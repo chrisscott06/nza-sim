@@ -143,6 +143,8 @@ export function ProjectProvider({ children }) {
 
   // ── Debounced save helpers ────────────────────────────────────────────────
 
+  // endpoint: sub-path like 'building' → PUT /api/projects/{id}/building
+  // endpoint: null → PUT /api/projects/{id} (for general updates like construction_choices)
   function _scheduleSave(endpoint, body) {
     if (!currentProjectId) return
 
@@ -154,7 +156,10 @@ export function ProjectProvider({ children }) {
 
     saveTimerRef.current = setTimeout(async () => {
       try {
-        await _apiFetch(`/api/projects/${currentProjectId}/${endpoint}`, {
+        const url = endpoint
+          ? `/api/projects/${currentProjectId}/${endpoint}`
+          : `/api/projects/${currentProjectId}`
+        await _apiFetch(url, {
           method: 'PUT',
           body: JSON.stringify(body),
         })
@@ -188,26 +193,7 @@ export function ProjectProvider({ children }) {
   const updateConstruction = useCallback((key, value) => {
     setConstructions(c => {
       const next = { ...c, [key]: value }
-      if (currentProjectId) {
-        if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-        if (savedTimerRef.current) clearTimeout(savedTimerRef.current)
-        setSaveStatus('saving')
-        saveTimerRef.current = setTimeout(async () => {
-          try {
-            await _apiFetch(`/api/projects/${currentProjectId}`, {
-              method: 'PUT',
-              body: JSON.stringify({ construction_choices: next }),
-            })
-            setSaveStatus('saved')
-            savedTimerRef.current = setTimeout(() => setSaveStatus('idle'), 2000)
-            const list = await _apiFetch('/api/projects')
-            setProjects(list)
-          } catch (err) {
-            console.error('[ProjectContext] Save constructions failed:', err)
-            setSaveStatus('error')
-          }
-        }, 1000)
-      }
+      _scheduleSave(null, { construction_choices: next })
       return next
     })
   }, [currentProjectId]) // eslint-disable-line react-hooks/exhaustive-deps

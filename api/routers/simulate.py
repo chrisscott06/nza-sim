@@ -3,6 +3,11 @@ api/routers/simulate.py
 
 POST /api/simulate — run a simulation from parametric inputs
 GET  /api/simulate/{run_id} — retrieve a previous simulation result
+
+DEPRECATED (for standalone testing only)
+The primary simulation endpoint is POST /api/projects/{id}/simulate which reads
+all inputs from the database.  This endpoint remains for quick testing without
+a project context but is not used by the frontend.
 """
 
 import json
@@ -12,7 +17,8 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
-from nza_engine.config import DEFAULT_WEATHER_DIR, SIMULATIONS_DIR
+from nza_engine.config import SIMULATIONS_DIR
+from api.utils import resolve_weather_file
 from nza_engine.generators.epjson_assembler import assemble_epjson
 from nza_engine.runner import run_simulation
 from nza_engine.parsers.sql_parser import (
@@ -78,34 +84,6 @@ class SimulateRequest(BaseModel):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _resolve_weather_file(weather_file: str) -> Path:
-    """Resolve weather file name to a full path."""
-    if weather_file == "USE_DEFAULT":
-        # Use the first .epw found in the default weather directory
-        epws = sorted(DEFAULT_WEATHER_DIR.glob("*.epw"))
-        if not epws:
-            raise HTTPException(
-                status_code=500,
-                detail=f"No EPW files found in {DEFAULT_WEATHER_DIR}",
-            )
-        return epws[0]
-
-    # If it's a bare filename, look it up in the weather directory
-    candidate = DEFAULT_WEATHER_DIR / weather_file
-    if candidate.exists():
-        return candidate
-
-    # If it's an absolute path
-    full = Path(weather_file)
-    if full.exists():
-        return full
-
-    raise HTTPException(
-        status_code=400,
-        detail=f"Weather file not found: {weather_file}",
-    )
-
-
 def _run_and_parse(run_id: str, request: SimulateRequest) -> dict:
     """
     Core simulation pipeline: assemble → run → parse → return results.
@@ -114,7 +92,7 @@ def _run_and_parse(run_id: str, request: SimulateRequest) -> dict:
     run_dir = SIMULATIONS_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    weather_path = _resolve_weather_file(request.weather_file)
+    weather_path = resolve_weather_file(request.weather_file)
 
     # Convert Pydantic models to plain dicts
     building_params = {

@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState } from 'react'
-import { BuildingContext } from '../../../context/BuildingContext.jsx'
+import { ProjectContext } from '../../../context/ProjectContext.jsx'
 
 function Field({ label, children, note }) {
   return (
@@ -44,7 +44,7 @@ function NumberInput({ value, onChange, min, max, step = 1 }) {
 }
 
 export default function DHWTab() {
-  const { systems, updateSystem, params } = useContext(BuildingContext)
+  const { systems, updateSystem, params } = useContext(ProjectContext)
   const [library, setLibrary] = useState([])
 
   useEffect(() => {

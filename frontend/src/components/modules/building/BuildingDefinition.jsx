@@ -6,7 +6,7 @@ import FabricTab from './FabricTab.jsx'
 import FabricSummary from './FabricSummary.jsx'
 import SummaryTab from './SummaryTab.jsx'
 import BuildingViewer3D from './BuildingViewer3D.jsx'
-import { BuildingContext } from '../../../context/BuildingContext.jsx'
+import { ProjectContext } from '../../../context/ProjectContext.jsx'
 
 const TABS = [
   { id: 'geometry', label: 'Geometry' },
@@ -43,7 +43,7 @@ function BuildingSidebar({ activeTab, onTabChange, library, details, onDetailCha
 
 export default function BuildingDefinition() {
   const [activeTab, setActiveTab] = useState('geometry')
-  const { params, constructions } = useContext(BuildingContext)
+  const { params, constructions } = useContext(ProjectContext)
 
   // Library + details for the FabricSummary main area
   const [library, setLibrary]   = useState([])

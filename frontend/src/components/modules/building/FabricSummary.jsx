@@ -7,7 +7,7 @@
  */
 
 import { useContext } from 'react'
-import { BuildingContext } from '../../../context/BuildingContext.jsx'
+import { ProjectContext } from '../../../context/ProjectContext.jsx'
 
 // Benchmark range for UK hotels (W/K per m² of floor area)
 // CIBSE TM54: typical hotel ~0.5-1.5 W/K·m²
@@ -44,7 +44,7 @@ function HTCBar({ htc, maxHtc = 3000 }) {
 }
 
 export default function FabricSummary({ library, constructions, details }) {
-  const { params } = useContext(BuildingContext)
+  const { params } = useContext(ProjectContext)
 
   if (!library || library.length === 0) return null
 

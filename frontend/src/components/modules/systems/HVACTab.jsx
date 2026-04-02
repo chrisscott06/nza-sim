@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState } from 'react'
-import { BuildingContext } from '../../../context/BuildingContext.jsx'
+import { ProjectContext } from '../../../context/ProjectContext.jsx'
 
 function Field({ label, children, note }) {
   return (
@@ -95,7 +95,7 @@ function SystemSchematic({ system }) {
 }
 
 export default function HVACTab() {
-  const { systems, updateSystem } = useContext(BuildingContext)
+  const { systems, updateSystem } = useContext(ProjectContext)
   const [library, setLibrary] = useState([])
   const [loading, setLoading] = useState(true)
 

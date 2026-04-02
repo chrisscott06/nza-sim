@@ -5,7 +5,7 @@ import HVACTab from './systems/HVACTab.jsx'
 import VentilationTab from './systems/VentilationTab.jsx'
 import DHWTab from './systems/DHWTab.jsx'
 import LightingTab from './systems/LightingTab.jsx'
-import { BuildingContext } from '../../context/BuildingContext.jsx'
+import { ProjectContext } from '../../context/ProjectContext.jsx'
 
 const TABS = [
   { id: 'hvac',        label: 'HVAC'        },
@@ -142,7 +142,7 @@ function SystemsSidebar({ activeTab, onTabChange }) {
 
 export default function SystemsZones() {
   const [activeTab, setActiveTab] = useState('hvac')
-  const { systems, params } = useContext(BuildingContext)
+  const { systems, params } = useContext(ProjectContext)
 
   return (
     <ExplorerLayout

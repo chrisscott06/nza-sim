@@ -10,7 +10,7 @@ import EnergyBalanceTab from './EnergyBalanceTab.jsx'
 import LoadProfilesTab from './LoadProfilesTab.jsx'
 import FabricAnalysisTab from './FabricAnalysisTab.jsx'
 import { SimulationContext } from '../../../context/SimulationContext.jsx'
-import { BuildingContext } from '../../../context/BuildingContext.jsx'
+import { ProjectContext } from '../../../context/ProjectContext.jsx'
 
 function ResultsSkeleton() {
   return (
@@ -37,7 +37,7 @@ const TABS = [
 
 function ResultsSidebar({ activeTab, onTabChange }) {
   const { status, results, error } = useContext(SimulationContext)
-  const { params } = useContext(BuildingContext)
+  const { params } = useContext(ProjectContext)
   const navigate = useNavigate()
 
   const s = results?.summary

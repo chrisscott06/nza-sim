@@ -59,8 +59,13 @@ def _row_to_item(row, include_config: bool = True) -> dict:
         "is_default":   bool(row["is_default"]),
         "created_at":   row["created_at"],
         "updated_at":   row["updated_at"],
-        # Always include key metrics for card display
-        "config_json": {
+    }
+    if include_config:
+        # Full config for detail views
+        out["config_json"] = cfg
+    else:
+        # Slim summary: key metrics only, for card/list display
+        out["config_json"] = {
             "u_value_W_per_m2K": cfg.get("u_value_W_per_m2K"),
             "g_value":           cfg.get("g_value"),
             "thermal_mass":      cfg.get("thermal_mass"),
@@ -70,10 +75,7 @@ def _row_to_item(row, include_config: bool = True) -> dict:
             "category":          cfg.get("category"),
             "schedule_type":     cfg.get("schedule_type"),
             "zone_type":         cfg.get("zone_type"),
-        },
-    }
-    if include_config:
-        out["config_json"] = cfg  # full config overrides the slim version
+        }
     return out
 
 

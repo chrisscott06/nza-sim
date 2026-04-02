@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState } from 'react'
-import { BuildingContext } from '../../../context/BuildingContext.jsx'
+import { ProjectContext } from '../../../context/ProjectContext.jsx'
 
 function Field({ label, children, note }) {
   return (
@@ -68,7 +68,7 @@ function Toggle({ value, onChange, label, description }) {
 }
 
 export default function VentilationTab() {
-  const { systems, updateSystem } = useContext(BuildingContext)
+  const { systems, updateSystem } = useContext(ProjectContext)
   const [library, setLibrary] = useState([])
 
   useEffect(() => {

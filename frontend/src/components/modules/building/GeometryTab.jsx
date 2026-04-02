@@ -1,5 +1,5 @@
 import { useContext } from 'react'
-import { BuildingContext } from '../../../context/BuildingContext.jsx'
+import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import DataCard from '../../ui/DataCard.jsx'
 
 /* ── Small compact input + label ───────────────────────────────────────────── */
@@ -73,7 +73,7 @@ function WWRSlider({ label, value, onChange }) {
 }
 
 export default function GeometryTab() {
-  const { params, updateParam } = useContext(BuildingContext)
+  const { params, updateParam } = useContext(ProjectContext)
   const { length, width, num_floors, floor_height, orientation, wwr, name } = params
 
   // Derived metrics

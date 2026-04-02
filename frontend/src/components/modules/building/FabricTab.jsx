@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState } from 'react'
-import { BuildingContext } from '../../../context/BuildingContext.jsx'
+import { ProjectContext } from '../../../context/ProjectContext.jsx'
 
 const ELEMENTS = [
   { key: 'external_wall', label: 'External Wall',  types: ['wall'] },
@@ -138,7 +138,7 @@ function ConstructionSelect({ elementKey, label, constructions, selectedId, onSe
 }
 
 export default function FabricTab({ onDetailChange }) {
-  const { constructions: selected, updateConstruction } = useContext(BuildingContext)
+  const { constructions: selected, updateConstruction } = useContext(ProjectContext)
 
   const [library, setLibrary]   = useState([])
   const [loading, setLoading]   = useState(true)

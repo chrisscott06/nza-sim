@@ -23,7 +23,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from api.db.database import get_db, DEFAULT_BUILDING_CONFIG, DEFAULT_CONSTRUCTION_CHOICES, DEFAULT_SYSTEMS_CONFIG
-from nza_engine.config import DEFAULT_WEATHER_DIR, SIMULATIONS_DIR
+from api.utils import resolve_weather_file
+from nza_engine.config import SIMULATIONS_DIR
 from nza_engine.generators.epjson_assembler import assemble_epjson
 from nza_engine.runner import run_simulation
 from nza_engine.parsers.sql_parser import (
@@ -74,31 +75,6 @@ class UpdateSystemsRequest(BaseModel):
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _resolve_weather_file(weather_file: str | None) -> Path:
-    """Resolve weather file name or 'USE_DEFAULT' to a full path."""
-    if not weather_file or weather_file == "USE_DEFAULT":
-        epws = sorted(DEFAULT_WEATHER_DIR.glob("*.epw"))
-        if not epws:
-            raise HTTPException(
-                status_code=500,
-                detail=f"No EPW files found in {DEFAULT_WEATHER_DIR}",
-            )
-        return epws[0]
-
-    candidate = DEFAULT_WEATHER_DIR / weather_file
-    if candidate.exists():
-        return candidate
-
-    full = Path(weather_file)
-    if full.exists():
-        return full
-
-    raise HTTPException(
-        status_code=400,
-        detail=f"Weather file not found: {weather_file}",
-    )
-
 
 def _row_to_project(row) -> dict:
     """Convert a database row to a project dict."""
@@ -404,7 +380,7 @@ async def simulate_project(project_id: str, scenario_name: str = "Baseline"):
     project = _row_to_project(row)
 
     # Resolve weather
-    weather_path = _resolve_weather_file(project.get("weather_file"))
+    weather_path = resolve_weather_file(project.get("weather_file"))
 
     run_id = str(uuid.uuid4())[:8]
     run_dir = SIMULATIONS_DIR / run_id

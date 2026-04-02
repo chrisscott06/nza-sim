@@ -1,7 +1,7 @@
 import { useContext } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { SimulationContext } from '../../../context/SimulationContext.jsx'
-import { BuildingContext } from '../../../context/BuildingContext.jsx'
+import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import DataCard from '../../ui/DataCard.jsx'
 import ModuleEmptyState from '../../ui/ModuleEmptyState.jsx'
 import { TOOLTIP_STYLE, TOOLTIP_WRAPPER_STYLE, LEGEND_STYLE } from '../../../data/chartTokens.js'
@@ -51,7 +51,7 @@ function SanityItem({ label, value, unit, status, note }) {
 
 export default function OverviewTab() {
   const { status, results } = useContext(SimulationContext)
-  const { params } = useContext(BuildingContext)
+  const { params } = useContext(ProjectContext)
 
   if (status !== 'complete' || !results) {
     return (

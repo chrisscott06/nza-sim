@@ -1,5 +1,5 @@
 import { useContext } from 'react'
-import { BuildingContext } from '../../../context/BuildingContext.jsx'
+import { ProjectContext } from '../../../context/ProjectContext.jsx'
 
 function Field({ label, children, note }) {
   return (
@@ -66,7 +66,7 @@ const CONTROL_FACTOR = {
 const ANNUAL_HOURS = 3650  // ~10 h/day average across zones
 
 export default function LightingTab() {
-  const { systems, updateSystem, params } = useContext(BuildingContext)
+  const { systems, updateSystem, params } = useContext(ProjectContext)
 
   const gia          = params.length * params.width * params.num_floors
   const lpd          = systems.lighting_power_density ?? 8.0

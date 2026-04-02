@@ -1,5 +1,5 @@
 import { useContext } from 'react'
-import { BuildingContext } from '../../../context/BuildingContext.jsx'
+import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import DataCard from '../../ui/DataCard.jsx'
 
 function Row({ label, value, unit }) {
@@ -25,7 +25,7 @@ function Section({ title, children }) {
 }
 
 export default function SummaryTab() {
-  const { params, constructions } = useContext(BuildingContext)
+  const { params, constructions } = useContext(ProjectContext)
   const {
     name, length, width, num_floors, floor_height, orientation, wwr,
   } = params

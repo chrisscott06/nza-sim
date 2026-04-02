@@ -41,12 +41,13 @@ Thumbs.db
 # Project state
 projects/project_data/*.json
 
-# Local launcher scripts
+# Local launcher scripts (machine-specific)
 go.bat
 update.bat
 launch*.bat
 _start*.bat
 start.bat
+*.command
 
 # Claude / git recovery
 .claude/
