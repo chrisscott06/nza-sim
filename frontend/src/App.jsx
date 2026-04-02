@@ -4,10 +4,10 @@ import { SimulationProvider } from './context/SimulationContext.jsx'
 import AppShell from './components/layout/AppShell.jsx'
 import HomePage from './pages/HomePage.jsx'
 import PlaceholderPage from './pages/PlaceholderPage.jsx'
+import BuildingDefinition from './components/modules/building/BuildingDefinition.jsx'
 
-// These will be replaced with real modules in Parts 4 and 7
-const BuildingPage  = () => <PlaceholderPage title="Building Definition" />
-const ResultsPage   = () => <PlaceholderPage title="Results Dashboard" />
+// Results Dashboard will be replaced with real module in Part 7
+const ResultsPage = () => <PlaceholderPage title="Results Dashboard" />
 
 export default function App() {
   return (
@@ -17,7 +17,7 @@ export default function App() {
           <Routes>
             <Route element={<AppShell />}>
               <Route path="/"          element={<HomePage />} />
-              <Route path="/building"  element={<BuildingPage />} />
+              <Route path="/building"  element={<BuildingDefinition />} />
               <Route path="/systems"   element={<PlaceholderPage title="Systems" />} />
               <Route path="/profiles"  element={<PlaceholderPage title="Profiles" />} />
               <Route path="/results"   element={<ResultsPage />} />
