@@ -19,6 +19,16 @@ export const SimulationContext = createContext(null)
 // ── Normalise DB row → same shape as live simulate response ─────────────────
 
 function normalizeDbResult(row) {
+  const ed = row.envelope_heat_flow  // detailed per-facade data
+  // Reconstruct basic envelope summary from detailed data so FabricAnalysisTab
+  // works after page refresh without needing a separate DB column.
+  const envelope = ed ? {
+    fabric_conduction_kWh:  ed.summary?.total_fabric_loss_kWh     ?? 0,
+    solar_gain_kWh:         ed.summary?.total_solar_gain_kWh      ?? 0,
+    infiltration_loss_kWh:  ed.infiltration?.annual_heat_loss_kWh ?? 0,
+    infiltration_gain_kWh:  ed.infiltration?.annual_heat_gain_kWh ?? 0,
+  } : null
+
   return {
     run_id:            row.id,
     id:                row.id,
@@ -29,8 +39,8 @@ function normalizeDbResult(row) {
     monthly_energy:    row.results_monthly,
     annual_energy:     row.annual_energy,
     hourly_profiles:   row.hourly_profiles,
-    envelope:          null,            // basic summary not stored; restored on next live run
-    envelope_detailed: row.envelope_heat_flow,
+    envelope,
+    envelope_detailed: ed,
     sankey_data:       row.sankey_data,
     warnings:          row.energyplus_warnings,
     simulation_time_seconds: row.simulation_time_seconds,
