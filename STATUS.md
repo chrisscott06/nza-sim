@@ -2,7 +2,7 @@
 
 ## Last completed
 
-Brief 07 Part 3 — MEV and MVHR ventilation generators with heat recovery.
+Brief 07 Part 4 — Gas boiler DHW with ASHP preheat option.
 - `nza_engine/generators/hvac_ventilation.py` (new): `generate_ventilation_system()` — MEV via `ZoneVentilation:DesignFlowRate` (exhaust), MVHR via `ZoneHVAC:EnergyRecoveryVentilator` + `HeatExchanger:AirToAir:SensibleAndLatent` + 2×`Fan:SystemModel` per zone with NodeList-based zone connections.
 - Assembler updated: detailed mode now calls ventilation generator after VRF, merging with `setdefault().update()` to preserve VRF fan objects alongside ERV fans.
 - `api/routers/simulate.py`: added `mvhr_efficiency: float = 0.85` to `SystemsConfig`.
@@ -75,7 +75,8 @@ Building: 60×15m, 4 floors, 3.2m height, 25% WWR all façades, 0° orientation.
 - ✅ Part 1: HVAC implementation research — `docs/hvac_implementation_notes.md`
 - ✅ Part 2: VRF system generator — native AirConditioner:VariableRefrigerantFlow with full performance curves
 - ✅ Part 3: MEV and MVHR ventilation generators
-- ⬜ Part 4: Gas boiler DHW system (`hvac_dhw.py`)
+- ✅ Part 4: Gas boiler DHW — WaterHeater:Mixed standalone mode, ASHP two-tank cascade. Gas Only 12,308 kWh → ASHP preheat 3,515 kWh gas (71% reduction)
+- ⬜ Part 5: Fuel-split results and carbon calculation
 - ⬜ Part 5: Fuel-split results and carbon calculation
 - ⬜ Part 6: Frontend system mode toggle
 - ⬜ Parts 7–10: Scenario comparison, performance curves, Bridgewater test, integration

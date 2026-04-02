@@ -73,6 +73,8 @@ class SystemsConfig(BaseModel):
     dhw_preheat: str = "none"
     dhw_setpoint: float = 60.0
     dhw_preheat_setpoint: float = 45.0
+    dhw_efficiency: float = 0.92               # gas boiler thermal efficiency
+    ashp_cop_dhw: float = 2.8                  # ASHP DHW preheat COP
     lighting_power_density: float = 8.0        # W/m²
     lighting_control: str = "occupancy_sensing"
     pump_type: str = "variable_speed"

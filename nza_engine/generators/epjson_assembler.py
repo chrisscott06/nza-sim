@@ -49,6 +49,7 @@ from nza_engine.library.schedules import (
 from nza_engine.library.loads import get_zone_loads
 from nza_engine.generators.hvac_vrf import generate_vrf_system
 from nza_engine.generators.hvac_ventilation import generate_ventilation_system
+from nza_engine.generators.hvac_dhw import generate_dhw_system
 
 
 # ── Construction placeholder → construction_choices key ───────────────────────
@@ -634,6 +635,20 @@ def assemble_epjson(
             heat_recovery_efficiency=mvhr_eff,
         )
         for obj_type, items in vent_objects.items():
+            hvac_objects.setdefault(obj_type, {}).update(items)
+
+        # DHW — gas boiler (+ optional ASHP preheat)
+        dhw_objects = generate_dhw_system(
+            zone_floor_area_m2=zone_floor_area,
+            num_zones=len(zones),
+            dhw_primary=sc.get("dhw_primary", "gas_boiler_dhw"),
+            dhw_preheat=sc.get("dhw_preheat", "none"),
+            boiler_efficiency=float(sc.get("dhw_efficiency", 0.92)),
+            dhw_setpoint=float(sc.get("dhw_setpoint", 60.0)),
+            dhw_preheat_setpoint=float(sc.get("dhw_preheat_setpoint", 45.0)),
+            ashp_cop=float(sc.get("ashp_cop_dhw", 2.8)),
+        )
+        for obj_type, items in dhw_objects.items():
             hvac_objects.setdefault(obj_type, {}).update(items)
     else:
         # Ideal loads — ZoneHVAC:IdealLoadsAirSystem (not HVACTemplate which needs ExpandObjects)
