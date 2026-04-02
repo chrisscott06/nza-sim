@@ -7,6 +7,7 @@ import PlaceholderPage from './pages/PlaceholderPage.jsx'
 import BuildingDefinition from './components/modules/building/BuildingDefinition.jsx'
 import ResultsDashboard from './components/modules/results/ResultsDashboard.jsx'
 import SystemsZones from './components/modules/SystemsZones.jsx'
+import LibraryBrowser from './components/modules/LibraryBrowser.jsx'
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
               <Route path="/profiles"  element={<PlaceholderPage title="Profiles" />} />
               <Route path="/results"   element={<ResultsDashboard />} />
               <Route path="/scenarios" element={<PlaceholderPage title="Scenarios" />} />
+              <Route path="/library"   element={<LibraryBrowser />} />
             </Route>
           </Routes>
         </SimulationProvider>

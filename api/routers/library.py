@@ -49,6 +49,7 @@ class UpdateLibraryItemRequest(BaseModel):
 
 def _row_to_item(row, include_config: bool = True) -> dict:
     """Convert a library_items row to a dict."""
+    cfg = json.loads(row["config_json"])
     out = {
         "id":           row["id"],
         "library_type": row["library_type"],
@@ -58,9 +59,21 @@ def _row_to_item(row, include_config: bool = True) -> dict:
         "is_default":   bool(row["is_default"]),
         "created_at":   row["created_at"],
         "updated_at":   row["updated_at"],
+        # Always include key metrics for card display
+        "config_json": {
+            "u_value_W_per_m2K": cfg.get("u_value_W_per_m2K"),
+            "g_value":           cfg.get("g_value"),
+            "thermal_mass":      cfg.get("thermal_mass"),
+            "type":              cfg.get("type"),
+            "cop":               cfg.get("cop"),
+            "eer":               cfg.get("eer"),
+            "category":          cfg.get("category"),
+            "schedule_type":     cfg.get("schedule_type"),
+            "zone_type":         cfg.get("zone_type"),
+        },
     }
     if include_config:
-        out["config_json"] = json.loads(row["config_json"])
+        out["config_json"] = cfg  # full config overrides the slim version
     return out
 
 
@@ -76,7 +89,7 @@ async def list_library_items(
         if type and search:
             cursor = await db.execute(
                 """
-                SELECT id, library_type, name, display_name, description, is_default, created_at, updated_at
+                SELECT id, library_type, name, display_name, description, config_json, is_default, created_at, updated_at
                 FROM library_items
                 WHERE library_type = ?
                   AND (name LIKE ? OR description LIKE ? OR display_name LIKE ?)
@@ -87,7 +100,7 @@ async def list_library_items(
         elif type:
             cursor = await db.execute(
                 """
-                SELECT id, library_type, name, display_name, description, is_default, created_at, updated_at
+                SELECT id, library_type, name, display_name, description, config_json, is_default, created_at, updated_at
                 FROM library_items
                 WHERE library_type = ?
                 ORDER BY is_default DESC, name
@@ -97,7 +110,7 @@ async def list_library_items(
         elif search:
             cursor = await db.execute(
                 """
-                SELECT id, library_type, name, display_name, description, is_default, created_at, updated_at
+                SELECT id, library_type, name, display_name, description, config_json, is_default, created_at, updated_at
                 FROM library_items
                 WHERE name LIKE ? OR description LIKE ? OR display_name LIKE ?
                 ORDER BY library_type, is_default DESC, name
@@ -107,7 +120,7 @@ async def list_library_items(
         else:
             cursor = await db.execute(
                 """
-                SELECT id, library_type, name, display_name, description, is_default, created_at, updated_at
+                SELECT id, library_type, name, display_name, description, config_json, is_default, created_at, updated_at
                 FROM library_items
                 ORDER BY library_type, is_default DESC, name
                 """

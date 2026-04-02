@@ -6,6 +6,7 @@ import {
   Clock,
   BarChart3,
   GitCompare,
+  BookOpen,
 } from 'lucide-react'
 
 const TOP_ITEMS = [
@@ -91,6 +92,15 @@ export default function Sidebar() {
         {BOTTOM_ITEMS.map(item => (
           <NavItem key={item.to} {...item} />
         ))}
+      </div>
+
+      {/* Spacer */}
+      <div className="flex-1" />
+
+      {/* Library — separated at the very bottom */}
+      <div className="my-2 mx-3 border-t border-white/12" />
+      <div className="pb-2">
+        <NavItem to="/library" icon={BookOpen} label="Library" />
       </div>
     </nav>
   )
