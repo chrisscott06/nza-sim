@@ -21,6 +21,7 @@ from nza_engine.parsers.sql_parser import (
     get_monthly_energy_by_enduse,
     get_zone_summary,
     get_envelope_heat_flow,
+    get_envelope_heat_flow_detailed,
     get_hourly_profiles,
     get_typical_day_profiles,
 )
@@ -162,7 +163,8 @@ def _run_and_parse(run_id: str, request: SimulateRequest) -> dict:
         "annual_energy":    get_annual_energy_by_enduse(sql),
         "monthly_energy":   get_monthly_energy_by_enduse(sql),
         "zone_summary":     get_zone_summary(sql),
-        "envelope":         get_envelope_heat_flow(sql),
+        "envelope":          get_envelope_heat_flow(sql),
+        "envelope_detailed": get_envelope_heat_flow_detailed(sql),
         # Typical day profiles included in main response (compact — 4 days × 24 hours)
         "hourly_profiles":  get_typical_day_profiles(sql),
     }

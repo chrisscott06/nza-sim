@@ -501,3 +501,144 @@ def get_typical_day_profiles(sql_path) -> dict:
         "typical_winter": {"label": "Typical Winter Day (Dec-Feb avg)", **_avg_profiles(winter_days)},
         "typical_summer": {"label": "Typical Summer Day (Jun-Aug avg)", **_avg_profiles(summer_days)},
     }
+
+
+def get_envelope_heat_flow_detailed(sql_path) -> dict:
+    """
+    Return per-facade annual heat flow data grouped by element type and facade.
+
+    Returns a structured dict:
+    {
+      "walls":    { "north": {area_m2, annual_heat_loss_kWh, annual_heat_gain_kWh, net_kWh}, ... },
+      "glazing":  { "north": {area_m2, solar_gain_kWh, conduction_kWh, net_kWh}, ... },
+      "roof":     { annual_heat_loss_kWh, annual_heat_gain_kWh, net_kWh },
+      "ground_floor": { annual_heat_loss_kWh, annual_heat_gain_kWh, net_kWh },
+      "infiltration": { annual_heat_loss_kWh, annual_heat_gain_kWh },
+      "summary":  { total_fabric_loss_kWh, total_solar_gain_kWh, net_balance_kWh }
+    }
+
+    Surface names follow geometry generator convention:
+      FLOOR_N_WALL_N/S/E/W, FLOOR_N_WIN_N/S/E/W, FLOOR_N_SLAB, FLOOR_N_CEILING
+    """
+    conn = _connect(sql_path)
+    try:
+        FACES = ("N", "S", "E", "W")
+        FACE_FULL = {"N": "north", "S": "south", "E": "east", "W": "west"}
+
+        def _sum_by_keyvalue_prefix(var_name: str, prefix_filter) -> dict[str, float]:
+            """
+            Sum annual energy per KeyValue, filtered by a callable.
+            Returns {keyvalue: kWh}.
+            """
+            rows = _query(
+                conn,
+                "SELECT ReportDataDictionaryIndex, KeyValue FROM ReportDataDictionary "
+                "WHERE Name = ? COLLATE NOCASE",
+                (var_name,),
+            )
+            result = {}
+            for row in rows:
+                kv = (row["KeyValue"] or "").upper()
+                if prefix_filter(kv):
+                    idx = row["ReportDataDictionaryIndex"]
+                    val = _query(
+                        conn,
+                        "SELECT SUM(Value) FROM ReportData WHERE ReportDataDictionaryIndex = ?",
+                        (idx,),
+                    )
+                    result[kv] = (val[0][0] or 0.0) * J_TO_KWH
+            return result
+
+        # ── Walls: surface conduction (positive = heat gain into zone, negative = loss)
+        walls = {FACE_FULL[f]: {"annual_heat_loss_kWh": 0.0, "annual_heat_gain_kWh": 0.0, "net_kWh": 0.0} for f in FACES}
+        wall_cond = _sum_by_keyvalue_prefix(
+            "Surface Inside Face Conduction Heat Transfer Energy",
+            lambda kv: "_WALL_" in kv and any(kv.endswith("_" + f) for f in FACES),
+        )
+        for kv, kwh in wall_cond.items():
+            face = kv[-1]  # last char: N/S/E/W
+            fname = FACE_FULL.get(face)
+            if fname:
+                if kwh >= 0:
+                    walls[fname]["annual_heat_gain_kWh"] += kwh
+                else:
+                    walls[fname]["annual_heat_loss_kWh"] += abs(kwh)
+                walls[fname]["net_kWh"] += kwh
+
+        # ── Glazing: solar gains + conduction through windows
+        glazing = {FACE_FULL[f]: {"solar_gain_kWh": 0.0, "conduction_kWh": 0.0, "net_kWh": 0.0} for f in FACES}
+
+        solar_by_win = _sum_by_keyvalue_prefix(
+            "Surface Window Transmitted Solar Radiation Energy",
+            lambda kv: "_WIN_" in kv and any(kv.endswith("_" + f) for f in FACES),
+        )
+        for kv, kwh in solar_by_win.items():
+            face = kv[-1]
+            fname = FACE_FULL.get(face)
+            if fname:
+                glazing[fname]["solar_gain_kWh"]  += kwh
+                glazing[fname]["net_kWh"] += kwh
+
+        # ── Roof (top floor ceiling)
+        roof_cond = _sum_by_keyvalue_prefix(
+            "Surface Inside Face Conduction Heat Transfer Energy",
+            lambda kv: kv.endswith("_CEILING"),
+        )
+        roof_net = sum(roof_cond.values())
+        roof = {
+            "annual_heat_loss_kWh": abs(roof_net) if roof_net < 0 else 0.0,
+            "annual_heat_gain_kWh": roof_net if roof_net >= 0 else 0.0,
+            "net_kWh": round(roof_net, 1),
+        }
+
+        # ── Ground floor (slab)
+        slab_cond = _sum_by_keyvalue_prefix(
+            "Surface Inside Face Conduction Heat Transfer Energy",
+            lambda kv: kv.endswith("_SLAB"),
+        )
+        slab_net = sum(slab_cond.values())
+        ground_floor = {
+            "annual_heat_loss_kWh": abs(slab_net) if slab_net < 0 else 0.0,
+            "annual_heat_gain_kWh": slab_net if slab_net >= 0 else 0.0,
+            "net_kWh": round(slab_net, 1),
+        }
+
+        # ── Infiltration
+        infil_loss = _sum_annual(conn, "Zone Infiltration Sensible Heat Loss Energy")
+        infil_gain = _sum_annual(conn, "Zone Infiltration Sensible Heat Gain Energy")
+
+        # ── Solar total and summary
+        total_solar = sum(v["solar_gain_kWh"] for v in glazing.values())
+        total_fabric_loss = (
+            sum(v["annual_heat_loss_kWh"] for v in walls.values())
+            + roof["annual_heat_loss_kWh"]
+            + ground_floor["annual_heat_loss_kWh"]
+        )
+        total_fabric_gain = (
+            sum(v["annual_heat_gain_kWh"] for v in walls.values())
+            + roof["annual_heat_gain_kWh"]
+            + ground_floor["annual_heat_gain_kWh"]
+        )
+
+        # Round everything
+        def _round_dict(d):
+            return {k: round(v, 1) if isinstance(v, float) else v for k, v in d.items()}
+
+        return {
+            "walls":        {f: _round_dict(v) for f, v in walls.items()},
+            "glazing":      {f: _round_dict(v) for f, v in glazing.items()},
+            "roof":         _round_dict(roof),
+            "ground_floor": _round_dict(ground_floor),
+            "infiltration": {
+                "annual_heat_loss_kWh": round(infil_loss, 1),
+                "annual_heat_gain_kWh": round(infil_gain, 1),
+            },
+            "summary": {
+                "total_solar_gain_kWh":   round(total_solar, 1),
+                "total_fabric_loss_kWh":  round(total_fabric_loss, 1),
+                "total_fabric_gain_kWh":  round(total_fabric_gain, 1),
+                "net_balance_kWh":        round(total_fabric_gain + total_solar - total_fabric_loss - infil_loss + infil_gain, 1),
+            },
+        }
+    finally:
+        conn.close()
