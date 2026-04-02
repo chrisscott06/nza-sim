@@ -46,7 +46,7 @@ const DEFAULT_CONSTRUCTIONS = {
 }
 
 const DEFAULT_SYSTEMS = {
-  mode:                   'ideal',
+  mode:                   'detailed',  // Brief 07: default to detailed HVAC
   hvac_type:              'vrf_standard',
   ventilation_type:       'mev_standard',
   natural_ventilation:    false,

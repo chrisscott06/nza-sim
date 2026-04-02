@@ -112,11 +112,14 @@ export default function HVACTab() {
 
   return (
     <div className="p-3 space-y-4">
-      {/* Simulation mode */}
-      <div className="bg-teal/5 border border-teal/20 rounded-lg p-3">
+      {/* Simulation mode — prominent toggle at top */}
+      <div className={`border rounded-lg p-3 ${systems.mode === 'detailed' ? 'bg-teal/5 border-teal/30' : 'bg-amber-50 border-amber-200'}`}>
         <p className="text-xxs uppercase tracking-wider text-teal mb-2">Simulation mode</p>
         <div className="flex gap-2">
-          {[{ v: 'ideal', l: 'Ideal Loads' }, { v: 'detailed', l: 'Detailed Systems' }].map(opt => (
+          {[
+            { v: 'detailed', l: 'Detailed Systems' },
+            { v: 'ideal',    l: 'Ideal Loads' },
+          ].map(opt => (
             <button
               key={opt.v}
               onClick={() => updateSystem('mode', opt.v)}
@@ -132,34 +135,39 @@ export default function HVACTab() {
         </div>
         <p className="text-xxs text-mid-grey mt-2">
           {systems.mode === 'ideal'
-            ? 'Ideal Loads shows pure building demand — 100% efficient HVAC. Use for fabric comparisons.'
-            : 'Detailed Systems applies real system efficiencies. EUI will be higher than Ideal mode.'
+            ? '⚠ Ideal Loads assumes 100% efficient, infinitely powerful HVAC. Useful for isolating fabric performance, but EUI will be unrealistically low. COP/EER inputs have no effect in this mode.'
+            : '✓ Detailed Systems applies real VRF performance curves, fan energy, and fuel-specific DHW. Recommended for realistic EUI, carbon, and scenario comparisons.'
           }
         </p>
       </div>
 
-      {/* System picker */}
-      <Field label="HVAC system type">
-        <Select
-          value={systems.hvac_type}
-          onChange={v => updateSystem('hvac_type', v)}
-          options={loading ? [{ value: systems.hvac_type, label: 'Loading…' }] : hvacOptions}
-        />
-      </Field>
+      {/* System parameters — dimmed in ideal loads mode (inputs have no effect) */}
+      <div className={systems.mode === 'ideal' ? 'opacity-40 pointer-events-none' : ''}>
+        {/* System picker */}
+        <div className="space-y-4">
+          <Field label="HVAC system type">
+            <Select
+              value={systems.hvac_type}
+              onChange={v => updateSystem('hvac_type', v)}
+              options={loading ? [{ value: systems.hvac_type, label: 'Loading…' }] : hvacOptions}
+            />
+          </Field>
 
-      {/* COP override */}
-      {selected?.heating_cop != null && (
-        <Field label="Heating COP (override)" note="Leave as system default, or enter a measured/certified value">
-          <NumberInput
-            value={systems.hvac_cop_override ?? selected.heating_cop}
-            onChange={v => updateSystem('hvac_cop_override', v)}
-            min={1.0} max={8.0} step={0.1}
-          />
-        </Field>
-      )}
+          {/* COP override */}
+          {selected?.heating_cop != null && (
+            <Field label="Heating COP (override)" note="Leave as system default, or enter a measured/certified value">
+              <NumberInput
+                value={systems.hvac_cop_override ?? selected.heating_cop}
+                onChange={v => updateSystem('hvac_cop_override', v)}
+                min={1.0} max={8.0} step={0.1}
+              />
+            </Field>
+          )}
 
-      {/* System schematic */}
-      {selected && <SystemSchematic system={selected} />}
+          {/* System schematic */}
+          {selected && <SystemSchematic system={selected} />}
+        </div>
+      </div>
     </div>
   )
 }
