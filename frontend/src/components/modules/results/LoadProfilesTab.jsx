@@ -6,6 +6,7 @@ import {
 import { SimulationContext } from '../../../context/SimulationContext.jsx'
 import DataCard from '../../ui/DataCard.jsx'
 import ModuleEmptyState from '../../ui/ModuleEmptyState.jsx'
+import FullYearView from './FullYearView.jsx'
 import {
   TICK_STYLE, TOOLTIP_STYLE, TOOLTIP_WRAPPER_STYLE, LEGEND_STYLE,
   GRID_STYLE, AXIS_PROPS,
@@ -59,70 +60,114 @@ function CustomTooltip({ active, payload, label }) {
   )
 }
 
+const VIEW_MODES = [
+  { key: 'typical_day', label: 'Typical Day' },
+  { key: 'full_year',   label: 'Full Year'   },
+]
+
 export default function LoadProfilesTab({ activeResults } = {}) {
   const ctx = useContext(SimulationContext)
   const status  = activeResults ? 'complete' : ctx.status
   const results = activeResults ?? ctx.results
+  const [viewMode,        setViewMode]        = useState('typical_day')
   const [selectedDayType, setSelectedDayType] = useState('peak_heating')
   const [fuelFilter,      setFuelFilter]      = useState('all')
 
-  if (status !== 'complete' || !results?.hourly_profiles) {
+  if (status !== 'complete') {
     return (
       <ModuleEmptyState
         icon={Activity}
         title="No results yet"
-        description="Run a simulation to see hourly load profiles."
+        description="Run a simulation to see load profiles."
         className="p-6"
       />
     )
   }
 
-  const profiles = results.hourly_profiles
+  // Typical day data (only used in typical_day mode)
+  const profiles = results?.hourly_profiles ?? {}
   const profile  = profiles[selectedDayType]
 
-  if (!profile) {
-    return (
-      <ModuleEmptyState
-        icon={Activity}
-        title="Profile data unavailable"
-        description="Run a new simulation to generate profile data."
-        className="p-6"
-      />
-    )
-  }
-
-  // Filter series by fuel type
   const visibleSeries = fuelFilter === 'all'
     ? ALL_SERIES
     : ALL_SERIES.filter(s => s.fuel === fuelFilter)
 
-  // Build chart data — 24 hourly points
-  const chartData = HOUR_LABELS.map((hour, h) => {
-    const row = { hour }
-    for (const s of ALL_SERIES) {
-      row[s.key] = profile[s.key]?.[h] ?? 0
-    }
-    return row
-  })
+  const isIdealLoadsGas = fuelFilter === 'gas'
 
-  // DataCard metrics based on visible series
+  // Build chart data — 24 hourly points (only used in typical_day mode)
+  const chartData = profile
+    ? HOUR_LABELS.map((hour, h) => {
+        const row = { hour }
+        for (const s of ALL_SERIES) {
+          row[s.key] = profile[s.key]?.[h] ?? 0
+        }
+        return row
+      })
+    : []
+
+  // DataCard metrics
   const totalValues = chartData.map(d =>
     visibleSeries.reduce((sum, s) => sum + (d[s.key] ?? 0), 0)
   )
-  const peakDemand  = Math.max(...totalValues)
-  const avgDemand   = totalValues.reduce((s, v) => s + v, 0) / 24
-  const loadFactor  = peakDemand > 0 ? avgDemand / peakDemand : 0
-  const midnight    = totalValues[0]
-  const midday      = totalValues[12]
-
-  const isIdealLoadsGas = fuelFilter === 'gas'
+  const peakDemand = totalValues.length ? Math.max(...totalValues) : 0
+  const avgDemand  = totalValues.length ? totalValues.reduce((s, v) => s + v, 0) / 24 : 0
+  const loadFactor = peakDemand > 0 ? avgDemand / peakDemand : 0
+  const midnight   = totalValues[0] ?? 0
+  const midday     = totalValues[12] ?? 0
 
   return (
     <div className="p-4 space-y-4">
 
-      {/* Controls row: day type + fuel toggle */}
-      <div className="flex flex-wrap gap-4 items-start">
-        {/* Day type selector */}
+      {/* Top controls row: view mode + fuel toggle */}
+      <div className="flex flex-wrap gap-4 items-start justify-between">
+        {/* View mode toggle */}
+        <div>
+          <p className="text-xxs uppercase tracking-wider text-mid-grey mb-2">View</p>
+          <div className="flex gap-1 bg-off-white border border-light-grey rounded-lg p-0.5">
+            {VIEW_MODES.map(m => (
+              <button
+                key={m.key}
+                onClick={() => setViewMode(m.key)}
+                className={`px-3 py-1.5 text-caption rounded transition-colors ${
+                  viewMode === m.key
+                    ? 'bg-white text-navy shadow-sm border border-light-grey'
+                    : 'text-mid-grey hover:text-navy'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Fuel toggle */}
+        <div>
+          <p className="text-xxs uppercase tracking-wider text-mid-grey mb-2">Fuel type</p>
+          <div className="flex gap-1.5">
+            {FUEL_FILTERS.map(f => (
+              <button
+                key={f.key}
+                onClick={() => setFuelFilter(f.key)}
+                className={`px-2.5 py-1.5 text-xxs rounded border transition-colors ${
+                  fuelFilter === f.key
+                    ? 'bg-navy text-white border-navy'
+                    : 'text-mid-grey border-light-grey hover:border-navy hover:text-navy'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Full Year view ── */}
+      {viewMode === 'full_year' && (
+        <FullYearView results={results} fuelFilter={fuelFilter} />
+      )}
+
+      {/* ── Typical Day controls (only in typical_day mode) ── */}
+      {viewMode === 'typical_day' && <div className="flex flex-wrap gap-4 items-start">
         <div>
           <p className="text-xxs uppercase tracking-wider text-mid-grey mb-2">Day type</p>
           <div className="flex flex-wrap gap-2">
@@ -147,110 +192,109 @@ export default function LoadProfilesTab({ activeResults } = {}) {
             <p className="text-xxs text-mid-grey mt-1.5">{profile.label}</p>
           )}
         </div>
+      </div>}
 
-        {/* Fuel toggle */}
-        <div>
-          <p className="text-xxs uppercase tracking-wider text-mid-grey mb-2">Fuel type</p>
-          <div className="flex gap-1.5">
-            {FUEL_FILTERS.map(f => (
-              <button
-                key={f.key}
-                onClick={() => setFuelFilter(f.key)}
-                className={`px-2.5 py-1.5 text-xxs rounded border transition-colors ${
-                  fuelFilter === f.key
-                    ? 'bg-navy text-white border-navy'
-                    : 'text-mid-grey border-light-grey hover:border-navy hover:text-navy'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
+      {/* ── Typical Day content ── */}
+      {viewMode === 'typical_day' && <>
+
+        {/* Ideal loads note for Gas filter */}
+        {isIdealLoadsGas && (
+          <div className="bg-off-white border border-light-grey rounded-lg px-3 py-2">
+            <p className="text-xxs text-mid-grey">
+              <span className="font-medium text-dark-grey">Ideal loads mode</span> — all energy treated as electricity.
+              DHW energy (if modelled as gas) would appear here. Switch to detailed HVAC mode for fuel-specific analysis.
+            </p>
           </div>
-        </div>
-      </div>
+        )}
 
-      {/* Ideal loads note for Gas filter */}
-      {isIdealLoadsGas && (
-        <div className="bg-off-white border border-light-grey rounded-lg px-3 py-2">
-          <p className="text-xxs text-mid-grey">
-            <span className="font-medium text-dark-grey">Ideal loads mode</span> — all energy treated as electricity.
-            DHW energy (if modelled as gas) would appear here. Switch to detailed HVAC mode for fuel-specific analysis.
-          </p>
-        </div>
-      )}
+        {/* No profile data state */}
+        {!profile && (
+          <ModuleEmptyState
+            icon={Activity}
+            title="Profile data unavailable"
+            description="Run a new simulation to generate profile data."
+            className="py-6"
+          />
+        )}
 
-      {/* Stacked area chart */}
-      <div className="bg-white rounded-lg border border-light-grey p-3">
-        <ResponsiveContainer width="100%" height={260}>
-          <AreaChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 16 }}>
-            <defs>
-              {ALL_SERIES.map(s => (
-                <linearGradient key={s.key} id={`grad-lp-${s.key}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor={s.color} stopOpacity={0.5} />
-                  <stop offset="95%" stopColor={s.color} stopOpacity={0.05} />
-                </linearGradient>
-              ))}
-            </defs>
-            <CartesianGrid {...GRID_STYLE} vertical={false} />
-            <XAxis
-              dataKey="hour"
-              {...AXIS_PROPS}
-              interval={2}
-              label={{ value: 'Hour of day', position: 'insideBottom', offset: -10, style: { ...TICK_STYLE, fontSize: 8 } }}
-            />
-            <YAxis
-              {...AXIS_PROPS}
-              label={{ value: 'kWh', angle: -90, position: 'insideLeft', offset: 8, style: { ...TICK_STYLE, fontSize: 8 } }}
-            />
-            <Tooltip content={<CustomTooltip />} wrapperStyle={TOOLTIP_WRAPPER_STYLE} />
-            <Legend wrapperStyle={LEGEND_STYLE} iconType="circle" iconSize={7} />
-            {visibleSeries.map(s => (
-              <Area
-                key={s.key}
-                type="monotone"
-                dataKey={s.key}
-                name={s.label}
-                stackId="a"
-                stroke={s.color}
-                strokeWidth={1.5}
-                fill={`url(#grad-lp-${s.key})`}
-                dot={false}
-                activeDot={{ r: 3, stroke: s.color }}
+        {/* Stacked area chart */}
+        {profile && (
+          <div className="bg-white rounded-lg border border-light-grey p-3">
+            <ResponsiveContainer width="100%" height={260}>
+              <AreaChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 16 }}>
+                <defs>
+                  {ALL_SERIES.map(s => (
+                    <linearGradient key={s.key} id={`grad-lp-${s.key}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor={s.color} stopOpacity={0.5} />
+                      <stop offset="95%" stopColor={s.color} stopOpacity={0.05} />
+                    </linearGradient>
+                  ))}
+                </defs>
+                <CartesianGrid {...GRID_STYLE} vertical={false} />
+                <XAxis
+                  dataKey="hour"
+                  {...AXIS_PROPS}
+                  interval={2}
+                  label={{ value: 'Hour of day', position: 'insideBottom', offset: -10, style: { ...TICK_STYLE, fontSize: 8 } }}
+                />
+                <YAxis
+                  {...AXIS_PROPS}
+                  label={{ value: 'kWh', angle: -90, position: 'insideLeft', offset: 8, style: { ...TICK_STYLE, fontSize: 8 } }}
+                />
+                <Tooltip content={<CustomTooltip />} wrapperStyle={TOOLTIP_WRAPPER_STYLE} />
+                <Legend wrapperStyle={LEGEND_STYLE} iconType="circle" iconSize={7} />
+                {visibleSeries.map(s => (
+                  <Area
+                    key={s.key}
+                    type="monotone"
+                    dataKey={s.key}
+                    name={s.label}
+                    stackId="a"
+                    stroke={s.color}
+                    strokeWidth={1.5}
+                    fill={`url(#grad-lp-${s.key})`}
+                    dot={false}
+                    activeDot={{ r: 3, stroke: s.color }}
+                  />
+                ))}
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* Day metrics */}
+        {profile && (
+          <div>
+            <p className="text-xxs uppercase tracking-wider text-mid-grey mb-2">Day metrics</p>
+            <div className="grid grid-cols-2 gap-2">
+              <DataCard
+                label="Peak demand"
+                value={peakDemand.toFixed(1)}
+                unit="kWh/hr"
+                accent="navy"
               />
-            ))}
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
+              <DataCard
+                label="Average demand"
+                value={avgDemand.toFixed(1)}
+                unit="kWh/hr"
+                accent="teal"
+              />
+              <DataCard
+                label="Load factor"
+                value={(loadFactor * 100).toFixed(0) + '%'}
+                accent="gold"
+              />
+              <DataCard
+                label="Midnight vs midday"
+                value={`${midnight.toFixed(1)} / ${midday.toFixed(1)}`}
+                unit="kWh"
+                accent="slate"
+              />
+            </div>
+          </div>
+        )}
 
-      {/* Metrics */}
-      <div>
-        <p className="text-xxs uppercase tracking-wider text-mid-grey mb-2">Day metrics</p>
-        <div className="grid grid-cols-2 gap-2">
-          <DataCard
-            label="Peak demand"
-            value={peakDemand.toFixed(1)}
-            unit="kWh/hr"
-            accent="navy"
-          />
-          <DataCard
-            label="Average demand"
-            value={avgDemand.toFixed(1)}
-            unit="kWh/hr"
-            accent="teal"
-          />
-          <DataCard
-            label="Load factor"
-            value={(loadFactor * 100).toFixed(0) + '%'}
-            accent="gold"
-          />
-          <DataCard
-            label="Midnight vs midday"
-            value={`${midnight.toFixed(1)} / ${midday.toFixed(1)}`}
-            unit="kWh"
-            accent="slate"
-          />
-        </div>
-      </div>
+      </>}
 
     </div>
   )
