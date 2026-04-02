@@ -6,12 +6,13 @@
  *  - Main area: selected scenario detail (config summary, changes list, results)
  */
 
-import { useCallback, useContext, useEffect, useRef, useState } from 'react'
-import { ArrowRight, Edit2 } from 'lucide-react'
+import { useCallback, useContext, useEffect, useState } from 'react'
+import { ArrowRight, Edit2, Pencil } from 'lucide-react'
 import ExplorerLayout from '../ui/ExplorerLayout.jsx'
 import DataCard from '../ui/DataCard.jsx'
 import ScenarioList from './scenarios/ScenarioList.jsx'
 import CreateScenarioModal from './scenarios/CreateScenarioModal.jsx'
+import ScenarioEditor from './scenarios/ScenarioEditor.jsx'
 import { ProjectContext } from '../../context/ProjectContext.jsx'
 
 // ── API helpers ────────────────────────────────────────────────────────────────
@@ -174,7 +175,7 @@ function ScenarioResults({ latestRunId, projectId }) {
 
 // ── Main content area ──────────────────────────────────────────────────────────
 
-function ScenarioDetail({ scenario, projectId }) {
+function ScenarioDetail({ scenario, projectId, onEdit }) {
   const changes = scenario.changes_from_baseline ?? []
 
   return (
@@ -194,6 +195,14 @@ function ScenarioDetail({ scenario, projectId }) {
             <p className="text-caption text-mid-grey mt-1">{scenario.description}</p>
           )}
         </div>
+        {onEdit && (
+          <button
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-light-grey text-xxs font-medium text-dark-grey hover:border-navy hover:text-navy transition-colors"
+            onClick={onEdit}
+          >
+            <Pencil size={12} /> Edit
+          </button>
+        )}
       </div>
 
       {/* Changes from baseline (non-baseline scenarios only) */}
@@ -261,11 +270,13 @@ export default function ScenarioManager() {
 
   const [scenarios, setScenarios]       = useState([])
   const [selectedId, setSelectedId]     = useState(null)
+  const [isEditing, setIsEditing]       = useState(false)
   const [showModal, setShowModal]       = useState(false)
   const [runStatuses, setRunStatuses]   = useState({}) // { [id]: 'idle'|'running'|'complete'|'error' }
   const [runAllProgress, setRunAllProgress] = useState(null)
 
   const selectedScenario = scenarios.find(s => s.id === selectedId) ?? null
+  const baselineScenario = scenarios.find(s => s.is_baseline) ?? null
 
   // ── Load scenarios ──────────────────────────────────────────────────────────
 
@@ -287,6 +298,7 @@ export default function ScenarioManager() {
   useEffect(() => {
     setScenarios([])
     setSelectedId(null)
+    setIsEditing(false)
     setRunStatuses({})
     setRunAllProgress(null)
     loadScenarios()
@@ -333,6 +345,12 @@ export default function ScenarioManager() {
     setRunAllProgress(null)
   }
 
+  // ── Scenario updated by editor ───────────────────────────────────────────────
+
+  function handleScenarioUpdated(updated) {
+    setScenarios(prev => prev.map(s => s.id === updated.id ? { ...s, ...updated } : s))
+  }
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   const sidebar = (
@@ -340,7 +358,7 @@ export default function ScenarioManager() {
       scenarios={scenarios}
       selectedId={selectedId}
       runStatuses={runStatuses}
-      onSelect={setSelectedId}
+      onSelect={id => { setSelectedId(id); setIsEditing(false) }}
       onRun={handleRun}
       onRunAll={handleRunAll}
       onNew={() => setShowModal(true)}
@@ -348,21 +366,41 @@ export default function ScenarioManager() {
     />
   )
 
+  function renderMainContent() {
+    if (scenarios.length === 0) {
+      return <EmptyState onNew={() => setShowModal(true)} />
+    }
+    if (!selectedScenario) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <p className="text-caption text-mid-grey">Select a scenario to view details</p>
+        </div>
+      )
+    }
+    if (isEditing && !selectedScenario.is_baseline) {
+      return (
+        <ScenarioEditor
+          scenario={selectedScenario}
+          baseline={baselineScenario}
+          projectId={currentProjectId}
+          onDone={() => setIsEditing(false)}
+          onScenarioUpdated={handleScenarioUpdated}
+        />
+      )
+    }
+    return (
+      <ScenarioDetail
+        scenario={selectedScenario}
+        projectId={currentProjectId}
+        onEdit={selectedScenario.is_baseline ? null : () => setIsEditing(true)}
+      />
+    )
+  }
+
   return (
     <>
       <ExplorerLayout sidebar={sidebar} sidebarWidth="w-72">
-        {scenarios.length === 0 ? (
-          <EmptyState onNew={() => setShowModal(true)} />
-        ) : selectedScenario ? (
-          <ScenarioDetail
-            scenario={selectedScenario}
-            projectId={currentProjectId}
-          />
-        ) : (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-caption text-mid-grey">Select a scenario to view details</p>
-          </div>
-        )}
+        {renderMainContent()}
       </ExplorerLayout>
 
       {showModal && (
