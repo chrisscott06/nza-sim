@@ -202,20 +202,19 @@ function EuiTrajectoryChart({ scenarioLines, euiTargets }) {
 
 // ── Carbon Chart (single or multi-scenario) ───────────────────────────────────
 
-function CarbonTrajectoryChart({ scenarioLines, gia, carbonTargets }) {
-  // scenarioLines: [{ name, totalKwh, color }]
+function CarbonTrajectoryChart({ scenarioLines, defaultGia, carbonTargets }) {
+  // scenarioLines: [{ name, totalKwh, color, gia? }]
   const data = CHART_YEARS.map(year => {
     const row = {
       year,
       'CRREM 1.5°C Carbon': Number(interpolate(carbonTargets, year).toFixed(1)),
       safeZone:             Number(interpolate(carbonTargets, year).toFixed(1)),
     }
-    if (gia > 0) {
-      const gridIntensity = interpolate(GRID_INTENSITY, year)
-      for (const s of scenarioLines) {
-        if (year >= CURRENT_YEAR - 1) {
-          row[s.name] = Number(((s.totalKwh * gridIntensity) / gia).toFixed(1))
-        }
+    const gridIntensity = interpolate(GRID_INTENSITY, year)
+    for (const s of scenarioLines) {
+      const effectiveGia = s.gia ?? defaultGia
+      if (effectiveGia > 0 && year >= CURRENT_YEAR - 1) {
+        row[s.name] = Number(((s.totalKwh * gridIntensity) / effectiveGia).toFixed(1))
       }
     }
     return row
@@ -275,7 +274,8 @@ function StrandingTable({ scenarioLines, euiTargets, carbonTargets, gia }) {
         <tbody>
           {scenarioLines.map(s => {
             const euiStrand    = findStrandingYear(s.eui, euiTargets)
-            const carbStrand   = gia > 0 ? findCarbonStrandingYear(s.totalKwh, gia, carbonTargets) : null
+            const scGia        = s.gia ?? gia
+            const carbStrand   = scGia > 0 ? findCarbonStrandingYear(s.totalKwh, scGia, carbonTargets) : null
             return (
               <tr key={s.name} className="border-b border-light-grey last:border-0 hover:bg-off-white/50">
                 <td className="px-4 py-2">
@@ -358,12 +358,18 @@ export default function CRREMTab({ scenarios = [], scenarioResults = {} }) {
   let scenarioLines = []
 
   if (useMultiScenario) {
-    scenarioLines = scenariosWithResults.map((s, i) => ({
-      name:     s.name,
-      color:    SCENARIO_COLORS[i] ?? SCENARIO_COLORS[0],
-      eui:      scenarioResults[s.id].results_summary?.eui_kWh_per_m2 ?? 0,
-      totalKwh: scenarioResults[s.id].results_summary?.total_energy_kWh ?? 0,
-    }))
+    scenarioLines = scenariosWithResults.map((s, i) => {
+      const sr = scenarioResults[s.id]
+      return {
+        name:     s.name,
+        color:    SCENARIO_COLORS[i] ?? SCENARIO_COLORS[0],
+        eui:      sr.results_summary?.eui_kWh_per_m2 ?? 0,
+        // Prefer annual_energy.total_kWh (always present); results_summary.total_energy_kWh is null
+        totalKwh: sr.annual_energy?.total_kWh ?? sr.results_summary?.total_energy_kWh ?? 0,
+        // GIA from results_summary if available, else fall back to computed
+        gia:      sr.results_summary?.total_gia_m2 ?? null,
+      }
+    })
   } else if (status === 'complete' && results) {
     // Fallback: single line from SimulationContext
     scenarioLines = [{
@@ -371,6 +377,7 @@ export default function CRREMTab({ scenarios = [], scenarioResults = {} }) {
       color:    '#2B2A4C',
       eui:      results.summary?.eui_kWh_per_m2 ?? 0,
       totalKwh: results.annual_energy?.total_kWh ?? 0,
+      gia:      results.summary?.total_gia_m2 ?? null,
     }]
   }
 
@@ -389,6 +396,8 @@ export default function CRREMTab({ scenarios = [], scenarioResults = {} }) {
   const primary = scenarioLines[0]
   const primaryEui    = primary.eui
   const primaryKwh    = primary.totalKwh
+  // Use GIA from results if available; fall back to ProjectContext geometry
+  const effectiveGia  = primary.gia ?? gia
 
   const crremEuiNow    = interpolate(euiTargets,    CURRENT_YEAR)
   const crremCarbonNow = interpolate(carbonTargets, CURRENT_YEAR)
@@ -397,10 +406,10 @@ export default function CRREMTab({ scenarios = [], scenarioResults = {} }) {
   const isEuiCompliant = euiGap != null && euiGap <= 0
 
   const currentGridIntensity = interpolate(GRID_INTENSITY, CURRENT_YEAR)
-  const buildingCarbonNow    = gia > 0 ? (primaryKwh * currentGridIntensity) / gia : null
+  const buildingCarbonNow    = effectiveGia > 0 ? (primaryKwh * currentGridIntensity) / effectiveGia : null
 
   const strandingYearEui    = findStrandingYear(primaryEui, euiTargets)
-  const strandingYearCarbon = gia > 0 ? findCarbonStrandingYear(primaryKwh, gia, carbonTargets) : null
+  const strandingYearCarbon = effectiveGia > 0 ? findCarbonStrandingYear(primaryKwh, effectiveGia, carbonTargets) : null
 
   return (
     <div className="p-6 space-y-6">
@@ -476,16 +485,16 @@ export default function CRREMTab({ scenarios = [], scenarioResults = {} }) {
       />
 
       {/* Carbon Trajectory Chart */}
-      {gia > 0 && (
+      {effectiveGia > 0 && primaryKwh > 0 && (
         <CarbonTrajectoryChart
           scenarioLines={scenarioLines}
-          gia={gia}
+          defaultGia={effectiveGia}
           carbonTargets={carbonTargets}
         />
       )}
 
       {/* Carbon DataCards (primary scenario) */}
-      {gia > 0 && (
+      {effectiveGia > 0 && primaryKwh > 0 && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <DataCard
             label={`Carbon ${CURRENT_YEAR}`}
@@ -501,7 +510,7 @@ export default function CRREMTab({ scenarios = [], scenarioResults = {} }) {
           />
           <DataCard
             label="Building carbon 2050"
-            value={primaryKwh > 0 ? ((primaryKwh * interpolate(GRID_INTENSITY, 2050)) / gia).toFixed(1) : null}
+            value={effectiveGia > 0 ? ((primaryKwh * interpolate(GRID_INTENSITY, 2050)) / effectiveGia).toFixed(1) : null}
             unit="kgCO₂/m²"
             accent="navy"
           />
