@@ -63,6 +63,8 @@ class ConstructionChoices(BaseModel):
 class SystemsConfig(BaseModel):
     mode: str = "ideal"                        # 'ideal' | 'detailed'
     hvac_type: str = "vrf_standard"
+    cop_heating: float = 3.5                   # VRF heating COP at rated conditions
+    cop_cooling: float = 3.2                   # VRF cooling EER at rated conditions
     ventilation_type: str = "mev_standard"
     natural_ventilation: bool = False
     natural_vent_threshold: float = 22.0

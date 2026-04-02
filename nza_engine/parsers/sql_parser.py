@@ -232,35 +232,113 @@ def _get_unmet_hours(conn: sqlite3.Connection) -> dict[str, float]:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+def _detect_hvac_mode(conn: sqlite3.Connection) -> str:
+    """
+    Detect whether the simulation used ideal loads or detailed HVAC.
+
+    Returns 'ideal_loads' or 'detailed'.
+    Heuristic: if 'Zone Ideal Loads Supply Air Total Heating Energy' is in
+    the ReportDataDictionary, the simulation used IdealLoads.
+    """
+    rows = _query(
+        conn,
+        "SELECT ReportDataDictionaryIndex FROM ReportDataDictionary "
+        "WHERE Name = 'Zone Ideal Loads Supply Air Total Heating Energy' LIMIT 1"
+    )
+    return "ideal_loads" if rows else "detailed"
+
+
 def get_annual_energy_by_enduse(sql_path: str | Path) -> dict[str, float]:
-    """Return annual energy by end use in kWh."""
+    """
+    Return annual energy by end use in kWh.
+
+    Mode-aware: detects whether the simulation used IdealLoads or detailed HVAC
+    (VRF, etc.) and reads the appropriate variables/meters.
+
+    For ideal loads:
+      - heating/cooling = zone thermal demand (Zone Ideal Loads variables)
+      - total = thermal demand + lighting + equipment
+    For detailed HVAC:
+      - heating_kWh   = Heating:EnergyTransfer (thermal energy delivered to zones)
+      - cooling_kWh   = Cooling:EnergyTransfer (thermal energy removed from zones)
+      - fans_kWh      = Fans:Electricity
+      - hvac_elec_kWh = Heating:Electricity + Cooling:Electricity + Fans:Electricity
+      - total_kWh     = Electricity:Facility (all site electricity incl. lighting, equip, HVAC)
+    """
     conn = _connect(sql_path)
     try:
-        heating   = _sum_annual(conn, "Zone Ideal Loads Supply Air Total Heating Energy")
-        cooling   = _sum_annual(conn, "Zone Ideal Loads Supply Air Total Cooling Energy")
+        mode     = _detect_hvac_mode(conn)
         lighting  = _sum_annual(conn, "Zone Lights Electricity Energy")
         equipment = _sum_annual(conn, "Zone Electric Equipment Electricity Energy")
-        return {
-            "heating_kWh":   round(heating,   1),
-            "cooling_kWh":   round(cooling,   1),
-            "lighting_kWh":  round(lighting,  1),
-            "equipment_kWh": round(equipment, 1),
-            "total_kWh":     round(heating + cooling + lighting + equipment, 1),
-        }
+
+        if mode == "ideal_loads":
+            heating = _sum_annual(conn, "Zone Ideal Loads Supply Air Total Heating Energy")
+            cooling = _sum_annual(conn, "Zone Ideal Loads Supply Air Total Cooling Energy")
+            fans    = 0.0
+            total   = heating + cooling + lighting + equipment
+            return {
+                "hvac_mode":     "ideal_loads",
+                "heating_kWh":   round(heating,   1),
+                "cooling_kWh":   round(cooling,   1),
+                "fans_kWh":      0.0,
+                "lighting_kWh":  round(lighting,  1),
+                "equipment_kWh": round(equipment, 1),
+                "total_kWh":     round(total,     1),
+            }
+        else:
+            # Detailed HVAC (VRF etc.): read from meters
+            # EnergyTransfer = thermal demand (useful for reporting building demand)
+            heating_et  = _sum_annual(conn, "Heating:EnergyTransfer")
+            cooling_et  = _sum_annual(conn, "Cooling:EnergyTransfer")
+            # Electricity meters = actual site consumption
+            heating_el  = _sum_annual(conn, "Heating:Electricity")
+            cooling_el  = _sum_annual(conn, "Cooling:Electricity")
+            fans        = _sum_annual(conn, "Fans:Electricity")
+            # Electricity:Facility = all electricity including lighting + equipment + HVAC
+            total_elec  = _sum_annual(conn, "Electricity:Facility")
+            # Gas (for future DHW gas boiler support)
+            gas_el      = _sum_annual(conn, "NaturalGas:Facility")
+            total       = total_elec + gas_el
+            return {
+                "hvac_mode":             "detailed",
+                "heating_kWh":           round(heating_et,  1),   # thermal demand
+                "cooling_kWh":           round(cooling_et,  1),   # thermal demand
+                "heating_electricity_kWh": round(heating_el, 1),  # actual site elec
+                "cooling_electricity_kWh": round(cooling_el, 1),
+                "fans_kWh":              round(fans,        1),
+                "lighting_kWh":          round(lighting,    1),
+                "equipment_kWh":         round(equipment,   1),
+                "electricity_kWh":       round(total_elec,  1),
+                "gas_kWh":               round(gas_el,      1),
+                "total_kWh":             round(total,       1),
+            }
     finally:
         conn.close()
 
 
 def get_monthly_energy_by_enduse(sql_path: str | Path) -> dict[str, list[float]]:
-    """Return monthly energy breakdown in kWh (12 values per end use)."""
+    """
+    Return monthly energy breakdown in kWh (12 values per end use).
+    Mode-aware: uses IdealLoads variables or meters depending on simulation mode.
+    """
     conn = _connect(sql_path)
     try:
-        return {
-            "heating_kWh":   _monthly_sums(conn, "Zone Ideal Loads Supply Air Total Heating Energy"),
-            "cooling_kWh":   _monthly_sums(conn, "Zone Ideal Loads Supply Air Total Cooling Energy"),
-            "lighting_kWh":  _monthly_sums(conn, "Zone Lights Electricity Energy"),
-            "equipment_kWh": _monthly_sums(conn, "Zone Electric Equipment Electricity Energy"),
-        }
+        mode = _detect_hvac_mode(conn)
+        if mode == "ideal_loads":
+            return {
+                "heating_kWh":   _monthly_sums(conn, "Zone Ideal Loads Supply Air Total Heating Energy"),
+                "cooling_kWh":   _monthly_sums(conn, "Zone Ideal Loads Supply Air Total Cooling Energy"),
+                "lighting_kWh":  _monthly_sums(conn, "Zone Lights Electricity Energy"),
+                "equipment_kWh": _monthly_sums(conn, "Zone Electric Equipment Electricity Energy"),
+            }
+        else:
+            return {
+                "heating_kWh":   _monthly_sums(conn, "Heating:EnergyTransfer"),
+                "cooling_kWh":   _monthly_sums(conn, "Cooling:EnergyTransfer"),
+                "fans_kWh":      _monthly_sums(conn, "Fans:Electricity"),
+                "lighting_kWh":  _monthly_sums(conn, "Zone Lights Electricity Energy"),
+                "equipment_kWh": _monthly_sums(conn, "Zone Electric Equipment Electricity Energy"),
+            }
     finally:
         conn.close()
 
@@ -271,13 +349,18 @@ def get_zone_summary(sql_path: str | Path) -> list[dict]:
     try:
         zones_info = _get_zones_info(conn)
         zone_names = [z["name"] for z in zones_info]
+        mode       = _detect_hvac_mode(conn)
 
-        heat_by_zone = _get_zone_energy_by_variable(
-            conn, "Zone Ideal Loads Supply Air Total Heating Energy", zone_names
-        )
-        cool_by_zone = _get_zone_energy_by_variable(
-            conn, "Zone Ideal Loads Supply Air Total Cooling Energy", zone_names
-        )
+        if mode == "ideal_loads":
+            heat_var = "Zone Ideal Loads Supply Air Total Heating Energy"
+            cool_var = "Zone Ideal Loads Supply Air Total Cooling Energy"
+        else:
+            # For VRF: use coil energy variables if available, otherwise meters
+            heat_var = "Zone VRF Heat Pump Heating Energy"
+            cool_var = "Zone VRF Heat Pump Cooling Energy"
+
+        heat_by_zone = _get_zone_energy_by_variable(conn, heat_var, zone_names)
+        cool_by_zone = _get_zone_energy_by_variable(conn, cool_var, zone_names)
 
         return [
             {
@@ -314,21 +397,33 @@ def get_building_summary(sql_path: str | Path) -> dict[str, Any]:
         total_gia   = sum(z["floor_area_m2"] for z in zones_info)
         total_vol   = sum(z["volume_m3"]     for z in zones_info)
 
-        heating   = _sum_annual(conn, "Zone Ideal Loads Supply Air Total Heating Energy")
-        cooling   = _sum_annual(conn, "Zone Ideal Loads Supply Air Total Cooling Energy")
+        mode      = _detect_hvac_mode(conn)
         lighting  = _sum_annual(conn, "Zone Lights Electricity Energy")
         equipment = _sum_annual(conn, "Zone Electric Equipment Electricity Energy")
-        total     = heating + cooling + lighting + equipment
+
+        if mode == "ideal_loads":
+            heating = _sum_annual(conn, "Zone Ideal Loads Supply Air Total Heating Energy")
+            cooling = _sum_annual(conn, "Zone Ideal Loads Supply Air Total Cooling Energy")
+            total   = heating + cooling + lighting + equipment
+            peak_heat_W = _get_coincident_peak_W(
+                conn, "Zone Ideal Loads Supply Air Total Heating Energy"
+            )
+            peak_cool_W = _get_coincident_peak_W(
+                conn, "Zone Ideal Loads Supply Air Total Cooling Energy"
+            )
+        else:
+            # Detailed mode: report thermal demand for heating/cooling display,
+            # but use total site electricity for EUI
+            heating     = _sum_annual(conn, "Heating:EnergyTransfer")
+            cooling     = _sum_annual(conn, "Cooling:EnergyTransfer")
+            total_elec  = _sum_annual(conn, "Electricity:Facility")
+            gas         = _sum_annual(conn, "NaturalGas:Facility")
+            total       = total_elec + gas
+            # Peak from the EnergyTransfer meters (represents peak zone demand)
+            peak_heat_W = _get_coincident_peak_W(conn, "Heating:EnergyTransfer")
+            peak_cool_W = _get_coincident_peak_W(conn, "Cooling:EnergyTransfer")
 
         eui = total / total_gia if total_gia > 0 else 0.0
-
-        # Coincident peak loads (sum all zones at each timestep, return max)
-        peak_heat_W = _get_coincident_peak_W(
-            conn, "Zone Ideal Loads Supply Air Total Heating Energy"
-        )
-        peak_cool_W = _get_coincident_peak_W(
-            conn, "Zone Ideal Loads Supply Air Total Cooling Energy"
-        )
 
         unmet = _get_unmet_hours(conn)
 

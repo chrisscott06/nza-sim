@@ -47,6 +47,7 @@ from nza_engine.library.schedules import (
     library_schedule_to_compact,
 )
 from nza_engine.library.loads import get_zone_loads
+from nza_engine.generators.hvac_vrf import generate_vrf_system
 
 
 # ── Construction placeholder → construction_choices key ───────────────────────
@@ -366,6 +367,75 @@ def _build_hvac_ideal_loads(zones: dict) -> tuple[dict, dict, dict, dict, dict]:
     return ideal_loads, equip_lists, equip_conns, thermostats, zone_controls
 
 
+def _build_sizing_objects(zones: dict) -> dict:
+    """
+    Build zone sizing objects needed for detailed HVAC mode (VRF, etc.).
+
+    ZoneHVAC:IdealLoadsAirSystem can autosize without these objects,
+    but Fan:SystemModel and VRF coils require Sizing:Zone + design days.
+
+    Uses conservative UK/Northern-Europe design conditions:
+      Heating: -5°C OA (worst-case winter), Cooling: 32°C OA (peak summer)
+    """
+    # Shared outdoor air design spec (8 l/s/person for hotel bedrooms)
+    dsoa = {}
+    for zone_name in zones:
+        dsoa[f"{zone_name}_DSOA"] = {
+            "outdoor_air_method": "Flow/Person",
+            "outdoor_air_flow_per_person": _VENT_M3_PER_S_PER_PERSON,
+        }
+
+    # Zone sizing (one entry per zone)
+    sizing_zone = {}
+    for zone_name in zones:
+        sizing_zone[f"{zone_name}_Sizing"] = {
+            "zone_or_zonelist_name": zone_name,
+            "zone_cooling_design_supply_air_temperature": 14.0,
+            "zone_heating_design_supply_air_temperature": 40.0,
+            "zone_cooling_design_supply_air_humidity_ratio": 0.009,
+            "zone_heating_design_supply_air_humidity_ratio": 0.004,
+            "design_specification_outdoor_air_object_name": f"{zone_name}_DSOA",
+            "zone_heating_sizing_factor": 1.25,
+            "zone_cooling_sizing_factor": 1.15,
+        }
+
+    # Design days — conservative European values
+    design_days = {
+        "Heating Design Day": {
+            "month": 1, "day_of_month": 21,
+            "day_type": "WinterDesignDay",
+            "maximum_dry_bulb_temperature": -5.0,
+            "daily_dry_bulb_temperature_range": 0.0,
+            "humidity_condition_type": "WetBulb",
+            "wetbulb_or_dewpoint_at_maximum_dry_bulb": -5.0,
+            "barometric_pressure": 101325.0,
+            "wind_speed": 3.0,
+            "wind_direction": 270.0,
+            "solar_model_indicator": "ASHRAEClearSky",
+            "sky_clearness": 0.0,
+        },
+        "Cooling Design Day": {
+            "month": 7, "day_of_month": 21,
+            "day_type": "SummerDesignDay",
+            "maximum_dry_bulb_temperature": 32.0,
+            "daily_dry_bulb_temperature_range": 11.0,
+            "humidity_condition_type": "WetBulb",
+            "wetbulb_or_dewpoint_at_maximum_dry_bulb": 22.0,
+            "barometric_pressure": 101325.0,
+            "wind_speed": 3.5,
+            "wind_direction": 270.0,
+            "solar_model_indicator": "ASHRAEClearSky",
+            "sky_clearness": 1.0,
+        },
+    }
+
+    return {
+        "DesignSpecification:OutdoorAir": dsoa,
+        "Sizing:Zone": sizing_zone,
+        "SizingPeriod:DesignDay": design_days,
+    }
+
+
 def _output_variables() -> dict:
     """
     Build Output:Variable request objects for key simulation outputs.
@@ -406,10 +476,16 @@ def _output_meters() -> dict:
     meters = [
         "Electricity:Facility",
         "Gas:Facility",
+        "NaturalGas:Facility",
         "Heating:EnergyTransfer",
         "Cooling:EnergyTransfer",
         "InteriorLights:Electricity",
         "InteriorEquipment:Electricity",
+        "Fans:Electricity",
+        "Cooling:Electricity",
+        "Heating:Electricity",
+        "WaterSystems:Electricity",
+        "WaterSystems:NaturalGas",
     ]
     result = {}
     for i, meter in enumerate(meters, start=1):
@@ -526,11 +602,35 @@ def assemble_epjson(
             zones, building_params, natural_vent_threshold=threshold
         )
 
-    # ── 7. HVAC (ideal loads — perfect system, no real HVAC effects) ──────────
-    # Uses native ZoneHVAC:IdealLoadsAirSystem (not HVACTemplate which needs ExpandObjects)
-    ideal_loads, equip_lists, equip_conns, dual_setpoints, zone_controls = (
-        _build_hvac_ideal_loads(zones)
-    )
+    # ── 7. HVAC — branch on mode ──────────────────────────────────────────────
+    # "ideal_loads" (default): ZoneHVAC:IdealLoadsAirSystem — perfect, no real system effects
+    # "detailed": real VRF objects with performance curves, real COP, fan energy
+    mode = sc.get("mode", "ideal_loads")
+
+    if mode == "detailed":
+        heating_cop = float(sc.get("cop_heating", 3.5))
+        cooling_eer = float(sc.get("cop_cooling", 3.2))
+        # Currently VRF is the detailed HVAC system (vrf_standard, vrf_high_efficiency, ashp_system)
+        hvac_objects = generate_vrf_system(
+            zone_names=list(zones.keys()),
+            heating_cop=heating_cop,
+            cooling_eer=cooling_eer,
+        )
+        # Zone sizing objects are required for Fan:SystemModel and VRF coil autosizing
+        sizing_objects = _build_sizing_objects(zones)
+        hvac_objects.update(sizing_objects)
+    else:
+        # Ideal loads — ZoneHVAC:IdealLoadsAirSystem (not HVACTemplate which needs ExpandObjects)
+        ideal_loads, equip_lists, equip_conns, dual_setpoints, zone_controls = (
+            _build_hvac_ideal_loads(zones)
+        )
+        hvac_objects = {
+            "ZoneHVAC:IdealLoadsAirSystem": ideal_loads,
+            "ZoneHVAC:EquipmentList":       equip_lists,
+            "ZoneHVAC:EquipmentConnections": equip_conns,
+            "ThermostatSetpoint:DualSetpoint": dual_setpoints,
+            "ZoneControl:Thermostat":        zone_controls,
+        }
 
     # ThermostatControlType_DualSetpoint schedule is already in schedules.py
     # ThermostatControlType ScheduleTypeLimits is already in schedule_type_limits
@@ -620,11 +720,8 @@ def assemble_epjson(
         "ElectricEquipment": equip_objects,
         "ZoneInfiltration:DesignFlowRate": infil_objects,
 
-        "ZoneHVAC:IdealLoadsAirSystem": ideal_loads,
-        "ZoneHVAC:EquipmentList": equip_lists,
-        "ZoneHVAC:EquipmentConnections": equip_conns,
-        "ThermostatSetpoint:DualSetpoint": dual_setpoints,
-        "ZoneControl:Thermostat": zone_controls,
+        # HVAC — keys injected dynamically based on mode (ideal_loads or detailed VRF)
+        **hvac_objects,
 
         **({"ZoneVentilation:WindandStackOpenArea": natural_vent_objects}
            if natural_vent_objects else {}),
