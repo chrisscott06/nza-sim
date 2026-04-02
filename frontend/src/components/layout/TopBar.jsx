@@ -1,6 +1,7 @@
 import { useContext, useEffect, useState } from 'react'
 import { Play, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
 import { SimulationContext } from '../../context/SimulationContext.jsx'
+import { BuildingContext } from '../../context/BuildingContext.jsx'
 
 /* Toast notification shown after simulation completes or errors */
 function Toast({ message, type, onDismiss }) {
@@ -29,6 +30,8 @@ function Toast({ message, type, onDismiss }) {
 
 export default function TopBar() {
   const { status, results, error, runSimulation } = useContext(SimulationContext)
+  const buildingCtx = useContext(BuildingContext)
+  const buildingName = buildingCtx?.params?.name || 'NZA Simulate'
   const [toast, setToast] = useState(null)
 
   /* Show toast when simulation completes or errors */
@@ -50,14 +53,17 @@ export default function TopBar() {
 
   /* Button appearance by status */
   const buttonClass = (() => {
-    if (status === 'running') return 'bg-magenta opacity-80 cursor-not-allowed animate-pulse'
-    if (status === 'error')   return 'bg-coral hover:bg-coral/90'
+    if (status === 'running')  return 'bg-magenta opacity-80 cursor-not-allowed animate-pulse'
+    if (status === 'complete') return 'bg-green-600 hover:bg-green-700'
+    if (status === 'error')    return 'bg-coral hover:bg-coral/90'
     return 'bg-magenta hover:bg-magenta/90'
   })()
 
   const buttonContent = (() => {
     if (status === 'running')
       return <><Loader2 size={13} className="animate-spin" /><span>Simulating…</span></>
+    if (status === 'complete')
+      return <><CheckCircle2 size={13} /><span>Re-run Simulation</span></>
     if (status === 'error')
       return <><AlertCircle size={13} /><span>Retry Simulation</span></>
     return <><Play size={13} fill="currentColor" /><span>Run Simulation</span></>
@@ -66,8 +72,8 @@ export default function TopBar() {
   return (
     <>
       <header className="h-12 bg-white border-b border-light-grey flex items-center px-4 gap-4 flex-shrink-0">
-        {/* Project name */}
-        <span className="text-section font-medium text-navy">Bridgewater Hotel</span>
+        {/* Project name — reads dynamically from BuildingContext */}
+        <span className="text-section font-medium text-navy">{buildingName}</span>
 
         <div className="flex-1" />
 
