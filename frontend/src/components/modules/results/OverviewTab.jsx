@@ -64,51 +64,41 @@ export default function OverviewTab() {
     )
   }
 
-  const s = results.summary ?? {}
-  const gia = (params.length ?? 60) * (params.width ?? 15) * (params.num_floors ?? 4)
+  // API response shape:
+  //   results.summary   — { eui_kWh_per_m2, annual_heating_kWh, annual_cooling_kWh, peak_*_W_per_m2, unmet_* }
+  //   results.annual_energy — { heating_kWh, cooling_kWh, lighting_kWh, equipment_kWh, total_kWh }
+  const s   = results.summary      ?? {}
+  const ae  = results.annual_energy ?? {}
+  const gia = s.total_gia_m2 ?? ((params.length ?? 60) * (params.width ?? 15) * (params.num_floors ?? 4))
 
-  // --- KPI cards ---
-  const totalHeating = s.total_heating_kWh ?? 0
-  const totalCooling = s.total_cooling_kWh ?? 0
-  const eui          = s.eui_kWh_per_m2   ?? 0
+  const totalHeating = s.annual_heating_kWh ?? ae.heating_kWh  ?? 0
+  const totalCooling = s.annual_cooling_kWh ?? ae.cooling_kWh  ?? 0
+  const eui          = s.eui_kWh_per_m2     ?? 0
 
-  // Build donut data from annual_by_enduse if available
-  let donutData = []
-  if (results.annual_by_enduse?.length) {
-    const sums = { Heating: 0, Cooling: 0, Lighting: 0, Equipment: 0 }
-    for (const row of results.annual_by_enduse) {
-      sums.Heating   += row.heating_kWh   ?? 0
-      sums.Cooling   += row.cooling_kWh   ?? 0
-      sums.Lighting  += row.lighting_kWh  ?? 0
-      sums.Equipment += row.equipment_kWh ?? 0
-    }
-    const total = Object.values(sums).reduce((a, b) => a + b, 0)
-    donutData = Object.entries(sums)
-      .filter(([, v]) => v > 0)
-      .map(([name, value]) => ({
-        name,
-        value: Math.round(value),
-        pct: total > 0 ? Math.round((value / total) * 100) : 0,
-      }))
-  } else {
-    // Fallback from summary totals if annual_by_enduse not present
-    const total = totalHeating + totalCooling
-    if (total > 0) {
-      donutData = [
-        { name: 'Heating', value: Math.round(totalHeating), pct: Math.round(totalHeating / total * 100) },
-        { name: 'Cooling', value: Math.round(totalCooling), pct: Math.round(totalCooling / total * 100) },
-      ]
-    }
+  // Build donut data from annual_energy dict
+  const donutRaw = {
+    Heating:   ae.heating_kWh   ?? totalHeating,
+    Cooling:   ae.cooling_kWh   ?? totalCooling,
+    Lighting:  ae.lighting_kWh  ?? 0,
+    Equipment: ae.equipment_kWh ?? 0,
   }
+  const donutTotal = Object.values(donutRaw).reduce((a, b) => a + b, 0)
+  const donutData = Object.entries(donutRaw)
+    .filter(([, v]) => v > 0)
+    .map(([name, value]) => ({
+      name,
+      value: Math.round(value),
+      pct: donutTotal > 0 ? Math.round((value / donutTotal) * 100) : 0,
+    }))
 
   // --- Sanity checks ---
   const euiStatus = eui > 0 && eui < 300 ? 'ok' : 'warn'
   const peakHeat  = s.peak_heating_W_per_m2 ?? 0
   const peakCool  = s.peak_cooling_W_per_m2 ?? 0
-  const unmetH    = s.unmet_heating_hours ?? 0
-  const unmetC    = s.unmet_cooling_hours ?? 0
-  const warnings  = s.warnings  ?? 0
-  const severes   = s.severes   ?? 0
+  const unmetH    = s.unmet_heating_hours    ?? 0
+  const unmetC    = s.unmet_cooling_hours    ?? 0
+  const warnings  = results.warnings         ?? 0
+  const severes   = 0  // not currently exposed in API response
 
   return (
     <div className="p-4 space-y-5">
@@ -141,6 +131,7 @@ export default function OverviewTab() {
             value={Math.round(gia).toLocaleString()}
             unit="m²"
             accent="slate"
+            large={false}
           />
         </div>
       </div>

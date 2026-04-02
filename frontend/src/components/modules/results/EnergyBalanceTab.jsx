@@ -41,7 +41,11 @@ function CustomTooltip({ active, payload, label }) {
 export default function EnergyBalanceTab() {
   const { status, results } = useContext(SimulationContext)
 
-  if (status !== 'complete' || !results?.monthly_by_enduse?.length) {
+  // API returns monthly_energy as a dict of 12-value arrays:
+  // { heating_kWh: [jan, feb, ...], cooling_kWh: [...], ... }
+  const me = results?.monthly_energy
+
+  if (status !== 'complete' || !me) {
     return (
       <ModuleEmptyState
         icon={BarChart3}
@@ -52,14 +56,13 @@ export default function EnergyBalanceTab() {
     )
   }
 
-  // Ensure months are in order 1–12
-  const sorted = [...results.monthly_by_enduse].sort((a, b) => a.month - b.month)
-  const chartData = sorted.map(row => ({
-    month: MONTH_LABELS[(row.month ?? 1) - 1] ?? `M${row.month}`,
-    heating_kWh:   Math.round(row.heating_kWh   ?? 0),
-    cooling_kWh:   Math.round(row.cooling_kWh   ?? 0),
-    lighting_kWh:  Math.round(row.lighting_kWh  ?? 0),
-    equipment_kWh: Math.round(row.equipment_kWh ?? 0),
+  // Transform dict of arrays → array of month objects
+  const chartData = MONTH_LABELS.map((month, i) => ({
+    month,
+    heating_kWh:   Math.round(me.heating_kWh?.[i]   ?? 0),
+    cooling_kWh:   Math.round(me.cooling_kWh?.[i]   ?? 0),
+    lighting_kWh:  Math.round(me.lighting_kWh?.[i]  ?? 0),
+    equipment_kWh: Math.round(me.equipment_kWh?.[i] ?? 0),
   }))
 
   // Annual totals
