@@ -413,6 +413,19 @@ async def simulate_project(project_id: str, scenario_name: str = "Baseline"):
     building_params = project["building_config"]
     construction_choices = project["construction_choices"]
     systems_config = project["systems_config"]
+    schedule_assignments = project.get("schedule_assignments") or {}
+
+    # Resolve schedule assignments: fetch config_json for each assigned library item
+    schedule_overrides: dict = {}
+    if schedule_assignments:
+        async with get_db() as db:
+            for assign_key, item_id in schedule_assignments.items():
+                cursor = await db.execute(
+                    "SELECT config_json FROM library_items WHERE id = ?", (item_id,)
+                )
+                row = await cursor.fetchone()
+                if row and row["config_json"]:
+                    schedule_overrides[assign_key] = json.loads(row["config_json"])
 
     # Assemble and run
     epjson_path = run_dir / "input.epJSON"
@@ -422,6 +435,7 @@ async def simulate_project(project_id: str, scenario_name: str = "Baseline"):
         weather_file_path=weather_path,
         output_path=epjson_path,
         systems_config=systems_config,
+        schedule_overrides=schedule_overrides if schedule_overrides else None,
     )
 
     sim_result = run_simulation(

@@ -44,6 +44,7 @@ from nza_engine.library.constructions import get_construction
 from nza_engine.library.schedules import (
     get_all_schedules,
     get_schedule_type_limits,
+    library_schedule_to_compact,
 )
 from nza_engine.library.loads import get_zone_loads
 
@@ -415,12 +416,24 @@ def _output_meters() -> dict:
     return result
 
 
+## Map schedule_type → default Schedule:Compact name(s) used in the model
+_SCHEDULE_TYPE_TO_DEFAULT_NAME: dict[str, str] = {
+    "occupancy":        "hotel_bedroom_occupancy",
+    "lighting":         "hotel_bedroom_lighting",
+    "equipment":        "hotel_bedroom_equipment",
+    "heating_setpoint": "hotel_heating_setpoint",
+    "cooling_setpoint": "hotel_cooling_setpoint",
+    "dhw":              "hotel_dhw_demand",
+}
+
+
 def assemble_epjson(
     building_params: dict,
     construction_choices: dict[str, str],
     weather_file_path: str | Path,
     output_path: str | Path | None = None,
     systems_config: dict | None = None,
+    schedule_overrides: dict[str, dict] | None = None,
 ) -> dict:
     """
     Assemble a complete epJSON dict for the given building.
@@ -438,6 +451,13 @@ def assemble_epjson(
     systems_config : dict | None
         Optional systems configuration from the frontend (mode, hvac_type,
         lighting_power_density, etc.)
+    schedule_overrides : dict[str, dict] | None
+        Optional mapping of assignment key → library config_json.
+        Each entry replaces the corresponding default schedule in the model.
+        Keys are formatted as "{zone_type}_{schedule_type}" (e.g.
+        "bedroom_occupancy") or just the schedule_type string.
+        The schedule_type field inside config_json determines which default
+        schedule is replaced.
 
     Returns
     -------
@@ -465,6 +485,16 @@ def assemble_epjson(
     # ── 5. Schedules ──────────────────────────────────────────────────────────
     all_schedules = get_all_schedules()
     schedule_type_limits = get_schedule_type_limits()
+
+    # Apply user schedule overrides: replace default Schedule:Compact entries
+    # with converted library schedules.  The config_json schedule_type field
+    # determines which default name is replaced.
+    if schedule_overrides:
+        for _key, cfg in schedule_overrides.items():
+            sched_type = cfg.get("schedule_type", "")
+            default_name = _SCHEDULE_TYPE_TO_DEFAULT_NAME.get(sched_type)
+            if default_name and default_name in all_schedules:
+                all_schedules[default_name] = library_schedule_to_compact(cfg)
 
     # ── 6. Internal loads ─────────────────────────────────────────────────────
     # All zones treated as hotel_bedroom for this rectangular massing model

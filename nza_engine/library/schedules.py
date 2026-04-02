@@ -325,6 +325,80 @@ def get_schedule_type_limits() -> dict:
     return deepcopy(SCHEDULE_TYPE_LIMITS)
 
 
+# ── Library schedule → Schedule:Compact converter ─────────────────────────────
+
+# Last day of each month (non-leap year)
+_MONTH_ENDS = [
+    "1/31", "2/28", "3/31", "4/30", "5/31", "6/30",
+    "7/31", "8/31", "9/30", "10/31", "11/30", "12/31",
+]
+
+# Map schedule_type string to EnergyPlus ScheduleTypeLimits name
+_SCHED_TYPE_LIMITS_MAP: dict[str, str] = {
+    "occupancy":        "Fraction",
+    "lighting":         "Fraction",
+    "equipment":        "Fraction",
+    "dhw":              "Fraction",
+    "heating_setpoint": "Temperature",
+    "cooling_setpoint": "Temperature",
+}
+
+
+def library_schedule_to_compact(config_json: dict) -> dict:
+    """
+    Convert a library schedule config_json (day_types + monthly_multipliers format)
+    to an EnergyPlus Schedule:Compact epJSON dict.
+
+    For fraction schedules the hourly value is multiplied by the monthly multiplier
+    and clamped to [0, 1].  For setpoint schedules the multiplier is not applied.
+
+    Parameters
+    ----------
+    config_json : dict
+        Must contain:
+          - ``day_types``: dict with keys 'weekday', 'saturday', 'sunday',
+                           each a list of 24 float values
+          - ``monthly_multipliers``: list of 12 floats
+          - ``schedule_type``: one of 'occupancy', 'lighting', 'equipment',
+                               'dhw', 'heating_setpoint', 'cooling_setpoint'
+    """
+    day_types   = config_json.get("day_types", {})
+    multipliers = config_json.get("monthly_multipliers", [1.0] * 12)
+    sched_type  = config_json.get("schedule_type", "occupancy")
+
+    weekday  = day_types.get("weekday",  [0.5] * 24)
+    saturday = day_types.get("saturday", weekday)
+    sunday   = day_types.get("sunday",   weekday)
+
+    type_limits = _SCHED_TYPE_LIMITS_MAP.get(sched_type, "Fraction")
+    is_setpoint = sched_type in ("heating_setpoint", "cooling_setpoint")
+
+    data: list[dict] = []
+
+    for m, month_end in enumerate(_MONTH_ENDS):
+        mult = 1.0 if is_setpoint else float(multipliers[m])
+        data.append({"field": f"Through: {month_end}"})
+
+        for day_label, day_values in [
+            ("For: Weekdays", weekday),
+            ("For: Saturday", saturday),
+            ("For: AllOtherDays", sunday),   # covers Sunday, holidays, design days
+        ]:
+            data.append({"field": day_label})
+            for h, raw_val in enumerate(day_values):
+                if is_setpoint:
+                    val = float(raw_val)
+                else:
+                    val = round(max(0.0, min(1.0, float(raw_val) * mult)), 4)
+                data.append({"field": f"Until: {h + 1:02d}:00"})
+                data.append({"field": val})
+
+    return {
+        "schedule_type_limits_name": type_limits,
+        "data": data,
+    }
+
+
 # ── Standardised visual library format ────────────────────────────────────────
 #
 # Used by the library database and Profiles editor.
