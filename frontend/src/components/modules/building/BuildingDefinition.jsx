@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useState, useContext } from 'react'
 import ExplorerLayout from '../../ui/ExplorerLayout.jsx'
 import TabBar from '../../ui/TabBar.jsx'
 import GeometryTab from './GeometryTab.jsx'
 import FabricTab from './FabricTab.jsx'
 import SummaryTab from './SummaryTab.jsx'
+import BuildingViewer3D from './BuildingViewer3D.jsx'
+import { BuildingContext } from '../../../context/BuildingContext.jsx'
 
 const TABS = [
   { id: 'geometry', label: 'Geometry' },
@@ -38,6 +40,7 @@ function BuildingSidebar({ activeTab, onTabChange }) {
 
 export default function BuildingDefinition() {
   const [activeTab, setActiveTab] = useState('geometry')
+  const { params } = useContext(BuildingContext)
 
   return (
     <ExplorerLayout
@@ -49,20 +52,9 @@ export default function BuildingDefinition() {
         />
       }
     >
-      {/* Main area — 3D viewer will go here in Part 5 */}
-      <div className="flex items-center justify-center h-full text-mid-grey select-none">
-        <div className="text-center space-y-2">
-          <div className="w-16 h-16 mx-auto rounded-xl bg-white border border-light-grey flex items-center justify-center opacity-40">
-            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
-              <polyline points="9 22 9 12 15 12 15 22"/>
-            </svg>
-          </div>
-          <p className="text-body font-medium text-dark-grey">3D Viewer</p>
-          <p className="text-caption text-mid-grey max-w-xs">
-            Interactive building model coming in Part 5.
-          </p>
-        </div>
+      {/* Main area — interactive 3D viewer */}
+      <div className="relative w-full h-full">
+        <BuildingViewer3D params={params} />
       </div>
     </ExplorerLayout>
   )
