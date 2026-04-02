@@ -1,7 +1,8 @@
 import { useContext, useEffect, useState } from 'react'
-import { Play, Loader2, CheckCircle2, AlertCircle, Save, RefreshCw } from 'lucide-react'
+import { Play, Loader2, CheckCircle2, AlertCircle, ChevronDown } from 'lucide-react'
 import { SimulationContext } from '../../context/SimulationContext.jsx'
 import { ProjectContext } from '../../context/ProjectContext.jsx'
+import ProjectPicker from './ProjectPicker.jsx'
 
 /* Toast notification shown after simulation completes or errors */
 function Toast({ message, type, onDismiss }) {
@@ -55,6 +56,7 @@ export default function TopBar() {
   const buildingName = projectCtx?.params?.name || 'NZA Simulate'
   const saveStatus = projectCtx?.saveStatus ?? 'idle'
   const [toast, setToast] = useState(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   /* Show toast when simulation completes or errors */
   useEffect(() => {
@@ -93,9 +95,18 @@ export default function TopBar() {
 
   return (
     <>
-      <header className="h-12 bg-white border-b border-light-grey flex items-center px-4 gap-4 flex-shrink-0">
-        {/* Project name */}
-        <span className="text-section font-medium text-navy">{buildingName}</span>
+      <header className="h-12 bg-white border-b border-light-grey flex items-center px-4 gap-4 flex-shrink-0 relative">
+        {/* Project name — click to open picker */}
+        <button
+          onClick={() => setPickerOpen(v => !v)}
+          className="flex items-center gap-1.5 text-section font-medium text-navy hover:text-magenta transition-colors"
+        >
+          {buildingName}
+          <ChevronDown size={14} className={`transition-transform ${pickerOpen ? 'rotate-180' : ''}`} />
+        </button>
+
+        {/* Project picker dropdown */}
+        {pickerOpen && <ProjectPicker onClose={() => setPickerOpen(false)} />}
 
         {/* Save status indicator */}
         <SaveIndicator status={saveStatus} />
