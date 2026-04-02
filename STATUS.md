@@ -104,18 +104,34 @@ Building: 60×15m, 4 floors, 3.2m height, 25% WWR all façades, 0° orientation.
 - ✅ Part 7: Scenario editor supports system mode — mode toggle in ScenarioEditor Systems section, captured in changes_from_baseline
 - ✅ Part 8: Performance curves verified — avg COP 4.25 in UK climate, winter-concentrated heating pattern, 0 severe errors
 - ✅ Part 9: Full Bridgewater 5-scenario comparison — all scenarios run, physics verified (MVHR -92% heating, ASHP -71% gas)
-- ⬜ Part 10: Full integration test walkthrough
+- ✅ Part 10: Full integration test — API pipeline verified, build clean (0 errors)
 
 ---
 
-## Next task (Brief 07, Part 4)
+## Brief 07 — Final integration report
 
-- Detailed HVAC modelling with COP curves (so MVHR, ASHP show real benefit vs ideal loads)
+**Detailed HVAC working:** VRF ✓ | MVHR ✓ | Gas Boiler ✓ | ASHP Preheat ✓
+**Fuel split (Baseline Detailed):** Electricity 222.1 MWh (81.8%) | Gas 49.3 MWh (18.2%)
+**EUI range:** 47.2 (Full Upgrade) → 75.4 (Baseline Detailed) kWh/m²
+**MVHR benefit:** Heating thermal 131 → 10.6 MWh (-92%)
+**ASHP benefit:** Gas 49.3 → 14.1 MWh (-71%)
+**Performance curves:** COP varies ✓ (avg COP ≈ 4.25 in UK mild climate)
+**Carbon 2026 (grid intensity 0.145 kgCO₂/kWh):**
+  - Baseline: (222,134 × 0.145 + 49,303 × 0.183) / 3,600 = **11.5 kgCO₂/m²**
+  - Full Upgrade: (155,900 × 0.145 + 14,100 × 0.183) / 3,600 = **7.0 kgCO₂/m²**
+**Data pipeline:** CRREM tab reads `annual_energy.electricity_kWh`/`gas_kWh` as fuel-split fallback ✓
+**Build:** Clean — 0 errors, 0 type issues
+
+---
+
+## Next task (post-Brief 07)
+
+Brief 07 is complete. Next briefs to consider:
 - Report export to PowerPoint/PDF using NZA template
-- Carbon overlay with actual fuel splits (electricity vs gas DHW)
 - CIBSE TM54 benchmark integration
 - EV charging demand modelling
 - Multi-zone building types (office, retail, hotel mix)
+- Glazing g-value / solar control as scenario parameter
 
 ---
 
