@@ -66,6 +66,7 @@ class SystemsConfig(BaseModel):
     cop_heating: float = 3.5                   # VRF heating COP at rated conditions
     cop_cooling: float = 3.2                   # VRF cooling EER at rated conditions
     ventilation_type: str = "mev_standard"
+    mvhr_efficiency: float = 0.85              # MVHR sensible heat recovery efficiency (0–1)
     natural_ventilation: bool = False
     natural_vent_threshold: float = 22.0
     dhw_primary: str = "gas_boiler_dhw"

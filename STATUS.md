@@ -2,7 +2,11 @@
 
 ## Last completed
 
-Brief 06 — All 14 parts complete. Bug fixes, UI gaps closed, custom library item creation, full-year zoomable load profile, colour constant centralisation, and UI polish.
+Brief 07 Part 3 — MEV and MVHR ventilation generators with heat recovery.
+- `nza_engine/generators/hvac_ventilation.py` (new): `generate_ventilation_system()` — MEV via `ZoneVentilation:DesignFlowRate` (exhaust), MVHR via `ZoneHVAC:EnergyRecoveryVentilator` + `HeatExchanger:AirToAir:SensibleAndLatent` + 2×`Fan:SystemModel` per zone with NodeList-based zone connections.
+- Assembler updated: detailed mode now calls ventilation generator after VRF, merging with `setdefault().update()` to preserve VRF fan objects alongside ERV fans.
+- `api/routers/simulate.py`: added `mvhr_efficiency: float = 0.85` to `SystemsConfig`.
+- Verified: MEV heating 29.4 MWh → MVHR 2.0 MWh (93% reduction). Zero fatal/severe errors both modes.
 
 ---
 
@@ -66,7 +70,19 @@ Building: 60×15m, 4 floors, 3.2m height, 25% WWR all façades, 0° orientation.
 
 ---
 
-## Next task (Brief 07 — candidates)
+## Brief 07 progress
+
+- ✅ Part 1: HVAC implementation research — `docs/hvac_implementation_notes.md`
+- ✅ Part 2: VRF system generator — native AirConditioner:VariableRefrigerantFlow with full performance curves
+- ✅ Part 3: MEV and MVHR ventilation generators
+- ⬜ Part 4: Gas boiler DHW system (`hvac_dhw.py`)
+- ⬜ Part 5: Fuel-split results and carbon calculation
+- ⬜ Part 6: Frontend system mode toggle
+- ⬜ Parts 7–10: Scenario comparison, performance curves, Bridgewater test, integration
+
+---
+
+## Next task (Brief 07, Part 4)
 
 - Detailed HVAC modelling with COP curves (so MVHR, ASHP show real benefit vs ideal loads)
 - Report export to PowerPoint/PDF using NZA template

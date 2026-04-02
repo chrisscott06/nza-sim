@@ -48,6 +48,7 @@ from nza_engine.library.schedules import (
 )
 from nza_engine.library.loads import get_zone_loads
 from nza_engine.generators.hvac_vrf import generate_vrf_system
+from nza_engine.generators.hvac_ventilation import generate_ventilation_system
 
 
 # ── Construction placeholder → construction_choices key ───────────────────────
@@ -619,6 +620,21 @@ def assemble_epjson(
         # Zone sizing objects are required for Fan:SystemModel and VRF coil autosizing
         sizing_objects = _build_sizing_objects(zones)
         hvac_objects.update(sizing_objects)
+
+        # Ventilation — MEV (exhaust only) or MVHR (balanced ERV with heat recovery)
+        # Must merge at the object-type level (setdefault+update) so that VRF Fan:SystemModel
+        # entries are preserved while MVHR Fan:SystemModel entries are added alongside them.
+        vent_type = sc.get("ventilation_type", "mev_standard")
+        mvhr_eff  = float(sc.get("mvhr_efficiency", 0.85))
+        zone_floor_area = building_params["length"] * building_params["width"]
+        vent_objects = generate_ventilation_system(
+            zone_names=list(zones.keys()),
+            ventilation_type=vent_type,
+            zone_floor_area_m2=zone_floor_area,
+            heat_recovery_efficiency=mvhr_eff,
+        )
+        for obj_type, items in vent_objects.items():
+            hvac_objects.setdefault(obj_type, {}).update(items)
     else:
         # Ideal loads — ZoneHVAC:IdealLoadsAirSystem (not HVACTemplate which needs ExpandObjects)
         ideal_loads, equip_lists, equip_conns, dual_setpoints, zone_controls = (
