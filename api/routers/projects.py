@@ -98,6 +98,7 @@ def _row_to_sim_run(row) -> dict:
     return {
         "id":                       row["id"],
         "project_id":               row["project_id"],
+        "scenario_id":              row["scenario_id"] if "scenario_id" in row.keys() else None,
         "scenario_name":            row["scenario_name"],
         "status":                   row["status"],
         "results_summary":          json.loads(row["results_summary"]) if row["results_summary"] else None,
