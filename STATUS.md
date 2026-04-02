@@ -2,11 +2,34 @@
 
 ## Last completed
 
-Brief 07 Part 4 — Gas boiler DHW with ASHP preheat option.
-- `nza_engine/generators/hvac_ventilation.py` (new): `generate_ventilation_system()` — MEV via `ZoneVentilation:DesignFlowRate` (exhaust), MVHR via `ZoneHVAC:EnergyRecoveryVentilator` + `HeatExchanger:AirToAir:SensibleAndLatent` + 2×`Fan:SystemModel` per zone with NodeList-based zone connections.
-- Assembler updated: detailed mode now calls ventilation generator after VRF, merging with `setdefault().update()` to preserve VRF fan objects alongside ERV fans.
-- `api/routers/simulate.py`: added `mvhr_efficiency: float = 0.85` to `SystemsConfig`.
-- Verified: MEV heating 29.4 MWh → MVHR 2.0 MWh (93% reduction). Zero fatal/severe errors both modes.
+Brief 07 Parts 5–9 completed.
+
+**Part 5** — Fuel-split results and real carbon calculation.
+- `nza_engine/parsers/sql_parser.py`: `get_energy_by_fuel()` reads `Electricity:Facility` + `NaturalGas:Facility` meters in detailed mode.
+- `api/routers/simulate.py`: `fuel_split` key added to results response.
+- `frontend/src/components/modules/results/CRREMTab.jsx`: carbon trajectory now uses `gas_kWh × 0.183 + electricity_kWh × grid_intensity[year]`.
+
+**Part 6** — Frontend system mode toggle.
+- `HVACTab.jsx`: prominent Detailed/Ideal Loads toggle at top. Detailed = teal background. Ideal = amber warning. HVAC inputs dim in ideal mode.
+- `ProjectContext.jsx`: DEFAULT_SYSTEMS.mode changed to `'detailed'`.
+
+**Part 7** — Scenario editor mode support.
+- `ScenarioEditor.jsx`: Simulation Mode toggle added to Systems section. Mode changes captured in changes_from_baseline.
+
+**Parts 8–9** — Performance curves verified + full Bridgewater 5-scenario test.
+- **Critical fix discovered**: uvicorn running without `--reload` was serving stale code. Restart required to activate VRF/DHW/ventilation generators.
+- **Bridgewater Hotel 5-scenario results (EUI, GIA=3600 m²):**
+
+| Scenario | Mode | EUI (kWh/m²) | Heating (MWh) | Gas (MWh) |
+|----------|------|-------------|---------------|-----------|
+| Baseline (Detailed) | detailed | 75.4 | 131.0 | 49.3 |
+| Enhanced Fabric | detailed | 73.7 | 121.3 | 49.3 |
+| MVHR Upgrade | detailed | 66.4 | 10.6 | 49.3 |
+| Full Upgrade (MVHR+ASHP+LED) | detailed | 47.2 | 11.7 | 14.1 |
+| Baseline (Ideal Loads) | ideal | 50.5 | 8.2 | 0 |
+
+- MVHR: heating thermal 131→10.6 MWh (-92%). ASHP DHW preheat: gas 49.3→14.1 MWh (-71%). VRF performance curves: avg COP ≈ 4.25 (UK mild climate). Zero fatal/severe errors all scenarios.
+- EUI below CIBSE 150–300 benchmark: expected — model is hotel_bedroom zones only (known limitation).
 
 ---
 
@@ -77,9 +100,11 @@ Building: 60×15m, 4 floors, 3.2m height, 25% WWR all façades, 0° orientation.
 - ✅ Part 3: MEV and MVHR ventilation generators
 - ✅ Part 4: Gas boiler DHW — WaterHeater:Mixed standalone mode, ASHP two-tank cascade. Gas Only 12,308 kWh → ASHP preheat 3,515 kWh gas (71% reduction)
 - ✅ Part 5: Fuel-split results — get_energy_by_fuel() in sql_parser; fuel_split key in API response; CRREM carbon uses real electricity+gas formula (gas constant 0.183 kgCO₂/kWh)
-- ⬜ Part 5: Fuel-split results and carbon calculation
-- ⬜ Part 6: Frontend system mode toggle
-- ⬜ Parts 7–10: Scenario comparison, performance curves, Bridgewater test, integration
+- ✅ Part 6: Frontend system mode toggle — HVACTab Detailed/Ideal Loads with amber warning, inputs dim in ideal mode. ProjectContext default changed to 'detailed'.
+- ✅ Part 7: Scenario editor supports system mode — mode toggle in ScenarioEditor Systems section, captured in changes_from_baseline
+- ✅ Part 8: Performance curves verified — avg COP 4.25 in UK climate, winter-concentrated heating pattern, 0 severe errors
+- ✅ Part 9: Full Bridgewater 5-scenario comparison — all scenarios run, physics verified (MVHR -92% heating, ASHP -71% gas)
+- ⬜ Part 10: Full integration test walkthrough
 
 ---
 
@@ -96,10 +121,11 @@ Building: 60×15m, 4 floors, 3.2m height, 25% WWR all façades, 0° orientation.
 
 ## Known issues
 
-- MVHR shows no EUI benefit in ideal loads mode — expected. Real effect requires detailed HVAC mode (Brief 07).
-- Building hardcoded as hotel_bedroom zone type — multi-zone not yet supported.
-- Enhanced fabric raises EUI due to increased cooling demand — physically correct but counterintuitive. Note in CRREM tab explains this.
+- Building hardcoded as hotel_bedroom zone type — multi-zone not yet supported. EUI ~50–75 kWh/m² (below CIBSE hotel benchmark) because public-area loads not modelled.
+- **uvicorn must be restarted** after code changes — not running with `--reload`. Old code will silently produce ideal-loads results even when mode=detailed is set.
 - Full-year hourly data requires the EnergyPlus .sql output file to still exist on disk (`data/simulations/{run_id}/eplusout.sql`). If old simulation directories are cleaned, full-year view returns a 404.
+- MVHR raises cooling demand significantly (MEV 2 MWh → MVHR 50 MWh): forced supply air at design flow rate in summer, vs MEV's low-rate infiltration. Physically consistent but counterintuitive.
+- Standalone `/api/simulate` (deprecated endpoint) may not forward systems_config correctly — use `/api/projects/{id}/simulate` for all production simulations.
 
 ---
 
