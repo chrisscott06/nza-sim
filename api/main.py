@@ -16,6 +16,7 @@ Endpoints:
 """
 
 import subprocess
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -23,11 +24,22 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from nza_engine.config import ENERGYPLUS_BIN, ENERGYPLUS_DIR, DEFAULT_WEATHER_DIR
 from api.routers import simulate, library
+from api.routers import projects as projects_router
+from api.db.database import init_db
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialise the database (create tables, seed library) on startup."""
+    await init_db()
+    yield
+
 
 app = FastAPI(
     title="NZA Simulate API",
     description="Building energy simulation API powered by EnergyPlus",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # Allow the Vite dev server (port 5176) to call the API
@@ -41,6 +53,7 @@ app.add_middleware(
 
 app.include_router(simulate.router)
 app.include_router(library.router)
+app.include_router(projects_router.router)
 
 
 @app.get("/api/health")
