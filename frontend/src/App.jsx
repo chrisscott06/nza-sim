@@ -6,6 +6,7 @@ import HomePage from './pages/HomePage.jsx'
 import PlaceholderPage from './pages/PlaceholderPage.jsx'
 import BuildingDefinition from './components/modules/building/BuildingDefinition.jsx'
 import ResultsDashboard from './components/modules/results/ResultsDashboard.jsx'
+import SystemsZones from './components/modules/SystemsZones.jsx'
 
 export default function App() {
   return (
@@ -16,7 +17,7 @@ export default function App() {
             <Route element={<AppShell />}>
               <Route path="/"          element={<HomePage />} />
               <Route path="/building"  element={<BuildingDefinition />} />
-              <Route path="/systems"   element={<PlaceholderPage title="Systems" />} />
+              <Route path="/systems"   element={<SystemsZones />} />
               <Route path="/profiles"  element={<PlaceholderPage title="Profiles" />} />
               <Route path="/results"   element={<ResultsDashboard />} />
               <Route path="/scenarios" element={<PlaceholderPage title="Scenarios" />} />
