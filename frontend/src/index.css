@@ -1,0 +1,139 @@
+@import "tailwindcss";
+
+/* ── Pablo design system — colour palette ───────────────────────────────── */
+@theme {
+  /* Core palette */
+  --color-navy:        #2B2A4C;
+  --color-magenta:     #E84393;
+  --color-coral:       #F48379;
+  --color-teal:        #00AEEF;
+  --color-gold:        #ECB01F;
+  --color-off-white:   #F8F9FA;
+  --color-light-grey:  #E6E6E6;
+  --color-mid-grey:    #95A5A6;
+  --color-dark-grey:   #58595B;
+
+  /* Building simulation tokens */
+  --color-heating-red:     #DC2626;
+  --color-cooling-blue:    #3B82F6;
+  --color-dhw-orange:      #F97316;
+  --color-lighting-amber:  #F59E0B;
+  --color-fan-purple:      #8B5CF6;
+  --color-equipment-slate: #64748B;
+  --color-fabric-wall:     #A1887F;
+  --color-fabric-glazing:  #4FC3F7;
+  --color-fabric-roof:     #78909C;
+  --color-infiltration:    #9E9E9E;
+
+  /* ── Typography ─────────────────────────────────────────────── */
+  --font-family-sans: "Stolzl", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  --font-size-xxs:        0.6rem;
+  --font-size-xs:         0.65rem;
+  --font-size-caption:    0.6875rem;
+  --font-size-table:      0.75rem;
+  --font-size-body:       0.8125rem;
+  --font-size-subsection: 0.875rem;
+  --font-size-section:    1rem;
+  --font-size-page-title: 1.25rem;
+  --font-size-metric:     1.25rem;
+  --font-size-metric-lg:  1.5rem;
+
+  --line-height-xxs:        0.85rem;
+  --line-height-xs:         0.9rem;
+  --line-height-caption:    0.95rem;
+  --line-height-table:      1rem;
+  --line-height-body:       1.15rem;
+  --line-height-subsection: 1.2rem;
+  --line-height-section:    1.35rem;
+  --line-height-page-title: 1.6rem;
+  --line-height-metric:     1.5rem;
+  --line-height-metric-lg:  1.75rem;
+}
+
+/* ── Stolzl font-face ────────────────────────────────────────────────────── */
+/* When font files are placed in /public/fonts/, these will activate.        */
+/* The app falls back cleanly to system fonts until then.                    */
+@font-face {
+  font-family: "Stolzl";
+  src: url("/fonts/Stolzl-Light.woff2") format("woff2"),
+       url("/fonts/Stolzl-Light.woff") format("woff");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Stolzl";
+  src: url("/fonts/Stolzl-Regular.woff2") format("woff2"),
+       url("/fonts/Stolzl-Regular.woff") format("woff");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Stolzl";
+  src: url("/fonts/Stolzl-Medium.woff2") format("woff2"),
+       url("/fonts/Stolzl-Medium.woff") format("woff");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Stolzl";
+  src: url("/fonts/Stolzl-Bold.woff2") format("woff2"),
+       url("/fonts/Stolzl-Bold.woff") format("woff");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ── Base resets ─────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-body);
+  font-weight: 300;
+  color: var(--color-dark-grey);
+  background-color: var(--color-off-white);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Scrollbar styling ───────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-light-grey); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-mid-grey); }
+
+/* ── Range input (slider) base styling ──────────────────────────────────── */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--color-light-grey);
+  outline: none;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-navy);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+input[type="range"]::-webkit-slider-thumb:hover {
+  background: var(--color-teal);
+}
