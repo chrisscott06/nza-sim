@@ -66,11 +66,11 @@ function buildSankeyData(results) {
 
   function addLink(source, target, value) {
     if (value < MIN) return
-    links.push({
-      source: nodeIdx[source],
-      target: nodeIdx[target],
-      value: Math.round(value),
-    })
+    const s = nodeIdx[source]
+    const t = nodeIdx[target]
+    // Skip if either endpoint was not added (e.g. heating near-zero means no heating_del node)
+    if (s === undefined || t === undefined) return
+    links.push({ source: s, target: t, value: Math.round(value) })
   }
 
   // ── Source nodes (left)
@@ -111,7 +111,14 @@ function buildSankeyData(results) {
 
   // ── Solar → output (solar goes to heating demand reduction + delivered)
   if (solarGain > MIN) addLink('solar', 'solar_del', solarGain)
-  if (internalGains > MIN) addLink('internal', 'heating_del', internalGains)
+  // Internal gains: flow to heating if heating_del exists, else cooling (cooling-dominated buildings)
+  if (internalGains > MIN) {
+    const igTarget = nodeIdx['heating_del'] !== undefined ? 'heating_del'
+                   : nodeIdx['cooling_del'] !== undefined ? 'cooling_del'
+                   : nodeIdx['equipment_del'] !== undefined ? 'equipment_del'
+                   : null
+    if (igTarget) addLink('internal', igTarget, internalGains)
+  }
 
   // ── Heat losses (from electricity input implicitly via building demand)
   addLink('heating_sys', 'walls',       wallLoss  > MIN ? wallLoss * 0.5 : 0)
