@@ -109,18 +109,26 @@ export default function VentilationTab() {
         />
       </Field>
 
-      {/* Heat recovery */}
-      <Field
-        label={`Heat recovery efficiency${!isMVHR ? ' — N/A for MEV' : ''}`}
-        note={isMVHR ? 'Fraction of exhaust heat recovered' : 'MEV does not recover heat from exhaust'}
-      >
-        <Slider
-          value={isMVHR ? (systems.hre_override ?? 82) : 0}
-          onChange={v => updateSystem('hre_override', v)}
-          min={0} max={95} step={1}
-          unit="%"
-        />
-      </Field>
+      {/* Heat recovery — only shown/editable for MVHR */}
+      {isMVHR ? (
+        <Field
+          label={`Heat recovery efficiency — ${systems.hre_override ?? 85}%`}
+          note="Fraction of exhaust heat recovered before it leaves the building"
+        >
+          <Slider
+            value={systems.hre_override ?? 85}
+            onChange={v => updateSystem('hre_override', v)}
+            min={0} max={95} step={1}
+            unit="%"
+          />
+        </Field>
+      ) : (
+        <div className="bg-off-white border border-light-grey rounded-lg px-3 py-2">
+          <p className="text-xxs text-mid-grey">
+            <span className="font-medium text-dark-grey">Heat recovery not available</span> — extract-only ventilation (MEV) cannot recover heat from exhaust air. Select MVHR to enable.
+          </p>
+        </div>
+      )}
 
       {/* Natural ventilation toggle */}
       <div className="pt-2 border-t border-light-grey">

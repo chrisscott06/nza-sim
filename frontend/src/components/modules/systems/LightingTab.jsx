@@ -83,10 +83,31 @@ export default function LightingTab() {
         label={`Lighting power density — ${lpd} W/m²`}
         note="CIBSE SLL CoP 2022: hotel bedrooms 5 W/m², corridors 8 W/m², reception 12 W/m²"
       >
+        {/* Preset buttons */}
+        <div className="flex gap-1.5 mb-2 flex-wrap">
+          {[
+            { label: 'LED Modern',   value: 4  },
+            { label: 'LED Standard', value: 7  },
+            { label: 'Fluorescent',  value: 11 },
+            { label: 'Incandescent', value: 18 },
+          ].map(p => (
+            <button
+              key={p.label}
+              onClick={() => updateSystem('lighting_power_density', p.value)}
+              className={`px-2 py-1 text-xxs rounded border transition-colors ${
+                lpd === p.value
+                  ? 'bg-navy text-white border-navy'
+                  : 'text-mid-grey border-light-grey hover:border-navy hover:text-navy'
+              }`}
+            >
+              {p.label} ({p.value})
+            </button>
+          ))}
+        </div>
         <Slider
           value={lpd}
           onChange={v => updateSystem('lighting_power_density', v)}
-          min={4} max={15} step={0.5}
+          min={0} max={20} step={0.5}
           unit=" W/m²"
         />
       </Field>
