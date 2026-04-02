@@ -28,13 +28,14 @@ export const ProjectContext = createContext(null)
 // ── Defaults (mirror api/db/database.py) ─────────────────────────────────────
 
 const DEFAULT_PARAMS = {
-  name:         'New Project',
-  length:       60.0,
-  width:        15.0,
-  num_floors:   4,
-  floor_height: 3.2,
-  orientation:  0.0,
-  wwr: { north: 0.25, south: 0.25, east: 0.25, west: 0.25 },
+  name:            'New Project',
+  length:          60.0,
+  width:           15.0,
+  num_floors:      4,
+  floor_height:    3.2,
+  orientation:     0.0,
+  wwr:             { north: 0.25, south: 0.25, east: 0.25, west: 0.25 },
+  infiltration_ach: 0.5,
 }
 
 const DEFAULT_CONSTRUCTIONS = {
@@ -106,7 +107,8 @@ export function ProjectProvider({ children }) {
       num_floors:   bc.num_floors   ?? DEFAULT_PARAMS.num_floors,
       floor_height: bc.floor_height ?? DEFAULT_PARAMS.floor_height,
       orientation:  bc.orientation  ?? DEFAULT_PARAMS.orientation,
-      wwr:          bc.wwr          ?? DEFAULT_PARAMS.wwr,
+      wwr:             bc.wwr             ?? DEFAULT_PARAMS.wwr,
+      infiltration_ach: bc.infiltration_ach ?? DEFAULT_PARAMS.infiltration_ach,
     })
     setConstructions(project.construction_choices ?? DEFAULT_CONSTRUCTIONS)
     setSystems(project.systems_config ?? DEFAULT_SYSTEMS)

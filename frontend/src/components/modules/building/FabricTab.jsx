@@ -137,8 +137,15 @@ function ConstructionSelect({ elementKey, label, constructions, selectedId, onSe
   )
 }
 
+function AirtightnessGuidance({ ach }) {
+  if (ach < 0.3) return <p className="text-xxs text-green-600 mt-1">Very airtight (Passivhaus level)</p>
+  if (ach <= 0.6) return <p className="text-xxs text-green-600 mt-1">Good (modern construction)</p>
+  if (ach <= 1.0) return <p className="text-xxs text-amber-600 mt-1">Average (typical existing building)</p>
+  return <p className="text-xxs text-red-600 mt-1">Leaky (poor airtightness)</p>
+}
+
 export default function FabricTab({ onDetailChange }) {
-  const { constructions: selected, updateConstruction } = useContext(ProjectContext)
+  const { constructions: selected, updateConstruction, params, updateParam } = useContext(ProjectContext)
 
   const [library, setLibrary]   = useState([])
   const [loading, setLoading]   = useState(true)
@@ -211,6 +218,26 @@ export default function FabricTab({ onDetailChange }) {
           detail={details[selected?.[key]] ?? null}
         />
       ))}
+
+      {/* Infiltration rate */}
+      <div className="bg-white rounded-lg border border-light-grey p-3 space-y-2">
+        <p className="text-xxs uppercase tracking-wider text-mid-grey">Air Permeability</p>
+        <div className="flex items-center gap-2">
+          <input
+            type="range"
+            min={0.1}
+            max={2.0}
+            step={0.05}
+            value={params?.infiltration_ach ?? 0.5}
+            onChange={e => updateParam('infiltration_ach', parseFloat(e.target.value))}
+            className="flex-1 accent-teal"
+          />
+          <span className="text-caption font-semibold text-navy w-14 text-right">
+            {(params?.infiltration_ach ?? 0.5).toFixed(2)} ACH
+          </span>
+        </div>
+        <AirtightnessGuidance ach={params?.infiltration_ach ?? 0.5} />
+      </div>
 
       <p className="text-xxs text-mid-grey pt-1">
         U-values from NZA construction library. Selections are used directly in the EnergyPlus simulation.

@@ -510,6 +510,7 @@ def assemble_epjson(
         building_params["length"],
         building_params["width"],
         building_params["floor_height"],
+        ach=building_params.get("infiltration_ach", DEFAULT_INFILTRATION_ACH),
     )
 
     # ── 6b. Natural ventilation (openable windows) ────────────────────────────
