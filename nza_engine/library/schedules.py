@@ -323,3 +323,262 @@ def get_all_schedules() -> dict:
 def get_schedule_type_limits() -> dict:
     """Return 'ScheduleTypeLimits' epJSON objects for all used types."""
     return deepcopy(SCHEDULE_TYPE_LIMITS)
+
+
+# ── Standardised visual library format ────────────────────────────────────────
+#
+# Used by the library database and Profiles editor.
+# Format: day_types arrays (24 hourly values each), monthly_multipliers,
+# and metadata. Independent of EnergyPlus Schedule:Compact syntax.
+#
+# Values are fractions (0–1) for occupancy/lighting/equipment/DHW,
+# or degrees Celsius for setpoint schedules.
+
+_SCHEDULE_LIBRARY: dict[str, dict] = {
+
+    # Hotel bedroom occupancy — high at night, low during the day
+    "hotel_bedroom_occupancy": {
+        "schedule_type":      "occupancy",
+        "building_type":      "hotel",
+        "zone_type":          "bedroom",
+        "time_resolution":    "hourly",
+        "display_name":       "Hotel Bedroom — Occupancy",
+        "description":        "Hotel bedroom occupancy — high at night, low during day, seasonal variation for UK tourism",
+        "day_types": {
+            "weekday": [0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.7, 0.4, 0.3, 0.2, 0.2, 0.2,
+                        0.2, 0.2, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.9, 0.9],
+            "saturday":[0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.8, 0.5, 0.4, 0.3, 0.3, 0.3,
+                        0.3, 0.3, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.9, 0.9, 0.9],
+            "sunday":  [0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.8, 0.6, 0.5, 0.4, 0.4, 0.4,
+                        0.4, 0.4, 0.4, 0.5, 0.5, 0.6, 0.7, 0.8, 0.9, 0.9, 0.9, 0.9],
+        },
+        "monthly_multipliers": [0.7, 0.7, 0.8, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 0.9, 0.8, 0.7],
+    },
+
+    # Hotel corridor occupancy — inverse of bedrooms, peaks at movement hours
+    "hotel_corridor_occupancy": {
+        "schedule_type":      "occupancy",
+        "building_type":      "hotel",
+        "zone_type":          "corridor",
+        "time_resolution":    "hourly",
+        "display_name":       "Hotel Corridor — Occupancy",
+        "description":        "Hotel corridor occupancy — busiest at morning checkout and evening arrival",
+        "day_types": {
+            "weekday": [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.3, 0.6, 0.5, 0.4, 0.3, 0.3,
+                        0.3, 0.3, 0.3, 0.4, 0.5, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.1],
+            "saturday":[0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.5, 0.6, 0.5, 0.4, 0.4,
+                        0.4, 0.4, 0.4, 0.5, 0.6, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.1],
+            "sunday":  [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.4, 0.6, 0.6, 0.5, 0.5,
+                        0.5, 0.5, 0.4, 0.5, 0.5, 0.5, 0.4, 0.3, 0.2, 0.2, 0.1, 0.1],
+        },
+        "monthly_multipliers": [0.7, 0.7, 0.8, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 0.9, 0.8, 0.7],
+    },
+
+    # Hotel reception — daytime peaks
+    "hotel_reception_occupancy": {
+        "schedule_type":      "occupancy",
+        "building_type":      "hotel",
+        "zone_type":          "reception",
+        "time_resolution":    "hourly",
+        "display_name":       "Hotel Reception — Occupancy",
+        "description":        "Hotel reception occupancy — daytime operation with check-in/out peaks",
+        "day_types": {
+            "weekday": [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.5, 0.8, 0.7, 0.6, 0.6,
+                        0.5, 0.5, 0.7, 0.8, 0.9, 0.7, 0.5, 0.3, 0.2, 0.2, 0.1, 0.1],
+            "saturday":[0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.4, 0.7, 0.8, 0.7, 0.6,
+                        0.5, 0.5, 0.6, 0.8, 0.9, 0.7, 0.5, 0.3, 0.2, 0.2, 0.1, 0.1],
+            "sunday":  [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.4, 0.6, 0.8, 0.7, 0.6,
+                        0.5, 0.4, 0.4, 0.5, 0.6, 0.5, 0.4, 0.3, 0.2, 0.2, 0.1, 0.1],
+        },
+        "monthly_multipliers": [0.7, 0.7, 0.8, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 0.9, 0.8, 0.7],
+    },
+
+    # Hotel bedroom lighting — follows occupancy with evening peak
+    "hotel_bedroom_lighting": {
+        "schedule_type":      "lighting",
+        "building_type":      "hotel",
+        "zone_type":          "bedroom",
+        "time_resolution":    "hourly",
+        "display_name":       "Hotel Bedroom — Lighting",
+        "description":        "Hotel bedroom lighting — minimal overnight, peaks at wakeup and bedtime",
+        "day_types": {
+            "weekday": [0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.4, 0.7, 0.2, 0.1, 0.1, 0.1,
+                        0.1,  0.1,  0.1,  0.1,  0.1,  0.2,  0.5, 0.8, 0.8, 0.6, 0.2, 0.05],
+            "saturday":[0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.2, 0.6, 0.4, 0.2, 0.1, 0.1,
+                        0.1,  0.1,  0.1,  0.1,  0.2,  0.3,  0.5, 0.8, 0.8, 0.6, 0.2, 0.05],
+            "sunday":  [0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.2, 0.5, 0.5, 0.3, 0.2, 0.1,
+                        0.1,  0.1,  0.1,  0.1,  0.2,  0.3,  0.5, 0.8, 0.7, 0.5, 0.2, 0.05],
+        },
+        "monthly_multipliers": [1.0, 1.0, 0.9, 0.8, 0.7, 0.7, 0.7, 0.7, 0.8, 0.9, 1.0, 1.0],
+    },
+
+    # Hotel corridor lighting — near constant, slightly lower overnight
+    "hotel_corridor_lighting": {
+        "schedule_type":      "lighting",
+        "building_type":      "hotel",
+        "zone_type":          "corridor",
+        "time_resolution":    "hourly",
+        "display_name":       "Hotel Corridor — Lighting",
+        "description":        "Hotel corridor lighting — near-constant throughout the day, reduced overnight",
+        "day_types": {
+            "weekday": [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.7, 0.8, 0.8, 0.8, 0.8, 0.8,
+                        0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.7, 0.6, 0.5],
+            "saturday":[0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.6, 0.8, 0.8, 0.8, 0.8, 0.8,
+                        0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.7, 0.6, 0.5, 0.5],
+            "sunday":  [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.6, 0.7, 0.8, 0.8, 0.8, 0.8,
+                        0.8, 0.8, 0.8, 0.8, 0.8, 0.7, 0.7, 0.7, 0.6, 0.6, 0.5, 0.5],
+        },
+        "monthly_multipliers": [1.0, 1.0, 0.9, 0.8, 0.7, 0.7, 0.7, 0.7, 0.8, 0.9, 1.0, 1.0],
+    },
+
+    # Hotel bedroom equipment
+    "hotel_bedroom_equipment": {
+        "schedule_type":      "equipment",
+        "building_type":      "hotel",
+        "zone_type":          "bedroom",
+        "time_resolution":    "hourly",
+        "display_name":       "Hotel Bedroom — Equipment",
+        "description":        "Hotel bedroom equipment (TV, chargers, HVAC) — loosely follows occupancy",
+        "day_types": {
+            "weekday": [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.3, 0.6, 0.1, 0.05, 0.05, 0.05,
+                        0.05, 0.05, 0.05, 0.05, 0.1, 0.3, 0.6, 0.7, 0.6, 0.4, 0.2, 0.1],
+            "saturday":[0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.5, 0.3, 0.1, 0.1, 0.1,
+                        0.1, 0.1, 0.1, 0.1, 0.2, 0.4, 0.6, 0.7, 0.6, 0.4, 0.2, 0.1],
+            "sunday":  [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.4, 0.4, 0.2, 0.1, 0.1,
+                        0.1, 0.1, 0.1, 0.1, 0.2, 0.3, 0.5, 0.6, 0.5, 0.3, 0.2, 0.1],
+        },
+        "monthly_multipliers": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+    },
+
+    # Hotel heating setpoint (°C)
+    "hotel_heating_setpoint": {
+        "schedule_type":      "heating_setpoint",
+        "building_type":      "hotel",
+        "zone_type":          "all",
+        "time_resolution":    "hourly",
+        "display_name":       "Hotel — Heating Setpoint",
+        "description":        "Hotel heating setpoint — 21°C occupied, 18°C setback",
+        "day_types": {
+            "weekday": [18, 18, 18, 18, 18, 18, 18, 21, 21, 21, 21, 21,
+                        21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 18],
+            "saturday":[18, 18, 18, 18, 18, 18, 18, 21, 21, 21, 21, 21,
+                        21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 18],
+            "sunday":  [18, 18, 18, 18, 18, 18, 18, 21, 21, 21, 21, 21,
+                        21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 18],
+        },
+        "monthly_multipliers": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+    },
+
+    # Hotel cooling setpoint (°C)
+    "hotel_cooling_setpoint": {
+        "schedule_type":      "cooling_setpoint",
+        "building_type":      "hotel",
+        "zone_type":          "all",
+        "time_resolution":    "hourly",
+        "display_name":       "Hotel — Cooling Setpoint",
+        "description":        "Hotel cooling setpoint — 24°C occupied, 28°C setback",
+        "day_types": {
+            "weekday": [28, 28, 28, 28, 28, 28, 28, 24, 24, 24, 24, 24,
+                        24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 28],
+            "saturday":[28, 28, 28, 28, 28, 28, 28, 24, 24, 24, 24, 24,
+                        24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 28],
+            "sunday":  [28, 28, 28, 28, 28, 28, 28, 24, 24, 24, 24, 24,
+                        24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 28],
+        },
+        "monthly_multipliers": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+    },
+
+    # Hotel DHW demand — morning and evening peaks
+    "hotel_dhw_demand": {
+        "schedule_type":      "dhw",
+        "building_type":      "hotel",
+        "zone_type":          "all",
+        "time_resolution":    "hourly",
+        "display_name":       "Hotel — DHW Demand",
+        "description":        "Hotel DHW demand — morning shower peak (06-10) and evening peak (17-22)",
+        "day_types": {
+            "weekday": [0.05, 0.05, 0.05, 0.05, 0.05, 0.15, 0.80, 1.00, 0.90, 0.60,
+                        0.30, 0.20, 0.20, 0.15, 0.15, 0.20, 0.40, 0.60, 0.70, 0.65,
+                        0.55, 0.30, 0.10, 0.05],
+            "saturday":[0.05, 0.05, 0.05, 0.05, 0.05, 0.10, 0.60, 0.90, 1.00, 0.80,
+                        0.40, 0.25, 0.20, 0.20, 0.20, 0.25, 0.45, 0.65, 0.70, 0.65,
+                        0.55, 0.30, 0.10, 0.05],
+            "sunday":  [0.05, 0.05, 0.05, 0.05, 0.05, 0.10, 0.50, 0.80, 1.00, 0.90,
+                        0.50, 0.30, 0.25, 0.20, 0.20, 0.25, 0.45, 0.60, 0.65, 0.60,
+                        0.50, 0.30, 0.10, 0.05],
+        },
+        "monthly_multipliers": [0.8, 0.8, 0.9, 0.95, 1.0, 1.0, 1.0, 1.0, 1.0, 0.95, 0.9, 0.85],
+    },
+
+    # Office occupancy — 9-5 weekday, empty weekend
+    "office_occupancy": {
+        "schedule_type":      "occupancy",
+        "building_type":      "office",
+        "zone_type":          "open_plan",
+        "time_resolution":    "hourly",
+        "display_name":       "Office — Occupancy",
+        "description":        "Office occupancy — 9-5 weekday pattern with lunch dip, empty at weekends",
+        "day_types": {
+            "weekday": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 0.5, 0.9, 0.95, 0.95,
+                        0.75, 0.9, 0.95, 0.9, 0.7, 0.3, 0.1, 0.05, 0.0, 0.0, 0.0, 0.0],
+            "saturday":[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.05, 0.05, 0.05,
+                        0.05, 0.05, 0.05, 0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "sunday":  [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        },
+        "monthly_multipliers": [0.9, 0.9, 1.0, 1.0, 1.0, 0.9, 0.8, 0.8, 1.0, 1.0, 1.0, 0.85],
+    },
+
+    # Office lighting — follows occupancy with daylight adjustment
+    "office_lighting": {
+        "schedule_type":      "lighting",
+        "building_type":      "office",
+        "zone_type":          "open_plan",
+        "time_resolution":    "hourly",
+        "display_name":       "Office — Lighting",
+        "description":        "Office lighting — follows occupancy, reduced in summer by daylight",
+        "day_types": {
+            "weekday": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 0.5, 0.8, 0.9, 0.9,
+                        0.7, 0.85, 0.9, 0.85, 0.65, 0.25, 0.05, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "saturday":[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.05, 0.05, 0.05,
+                        0.05, 0.05, 0.05, 0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "sunday":  [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        },
+        "monthly_multipliers": [1.0, 1.0, 0.9, 0.8, 0.7, 0.6, 0.6, 0.65, 0.75, 0.85, 0.95, 1.0],
+    },
+
+    # Retail occupancy — 10-6 pattern
+    "retail_occupancy": {
+        "schedule_type":      "occupancy",
+        "building_type":      "retail",
+        "zone_type":          "sales_floor",
+        "time_resolution":    "hourly",
+        "display_name":       "Retail — Occupancy",
+        "description":        "Retail occupancy — 10-6 pattern, busier at weekends",
+        "day_types": {
+            "weekday": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 0.5, 0.8,
+                        0.9, 0.85, 0.8, 0.75, 0.7, 0.4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "saturday":[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 0.6, 0.9,
+                        1.0, 0.95, 0.9, 0.85, 0.8, 0.6, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "sunday":  [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.2, 0.6,
+                        0.8, 0.85, 0.8, 0.7, 0.5, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        },
+        "monthly_multipliers": [0.8, 0.9, 1.0, 1.0, 1.0, 0.95, 0.9, 0.95, 0.95, 1.0, 1.1, 1.2],
+    },
+}
+
+
+def list_schedule_library() -> list[dict]:
+    """Return summary of all visual-format schedule library items."""
+    return [
+        {
+            "name":          name,
+            "display_name":  data.get("display_name", name),
+            "description":   data.get("description", ""),
+            "schedule_type": data.get("schedule_type"),
+            "building_type": data.get("building_type"),
+            "zone_type":     data.get("zone_type"),
+        }
+        for name, data in _SCHEDULE_LIBRARY.items()
+    ]

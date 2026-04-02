@@ -100,6 +100,9 @@ async def init_db() -> None:
         # Seed system templates from nza_engine library
         await _seed_systems(db)
 
+        # Seed schedule templates from nza_engine library
+        await _seed_schedules(db)
+
         await db.commit()
 
 
@@ -138,6 +141,29 @@ async def _seed_constructions(db: aiosqlite.Connection) -> None:
                 name,
                 display_name,
                 description,
+                json.dumps(config),
+            ),
+        )
+
+
+async def _seed_schedules(db: aiosqlite.Connection) -> None:
+    """Seed all schedule templates from the visual library into library_items."""
+    from nza_engine.library.schedules import _SCHEDULE_LIBRARY  # type: ignore[attr-defined]
+
+    for name, data in _SCHEDULE_LIBRARY.items():
+        item_id = f"lib_schedule_{name}"
+        config = {**data, "name": name}
+        await db.execute(
+            """
+            INSERT OR IGNORE INTO library_items
+                (id, library_type, name, display_name, description, config_json, is_default)
+            VALUES (?, 'schedule', ?, ?, ?, ?, 1)
+            """,
+            (
+                item_id,
+                name,
+                data.get("display_name", name),
+                data.get("description", ""),
                 json.dumps(config),
             ),
         )
