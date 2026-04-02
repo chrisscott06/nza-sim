@@ -6,9 +6,10 @@
  */
 
 import { useState, useEffect, useContext } from 'react'
-import { Clock, Search, X, Check } from 'lucide-react'
+import { Clock, Search, X, Check, Plus } from 'lucide-react'
 import ExplorerLayout  from '../ui/ExplorerLayout.jsx'
 import ScheduleViewer  from './profiles/ScheduleViewer.jsx'
+import ScheduleEditor  from './profiles/ScheduleEditor.jsx'
 import { ProjectContext } from '../../context/ProjectContext.jsx'
 
 // ── Filter config ──────────────────────────────────────────────────────────────
@@ -51,6 +52,7 @@ function ProfilesSidebar({
   zoneFilter, setZoneFilter,
   search, setSearch,
   selectedId, onSelect,
+  onCreateClick,
 }) {
   const filtered = schedules.filter(s => {
     const cfg = s.config_json ?? {}
@@ -178,15 +180,114 @@ function ProfilesSidebar({
         })}
       </div>
 
-      {/* Footer: create button placeholder */}
+      {/* Footer: create button */}
       <div className="flex-shrink-0 border-t border-light-grey p-3">
         <button
-          disabled
-          className="w-full py-1.5 text-caption border border-dashed border-light-grey rounded-lg text-mid-grey cursor-not-allowed"
-          title="Coming in Part 10"
+          onClick={onCreateClick}
+          className="w-full flex items-center justify-center gap-1.5 py-1.5 text-caption border border-dashed border-navy/40 rounded-lg text-navy hover:bg-navy/5 transition-colors"
         >
-          + Create Custom Schedule
+          <Plus size={12} /> Create Custom Schedule
         </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Create dialog ──────────────────────────────────────────────────────────────
+
+function CreateDialog({ schedules, onConfirm, onCancel }) {
+  const [name,      setName]      = useState('My Custom Schedule')
+  const [schedType, setSchedType] = useState('occupancy')
+  const [zoneType,  setZoneType]  = useState('bedroom')
+  const [template,  setTemplate]  = useState('')
+
+  function handleCreate() {
+    // Find base template schedule (if selected) or use blanks
+    const base = schedules.find(s => s.id === template)
+    const blankDays = { weekday: Array(24).fill(0.5), saturday: Array(24).fill(0.5), sunday: Array(24).fill(0.5) }
+    const blankMult = Array(12).fill(1)
+    const initialSchedule = {
+      display_name: name,
+      name: name,
+      config_json: {
+        schedule_type:       schedType,
+        zone_type:           zoneType,
+        day_types:           base ? { ...(base.config_json?.day_types ?? blankDays) } : blankDays,
+        monthly_multipliers: base ? [...(base.config_json?.monthly_multipliers ?? blankMult)] : blankMult,
+      },
+    }
+    onConfirm(initialSchedule)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+      <div className="bg-white rounded-xl border border-light-grey shadow-xl p-6 w-80 space-y-4">
+        <h3 className="text-caption font-semibold text-navy">Create Custom Schedule</h3>
+
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xxs uppercase tracking-wider text-mid-grey mb-1">Name</label>
+            <input
+              value={name}
+              onChange={e => setName(e.target.value)}
+              className="w-full px-2 py-1.5 text-caption border border-light-grey rounded focus:outline-none focus:border-teal"
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="block text-xxs uppercase tracking-wider text-mid-grey mb-1">Schedule Type</label>
+            <select
+              value={schedType}
+              onChange={e => setSchedType(e.target.value)}
+              className="w-full px-2 py-1.5 text-caption border border-light-grey rounded bg-white focus:outline-none"
+            >
+              {['occupancy','lighting','equipment','heating_setpoint','cooling_setpoint','dhw'].map(t => (
+                <option key={t} value={t}>{t.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xxs uppercase tracking-wider text-mid-grey mb-1">Zone Type</label>
+            <select
+              value={zoneType}
+              onChange={e => setZoneType(e.target.value)}
+              className="w-full px-2 py-1.5 text-caption border border-light-grey rounded bg-white focus:outline-none"
+            >
+              {['bedroom','corridor','reception','office','retail','general'].map(z => (
+                <option key={z} value={z}>{z.replace(/\b\w/g,c=>c.toUpperCase())}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xxs uppercase tracking-wider text-mid-grey mb-1">Base Template (optional)</label>
+            <select
+              value={template}
+              onChange={e => setTemplate(e.target.value)}
+              className="w-full px-2 py-1.5 text-caption border border-light-grey rounded bg-white focus:outline-none"
+            >
+              <option value="">— blank schedule —</option>
+              {schedules.map(s => (
+                <option key={s.id} value={s.id}>{s.display_name ?? s.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={onCancel}
+            className="flex-1 py-1.5 text-caption border border-light-grey rounded-lg text-mid-grey hover:text-navy transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleCreate}
+            disabled={!name.trim()}
+            className="flex-1 py-1.5 text-caption bg-navy text-white rounded-lg hover:bg-opacity-90 transition-colors disabled:opacity-60"
+          >
+            Create
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -206,15 +307,21 @@ export default function ProfilesEditor() {
   const [search,      setSearch]      = useState('')
   const [assignMsg,   setAssignMsg]   = useState(null)
 
+  // Editor mode state
+  const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [editingSchedule,  setEditingSchedule]  = useState(null) // non-null = editor visible
+
   // Fetch full detail when a schedule is selected
   const [detailCache, setDetailCache] = useState({})
 
-  useEffect(() => {
+  function loadSchedules() {
     fetch('/api/library?type=schedule')
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
       .then(data => { setSchedules(data); setLoading(false) })
       .catch(err => { setError(err.message); setLoading(false) })
-  }, [])
+  }
+
+  useEffect(() => { loadSchedules() }, [])
 
   // When selected changes, load full detail if not cached
   useEffect(() => {
@@ -231,7 +338,6 @@ export default function ProfilesEditor() {
   // Auto-select first schedule on load
   useEffect(() => {
     if (schedules.length > 0 && !selected) {
-      // Pick hotel_bedroom_occupancy as the default selection
       const defaultSched = schedules.find(s => s.name === 'hotel_bedroom_occupancy') ?? schedules[0]
       setSelected(defaultSched)
     }
@@ -240,7 +346,6 @@ export default function ProfilesEditor() {
   function handleAssign(schedule) {
     if (!currentProjectId) return
     const cfg = schedule.config_json ?? {}
-    // Build a simple assignment key from zone_type + schedule_type
     const key = `${cfg.zone_type ?? 'general'}_${cfg.schedule_type ?? 'schedule'}`
     fetch(`/api/projects/${currentProjectId}`, {
       method: 'PUT',
@@ -258,42 +363,74 @@ export default function ProfilesEditor() {
       })
   }
 
+  function handleEditorSaved(newItem) {
+    // Reload the schedule list to show the new item, then switch to browsing it
+    loadSchedules()
+    setDetailCache(c => ({ ...c, [newItem.id]: newItem }))
+    setSelected(newItem)
+    setEditingSchedule(null)
+    setAssignMsg(`"${newItem.display_name ?? newItem.name}" saved to library`)
+    setTimeout(() => setAssignMsg(null), 3000)
+  }
+
   // Use the cached full detail if available, otherwise the list item
   const selectedDetail = selected
     ? (detailCache[selected.id] ?? selected)
     : null
 
   return (
-    <ExplorerLayout
-      sidebarWidth="w-72"
-      sidebar={
-        <ProfilesSidebar
+    <>
+      {showCreateDialog && (
+        <CreateDialog
           schedules={schedules}
-          loading={loading}
-          error={error}
-          typeFilter={typeFilter}
-          setTypeFilter={setTypeFilter}
-          zoneFilter={zoneFilter}
-          setZoneFilter={setZoneFilter}
-          search={search}
-          setSearch={setSearch}
-          selectedId={selected?.id}
-          onSelect={setSelected}
+          onConfirm={initial => {
+            setShowCreateDialog(false)
+            setEditingSchedule(initial)
+          }}
+          onCancel={() => setShowCreateDialog(false)}
         />
-      }
-    >
-      {/* Assign notification toast */}
-      {assignMsg && (
-        <div className="fixed bottom-4 right-4 z-50 bg-navy text-white text-caption px-4 py-2 rounded-lg shadow-lg">
-          {assignMsg}
-        </div>
       )}
 
-      <ScheduleViewer
-        schedule={selectedDetail}
-        onAssign={handleAssign}
-        onEditCopy={null}
-      />
-    </ExplorerLayout>
+      <ExplorerLayout
+        sidebarWidth="w-72"
+        sidebar={
+          <ProfilesSidebar
+            schedules={schedules}
+            loading={loading}
+            error={error}
+            typeFilter={typeFilter}
+            setTypeFilter={setTypeFilter}
+            zoneFilter={zoneFilter}
+            setZoneFilter={setZoneFilter}
+            search={search}
+            setSearch={setSearch}
+            selectedId={selected?.id}
+            onSelect={s => { setSelected(s); setEditingSchedule(null) }}
+            onCreateClick={() => setShowCreateDialog(true)}
+          />
+        }
+      >
+        {/* Assign notification toast */}
+        {assignMsg && (
+          <div className="fixed bottom-4 right-4 z-50 bg-navy text-white text-caption px-4 py-2 rounded-lg shadow-lg">
+            {assignMsg}
+          </div>
+        )}
+
+        {editingSchedule ? (
+          <ScheduleEditor
+            initialSchedule={editingSchedule}
+            onSaved={handleEditorSaved}
+            onCancel={() => setEditingSchedule(null)}
+          />
+        ) : (
+          <ScheduleViewer
+            schedule={selectedDetail}
+            onAssign={handleAssign}
+            onEditCopy={s => setEditingSchedule(detailCache[s.id] ?? s)}
+          />
+        )}
+      </ExplorerLayout>
+    </>
   )
 }
