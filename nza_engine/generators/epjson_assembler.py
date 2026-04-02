@@ -229,29 +229,82 @@ def _build_infiltration_objects(
     return infiltration
 
 
-def _build_hvac_ideal_loads(zones: dict) -> dict:
+def _build_hvac_ideal_loads(zones: dict) -> tuple[dict, dict, dict, dict, dict]:
     """
-    Build HVACTemplate:Zone:IdealLoadsAirSystem for each zone.
-    This perfect system meets any load, letting us see true building demand.
+    Build native ZoneHVAC:IdealLoadsAirSystem HVAC objects for each zone.
+
+    Returns 5 dicts for the epJSON:
+      - ZoneHVAC:IdealLoadsAirSystem
+      - ZoneHVAC:EquipmentList
+      - ZoneHVAC:EquipmentConnections
+      - ThermostatSetpoint:DualSetpoint
+      - ZoneControl:Thermostat
     """
-    ideal = {}
+    ideal_loads   = {}
+    equip_lists   = {}
+    equip_conns   = {}
+    thermostats   = {}
+    zone_controls = {}
+
     for zone_name in zones:
-        ideal[f"{zone_name}_IdealLoads"] = {
+        supply_node = f"{zone_name}_Supply"
+        return_node = f"{zone_name}_Return"
+        air_node    = f"{zone_name}_Air"
+        equip_name  = f"{zone_name}_IdealLoads"
+        list_name   = f"{zone_name}_EquipList"
+        tstat_name  = f"{zone_name}_DualSetpoint"
+        ctrl_name   = f"{zone_name}_TstatCtrl"
+
+        # ZoneHVAC:IdealLoadsAirSystem — perfect system, no real HVAC effects
+        ideal_loads[equip_name] = {
+            "zone_supply_air_node_name": supply_node,
+            "maximum_heating_supply_air_temperature": 50.0,
+            "minimum_cooling_supply_air_temperature": 13.0,
+            "maximum_heating_supply_air_humidity_ratio": 0.0156,
+            "minimum_cooling_supply_air_humidity_ratio": 0.0077,
+            "heating_limit": "NoLimit",
+            "cooling_limit": "NoLimit",
+            "dehumidification_control_type": "None",
+            "humidification_control_type": "None",
+        }
+
+        # ZoneHVAC:EquipmentList
+        equip_lists[list_name] = {
+            "load_distribution_scheme": "SequentialLoad",
+            "equipment": [
+                {
+                    "zone_equipment_object_type": "ZoneHVAC:IdealLoadsAirSystem",
+                    "zone_equipment_name": equip_name,
+                    "zone_equipment_cooling_sequence": 1,
+                    "zone_equipment_heating_or_no_load_sequence": 1,
+                }
+            ],
+        }
+
+        # ZoneHVAC:EquipmentConnections
+        equip_conns[f"{zone_name}_EquipConn"] = {
             "zone_name": zone_name,
-            "template_thermostat_name": f"{zone_name}_Thermostat",
+            "zone_conditioning_equipment_list_name": list_name,
+            "zone_air_inlet_node_or_nodelist_name": supply_node,
+            "zone_air_node_name": air_node,
+            "zone_return_air_node_or_nodelist_name": return_node,
         }
-    return ideal
 
-
-def _build_thermostats(zones: dict) -> dict:
-    """Build HVACTemplate:Thermostat for each zone."""
-    thermostats = {}
-    for zone_name in zones:
-        thermostats[f"{zone_name}_Thermostat"] = {
-            "heating_setpoint_schedule_name": "hotel_heating_setpoint",
-            "cooling_setpoint_schedule_name": "hotel_cooling_setpoint",
+        # ThermostatSetpoint:DualSetpoint
+        thermostats[tstat_name] = {
+            "heating_setpoint_temperature_schedule_name": "hotel_heating_setpoint",
+            "cooling_setpoint_temperature_schedule_name": "hotel_cooling_setpoint",
         }
-    return thermostats
+
+        # ZoneControl:Thermostat
+        zone_controls[ctrl_name] = {
+            "zone_or_zonelist_name": zone_name,
+            "control_type_schedule_name": "ThermostatControlType_DualSetpoint",
+            "control_1_object_type": "ThermostatSetpoint:DualSetpoint",
+            "control_1_name": tstat_name,
+        }
+
+    return ideal_loads, equip_lists, equip_conns, thermostats, zone_controls
 
 
 def _output_variables() -> dict:
@@ -361,8 +414,13 @@ def assemble_epjson(
     )
 
     # ── 7. HVAC (ideal loads — perfect system, no real HVAC effects) ──────────
-    ideal_loads = _build_hvac_ideal_loads(zones)
-    thermostats  = _build_thermostats(zones)
+    # Uses native ZoneHVAC:IdealLoadsAirSystem (not HVACTemplate which needs ExpandObjects)
+    ideal_loads, equip_lists, equip_conns, dual_setpoints, zone_controls = (
+        _build_hvac_ideal_loads(zones)
+    )
+
+    # ThermostatControlType_DualSetpoint schedule is already in schedules.py
+    # ThermostatControlType ScheduleTypeLimits is already in schedule_type_limits
 
     # ── 8. Assemble the full epJSON dict ──────────────────────────────────────
     epjson: dict[str, Any] = {
@@ -449,8 +507,11 @@ def assemble_epjson(
         "ElectricEquipment": equip_objects,
         "ZoneInfiltration:DesignFlowRate": infil_objects,
 
-        "HVACTemplate:Thermostat": thermostats,
-        "HVACTemplate:Zone:IdealLoadsAirSystem": ideal_loads,
+        "ZoneHVAC:IdealLoadsAirSystem": ideal_loads,
+        "ZoneHVAC:EquipmentList": equip_lists,
+        "ZoneHVAC:EquipmentConnections": equip_conns,
+        "ThermostatSetpoint:DualSetpoint": dual_setpoints,
+        "ZoneControl:Thermostat": zone_controls,
 
         "Output:Variable": _output_variables(),
         "Output:Meter": _output_meters(),
@@ -460,7 +521,7 @@ def assemble_epjson(
         },
 
         "Output:SQLite": {
-            "Output:SQLite 1": {"output_type": "SimpleAndTabular"}
+            "Output:SQLite 1": {"option_type": "SimpleAndTabular"}
         },
 
         "Output:Table:SummaryReports": {

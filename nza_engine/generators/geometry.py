@@ -66,7 +66,6 @@ def _wall_surface(
         "outside_boundary_condition_object": outside_bc_object,
         "sun_exposure": "SunExposed" if sun_exposed else "NoSun",
         "wind_exposure": "WindExposed" if wind_exposed else "NoWind",
-        "view_factor_to_ground": "autocalculate",
         "number_of_vertices": len(vertices),
         "vertices": vertices,
     }
@@ -89,7 +88,6 @@ def _floor_surface(
         "outside_boundary_condition_object": outside_bc_object,
         "sun_exposure": "NoSun",
         "wind_exposure": "NoWind",
-        "view_factor_to_ground": "autocalculate",
         "number_of_vertices": len(vertices),
         "vertices": vertices,
     }
@@ -113,7 +111,6 @@ def _ceiling_surface(
         "outside_boundary_condition_object": outside_bc_object,
         "sun_exposure": "SunExposed" if is_roof else "NoSun",
         "wind_exposure": "WindExposed" if is_roof else "NoWind",
-        "view_factor_to_ground": "autocalculate",
         "number_of_vertices": len(vertices),
         "vertices": vertices,
     }
@@ -125,16 +122,26 @@ def _window_surface(
     construction_name: str,
     vertices: list[dict],
 ) -> dict:
-    """Assemble a FenestrationSurface:Detailed window entry."""
-    return {
+    """
+    Assemble a FenestrationSurface:Detailed window entry.
+
+    EnergyPlus 25.2 epJSON uses flat vertex fields for FenestrationSurface
+    (vertex_1_x_coordinate etc.) rather than the array format used by
+    BuildingSurface:Detailed.
+    """
+    obj: dict = {
         "surface_type": "Window",
         "construction_name": construction_name,
         "building_surface_name": parent_surface_name,
-        "frame_and_divider_name": "",
         "multiplier": 1.0,
         "number_of_vertices": len(vertices),
-        "vertices": vertices,
     }
+    # Flatten vertices into numbered fields
+    for i, v in enumerate(vertices, start=1):
+        obj[f"vertex_{i}_x_coordinate"] = v["vertex_x_coordinate"]
+        obj[f"vertex_{i}_y_coordinate"] = v["vertex_y_coordinate"]
+        obj[f"vertex_{i}_z_coordinate"] = v["vertex_z_coordinate"]
+    return obj
 
 
 def _window_vertices_on_wall(
@@ -255,8 +262,8 @@ def generate_building_geometry(params: dict) -> dict[str, Any]:
             "type": 1,
             "multiplier": 1,
             "ceiling_height": fh,
-            "volume": "autocalculate",
-            "floor_area": "autocalculate",
+            # volume and floor_area intentionally omitted —
+            # EnergyPlus calculates them from surface geometry
         }
 
         # ── Wall names ────────────────────────────────────────────────────────
@@ -380,19 +387,17 @@ def generate_building_geometry(params: dict) -> dict[str, Any]:
     wall_area_per_floor = 2 * (L + W) * fh
     total_wall_area = wall_area_per_floor * nf
 
-    # Compute actual glazing area from generated windows
-    def _win_area(verts: list[dict]) -> float:
-        v0, v1, v2 = verts[0], verts[1], verts[2]
-        w = math.sqrt(
-            (v1["vertex_x_coordinate"] - v0["vertex_x_coordinate"]) ** 2
-            + (v1["vertex_y_coordinate"] - v0["vertex_y_coordinate"]) ** 2
-        )
-        h = abs(v2["vertex_z_coordinate"] - v1["vertex_z_coordinate"])
+    # Compute actual glazing area from generated windows.
+    # Windows now use flat vertex fields (vertex_N_x/y/z_coordinate).
+    def _win_area_flat(win: dict) -> float:
+        x1, y1, z1 = win["vertex_1_x_coordinate"], win["vertex_1_y_coordinate"], win["vertex_1_z_coordinate"]
+        x2, y2, z2 = win["vertex_2_x_coordinate"], win["vertex_2_y_coordinate"], win["vertex_2_z_coordinate"]
+        x3, y3, z3 = win["vertex_3_x_coordinate"], win["vertex_3_y_coordinate"], win["vertex_3_z_coordinate"]
+        w = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+        h = abs(z3 - z2)
         return w * h
 
-    total_glazing_area = sum(
-        _win_area(win["vertices"]) for win in windows.values()
-    )
+    total_glazing_area = sum(_win_area_flat(win) for win in windows.values())
 
     metadata = {
         "building_name": params.get("name", "Building"),
