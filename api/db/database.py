@@ -25,6 +25,7 @@ import aiosqlite
 from nza_engine.config import DATA_DIR
 from nza_engine.library.constructions import list_constructions
 from nza_engine.library.systems import list_systems
+from nza_engine.library.benchmarks import _BENCHMARKS
 
 # ── Database path ─────────────────────────────────────────────────────────────
 
@@ -114,6 +115,9 @@ async def init_db() -> None:
         # Seed schedule templates from nza_engine library
         await _seed_schedules(db)
 
+        # Seed CRREM benchmark pathways
+        await _seed_benchmarks(db)
+
         await db.commit()
 
 
@@ -199,5 +203,27 @@ async def _seed_systems(db: aiosqlite.Connection) -> None:
                 data.get("display_name", name),
                 data.get("description", ""),
                 json.dumps(config),
+            ),
+        )
+
+
+async def _seed_benchmarks(db: aiosqlite.Connection) -> None:
+    """Seed CRREM pathway and carbon intensity benchmarks into library_items."""
+    from nza_engine.library.benchmarks import _BENCHMARKS  # type: ignore[attr-defined]
+
+    for name, data in _BENCHMARKS.items():
+        item_id = f"lib_benchmark_{name}"
+        await db.execute(
+            """
+            INSERT OR IGNORE INTO library_items
+                (id, library_type, name, display_name, description, config_json, is_default)
+            VALUES (?, 'benchmark', ?, ?, ?, ?, 1)
+            """,
+            (
+                item_id,
+                name,
+                data.get("display_name", name),
+                data.get("description", ""),
+                json.dumps(data),
             ),
         )

@@ -243,6 +243,44 @@ async def get_system_detail(name: str):
     return {"name": row["name"], "system": cfg}
 
 
+@router.get("/benchmarks")
+async def get_benchmarks(building_type: str | None = None, pathway: str | None = None):
+    """
+    Return all benchmark pathways (CRREM, carbon intensity).
+    Optional filters: building_type (e.g. 'hotel'), pathway (e.g. '1.5C').
+    """
+    async with get_db() as db:
+        cursor = await db.execute(
+            """
+            SELECT id, name, display_name, description, config_json
+            FROM library_items
+            WHERE library_type = 'benchmark'
+            ORDER BY name
+            """
+        )
+        rows = await cursor.fetchall()
+
+    benchmarks = []
+    for row in rows:
+        cfg = json.loads(row["config_json"])
+        if building_type and cfg.get("building_type") != building_type:
+            continue
+        if pathway and cfg.get("pathway") != pathway:
+            continue
+        benchmarks.append({
+            "id":            row["id"],
+            "name":          row["name"],
+            "display_name":  row["display_name"] or row["name"],
+            "description":   row["description"] or "",
+            "building_type": cfg.get("building_type"),
+            "pathway":       cfg.get("pathway"),
+            "country":       cfg.get("country"),
+            "config_json":   cfg,
+        })
+
+    return {"benchmarks": benchmarks}
+
+
 @router.get("/schedules")
 async def get_schedules():
     """Return all schedule templates — database-backed."""
