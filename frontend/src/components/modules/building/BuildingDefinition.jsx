@@ -1,8 +1,9 @@
-import { useState, useContext } from 'react'
+import { useState, useContext, useEffect } from 'react'
 import ExplorerLayout from '../../ui/ExplorerLayout.jsx'
 import TabBar from '../../ui/TabBar.jsx'
 import GeometryTab from './GeometryTab.jsx'
 import FabricTab from './FabricTab.jsx'
+import FabricSummary from './FabricSummary.jsx'
 import SummaryTab from './SummaryTab.jsx'
 import BuildingViewer3D from './BuildingViewer3D.jsx'
 import { BuildingContext } from '../../../context/BuildingContext.jsx'
@@ -13,7 +14,7 @@ const TABS = [
   { id: 'summary',  label: 'Summary'  },
 ]
 
-function BuildingSidebar({ activeTab, onTabChange }) {
+function BuildingSidebar({ activeTab, onTabChange, library, details, onDetailChange }) {
   return (
     <div className="flex flex-col h-full">
       <div className="px-3 pt-3 pb-1 border-b border-light-grey">
@@ -31,7 +32,9 @@ function BuildingSidebar({ activeTab, onTabChange }) {
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         {activeTab === 'geometry' && <GeometryTab />}
-        {activeTab === 'fabric'   && <FabricTab />}
+        {activeTab === 'fabric'   && (
+          <FabricTab onDetailChange={onDetailChange} />
+        )}
         {activeTab === 'summary'  && <SummaryTab />}
       </div>
     </div>
@@ -40,7 +43,22 @@ function BuildingSidebar({ activeTab, onTabChange }) {
 
 export default function BuildingDefinition() {
   const [activeTab, setActiveTab] = useState('geometry')
-  const { params } = useContext(BuildingContext)
+  const { params, constructions } = useContext(BuildingContext)
+
+  // Library + details for the FabricSummary main area
+  const [library, setLibrary]   = useState([])
+  const [details, setDetails]   = useState({})
+
+  useEffect(() => {
+    fetch('/api/library/constructions')
+      .then(r => r.ok ? r.json() : { constructions: [] })
+      .then(d => setLibrary(d.constructions ?? []))
+      .catch(() => {})
+  }, [])
+
+  function handleDetailChange(name, data) {
+    setDetails(d => ({ ...d, [name]: data }))
+  }
 
   return (
     <ExplorerLayout
@@ -49,13 +67,24 @@ export default function BuildingDefinition() {
         <BuildingSidebar
           activeTab={activeTab}
           onTabChange={setActiveTab}
+          library={library}
+          details={details}
+          onDetailChange={handleDetailChange}
         />
       }
     >
-      {/* Main area — interactive 3D viewer */}
-      <div className="relative w-full h-full">
-        <BuildingViewer3D params={params} />
-      </div>
+      {/* Main area */}
+      {activeTab === 'fabric' ? (
+        <FabricSummary
+          library={library}
+          constructions={constructions}
+          details={details}
+        />
+      ) : (
+        <div className="relative w-full h-full">
+          <BuildingViewer3D params={params} />
+        </div>
+      )}
     </ExplorerLayout>
   )
 }

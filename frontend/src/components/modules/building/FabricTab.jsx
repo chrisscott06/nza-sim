@@ -2,37 +2,102 @@ import { useContext, useEffect, useState } from 'react'
 import { BuildingContext } from '../../../context/BuildingContext.jsx'
 
 const ELEMENTS = [
-  { key: 'external_wall', label: 'External Wall' },
-  { key: 'roof',          label: 'Roof' },
-  { key: 'ground_floor',  label: 'Ground Floor' },
-  { key: 'glazing',       label: 'Glazing' },
+  { key: 'external_wall', label: 'External Wall',  types: ['wall'] },
+  { key: 'roof',          label: 'Roof',           types: ['roof'] },
+  { key: 'ground_floor',  label: 'Ground Floor',   types: ['floor', 'ground_floor'] },
+  { key: 'glazing',       label: 'Glazing',        types: ['glazing', 'window'] },
 ]
-
 
 function UValueBadge({ u }) {
   if (u == null) return null
-  // Colour coding: green ≤0.18, amber ≤0.28, red >0.28
   const color =
     u <= 0.18 ? '#16A34A' :
     u <= 0.28 ? '#ECB01F' :
                '#DC2626'
   return (
     <span
-      className="text-xxs font-medium px-1.5 py-0.5 rounded"
-      style={{ backgroundColor: color + '22', color }}
+      className="text-xxs font-semibold px-1.5 py-0.5 rounded"
+      style={{ backgroundColor: color + '20', color }}
     >
-      U = {u} W/m²K
+      U = {Number(u).toFixed(2)} W/m²K
     </span>
   )
 }
 
+function ThermalMassBadge({ mass }) {
+  if (!mass) return null
+  const map = {
+    heavy:  { label: 'Heavy mass',  cls: 'bg-orange-50 text-orange-700' },
+    medium: { label: 'Medium mass', cls: 'bg-amber-50 text-amber-700' },
+    light:  { label: 'Light mass',  cls: 'bg-sky-50 text-sky-700' },
+    none:   { label: 'No mass',     cls: 'bg-gray-50 text-gray-500' },
+  }
+  const cfg = map[mass.toLowerCase()] ?? map.light
+  return (
+    <span className={`text-xxs font-medium px-1.5 py-0.5 rounded ${cfg.cls}`}>
+      {cfg.label}
+    </span>
+  )
+}
 
-function ConstructionSelect({ elementKey, label, constructions, selectedId, onSelect }) {
-  // API uses `name` as the identifier; description is the human-readable label
-  const selected = constructions.find(c => c.name === selectedId)
+/** Compact layer stack — coloured bars proportional to thickness */
+function MiniBuildup({ layers }) {
+  if (!layers || layers.length === 0) return null
+
+  const totalThickness = layers.reduce((s, l) => s + (l.thickness ?? 0), 0)
 
   return (
-    <div className="bg-white rounded-lg border border-light-grey p-3 space-y-2">
+    <div className="flex flex-col gap-0.5 mt-1.5">
+      {layers.map((layer, i) => {
+        const pct = totalThickness > 0
+          ? Math.max(8, Math.round((layer.thickness / totalThickness) * 60))
+          : 12
+
+        const nameL = layer.name.toLowerCase()
+        const barColour =
+          nameL.includes('insul')                     ? 'bg-yellow-300' :
+          nameL.includes('plaster') || nameL.includes('board') ? 'bg-sky-200' :
+          nameL.includes('glass') || nameL.includes('glaz')    ? 'bg-cyan-200' :
+          nameL.includes('render') || nameL.includes('finish')  ? 'bg-slate-200' :
+                                                                   'bg-gray-300'
+
+        return (
+          <div key={i} className="flex items-center gap-1.5">
+            <div
+              className={`${barColour} rounded-sm flex-shrink-0`}
+              style={{ width: `${pct}px`, height: '10px' }}
+              title={`${layer.name} — ${layer.thickness != null ? Math.round(layer.thickness * 1000) + ' mm' : '—'}`}
+            />
+            <span className="text-xxs text-mid-grey truncate">
+              {layer.name}
+              {layer.thickness != null && ` · ${Math.round(layer.thickness * 1000)} mm`}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function ConstructionSelect({ elementKey, label, constructions, selectedId, onSelect, detail }) {
+  const selected = constructions.find(c => c.name === selectedId)
+
+  // Extract layers from the fetched detail (epjson data)
+  const layers = (() => {
+    if (!detail) return []
+    const epjson = detail.definition ?? {}
+    const out = []
+    for (const matType of Object.keys(epjson)) {
+      if (!matType.startsWith('Material') && !matType.startsWith('WindowMaterial')) continue
+      for (const [name, mat] of Object.entries(epjson[matType] ?? {})) {
+        out.push({ name, thickness: mat.thickness ?? null, conductivity: mat.conductivity ?? null })
+      }
+    }
+    return out
+  })()
+
+  return (
+    <div className="bg-white rounded-lg border border-light-grey p-3 space-y-1.5">
       <p className="text-xxs uppercase tracking-wider text-mid-grey">{label}</p>
 
       <select
@@ -58,23 +123,28 @@ function ConstructionSelect({ elementKey, label, constructions, selectedId, onSe
       </select>
 
       {selected && (
-        <div className="flex items-center gap-2 pt-0.5">
+        <div className="flex flex-wrap gap-1.5 pt-0.5">
           <UValueBadge u={selected.u_value_W_per_m2K} />
           {selected.g_value != null && (
             <span className="text-xxs text-mid-grey">g = {selected.g_value}</span>
           )}
+          <ThermalMassBadge mass={selected.thermal_mass} />
         </div>
       )}
+
+      {layers.length > 0 && <MiniBuildup layers={layers} />}
     </div>
   )
 }
 
-export default function FabricTab() {
+export default function FabricTab({ onDetailChange }) {
   const { constructions: selected, updateConstruction } = useContext(BuildingContext)
 
   const [library, setLibrary]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState(null)
+  // Cache of full detail by construction name
+  const [details, setDetails]   = useState({})
 
   useEffect(() => {
     fetch('/api/library/constructions')
@@ -85,6 +155,25 @@ export default function FabricTab() {
       .then(data => { setLibrary(data.constructions ?? []); setLoading(false) })
       .catch(err => { setError(err.message); setLoading(false) })
   }, [])
+
+  // Fetch detail for each selected construction when selection changes
+  useEffect(() => {
+    if (!selected) return
+    for (const key of Object.keys(selected)) {
+      const name = selected[key]
+      if (name && !details[name]) {
+        fetch(`/api/library/constructions/${name}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            if (data) {
+              setDetails(d => ({ ...d, [name]: data }))
+              if (onDetailChange) onDetailChange(name, data)
+            }
+          })
+          .catch(() => {})
+      }
+    }
+  }, [selected])
 
   if (loading) {
     return (
@@ -102,31 +191,24 @@ export default function FabricTab() {
     )
   }
 
-  // Filter by the 'type' field returned by the API
-  const byType = (elementKey) => {
-    const typeMap = {
-      external_wall: ['wall'],
-      roof:          ['roof'],
-      ground_floor:  ['floor', 'ground_floor'],
-      glazing:       ['glazing', 'window'],
-    }
-    const tags = typeMap[elementKey] ?? []
+  const byType = (types) => {
     const filtered = library.filter(c =>
-      tags.some(t => (c.type ?? '').toLowerCase() === t)
+      types.some(t => (c.type ?? '').toLowerCase() === t)
     )
     return filtered.length > 0 ? filtered : library
   }
 
   return (
     <div className="p-3 space-y-3">
-      {ELEMENTS.map(({ key, label }) => (
+      {ELEMENTS.map(({ key, label, types }) => (
         <ConstructionSelect
           key={key}
           elementKey={key}
           label={label}
-          constructions={byType(key)}
+          constructions={byType(types)}
           selectedId={selected?.[key] ?? null}
           onSelect={updateConstruction}
+          detail={details[selected?.[key]] ?? null}
         />
       ))}
 
