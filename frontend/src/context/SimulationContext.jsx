@@ -29,6 +29,20 @@ export function SimulationProvider({ children }) {
       ground_floor: 'ground_floor_slab',
       glazing: 'double_low_e',
     }
+    const systems = buildingCtx?.systems ?? {
+      mode: 'ideal',
+      hvac_type: 'vrf_standard',
+      ventilation_type: 'mev_standard',
+      natural_ventilation: false,
+      natural_vent_threshold: 22,
+      dhw_primary: 'gas_boiler_dhw',
+      dhw_preheat: 'none',
+      dhw_setpoint: 60,
+      dhw_preheat_setpoint: 45,
+      lighting_power_density: 8.0,
+      lighting_control: 'occupancy_sensing',
+      pump_type: 'variable_speed',
+    }
 
     try {
       const response = await fetch('/api/simulate', {
@@ -37,6 +51,7 @@ export function SimulationProvider({ children }) {
         body: JSON.stringify({
           building: { ...params },
           constructions,
+          systems,
           weather_file: 'USE_DEFAULT',
         }),
       })

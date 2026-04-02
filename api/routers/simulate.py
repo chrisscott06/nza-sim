@@ -54,9 +54,25 @@ class ConstructionChoices(BaseModel):
     glazing:       str = "double_low_e"
 
 
+class SystemsConfig(BaseModel):
+    mode: str = "ideal"                        # 'ideal' | 'detailed'
+    hvac_type: str = "vrf_standard"
+    ventilation_type: str = "mev_standard"
+    natural_ventilation: bool = False
+    natural_vent_threshold: float = 22.0
+    dhw_primary: str = "gas_boiler_dhw"
+    dhw_preheat: str = "none"
+    dhw_setpoint: float = 60.0
+    dhw_preheat_setpoint: float = 45.0
+    lighting_power_density: float = 8.0        # W/m²
+    lighting_control: str = "occupancy_sensing"
+    pump_type: str = "variable_speed"
+
+
 class SimulateRequest(BaseModel):
     building: BuildingParams
     constructions: ConstructionChoices = ConstructionChoices()
+    systems: SystemsConfig = SystemsConfig()
     weather_file: str = "USE_DEFAULT"
 
 
@@ -121,6 +137,7 @@ def _run_and_parse(run_id: str, request: SimulateRequest) -> dict:
         "ground_floor":  request.constructions.ground_floor,
         "glazing":       request.constructions.glazing,
     }
+    systems_config = request.systems.model_dump()
 
     epjson_path = run_dir / "input.epJSON"
     assemble_epjson(
@@ -128,6 +145,7 @@ def _run_and_parse(run_id: str, request: SimulateRequest) -> dict:
         construction_choices=construction_choices,
         weather_file_path=weather_path,
         output_path=epjson_path,
+        systems_config=systems_config,
     )
 
     sim_result = run_simulation(
@@ -158,6 +176,7 @@ def _run_and_parse(run_id: str, request: SimulateRequest) -> dict:
         "warnings":         sim_result.warnings,
         "building":         building_params,
         "constructions":    construction_choices,
+        "systems":          systems_config,
         "weather_file":     str(weather_path),
         "summary":          get_building_summary(sql),
         "annual_energy":    get_annual_energy_by_enduse(sql),

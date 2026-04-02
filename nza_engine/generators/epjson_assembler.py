@@ -178,15 +178,20 @@ def _build_people_objects(zones: dict, zone_type: str = "hotel_bedroom") -> dict
     return people
 
 
-def _build_lights_objects(zones: dict, zone_type: str = "hotel_bedroom") -> dict:
+def _build_lights_objects(
+    zones: dict,
+    zone_type: str = "hotel_bedroom",
+    lpd_override: float | None = None,
+) -> dict:
     loads = get_zone_loads(zone_type)
+    lpd = lpd_override if lpd_override is not None else loads["lighting_power_density_W_per_m2"]
     lights = {}
     for zone_name in zones:
         lights[f"{zone_name}_Lights"] = {
             "zone_or_zonelist_or_space_or_spacelist_name": zone_name,
             "schedule_name": loads["lighting_schedule"],
             "design_level_calculation_method": "Watts/Area",
-            "watts_per_floor_area": loads["lighting_power_density_W_per_m2"],
+            "watts_per_floor_area": lpd,
             "return_air_fraction": 0.0,
             "fraction_radiant": 0.32,
             "fraction_visible": 0.25,
@@ -362,6 +367,7 @@ def assemble_epjson(
     construction_choices: dict[str, str],
     weather_file_path: str | Path,
     output_path: str | Path | None = None,
+    systems_config: dict | None = None,
 ) -> dict:
     """
     Assemble a complete epJSON dict for the given building.
@@ -376,6 +382,9 @@ def assemble_epjson(
         Path to an EPW weather file (used to extract Site:Location)
     output_path : str | Path | None
         If provided, write the epJSON to this path. Parent dirs are created.
+    systems_config : dict | None
+        Optional systems configuration from the frontend (mode, hvac_type,
+        lighting_power_density, etc.)
 
     Returns
     -------
@@ -406,8 +415,12 @@ def assemble_epjson(
 
     # ── 6. Internal loads ─────────────────────────────────────────────────────
     # All zones treated as hotel_bedroom for this rectangular massing model
+    # Apply systems_config overrides where relevant
+    sc = systems_config or {}
+    lpd_override = sc.get("lighting_power_density")  # W/m², None = use library default
+
     people_objects  = _build_people_objects(zones)
-    lights_objects  = _build_lights_objects(zones)
+    lights_objects  = _build_lights_objects(zones, lpd_override=lpd_override)
     equip_objects   = _build_equipment_objects(zones)
     infil_objects   = _build_infiltration_objects(
         zones,
