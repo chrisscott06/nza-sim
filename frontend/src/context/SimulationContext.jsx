@@ -40,10 +40,11 @@ function normalizeDbResult(row) {
 // ── Provider ─────────────────────────────────────────────────────────────────
 
 export function SimulationProvider({ children }) {
-  const [status,  setStatus]  = useState('idle')   // idle | running | complete | error
-  const [runId,   setRunId]   = useState(null)
-  const [results, setResults] = useState(null)
-  const [error,   setError]   = useState(null)
+  const [status,         setStatus]         = useState('idle')   // idle | running | complete | error
+  const [runId,          setRunId]          = useState(null)
+  const [results,        setResults]        = useState(null)
+  const [error,          setError]          = useState(null)
+  const [resultsLoading, setResultsLoading] = useState(false)   // true while fetching from DB
 
   const { currentProjectId } = useContext(ProjectContext)
 
@@ -55,6 +56,7 @@ export function SimulationProvider({ children }) {
     setRunId(null)
     setStatus('idle')
     setError(null)
+    setResultsLoading(true)
 
     fetch(`/api/projects/${currentProjectId}/simulations`)
       .then(r => r.ok ? r.json() : [])
@@ -71,6 +73,7 @@ export function SimulationProvider({ children }) {
         setStatus('complete')
       })
       .catch(err => console.error('[SimulationContext] Failed to load latest results:', err))
+      .finally(() => setResultsLoading(false))
   }, [currentProjectId])
 
   // ── Run simulation ─────────────────────────────────────────────────────────
@@ -107,7 +110,7 @@ export function SimulationProvider({ children }) {
   }
 
   return (
-    <SimulationContext.Provider value={{ status, runId, results, error, runSimulation }}>
+    <SimulationContext.Provider value={{ status, runId, results, error, resultsLoading, runSimulation }}>
       {children}
     </SimulationContext.Provider>
   )

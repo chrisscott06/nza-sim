@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import { Play, Loader2, CheckCircle2, AlertCircle, ChevronDown } from 'lucide-react'
 import { SimulationContext } from '../../context/SimulationContext.jsx'
 import { ProjectContext } from '../../context/ProjectContext.jsx'
@@ -57,6 +57,7 @@ export default function TopBar() {
   const saveStatus = projectCtx?.saveStatus ?? 'idle'
   const [toast, setToast] = useState(null)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const pendingRunRef = useRef(false)   // true if we're waiting for save to finish
 
   /* Show toast when simulation completes or errors */
   useEffect(() => {
@@ -69,9 +70,22 @@ export default function TopBar() {
     }
   }, [status, results, error])
 
+  /* Auto-trigger simulation once a pending save completes */
+  useEffect(() => {
+    if (pendingRunRef.current && saveStatus === 'saved') {
+      pendingRunRef.current = false
+      runSimulation()
+    }
+  }, [saveStatus]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleRun = () => {
     if (status === 'running') return
     setToast(null)
+    if (saveStatus === 'saving') {
+      // Changes are still being debounced — queue the run
+      pendingRunRef.current = true
+      return
+    }
     runSimulation()
   }
 

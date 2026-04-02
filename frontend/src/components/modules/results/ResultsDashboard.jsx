@@ -2,6 +2,7 @@ import { useState, useContext } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Play } from 'lucide-react'
 import ExplorerLayout from '../../ui/ExplorerLayout.jsx'
+import ErrorBoundary from '../../ui/ErrorBoundary.jsx'
 import TabBar from '../../ui/TabBar.jsx'
 import OverviewTab from './OverviewTab.jsx'
 import EnergyFlowsTab from './EnergyFlowsTab.jsx'
@@ -10,6 +11,21 @@ import LoadProfilesTab from './LoadProfilesTab.jsx'
 import FabricAnalysisTab from './FabricAnalysisTab.jsx'
 import { SimulationContext } from '../../../context/SimulationContext.jsx'
 import { BuildingContext } from '../../../context/BuildingContext.jsx'
+
+function ResultsSkeleton() {
+  return (
+    <div className="p-6 space-y-4 animate-pulse">
+      <div className="h-5 bg-light-grey rounded w-48" />
+      <div className="grid grid-cols-3 gap-3">
+        {[1,2,3].map(i => (
+          <div key={i} className="h-20 bg-light-grey rounded-xl" />
+        ))}
+      </div>
+      <div className="h-48 bg-light-grey rounded-xl" />
+      <div className="h-32 bg-light-grey rounded-xl" />
+    </div>
+  )
+}
 
 const TABS = [
   { id: 'overview',  label: 'Overview'       },
@@ -108,13 +124,14 @@ function ResultsSidebar({ activeTab, onTabChange }) {
 
 export default function ResultsDashboard() {
   const [activeTab, setActiveTab] = useState('overview')
+  const { resultsLoading } = useContext(SimulationContext)
 
   const tabContent = {
-    overview: <OverviewTab />,
-    flows:    <EnergyFlowsTab />,
-    balance:  <EnergyBalanceTab />,
-    profiles: <LoadProfilesTab />,
-    fabric:   <FabricAnalysisTab />,
+    overview: <ErrorBoundary moduleName="Results Overview"><OverviewTab /></ErrorBoundary>,
+    flows:    <ErrorBoundary moduleName="Energy Flows"><EnergyFlowsTab /></ErrorBoundary>,
+    balance:  <ErrorBoundary moduleName="Energy Balance"><EnergyBalanceTab /></ErrorBoundary>,
+    profiles: <ErrorBoundary moduleName="Load Profiles"><LoadProfilesTab /></ErrorBoundary>,
+    fabric:   <ErrorBoundary moduleName="Fabric Analysis"><FabricAnalysisTab /></ErrorBoundary>,
   }
 
   return (
@@ -128,7 +145,7 @@ export default function ResultsDashboard() {
       }
     >
       <div className="h-full overflow-y-auto">
-        {tabContent[activeTab]}
+        {resultsLoading ? <ResultsSkeleton /> : tabContent[activeTab]}
       </div>
     </ExplorerLayout>
   )
