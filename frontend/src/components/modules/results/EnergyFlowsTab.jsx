@@ -322,12 +322,18 @@ export default function EnergyFlowsTab({ activeResults } = {}) {
   const ae = results.annual_energy ?? {}
   const total = (ae.heating_kWh ?? 0) + (ae.cooling_kWh ?? 0) + (ae.lighting_kWh ?? 0) + (ae.equipment_kWh ?? 0)
 
+  const scenarioName  = results.scenario_name ?? 'Simulation'
+  const totalMWh      = ((results.annual_energy?.total_kWh ?? total) / 1000).toFixed(1)
+  const totalLabel    = `${totalMWh} MWh/yr`
+
   return (
     <div className="p-4 space-y-4">
       <div>
-        <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1">Energy flows — annual kWh</p>
-        <p className="text-xxs text-mid-grey">
-          Total electricity input: <span className="text-navy font-medium">{Math.round(total).toLocaleString()} kWh/yr</span>
+        <h3 className="text-caption font-semibold text-navy">
+          Energy Flows — {scenarioName}
+        </h3>
+        <p className="text-xxs text-mid-grey mt-0.5">
+          Total input: <span className="text-navy font-medium">{totalLabel}</span>
           {results.summary?.eui_kWh_per_m2 && (
             <span className="ml-2">· EUI: <span className="text-navy font-medium">{results.summary.eui_kWh_per_m2} kWh/m²</span></span>
           )}

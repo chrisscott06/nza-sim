@@ -144,6 +144,13 @@ function AirtightnessGuidance({ ach }) {
   return <p className="text-xxs text-red-600 mt-1">Leaky (poor airtightness)</p>
 }
 
+function achLabel(ach) {
+  if (ach < 0.3)  return { text: 'Very airtight', color: 'text-green-600' }
+  if (ach <= 0.6) return { text: 'Good',          color: 'text-green-600' }
+  if (ach <= 1.0) return { text: 'Average',        color: 'text-amber-600' }
+  return                  { text: 'Leaky',          color: 'text-red-600'  }
+}
+
 export default function FabricTab({ onDetailChange }) {
   const { constructions: selected, updateConstruction, params, updateParam } = useContext(ProjectContext)
 
@@ -237,6 +244,36 @@ export default function FabricTab({ onDetailChange }) {
           </span>
         </div>
         <AirtightnessGuidance ach={params?.infiltration_ach ?? 0.5} />
+      </div>
+
+      {/* Fabric summary — U-values + infiltration at a glance */}
+      <div className="bg-off-white rounded-lg border border-light-grey p-3">
+        <p className="text-xxs uppercase tracking-wider text-mid-grey mb-2">Fabric summary</p>
+        <div className="space-y-1.5">
+          {ELEMENTS.map(({ key, label }) => {
+            const name = selected?.[key]
+            const u    = details[name]?.config_json?.u_value
+            return (
+              <div key={key} className="flex items-center justify-between">
+                <span className="text-xxs text-dark-grey">{label}</span>
+                {u != null
+                  ? <UValueBadge u={u} />
+                  : <span className="text-xxs text-mid-grey">No selection</span>
+                }
+              </div>
+            )
+          })}
+          <div className="flex items-center justify-between pt-1.5 border-t border-light-grey">
+            <span className="text-xxs text-dark-grey">Air permeability</span>
+            <div className="flex items-center gap-2">
+              {(() => {
+                const a = achLabel(params?.infiltration_ach ?? 0.5)
+                return <span className={`text-xxs ${a.color}`}>{a.text}</span>
+              })()}
+              <span className="text-xxs font-semibold text-navy">{(params?.infiltration_ach ?? 0.5).toFixed(2)} ACH</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <p className="text-xxs text-mid-grey pt-1">

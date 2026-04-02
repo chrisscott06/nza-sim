@@ -16,7 +16,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend,
   Cell, ReferenceLine, ResponsiveContainer
 } from 'recharts'
-import { TrendingDown } from 'lucide-react'
+import { TrendingDown, Trophy } from 'lucide-react'
 import ChartContainer from '../../ui/ChartContainer.jsx'
 import DataCard from '../../ui/DataCard.jsx'
 import { SCENARIO_COLORS } from '../../../data/chartTokens.js'
@@ -215,6 +215,12 @@ function EuiRankingChart({ scenarios, results }) {
                 <div className="flex items-center gap-2">
                   <span className="text-xxs font-medium text-dark-grey">{i + 1}.</span>
                   <span className="text-xxs font-semibold" style={{ color }}>{s.name}</span>
+                  {i === 0 && withResults.length > 1 && (
+                    <span className="inline-flex items-center gap-0.5 text-xxs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">
+                      <Trophy size={9} />
+                      Best
+                    </span>
+                  )}
                   {s.is_baseline && (
                     <span className="text-xxs text-mid-grey">(Baseline)</span>
                   )}

@@ -152,23 +152,23 @@ export default function HomePage() {
         </div>
       ) : (
         <div className="bg-white border border-light-grey rounded-xl p-6">
-          <h2 className="text-caption font-semibold text-navy mb-4">Getting started</h2>
+          <h2 className="text-caption font-semibold text-navy mb-1">Getting started</h2>
+          <p className="text-xs text-mid-grey mb-4">Follow these steps to run your first simulation.</p>
           <ol className="space-y-3">
             {[
-              { step: '1', label: 'Define your building', href: '/building', desc: 'Set the geometry, fabric constructions, and orientation' },
-              { step: '2', label: 'Configure systems', href: '/systems', desc: 'Choose HVAC, ventilation, DHW, and lighting' },
-              { step: '3', label: 'Run simulation', href: null, desc: 'Click "Run Simulation" in the top bar to generate results' },
+              { step: '1', label: 'Define building geometry',    href: '/building', desc: 'Set floor dimensions, number of floors, height, and orientation' },
+              { step: '2', label: 'Select fabric constructions', href: '/building', desc: 'Choose walls, roof, floor, and glazing from the construction library' },
+              { step: '3', label: 'Configure systems',           href: '/systems',  desc: 'Choose HVAC, ventilation, DHW, and set lighting power density' },
+              { step: '4', label: 'Run simulation',              href: null,        desc: 'Click "Run Simulation" in the top bar — EnergyPlus runs in seconds' },
+              { step: '5', label: 'View results',                href: '/results',  desc: 'Explore load profiles, energy flows, fabric analysis, and carbon trajectory' },
             ].map(item => (
               <li key={item.step} className="flex items-start gap-3">
-                <span className="
-                  w-6 h-6 rounded-full bg-navy/5 text-navy flex-shrink-0
-                  flex items-center justify-center text-xs font-semibold
-                ">
+                <span className="w-6 h-6 rounded-full bg-navy text-white flex-shrink-0 flex items-center justify-center text-xs font-semibold">
                   {item.step}
                 </span>
                 <div>
                   {item.href ? (
-                    <Link to={item.href} className="text-caption font-medium text-navy hover:text-magenta">
+                    <Link to={item.href} className="text-caption font-medium text-navy hover:text-magenta transition-colors">
                       {item.label} →
                     </Link>
                   ) : (

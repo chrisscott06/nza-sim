@@ -106,8 +106,26 @@ export default function OverviewTab({ activeResults } = {}) {
   const warnings  = results.warnings         ?? 0
   const severes   = 0  // not currently exposed in API response
 
+  // Building summary fields
+  const numFloors   = params.num_floors ?? 4
+  const orientation = params.orientation ?? 0
+  const orientLabel = orientation === 0 ? 'North' : orientation === 90 ? 'East' : orientation === 180 ? 'South' : orientation === 270 ? 'West' : `${orientation}°`
+
   return (
     <div className="p-4 space-y-5">
+
+      {/* Building summary */}
+      <div className="bg-off-white rounded-lg border border-light-grey px-3 py-2.5">
+        <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1.5">Building</p>
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          <span className="text-xxs text-dark-grey">GIA <span className="font-semibold text-navy">{Math.round(gia).toLocaleString()} m²</span></span>
+          <span className="text-xxs text-dark-grey">Floors <span className="font-semibold text-navy">{numFloors}</span></span>
+          <span className="text-xxs text-dark-grey">Orientation <span className="font-semibold text-navy">{orientLabel}</span></span>
+          {results.scenario_name && (
+            <span className="text-xxs text-dark-grey">Scenario <span className="font-semibold text-navy">{results.scenario_name}</span></span>
+          )}
+        </div>
+      </div>
 
       {/* KPI DataCards */}
       <div>
