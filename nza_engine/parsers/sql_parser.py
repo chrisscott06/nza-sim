@@ -447,6 +447,49 @@ def get_building_summary(sql_path: str | Path) -> dict[str, Any]:
         conn.close()
 
 
+def get_energy_by_fuel(sql_path: str | Path) -> dict:
+    """
+    Return annual energy consumption split by fuel type.
+
+    For ideal_loads mode: all energy is treated as electricity (no real system).
+    For detailed mode: electricity and gas are read from Facility meters.
+
+    Returns
+    -------
+    dict with keys:
+      electricity_kwh       — total site electricity (kWh)
+      natural_gas_kwh       — total natural gas (kWh)
+      total_kwh             — electricity + gas
+      electricity_fraction  — share of total (0-1)
+      gas_fraction          — share of total (0-1)
+    """
+    conn = _connect(sql_path)
+    try:
+        mode = _detect_hvac_mode(conn)
+        if mode == "ideal_loads":
+            # Ideal loads — no real fuel split; total is thermal + lighting + equip
+            heating  = _sum_annual(conn, "Zone Ideal Loads Supply Air Total Heating Energy")
+            cooling  = _sum_annual(conn, "Zone Ideal Loads Supply Air Total Cooling Energy")
+            lighting = _sum_annual(conn, "Zone Lights Electricity Energy")
+            equip    = _sum_annual(conn, "Zone Electric Equipment Electricity Energy")
+            total    = heating + cooling + lighting + equip
+            elec, gas = total, 0.0
+        else:
+            elec = _sum_annual(conn, "Electricity:Facility")
+            gas  = _sum_annual(conn, "NaturalGas:Facility")
+            total = elec + gas
+        total = max(total, 0.001)  # avoid division by zero
+        return {
+            "electricity_kwh":      round(elec,           1),
+            "natural_gas_kwh":      round(gas,            1),
+            "total_kwh":            round(elec + gas,     1),
+            "electricity_fraction": round(elec / total,   4),
+            "gas_fraction":         round(gas  / total,   4),
+        }
+    finally:
+        conn.close()
+
+
 def get_envelope_heat_flow(sql_path: str | Path) -> dict[str, float]:
     """
     Return annual heat flow through envelope components in kWh.

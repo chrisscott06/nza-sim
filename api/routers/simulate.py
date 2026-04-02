@@ -30,6 +30,7 @@ from nza_engine.parsers.sql_parser import (
     get_envelope_heat_flow_detailed,
     get_hourly_profiles,
     get_typical_day_profiles,
+    get_energy_by_fuel,
 )
 
 router = APIRouter(prefix="/api/simulate", tags=["simulate"])
@@ -169,6 +170,7 @@ def _run_and_parse(run_id: str, request: SimulateRequest) -> dict:
         "envelope_detailed": get_envelope_heat_flow_detailed(sql),
         # Typical day profiles included in main response (compact — 4 days × 24 hours)
         "hourly_profiles":  get_typical_day_profiles(sql),
+        "fuel_split":        get_energy_by_fuel(sql),
     }
 
     # Cache results for later retrieval (without full 8760 — too large for JSON cache)

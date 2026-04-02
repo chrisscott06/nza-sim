@@ -76,7 +76,7 @@ Building: 60×15m, 4 floors, 3.2m height, 25% WWR all façades, 0° orientation.
 - ✅ Part 2: VRF system generator — native AirConditioner:VariableRefrigerantFlow with full performance curves
 - ✅ Part 3: MEV and MVHR ventilation generators
 - ✅ Part 4: Gas boiler DHW — WaterHeater:Mixed standalone mode, ASHP two-tank cascade. Gas Only 12,308 kWh → ASHP preheat 3,515 kWh gas (71% reduction)
-- ⬜ Part 5: Fuel-split results and carbon calculation
+- ✅ Part 5: Fuel-split results — get_energy_by_fuel() in sql_parser; fuel_split key in API response; CRREM carbon uses real electricity+gas formula (gas constant 0.183 kgCO₂/kWh)
 - ⬜ Part 5: Fuel-split results and carbon calculation
 - ⬜ Part 6: Frontend system mode toggle
 - ⬜ Parts 7–10: Scenario comparison, performance curves, Bridgewater test, integration

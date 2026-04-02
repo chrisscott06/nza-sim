@@ -69,9 +69,31 @@ function findStrandingYear(buildingEui, euiTargets) {
   return null
 }
 
-function findCarbonStrandingYear(totalKwh, gia, carbonTargets) {
+// Gas carbon intensity (kgCO₂/kWh) — UK Government GHG Conversion Factors
+const GAS_CARBON_KG_KWH = 0.183
+
+/**
+ * Carbon intensity (kgCO₂/m²) for a given year.
+ *
+ * When electricityKwh + gasKwh are provided (detailed HVAC mode), the
+ * calculation uses real fuel splits: electricity decarbonises with the
+ * grid, gas stays at a constant 0.183 kgCO₂/kWh.
+ *
+ * When only totalKwh is provided (ideal loads fallback), all energy is
+ * treated as electricity — consistent with pre-Brief-07 behaviour.
+ */
+function buildingCarbonKgPerM2(year, gia, { electricityKwh = 0, gasKwh = 0, totalKwh = 0 }) {
+  const gridFactor = interpolate(GRID_INTENSITY, year)
+  if (electricityKwh + gasKwh > 0) {
+    return (electricityKwh * gridFactor + gasKwh * GAS_CARBON_KG_KWH) / gia
+  }
+  // Fallback for ideal_loads (no fuel split): treat all as electricity
+  return (totalKwh * gridFactor) / gia
+}
+
+function findCarbonStrandingYear(fuels, gia, carbonTargets) {
   for (const year of CHART_YEARS) {
-    const carbon = (totalKwh * interpolate(GRID_INTENSITY, year)) / gia
+    const carbon = buildingCarbonKgPerM2(year, gia, fuels)
     if (interpolate(carbonTargets, year) < carbon) return year
   }
   return null
@@ -195,18 +217,23 @@ function EuiTrajectoryChart({ scenarioLines, euiTargets }) {
 // ── Carbon Chart (single or multi-scenario) ───────────────────────────────────
 
 function CarbonTrajectoryChart({ scenarioLines, defaultGia, carbonTargets }) {
-  // scenarioLines: [{ name, totalKwh, color, gia? }]
+  // scenarioLines: [{ name, totalKwh, electricityKwh, gasKwh, color, gia? }]
   const data = CHART_YEARS.map(year => {
     const row = {
       year,
       'CRREM 1.5°C Carbon': Number(interpolate(carbonTargets, year).toFixed(1)),
       safeZone:             Number(interpolate(carbonTargets, year).toFixed(1)),
     }
-    const gridIntensity = interpolate(GRID_INTENSITY, year)
     for (const s of scenarioLines) {
       const effectiveGia = s.gia ?? defaultGia
       if (effectiveGia > 0 && year >= CURRENT_YEAR - 1) {
-        row[s.name] = Number(((s.totalKwh * gridIntensity) / effectiveGia).toFixed(1))
+        row[s.name] = Number(
+          buildingCarbonKgPerM2(year, effectiveGia, {
+            electricityKwh: s.electricityKwh,
+            gasKwh:         s.gasKwh,
+            totalKwh:       s.totalKwh,
+          }).toFixed(1)
+        )
       }
     }
     return row
@@ -267,7 +294,9 @@ function StrandingTable({ scenarioLines, euiTargets, carbonTargets, gia }) {
           {scenarioLines.map(s => {
             const euiStrand    = findStrandingYear(s.eui, euiTargets)
             const scGia        = s.gia ?? gia
-            const carbStrand   = scGia > 0 ? findCarbonStrandingYear(s.totalKwh, scGia, carbonTargets) : null
+            const carbStrand   = scGia > 0 ? findCarbonStrandingYear(
+              { electricityKwh: s.electricityKwh, gasKwh: s.gasKwh, totalKwh: s.totalKwh },
+              scGia, carbonTargets) : null
             return (
               <tr key={s.name} className="border-b border-light-grey last:border-0 hover:bg-off-white/50">
                 <td className="px-4 py-2">
@@ -352,24 +381,30 @@ export default function CRREMTab({ scenarios = [], scenarioResults = {} }) {
   if (useMultiScenario) {
     scenarioLines = scenariosWithResults.map((s, i) => {
       const sr = scenarioResults[s.id]
+      // fuel_split (Brief 07+) gives real electricity/gas split for carbon accuracy.
+      // Falls back to treating total_kWh as all-electricity for ideal_loads mode.
+      const fs = sr.fuel_split
       return {
-        name:     s.name,
-        color:    SCENARIO_COLORS[i] ?? SCENARIO_COLORS[0],
-        eui:      sr.results_summary?.eui_kWh_per_m2 ?? 0,
-        // Prefer annual_energy.total_kWh (always present); results_summary.total_energy_kWh is null
-        totalKwh: sr.annual_energy?.total_kWh ?? sr.results_summary?.total_energy_kWh ?? 0,
-        // GIA from results_summary if available, else fall back to computed
-        gia:      sr.results_summary?.total_gia_m2 ?? null,
+        name:         s.name,
+        color:        SCENARIO_COLORS[i] ?? SCENARIO_COLORS[0],
+        eui:          sr.results_summary?.eui_kWh_per_m2 ?? 0,
+        totalKwh:     sr.annual_energy?.total_kWh ?? sr.results_summary?.total_energy_kWh ?? 0,
+        electricityKwh: fs?.electricity_kwh ?? sr.annual_energy?.electricity_kWh ?? 0,
+        gasKwh:       fs?.natural_gas_kwh   ?? sr.annual_energy?.gas_kWh          ?? 0,
+        gia:          sr.results_summary?.total_gia_m2 ?? null,
       }
     })
   } else if (status === 'complete' && results) {
     // Fallback: single line from SimulationContext
+    const fs = results.fuel_split
     scenarioLines = [{
-      name:     'This building',
-      color:    '#2B2A4C',
-      eui:      results.summary?.eui_kWh_per_m2 ?? 0,
-      totalKwh: results.annual_energy?.total_kWh ?? 0,
-      gia:      results.summary?.total_gia_m2 ?? null,
+      name:         'This building',
+      color:        '#2B2A4C',
+      eui:          results.summary?.eui_kWh_per_m2 ?? 0,
+      totalKwh:     results.annual_energy?.total_kWh ?? 0,
+      electricityKwh: fs?.electricity_kwh ?? results.annual_energy?.electricity_kWh ?? 0,
+      gasKwh:       fs?.natural_gas_kwh   ?? results.annual_energy?.gas_kWh          ?? 0,
+      gia:          results.summary?.total_gia_m2 ?? null,
     }]
   }
 
@@ -397,11 +432,19 @@ export default function CRREMTab({ scenarios = [], scenarioResults = {} }) {
   const euiGap         = primaryEui > 0 ? primaryEui - crremEuiNow : null
   const isEuiCompliant = euiGap != null && euiGap <= 0
 
-  const currentGridIntensity = interpolate(GRID_INTENSITY, CURRENT_YEAR)
-  const buildingCarbonNow    = effectiveGia > 0 ? (primaryKwh * currentGridIntensity) / effectiveGia : null
+  const primaryFuels = {
+    electricityKwh: primary.electricityKwh,
+    gasKwh:         primary.gasKwh,
+    totalKwh:       primaryKwh,
+  }
+  const buildingCarbonNow    = effectiveGia > 0
+    ? buildingCarbonKgPerM2(CURRENT_YEAR, effectiveGia, primaryFuels)
+    : null
 
   const strandingYearEui    = findStrandingYear(primaryEui, euiTargets)
-  const strandingYearCarbon = effectiveGia > 0 ? findCarbonStrandingYear(primaryKwh, effectiveGia, carbonTargets) : null
+  const strandingYearCarbon = effectiveGia > 0
+    ? findCarbonStrandingYear(primaryFuels, effectiveGia, carbonTargets)
+    : null
 
   return (
     <div className="p-6 space-y-6">
@@ -502,7 +545,9 @@ export default function CRREMTab({ scenarios = [], scenarioResults = {} }) {
           />
           <DataCard
             label="Building carbon 2050"
-            value={effectiveGia > 0 ? ((primaryKwh * interpolate(GRID_INTENSITY, 2050)) / effectiveGia).toFixed(1) : null}
+            value={effectiveGia > 0
+              ? buildingCarbonKgPerM2(2050, effectiveGia, primaryFuels).toFixed(1)
+              : null}
             unit="kgCO₂/m²"
             accent="navy"
           />
