@@ -285,7 +285,21 @@ export default function ScenarioManager() {
   const loadScenarios = useCallback(async () => {
     if (!currentProjectId) return
     try {
-      const data = await apiFetch(`/api/projects/${currentProjectId}/scenarios`)
+      let data = await apiFetch(`/api/projects/${currentProjectId}/scenarios`)
+
+      // Auto-create baseline if this project has no scenarios yet
+      if (data.length === 0) {
+        try {
+          await apiFetch(`/api/projects/${currentProjectId}/scenarios`, {
+            method: 'POST',
+            body: JSON.stringify({ name: 'Baseline', source: 'baseline' }),
+          })
+          data = await apiFetch(`/api/projects/${currentProjectId}/scenarios`)
+        } catch (err) {
+          console.error('[ScenarioManager] Auto-baseline creation failed:', err)
+        }
+      }
+
       setScenarios(data)
       // Auto-select baseline or first scenario
       if (data.length > 0 && !selectedId) {

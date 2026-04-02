@@ -269,6 +269,19 @@ async def create_scenario(project_id: str, request: CreateScenarioRequest):
         )
         await db.commit()
 
+        # If this is the first (baseline) scenario, link any unlinked completed
+        # simulation runs for this project to it, so historical results appear.
+        if is_baseline:
+            await db.execute(
+                """
+                UPDATE simulation_runs
+                SET scenario_id = ?
+                WHERE project_id = ? AND scenario_id IS NULL AND status = 'complete'
+                """,
+                (scenario_id, project_id),
+            )
+            await db.commit()
+
         cur = await db.execute("SELECT * FROM scenarios WHERE id = ?", (scenario_id,))
         new_row = await cur.fetchone()
 
