@@ -7,12 +7,13 @@
  */
 
 import { useCallback, useContext, useEffect, useState } from 'react'
-import { ArrowRight, Edit2, Pencil } from 'lucide-react'
+import { ArrowRight, Edit2, Pencil, GitCompareArrows } from 'lucide-react'
 import ExplorerLayout from '../ui/ExplorerLayout.jsx'
 import DataCard from '../ui/DataCard.jsx'
 import ScenarioList from './scenarios/ScenarioList.jsx'
 import CreateScenarioModal from './scenarios/CreateScenarioModal.jsx'
 import ScenarioEditor from './scenarios/ScenarioEditor.jsx'
+import ComparisonView from './scenarios/ComparisonView.jsx'
 import { ProjectContext } from '../../context/ProjectContext.jsx'
 
 // ── API helpers ────────────────────────────────────────────────────────────────
@@ -271,6 +272,7 @@ export default function ScenarioManager() {
   const [scenarios, setScenarios]       = useState([])
   const [selectedId, setSelectedId]     = useState(null)
   const [isEditing, setIsEditing]       = useState(false)
+  const [showCompare, setShowCompare]   = useState(false)
   const [showModal, setShowModal]       = useState(false)
   const [runStatuses, setRunStatuses]   = useState({}) // { [id]: 'idle'|'running'|'complete'|'error' }
   const [runAllProgress, setRunAllProgress] = useState(null)
@@ -354,22 +356,49 @@ export default function ScenarioManager() {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   const sidebar = (
-    <ScenarioList
-      scenarios={scenarios}
-      selectedId={selectedId}
-      runStatuses={runStatuses}
-      onSelect={id => { setSelectedId(id); setIsEditing(false) }}
-      onRun={handleRun}
-      onRunAll={handleRunAll}
-      onNew={() => setShowModal(true)}
-      runAllProgress={runAllProgress}
-    />
+    <div className="flex flex-col h-full">
+      <ScenarioList
+        scenarios={scenarios}
+        selectedId={showCompare ? null : selectedId}
+        runStatuses={runStatuses}
+        onSelect={id => { setSelectedId(id); setIsEditing(false); setShowCompare(false) }}
+        onRun={handleRun}
+        onRunAll={handleRunAll}
+        onNew={() => setShowModal(true)}
+        runAllProgress={runAllProgress}
+      />
+      {scenarios.length > 1 && (
+        <div className="px-3 py-2 border-t border-light-grey">
+          <button
+            className={`w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded border text-xxs font-medium transition-colors ${
+              showCompare
+                ? 'border-navy bg-navy text-white'
+                : 'border-light-grey text-dark-grey hover:border-navy hover:text-navy'
+            }`}
+            onClick={() => { setShowCompare(v => !v); setIsEditing(false) }}
+          >
+            <GitCompareArrows size={11} />
+            {showCompare ? 'Exit Compare' : 'Compare All'}
+          </button>
+        </div>
+      )}
+    </div>
   )
 
   function renderMainContent() {
     if (scenarios.length === 0) {
       return <EmptyState onNew={() => setShowModal(true)} />
     }
+
+    if (showCompare) {
+      return (
+        <ComparisonView
+          scenarios={scenarios}
+          projectId={currentProjectId}
+        />
+      )
+    }
+
     if (!selectedScenario) {
       return (
         <div className="flex items-center justify-center h-full">
