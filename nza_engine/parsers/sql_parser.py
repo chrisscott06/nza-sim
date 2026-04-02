@@ -362,9 +362,12 @@ def get_envelope_heat_flow(sql_path: str | Path) -> dict[str, float]:
         infil_loss = _sum_annual(conn, "Zone Infiltration Sensible Heat Loss Energy")
         infil_gain = _sum_annual(conn, "Zone Infiltration Sensible Heat Gain Energy")
 
-        # Solar radiation — try both rate and energy variable names
-        solar = _sum_annual(conn, "Zone Windows Total Transmitted Solar Radiation Rate")
+        # Solar gains — surface-level variable works with SimpleGlazingSystem in EP 25.2
+        # Zone-level "Zone Windows Total Transmitted Solar Radiation Energy" is not generated
+        # by SimpleGlazingSystem; "Surface Window Transmitted Solar Radiation Energy" is.
+        solar = _sum_annual(conn, "Surface Window Transmitted Solar Radiation Energy")
         if solar == 0.0:
+            # Fallback to zone-level (may work with detailed glazing in future)
             solar = _sum_annual(conn, "Zone Windows Total Transmitted Solar Radiation Energy")
 
         fabric = _sum_annual(conn, "Surface Inside Face Conduction Heat Transfer Energy")

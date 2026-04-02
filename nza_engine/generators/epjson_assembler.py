@@ -321,7 +321,10 @@ def _output_variables() -> dict:
         "Zone Infiltration Sensible Heat Loss Energy",
         "Zone Infiltration Sensible Heat Gain Energy",
         "Surface Inside Face Conduction Heat Transfer Energy",
-        "Zone Windows Total Transmitted Solar Radiation Rate",
+        # Solar gains — use Energy (J) which works with SimpleGlazingSystem
+        # Rate (W) is not generated with simplified glazing in EP 25.2
+        "Zone Windows Total Transmitted Solar Radiation Energy",
+        "Surface Window Transmitted Solar Radiation Energy",
         "Zone Ideal Loads Heat Recovery Total Heating Energy",
         "Zone Ideal Loads Heat Recovery Total Cooling Energy",
     ]
@@ -515,6 +518,14 @@ def assemble_epjson(
 
         "Output:Variable": _output_variables(),
         "Output:Meter": _output_meters(),
+
+        # Generate a full RDD (report data dictionary) listing all available variables
+        "Output:VariableDictionary": {
+            "Output:VariableDictionary 1": {
+                "key_field": "IDF",
+                "sort_option": "Name",
+            }
+        },
 
         "OutputControl:Table:Style": {
             "OutputControl:Table:Style 1": {"column_separator": "HTML"}
