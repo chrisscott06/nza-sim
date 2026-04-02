@@ -9,6 +9,7 @@ import EnergyFlowsTab from './EnergyFlowsTab.jsx'
 import EnergyBalanceTab from './EnergyBalanceTab.jsx'
 import LoadProfilesTab from './LoadProfilesTab.jsx'
 import FabricAnalysisTab from './FabricAnalysisTab.jsx'
+import CRREMTab from './CRREMTab.jsx'
 import { SimulationContext } from '../../../context/SimulationContext.jsx'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 
@@ -28,11 +29,12 @@ function ResultsSkeleton() {
 }
 
 const TABS = [
-  { id: 'overview',  label: 'Overview'       },
-  { id: 'flows',     label: 'Energy Flows'   },
-  { id: 'balance',   label: 'Energy Balance'  },
-  { id: 'profiles',  label: 'Load Profiles'   },
-  { id: 'fabric',    label: 'Fabric Analysis' },
+  { id: 'overview',  label: 'Overview'         },
+  { id: 'flows',     label: 'Energy Flows'     },
+  { id: 'balance',   label: 'Energy Balance'   },
+  { id: 'profiles',  label: 'Load Profiles'    },
+  { id: 'fabric',    label: 'Fabric Analysis'  },
+  { id: 'crrem',     label: 'CRREM & Carbon'   },
 ]
 
 function ResultsSidebar({ activeTab, onTabChange }) {
@@ -132,6 +134,7 @@ export default function ResultsDashboard() {
     balance:  <ErrorBoundary moduleName="Energy Balance"><EnergyBalanceTab /></ErrorBoundary>,
     profiles: <ErrorBoundary moduleName="Load Profiles"><LoadProfilesTab /></ErrorBoundary>,
     fabric:   <ErrorBoundary moduleName="Fabric Analysis"><FabricAnalysisTab /></ErrorBoundary>,
+    crrem:    <ErrorBoundary moduleName="CRREM & Carbon"><CRREMTab /></ErrorBoundary>,
   }
 
   return (
