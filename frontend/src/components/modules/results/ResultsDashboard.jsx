@@ -37,7 +37,7 @@ const TABS = [
   { id: 'crrem',     label: 'CRREM & Carbon'   },
 ]
 
-function ResultsSidebar({ activeTab, onTabChange }) {
+function ResultsSidebar({ activeTab, onTabChange, scenarios, scenarioResults, selectedScenarioId, onScenarioChange }) {
   const { status, results, error } = useContext(SimulationContext)
   const { params } = useContext(ProjectContext)
   const navigate = useNavigate()
@@ -92,6 +92,35 @@ function ResultsSidebar({ activeTab, onTabChange }) {
         </div>
       )}
 
+      {/* Scenario selector (shown when scenarios exist with results) */}
+      {scenarios.length > 0 && (
+        <div className="mx-3 mt-3">
+          <p className="text-xxs text-mid-grey mb-1">Viewing scenario</p>
+          <div className="flex items-center gap-1">
+            <select
+              value={selectedScenarioId ?? ''}
+              onChange={e => onScenarioChange(e.target.value || null)}
+              className="flex-1 px-2 py-1 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-teal"
+            >
+              <option value="">Project (latest run)</option>
+              {scenarios.map(s => (
+                <option key={s.id} value={s.id} disabled={!scenarioResults[s.id]}>
+                  {s.name}{!scenarioResults[s.id] ? ' (not run)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          {selectedScenarioId && (
+            <button
+              className="mt-1 text-xxs text-teal hover:underline"
+              onClick={() => navigate('/scenarios')}
+            >
+              ← Back to scenarios
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Tab navigation */}
       <div className="mt-2 border-b border-light-grey">
         <div className="flex flex-col">
@@ -125,7 +154,8 @@ function ResultsSidebar({ activeTab, onTabChange }) {
 }
 
 export default function ResultsDashboard() {
-  const [activeTab, setActiveTab] = useState('overview')
+  const [activeTab,          setActiveTab]          = useState('overview')
+  const [selectedScenarioId, setSelectedScenarioId] = useState(null)
   const { resultsLoading }        = useContext(SimulationContext)
   const { currentProjectId }      = useContext(ProjectContext)
 
@@ -160,7 +190,11 @@ export default function ResultsDashboard() {
     profiles: <ErrorBoundary moduleName="Load Profiles"><LoadProfilesTab /></ErrorBoundary>,
     fabric:   <ErrorBoundary moduleName="Fabric Analysis"><FabricAnalysisTab /></ErrorBoundary>,
     crrem:    <ErrorBoundary moduleName="CRREM & Carbon">
-                <CRREMTab scenarios={scenarios} scenarioResults={scenarioResults} />
+                <CRREMTab
+                  scenarios={scenarios}
+                  scenarioResults={scenarioResults}
+                  focusScenarioId={selectedScenarioId}
+                />
               </ErrorBoundary>,
   }
 
@@ -171,6 +205,10 @@ export default function ResultsDashboard() {
         <ResultsSidebar
           activeTab={activeTab}
           onTabChange={setActiveTab}
+          scenarios={scenarios}
+          scenarioResults={scenarioResults}
+          selectedScenarioId={selectedScenarioId}
+          onScenarioChange={setSelectedScenarioId}
         />
       }
     >

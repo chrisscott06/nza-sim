@@ -7,7 +7,8 @@
  */
 
 import { useCallback, useContext, useEffect, useState } from 'react'
-import { ArrowRight, Edit2, Pencil, GitCompareArrows } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { ArrowRight, Edit2, Pencil, GitCompareArrows, BarChart3 } from 'lucide-react'
 import ExplorerLayout from '../ui/ExplorerLayout.jsx'
 import DataCard from '../ui/DataCard.jsx'
 import ScenarioList from './scenarios/ScenarioList.jsx'
@@ -178,6 +179,7 @@ function ScenarioResults({ latestRunId, projectId }) {
 
 function ScenarioDetail({ scenario, projectId, onEdit }) {
   const changes = scenario.changes_from_baseline ?? []
+  const navigate = useNavigate()
 
   return (
     <div className="p-6 space-y-6">
@@ -196,14 +198,24 @@ function ScenarioDetail({ scenario, projectId, onEdit }) {
             <p className="text-caption text-mid-grey mt-1">{scenario.description}</p>
           )}
         </div>
-        {onEdit && (
-          <button
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-light-grey text-xxs font-medium text-dark-grey hover:border-navy hover:text-navy transition-colors"
-            onClick={onEdit}
-          >
-            <Pencil size={12} /> Edit
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {scenario.latest_run_id && (
+            <button
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-light-grey text-xxs font-medium text-dark-grey hover:border-teal hover:text-teal transition-colors"
+              onClick={() => navigate('/results')}
+            >
+              <BarChart3 size={12} /> View Full Results
+            </button>
+          )}
+          {onEdit && (
+            <button
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-light-grey text-xxs font-medium text-dark-grey hover:border-navy hover:text-navy transition-colors"
+              onClick={onEdit}
+            >
+              <Pencil size={12} /> Edit
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Changes from baseline (non-baseline scenarios only) */}

@@ -1,11 +1,12 @@
 import { useContext } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { SimulationContext } from '../../../context/SimulationContext.jsx'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import DataCard from '../../ui/DataCard.jsx'
 import ModuleEmptyState from '../../ui/ModuleEmptyState.jsx'
 import { TOOLTIP_STYLE, TOOLTIP_WRAPPER_STYLE, LEGEND_STYLE } from '../../../data/chartTokens.js'
-import { BarChart3, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { BarChart3, AlertTriangle, CheckCircle2, GitCompareArrows } from 'lucide-react'
 
 /* ── Donut chart colours (end-use breakdown) ──────────────────────────────── */
 const END_USE_COLORS = {
@@ -52,6 +53,7 @@ function SanityItem({ label, value, unit, status, note }) {
 export default function OverviewTab() {
   const { status, results } = useContext(SimulationContext)
   const { params } = useContext(ProjectContext)
+  const navigate = useNavigate()
 
   if (status !== 'complete' || !results) {
     return (
@@ -234,6 +236,17 @@ export default function OverviewTab() {
             />
           )}
         </div>
+      </div>
+
+      {/* Cross-navigation */}
+      <div className="flex gap-3">
+        <button
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-light-grey text-xxs font-medium text-dark-grey hover:border-navy hover:text-navy transition-colors"
+          onClick={() => navigate('/scenarios')}
+        >
+          <GitCompareArrows size={12} />
+          Compare Scenarios →
+        </button>
       </div>
 
     </div>
