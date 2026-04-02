@@ -8,19 +8,6 @@ const ELEMENTS = [
   { key: 'glazing',       label: 'Glazing' },
 ]
 
-const THERMAL_MASS_LABELS = {
-  heavy:  'Heavy',
-  medium: 'Medium',
-  light:  'Light',
-  none:   'None',
-}
-
-const THERMAL_MASS_COLORS = {
-  heavy:  'bg-navy text-white',
-  medium: 'bg-gold text-navy',
-  light:  'bg-teal text-white',
-  none:   'bg-light-grey text-mid-grey',
-}
 
 function UValueBadge({ u }) {
   if (u == null) return null
@@ -39,18 +26,10 @@ function UValueBadge({ u }) {
   )
 }
 
-function ThermalMassBadge({ category }) {
-  if (!category) return null
-  const cls = THERMAL_MASS_COLORS[category] ?? 'bg-light-grey text-mid-grey'
-  return (
-    <span className={`text-xxs font-medium px-1.5 py-0.5 rounded ${cls}`}>
-      {THERMAL_MASS_LABELS[category] ?? category}
-    </span>
-  )
-}
 
 function ConstructionSelect({ elementKey, label, constructions, selectedId, onSelect }) {
-  const selected = constructions.find(c => c.id === selectedId)
+  // API uses `name` as the identifier; description is the human-readable label
+  const selected = constructions.find(c => c.name === selectedId)
 
   return (
     <div className="bg-white rounded-lg border border-light-grey p-3 space-y-2">
@@ -74,14 +53,16 @@ function ConstructionSelect({ elementKey, label, constructions, selectedId, onSe
       >
         <option value="">— select construction —</option>
         {constructions.map(c => (
-          <option key={c.id} value={c.id}>{c.name}</option>
+          <option key={c.name} value={c.name}>{c.description ?? c.name}</option>
         ))}
       </select>
 
       {selected && (
         <div className="flex items-center gap-2 pt-0.5">
-          <UValueBadge u={selected.u_value} />
-          <ThermalMassBadge category={selected.thermal_mass} />
+          <UValueBadge u={selected.u_value_W_per_m2K} />
+          {selected.g_value != null && (
+            <span className="text-xxs text-mid-grey">g = {selected.g_value}</span>
+          )}
         </div>
       )}
     </div>
@@ -101,7 +82,7 @@ export default function FabricTab() {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
       })
-      .then(data => { setLibrary(data); setLoading(false) })
+      .then(data => { setLibrary(data.constructions ?? []); setLoading(false) })
       .catch(err => { setError(err.message); setLoading(false) })
   }, [])
 
@@ -121,18 +102,17 @@ export default function FabricTab() {
     )
   }
 
-  // Filter constructions by element type using the 'type' field if present,
-  // otherwise show all for each element
-  const byType = (type) => {
+  // Filter by the 'type' field returned by the API
+  const byType = (elementKey) => {
     const typeMap = {
       external_wall: ['wall'],
       roof:          ['roof'],
-      ground_floor:  ['floor'],
+      ground_floor:  ['floor', 'ground_floor'],
       glazing:       ['glazing', 'window'],
     }
-    const tags = typeMap[type] ?? []
+    const tags = typeMap[elementKey] ?? []
     const filtered = library.filter(c =>
-      tags.length === 0 || tags.some(t => (c.type ?? '').toLowerCase().includes(t))
+      tags.some(t => (c.type ?? '').toLowerCase() === t)
     )
     return filtered.length > 0 ? filtered : library
   }
