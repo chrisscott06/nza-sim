@@ -259,12 +259,16 @@ def _build_natural_ventilation_objects(
     perimeter_m         = 2.0 * (length + width)
     facade_area_per_floor = perimeter_m * floor_height
     window_area_per_zone  = avg_wwr * facade_area_per_floor
-    opening_area          = round(0.5 * window_area_per_zone, 2)  # 50% max open
+    # Effective opening = 10% of total window area per floor zone.
+    # 50% would be the absolute max (fully-open fraction of all glazing), but since one
+    # EnergyPlus zone represents a whole floor, using 10% produces realistic ACH values
+    # (~5–8 ACH at 5 m/s) without flooding the zone with unconstrained outdoor air.
+    opening_area          = round(0.10 * window_area_per_zone, 2)
 
     nat_vent = {}
     for zone_name in zones:
         nat_vent[f"{zone_name}_NatVent"] = {
-            "zone_or_zonelist_name":             zone_name,
+            "zone_or_space_name":                zone_name,
             "opening_area":                      opening_area,
             # Fraction = occupancy schedule (0 when unoccupied, 1 when occupied)
             "opening_area_fraction_schedule_name": "hotel_bedroom_occupancy",
@@ -586,7 +590,7 @@ def assemble_epjson(
         "ThermostatSetpoint:DualSetpoint": dual_setpoints,
         "ZoneControl:Thermostat": zone_controls,
 
-        **({"ZoneVentilation:WindAndStackOpenArea": natural_vent_objects}
+        **({"ZoneVentilation:WindandStackOpenArea": natural_vent_objects}
            if natural_vent_objects else {}),
 
         "Output:Variable": _output_variables(),
