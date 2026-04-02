@@ -7,8 +7,9 @@
  */
 
 import { useEffect, useState } from 'react'
-import { Search, X, Layers, Thermometer, Clock, Check } from 'lucide-react'
+import { Search, X, Layers, Thermometer, Clock, Check, Plus, Copy, Trash2 } from 'lucide-react'
 import ExplorerLayout from '../ui/ExplorerLayout.jsx'
+import ConstructionEditor from './library/ConstructionEditor.jsx'
 
 // ── Type config ───────────────────────────────────────────────────────────────
 
@@ -78,13 +79,13 @@ function keyMetric(item) {
 
 // ── Item Card ─────────────────────────────────────────────────────────────────
 
-function ItemCard({ item, isSelected, onClick }) {
+function ItemCard({ item, isSelected, onClick, onDuplicate, onDelete }) {
   const metric = keyMetric(item)
   return (
-    <button
+    <div
       onClick={onClick}
       className={`
-        text-left w-full p-4 rounded-xl border transition-all
+        text-left w-full p-4 rounded-xl border transition-all cursor-pointer relative group
         ${isSelected
           ? 'border-magenta/50 bg-white shadow-md ring-1 ring-magenta/20'
           : 'border-light-grey bg-white hover:border-mid-grey hover:shadow-sm'}
@@ -92,6 +93,9 @@ function ItemCard({ item, isSelected, onClick }) {
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <TypeBadge type={item.library_type} small />
+        {!item.is_default && (
+          <span className="text-xs text-teal font-medium">Custom</span>
+        )}
         {item.is_default && (
           <span className="text-xs text-mid-grey">Default</span>
         )}
@@ -102,7 +106,28 @@ function ItemCard({ item, isSelected, onClick }) {
       {metric && (
         <p className="text-xs text-mid-grey mt-1">{metric}</p>
       )}
-    </button>
+      {/* Action buttons (visible on hover) */}
+      {item.library_type === 'construction' && (
+        <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={e => { e.stopPropagation(); onDuplicate(item) }}
+            className="p-1.5 rounded bg-off-white border border-light-grey text-mid-grey hover:text-navy hover:border-navy"
+            title="Duplicate"
+          >
+            <Copy size={10} />
+          </button>
+          {!item.is_default && (
+            <button
+              onClick={e => { e.stopPropagation(); onDelete(item) }}
+              className="p-1.5 rounded bg-off-white border border-light-grey text-mid-grey hover:text-red-600 hover:border-red-200"
+              title="Delete"
+            >
+              <Trash2 size={10} />
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -364,23 +389,26 @@ export default function LibraryBrowser() {
   const [search, setSearch]         = useState('')
   const [selectedItem, setSelectedItem] = useState(null)
 
+  // Editor state
+  const [editorOpen,    setEditorOpen]    = useState(false)
+  const [duplicateItem, setDuplicateItem] = useState(null)  // null = new, else item to copy
+
   // Fetch library items
-  useEffect(() => {
-    async function load() {
-      setLoading(true)
-      try {
-        const res = await fetch('/api/library')
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = await res.json()
-        setItems(data)
-      } catch (err) {
-        setError(err.message)
-      } finally {
-        setLoading(false)
-      }
+  async function loadItems() {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/library')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      setItems(data)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
     }
-    load()
-  }, [])
+  }
+
+  useEffect(() => { loadItems() }, [])
 
   function toggleType(type) {
     setActiveTypes(prev =>
@@ -388,6 +416,29 @@ export default function LibraryBrowser() {
         ? prev.filter(t => t !== type)
         : [...prev, type]
     )
+  }
+
+  function handleEditorSave(newItem) {
+    setEditorOpen(false)
+    setDuplicateItem(null)
+    loadItems()
+  }
+
+  function handleDuplicate(item) {
+    setDuplicateItem(item)
+    setEditorOpen(true)
+  }
+
+  async function handleDelete(item) {
+    if (!confirm(`Delete "${item.display_name || item.name}"? This cannot be undone.`)) return
+    try {
+      const res = await fetch(`/api/library/${item.id}`, { method: 'DELETE' })
+      if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`)
+      if (selectedItem?.id === item.id) setSelectedItem(null)
+      loadItems()
+    } catch (err) {
+      alert('Failed to delete: ' + err.message)
+    }
   }
 
   // Filter items
@@ -438,6 +489,13 @@ export default function LibraryBrowser() {
               {search ? ` matching "${search}"` : ''}
             </p>
           </div>
+          <button
+            onClick={() => { setDuplicateItem(null); setEditorOpen(true) }}
+            className="flex items-center gap-1.5 px-3 py-2 text-caption text-white bg-navy rounded-lg hover:bg-navy/80 transition-colors"
+          >
+            <Plus size={13} />
+            New Construction
+          </button>
         </div>
 
         {loading && (
@@ -469,6 +527,8 @@ export default function LibraryBrowser() {
                   onClick={() => setSelectedItem(
                     selectedItem?.id === item.id ? null : item
                   )}
+                  onDuplicate={handleDuplicate}
+                  onDelete={handleDelete}
                 />
               ))}
             </div>
@@ -481,6 +541,15 @@ export default function LibraryBrowser() {
         <DetailPanel
           item={selectedItem}
           onClose={() => setSelectedItem(null)}
+        />
+      )}
+
+      {/* Construction editor modal */}
+      {editorOpen && (
+        <ConstructionEditor
+          initialItem={duplicateItem}
+          onSave={handleEditorSave}
+          onClose={() => { setEditorOpen(false); setDuplicateItem(null) }}
         />
       )}
     </div>
