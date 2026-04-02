@@ -38,8 +38,10 @@ function CustomTooltip({ active, payload, label }) {
   )
 }
 
-export default function EnergyBalanceTab() {
-  const { status, results } = useContext(SimulationContext)
+export default function EnergyBalanceTab({ activeResults } = {}) {
+  const ctx = useContext(SimulationContext)
+  const status  = activeResults ? 'complete' : ctx.status
+  const results = activeResults ?? ctx.results
 
   // API returns monthly_energy as a dict of 12-value arrays:
   // { heating_kWh: [jan, feb, ...], cooling_kWh: [...], ... }

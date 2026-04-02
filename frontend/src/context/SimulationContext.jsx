@@ -17,8 +17,9 @@ import { ProjectContext } from './ProjectContext.jsx'
 export const SimulationContext = createContext(null)
 
 // ── Normalise DB row → same shape as live simulate response ─────────────────
+// Exported so ResultsDashboard can normalize scenario results the same way.
 
-function normalizeDbResult(row) {
+export function normalizeDbResult(row) {
   const ed = row.envelope_heat_flow  // detailed per-facade data
   // Reconstruct basic envelope summary from detailed data so FabricAnalysisTab
   // works after page refresh without needing a separate DB column.

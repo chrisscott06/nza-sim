@@ -50,10 +50,14 @@ function SanityItem({ label, value, unit, status, note }) {
   )
 }
 
-export default function OverviewTab() {
-  const { status, results } = useContext(SimulationContext)
+export default function OverviewTab({ activeResults } = {}) {
+  const ctx = useContext(SimulationContext)
   const { params } = useContext(ProjectContext)
   const navigate = useNavigate()
+
+  // Use activeResults (scenario override) when provided; fall back to SimulationContext
+  const status  = activeResults ? 'complete' : ctx.status
+  const results = activeResults ?? ctx.results
 
   if (status !== 'complete' || !results) {
     return (

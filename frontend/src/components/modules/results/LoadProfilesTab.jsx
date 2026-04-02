@@ -47,8 +47,10 @@ function CustomTooltip({ active, payload, label }) {
   )
 }
 
-export default function LoadProfilesTab() {
-  const { status, results } = useContext(SimulationContext)
+export default function LoadProfilesTab({ activeResults } = {}) {
+  const ctx = useContext(SimulationContext)
+  const status  = activeResults ? 'complete' : ctx.status
+  const results = activeResults ?? ctx.results
   const [selectedDayType, setSelectedDayType] = useState('peak_heating')
 
   if (status !== 'complete' || !results?.hourly_profiles) {

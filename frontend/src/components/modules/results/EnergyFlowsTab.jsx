@@ -288,8 +288,10 @@ function SankeyChart({ data, width, height }) {
 }
 
 /* ── Main tab component ──────────────────────────────────────────────────────── */
-export default function EnergyFlowsTab() {
-  const { status, results } = useContext(SimulationContext)
+export default function EnergyFlowsTab({ activeResults } = {}) {
+  const ctx = useContext(SimulationContext)
+  const status  = activeResults ? 'complete' : ctx.status
+  const results = activeResults ?? ctx.results
   const containerRef = useRef(null)
   const [dims, setDims] = useState({ width: 600, height: 420 })
 

@@ -39,8 +39,10 @@ function SolarTooltip({ active, payload, label }) {
   )
 }
 
-export default function FabricAnalysisTab() {
-  const { status, results } = useContext(SimulationContext)
+export default function FabricAnalysisTab({ activeResults } = {}) {
+  const ctx = useContext(SimulationContext)
+  const status  = activeResults ? 'complete' : ctx.status
+  const results = activeResults ?? ctx.results
 
   const ed  = results?.envelope_detailed   // rich per-facade data (Part 5+)
   const env = results?.envelope            // simple summary (always present)

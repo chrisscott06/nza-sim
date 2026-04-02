@@ -10,7 +10,7 @@ import EnergyBalanceTab from './EnergyBalanceTab.jsx'
 import LoadProfilesTab from './LoadProfilesTab.jsx'
 import FabricAnalysisTab from './FabricAnalysisTab.jsx'
 import CRREMTab from './CRREMTab.jsx'
-import { SimulationContext } from '../../../context/SimulationContext.jsx'
+import { SimulationContext, normalizeDbResult } from '../../../context/SimulationContext.jsx'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 
 function ResultsSkeleton() {
@@ -183,12 +183,18 @@ export default function ResultsDashboard() {
       .catch(() => {})
   }, [currentProjectId])
 
+  // When a scenario is selected, normalize its raw DB row to the same shape
+  // that live simulate responses use, so all tabs get consistent data.
+  const activeResults = selectedScenarioId && scenarioResults[selectedScenarioId]
+    ? normalizeDbResult(scenarioResults[selectedScenarioId])
+    : null
+
   const tabContent = {
-    overview: <ErrorBoundary moduleName="Results Overview"><OverviewTab /></ErrorBoundary>,
-    flows:    <ErrorBoundary moduleName="Energy Flows"><EnergyFlowsTab /></ErrorBoundary>,
-    balance:  <ErrorBoundary moduleName="Energy Balance"><EnergyBalanceTab /></ErrorBoundary>,
-    profiles: <ErrorBoundary moduleName="Load Profiles"><LoadProfilesTab /></ErrorBoundary>,
-    fabric:   <ErrorBoundary moduleName="Fabric Analysis"><FabricAnalysisTab /></ErrorBoundary>,
+    overview: <ErrorBoundary moduleName="Results Overview"><OverviewTab activeResults={activeResults} /></ErrorBoundary>,
+    flows:    <ErrorBoundary moduleName="Energy Flows"><EnergyFlowsTab activeResults={activeResults} /></ErrorBoundary>,
+    balance:  <ErrorBoundary moduleName="Energy Balance"><EnergyBalanceTab activeResults={activeResults} /></ErrorBoundary>,
+    profiles: <ErrorBoundary moduleName="Load Profiles"><LoadProfilesTab activeResults={activeResults} /></ErrorBoundary>,
+    fabric:   <ErrorBoundary moduleName="Fabric Analysis"><FabricAnalysisTab activeResults={activeResults} /></ErrorBoundary>,
     crrem:    <ErrorBoundary moduleName="CRREM & Carbon">
                 <CRREMTab
                   scenarios={scenarios}
