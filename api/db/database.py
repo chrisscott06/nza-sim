@@ -90,9 +90,20 @@ async def init_db() -> None:
     schema_sql = _SCHEMA_PATH.read_text()
 
     async with get_db() as db:
-        # Create tables
+        # Create tables (scenarios table included in schema.sql)
         await db.executescript(schema_sql)
         await db.commit()
+
+        # Add scenario_id to simulation_runs if not yet present.
+        # SQLite does not support ADD COLUMN IF NOT EXISTS, so catch the error.
+        try:
+            await db.execute(
+                "ALTER TABLE simulation_runs ADD COLUMN scenario_id TEXT REFERENCES scenarios(id) ON DELETE SET NULL"
+            )
+            await db.commit()
+        except Exception:
+            # Column already exists — this is expected on subsequent startups
+            pass
 
         # Seed constructions from nza_engine library
         await _seed_constructions(db)

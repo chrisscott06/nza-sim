@@ -51,7 +51,26 @@ CREATE TABLE IF NOT EXISTS simulation_runs (
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
 
+-- Scenarios within a project
+CREATE TABLE IF NOT EXISTS scenarios (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    name TEXT NOT NULL,                   -- e.g. "Baseline", "Enhanced Fabric", "MVHR + ASHP"
+    description TEXT,
+    is_baseline INTEGER DEFAULT 0,        -- 1 for the baseline scenario
+    building_config JSON NOT NULL,
+    systems_config JSON NOT NULL,
+    construction_choices JSON NOT NULL,
+    schedule_assignments JSON,
+    weather_file TEXT,
+    changes_from_baseline JSON,           -- auto-computed: what differs from baseline
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
 -- Index for fast project lookups
 CREATE INDEX IF NOT EXISTS idx_projects_updated_at ON projects (updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_simruns_project_id ON simulation_runs (project_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_library_type ON library_items (library_type);
+CREATE INDEX IF NOT EXISTS idx_scenarios_project_id ON scenarios (project_id, created_at);
