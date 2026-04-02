@@ -1,59 +1,94 @@
-import { createContext, useState, useContext } from 'react'
+/**
+ * SimulationContext.jsx
+ *
+ * Manages simulation state for the current project.
+ *
+ * - runSimulation() calls POST /api/projects/{id}/simulate — the backend reads
+ *   all inputs (building, constructions, systems, schedules) from the DB.
+ * - On project change, automatically restores the latest successful simulation
+ *   results from the DB so they survive page refresh.
+ * - Results are normalised to a consistent shape regardless of whether they
+ *   came from a live run or were loaded from the DB.
+ */
+
+import { createContext, useState, useContext, useEffect } from 'react'
 import { ProjectContext } from './ProjectContext.jsx'
 
 export const SimulationContext = createContext(null)
 
-export function SimulationProvider({ children }) {
-  const [status, setStatus] = useState('idle')   // idle | running | complete | error
-  const [runId, setRunId] = useState(null)
-  const [results, setResults] = useState(null)
-  const [error, setError] = useState(null)
+// ── Normalise DB row → same shape as live simulate response ─────────────────
 
-  const projectCtx = useContext(ProjectContext)
+function normalizeDbResult(row) {
+  return {
+    run_id:            row.id,
+    id:                row.id,
+    project_id:        row.project_id,
+    scenario_name:     row.scenario_name,
+    status:            row.status,
+    summary:           row.results_summary,
+    monthly_energy:    row.results_monthly,
+    annual_energy:     row.annual_energy,
+    hourly_profiles:   row.hourly_profiles,
+    envelope:          null,            // basic summary not stored; restored on next live run
+    envelope_detailed: row.envelope_heat_flow,
+    sankey_data:       row.sankey_data,
+    warnings:          row.energyplus_warnings,
+    simulation_time_seconds: row.simulation_time_seconds,
+  }
+}
+
+// ── Provider ─────────────────────────────────────────────────────────────────
+
+export function SimulationProvider({ children }) {
+  const [status,  setStatus]  = useState('idle')   // idle | running | complete | error
+  const [runId,   setRunId]   = useState(null)
+  const [results, setResults] = useState(null)
+  const [error,   setError]   = useState(null)
+
+  const { currentProjectId } = useContext(ProjectContext)
+
+  // When the project changes, restore the latest complete simulation from the DB
+  useEffect(() => {
+    if (!currentProjectId) return
+
+    setResults(null)
+    setRunId(null)
+    setStatus('idle')
+    setError(null)
+
+    fetch(`/api/projects/${currentProjectId}/simulations`)
+      .then(r => r.ok ? r.json() : [])
+      .then(runs => {
+        const latest = runs.find(r => r.status === 'complete')
+        if (!latest) return null
+        return fetch(`/api/projects/${currentProjectId}/simulations/${latest.id}`)
+          .then(r => r.ok ? r.json() : null)
+      })
+      .then(row => {
+        if (!row) return
+        setResults(normalizeDbResult(row))
+        setRunId(row.id)
+        setStatus('complete')
+      })
+      .catch(err => console.error('[SimulationContext] Failed to load latest results:', err))
+  }, [currentProjectId])
+
+  // ── Run simulation ─────────────────────────────────────────────────────────
 
   async function runSimulation() {
+    if (!currentProjectId) {
+      console.warn('[SimulationContext] No project selected')
+      return
+    }
+
     setStatus('running')
     setError(null)
 
-    // Read from ProjectContext — falls back to defaults if context not ready
-    const params = projectCtx?.params ?? {
-      name: 'New Project',
-      length: 60, width: 15, num_floors: 4, floor_height: 3.2,
-      orientation: 0,
-      wwr: { north: 0.25, south: 0.25, east: 0.25, west: 0.25 },
-    }
-    const constructions = projectCtx?.constructions ?? {
-      external_wall: 'cavity_wall_standard',
-      roof: 'flat_roof_standard',
-      ground_floor: 'ground_floor_slab',
-      glazing: 'double_low_e',
-    }
-    const systems = projectCtx?.systems ?? {
-      mode: 'ideal',
-      hvac_type: 'vrf_standard',
-      ventilation_type: 'mev_standard',
-      natural_ventilation: false,
-      natural_vent_threshold: 22,
-      dhw_primary: 'gas_boiler_dhw',
-      dhw_preheat: 'ashp_dhw',
-      dhw_setpoint: 60,
-      dhw_preheat_setpoint: 45,
-      lighting_power_density: 8.0,
-      lighting_control: 'occupancy_sensing',
-      pump_type: 'variable_speed',
-    }
-
     try {
-      const response = await fetch('/api/simulate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          building: { ...params },
-          constructions,
-          systems,
-          weather_file: 'USE_DEFAULT',
-        }),
-      })
+      const response = await fetch(
+        `/api/projects/${currentProjectId}/simulate`,
+        { method: 'POST' },
+      )
 
       if (!response.ok) {
         const detail = await response.json().catch(() => ({ detail: 'Unknown error' }))
@@ -64,7 +99,6 @@ export function SimulationProvider({ children }) {
       setResults(data)
       setRunId(data.run_id)
       setStatus('complete')
-      console.log('[SimulationContext] Results:', data)
     } catch (err) {
       console.error('[SimulationContext] Error:', err)
       setError(err.message ?? 'Simulation failed')
