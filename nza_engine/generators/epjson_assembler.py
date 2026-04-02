@@ -228,7 +228,7 @@ def _build_infiltration_objects(
     for zone_name in zones:
         infiltration[f"{zone_name}_Infiltration"] = {
             "zone_or_zonelist_or_space_or_spacelist_name": zone_name,
-            "schedule_name": "hotel_bedroom_occupancy",
+            "schedule_name": "hotel_ventilation_continuous",  # overridable via ventilation schedule assignment
             "design_flow_rate_calculation_method": "AirChanges/Hour",
             "air_changes_per_hour": ach,
         }
@@ -424,6 +424,7 @@ _SCHEDULE_TYPE_TO_DEFAULT_NAME: dict[str, str] = {
     "heating_setpoint": "hotel_heating_setpoint",
     "cooling_setpoint": "hotel_cooling_setpoint",
     "dhw":              "hotel_dhw_demand",
+    "ventilation":      "hotel_ventilation_continuous",  # controls infiltration/vent rate
 }
 
 

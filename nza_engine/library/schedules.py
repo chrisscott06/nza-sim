@@ -277,6 +277,42 @@ SCHEDULES["hotel_dhw_demand"] = _compact(
     ],
 )
 
+# ── Ventilation schedules ──────────────────────────────────────────────────────
+# hotel_ventilation_continuous: 24/7 full rate
+SCHEDULES["hotel_ventilation_continuous"] = _compact(
+    "hotel_ventilation_continuous", "Fraction",
+    [
+        "Through: 12/31",
+        "For: AllDays",
+        "Until: 24:00, 1.0",
+    ],
+)
+
+# hotel_ventilation_occupied: full rate 06:00–23:00, reduced overnight
+SCHEDULES["hotel_ventilation_occupied"] = _compact(
+    "hotel_ventilation_occupied", "Fraction",
+    [
+        "Through: 12/31",
+        "For: AllDays",
+        "Until: 06:00, 0.3",
+        "Until: 23:00, 1.0",
+        "Until: 24:00, 0.3",
+    ],
+)
+
+# hotel_ventilation_timer: 07:00–22:00 full, overnight 50%
+SCHEDULES["hotel_ventilation_timer"] = _compact(
+    "hotel_ventilation_timer", "Fraction",
+    [
+        "Through: 12/31",
+        "For: AllDays",
+        "Until: 07:00, 0.5",
+        "Until: 22:00, 1.0",
+        "Until: 24:00, 0.5",
+    ],
+)
+
+
 # ── Thermostat control type — always DualSetpoint (4) ─────────────────────────
 SCHEDULES["ThermostatControlType_DualSetpoint"] = _compact(
     "ThermostatControlType_DualSetpoint", "ThermostatControlType",
@@ -639,6 +675,70 @@ _SCHEDULE_LIBRARY: dict[str, dict] = {
                         0.8, 0.85, 0.8, 0.7, 0.5, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         },
         "monthly_multipliers": [0.8, 0.9, 1.0, 1.0, 1.0, 0.95, 0.9, 0.95, 0.95, 1.0, 1.1, 1.2],
+    },
+
+    # Ventilation schedules
+    "hotel_ventilation_continuous": {
+        "schedule_type":   "ventilation",
+        "building_type":   "hotel",
+        "zone_type":       "all",
+        "time_resolution": "hourly",
+        "display_name":    "Hotel — Ventilation Continuous",
+        "description":     "24/7 continuous ventilation at full rate. Typical for centralised extract systems.",
+        "day_types": {
+            "weekday": [1.0] * 24,
+            "saturday": [1.0] * 24,
+            "sunday": [1.0] * 24,
+        },
+        "monthly_multipliers": [1.0] * 12,
+    },
+
+    "hotel_ventilation_occupied": {
+        "schedule_type":   "ventilation",
+        "building_type":   "hotel",
+        "zone_type":       "all",
+        "time_resolution": "hourly",
+        "display_name":    "Hotel — Ventilation Occupied",
+        "description":     "Full rate 06:00–23:00 (1.0), reduced overnight 23:00–06:00 (0.3). Better for energy, may need building regs check.",
+        "day_types": {
+            "weekday":  [0.3, 0.3, 0.3, 0.3, 0.3, 0.3,
+                         1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                         1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                         1.0, 1.0, 1.0, 1.0, 1.0, 0.3],
+            "saturday": [0.3, 0.3, 0.3, 0.3, 0.3, 0.3,
+                         1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                         1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                         1.0, 1.0, 1.0, 1.0, 1.0, 0.3],
+            "sunday":   [0.3, 0.3, 0.3, 0.3, 0.3, 0.3,
+                         1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                         1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                         1.0, 1.0, 1.0, 1.0, 1.0, 0.3],
+        },
+        "monthly_multipliers": [1.0] * 12,
+    },
+
+    "hotel_ventilation_timer": {
+        "schedule_type":   "ventilation",
+        "building_type":   "hotel",
+        "zone_type":       "all",
+        "time_resolution": "hourly",
+        "display_name":    "Hotel — Ventilation Timer",
+        "description":     "Fixed timer: 07:00–22:00 full rate (1.0), 22:00–07:00 at 50%. Typical for time-clock controls.",
+        "day_types": {
+            "weekday":  [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
+                         1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                         1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                         1.0, 0.5, 0.5],
+            "saturday": [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
+                         1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                         1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                         1.0, 0.5, 0.5],
+            "sunday":   [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
+                         1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                         1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                         1.0, 0.5, 0.5],
+        },
+        "monthly_multipliers": [1.0] * 12,
     },
 }
 
