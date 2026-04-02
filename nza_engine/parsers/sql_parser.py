@@ -380,3 +380,124 @@ def get_envelope_heat_flow(sql_path: str | Path) -> dict[str, float]:
         }
     finally:
         conn.close()
+
+
+def get_hourly_profiles(sql_path) -> dict:
+    """
+    Return full 8760-hour load profiles from the simulation.
+
+    Returns dict with keys: hours, months, days, hours_of_day,
+    heating_kWh, cooling_kWh, lighting_kWh, equipment_kWh, solar_kWh.
+    Each is a list of 8760 values.
+    """
+    conn = _connect(sql_path)
+    try:
+        def _get_hourly_series(var_name):
+            indices = _get_indices(conn, var_name)
+            if not indices:
+                return {}
+            ph = ",".join("?" for _ in indices)
+            rows = _query(
+                conn,
+                f"""
+                SELECT TimeIndex, SUM(Value) AS TotalJ
+                FROM ReportData
+                WHERE ReportDataDictionaryIndex IN ({ph})
+                GROUP BY TimeIndex
+                """,
+                indices,
+            )
+            return {r["TimeIndex"]: (r["TotalJ"] or 0.0) * J_TO_KWH for r in rows}
+
+        heating   = _get_hourly_series("Zone Ideal Loads Supply Air Total Heating Energy")
+        cooling   = _get_hourly_series("Zone Ideal Loads Supply Air Total Cooling Energy")
+        lighting  = _get_hourly_series("Zone Lights Electricity Energy")
+        equipment = _get_hourly_series("Zone Electric Equipment Electricity Energy")
+        solar     = _get_hourly_series("Surface Window Transmitted Solar Radiation Energy")
+
+        time_rows = _query(conn, "SELECT TimeIndex, Month, Day, Hour FROM Time ORDER BY TimeIndex")
+
+        hours_of_year, months, days, hours_of_day = [], [], [], []
+        h_vals, c_vals, l_vals, e_vals, s_vals = [], [], [], [], []
+
+        for i, tr in enumerate(time_rows):
+            ti = tr["TimeIndex"]
+            hours_of_year.append(i)
+            months.append(tr["Month"] or 1)
+            days.append(tr["Day"] or 1)
+            hours_of_day.append((tr["Hour"] or 1) - 1)  # EP Hour is 1-24 → 0-23
+            h_vals.append(round(heating.get(ti, 0.0), 4))
+            c_vals.append(round(cooling.get(ti, 0.0), 4))
+            l_vals.append(round(lighting.get(ti, 0.0), 4))
+            e_vals.append(round(equipment.get(ti, 0.0), 4))
+            s_vals.append(round(solar.get(ti, 0.0), 4))
+
+        return {
+            "hours":         hours_of_year,
+            "months":        months,
+            "days":          days,
+            "hours_of_day":  hours_of_day,
+            "heating_kWh":   h_vals,
+            "cooling_kWh":   c_vals,
+            "lighting_kWh":  l_vals,
+            "equipment_kWh": e_vals,
+            "solar_kWh":     s_vals,
+        }
+    finally:
+        conn.close()
+
+
+def get_typical_day_profiles(sql_path) -> dict:
+    """
+    Extract representative 24-hour profiles for 4 day types:
+    peak_heating, peak_cooling, typical_winter, typical_summer.
+
+    Each profile is a dict with 24-value lists per end use.
+    """
+    from collections import defaultdict
+
+    hourly = get_hourly_profiles(sql_path)
+    n = len(hourly["hours"])
+    KEYS = ("heating_kWh", "cooling_kWh", "lighting_kWh", "equipment_kWh", "solar_kWh")
+
+    if n == 0:
+        empty = {k: [0.0] * 24 for k in KEYS}
+        return {t: {"label": t, **empty} for t in ("peak_heating", "peak_cooling", "typical_winter", "typical_summer")}
+
+    # Group hours by (month, day)
+    day_data: dict = defaultdict(lambda: defaultdict(dict))
+    for i in range(n):
+        md = (hourly["months"][i], hourly["days"][i])
+        hod = hourly["hours_of_day"][i]
+        day_data[md][hod] = {k: hourly[k][i] for k in KEYS}
+
+    def _day_profile(md):
+        hmap = day_data[md]
+        return {k: [hmap.get(h, {}).get(k, 0.0) for h in range(24)] for k in KEYS}
+
+    def _avg_profiles(mds):
+        if not mds:
+            return {k: [0.0] * 24 for k in KEYS}
+        sums = {k: [0.0] * 24 for k in KEYS}
+        for md in mds:
+            prof = _day_profile(md)
+            for k in KEYS:
+                for h in range(24):
+                    sums[k][h] += prof[k][h]
+        nd = len(mds)
+        return {k: [round(v / nd, 4) for v in sums[k]] for k in KEYS}
+
+    day_heat_totals = {md: sum(day_data[md].get(h, {}).get("heating_kWh", 0.0) for h in range(24)) for md in day_data}
+    day_cool_totals = {md: sum(day_data[md].get(h, {}).get("cooling_kWh", 0.0) for h in range(24)) for md in day_data}
+
+    peak_heat_day = max(day_heat_totals, key=day_heat_totals.get)
+    peak_cool_day = max(day_cool_totals, key=day_cool_totals.get)
+    winter_days = [md for md in day_data if md[0] in (12, 1, 2)]
+    summer_days = [md for md in day_data if md[0] in (6, 7, 8)]
+
+    return {
+        "peak_heating":   {"label": f"Peak Heating Day", "month": peak_heat_day[0], "day": peak_heat_day[1], **_day_profile(peak_heat_day)},
+        "peak_cooling":   {"label": f"Peak Cooling Day",  "month": peak_cool_day[0], "day": peak_cool_day[1], **_day_profile(peak_cool_day)},
+        "typical_winter": {"label": "Typical Winter Day (Dec-Feb avg)", **_avg_profiles(winter_days)},
+        "typical_summer": {"label": "Typical Summer Day (Jun-Aug avg)", **_avg_profiles(summer_days)},
+    }

@@ -21,6 +21,8 @@ from nza_engine.parsers.sql_parser import (
     get_monthly_energy_by_enduse,
     get_zone_summary,
     get_envelope_heat_flow,
+    get_hourly_profiles,
+    get_typical_day_profiles,
 )
 
 router = APIRouter(prefix="/api/simulate", tags=["simulate"])
@@ -149,21 +151,23 @@ def _run_and_parse(run_id: str, request: SimulateRequest) -> dict:
 
     sql = sim_result.sql_path
     results = {
-        "run_id":         run_id,
-        "status":         "success",
-        "runtime_s":      sim_result.runtime_seconds,
-        "warnings":       sim_result.warnings,
-        "building":       building_params,
-        "constructions":  construction_choices,
-        "weather_file":   str(weather_path),
-        "summary":        get_building_summary(sql),
-        "annual_energy":  get_annual_energy_by_enduse(sql),
-        "monthly_energy": get_monthly_energy_by_enduse(sql),
-        "zone_summary":   get_zone_summary(sql),
-        "envelope":       get_envelope_heat_flow(sql),
+        "run_id":           run_id,
+        "status":           "success",
+        "runtime_s":        sim_result.runtime_seconds,
+        "warnings":         sim_result.warnings,
+        "building":         building_params,
+        "constructions":    construction_choices,
+        "weather_file":     str(weather_path),
+        "summary":          get_building_summary(sql),
+        "annual_energy":    get_annual_energy_by_enduse(sql),
+        "monthly_energy":   get_monthly_energy_by_enduse(sql),
+        "zone_summary":     get_zone_summary(sql),
+        "envelope":         get_envelope_heat_flow(sql),
+        # Typical day profiles included in main response (compact — 4 days × 24 hours)
+        "hourly_profiles":  get_typical_day_profiles(sql),
     }
 
-    # Cache results for later retrieval
+    # Cache results for later retrieval (without full 8760 — too large for JSON cache)
     results_path = run_dir / "results.json"
     with open(results_path, "w") as f:
         json.dump(results, f, indent=2)
@@ -201,3 +205,18 @@ async def get_simulation_result(run_id: str):
         )
     with open(results_path) as f:
         return json.load(f)
+
+
+@router.get("/{run_id}/hourly")
+async def get_hourly_data(run_id: str):
+    """
+    Return the full 8760-hour dataset for a previous simulation run.
+    Used for detailed analysis, heatmaps, and carpet plots.
+    """
+    sql_path = SIMULATIONS_DIR / run_id / "eplusout.sql"
+    if not sql_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Run '{run_id}' not found or SQL output missing.",
+        )
+    return get_hourly_profiles(sql_path)
