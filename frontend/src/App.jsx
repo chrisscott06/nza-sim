@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { BuildingProvider } from './context/BuildingContext.jsx'
+import { ProjectProvider } from './context/ProjectContext.jsx'
 import { SimulationProvider } from './context/SimulationContext.jsx'
 import AppShell from './components/layout/AppShell.jsx'
 import HomePage from './pages/HomePage.jsx'
@@ -11,7 +11,7 @@ import SystemsZones from './components/modules/SystemsZones.jsx'
 export default function App() {
   return (
     <BrowserRouter>
-      <BuildingProvider>
+      <ProjectProvider>
         <SimulationProvider>
           <Routes>
             <Route element={<AppShell />}>
@@ -24,7 +24,7 @@ export default function App() {
             </Route>
           </Routes>
         </SimulationProvider>
-      </BuildingProvider>
+      </ProjectProvider>
     </BrowserRouter>
   )
 }

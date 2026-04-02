@@ -70,7 +70,9 @@ def main():
         "Material", "Material:NoMass", "WindowMaterial:SimpleGlazingSystem",
         "Construction", "Schedule:Compact", "People", "Lights",
         "ElectricEquipment", "ZoneInfiltration:DesignFlowRate",
-        "HVACTemplate:Zone:IdealLoadsAirSystem", "Output:Variable", "Output:Meter",
+        "ZoneHVAC:IdealLoadsAirSystem", "ZoneHVAC:EquipmentList", "ZoneHVAC:EquipmentConnections",
+        "ThermostatSetpoint:DualSetpoint", "ZoneControl:Thermostat",
+        "Output:Variable", "Output:Meter",
     ]
     total = 0
     for obj_type in object_types:
@@ -143,7 +145,7 @@ def main():
     check("Output:Variable requests present", len(epjson.get("Output:Variable", {})) >= 8)
 
     # Check ideal loads HVAC
-    ideal = epjson.get("HVACTemplate:Zone:IdealLoadsAirSystem", {})
+    ideal = epjson.get("ZoneHVAC:IdealLoadsAirSystem", {})
     check("Ideal loads system for each zone", len(ideal) == 4, f"got {len(ideal)}")
 
     # Check site location was parsed

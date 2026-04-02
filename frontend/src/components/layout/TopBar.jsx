@@ -1,7 +1,7 @@
 import { useContext, useEffect, useState } from 'react'
-import { Play, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Play, Loader2, CheckCircle2, AlertCircle, Save, RefreshCw } from 'lucide-react'
 import { SimulationContext } from '../../context/SimulationContext.jsx'
-import { BuildingContext } from '../../context/BuildingContext.jsx'
+import { ProjectContext } from '../../context/ProjectContext.jsx'
 
 /* Toast notification shown after simulation completes or errors */
 function Toast({ message, type, onDismiss }) {
@@ -28,10 +28,32 @@ function Toast({ message, type, onDismiss }) {
   )
 }
 
+/* Save status indicator */
+function SaveIndicator({ status }) {
+  if (status === 'idle') return null
+
+  const configs = {
+    saving: { icon: <Loader2 size={11} className="animate-spin" />, label: 'Saving…',  colour: 'text-mid-grey' },
+    saved:  { icon: <CheckCircle2 size={11} />,                      label: 'Saved',    colour: 'text-green-600' },
+    error:  { icon: <AlertCircle size={11} />,                       label: 'Save failed', colour: 'text-coral' },
+  }
+
+  const cfg = configs[status]
+  if (!cfg) return null
+
+  return (
+    <span className={`flex items-center gap-1 text-caption ${cfg.colour}`}>
+      {cfg.icon}
+      {cfg.label}
+    </span>
+  )
+}
+
 export default function TopBar() {
   const { status, results, error, runSimulation } = useContext(SimulationContext)
-  const buildingCtx = useContext(BuildingContext)
-  const buildingName = buildingCtx?.params?.name || 'NZA Simulate'
+  const projectCtx = useContext(ProjectContext)
+  const buildingName = projectCtx?.params?.name || 'NZA Simulate'
+  const saveStatus = projectCtx?.saveStatus ?? 'idle'
   const [toast, setToast] = useState(null)
 
   /* Show toast when simulation completes or errors */
@@ -72,8 +94,11 @@ export default function TopBar() {
   return (
     <>
       <header className="h-12 bg-white border-b border-light-grey flex items-center px-4 gap-4 flex-shrink-0">
-        {/* Project name — reads dynamically from BuildingContext */}
+        {/* Project name */}
         <span className="text-section font-medium text-navy">{buildingName}</span>
+
+        {/* Save status indicator */}
+        <SaveIndicator status={saveStatus} />
 
         <div className="flex-1" />
 

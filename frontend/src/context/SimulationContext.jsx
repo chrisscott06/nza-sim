@@ -1,5 +1,5 @@
 import { createContext, useState, useContext } from 'react'
-import { BuildingContext } from './BuildingContext.jsx'
+import { ProjectContext } from './ProjectContext.jsx'
 
 export const SimulationContext = createContext(null)
 
@@ -9,34 +9,33 @@ export function SimulationProvider({ children }) {
   const [results, setResults] = useState(null)
   const [error, setError] = useState(null)
 
-  // BuildingContext may not be mounted yet at this level — we'll read it lazily in runSimulation
-  const buildingCtx = useContext(BuildingContext)
+  const projectCtx = useContext(ProjectContext)
 
   async function runSimulation() {
     setStatus('running')
     setError(null)
 
-    // Read building params from BuildingContext if available, else use defaults
-    const params = buildingCtx?.params ?? {
-      name: 'Bridgewater Hotel',
+    // Read from ProjectContext — falls back to defaults if context not ready
+    const params = projectCtx?.params ?? {
+      name: 'New Project',
       length: 60, width: 15, num_floors: 4, floor_height: 3.2,
       orientation: 0,
       wwr: { north: 0.25, south: 0.25, east: 0.25, west: 0.25 },
     }
-    const constructions = buildingCtx?.constructions ?? {
+    const constructions = projectCtx?.constructions ?? {
       external_wall: 'cavity_wall_standard',
       roof: 'flat_roof_standard',
       ground_floor: 'ground_floor_slab',
       glazing: 'double_low_e',
     }
-    const systems = buildingCtx?.systems ?? {
+    const systems = projectCtx?.systems ?? {
       mode: 'ideal',
       hvac_type: 'vrf_standard',
       ventilation_type: 'mev_standard',
       natural_ventilation: false,
       natural_vent_threshold: 22,
       dhw_primary: 'gas_boiler_dhw',
-      dhw_preheat: 'none',
+      dhw_preheat: 'ashp_dhw',
       dhw_setpoint: 60,
       dhw_preheat_setpoint: 45,
       lighting_power_density: 8.0,
