@@ -1,4 +1,4 @@
-import { useState, useContext } from 'react'
+import { useState, useContext, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Play } from 'lucide-react'
 import ExplorerLayout from '../../ui/ExplorerLayout.jsx'
@@ -126,7 +126,32 @@ function ResultsSidebar({ activeTab, onTabChange }) {
 
 export default function ResultsDashboard() {
   const [activeTab, setActiveTab] = useState('overview')
-  const { resultsLoading } = useContext(SimulationContext)
+  const { resultsLoading }        = useContext(SimulationContext)
+  const { currentProjectId }      = useContext(ProjectContext)
+
+  // Load scenarios + their results for the CRREM multi-scenario overlay
+  const [scenarios,        setScenarios]        = useState([])
+  const [scenarioResults,  setScenarioResults]  = useState({}) // { [scenarioId]: simRunData }
+
+  useEffect(() => {
+    if (!currentProjectId) return
+    fetch(`/api/projects/${currentProjectId}/scenarios`)
+      .then(r => r.ok ? r.json() : [])
+      .then(async data => {
+        setScenarios(data)
+        // Fetch results for scenarios that have been run
+        const map = {}
+        for (const s of data) {
+          if (!s.latest_run_id) continue
+          try {
+            const res = await fetch(`/api/projects/${currentProjectId}/simulations/${s.latest_run_id}`)
+            if (res.ok) map[s.id] = await res.json()
+          } catch {}
+        }
+        setScenarioResults(map)
+      })
+      .catch(() => {})
+  }, [currentProjectId])
 
   const tabContent = {
     overview: <ErrorBoundary moduleName="Results Overview"><OverviewTab /></ErrorBoundary>,
@@ -134,7 +159,9 @@ export default function ResultsDashboard() {
     balance:  <ErrorBoundary moduleName="Energy Balance"><EnergyBalanceTab /></ErrorBoundary>,
     profiles: <ErrorBoundary moduleName="Load Profiles"><LoadProfilesTab /></ErrorBoundary>,
     fabric:   <ErrorBoundary moduleName="Fabric Analysis"><FabricAnalysisTab /></ErrorBoundary>,
-    crrem:    <ErrorBoundary moduleName="CRREM & Carbon"><CRREMTab /></ErrorBoundary>,
+    crrem:    <ErrorBoundary moduleName="CRREM & Carbon">
+                <CRREMTab scenarios={scenarios} scenarioResults={scenarioResults} />
+              </ErrorBoundary>,
   }
 
   return (

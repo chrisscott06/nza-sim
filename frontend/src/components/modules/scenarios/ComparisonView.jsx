@@ -11,10 +11,12 @@
  */
 
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend,
   Cell, ReferenceLine, ResponsiveContainer
 } from 'recharts'
+import { TrendingDown } from 'lucide-react'
 import ChartContainer from '../../ui/ChartContainer.jsx'
 import DataCard from '../../ui/DataCard.jsx'
 
@@ -331,6 +333,7 @@ function DeltaCards({ scenarios, results }) {
 export default function ComparisonView({ scenarios, projectId }) {
   const [results, setResults]   = useState({}) // { [scenarioId]: simRunData }
   const [loading, setLoading]   = useState(true)
+  const navigate = useNavigate()
 
   useEffect(() => {
     async function loadResults() {
@@ -361,12 +364,23 @@ export default function ComparisonView({ scenarios, projectId }) {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-heading font-semibold text-navy">Scenario Comparison</h1>
-        <p className="text-caption text-mid-grey mt-0.5">
-          {scenarios.length} scenario{scenarios.length !== 1 ? 's' : ''} ·{' '}
-          {Object.keys(results).length} with results
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-heading font-semibold text-navy">Scenario Comparison</h1>
+          <p className="text-caption text-mid-grey mt-0.5">
+            {scenarios.length} scenario{scenarios.length !== 1 ? 's' : ''} ·{' '}
+            {Object.keys(results).length} with results
+          </p>
+        </div>
+        {hasAnyResults && (
+          <button
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-light-grey text-xxs font-medium text-dark-grey hover:border-navy hover:text-navy transition-colors"
+            onClick={() => navigate('/results')}
+          >
+            <TrendingDown size={11} />
+            CRREM & Carbon →
+          </button>
+        )}
       </div>
 
       {/* Input differences */}
