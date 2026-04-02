@@ -1,0 +1,97 @@
+import { NavLink, useLocation } from 'react-router-dom'
+import {
+  Home,
+  Building2,
+  Thermometer,
+  Clock,
+  BarChart3,
+  GitCompare,
+} from 'lucide-react'
+
+const TOP_ITEMS = [
+  { to: '/',         icon: Home,        label: 'Home' },
+  { to: '/building', icon: Building2,   label: 'Building' },
+  { to: '/systems',  icon: Thermometer, label: 'Systems' },
+  { to: '/profiles', icon: Clock,       label: 'Profiles' },
+]
+
+const BOTTOM_ITEMS = [
+  { to: '/results',   icon: BarChart3,  label: 'Results' },
+  { to: '/scenarios', icon: GitCompare, label: 'Scenarios' },
+]
+
+function NavItem({ to, icon: Icon, label }) {
+  const location = useLocation()
+  // Exact match for root, prefix match for others
+  const isActive = to === '/'
+    ? location.pathname === '/'
+    : location.pathname.startsWith(to)
+
+  return (
+    <div className="relative group">
+      <NavLink
+        to={to}
+        className={`
+          flex items-center justify-center w-full h-11
+          transition-colors duration-150 relative
+          ${isActive
+            ? 'bg-white/10'
+            : 'hover:bg-white/6'
+          }
+        `}
+      >
+        {/* Teal active indicator */}
+        {isActive && (
+          <span
+            className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full bg-teal"
+          />
+        )}
+        <Icon
+          size={18}
+          strokeWidth={isActive ? 2 : 1.5}
+          className={isActive ? 'text-white' : 'text-white/55'}
+        />
+      </NavLink>
+
+      {/* Tooltip */}
+      <div
+        className="
+          pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50
+          px-2 py-1 rounded text-xxs font-medium text-white bg-navy border border-white/10
+          whitespace-nowrap shadow-lg
+          opacity-0 group-hover:opacity-100 transition-opacity duration-150 delay-300
+        "
+      >
+        {label}
+      </div>
+    </div>
+  )
+}
+
+export default function Sidebar() {
+  return (
+    <nav className="w-14 min-h-screen bg-navy flex flex-col flex-shrink-0 select-none">
+      {/* Logo mark */}
+      <div className="h-12 flex items-center justify-center border-b border-white/8">
+        <span className="text-white font-medium text-caption tracking-widest">N</span>
+      </div>
+
+      {/* Top navigation items */}
+      <div className="flex flex-col pt-1">
+        {TOP_ITEMS.map(item => (
+          <NavItem key={item.to} {...item} />
+        ))}
+      </div>
+
+      {/* Divider */}
+      <div className="my-2 mx-3 border-t border-white/12" />
+
+      {/* Bottom navigation items (output modules) */}
+      <div className="flex flex-col">
+        {BOTTOM_ITEMS.map(item => (
+          <NavItem key={item.to} {...item} />
+        ))}
+      </div>
+    </nav>
+  )
+}
