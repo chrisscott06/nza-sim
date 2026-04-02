@@ -234,6 +234,55 @@ def _build_infiltration_objects(
     return infiltration
 
 
+def _build_natural_ventilation_objects(
+    zones: dict,
+    building_params: dict,
+    natural_vent_threshold: float = 22.0,
+) -> dict:
+    """
+    Build ZoneVentilation:WindAndStackOpenArea objects for all zones.
+
+    Opening area = 50% × average_wwr × perimeter facade area per floor.
+    Windows open only when indoor temperature > threshold AND occupied
+    (the opening_area_fraction_schedule_name uses the occupancy schedule).
+    """
+    length       = building_params["length"]
+    width        = building_params["width"]
+    floor_height = building_params["floor_height"]
+    wwr          = building_params.get("wwr", {})
+    avg_wwr      = (
+        wwr.get("north", 0.25) + wwr.get("south", 0.25)
+        + wwr.get("east", 0.25) + wwr.get("west", 0.25)
+    ) / 4.0
+
+    # Window area per zone (one zone per floor, all four facades)
+    perimeter_m         = 2.0 * (length + width)
+    facade_area_per_floor = perimeter_m * floor_height
+    window_area_per_zone  = avg_wwr * facade_area_per_floor
+    opening_area          = round(0.5 * window_area_per_zone, 2)  # 50% max open
+
+    nat_vent = {}
+    for zone_name in zones:
+        nat_vent[f"{zone_name}_NatVent"] = {
+            "zone_or_zonelist_name":             zone_name,
+            "opening_area":                      opening_area,
+            # Fraction = occupancy schedule (0 when unoccupied, 1 when occupied)
+            "opening_area_fraction_schedule_name": "hotel_bedroom_occupancy",
+            "opening_effectiveness":             "Autocalculate",
+            "effective_angle":                   90.0,   # vertical opening
+            "height_difference":                 1.0,    # m
+            "discharge_coefficient_for_opening": 0.65,
+            # Temperature controls: windows open when indoor > threshold
+            "minimum_indoor_temperature":        natural_vent_threshold,
+            "maximum_indoor_temperature":        100.0,  # no upper cap
+            # Allow ventilation at any outdoor temp (winter draughts modelled naturally)
+            "minimum_outdoor_temperature":       -100.0,
+            "maximum_outdoor_temperature":       100.0,
+            "maximum_wind_speed":                40.0,   # m/s — effectively unlimited
+        }
+    return nat_vent
+
+
 def _build_hvac_ideal_loads(zones: dict) -> tuple[dict, dict, dict, dict, dict]:
     """
     Build native ZoneHVAC:IdealLoadsAirSystem HVAC objects for each zone.
@@ -429,6 +478,14 @@ def assemble_epjson(
         building_params["floor_height"],
     )
 
+    # ── 6b. Natural ventilation (openable windows) ────────────────────────────
+    natural_vent_objects = {}
+    if sc.get("natural_ventilation", False):
+        threshold = float(sc.get("natural_vent_threshold", 22.0))
+        natural_vent_objects = _build_natural_ventilation_objects(
+            zones, building_params, natural_vent_threshold=threshold
+        )
+
     # ── 7. HVAC (ideal loads — perfect system, no real HVAC effects) ──────────
     # Uses native ZoneHVAC:IdealLoadsAirSystem (not HVACTemplate which needs ExpandObjects)
     ideal_loads, equip_lists, equip_conns, dual_setpoints, zone_controls = (
@@ -528,6 +585,9 @@ def assemble_epjson(
         "ZoneHVAC:EquipmentConnections": equip_conns,
         "ThermostatSetpoint:DualSetpoint": dual_setpoints,
         "ZoneControl:Thermostat": zone_controls,
+
+        **({"ZoneVentilation:WindAndStackOpenArea": natural_vent_objects}
+           if natural_vent_objects else {}),
 
         "Output:Variable": _output_variables(),
         "Output:Meter": _output_meters(),
