@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react'
 import { Search, X, Layers, Thermometer, Clock, Check, Plus, Copy, Trash2 } from 'lucide-react'
 import ExplorerLayout from '../ui/ExplorerLayout.jsx'
 import ConstructionEditor from './library/ConstructionEditor.jsx'
+import SystemEditor from './library/SystemEditor.jsx'
 
 // ── Type config ───────────────────────────────────────────────────────────────
 
@@ -106,8 +107,8 @@ function ItemCard({ item, isSelected, onClick, onDuplicate, onDelete }) {
       {metric && (
         <p className="text-xs text-mid-grey mt-1">{metric}</p>
       )}
-      {/* Action buttons (visible on hover) */}
-      {item.library_type === 'construction' && (
+      {/* Action buttons (visible on hover) — constructions and systems */}
+      {(item.library_type === 'construction' || item.library_type === 'system') && (
         <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             onClick={e => { e.stopPropagation(); onDuplicate(item) }}
@@ -389,9 +390,12 @@ export default function LibraryBrowser() {
   const [search, setSearch]         = useState('')
   const [selectedItem, setSelectedItem] = useState(null)
 
-  // Editor state
+  // Construction editor state
   const [editorOpen,    setEditorOpen]    = useState(false)
   const [duplicateItem, setDuplicateItem] = useState(null)  // null = new, else item to copy
+  // System editor state
+  const [sysEditorOpen,    setSysEditorOpen]    = useState(false)
+  const [sysDuplicateItem, setSysDuplicateItem] = useState(null)
 
   // Fetch library items
   async function loadItems() {
@@ -425,8 +429,13 @@ export default function LibraryBrowser() {
   }
 
   function handleDuplicate(item) {
-    setDuplicateItem(item)
-    setEditorOpen(true)
+    if (item.library_type === 'system') {
+      setSysDuplicateItem(item)
+      setSysEditorOpen(true)
+    } else {
+      setDuplicateItem(item)
+      setEditorOpen(true)
+    }
   }
 
   async function handleDelete(item) {
@@ -489,13 +498,22 @@ export default function LibraryBrowser() {
               {search ? ` matching "${search}"` : ''}
             </p>
           </div>
-          <button
-            onClick={() => { setDuplicateItem(null); setEditorOpen(true) }}
-            className="flex items-center gap-1.5 px-3 py-2 text-caption text-white bg-navy rounded-lg hover:bg-navy/80 transition-colors"
-          >
-            <Plus size={13} />
-            New Construction
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setDuplicateItem(null); setEditorOpen(true) }}
+              className="flex items-center gap-1.5 px-3 py-2 text-caption text-white bg-navy rounded-lg hover:bg-navy/80 transition-colors"
+            >
+              <Plus size={13} />
+              New Construction
+            </button>
+            <button
+              onClick={() => { setSysDuplicateItem(null); setSysEditorOpen(true) }}
+              className="flex items-center gap-1.5 px-3 py-2 text-caption text-navy bg-white border border-navy rounded-lg hover:bg-off-white transition-colors"
+            >
+              <Plus size={13} />
+              New System
+            </button>
+          </div>
         </div>
 
         {loading && (
@@ -550,6 +568,15 @@ export default function LibraryBrowser() {
           initialItem={duplicateItem}
           onSave={handleEditorSave}
           onClose={() => { setEditorOpen(false); setDuplicateItem(null) }}
+        />
+      )}
+
+      {/* System editor modal */}
+      {sysEditorOpen && (
+        <SystemEditor
+          initialItem={sysDuplicateItem}
+          onSave={item => { setSysEditorOpen(false); setSysDuplicateItem(null); loadItems() }}
+          onClose={() => { setSysEditorOpen(false); setSysDuplicateItem(null) }}
         />
       )}
     </div>
