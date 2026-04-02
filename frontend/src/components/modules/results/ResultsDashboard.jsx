@@ -4,6 +4,7 @@ import { Play } from 'lucide-react'
 import ExplorerLayout from '../../ui/ExplorerLayout.jsx'
 import TabBar from '../../ui/TabBar.jsx'
 import OverviewTab from './OverviewTab.jsx'
+import EnergyFlowsTab from './EnergyFlowsTab.jsx'
 import EnergyBalanceTab from './EnergyBalanceTab.jsx'
 import LoadProfilesTab from './LoadProfilesTab.jsx'
 import FabricAnalysisTab from './FabricAnalysisTab.jsx'
@@ -12,6 +13,7 @@ import { BuildingContext } from '../../../context/BuildingContext.jsx'
 
 const TABS = [
   { id: 'overview',  label: 'Overview'       },
+  { id: 'flows',     label: 'Energy Flows'   },
   { id: 'balance',   label: 'Energy Balance'  },
   { id: 'profiles',  label: 'Load Profiles'   },
   { id: 'fabric',    label: 'Fabric Analysis' },
@@ -109,6 +111,7 @@ export default function ResultsDashboard() {
 
   const tabContent = {
     overview: <OverviewTab />,
+    flows:    <EnergyFlowsTab />,
     balance:  <EnergyBalanceTab />,
     profiles: <LoadProfilesTab />,
     fabric:   <FabricAnalysisTab />,
