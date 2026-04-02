@@ -314,6 +314,36 @@ export default function ScenarioEditor({ scenario, baseline, projectId, onDone, 
         <p className="text-xxs text-mid-grey mb-3">
           Strikethrough shows the baseline value where it differs.
         </p>
+
+        {/* Simulation mode toggle */}
+        <FieldRow
+          label="Sim Mode"
+          baselineValue={baselineSys.mode}
+          currentValue={systems.mode}
+        >
+          <div className="flex gap-1.5">
+            {[
+              { v: 'detailed', l: 'Detailed' },
+              { v: 'ideal',    l: 'Ideal Loads' },
+            ].map(opt => (
+              <button
+                key={opt.v}
+                onClick={() => updateSystem('mode', opt.v)}
+                className={`px-2 py-1 text-xxs rounded border transition-colors ${
+                  systems.mode === opt.v
+                    ? 'bg-teal text-white border-teal'
+                    : 'bg-white text-mid-grey border-light-grey hover:border-teal'
+                }`}
+              >
+                {opt.l}
+              </button>
+            ))}
+          </div>
+          {systems.mode === 'ideal' && (
+            <p className="text-xxs text-amber-600 mt-1">⚠ Ideal Loads bypasses real HVAC — EUI will be unrealistically low</p>
+          )}
+        </FieldRow>
+
         {SYSTEM_FIELDS.map(field => {
           const currentVal = systems[field.key]
           const baselineVal = baselineSys[field.key]
