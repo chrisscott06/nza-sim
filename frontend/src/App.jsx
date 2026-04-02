@@ -5,9 +5,7 @@ import AppShell from './components/layout/AppShell.jsx'
 import HomePage from './pages/HomePage.jsx'
 import PlaceholderPage from './pages/PlaceholderPage.jsx'
 import BuildingDefinition from './components/modules/building/BuildingDefinition.jsx'
-
-// Results Dashboard will be replaced with real module in Part 7
-const ResultsPage = () => <PlaceholderPage title="Results Dashboard" />
+import ResultsDashboard from './components/modules/results/ResultsDashboard.jsx'
 
 export default function App() {
   return (
@@ -20,7 +18,7 @@ export default function App() {
               <Route path="/building"  element={<BuildingDefinition />} />
               <Route path="/systems"   element={<PlaceholderPage title="Systems" />} />
               <Route path="/profiles"  element={<PlaceholderPage title="Profiles" />} />
-              <Route path="/results"   element={<ResultsPage />} />
+              <Route path="/results"   element={<ResultsDashboard />} />
               <Route path="/scenarios" element={<PlaceholderPage title="Scenarios" />} />
             </Route>
           </Routes>
