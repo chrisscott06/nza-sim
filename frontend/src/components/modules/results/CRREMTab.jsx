@@ -29,21 +29,13 @@ import {
   AXIS_PROPS,
   GRID_STYLE,
   LEGEND_STYLE,
+  SCENARIO_COLORS,
 } from '../../../data/chartTokens.js'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const CURRENT_YEAR = new Date().getFullYear()
 const CHART_YEARS  = Array.from({ length: 41 }, (_, i) => 2020 + i) // 2020–2060
-
-const SCENARIO_COLORS = [
-  '#2B2A4C', // navy (baseline)
-  '#00AEEF', // teal
-  '#E84393', // magenta
-  '#ECB01F', // gold
-  '#16A34A', // green
-  '#8B5CF6', // purple
-]
 
 // Grid carbon intensity (kgCO₂/kWh) — FES Leading the Way 2023
 const GRID_INTENSITY = {

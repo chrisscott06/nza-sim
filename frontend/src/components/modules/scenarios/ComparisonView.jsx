@@ -19,17 +19,7 @@ import {
 import { TrendingDown } from 'lucide-react'
 import ChartContainer from '../../ui/ChartContainer.jsx'
 import DataCard from '../../ui/DataCard.jsx'
-
-// ── Colour palette for scenarios ──────────────────────────────────────────────
-
-const SCENARIO_COLORS = [
-  '#2B2A4C', // navy (baseline)
-  '#00AEEF', // teal
-  '#E84393', // magenta
-  '#ECB01F', // gold
-  '#16A34A', // green
-  '#8B5CF6', // purple
-]
+import { SCENARIO_COLORS } from '../../../data/chartTokens.js'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

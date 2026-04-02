@@ -40,3 +40,37 @@ export const AXIS_PROPS = {
 export const TOOLTIP_WRAPPER_STYLE = {
   outline: 'none',
 }
+
+// ── Shared colour palettes ────────────────────────────────────────────────────
+
+/** Scenario comparison colours — index 0 = baseline, 1-5 = alternatives */
+export const SCENARIO_COLORS = [
+  '#2B2A4C', // navy   (baseline)
+  '#00AEEF', // teal
+  '#E84393', // magenta
+  '#ECB01F', // gold
+  '#16A34A', // green
+  '#8B5CF6', // purple
+]
+
+/** End-use energy colours — keyed by end use */
+export const ENDUSE_COLORS = {
+  heating:      '#DC2626',
+  cooling:      '#3B82F6',
+  lighting:     '#ECB01F',
+  equipment:    '#8B5CF6',
+  fans:         '#7C3AED',
+  dhw:          '#F97316',
+  ventilation:  '#06B6D4',
+  infiltration: '#9E9E9E',
+}
+
+/** Fabric element colours — keyed by element type */
+export const FABRIC_COLORS = {
+  wall:         '#A1887F',
+  glazing:      '#4FC3F7',
+  roof:         '#78909C',
+  floor:        '#795548',
+  infiltration: '#9E9E9E',
+  ventilation:  '#06B6D4',
+}
