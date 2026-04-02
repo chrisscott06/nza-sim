@@ -414,11 +414,17 @@ def get_hourly_profiles(sql_path) -> dict:
         lighting  = _get_hourly_series("Zone Lights Electricity Energy")
         equipment = _get_hourly_series("Zone Electric Equipment Electricity Energy")
         solar     = _get_hourly_series("Surface Window Transmitted Solar Radiation Energy")
+        # New end uses (may return empty dict if not available in this model)
+        dhw       = _get_hourly_series("Zone Hot Water Equipment Electricity Energy")
+        fan       = _get_hourly_series("Fan Electricity Energy")
+        vent_loss = _get_hourly_series("Zone Ventilation Sensible Heat Loss Energy")
+        infil_loss = _get_hourly_series("Zone Infiltration Sensible Heat Loss Energy")
 
         time_rows = _query(conn, "SELECT TimeIndex, Month, Day, Hour FROM Time ORDER BY TimeIndex")
 
         hours_of_year, months, days, hours_of_day = [], [], [], []
         h_vals, c_vals, l_vals, e_vals, s_vals = [], [], [], [], []
+        dhw_vals, fan_vals, vent_vals = [], [], []
 
         for i, tr in enumerate(time_rows):
             ti = tr["TimeIndex"]
@@ -431,6 +437,11 @@ def get_hourly_profiles(sql_path) -> dict:
             l_vals.append(round(lighting.get(ti, 0.0), 4))
             e_vals.append(round(equipment.get(ti, 0.0), 4))
             s_vals.append(round(solar.get(ti, 0.0), 4))
+            dhw_vals.append(round(dhw.get(ti, 0.0), 4))
+            fan_vals.append(round(fan.get(ti, 0.0), 4))
+            # Ventilation loss: sum of mechanical vent loss + infiltration loss
+            vl = vent_loss.get(ti, 0.0) + infil_loss.get(ti, 0.0)
+            vent_vals.append(round(vl, 4))
 
         return {
             "hours":         hours_of_year,
@@ -442,6 +453,9 @@ def get_hourly_profiles(sql_path) -> dict:
             "lighting_kWh":  l_vals,
             "equipment_kWh": e_vals,
             "solar_kWh":     s_vals,
+            "dhw_kWh":       dhw_vals,
+            "fan_kWh":       fan_vals,
+            "vent_loss_kWh": vent_vals,
         }
     finally:
         conn.close()
@@ -458,7 +472,8 @@ def get_typical_day_profiles(sql_path) -> dict:
 
     hourly = get_hourly_profiles(sql_path)
     n = len(hourly["hours"])
-    KEYS = ("heating_kWh", "cooling_kWh", "lighting_kWh", "equipment_kWh", "solar_kWh")
+    KEYS = ("heating_kWh", "cooling_kWh", "lighting_kWh", "equipment_kWh", "solar_kWh",
+            "dhw_kWh", "fan_kWh", "vent_loss_kWh")
 
     if n == 0:
         empty = {k: [0.0] * 24 for k in KEYS}

@@ -377,8 +377,12 @@ def _output_variables() -> dict:
         "Zone People Occupant Count",
         "Zone Lights Electricity Energy",
         "Zone Electric Equipment Electricity Energy",
+        "Zone Hot Water Equipment Electricity Energy",   # DHW if modeled as hot water equip
         "Zone Infiltration Sensible Heat Loss Energy",
         "Zone Infiltration Sensible Heat Gain Energy",
+        "Zone Ventilation Sensible Heat Loss Energy",    # mechanical vent heat loss
+        "Zone Ventilation Sensible Heat Gain Energy",    # mechanical vent heat gain
+        "Fan Electricity Energy",                        # fan energy (if fan objects present)
         "Surface Inside Face Conduction Heat Transfer Energy",
         # Solar gains — use Energy (J) which works with SimpleGlazingSystem
         # Rate (W) is not generated with simplified glazing in EP 25.2
