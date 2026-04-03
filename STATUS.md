@@ -14,7 +14,7 @@ Brief 13 Parts 8–11 completed (2026-04-03). Part 12 (browser integration test)
 - Part 9: Sankey link hover interaction + link tooltips — committed
 - Part 10: Topology-change animation (CSS fadeIn on node/link add/remove) — committed
 - Part 11: Right panel demand-based breakdown with efficiency insights, waste summary, recovery callouts — committed
-- Part 12: Browser integration test — PENDING (requires screen recording permission)
+- Part 12: Browser integration test — TO DO next session (grant screen recording in System Settings → Privacy & Security → Screen Recording, then run 3-config walkthrough per brief)
 
 ---
 
