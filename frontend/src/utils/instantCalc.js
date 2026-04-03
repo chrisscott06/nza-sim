@@ -17,13 +17,29 @@ const UK_HDD   = 2200   // Heating degree days (15.5°C base, UK average)
 const UK_CDD   = 150    // Cooling degree days (22°C base, UK average)
 const HOURS    = 8760   // Hours per year
 
-// Annual incident solar irradiance per facade orientation (kWh/m²/year, UK)
-const SOLAR_RADIATION = {
-  south: 750,
-  north: 350,
-  east:  500,
-  west:  500,
+// Annual incident solar irradiance by TRUE compass direction (kWh/m²/yr, UK)
+const SOLAR_BY_COMPASS = {
+  N: 350, NE: 400, E: 500, SE: 650, S: 750, SW: 650, W: 500, NW: 400,
 }
+
+/**
+ * Return the true compass direction for a facade given building orientation.
+ * orientationDeg: degrees clockwise from north (EnergyPlus north_axis convention).
+ * facadeLabel:   'north' | 'east' | 'south' | 'west' (relative to building geometry).
+ */
+function getActualDirection(facadeLabel, orientationDeg) {
+  const baseAngles = { north: 0, east: 90, south: 180, west: 270 }
+  const trueAngle = ((baseAngles[facadeLabel] ?? 0) + Number(orientationDeg ?? 0)) % 360
+  const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+  const index = Math.round(trueAngle / 45) % 8
+  return directions[index]
+}
+
+export function getSolarRadiation(facadeLabel, orientationDeg) {
+  return SOLAR_BY_COMPASS[getActualDirection(facadeLabel, orientationDeg)]
+}
+
+export { SOLAR_BY_COMPASS }
 
 // Glazing g-value (solar heat gain coefficient) default
 const DEFAULT_G_VALUE = 0.4
@@ -145,13 +161,14 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
   const heat_recovery  = is_mvhr ? mvhr_eff : 0
   const vent_kWh       = AIR_HEAT_CAPACITY * vent_ach * volume * UK_HDD * 24 / 1000 * (1 - heat_recovery)
 
-  // ── Solar gains ───────────────────────────────────────────────────────────
+  // ── Solar gains (orientation-aware) ──────────────────────────────────────
+  const orientation = Number(building.orientation ?? 0)
   const g_value = DEFAULT_G_VALUE
   const solar_gains = {
-    north: glazing.north * SOLAR_RADIATION.north * g_value / 1000,
-    south: glazing.south * SOLAR_RADIATION.south * g_value / 1000,
-    east:  glazing.east  * SOLAR_RADIATION.east  * g_value / 1000,
-    west:  glazing.west  * SOLAR_RADIATION.west  * g_value / 1000,
+    north: glazing.north * getSolarRadiation('north', orientation) * g_value / 1000,
+    south: glazing.south * getSolarRadiation('south', orientation) * g_value / 1000,
+    east:  glazing.east  * getSolarRadiation('east',  orientation) * g_value / 1000,
+    west:  glazing.west  * getSolarRadiation('west',  orientation) * g_value / 1000,
   }
   const total_solar = Object.values(solar_gains).reduce((a, b) => a + b, 0)
 
