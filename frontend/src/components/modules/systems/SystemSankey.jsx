@@ -2,12 +2,14 @@
  * SystemSankey.jsx
  *
  * Sankey-style flow diagram for the Systems module centre panel.
- * Reads systems_flow data from instantCalc and renders proportional energy flows
- * from sources (Grid, Gas) through systems (VRF, MVHR, Boiler) to end uses.
+ * Auto-generates nodes and links from the systems_flow data produced by instantCalc.
+ * Node IDs use prefixes (sh_ sc_ dhw_ dhw_sec_ vent_) so click-to-expand can
+ * resolve the target accordion section without hardcoded system keys.
  *
- * Inter-system connections:
- *   - MVHR heat recovery: green dashed link
- *   - ASHP preheat cascade: green dashed link from heat_reject → boiler
+ * Link styles:
+ *   electricity → gold   gas → red   heating → dark-red   cooling → blue
+ *   dhw → orange   air → cyan   waste → light-grey (solid)
+ *   recovered → green (dashed)
  */
 
 import { useContext, useRef, useEffect, useState, useMemo, useCallback } from 'react'
@@ -18,13 +20,14 @@ import { calculateInstant } from '../../../utils/instantCalc.js'
 // ── Colour palette ────────────────────────────────────────────────────────────
 
 const LINK_COLORS = {
-  electricity: '#ECB01F',   // gold — grid electricity
-  gas:         '#E74C3C',   // red   — gas
-  heating:     '#DC2626',   // red   — heat delivery
-  cooling:     '#3B82F6',   // blue  — cooling delivery
-  air:         '#06B6D4',   // cyan  — ventilation air
-  waste:       '#9CA3AF',   // grey  — heat rejection
-  recovered:   '#16A34A',   // green — recovered/cascaded heat
+  electricity: '#ECB01F',   // gold        — grid electricity
+  gas:         '#E74C3C',   // orange-red  — gas
+  heating:     '#DC2626',   // dark red    — space heating delivered
+  cooling:     '#3B82F6',   // blue        — space cooling delivered
+  dhw:         '#F97316',   // orange      — DHW delivered
+  air:         '#06B6D4',   // cyan        — ventilation air
+  waste:       '#D4D4D4',   // light grey  — heat rejection / flue loss (solid)
+  recovered:   '#16A34A',   // green       — recovered / cascaded heat (dashed)
   default:     '#CCCCCC',
 }
 
@@ -76,10 +79,12 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
   )
 
   const systemsFlow = result.systems_flow
-  const isIdeal  = systems.mode !== 'detailed'
-  const isMVHR   = systems.ventilation_type?.startsWith('mvhr')
-  const hasASHP  = systems.dhw_preheat === 'ashp_dhw'
-  const isGas    = systems.dhw_primary === 'gas_boiler_dhw'
+  const isIdeal = systems.mode !== 'detailed'
+  // Read from demand-based structure, fall back to legacy flat keys
+  const ventSys = systems.ventilation?.primary?.system ?? systems.ventilation_type ?? 'mev_standard'
+  const dhwSec  = systems.dhw?.secondary?.system      ?? systems.dhw_preheat      ?? 'none'
+  const isMVHR  = ventSys.startsWith('mvhr')
+  const hasASHP = dhwSec && dhwSec !== 'none' && (dhwSec.includes('ashp') || dhwSec.includes('heat_pump'))
 
   // ResizeObserver
   useEffect(() => {
@@ -145,22 +150,33 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
     setHoveredNodeId(null)
   }, [])
 
-  // ── Click on node → expand accordion ─────────────────────────────────────
+  // ── Click on node → expand demand accordion ──────────────────────────────
+  // Node IDs from instantCalc use prefixes: sh_ sc_ dhw_ dhw_sec_ vent_
+  // Legacy IDs (vrf, mvhr, boiler) are also handled for backward compat.
   const handleNodeClick = useCallback((node) => {
     if (!setOpenSection) return
-    const sectionMap = {
-      vrf: 'space_heating', mvhr: 'ventilation',
-      boiler: 'dhw', lighting: 'lighting', small_power: 'smallpower',
-    }
-    const section = sectionMap[node.id]
+    const id = node.id ?? ''
+    let section = null
+    if (id.startsWith('sh_'))      section = 'space_heating'
+    else if (id.startsWith('sc_')) section = 'space_cooling'
+    else if (id.startsWith('dhw_sec_')) section = 'dhw'
+    else if (id.startsWith('dhw_'))    section = 'dhw'
+    else if (id.startsWith('vent_'))   section = 'ventilation'
+    else if (id === 'lighting')        section = 'lighting'
+    else if (id === 'small_power')     section = 'smallpower'
+    // Legacy fallbacks
+    else if (id === 'vrf')    section = 'space_heating'
+    else if (id === 'mvhr')   section = 'ventilation'
+    else if (id === 'boiler') section = 'dhw'
     if (section) setOpenSection(section)
   }, [setOpenSection])
 
   // ── Badge list ────────────────────────────────────────────────────────────
   const badges = [
     { label: isIdeal ? 'Ideal Loads' : 'Detailed', color: isIdeal ? '#F59E0B' : '#00AEEF', bg: isIdeal ? '#FFFBEB' : '#EEF8FF' },
-    isMVHR   ? { label: 'MVHR', color: '#16A34A', bg: '#ECFDF5' } : { label: 'MEV', color: '#9CA3AF', bg: '#F9FAFB' },
-    hasASHP  ? { label: 'ASHP Preheat', color: '#16A34A', bg: '#ECFDF5' } : null,
+    isMVHR  ? { label: 'MVHR ✓',         color: '#16A34A', bg: '#ECFDF5' }
+            : { label: 'MEV',             color: '#9CA3AF', bg: '#F9FAFB' },
+    hasASHP ? { label: 'ASHP Preheat ✓', color: '#16A34A', bg: '#ECFDF5' } : null,
   ].filter(Boolean)
 
   return (
@@ -203,7 +219,7 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
             {sankeyResult.links.map((link, i) => {
               const style  = link.style ?? 'default'
               const color  = LINK_COLORS[style] ?? LINK_COLORS.default
-              const isRecovered = style === 'recovered' || style === 'waste'
+              const isRecovered = style === 'recovered'  // only recovered gets dashed; waste is solid
               const w = Math.max(1, link.width ?? 2)
               const srcId = typeof link.source === 'object' ? link.source.id : link.source
               const tgtId = typeof link.target === 'object' ? link.target.id : link.target
@@ -248,7 +264,12 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
               const h  = Math.max(24, y1 - y0)
               const type = node.type ?? 'system'
               const c  = NODE_COLORS[type] ?? NODE_COLORS.system
-              const isClickable = ['vrf','mvhr','boiler','lighting','small_power'].includes(node.id)
+              const nid = node.id ?? ''
+              const isClickable = nid.startsWith('sh_') || nid.startsWith('sc_') ||
+                nid.startsWith('dhw_') || nid.startsWith('vent_') ||
+                nid === 'lighting' || nid === 'small_power' ||
+                // legacy IDs
+                nid === 'vrf' || nid === 'mvhr' || nid === 'boiler'
               const labelX = x1 + 5
               const isNodeDimmed = hoveredNodeId && node.id !== hoveredNodeId
                 && !sankeyResult.links.some(l => {
@@ -319,9 +340,14 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
             {tooltip.inFlow > 0 && tooltip.outFlow > 0 && tooltip.inFlow < tooltip.outFlow && (
               <p className="text-xxs text-green-600">×{(tooltip.outFlow / tooltip.inFlow).toFixed(1)} multiplier (COP)</p>
             )}
-            {['vrf','mvhr','boiler','lighting','small_power','vrf_heating','vrf_cooling','gas_boiler_heating'].includes(tooltip.node.id) && (
-              <p className="text-xxs text-teal mt-0.5 italic">click to edit ↗</p>
-            )}
+            {(() => {
+              const tid = tooltip.node.id ?? ''
+              const showEdit = tid.startsWith('sh_') || tid.startsWith('sc_') ||
+                tid.startsWith('dhw_') || tid.startsWith('vent_') ||
+                tid === 'lighting' || tid === 'small_power' ||
+                tid === 'vrf' || tid === 'mvhr' || tid === 'boiler'
+              return showEdit ? <p className="text-xxs text-teal mt-0.5 italic">click to edit ↗</p> : null
+            })()}
           </div>
         )}
       </div>

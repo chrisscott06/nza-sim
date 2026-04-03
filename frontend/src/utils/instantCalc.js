@@ -382,101 +382,164 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
   // ── Carbon (2026 grid) ────────────────────────────────────────────────────
   const carbon_kgCO2_m2 = (electricity_kWh * GRID_INTENSITY_2026 + gas_kWh * GAS_CARBON_KG_KWH) / gia
 
-  // ── Systems flow data model for Sankey diagram ────────────────────────────
-  // HVAC electricity = heating elec + cooling elec + VRF fans
-  const hvac_electricity_kWh = heating_electricity + cooling_electricity + vrf_fans_kWh
-  // Heat delivered to space
-  const heating_delivered_kWh = heating_thermal
-  const cooling_delivered_kWh = cooling_thermal
-  // Heat rejected by cooling to outdoors: cooling × (1 + 1/EER)
-  const eer = sc_eer_val  // from demand-based cooling assignment
-  const heat_rejected_kWh = cooling_thermal > 0 ? cooling_thermal * (1 + 1 / (eer || 1)) : 0
-  // MVHR heat recovered from exhaust air
+  // ── Systems flow data model (auto-generated Sankey) ──────────────────────
+  const eer             = sc_eer_val
+  const heat_rejected_kWh = (!sc_is_none && cooling_thermal > 0) ? cooling_thermal * (1 + 1 / (eer || 1)) : 0
   const vent_kWh_no_recovery = AIR_HEAT_CAPACITY * vent_ach * volume * UK_HDD * 24 / 1000
   const mvhr_recovery_kWh   = is_mvhr ? vent_kWh_no_recovery - vent_kWh : 0
 
-  const _addLink = (links, source, target, value_kWh, style) => {
-    if (value_kWh > 0) links.push({ source, target, value_kWh: Math.round(value_kWh), style })
-  }
+  // Flue losses — gas boilers only (gas_input × (1 − efficiency))
+  const heating_flue_kWh = (shDef.fuel === 'gas' && heating_gas > 0) ? heating_gas * (1 - sh_eff) : 0
+  const dhw_flue_kWh     = (dhwPrimDef.fuel === 'gas' && dhw_gas_kWh > 0) ? dhw_gas_kWh * (1 - dhw_prim_eff) : 0
 
-  // ── Helper: format a system key as a readable label ──────────────────────
+  // ── Node ID naming ────────────────────────────────────────────────────────
+  // Prefixed IDs let the Sankey component resolve which demand accordion to open.
+  // sh_ sc_ dhw_ dhw_sec_ vent_ prefixes are parsed in SystemSankey.jsx.
+  const same_hvac    = !sc_is_none && sh_sys_key === sc_sys_key  // combined H+C (e.g. VRF)
+  const sh_node_id   = `sh_${sh_sys_key}`
+  const sc_node_id   = same_hvac ? null : (sc_is_none ? null : `sc_${sc_sys_key}`)
+  const vent_node_id = `vent_${vent_sys_key}`
+  const dhw_node_id  = `dhw_${dhw_prim_key}`
+  const dhw_sec_node_id = (dhwSecDef && dhw_sec_share > 0) ? `dhw_sec_${dhw_sec_key}` : null
+
+  const _addLink = (links, source, target, value_kWh, style) => {
+    if (value_kWh > 0 && source && target)
+      links.push({ source, target, value_kWh: Math.round(value_kWh), style })
+  }
   const _sysLabel = key => key?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) ?? 'System'
 
   const sf_nodes = []
   const sf_links = []
 
-  // Source nodes
+  // ── Source nodes ──────────────────────────────────────────────────────────
   if (electricity_kWh > 0) sf_nodes.push({ id: 'grid', label: 'Grid Electricity', type: 'source' })
   if (gas_kWh > 0)          sf_nodes.push({ id: 'gas',  label: 'Natural Gas',       type: 'source' })
 
-  // Space-conditioning system node ('vrf' id kept for Sankey click mapping)
-  if (hvac_electricity_kWh > 0 || heating_gas > 0 || heating_thermal > 0 || cooling_thermal > 0) {
+  // ── Space heating / conditioning system node ──────────────────────────────
+  if (heating_thermal > 0 || heating_electricity > 0 || heating_gas > 0) {
     const sh_metric = shDef.fuel === 'gas'
       ? `${Math.round(sh_eff * 100)}% eff`
-      : `SCOP ${sh_eff.toFixed(1)}${!sc_is_none ? ` / EER ${(sc_eer_val ?? 3.2).toFixed(1)}` : ''}`
-    sf_nodes.push({ id: 'vrf', label: _sysLabel(sh_sys_key), type: 'system', category: 'hvac', metric: sh_metric })
+      : `SCOP ${sh_eff.toFixed(1)}${same_hvac ? ` / EER ${(sc_eer_val ?? 3.2).toFixed(1)}` : ''}`
+    const sh_label = same_hvac ? _sysLabel(sh_sys_key) + ' (H+C)' : _sysLabel(sh_sys_key)
+    sf_nodes.push({ id: sh_node_id, label: sh_label, type: 'system', category: 'hvac', metric: sh_metric })
   }
 
-  // Ventilation system node ('mvhr' id kept for click mapping)
+  // ── Separate cooling system (only when a different system from heating) ───
+  if (sc_node_id && cooling_thermal > 0) {
+    sf_nodes.push({ id: sc_node_id, label: _sysLabel(sc_sys_key), type: 'system', category: 'hvac',
+      metric: `EER ${(sc_eer_val ?? 3.2).toFixed(1)}` })
+  }
+
+  // ── Ventilation system node ───────────────────────────────────────────────
   if (vent_fans_kWh > 0) {
-    const ventLabel = is_mvhr ? 'MVHR' : (vent_sys_key === 'natural_vent_windows' ? 'Natural Vent' : 'MEV')
-    sf_nodes.push({ id: 'mvhr', label: ventLabel, type: 'system', category: 'ventilation',
+    const ventLabel = is_mvhr ? 'MVHR'
+      : vent_sys_key === 'natural_vent_windows' ? 'Natural Vent' : 'MEV'
+    sf_nodes.push({ id: vent_node_id, label: ventLabel, type: 'system', category: 'ventilation',
       metric: is_mvhr ? `${Math.round(heat_recovery * 100)}% HR` : 'Extract only' })
   }
 
-  // DHW system node ('boiler' id kept for click mapping)
+  // ── DHW secondary system node (ASHP preheat, solar thermal, etc.) ─────────
+  if (dhw_sec_node_id) {
+    const secLabel = dhw_sec_key?.includes('ashp')   ? 'ASHP DHW Preheat'
+                   : dhw_sec_key?.includes('solar')  ? 'Solar Thermal'
+                   : _sysLabel(dhw_sec_key)
+    const secMetric = dhwSecDef.fuel === 'electricity' ? `COP ${dhw_sec_eff.toFixed(1)}`
+                    : dhwSecDef.fuel === 'renewable'   ? 'Solar'
+                    : `${Math.round(dhw_sec_eff * 100)}% eff`
+    sf_nodes.push({ id: dhw_sec_node_id, label: secLabel, type: 'system', category: 'dhw', metric: secMetric })
+  }
+
+  // ── DHW primary system node ───────────────────────────────────────────────
   if (dhw_thermal > 0) {
-    const dhwLabel  = dhwPrimDef.fuel === 'gas' ? 'Gas Boiler DHW' : _sysLabel(dhw_prim_key)
+    const dhwLabel  = dhwPrimDef.fuel === 'gas' ? 'DHW Boiler' : _sysLabel(dhw_prim_key)
     const dhwMetric = dhwPrimDef.fuel === 'gas'
       ? `${Math.round(dhw_prim_eff * 100)}% eff`
       : `COP ${dhw_prim_eff.toFixed(1)}`
-    sf_nodes.push({ id: 'boiler', label: dhwLabel, type: 'system', category: 'dhw', metric: dhwMetric })
+    sf_nodes.push({ id: dhw_node_id, label: dhwLabel, type: 'system', category: 'dhw', metric: dhwMetric })
   }
 
+  // ── Lighting / small power ────────────────────────────────────────────────
   if (lighting_kWh > 0)
     sf_nodes.push({ id: 'lighting',    label: 'Lighting',    type: 'system', category: 'lighting',  metric: `${lpd} W/m²` })
   if (equipment_kWh > 0)
     sf_nodes.push({ id: 'small_power', label: 'Small Power', type: 'system', category: 'equipment', metric: `${epd} W/m²` })
 
-  // Recovery node (MVHR)
+  // ── Recovery node ─────────────────────────────────────────────────────────
   if (mvhr_recovery_kWh > 0)
     sf_nodes.push({ id: 'mvhr_recov', label: 'Recovered Heat', type: 'recovered' })
 
-  // End use nodes
-  if (heating_thermal > 0)   sf_nodes.push({ id: 'space_heat',  label: 'Space Heating',  type: 'end_use' })
-  if (cooling_thermal > 0)   sf_nodes.push({ id: 'space_cool',  label: 'Space Cooling',  type: 'end_use' })
-  if (dhw_thermal > 0)       sf_nodes.push({ id: 'dhw_del',     label: 'Hot Water',      type: 'end_use' })
-  if (vent_fans_kWh > 0)     sf_nodes.push({ id: 'fresh_air',   label: 'Fresh Air',      type: 'end_use' })
-  if (lighting_kWh > 0)      sf_nodes.push({ id: 'light_del',   label: 'Light',          type: 'end_use' })
-  if (equipment_kWh > 0)     sf_nodes.push({ id: 'equip_del',   label: 'Equipment',      type: 'end_use' })
-  if (heat_rejected_kWh > 0) sf_nodes.push({ id: 'heat_reject', label: 'Heat Rejection', type: 'waste'   })
+  // ── End-use nodes ─────────────────────────────────────────────────────────
+  if (heating_thermal > 0) sf_nodes.push({ id: 'space_heat',  label: 'Space Heating', type: 'end_use' })
+  if (cooling_thermal > 0) sf_nodes.push({ id: 'space_cool',  label: 'Space Cooling', type: 'end_use' })
+  if (dhw_thermal > 0)     sf_nodes.push({ id: 'dhw_del',     label: 'Hot Water',     type: 'end_use' })
+  if (vent_fans_kWh > 0)   sf_nodes.push({ id: 'fresh_air',   label: 'Fresh Air',     type: 'end_use' })
+  if (lighting_kWh > 0)    sf_nodes.push({ id: 'light_del',   label: 'Light',         type: 'end_use' })
+  if (equipment_kWh > 0)   sf_nodes.push({ id: 'equip_del',   label: 'Equipment',     type: 'end_use' })
 
-  // Sources → Systems
-  _addLink(sf_links, 'grid', 'vrf',         hvac_electricity_kWh, 'electricity')
-  _addLink(sf_links, 'gas',  'vrf',         heating_gas,           'gas')           // gas space heating
-  _addLink(sf_links, 'grid', 'mvhr',        vent_fans_kWh,         'electricity')
-  _addLink(sf_links, 'grid', 'lighting',    lighting_kWh,          'electricity')
-  _addLink(sf_links, 'grid', 'small_power', equipment_kWh,         'electricity')
-  _addLink(sf_links, 'gas',  'boiler',      dhw_gas_kWh,           'gas')
-  _addLink(sf_links, 'grid', 'boiler',      dhw_elec_kWh,          'electricity')
+  // ── Waste nodes ───────────────────────────────────────────────────────────
+  if (heat_rejected_kWh > 0) sf_nodes.push({ id: 'heat_reject',  label: 'Heat Rejection', type: 'waste' })
+  if (heating_flue_kWh > 0)  sf_nodes.push({ id: 'heating_flue', label: 'Heating Flue',   type: 'waste' })
+  if (dhw_flue_kWh > 0)      sf_nodes.push({ id: 'dhw_flue',     label: 'DHW Flue Loss',  type: 'waste' })
 
-  // Systems → End uses
-  _addLink(sf_links, 'vrf',         'space_heat',  heating_delivered_kWh, 'heating')
-  _addLink(sf_links, 'vrf',         'space_cool',  cooling_delivered_kWh, 'cooling')
-  _addLink(sf_links, 'vrf',         'heat_reject', heat_rejected_kWh,     'waste')
-  _addLink(sf_links, 'boiler',      'dhw_del',     dhw_thermal,            'heating')
-  _addLink(sf_links, 'mvhr',        'fresh_air',   vent_fans_kWh,          'air')
-  _addLink(sf_links, 'lighting',    'light_del',   lighting_kWh,           'electricity')
-  _addLink(sf_links, 'small_power', 'equip_del',   equipment_kWh,          'electricity')
+  // ── Links: Sources → Space heating / conditioning ─────────────────────────
+  const sh_elec_total = same_hvac
+    ? heating_electricity + cooling_electricity + vrf_fans_kWh
+    : heating_electricity + vrf_fans_kWh
+  _addLink(sf_links, 'grid', sh_node_id, sh_elec_total, 'electricity')
+  _addLink(sf_links, 'gas',  sh_node_id, heating_gas,   'gas')
 
-  // Inter-system: MVHR heat recovery → space heating benefit
+  // Sources → Separate cooling system
+  if (sc_node_id)
+    _addLink(sf_links, 'grid', sc_node_id, cooling_electricity, 'electricity')
+
+  // Sources → Ventilation
+  _addLink(sf_links, 'grid', vent_node_id, vent_fans_kWh, 'electricity')
+
+  // Sources → DHW secondary (e.g. ASHP preheat powered by electricity)
+  if (dhw_sec_node_id && dhwSecDef.fuel === 'electricity')
+    _addLink(sf_links, 'grid', dhw_sec_node_id, dhw_elec_kWh, 'electricity')
+  // renewable (solar): no grid link — free energy
+
+  // Sources → DHW primary
+  if (dhwPrimDef.fuel === 'gas') {
+    _addLink(sf_links, 'gas', dhw_node_id, dhw_gas_kWh, 'gas')
+  } else if (dhwPrimDef.fuel === 'electricity' && !dhw_sec_node_id) {
+    // Primary electric with no secondary: electricity flows direct to DHW node
+    _addLink(sf_links, 'grid', dhw_node_id, dhw_elec_kWh, 'electricity')
+  }
+
+  // Sources → Lighting / small power
+  _addLink(sf_links, 'grid', 'lighting',    lighting_kWh,  'electricity')
+  _addLink(sf_links, 'grid', 'small_power', equipment_kWh, 'electricity')
+
+  // ── Links: Systems → End uses ─────────────────────────────────────────────
+  _addLink(sf_links, sh_node_id, 'space_heat', heating_thermal, 'heating')
+  if (same_hvac) {
+    _addLink(sf_links, sh_node_id, 'space_cool', cooling_thermal, 'cooling')
+  } else if (sc_node_id) {
+    _addLink(sf_links, sc_node_id, 'space_cool', cooling_thermal, 'cooling')
+  }
+  _addLink(sf_links, dhw_node_id,   'dhw_del',   dhw_thermal,   'dhw')
+  _addLink(sf_links, vent_node_id,  'fresh_air',  vent_fans_kWh, 'air')
+  _addLink(sf_links, 'lighting',    'light_del',  lighting_kWh,  'electricity')
+  _addLink(sf_links, 'small_power', 'equip_del',  equipment_kWh, 'electricity')
+
+  // ── Links: Systems → Waste ────────────────────────────────────────────────
+  const cooling_sys_id = same_hvac ? sh_node_id : sc_node_id
+  _addLink(sf_links, cooling_sys_id, 'heat_reject',  heat_rejected_kWh, 'waste')
+  _addLink(sf_links, sh_node_id,     'heating_flue', heating_flue_kWh,  'waste')
+  _addLink(sf_links, dhw_node_id,    'dhw_flue',     dhw_flue_kWh,      'waste')
+
+  // ── Links: Recovery ───────────────────────────────────────────────────────
+  // MVHR recovered heat → reduces space heating demand (shown as green recovered link)
   _addLink(sf_links, 'mvhr_recov', 'space_heat', mvhr_recovery_kWh, 'recovered')
 
-  // Inter-system: ASHP DHW preheat — heat from source (COP-1) shown as recovered link
-  const is_ashp_dhw_preheat = dhwSecDef && (dhw_sec_key?.includes('ashp') || dhw_sec_key?.includes('heat_pump'))
-  if (is_ashp_dhw_preheat && dhw_elec_kWh > 0) {
-    const ashp_preheat_heat_kWh = dhw_elec_kWh * (ashp_cop - 1)
-    _addLink(sf_links, 'heat_reject', 'boiler', ashp_preheat_heat_kWh, 'recovered')
+  // DHW secondary → DHW primary: heat output feeds into the boiler/cylinder
+  if (dhw_sec_node_id && dhw_thermal > 0) {
+    const sec_heat_output = dhwSecDef.fuel === 'electricity'
+      ? dhw_elec_kWh * dhw_sec_eff        // heat pump: electricity × COP
+      : dhw_thermal * dhw_sec_share        // solar thermal / other: share of demand
+    _addLink(sf_links, dhw_sec_node_id, dhw_node_id, sec_heat_output, 'recovered')
   }
 
   const systems_flow = { nodes: sf_nodes, links: sf_links }
