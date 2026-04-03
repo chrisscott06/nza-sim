@@ -185,7 +185,11 @@ async def _seed_schedules(db: aiosqlite.Connection) -> None:
 
 
 async def _seed_systems(db: aiosqlite.Connection) -> None:
-    """Seed all system templates from the Python library into library_items."""
+    """Seed all system templates from the Python library into library_items.
+
+    Uses INSERT OR REPLACE so new fields (serves, efficiency_type, etc.) are
+    propagated to existing items when the library is updated.
+    """
     from nza_engine.library.systems import _SYSTEMS  # type: ignore[attr-defined]
 
     for name, data in _SYSTEMS.items():
@@ -193,7 +197,7 @@ async def _seed_systems(db: aiosqlite.Connection) -> None:
         config = {**data, "name": name}
         await db.execute(
             """
-            INSERT OR IGNORE INTO library_items
+            INSERT OR REPLACE INTO library_items
                 (id, library_type, name, display_name, description, config_json, is_default)
             VALUES (?, 'system', ?, ?, ?, ?, 1)
             """,

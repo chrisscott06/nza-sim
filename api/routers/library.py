@@ -194,10 +194,12 @@ async def get_construction_detail(name: str):
 
 
 @router.get("/systems")
-async def get_systems(category: str | None = None):
+async def get_systems(category: str | None = None, serves: str | None = None):
     """
     Return all system templates — database-backed.
-    Optional category filter: hvac, dhw, ventilation.
+    Optional filters:
+      category: hvac, heating, cooling, dhw, ventilation
+      serves:   heating, cooling, heating_and_cooling, dhw, ventilation
     """
     async with get_db() as db:
         cursor = await db.execute(
@@ -215,6 +217,14 @@ async def get_systems(category: str | None = None):
         cfg = json.loads(row["config_json"])
         if category and cfg.get("category") != category:
             continue
+        # Filter by serves field — support comma-separated for "heating_and_cooling"
+        if serves:
+            item_serves = cfg.get("serves", "")
+            # "heating_and_cooling" should match queries for "heating" or "cooling"
+            if serves in ("heating", "cooling") and item_serves == "heating_and_cooling":
+                pass  # include combined systems in heating/cooling queries
+            elif item_serves != serves:
+                continue
         systems.append({
             "name":         row["name"],
             "display_name": row["display_name"] or cfg.get("display_name", row["name"]),
