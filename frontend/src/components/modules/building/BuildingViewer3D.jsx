@@ -1,6 +1,6 @@
-import { useRef, useMemo, useState } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
-import { OrbitControls, Environment, Sky } from '@react-three/drei'
+import { useRef, useMemo, useState, Suspense, Component } from 'react'
+import { Canvas, useFrame, useLoader } from '@react-three/fiber'
+import { OrbitControls, Environment, Sky, useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import { getSolarRadiation, SOLAR_BY_COMPASS } from '../../../utils/instantCalc.js'
 
@@ -179,14 +179,27 @@ function OrientationIndicator({ orientation }) {
 }
 
 /* ── Camera auto-fit based on building size ────────────────────────────────── */
-function CameraRig({ params }) {
+function CameraRig({ params, resetSignal }) {
   const { length, width, num_floors, floor_height } = params
   const maxDim = Math.max(length, width, num_floors * floor_height)
-  // Camera starts at a nice 3/4 angle
   const dist = maxDim * 2.2
+  const controlsRef = useRef()
+
+  // Reset camera when resetSignal changes (increments)
+  const prevReset = useRef(resetSignal)
+  useFrame(({ camera }) => {
+    if (resetSignal !== prevReset.current && controlsRef.current) {
+      prevReset.current = resetSignal
+      const target = new THREE.Vector3(0, (num_floors * floor_height) / 2, 0)
+      controlsRef.current.target.copy(target)
+      camera.position.set(dist * 0.6, dist * 0.5, dist * 0.8)
+      controlsRef.current.update()
+    }
+  })
 
   return (
     <OrbitControls
+      ref={controlsRef}
       makeDefault
       target={[0, (num_floors * floor_height) / 2, 0]}
       minDistance={5}
@@ -198,13 +211,60 @@ function CameraRig({ params }) {
   )
 }
 
+/* ── Map tile ground plane ─────────────────────────────────────────────────── */
+function latLonToTile(lat, lon, zoom) {
+  const x = Math.floor(((lon + 180) / 360) * (1 << zoom))
+  const latRad = (lat * Math.PI) / 180
+  const y = Math.floor(
+    ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * (1 << zoom)
+  )
+  return { x, y, z: zoom }
+}
+
+function MapTileMesh({ location }) {
+  const zoom = 16
+  const { x, y, z } = latLonToTile(location.latitude, location.longitude, zoom)
+  // Use a proxy-friendly URL or direct OSM
+  const url = `https://tile.openstreetmap.org/${z}/${x}/${y}.png`
+  const texture = useLoader(THREE.TextureLoader, url)
+  // At zoom 16, 51° lat, one tile ≈ 384m wide
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
+      <planeGeometry args={[384, 384]} />
+      <meshStandardMaterial map={texture} roughness={0.9} metalness={0} />
+    </mesh>
+  )
+}
+
+function GreyGroundPlane() {
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
+      <planeGeometry args={[300, 300]} />
+      <meshStandardMaterial color={COLORS.groundPlane} roughness={0.95} metalness={0} />
+    </mesh>
+  )
+}
+
+// Error boundary for map tile loading failures
+class MapErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { failed: false } }
+  static getDerivedStateFromError() { return { failed: true } }
+  componentDidCatch(err) { console.warn('[MapTile] Load failed, using grey ground:', err.message) }
+  render() {
+    if (this.state.failed) return <GreyGroundPlane />
+    return this.props.children
+  }
+}
+
 /* ── Main viewer component ─────────────────────────────────────────────────── */
 export default function BuildingViewer3D({ params }) {
-  const { length, width, num_floors, floor_height, orientation } = params
+  const { length, width, num_floors, floor_height, orientation, location } = params
   const maxDim  = Math.max(length, width, num_floors * floor_height)
   const camDist = maxDim * 2.2
 
   const [solarOverlay, setSolarOverlay] = useState(true)
+  const [mapVisible, setMapVisible]     = useState(false)
+  const [resetSignal, setResetSignal]   = useState(0)
 
   // Legend: map compass directions to solar values for current orientation
   const legendStops = [
@@ -212,6 +272,8 @@ export default function BuildingViewer3D({ params }) {
     { label: `${Math.round((SOLAR_MIN + SOLAR_MAX) / 2)}`, color: COLORS.wall },
     { label: `${SOLAR_MIN}`, color: '#' + BASE_COLOR.clone().lerp(COOL_COLOR, 0.45).getHexString() },
   ]
+
+  const hasLocation = location?.latitude != null && location?.longitude != null
 
   return (
     <div className="w-full h-full relative" style={{ background: '#D8E8F0' }}>
@@ -256,13 +318,18 @@ export default function BuildingViewer3D({ params }) {
           <OrientationIndicator orientation={0} />
         </group>
 
-        {/* Ground plane — large solid, receives building shadow */}
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
-          <planeGeometry args={[300, 300]} />
-          <meshStandardMaterial color={COLORS.groundPlane} roughness={0.95} metalness={0} />
-        </mesh>
+        {/* Ground plane — map tile if visible and location set, else solid grey */}
+        {mapVisible && hasLocation ? (
+          <MapErrorBoundary>
+            <Suspense fallback={<GreyGroundPlane />}>
+              <MapTileMesh location={location} />
+            </Suspense>
+          </MapErrorBoundary>
+        ) : (
+          <GreyGroundPlane />
+        )}
 
-        <CameraRig params={params} />
+        <CameraRig params={params} resetSignal={resetSignal} />
       </Canvas>
 
       {/* Overlay — building metrics */}
@@ -276,18 +343,57 @@ export default function BuildingViewer3D({ params }) {
         </p>
       </div>
 
-      {/* Solar overlay toggle */}
-      <div className="absolute bottom-3 right-3 flex flex-col items-end gap-1.5">
+      {/* Toolbar — top-left */}
+      <div className="absolute top-3 left-3 flex flex-col gap-1">
+        {/* Reset view */}
         <button
-          onClick={() => setSolarOverlay(v => !v)}
-          className={`text-xxs px-2 py-1 rounded border backdrop-blur-sm transition-colors ${
-            solarOverlay
-              ? 'bg-amber-50/90 text-amber-700 border-amber-300'
-              : 'bg-white/80 text-mid-grey border-light-grey'
-          }`}
+          onClick={() => setResetSignal(s => s + 1)}
+          className="text-xxs px-2 py-1 rounded border bg-white/85 text-mid-grey border-light-grey backdrop-blur-sm hover:bg-white transition-colors"
+          title="Reset view"
         >
-          ☀ Solar overlay {solarOverlay ? 'on' : 'off'}
+          ⌖ Reset
         </button>
+      </div>
+
+      {/* Compass rose — bottom-left corner */}
+      <div className="absolute bottom-10 left-3 pointer-events-none select-none">
+        <svg width="36" height="36" viewBox="-1 -1 2 2">
+          <circle cx="0" cy="0" r="0.9" fill="rgba(255,255,255,0.7)" stroke="#D0D0D0" strokeWidth="0.08" />
+          <polygon points="0,-0.65 0.1,-0.25 0,0 -0.1,-0.25" fill="#2B2A4C" opacity="0.85" />
+          <polygon points="0,0.65 0.1,0.25 0,0 -0.1,0.25" fill="#C0C0C0" opacity="0.85" />
+          <text x="0" y="-0.68" textAnchor="middle" fontSize="0.28" fill="#2B2A4C" dominantBaseline="auto" fontWeight="600">N</text>
+        </svg>
+      </div>
+
+      {/* Solar overlay toggle + map toggle — bottom right */}
+      <div className="absolute bottom-3 right-3 flex flex-col items-end gap-1.5">
+        {/* Toggle buttons row */}
+        <div className="flex gap-1.5">
+          {/* Map toggle */}
+          <button
+            onClick={() => setMapVisible(v => !v)}
+            className={`text-xxs px-2 py-1 rounded border backdrop-blur-sm transition-colors ${
+              mapVisible && hasLocation
+                ? 'bg-teal/10 text-teal border-teal/40'
+                : 'bg-white/80 text-mid-grey border-light-grey'
+            }`}
+            title={hasLocation ? 'Toggle map ground plane' : 'Set location in Geometry tab to enable map'}
+          >
+            🗺 Map {mapVisible && hasLocation ? 'on' : 'off'}
+          </button>
+
+          {/* Solar overlay toggle */}
+          <button
+            onClick={() => setSolarOverlay(v => !v)}
+            className={`text-xxs px-2 py-1 rounded border backdrop-blur-sm transition-colors ${
+              solarOverlay
+                ? 'bg-amber-50/90 text-amber-700 border-amber-300'
+                : 'bg-white/80 text-mid-grey border-light-grey'
+            }`}
+          >
+            ☀ Solar {solarOverlay ? 'on' : 'off'}
+          </button>
+        </div>
 
         {/* Solar legend */}
         {solarOverlay && (

@@ -74,7 +74,7 @@ function WWRSlider({ label, value, onChange }) {
 
 export default function GeometryTab() {
   const { params, updateParam } = useContext(ProjectContext)
-  const { length, width, num_floors, floor_height, orientation, wwr, name } = params
+  const { length, width, num_floors, floor_height, orientation, wwr, name, location } = params
 
   // Derived metrics
   const gia   = length * width * num_floors
@@ -144,6 +144,37 @@ export default function GeometryTab() {
               onChange={v => updateParam('wwr', { [dir]: v })}
             />
           ))}
+        </div>
+      </div>
+
+      {/* Location */}
+      <div>
+        <p className="text-xxs uppercase tracking-wider text-mid-grey mb-2">Location</p>
+        <div className="space-y-2">
+          <Field label="Site name">
+            <input
+              type="text"
+              value={location?.name ?? ''}
+              onChange={e => updateParam('location', { name: e.target.value })}
+              className="w-full px-2 py-1.5 text-caption text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-teal transition-colors"
+            />
+          </Field>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Latitude">
+              <NumberInput
+                value={location?.latitude ?? 51.127}
+                min={-90} max={90} step={0.001}
+                onChange={v => updateParam('location', { latitude: v })}
+              />
+            </Field>
+            <Field label="Longitude">
+              <NumberInput
+                value={location?.longitude ?? -2.992}
+                min={-180} max={180} step={0.001}
+                onChange={v => updateParam('location', { longitude: v })}
+              />
+            </Field>
+          </div>
         </div>
       </div>
 

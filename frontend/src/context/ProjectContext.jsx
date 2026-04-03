@@ -37,6 +37,11 @@ const DEFAULT_PARAMS = {
   wwr:             { north: 0.25, south: 0.25, east: 0.25, west: 0.25 },
   infiltration_ach: 0.5,
   window_count:    { north: 8, south: 8, east: 3, west: 3 },
+  location: {
+    latitude:  51.127,
+    longitude: -2.992,
+    name:      'Bridgewater, Somerset',
+  },
 }
 
 const DEFAULT_CONSTRUCTIONS = {
@@ -110,6 +115,8 @@ export function ProjectProvider({ children }) {
       orientation:  bc.orientation  ?? DEFAULT_PARAMS.orientation,
       wwr:             bc.wwr             ?? DEFAULT_PARAMS.wwr,
       infiltration_ach: bc.infiltration_ach ?? DEFAULT_PARAMS.infiltration_ach,
+      window_count: bc.window_count ?? DEFAULT_PARAMS.window_count,
+      location:     bc.location     ?? DEFAULT_PARAMS.location,
     })
     setConstructions(project.construction_choices ?? DEFAULT_CONSTRUCTIONS)
     setSystems(project.systems_config ?? DEFAULT_SYSTEMS)
@@ -183,9 +190,14 @@ export function ProjectProvider({ children }) {
 
   const updateParam = useCallback((key, value) => {
     setParams(p => {
-      const next = key === 'wwr'
-        ? { ...p, wwr: { ...p.wwr, ...value } }
-        : { ...p, [key]: value }
+      let next
+      if (key === 'wwr') {
+        next = { ...p, wwr: { ...p.wwr, ...value } }
+      } else if (key === 'location') {
+        next = { ...p, location: { ...p.location, ...value } }
+      } else {
+        next = { ...p, [key]: value }
+      }
       _scheduleSave('building', next)
       return next
     })
