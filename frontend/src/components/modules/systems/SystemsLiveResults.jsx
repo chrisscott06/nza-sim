@@ -279,10 +279,12 @@ export default function SystemsLiveResults({ libraryData = {} }) {
               )}
               {boilerGasIn > 0 && (
                 <FlowRow
-                  label="Gas Boiler (DHW)"
+                  label={hasASHP ? 'DHW System (Gas + ASHP)' : 'Gas Boiler (DHW)'}
                   inMWh={boilerGasIn / 1000}
                   outMWh={boilerDhwOut / 1000}
-                  detail={boilerGasIn > 0 ? `${Math.round((boilerDhwOut / boilerGasIn) * 100)}% eff` : undefined}
+                  detail={hasASHP
+                    ? `COP ${(boilerDhwOut / boilerGasIn).toFixed(1)}×`
+                    : `${Math.round((boilerDhwOut / boilerGasIn) * 100)}% eff`}
                   color="#E74C3C"
                 />
               )}
