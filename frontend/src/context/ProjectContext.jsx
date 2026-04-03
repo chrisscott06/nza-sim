@@ -36,6 +36,7 @@ const DEFAULT_PARAMS = {
   orientation:     0.0,
   wwr:             { north: 0.25, south: 0.25, east: 0.25, west: 0.25 },
   infiltration_ach: 0.5,
+  window_count:    { north: 8, south: 8, east: 3, west: 3 },
 }
 
 const DEFAULT_CONSTRUCTIONS = {

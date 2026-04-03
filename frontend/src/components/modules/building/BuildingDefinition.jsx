@@ -140,7 +140,7 @@ const CONSTRUCTION_ELEMENTS = [
 
 function InputsColumn({ library }) {
   const { params, updateParam, constructions, updateConstruction } = useContext(ProjectContext)
-  const { length, width, num_floors, floor_height, orientation, wwr, name, infiltration_ach } = params
+  const { length, width, num_floors, floor_height, orientation, wwr, name, infiltration_ach, window_count } = params
   const ach = infiltration_ach ?? 0.5
 
   // Derived metrics
@@ -216,12 +216,24 @@ function InputsColumn({ library }) {
         <div className="border-t border-light-grey pt-3">
           <SectionHeader title="Glazing (WWR)" />
           {['north', 'south', 'east', 'west'].map(dir => (
-            <WWRSlider
-              key={dir}
-              label={dir[0].toUpperCase()}
-              value={wwr[dir]}
-              onChange={v => updateParam('wwr', { [dir]: v })}
-            />
+            <div key={dir} className="flex items-center gap-1 mb-1">
+              <span className="text-xxs text-mid-grey w-3">{dir[0].toUpperCase()}</span>
+              <input
+                type="range" min={0} max={100} step={1}
+                value={Math.round((wwr[dir] ?? 0.25) * 100)}
+                onChange={e => updateParam('wwr', { [dir]: Number(e.target.value) / 100 })}
+                className="flex-1 h-[3px] accent-navy"
+              />
+              <span className="text-xxs text-navy w-7 text-right">{Math.round((wwr[dir] ?? 0.25) * 100)}%</span>
+              <input
+                type="number" min={1} max={30} step={1}
+                value={window_count?.[dir] ?? (dir === 'north' || dir === 'south' ? 8 : 3)}
+                onChange={e => updateParam('window_count', { [dir]: Math.max(1, Number(e.target.value)) })}
+                className="w-8 px-1 py-0.5 text-xxs text-navy border border-light-grey rounded text-center focus:outline-none focus:border-teal"
+                title={`${dir} window count`}
+              />
+              <span className="text-xxs text-mid-grey w-5">win</span>
+            </div>
           ))}
         </div>
 

@@ -14,7 +14,7 @@ const COLORS = {
 
 /* ── Building geometry from params ────────────────────────────────────────── */
 function Building({ params }) {
-  const { length, width, num_floors, floor_height, wwr } = params
+  const { length, width, num_floors, floor_height, wwr, window_count } = params
 
   const totalHeight = num_floors * floor_height
 
@@ -26,38 +26,49 @@ function Building({ params }) {
   const winHeightFraction = 0.6
   const winSill = floor_height * 0.2
 
-  // Glass panels per facade
+  // Individual window panels per facade
   const GlassFace = useMemo(() => {
-    return function GlassFaceInner({ axis, sign, wwr: wwrFace, faceW, faceD }) {
+    return function GlassFaceInner({ axis, sign, wwr: wwrFace, faceW, count }) {
       if (!wwrFace || wwrFace < 0.01) return null
 
-      const winW  = faceW * wwrFace * 0.95   // slight inset
+      const n     = Math.max(1, Math.round(count ?? 4))
       const winH  = floor_height * winHeightFraction
       const winY0 = winSill
+
+      // Each individual window width
+      const totalGlaz = faceW * wwrFace
+      const winW  = totalGlaz / n
+      // Gap on each side of each window (equal spacing)
+      const gap   = (faceW - totalGlaz) / (n + 1)
+
       const panels = []
 
       for (let f = 0; f < num_floors; f++) {
         const cy = f * floor_height + winY0 + winH / 2
 
-        // position offset per axis
-        const px = axis === 'x' ? sign * (hd + 0.005) : 0
-        const pz = axis === 'z' ? sign * (hw + 0.005) : 0
+        for (let w = 0; w < n; w++) {
+          // Position along facade axis (centred at 0)
+          const along = -faceW / 2 + gap + w * (winW + gap) + winW / 2
 
-        panels.push(
-          <mesh key={f} position={[
-            axis === 'z' ? 0 : px,
-            cy,
-            axis === 'x' ? 0 : pz,
-          ]} rotation={axis === 'z' ? [0, 0, 0] : [0, Math.PI / 2, 0]}>
-            <planeGeometry args={[winW, winH]} />
-            <meshStandardMaterial
-              color={COLORS.glazing.slice(0, 7)}
-              transparent
-              opacity={0.35}
-              side={THREE.DoubleSide}
-            />
-          </mesh>
-        )
+          const px = axis === 'x' ? sign * (hd + 0.005) : along
+          const pz = axis === 'z' ? sign * (hw + 0.005) : along
+
+          panels.push(
+            <mesh key={`${f}-${w}`} position={[
+              axis === 'z' ? along : px,
+              cy,
+              axis === 'x' ? along : pz,
+            ]} rotation={axis === 'z' ? [0, 0, 0] : [0, Math.PI / 2, 0]}>
+              <planeGeometry args={[winW * 0.95, winH]} />
+              <meshStandardMaterial
+                color={COLORS.glazing.slice(0, 7)}
+                transparent
+                opacity={0.4}
+                side={THREE.DoubleSide}
+              />
+            </mesh>
+          )
+        }
       }
       return <>{panels}</>
     }
@@ -107,13 +118,13 @@ function Building({ params }) {
       {floorLines}
 
       {/* Glazing — North face (positive Z) */}
-      <GlassFace axis="z" sign={1} wwr={wwr.north} faceW={width} faceD={length} />
+      <GlassFace axis="z" sign={1}  wwr={wwr.north} faceW={width}  count={window_count?.north ?? 4} />
       {/* Glazing — South face (negative Z) */}
-      <GlassFace axis="z" sign={-1} wwr={wwr.south} faceW={width} faceD={length} />
+      <GlassFace axis="z" sign={-1} wwr={wwr.south} faceW={width}  count={window_count?.south ?? 4} />
       {/* Glazing — East face (positive X) */}
-      <GlassFace axis="x" sign={1} wwr={wwr.east} faceW={length} faceD={width} />
+      <GlassFace axis="x" sign={1}  wwr={wwr.east}  faceW={length} count={window_count?.east  ?? 8} />
       {/* Glazing — West face (negative X) */}
-      <GlassFace axis="x" sign={-1} wwr={wwr.west} faceW={length} faceD={width} />
+      <GlassFace axis="x" sign={-1} wwr={wwr.west}  faceW={length} count={window_count?.west  ?? 8} />
     </group>
   )
 }
