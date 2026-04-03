@@ -2,7 +2,19 @@
 
 ## Last completed
 
-Brief 12: Systems Module Overhaul — Sankey Schematic, 3D Fixes, Collapsible Inputs — all 10 parts complete.
+Brief 13 Parts 8–11 completed (2026-04-03). Part 12 (browser integration test) pending screen recording permission.
+
+**Brief 13 progress:**
+- Part 1–3: Completed in previous session (demand-based data model, expanded library, accordion UI)
+- Part 4: instantCalc reads demand-based assignments — committed
+- Part 5: Auto-generated Sankey with prefixed node IDs — committed
+- Part 6: Waste streams + recovery hints — committed
+- Part 7: SFP/HRE override connections fixed — committed
+- Part 8: EnergyPlus assembler reads demand-based assignments; hvac_heating_boiler.py created — committed
+- Part 9: Sankey link hover interaction + link tooltips — committed
+- Part 10: Topology-change animation (CSS fadeIn on node/link add/remove) — committed
+- Part 11: Right panel demand-based breakdown with efficiency insights, waste summary, recovery callouts — committed
+- Part 12: Browser integration test — PENDING (requires screen recording permission)
 
 ---
 
