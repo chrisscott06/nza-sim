@@ -468,8 +468,20 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
   if (mvhr_recovery_kWh > 0)
     sf_nodes.push({ id: 'mvhr_recov', label: 'Recovered Heat', type: 'recovered' })
 
-  // ── End-use nodes ─────────────────────────────────────────────────────────
-  if (heating_thermal > 0) sf_nodes.push({ id: 'space_heat',  label: 'Space Heating', type: 'end_use' })
+  // ── Recovery opportunity hints (for waste node tooltips) ─────────────────
+  // If a system is wasting heat that COULD be recovered, flag it on the node.
+  const has_ashp_dhw_preheat = !!dhw_sec_node_id && (dhw_sec_key?.includes('ashp') || dhw_sec_key?.includes('heat_pump'))
+  const heat_reject_hint = heat_rejected_kWh > 0 && !has_ashp_dhw_preheat
+    ? 'Recovery opportunity: add ASHP preheat to DHW — use this heat to reduce gas consumption'
+    : null
+  const vent_exhaust_hint = vent_kWh > 0 && !is_mvhr
+    ? 'Recovery opportunity: switch to MVHR to recover ~82% of this ventilation heat loss'
+    : null
+
+  // ── End-use / building nodes ──────────────────────────────────────────────
+  // space_heat is a 'building' pass-through node — it receives heating from systems
+  // and loses some to ventilation exhaust (vent_kWh). This makes the waste stream visible.
+  if (heating_thermal > 0) sf_nodes.push({ id: 'space_heat',  label: 'Space Heating', type: 'building' })
   if (cooling_thermal > 0) sf_nodes.push({ id: 'space_cool',  label: 'Space Cooling', type: 'end_use' })
   if (dhw_thermal > 0)     sf_nodes.push({ id: 'dhw_del',     label: 'Hot Water',     type: 'end_use' })
   if (vent_fans_kWh > 0)   sf_nodes.push({ id: 'fresh_air',   label: 'Fresh Air',     type: 'end_use' })
@@ -477,9 +489,17 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
   if (equipment_kWh > 0)   sf_nodes.push({ id: 'equip_del',   label: 'Equipment',     type: 'end_use' })
 
   // ── Waste nodes ───────────────────────────────────────────────────────────
-  if (heat_rejected_kWh > 0) sf_nodes.push({ id: 'heat_reject',  label: 'Heat Rejection', type: 'waste' })
-  if (heating_flue_kWh > 0)  sf_nodes.push({ id: 'heating_flue', label: 'Heating Flue',   type: 'waste' })
-  if (dhw_flue_kWh > 0)      sf_nodes.push({ id: 'dhw_flue',     label: 'DHW Flue Loss',  type: 'waste' })
+  if (heat_rejected_kWh > 0) sf_nodes.push({
+    id: 'heat_reject', label: 'Heat Rejection', type: 'waste',
+    recovery_hint: heat_reject_hint,
+  })
+  // Ventilation exhaust: all heat lost via exhaust (vent_kWh), thick for MEV, thin for MVHR
+  if (vent_kWh > 0) sf_nodes.push({
+    id: 'vent_exhaust', label: 'Vent Exhaust', type: 'waste',
+    recovery_hint: vent_exhaust_hint,
+  })
+  if (heating_flue_kWh > 0)  sf_nodes.push({ id: 'heating_flue', label: 'Heating Flue',  type: 'waste' })
+  if (dhw_flue_kWh > 0)      sf_nodes.push({ id: 'dhw_flue',     label: 'DHW Flue Loss', type: 'waste' })
 
   // ── Links: Sources → Space heating / conditioning ─────────────────────────
   const sh_elec_total = same_hvac
@@ -529,6 +549,9 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
   _addLink(sf_links, cooling_sys_id, 'heat_reject',  heat_rejected_kWh, 'waste')
   _addLink(sf_links, sh_node_id,     'heating_flue', heating_flue_kWh,  'waste')
   _addLink(sf_links, dhw_node_id,    'dhw_flue',     dhw_flue_kWh,      'waste')
+  // Ventilation exhaust: building heat lost via exhaust, routed through space_heat
+  // space_heat is a 'building' pass-through so it can emit this waste stream
+  _addLink(sf_links, 'space_heat',   'vent_exhaust', vent_kWh,           'waste')
 
   // ── Links: Recovery ───────────────────────────────────────────────────────
   // MVHR recovered heat → reduces space heating demand (shown as green recovered link)

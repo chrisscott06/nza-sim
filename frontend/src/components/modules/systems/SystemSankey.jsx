@@ -34,8 +34,9 @@ const LINK_COLORS = {
 const NODE_COLORS = {
   source:    { bg: '#FEF9EE', border: '#ECB01F', text: '#92400E' },
   system:    { bg: '#EEF8FF', border: '#00AEEF', text: '#0C4A6E' },
+  building:  { bg: '#FFF7ED', border: '#F97316', text: '#7C2D12' },  // warm orange — building thermal node
   end_use:   { bg: '#F0FDF4', border: '#16A34A', text: '#14532D' },
-  waste:     { bg: '#F3F4F6', border: '#9CA3AF', text: '#374151' },
+  waste:     { bg: '#F9FAFB', border: '#D4D4D4', text: '#6B7280' },  // light grey — waste nodes
   recovered: { bg: '#ECFDF5', border: '#16A34A', text: '#064E3B' },
 }
 
@@ -296,17 +297,24 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
                     style={{ transition: 'fill 300ms ease' }}
                   />
 
-                  {/* Label to the right (sources/systems) or left (end uses) */}
+                  {/* Label: right-side for sources/systems/building, left-side for end_use/waste */}
                   {type !== 'end_use' && type !== 'waste' ? (
                     <text x={labelX} y={y0 + h / 2 - (node.metric ? 5 : 0)} fontSize="8"
                       fontWeight="600" fill={c.text} dy="0.35em">
                       {node.label}
                     </text>
                   ) : (
-                    <text x={x0 - 4} y={y0 + h / 2} fontSize="8"
-                      fontWeight="600" fill={c.text} textAnchor="end" dy="0.35em">
-                      {node.label}
-                    </text>
+                    <>
+                      <text x={x0 - 4} y={y0 + h / 2 - (node.recovery_hint ? 4 : 0)} fontSize="8"
+                        fontWeight="600" fill={c.text} textAnchor="end" dy="0.35em">
+                        {node.label}
+                      </text>
+                      {/* Recovery possible indicator — small green ↻ badge on waste nodes */}
+                      {node.recovery_hint && (
+                        <text x={x0 - 4} y={y0 + h / 2 + 5} fontSize="6.5" fill="#16A34A"
+                          textAnchor="end" fontStyle="italic">↻ recover</text>
+                      )}
+                    </>
                   )}
 
                   {/* Metric sublabel (system nodes) */}
@@ -339,6 +347,11 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
             )}
             {tooltip.inFlow > 0 && tooltip.outFlow > 0 && tooltip.inFlow < tooltip.outFlow && (
               <p className="text-xxs text-green-600">×{(tooltip.outFlow / tooltip.inFlow).toFixed(1)} multiplier (COP)</p>
+            )}
+            {tooltip.node.recovery_hint && (
+              <p className="text-xxs text-green-700 mt-1 border-t border-green-100 pt-1">
+                ↻ {tooltip.node.recovery_hint}
+              </p>
             )}
             {(() => {
               const tid = tooltip.node.id ?? ''
