@@ -274,6 +274,13 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
       west_kWh:   Math.round(solar_gains.west),
       total_kWh:  Math.round(total_solar),
     },
+    // Internal gains breakdown (kWh) — used by GainsLossesChart
+    internal_gains: {
+      lighting_kWh:   Math.round(lighting_internal),
+      equipment_kWh:  Math.round(equip_internal),
+      people_kWh:     Math.round(people_internal),
+      total_kWh:      Math.round(total_internal),
+    },
     fuel_split: {
       electricity_kWh: Math.round(electricity_kWh),
       gas_kWh:         Math.round(gas_kWh),
@@ -293,6 +300,7 @@ function _empty() {
     annual_lighting_kWh: 0, annual_equipment_kWh: 0, annual_fans_kWh: 0, annual_dhw_kWh: 0,
     fabric_losses: { walls_kWh: 0, roof_kWh: 0, floor_kWh: 0, glazing_kWh: 0, infiltration_kWh: 0, ventilation_kWh: 0, total_kWh: 0 },
     solar_gains: { north_kWh: 0, south_kWh: 0, east_kWh: 0, west_kWh: 0, total_kWh: 0 },
+    internal_gains: { lighting_kWh: 0, equipment_kWh: 0, people_kWh: 0, total_kWh: 0 },
     fuel_split: { electricity_kWh: 0, gas_kWh: 0, total_kWh: 0, electricity_pct: 100, gas_pct: 0 },
     carbon_kgCO2_m2: 0, gia_m2: 0, _inputs: {},
   }

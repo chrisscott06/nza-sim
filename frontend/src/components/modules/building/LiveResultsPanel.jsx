@@ -10,6 +10,7 @@ import { useContext, useMemo } from 'react'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { calculateInstant } from '../../../utils/instantCalc.js'
 import { FABRIC_COLORS } from '../../../data/chartTokens.js'
+import GainsLossesChart from './GainsLossesChart.jsx'
 
 // ── EUI Arc Gauge (SVG, 180° sweep) ──────────────────────────────────────────
 
@@ -217,10 +218,10 @@ export default function LiveResultsPanel({ libraryData = {} }) {
         {/* EUI gauge */}
         <EUIGauge eui={result.eui_kWh_m2} />
 
-        {/* Fabric heat loss */}
-        <FabricBar fabric={result.fabric_losses} />
+        {/* Gains & Losses butterfly chart */}
+        <GainsLossesChart result={result} />
 
-        {/* Solar gains */}
+        {/* Solar gains by facade */}
         <SolarBars solar={result.solar_gains} />
 
         {/* Key metrics */}
