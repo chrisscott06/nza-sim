@@ -21,6 +21,7 @@ const COLORS = {
   glazing:     '#88C8E8',  // subtle blue glass
   floorLine:   '#B8A898',  // subtle floor band line
   groundPlane: '#EBEBEB',  // off-white ground
+  frame:       '#3A3A3A',  // dark grey window reveal frame
 }
 
 /* ── Solar tint helper ─────────────────────────────────────────────────────── */
@@ -53,7 +54,7 @@ function Building({ params, solarOverlay, onFacadeHover }) {
   const winHeightFraction = 0.6
   const winSill = floor_height * 0.2
 
-  // Individual window panels per facade
+  // Individual window panels per facade — with recessed reveal frames
   const GlassFace = useMemo(() => {
     return function GlassFaceInner({ axis, sign, wwr: wwrFace, faceW, count }) {
       if (!wwrFace || wwrFace < 0.01) return null
@@ -62,11 +63,20 @@ function Building({ params, solarOverlay, onFacadeHover }) {
       const winH  = floor_height * winHeightFraction
       const winY0 = winSill
 
-      // Each individual window width
       const totalGlaz = faceW * wwrFace
       const winW  = totalGlaz / n
-      // Gap on each side of each window (equal spacing)
       const gap   = (faceW - totalGlaz) / (n + 1)
+
+      // Reveal frame constants
+      const FW = Math.max(0.04, Math.min(0.08, winW * 0.12))  // frame strip width 40–80mm
+      const FD = 0.08  // reveal depth — frame protrudes 80mm outward from wall surface
+
+      // Wall face distance from origin along the perpendicular axis
+      const wallFace  = axis === 'z' ? hw : hd
+      // Centre of the frame box (half FD out from wall surface, in the outward direction)
+      const frameCtr  = sign * (wallFace + FD / 2)
+      // Glass sits just 10mm in front of wall surface (inside the frame reveal)
+      const glassFace = sign * (wallFace + 0.01)
 
       const panels = []
 
@@ -74,29 +84,59 @@ function Building({ params, solarOverlay, onFacadeHover }) {
         const cy = f * floor_height + winY0 + winH / 2
 
         for (let w = 0; w < n; w++) {
-          // Position along facade axis (centred at 0)
           const along = -faceW / 2 + gap + w * (winW + gap) + winW / 2
+          const gw    = winW * 0.95  // glass width (5% narrower than the opening)
 
-          const px = axis === 'x' ? sign * (hd + 0.005) : along
-          const pz = axis === 'z' ? sign * (hw + 0.005) : along
+          // Helper: build [x,y,z] from the 'along' (facade-parallel) and perpendicular coords
+          const p = (al, yy, perp) =>
+            axis === 'z' ? [al, yy, perp] : [perp, yy, al]
+
+          // Frame box sizes: horizontal (top/bot) and vertical (left/right) strips
+          const hArgs = axis === 'z' ? [gw + 2 * FW, FW, FD] : [FD, FW, gw + 2 * FW]
+          const vArgs = axis === 'z' ? [FW, winH, FD]         : [FD, winH, FW]
 
           panels.push(
-            <mesh key={`${f}-${w}`} castShadow position={[
-              axis === 'z' ? along : px,
-              cy,
-              axis === 'x' ? along : pz,
-            ]} rotation={axis === 'z' ? [0, 0, 0] : [0, Math.PI / 2, 0]}>
-              <planeGeometry args={[winW * 0.95, winH]} />
-              <meshPhysicalMaterial
-                color={COLORS.glazing}
-                roughness={0.05}
-                metalness={0.1}
-                transparent
-                opacity={0.55}
-                reflectivity={0.6}
-                side={THREE.DoubleSide}
-              />
-            </mesh>
+            <group key={`${f}-${w}`}>
+              {/* Glass panel — sits at wall surface level, inside the reveal frame */}
+              <mesh
+                castShadow receiveShadow
+                position={p(along, cy, glassFace)}
+                rotation={axis === 'z' ? [0, 0, 0] : [0, Math.PI / 2, 0]}
+              >
+                <planeGeometry args={[gw, winH]} />
+                <meshPhysicalMaterial
+                  color={COLORS.glazing}
+                  roughness={0.05}
+                  metalness={0.1}
+                  transparent
+                  opacity={0.55}
+                  reflectivity={0.6}
+                  side={THREE.DoubleSide}
+                />
+              </mesh>
+
+              {/* Reveal frame — 4 dark strips protruding outward from wall face */}
+              {/* Top bar */}
+              <mesh castShadow receiveShadow position={p(along, cy + winH / 2 + FW / 2, frameCtr)}>
+                <boxGeometry args={hArgs} />
+                <meshStandardMaterial color={COLORS.frame} roughness={0.55} metalness={0.05} />
+              </mesh>
+              {/* Bottom bar */}
+              <mesh castShadow receiveShadow position={p(along, cy - winH / 2 - FW / 2, frameCtr)}>
+                <boxGeometry args={hArgs} />
+                <meshStandardMaterial color={COLORS.frame} roughness={0.55} metalness={0.05} />
+              </mesh>
+              {/* Left bar */}
+              <mesh castShadow receiveShadow position={p(along - gw / 2 - FW / 2, cy, frameCtr)}>
+                <boxGeometry args={vArgs} />
+                <meshStandardMaterial color={COLORS.frame} roughness={0.55} metalness={0.05} />
+              </mesh>
+              {/* Right bar */}
+              <mesh castShadow receiveShadow position={p(along + gw / 2 + FW / 2, cy, frameCtr)}>
+                <boxGeometry args={vArgs} />
+                <meshStandardMaterial color={COLORS.frame} roughness={0.55} metalness={0.05} />
+              </mesh>
+            </group>
           )
         }
       }
