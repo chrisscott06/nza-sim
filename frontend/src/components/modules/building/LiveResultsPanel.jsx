@@ -183,6 +183,13 @@ function SolarBars({ solar }) {
 
 // ── Key metric row ────────────────────────────────────────────────────────────
 
+/** Format kWh as MWh, showing "< 1" instead of "0" for very small non-zero values */
+function fmtMWh(kWh) {
+  const mwh = Math.round(kWh / 1000)
+  if (mwh === 0 && kWh > 0) return '< 1'
+  return mwh
+}
+
 function Metric({ label, value, unit, color }) {
   return (
     <div className="flex items-center justify-between py-1 border-b border-light-grey last:border-0">
@@ -231,19 +238,19 @@ export default function LiveResultsPanel({ libraryData = {}, onSankeyExpand }) {
           <div>
             <Metric
               label="Annual heating"
-              value={Math.round(result.annual_heating_kWh / 1000)}
+              value={fmtMWh(result.annual_heating_kWh)}
               unit="MWh"
               color="#DC2626"
             />
             <Metric
               label="Annual cooling"
-              value={Math.round(result.annual_cooling_kWh / 1000)}
+              value={fmtMWh(result.annual_cooling_kWh)}
               unit="MWh"
               color="#3B82F6"
             />
             <Metric
               label="Annual DHW"
-              value={Math.round(result.annual_dhw_kWh / 1000)}
+              value={fmtMWh(result.annual_dhw_kWh)}
               unit="MWh"
               color="#F97316"
             />

@@ -50,6 +50,13 @@ function EUIGauge({ eui }) {
   )
 }
 
+/** Format kWh as MWh; show "< 1" for non-zero values that round to 0 */
+function fmtMWh(kWh) {
+  const mwh = Math.round(kWh / 1000)
+  if (mwh === 0 && kWh > 0) return '< 1'
+  return mwh
+}
+
 // ── End-use energy bars ───────────────────────────────────────────────────────
 
 const END_USES = [
@@ -85,7 +92,7 @@ function EndUseBars({ result }) {
                   style={{ width: `${pct}%`, backgroundColor: u.color }}
                 />
               </div>
-              <span className="text-xxs text-dark-grey w-10 text-right">{Math.round(val / 1000)} MWh</span>
+              <span className="text-xxs text-dark-grey w-10 text-right">{fmtMWh(val)} MWh</span>
             </div>
           )
         })}

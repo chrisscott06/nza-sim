@@ -222,8 +222,11 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
   // ── Heating demand ────────────────────────────────────────────────────────
   const heat_losses = total_fabric + infiltration_kWh + vent_kWh
   const heat_gains  = total_solar + total_internal
-  // Utilisation factor — not all gains reduce heating demand (summer gains don't help winter heating)
-  const util_factor = 0.75
+  // Utilisation factor — not all gains reduce heating demand (summer gains don't help winter heating).
+  // 0.60 chosen for a 24-hour hotel: gains occur throughout the day but heating peaks in early
+  // morning; less of the gain is temporally coincident with the heating need vs an office building.
+  // EnergyPlus consistently shows positive heating for MVHR hotels; 0.75 was too generous.
+  const util_factor = 0.60
   const heating_thermal = Math.max(0, heat_losses - heat_gains * util_factor)
 
   // Heating electricity via VRF COP
