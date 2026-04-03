@@ -1,15 +1,15 @@
 import { useRef, useMemo } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { OrbitControls, Grid, Environment } from '@react-three/drei'
+import { OrbitControls, Environment, Sky } from '@react-three/drei'
 import * as THREE from 'three'
 
-/* ── Colour palette matching Pablo design system ──────────────────────────── */
+/* ── Architectural material palette ───────────────────────────────────────── */
 const COLORS = {
-  wall:    '#2B2A4C',   // navy
-  roof:    '#4A496A',   // navy lighter
-  floor:   '#E6E6E6',   // light-grey
-  glazing: '#00AEEF44', // teal translucent
-  glazingEdge: '#00AEEF',
+  wall:        '#D4C5B8',  // warm light stone
+  roof:        '#8A8A8A',  // medium grey
+  glazing:     '#88C8E8',  // subtle blue glass
+  floorLine:   '#B8A898',  // subtle floor band line
+  groundPlane: '#EBEBEB',  // off-white ground
 }
 
 /* ── Building geometry from params ────────────────────────────────────────── */
@@ -54,16 +54,19 @@ function Building({ params }) {
           const pz = axis === 'z' ? sign * (hw + 0.005) : along
 
           panels.push(
-            <mesh key={`${f}-${w}`} position={[
+            <mesh key={`${f}-${w}`} castShadow position={[
               axis === 'z' ? along : px,
               cy,
               axis === 'x' ? along : pz,
             ]} rotation={axis === 'z' ? [0, 0, 0] : [0, Math.PI / 2, 0]}>
               <planeGeometry args={[winW * 0.95, winH]} />
-              <meshStandardMaterial
-                color={COLORS.glazing.slice(0, 7)}
+              <meshPhysicalMaterial
+                color={COLORS.glazing}
+                roughness={0.05}
+                metalness={0.1}
                 transparent
-                opacity={0.4}
+                opacity={0.55}
+                reflectivity={0.6}
                 side={THREE.DoubleSide}
               />
             </mesh>
@@ -88,7 +91,7 @@ function Building({ params }) {
       ]
       const geom = new THREE.BufferGeometry().setFromPoints(pts)
       lines.push(<line key={f} geometry={geom}>
-        <lineBasicMaterial color="#ffffff" opacity={0.15} transparent />
+        <lineBasicMaterial color={COLORS.floorLine} opacity={0.5} transparent />
       </line>)
     }
     return lines
@@ -99,19 +102,13 @@ function Building({ params }) {
       {/* Main building box */}
       <mesh position={[0, totalHeight / 2, 0]} castShadow receiveShadow>
         <boxGeometry args={[width, totalHeight, length]} />
-        <meshStandardMaterial color={COLORS.wall} roughness={0.7} metalness={0.1} />
+        <meshStandardMaterial color={COLORS.wall} roughness={0.85} metalness={0.0} />
       </mesh>
 
       {/* Roof cap — slightly wider for overhang effect */}
-      <mesh position={[0, totalHeight + 0.05, 0]}>
-        <boxGeometry args={[width + 0.3, 0.1, length + 0.3]} />
-        <meshStandardMaterial color={COLORS.roof} roughness={0.8} />
-      </mesh>
-
-      {/* Ground plane under building */}
-      <mesh position={[0, -0.02, 0]} receiveShadow>
-        <boxGeometry args={[width, 0.04, length]} />
-        <meshStandardMaterial color={COLORS.floor} roughness={1} />
+      <mesh position={[0, totalHeight + 0.05, 0]} castShadow receiveShadow>
+        <boxGeometry args={[width + 0.4, 0.15, length + 0.4]} />
+        <meshStandardMaterial color={COLORS.roof} roughness={0.7} metalness={0.0} />
       </mesh>
 
       {/* Floor lines */}
@@ -181,7 +178,7 @@ export default function BuildingViewer3D({ params }) {
   const midH    = (num_floors * floor_height) / 2
 
   return (
-    <div className="w-full h-full" style={{ background: '#F5F5F7' }}>
+    <div className="w-full h-full" style={{ background: '#D8E8F0' }}>
       <Canvas
         shadows
         camera={{
@@ -192,15 +189,30 @@ export default function BuildingViewer3D({ params }) {
         }}
         gl={{ antialias: true }}
       >
-        {/* Lighting */}
-        <ambientLight intensity={0.6} />
+        {/* Sky — subtle blue-white gradient */}
+        <Sky sunPosition={[-1, 0.5, -1]} inclination={0.6} azimuth={0.25} turbidity={4} rayleigh={0.5} />
+
+        {/* Lighting — soft ambient fill + directional sun from SW at ~45° */}
+        <ambientLight intensity={0.45} color="#EEF2FF" />
         <directionalLight
-          position={[50, 80, 30]}
-          intensity={1.2}
+          position={[-40, 55, -40]}
+          intensity={1.4}
+          color="#FFF8F0"
           castShadow
           shadow-mapSize={[2048, 2048]}
+          shadow-camera-near={1}
+          shadow-camera-far={300}
+          shadow-camera-left={-80}
+          shadow-camera-right={80}
+          shadow-camera-top={80}
+          shadow-camera-bottom={-80}
+          shadow-bias={-0.0005}
         />
-        <directionalLight position={[-30, 40, -20]} intensity={0.4} />
+        {/* Bounce light from NE to fill shadow side */}
+        <directionalLight position={[30, 20, 30]} intensity={0.25} color="#D6E8F7" />
+
+        {/* Environment — subtle city preset for glazing reflections */}
+        <Environment preset="city" />
 
         {/* Rotate building group by orientation */}
         <group rotation={[0, (-orientation * Math.PI) / 180, 0]}>
@@ -208,19 +220,11 @@ export default function BuildingViewer3D({ params }) {
           <OrientationIndicator orientation={0} />
         </group>
 
-        {/* Ground grid */}
-        <Grid
-          args={[200, 200]}
-          cellSize={5}
-          cellThickness={0.5}
-          cellColor="#C8C8C8"
-          sectionSize={25}
-          sectionThickness={1}
-          sectionColor="#AAAAAA"
-          fadeDistance={150}
-          fadeStrength={1}
-          position={[0, -0.01, 0]}
-        />
+        {/* Ground plane — large solid, receives building shadow */}
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
+          <planeGeometry args={[300, 300]} />
+          <meshStandardMaterial color={COLORS.groundPlane} roughness={0.95} metalness={0} />
+        </mesh>
 
         <CameraRig params={params} />
       </Canvas>
