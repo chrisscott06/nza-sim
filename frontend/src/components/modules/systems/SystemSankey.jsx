@@ -133,6 +133,24 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
 
   const linkPath = sankeyLinkHorizontal()
 
+  // ── Topology-change animation generation ──────────────────────────────────
+  // Increments whenever the set of node IDs changes (topology change, not just
+  // value change). New topology generation → React remounts node/link <g>
+  // elements via a changed key → CSS fadeIn animation fires on new elements.
+  const animGenRef    = useRef(0)
+  const prevNodeIdsRef = useRef('')
+  const [animGen, setAnimGen] = useState(0)
+
+  useEffect(() => {
+    if (!sankeyResult) return
+    const currentIds = sankeyResult.nodes.map(n => n.id).sort().join(',')
+    if (currentIds !== prevNodeIdsRef.current) {
+      prevNodeIdsRef.current = currentIds
+      animGenRef.current += 1
+      setAnimGen(animGenRef.current)
+    }
+  }, [sankeyResult])
+
   // ── Tooltip on node hover ──────────────────────────────────────────────────
   const handleNodeEnter = useCallback((e, node) => {
     const rect = containerRef.current?.getBoundingClientRect() ?? { left: 0, top: 0 }
@@ -233,6 +251,18 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
               <marker id="arrowhead" markerWidth="6" markerHeight="4" refX="3" refY="2" orient="auto">
                 <polygon points="0 0, 6 2, 0 4" fill="#CCCCCC" />
               </marker>
+              <style>{`
+                @keyframes sf-fade-in {
+                  from { opacity: 0; }
+                  to   { opacity: 1; }
+                }
+                .sf-node-enter {
+                  animation: sf-fade-in 300ms ease forwards;
+                }
+                .sf-link-enter {
+                  animation: sf-fade-in 300ms ease forwards;
+                }
+              `}</style>
             </defs>
 
             {/* ── Links ── */}
@@ -261,7 +291,7 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
 
               const d = linkPath(link)
               return (
-                <g key={i}>
+                <g key={`${animGen}-${srcId}-${tgtId}`} className="sf-link-enter">
                   <path
                     d={d}
                     fill="none"
@@ -333,7 +363,8 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
 
               return (
                 <g
-                  key={i}
+                  key={`${animGen}-${node.id}`}
+                  className="sf-node-enter"
                   style={{ cursor: isClickable ? 'pointer' : 'default', opacity: isNodeDimmed ? 0.3 : 1, transition: 'opacity 300ms ease' }}
                   onClick={() => handleNodeClick(node)}
                   onMouseEnter={e => handleNodeEnter(e, node)}
