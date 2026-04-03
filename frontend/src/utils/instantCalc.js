@@ -101,6 +101,17 @@ function computeGeometry(building) {
   return { gia, volume, total_wall_opaque, total_glazing, glazing, wall_opaque, roof_area, ground_area }
 }
 
+// ── G-value lookup ────────────────────────────────────────────────────────────
+
+function getGValue(constructionChoices, libraryData) {
+  const name = constructionChoices?.glazing
+  if (name && libraryData?.constructions) {
+    const item = libraryData.constructions.find(c => c.name === name)
+    if (item?.config_json?.g_value != null) return Number(item.config_json.g_value)
+  }
+  return DEFAULT_G_VALUE
+}
+
 // ── U-value lookup ────────────────────────────────────────────────────────────
 
 const DEFAULT_U_VALUES = {
@@ -163,14 +174,29 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
 
   // ── Solar gains (orientation-aware) ──────────────────────────────────────
   const orientation = Number(building.orientation ?? 0)
-  const g_value = DEFAULT_G_VALUE
+  const g_value = getGValue(constructions, libraryData)
   const solar_gains = {
     north: glazing.north * getSolarRadiation('north', orientation) * g_value / 1000,
     south: glazing.south * getSolarRadiation('south', orientation) * g_value / 1000,
     east:  glazing.east  * getSolarRadiation('east',  orientation) * g_value / 1000,
     west:  glazing.west  * getSolarRadiation('west',  orientation) * g_value / 1000,
   }
-  const total_solar = Object.values(solar_gains).reduce((a, b) => a + b, 0)
+
+  // ── Sol-air opaque conduction gains ────────────────────────────────────────
+  // Fraction of incident solar on opaque wall that conducts through as internal gain
+  const OPAQUE_GAIN_FRACTION = 0.04   // ~4% of incident irradiance per CIBSE simplified
+  const UK_HORIZONTAL_SOLAR  = 950    // kWh/m²/yr (horizontal irradiance, UK average)
+  const wall_op = geo.wall_opaque     // { north, south, east, west } in m²
+  const opaque_wall_solar = {
+    north: getSolarRadiation('north', orientation) * (wall_op.north ?? 0) * OPAQUE_GAIN_FRACTION / 1000,
+    south: getSolarRadiation('south', orientation) * (wall_op.south ?? 0) * OPAQUE_GAIN_FRACTION / 1000,
+    east:  getSolarRadiation('east',  orientation) * (wall_op.east  ?? 0) * OPAQUE_GAIN_FRACTION / 1000,
+    west:  getSolarRadiation('west',  orientation) * (wall_op.west  ?? 0) * OPAQUE_GAIN_FRACTION / 1000,
+  }
+  const opaque_wall_total = Object.values(opaque_wall_solar).reduce((a, b) => a + b, 0)
+  const roof_solar_kWh = UK_HORIZONTAL_SOLAR * roof_area * OPAQUE_GAIN_FRACTION / 1000
+
+  const total_solar = Object.values(solar_gains).reduce((a, b) => a + b, 0) + opaque_wall_total + roof_solar_kWh
 
   // ── Internal gains ────────────────────────────────────────────────────────
   const lpd    = Number(systems.lighting_power_density ?? 8)   // W/m²
@@ -268,11 +294,13 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
       total_kWh:           Math.round(total_fabric + infiltration_kWh + vent_kWh),
     },
     solar_gains: {
-      north_kWh:  Math.round(solar_gains.north),
-      south_kWh:  Math.round(solar_gains.south),
-      east_kWh:   Math.round(solar_gains.east),
-      west_kWh:   Math.round(solar_gains.west),
-      total_kWh:  Math.round(total_solar),
+      north_kWh:       Math.round(solar_gains.north),
+      south_kWh:       Math.round(solar_gains.south),
+      east_kWh:        Math.round(solar_gains.east),
+      west_kWh:        Math.round(solar_gains.west),
+      opaque_wall_kWh: Math.round(opaque_wall_total),
+      roof_solar_kWh:  Math.round(roof_solar_kWh),
+      total_kWh:       Math.round(total_solar),
     },
     // Internal gains breakdown (kWh) — used by GainsLossesChart
     internal_gains: {
@@ -299,7 +327,7 @@ function _empty() {
     eui_kWh_m2: 0, annual_heating_kWh: 0, annual_cooling_kWh: 0,
     annual_lighting_kWh: 0, annual_equipment_kWh: 0, annual_fans_kWh: 0, annual_dhw_kWh: 0,
     fabric_losses: { walls_kWh: 0, roof_kWh: 0, floor_kWh: 0, glazing_kWh: 0, infiltration_kWh: 0, ventilation_kWh: 0, total_kWh: 0 },
-    solar_gains: { north_kWh: 0, south_kWh: 0, east_kWh: 0, west_kWh: 0, total_kWh: 0 },
+    solar_gains: { north_kWh: 0, south_kWh: 0, east_kWh: 0, west_kWh: 0, opaque_wall_kWh: 0, roof_solar_kWh: 0, total_kWh: 0 },
     internal_gains: { lighting_kWh: 0, equipment_kWh: 0, people_kWh: 0, total_kWh: 0 },
     fuel_split: { electricity_kWh: 0, gas_kWh: 0, total_kWh: 0, electricity_pct: 100, gas_pct: 0 },
     carbon_kgCO2_m2: 0, gia_m2: 0, _inputs: {},

@@ -95,12 +95,14 @@ export default function GainsLossesChart({ result }) {
   // ── Gain rows (left bar = heating reduction, right bar = cooling driver) ──
   const ew = ((solar.east_kWh ?? 0) + (solar.west_kWh ?? 0)) / 2
   const GAIN_ROWS = [
-    { id: 'sol_s',  label: 'S solar',   left: solar.south_kWh ?? 0, right: solar.south_kWh ?? 0, lc: C.solar_s,  rc: C.solar_s  },
-    { id: 'equip',  label: 'Equipment', left: f(ig.equipment_kWh),  right: f(ig.equipment_kWh),  lc: C.equipment, rc: C.equipment },
-    { id: 'light',  label: 'Lighting',  left: f(ig.lighting_kWh),   right: f(ig.lighting_kWh),   lc: C.lighting,  rc: C.lighting  },
-    { id: 'people', label: 'People',    left: f(ig.people_kWh),     right: f(ig.people_kWh),     lc: C.people,    rc: C.people    },
-    { id: 'sol_ew', label: 'E/W solar', left: ew,                   right: ew,                   lc: C.solar_ew,  rc: C.solar_ew  },
-    { id: 'sol_n',  label: 'N solar',   left: solar.north_kWh ?? 0, right: solar.north_kWh ?? 0, lc: C.solar_n,   rc: C.solar_n   },
+    { id: 'sol_s',    label: 'S solar',     left: solar.south_kWh ?? 0,    right: solar.south_kWh ?? 0,    lc: C.solar_s,   rc: C.solar_s   },
+    { id: 'equip',    label: 'Equipment',   left: f(ig.equipment_kWh),      right: f(ig.equipment_kWh),      lc: C.equipment, rc: C.equipment },
+    { id: 'light',    label: 'Lighting',    left: f(ig.lighting_kWh),       right: f(ig.lighting_kWh),       lc: C.lighting,  rc: C.lighting  },
+    { id: 'people',   label: 'People',      left: f(ig.people_kWh),         right: f(ig.people_kWh),         lc: C.people,    rc: C.people    },
+    { id: 'sol_ew',   label: 'E/W solar',   left: ew,                       right: ew,                       lc: C.solar_ew,  rc: C.solar_ew  },
+    { id: 'sol_n',    label: 'N solar',     left: solar.north_kWh ?? 0,     right: solar.north_kWh ?? 0,     lc: C.solar_n,   rc: C.solar_n   },
+    { id: 'sol_wall', label: 'Wall sol-air',left: solar.opaque_wall_kWh ?? 0, right: solar.opaque_wall_kWh ?? 0, lc: '#BCAAA4', rc: '#BCAAA4' },
+    { id: 'sol_roof', label: 'Roof sol-air',left: solar.roof_solar_kWh ?? 0,  right: solar.roof_solar_kWh ?? 0,  lc: '#A5968F', rc: '#A5968F' },
   ].filter(r => r.left > 0 || r.right > 0)
 
   // ── Scale: single max across all left and right values ────────────────────
