@@ -210,6 +210,8 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
   const vent_ach      = 0.5   // Design ventilation rate (typical hotel)
   const heat_recovery = hre_fraction
   const vent_kWh      = AIR_HEAT_CAPACITY * vent_ach * volume * UK_HDD * 24 / 1000 * (1 - heat_recovery)
+  // SFP override (flat key used by ventilation SFP slider in UI)
+  const sfp_override  = systems.sfp_override
 
   // ── Solar gains (orientation-aware) — all values in kWh ─────────────────
   // IMPORTANT: do NOT divide by 1000 here — keep in kWh so units match
@@ -320,7 +322,8 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
   // ── Fan energy ────────────────────────────────────────────────────────────
   // VRF fans + ventilation fans
   const vrf_fan_sfp = 0.5       // W/(L/s) — VRF fan coil SFP
-  const vent_sfp    = is_mvhr ? 1.2 : 0.8  // W/(L/s) — MEV or MVHR SFP
+  // Use SFP override from UI slider if set, otherwise library default
+  const vent_sfp    = sfp_override != null ? sfp_override : (is_mvhr ? 1.2 : 0.8)
   const q_vent_ls   = vent_ach * volume / 3.6  // L/s ventilation flow
   const vrf_fans_kWh  = vrf_fan_sfp  * (gia / 10) * HOTEL_OPERATING_HOURS / 1000
   const vent_fans_kWh = vent_sfp * q_vent_ls * HOTEL_OPERATING_HOURS / 1000

@@ -233,9 +233,11 @@ function InputsColumn({ library, openSection, setOpenSection }) {
   const shSummary  = isIdeal ? 'Ideal Loads' : `${sysLabel(library, shSys)} ${shEffStr ? `(${shEffStr})` : ''}${hasShSec ? ` + ${sysLabel(library, sh.secondary?.system ?? '')} secondary` : ''}`
   const scSummary  = isIdeal ? 'Ideal Loads' : `${sysLabel(library, scSys)} ${scEffStr ? `(${scEffStr})` : ''}${hasScSec ? ` + secondary` : ''}`
   const dhwSummary = `${sysLabel(library, dhwSys)}${hasDhwSec ? ` + ${sysLabel(library, dhw.secondary?.system ?? 'ashp_dhw', 'ASHP preheat')}` : ''} · ${systems.dhw_setpoint ?? 60}°C`
+  const hreVal     = ven.primary?.efficiency_override ?? (isMVHR ? 82 : 0)
+  const sfpVal     = systems.sfp_override ?? (isMVHR ? 1.8 : 1.5)
   const venSummary = isMVHR
-    ? `MVHR · SFP ${systems.sfp_override ?? 1.8} W/(l/s) · ${systems.hre_override ?? 85}% HR`
-    : `${venItem?.display_name ?? 'MEV'} · SFP ${systems.sfp_override ?? 1.5} W/(l/s)`
+    ? `MVHR · SFP ${sfpVal} W/(l/s) · ${hreVal}% HR`
+    : `${venItem?.display_name ?? 'MEV'} · SFP ${sfpVal} W/(l/s)`
   const lightSummary = `${lpd} W/m² · ${lightingControlOpts.find(o => o.value === (systems.lighting_control ?? 'occupancy_sensing'))?.label}`
   const powerSummary = `${epd} W/m²`
 
@@ -358,6 +360,23 @@ function InputsColumn({ library, openSection, setOpenSection }) {
           <Field label="Primary system">
             <CompactSelect value={dhwSys} onChange={v => setPrimary('dhw', v)} options={dhwPrimOpts} />
           </Field>
+          {/* DHW primary efficiency override */}
+          {(() => {
+            const item = sysItem(library, dhwSys)
+            if (!item?.efficiency_value) return null
+            const isGasBoiler = item.fuel_type === 'gas'
+            return (
+              <Field label={isGasBoiler ? 'Seasonal efficiency' : 'COP'}>
+                <SliderWithNumber
+                  value={dhw.primary?.efficiency_override ?? item.efficiency_value}
+                  onChange={v => updateSystem('dhw', { ...dhw, primary: { ...dhw.primary, efficiency_override: v } })}
+                  min={isGasBoiler ? 0.7 : 1.5}
+                  max={isGasBoiler ? 1.0 : 5.0}
+                  step={isGasBoiler ? 0.01 : 0.1}
+                />
+              </Field>
+            )
+          })()}
           <Field label="Preheat (secondary)">
             <div className="flex items-center gap-1.5">
               <CompactSelect
@@ -408,8 +427,9 @@ function InputsColumn({ library, openSection, setOpenSection }) {
           </Field>
           {isMVHR && (
             <Field label="Heat recovery efficiency">
-              <SliderWithNumber value={systems.hre_override ?? 85}
-                onChange={v => updateSystem('hre_override', v)}
+              <SliderWithNumber
+                value={ven.primary?.efficiency_override ?? (venItem?.heat_recovery_efficiency != null ? Math.round(venItem.heat_recovery_efficiency * 100) : 82)}
+                onChange={v => updateSystem('ventilation', { ...ven, primary: { ...ven.primary, efficiency_override: v } })}
                 min={50} max={95} step={1} unit="%"
               />
             </Field>
