@@ -154,7 +154,49 @@ function Metric({ label, value, unit }) {
   )
 }
 
+// ── System efficiency flow row ────────────────────────────────────────────────
+
+function FlowRow({ label, inMWh, outMWh, detail, color = '#2B2A4C' }) {
+  if (inMWh === 0 && outMWh === 0) return null
+  return (
+    <div className="py-1.5 border-b border-light-grey last:border-0">
+      <div className="flex items-center justify-between mb-0.5">
+        <span className="text-xxs text-dark-grey">{label}</span>
+        {detail && <span className="text-xxs font-medium" style={{ color }}>{detail}</span>}
+      </div>
+      <div className="flex items-center gap-1 text-xxs text-mid-grey">
+        <span>{Math.round(inMWh)} MWh in</span>
+        <span className="text-light-grey">→</span>
+        <span className="font-medium text-navy">{Math.round(outMWh)} MWh out</span>
+      </div>
+    </div>
+  )
+}
+
+// ── Energy recovery callout ───────────────────────────────────────────────────
+
+function RecoveryCallout({ label, recoveredMWh, costSavingPounds, carbonSavingKg }) {
+  if (recoveredMWh < 1) return null
+  return (
+    <div className="bg-green-50 border border-green-200 rounded p-2">
+      <p className="text-xxs font-semibold text-green-800 mb-0.5">{label}</p>
+      <p className="text-xxs text-green-700">{Math.round(recoveredMWh)} MWh recovered</p>
+      {costSavingPounds > 0 && (
+        <p className="text-xxs text-green-600 mt-0.5">≈ £{Math.round(costSavingPounds).toLocaleString()}/yr gas saving @ 5p/kWh</p>
+      )}
+      {carbonSavingKg > 0 && (
+        <p className="text-xxs text-green-600">≈ {Math.round(carbonSavingKg / 1000).toLocaleString()} tCO₂/yr avoided</p>
+      )}
+    </div>
+  )
+}
+
 // ── Main panel ────────────────────────────────────────────────────────────────
+
+/** Look up a raw systems_flow link value (before d3 layout) */
+function sfLink(systemsFlow, src, tgt) {
+  return systemsFlow?.links?.find(l => l.source === src && l.target === tgt)?.value_kWh ?? 0
+}
 
 export default function SystemsLiveResults({ libraryData = {} }) {
   const { params, constructions, systems } = useContext(ProjectContext)
@@ -166,9 +208,27 @@ export default function SystemsLiveResults({ libraryData = {} }) {
 
   const isIdeal = systems.mode !== 'detailed'
   const isMVHR  = systems.ventilation_type?.startsWith('mvhr')
+  const hasASHP = systems.dhw_preheat === 'ashp_dhw'
   const fanPct  = result.fuel_split.total_kWh > 0
     ? Math.round((result.annual_fans_kWh / result.fuel_split.total_kWh) * 100)
     : 0
+
+  // Extract efficiency data from systems_flow links
+  const sf = result.systems_flow
+  const vrfElecIn    = sfLink(sf, 'grid', 'vrf')
+  const vrfHeatOut   = sfLink(sf, 'vrf', 'space_heat')
+  const vrfCoolOut   = sfLink(sf, 'vrf', 'space_cool')
+  const mvhrFanIn    = sfLink(sf, 'grid', 'mvhr')
+  const mvhrRecov    = sfLink(sf, 'mvhr_recov', 'space_heat')
+  const boilerGasIn  = sfLink(sf, 'gas', 'boiler')
+  const boilerDhwOut = sfLink(sf, 'boiler', 'dhw_del')
+  const ashpSaved    = sfLink(sf, 'heat_reject', 'boiler')
+
+  // Cost/carbon savings (MVHR recovers heat that would otherwise need gas @ 5p/kWh, 0.233 kgCO₂/kWh gas)
+  const mvhrCostSaving   = mvhrRecov * 0.05
+  const mvhrCarbonSaving = mvhrRecov * 0.233
+  const ashpCostSaving   = ashpSaved * 0.05
+  const ashpCarbonSaving = ashpSaved * 0.233
 
   return (
     <div className="h-full overflow-y-auto overflow-x-hidden bg-white border-l border-light-grey">
@@ -195,6 +255,58 @@ export default function SystemsLiveResults({ libraryData = {} }) {
 
         {/* Fuel split */}
         <FuelSplit fuel={result.fuel_split} />
+
+        {/* System efficiency flow summary */}
+        {!isIdeal && (vrfElecIn > 0 || boilerGasIn > 0 || mvhrFanIn > 0) && (
+          <div>
+            <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1.5">System efficiency</p>
+            <div>
+              <FlowRow
+                label="VRF (HVAC)"
+                inMWh={vrfElecIn / 1000}
+                outMWh={(vrfHeatOut + vrfCoolOut) / 1000}
+                detail={vrfElecIn > 0 ? `COP ${((vrfHeatOut + vrfCoolOut) / vrfElecIn).toFixed(1)}×` : undefined}
+                color="#00AEEF"
+              />
+              {isMVHR && (
+                <FlowRow
+                  label="MVHR (ventilation)"
+                  inMWh={mvhrFanIn / 1000}
+                  outMWh={mvhrRecov / 1000}
+                  detail={mvhrFanIn > 0 && mvhrRecov > 0 ? `${Math.round((mvhrRecov / (mvhrRecov + mvhrFanIn)) * 100)}% net HR` : undefined}
+                  color="#16A34A"
+                />
+              )}
+              {boilerGasIn > 0 && (
+                <FlowRow
+                  label="Gas Boiler (DHW)"
+                  inMWh={boilerGasIn / 1000}
+                  outMWh={boilerDhwOut / 1000}
+                  detail={boilerGasIn > 0 ? `${Math.round((boilerDhwOut / boilerGasIn) * 100)}% eff` : undefined}
+                  color="#E74C3C"
+                />
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Energy recovery callouts */}
+        {isMVHR && mvhrRecov > 0 && (
+          <RecoveryCallout
+            label="MVHR Heat Recovery"
+            recoveredMWh={mvhrRecov / 1000}
+            costSavingPounds={mvhrCostSaving}
+            carbonSavingKg={mvhrCarbonSaving}
+          />
+        )}
+        {hasASHP && ashpSaved > 0 && (
+          <RecoveryCallout
+            label="ASHP DHW Preheat"
+            recoveredMWh={ashpSaved / 1000}
+            costSavingPounds={ashpCostSaving}
+            carbonSavingKg={ashpCarbonSaving}
+          />
+        )}
 
         {/* System efficiency metrics */}
         <div>
