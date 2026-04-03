@@ -94,20 +94,21 @@ function InputsColumn({ library }) {
   const isMVHR  = systems.ventilation_type?.startsWith('mvhr')
 
   // Build option lists from library
+  // Library items use 'category' field (not 'type') — filter accordingly
   const hvacOpts = (() => {
-    const items = library.filter(l => l.type === 'hvac')
+    const items = library.filter(l => l.category === 'hvac')
     if (items.length === 0) return [{ value: systems.hvac_type ?? 'vrf_standard', label: 'Loading…' }]
     return items.map(l => ({ value: l.name, label: l.display_name ?? l.name }))
   })()
 
   const ventOpts = (() => {
-    const items = library.filter(l => l.type === 'ventilation')
+    const items = library.filter(l => l.category === 'ventilation')
     if (items.length === 0) return [{ value: systems.ventilation_type ?? 'mev_standard', label: 'Loading…' }]
     return items.map(l => ({ value: l.name, label: l.display_name ?? l.name }))
   })()
 
   const dhwOpts = (() => {
-    const items = library.filter(l => l.type === 'dhw' && !l.name.includes('preheat') && !l.name.includes('ashp'))
+    const items = library.filter(l => l.category === 'dhw' && !l.name.includes('preheat') && !l.name.includes('ashp'))
     if (items.length === 0) return [{ value: systems.dhw_primary ?? 'gas_boiler_dhw', label: 'Loading…' }]
     return items.map(l => ({ value: l.name, label: l.display_name ?? l.name }))
   })()
