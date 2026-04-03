@@ -2,34 +2,75 @@
 
 ## Last completed
 
-Brief 07 Parts 5–9 completed.
+Brief 08: The Live Studio — all 15 parts complete.
 
-**Part 5** — Fuel-split results and real carbon calculation.
-- `nza_engine/parsers/sql_parser.py`: `get_energy_by_fuel()` reads `Electricity:Facility` + `NaturalGas:Facility` meters in detailed mode.
-- `api/routers/simulate.py`: `fuel_split` key added to results response.
-- `frontend/src/components/modules/results/CRREMTab.jsx`: carbon trajectory now uses `gas_kWh × 0.183 + electricity_kWh × grid_intensity[year]`.
+**Part 1** — Global typography reduction (20% smaller text for higher density layout).
 
-**Part 6** — Frontend system mode toggle.
-- `HVACTab.jsx`: prominent Detailed/Ideal Loads toggle at top. Detailed = teal background. Ideal = amber warning. HVAC inputs dim in ideal mode.
-- `ProjectContext.jsx`: DEFAULT_SYSTEMS.mode changed to `'detailed'`.
+**Part 2** — instantCalc.js: client-side steady-state degree-day calculation.
+- `frontend/src/utils/instantCalc.js`: UK_HDD=2200, UK_CDD=150, degree-day method for heating/cooling, U×A fabric losses, g-value solar gains, fuel split, carbon.
+- EUI for default Bridgewater: ~78.7 kWh/m².
 
-**Part 7** — Scenario editor mode support.
-- `ScenarioEditor.jsx`: Simulation Mode toggle added to Systems section. Mode changes captured in changes_from_baseline.
+**Part 3** — Building module three-column live layout.
+- `BuildingDefinition.jsx` rewritten: inputs left (geometry, glazing WWR+count, fabric, airtightness), 3D viewer centre, LiveResultsPanel right.
+- `LiveResultsPanel.jsx`: EUI arc gauge (green ≤85, amber ≤110, red >110), fabric stacked bar, solar gains bars, key metrics. Status badge: "Instant estimate" in amber.
 
-**Parts 8–9** — Performance curves verified + full Bridgewater 5-scenario test.
-- **Critical fix discovered**: uvicorn running without `--reload` was serving stale code. Restart required to activate VRF/DHW/ventilation generators.
-- **Bridgewater Hotel 5-scenario results (EUI, GIA=3600 m²):**
+**Part 4** — Systems module three-column live layout.
+- `SystemsZones.jsx` rewritten: Detailed/Ideal toggle, HVAC, ventilation (SFP 0–3 W/(l/s) with number input), DHW, lighting, equipment power density (W/m²), ventilation control strategy.
+- `SystemSchematic.jsx`: SVG flow diagram with source nodes, system boxes, arrows, MVHR dashed feedback loop.
+- `SystemsLiveResults.jsx`: EUI gauge, end-use bars, fuel split, efficiency metrics (COP, fan %, DHW kWh, carbon).
 
-| Scenario | Mode | EUI (kWh/m²) | Heating (MWh) | Gas (MWh) |
-|----------|------|-------------|---------------|-----------|
-| Baseline (Detailed) | detailed | 75.4 | 131.0 | 49.3 |
-| Enhanced Fabric | detailed | 73.7 | 121.3 | 49.3 |
-| MVHR Upgrade | detailed | 66.4 | 10.6 | 49.3 |
-| Full Upgrade (MVHR+ASHP+LED) | detailed | 47.2 | 11.7 | 14.1 |
-| Baseline (Ideal Loads) | ideal | 50.5 | 8.2 | 0 |
+**Part 5** — Profiles module three-column live layout.
+- `ProfilesEditor.jsx` rewritten: schedule list with prev/next navigation, type filter pills, centre schedule viewer/editor.
+- `ProfilesLiveResults.jsx`: 24-hour bar chart (day type tabs), schedule statistics (peak, average, annual hours), monthly multiplier mini-bars.
 
-- MVHR: heating thermal 131→10.6 MWh (-92%). ASHP DHW preheat: gas 49.3→14.1 MWh (-71%). VRF performance curves: avg COP ≈ 4.25 (UK mild climate). Zero fatal/severe errors all scenarios.
-- EUI below CIBSE 150–300 benchmark: expected — model is hotel_bedroom zones only (known limitation).
+**Part 6** — Module colour themes.
+- `moduleThemes.js`: accent colours per module (Building #A1887F, Systems #00AEEF, Profiles #8B5CF6, Results #2B2A4C, Scenarios #E84393, Library #16A34A).
+- `Sidebar.jsx`: active indicator uses module accent colour.
+- Module left-column headers: 3px top border + name in accent colour.
+
+**Part 7** — Individual windows on 3D model.
+- `BuildingViewer3D.jsx`: `GlassFace` component renders N individual window panels per floor. Position: `along = -faceW/2 + gap + w*(winW+gap) + winW/2`.
+- `ProjectContext.jsx`: `window_count` added to DEFAULT_PARAMS (north:8, south:8, east:3, west:3).
+- `BuildingDefinition.jsx`: window count input per facade.
+
+**Parts 8–10** — Live results panels (substantially completed as part of Parts 3–5).
+
+**Part 11** — Auto-simulation after 3 seconds of inactivity.
+- `SimulationContext.jsx`: watches `saveStatus`, starts 2s timer after save completes (3s total from last change). Cancels timer if new change starts.
+- `TopBar.jsx`: Auto-simulate toggle (teal dot when on). `autoSimulate, setAutoSimulate` from context.
+
+**Part 12** — Sankey diagram overflow fix.
+- `EnergyFlowsTab.jsx`: PADDING right=160, node label truncation to 17 chars, container `overflow-x-auto overflow-y-hidden`.
+
+**Part 13** — Energy Balance chart includes fans, DHW, and ventilation end uses.
+- `EnergyBalanceTab.jsx`: SERIES expanded to 7 items. `activeSeries` filters out zero series. Annual totals filtered to non-zero. Top-bar radius applied to last active series.
+
+**Part 14** — SFP range, small power input, ventilation control strategy (completed as part of Part 4).
+- SFP slider min=0. `SliderWithNumber` pattern with paired number input. Equipment power density input (0–30 W/m²). Ventilation control strategy dropdown (Continuous / Occupied hours / Timer).
+
+**Part 15** — Full integration test.
+- Building: three-column ✓, instant calc ✓, individual windows ✓
+- Systems: three-column ✓, schematic ✓, fuel split ✓
+- Profiles: three-column ✓, statistics panel ✓
+- Results/Energy Balance: 5 end uses shown, fans/DHW/ventilation gracefully omitted when not in data ✓
+- Results/Energy Flows: Sankey fully contained, no sidebar overlap ✓
+- Auto-simulation: fires after ~3s, "Re-run Simulation" button ✓
+- Module colour themes: distinct across all modules ✓
+- Console: 0 errors ✓
+- Build: clean (0 errors) ✓
+
+---
+
+## Integration test results (Brief 08 — 2026-04-03)
+
+**Bridgewater Hotel — Enhanced Fabric scenario**
+
+- EUI: 83.5 kWh/m² (EnergyPlus verified)
+- Instant calc EUI: ~78.7 kWh/m² (≈6% difference — within expected degree-day approximation error)
+- Total annual energy: 300.6 MWh/yr
+- Auto-simulation: fires ~3s after last change ✓
+- Individual 3D windows: visible at correct positions on all facades ✓
+- EUI gauge: arc animates, colour-codes green/amber/red ✓
 
 ---
 
@@ -37,129 +78,53 @@ Brief 07 Parts 5–9 completed.
 
 ### What's working
 
-- **Project persistence** — ProjectContext auto-saves building/systems/constructions/schedule assignments to SQLite via debounced PUT. Projects survive server restart and page refresh.
-- **Project picker** — Switch between projects from the TopBar dropdown. Create, load, delete projects.
-- **Library system** — 11 constructions, 12+ schedules (incl. ventilation), 10+ system templates, 3 benchmark pathways. All browsable at /library. Custom constructions and system templates can be created/duplicated/deleted.
-- **Profiles editor** — /profiles: browse/edit/copy schedules, assign to project.
-- **Schedule wiring** — Assignments used at simulation time via library_schedule_to_compact().
-- **Simulation persistence** — Results stored in simulation_runs table. Latest complete simulation auto-loaded on project change.
-- **Error boundaries** — Each module wrapped in ErrorBoundary.
-- **Building Definition** — Geometry, Fabric tabs. 3D viewer, construction picker, infiltration slider (0.1–2.0 ACH), fabric summary card.
-- **Systems & Zones** — HVAC, Ventilation, DHW, Lighting tabs. Heat recovery hidden for MEV, editable for MVHR. LPD range 0–20 W/m² with LED/Fluorescent/Incandescent presets.
-- **Results Dashboard** — Overview (with building summary strip + Compare link), Energy Flows (Sankey with scenario title), Energy Balance, Load Profiles (typical day + full year with brush zoom + fuel toggle), Fabric Analysis, CRREM & Carbon. Scenario selector updates ALL tabs.
-- **Scenario Manager** — /scenarios with ExplorerLayout sidebar. Baseline auto-created. Create/run/compare scenarios. Compare view has best performer badge (trophy).
-- **CRREM & Carbon tab** — EUI trajectory vs CRREM 1.5°C UK Hotel pathway, carbon trajectory (grid decarbonisation), stranding year markers. Multi-scenario overlay.
-- **Library browser** — /library with type filters, search, item detail panel. Custom item creation for constructions (layer editor + quick U-value) and systems (parameter editor). Duplicate/delete items.
-- **Home page** — 5-step getting started guide when no simulation has been run.
-
----
-
-## Brief 06 — Bug fixes and improvements summary
-
-### Bugs fixed
-- ✅ **Part 1**: Sankey diagram layout error — defensive data handling, filters zero/NaN links
-- ✅ **Part 2**: Carbon trajectory showing zero — reads `annual_energy.total_kWh` (always present) instead of `results_summary.total_energy_kWh` (null in DB)
-- ✅ **Part 3**: Envelope persistence — `normalizeDbResult` reconstructs basic `envelope` from `envelope_detailed` so Fabric Analysis works after page refresh
-- ✅ **Part 4**: Scenario selector now updates ALL Results tabs (Overview, Energy Balance, Load Profiles, Fabric Analysis, CRREM) not just CRREM
-
-### UI gaps closed
-- ✅ **Part 5**: Infiltration rate input on Fabric tab (slider 0.1–2.0 ACH, airtightness guidance)
-- ✅ **Part 6**: Heat recovery hidden for MEV, editable for MVHR. LPD range 0–20 W/m² with 4 presets.
-- ✅ **Part 7**: Ventilation schedules (continuous, occupied, timer) added to library and assembler
-- ✅ **Part 8**: Expanded load profile end uses (fans, DHW, ventilation loss) + fuel type toggle (All / Electricity / Gas)
-
-### New features
-- ✅ **Part 9**: Custom construction creation — quick U-value method + layer editor. Duplicate existing constructions.
-- ✅ **Part 10**: Custom system template creation — parameter editor for VRF/ASHP/Gas Boiler/MEV/MVHR/Natural Ventilation. Duplicate existing systems.
-- ✅ **Part 11**: Full-year zoomable load profile — 8760h data via `/api/simulate/{run_id}/hourly`, daily aggregates + navigator brush, auto-switches to hourly when ≤13 days selected
-- ✅ **Part 12**: Centralised colour constants — `SCENARIO_COLORS`, `ENDUSE_COLORS`, `FABRIC_COLORS` in `chartTokens.js`
-- ✅ **Part 13**: UI polish — Fabric summary card, building summary on Overview, Sankey title with scenario+MWh, best performer badge in Comparison, 5-step getting started guide
-- ✅ **Part 14**: Integration test verified — clean build (zero errors). All 13 prior parts compile and cross-reference correctly.
-
----
-
-## Integration test results (Brief 05 — 2026-04-02)
-
-### Bridgewater Hotel — 4-scenario comparison
-
-Building: 60×15m, 4 floors, 3.2m height, 25% WWR all façades, 0° orientation.
-
-| Scenario | EUI (kWh/m²) | Heating (MWh) | Cooling (MWh) | Total (MWh) |
-|----------|-------------|---------------|----------------|-------------|
-| Baseline | 56.1 | 0.5 | 59.2 | 201.9 |
-| Enhanced Fabric | 59.8 | 0.0 | 73.0 | 215.3 |
-| MVHR Upgrade | 56.1 | 0.5 | 59.2 | 201.9 |
-| Fabric + MVHR | 59.8 | 0.0 | 73.0 | 215.3 |
-
----
-
-## Brief 07 progress
-
-- ✅ Part 1: HVAC implementation research — `docs/hvac_implementation_notes.md`
-- ✅ Part 2: VRF system generator — native AirConditioner:VariableRefrigerantFlow with full performance curves
-- ✅ Part 3: MEV and MVHR ventilation generators
-- ✅ Part 4: Gas boiler DHW — WaterHeater:Mixed standalone mode, ASHP two-tank cascade. Gas Only 12,308 kWh → ASHP preheat 3,515 kWh gas (71% reduction)
-- ✅ Part 5: Fuel-split results — get_energy_by_fuel() in sql_parser; fuel_split key in API response; CRREM carbon uses real electricity+gas formula (gas constant 0.183 kgCO₂/kWh)
-- ✅ Part 6: Frontend system mode toggle — HVACTab Detailed/Ideal Loads with amber warning, inputs dim in ideal mode. ProjectContext default changed to 'detailed'.
-- ✅ Part 7: Scenario editor supports system mode — mode toggle in ScenarioEditor Systems section, captured in changes_from_baseline
-- ✅ Part 8: Performance curves verified — avg COP 4.25 in UK climate, winter-concentrated heating pattern, 0 severe errors
-- ✅ Part 9: Full Bridgewater 5-scenario comparison — all scenarios run, physics verified (MVHR -92% heating, ASHP -71% gas)
-- ✅ Part 10: Full integration test — API pipeline verified, build clean (0 errors)
-
----
-
-## Brief 07 — Final integration report
-
-**Detailed HVAC working:** VRF ✓ | MVHR ✓ | Gas Boiler ✓ | ASHP Preheat ✓
-**Fuel split (Baseline Detailed):** Electricity 222.1 MWh (81.8%) | Gas 49.3 MWh (18.2%)
-**EUI range:** 47.2 (Full Upgrade) → 75.4 (Baseline Detailed) kWh/m²
-**MVHR benefit:** Heating thermal 131 → 10.6 MWh (-92%)
-**ASHP benefit:** Gas 49.3 → 14.1 MWh (-71%)
-**Performance curves:** COP varies ✓ (avg COP ≈ 4.25 in UK mild climate)
-**Carbon 2026 (grid intensity 0.145 kgCO₂/kWh):**
-  - Baseline: (222,134 × 0.145 + 49,303 × 0.183) / 3,600 = **11.5 kgCO₂/m²**
-  - Full Upgrade: (155,900 × 0.145 + 14,100 × 0.183) / 3,600 = **7.0 kgCO₂/m²**
-**Data pipeline:** CRREM tab reads `annual_energy.electricity_kWh`/`gas_kWh` as fuel-split fallback ✓
-**Build:** Clean — 0 errors, 0 type issues
-
----
-
-## Next task (post-Brief 07)
-
-Brief 07 is complete. Next briefs to consider:
-- Report export to PowerPoint/PDF using NZA template
-- CIBSE TM54 benchmark integration
-- EV charging demand modelling
-- Multi-zone building types (office, retail, hotel mix)
-- Glazing g-value / solar control as scenario parameter
+- **Three-column live workspaces** — Building, Systems, Profiles all show inputs | visual centre | live results
+- **Instant calc feedback** — EUI, fabric losses, solar gains, fuel split update <50ms from sliders
+- **Auto-simulation** — triggers 3s after last change, replaces instant estimate with EnergyPlus values
+- **Individual 3D windows** — per-facade window count controls separate glass panels on model
+- **Module colour themes** — each section has distinct accent colour throughout header, sidebar, indicators
+- **Energy Balance** — 7 end-use series, gracefully filters zero series
+- **Sankey** — contained within bounds, no sidebar overlap
+- **Project persistence** — building/systems/constructions/schedule assignments saved to SQLite
+- **Project picker** — Switch between projects. Create, load, delete.
+- **Library system** — constructions, systems, schedules, benchmarks. Custom item creation.
+- **Profiles editor** — browse/edit/copy schedules, assign to project, prev/next navigation
+- **Simulation persistence** — results stored in DB, auto-loaded on project change
+- **Results Dashboard** — Overview, Energy Flows, Energy Balance, Load Profiles, Fabric Analysis, CRREM & Carbon
+- **Scenario Manager** — create/run/compare scenarios, best performer badge
+- **CRREM & Carbon** — EUI trajectory vs CRREM 1.5°C UK Hotel, stranding year markers
 
 ---
 
 ## Known issues
 
-- Building hardcoded as hotel_bedroom zone type — multi-zone not yet supported. EUI ~50–75 kWh/m² (below CIBSE hotel benchmark) because public-area loads not modelled.
-- **uvicorn must be restarted** after code changes — not running with `--reload`. Old code will silently produce ideal-loads results even when mode=detailed is set.
-- Full-year hourly data requires the EnergyPlus .sql output file to still exist on disk (`data/simulations/{run_id}/eplusout.sql`). If old simulation directories are cleaned, full-year view returns a 404.
-- MVHR raises cooling demand significantly (MEV 2 MWh → MVHR 50 MWh): forced supply air at design flow rate in summer, vs MEV's low-rate infiltration. Physically consistent but counterintuitive.
-- Standalone `/api/simulate` (deprecated endpoint) may not forward systems_config correctly — use `/api/projects/{id}/simulate` for all production simulations.
+- Building hardcoded as hotel_bedroom zone type — multi-zone not yet supported.
+- **uvicorn must be restarted** after backend code changes — not running with `--reload`.
+- Full-year hourly data requires the EnergyPlus .sql output file on disk. If old sim directories are cleaned, full-year view returns 404.
+- MVHR raises cooling demand significantly (MEV 2 MWh → MVHR 50 MWh): forced supply air at design flow rate in summer. Physically consistent but counterintuitive.
+- Instant calc solar gains stored internally as MWh (formula divides by 1000). Display panels show MWh correctly.
+- Systems library options show "Loading…" briefly on page load until `/api/library/systems` resolves.
 
 ---
 
-## Suggestions for Brief 07
+## Suggestions for Brief 09
 
-- Detailed HVAC mode: real system objects (ZoneHVAC:IdealLoadsAirSystem → real fan coil / DX coil with COP curves)
-- Wire MVHR efficiency into epJSON so ideal loads mode reflects heat recovery
-- Show which schedule is currently assigned in the Profiles sidebar
-- Add "Duplicate project" to project picker
-- Add CSV export of simulation results
-- Add glazing g-value / solar control as scenario parameter in ScenarioEditor
+- Report export to PowerPoint/PDF using NZA template
+- CIBSE TM54 benchmark integration — show building type comparison
+- EV charging demand modelling
+- Multi-zone building types (office, retail, hotel mix)
+- Glazing g-value / solar control as scenario parameter
+- Dual-screen pop-out — detach results panel to second monitor
+- Future weather files — climate change scenarios (+2°C, +3.5°C)
 - Monthly weather visualisation (heating/cooling degree days per month)
+- CSV export of simulation results
+- "Duplicate project" in project picker
 
 ---
 
 ## Safety checks
 
-- Working tree: clean (git status)
+- Working tree: clean
 - Branch: main
-- Ahead of origin/main: 0 commits (push confirmed 2026-04-02)
+- Brief 08 all 15 parts committed to main
 - data/ directory: gitignored, intact, not touched
