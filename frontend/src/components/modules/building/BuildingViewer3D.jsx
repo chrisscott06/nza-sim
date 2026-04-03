@@ -30,7 +30,7 @@ function solarFaceColor(facadeLabel, orientationDeg, enabled) {
 }
 
 /* ── Building geometry from params ────────────────────────────────────────── */
-function Building({ params, solarOverlay }) {
+function Building({ params, solarOverlay, onFacadeHover }) {
   const { length, width, num_floors, floor_height, wwr, window_count, orientation } = params
 
   const totalHeight = num_floors * floor_height
@@ -114,10 +114,35 @@ function Building({ params, solarOverlay }) {
     return lines
   }, [num_floors, floor_height, hd, hw])
 
+  // Facade metadata for hover tooltip (BoxGeometry materialIndex order: +X,-X,+Y,-Y,+Z,-Z)
+  // Face area: East/West = length × totalHeight; North/South = width × totalHeight
+  const facadeMap = [
+    { label: 'East',  key: 'east',  faceW: length, area: length * totalHeight, wwrVal: wwr.east  },
+    { label: 'West',  key: 'west',  faceW: length, area: length * totalHeight, wwrVal: wwr.west  },
+    null,  // +Y top — not a facade
+    null,  // -Y bottom
+    { label: 'North', key: 'north', faceW: width,  area: width  * totalHeight, wwrVal: wwr.north },
+    { label: 'South', key: 'south', faceW: width,  area: width  * totalHeight, wwrVal: wwr.south },
+  ]
+
   return (
     <group position={[0, 0, 0]}>
       {/* Main building box — per-face solar tint (BoxGeometry face order: +X,-X,+Y,-Y,+Z,-Z) */}
-      <mesh position={[0, totalHeight / 2, 0]} castShadow receiveShadow>
+      <mesh
+        position={[0, totalHeight / 2, 0]}
+        castShadow
+        receiveShadow
+        onPointerEnter={e => {
+          e.stopPropagation()
+          const face = facadeMap[e.face?.materialIndex]
+          if (face && onFacadeHover) {
+            const glazArea = Math.round(face.area * face.wwrVal)
+            const solar    = getSolarRadiation(face.key, orientation)
+            onFacadeHover({ label: face.label, area: Math.round(face.area), glazArea, wwr: Math.round(face.wwrVal * 100), solar })
+          }
+        }}
+        onPointerLeave={() => onFacadeHover?.(null)}
+      >
         <boxGeometry args={[width, totalHeight, length]} />
         {/* +X = East */}
         <meshStandardMaterial attach="material-0" color={solarFaceColor('east',  orientation, solarOverlay)} roughness={0.85} metalness={0} />
@@ -265,6 +290,7 @@ export default function BuildingViewer3D({ params }) {
   const [solarOverlay, setSolarOverlay] = useState(true)
   const [mapVisible, setMapVisible]     = useState(false)
   const [resetSignal, setResetSignal]   = useState(0)
+  const [hoverInfo, setHoverInfo]       = useState(null)
 
   // Legend: map compass directions to solar values for current orientation
   const legendStops = [
@@ -314,7 +340,7 @@ export default function BuildingViewer3D({ params }) {
 
         {/* Rotate building group by orientation */}
         <group rotation={[0, (-orientation * Math.PI) / 180, 0]}>
-          <Building params={params} solarOverlay={solarOverlay} />
+          <Building params={params} solarOverlay={solarOverlay} onFacadeHover={setHoverInfo} />
           <OrientationIndicator orientation={0} />
         </group>
 
@@ -354,6 +380,18 @@ export default function BuildingViewer3D({ params }) {
           ⌖ Reset
         </button>
       </div>
+
+      {/* Facade hover tooltip */}
+      {hoverInfo && (
+        <div className="absolute top-12 left-3 bg-white/92 backdrop-blur-sm rounded-lg border border-light-grey px-3 py-2 pointer-events-none space-y-0.5 shadow-sm">
+          <p className="text-xxs uppercase tracking-wider text-mid-grey">{hoverInfo.label} facade</p>
+          <p className="text-caption text-navy font-medium">{hoverInfo.solar} kWh/m²/yr solar</p>
+          <div className="text-xxs text-dark-grey space-y-0.5 pt-0.5">
+            <p>Wall area: <span className="text-navy font-medium">{hoverInfo.area} m²</span></p>
+            <p>Glazing: <span className="text-navy font-medium">{hoverInfo.glazArea} m²</span> ({hoverInfo.wwr}% WWR)</p>
+          </div>
+        </div>
+      )}
 
       {/* Compass rose — bottom-left corner */}
       <div className="absolute bottom-10 left-3 pointer-events-none select-none">
