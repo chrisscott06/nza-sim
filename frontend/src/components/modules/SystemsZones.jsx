@@ -85,13 +85,54 @@ function Toggle({ value, onChange, label }) {
   )
 }
 
+// ── Accordion section ─────────────────────────────────────────────────────────
+
+function AccordionSection({ id, title, summary, isOpen, onToggle, children, accentColor = '#00AEEF' }) {
+  return (
+    <div
+      className="border-t border-light-grey"
+      style={{ borderLeft: `3px solid ${isOpen ? accentColor : 'transparent'}` }}
+    >
+      <button
+        onClick={() => onToggle(id)}
+        className={`w-full flex items-center justify-between px-2 py-2 text-left transition-colors ${
+          isOpen ? 'bg-teal/5' : 'hover:bg-off-white'
+        }`}
+      >
+        <div className="flex-1 min-w-0">
+          <p className="text-xxs font-semibold text-navy uppercase tracking-wider">{title}</p>
+          {!isOpen && summary && (
+            <p className="text-xxs text-mid-grey truncate mt-0.5">{summary}</p>
+          )}
+        </div>
+        <svg
+          className={`flex-shrink-0 ml-1 w-3 h-3 text-mid-grey transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      <div
+        className="overflow-hidden transition-all duration-200"
+        style={{ maxHeight: isOpen ? '600px' : '0px' }}
+      >
+        <div className={`px-2 pb-3 ${isOpen ? 'bg-teal/5' : ''}`}>
+          {children}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Left inputs column ────────────────────────────────────────────────────────
 
-function InputsColumn({ library }) {
+function InputsColumn({ library, openSection, setOpenSection }) {
   const { systems, updateSystem } = useContext(ProjectContext)
 
   const isIdeal = systems.mode !== 'detailed'
   const isMVHR  = systems.ventilation_type?.startsWith('mvhr')
+
+  const toggleSection = (id) => setOpenSection(prev => prev === id ? null : id)
 
   // Build option lists from library
   // Library items use 'category' field (not 'type') — filter accordingly
@@ -139,6 +180,22 @@ function InputsColumn({ library }) {
     { label: 'Incan', value: 16 },
   ]
 
+  // ── One-line summaries for each collapsed section ──────────────────────────
+  const hvacSummary  = isIdeal
+    ? 'Ideal Loads — 100% efficient'
+    : `${hvacOpts.find(o => o.value === (systems.hvac_type ?? 'vrf_standard'))?.label ?? 'VRF'} · COP ${systems.cop_heating ?? 3.5} / EER ${systems.cop_cooling ?? 3.2}`
+
+  const ventSummary  = isMVHR
+    ? `MVHR · SFP ${systems.sfp_override ?? 1.5} W/(l/s) · ${systems.hre_override ?? 85}% HR`
+    : `MEV · SFP ${systems.sfp_override ?? 1.5} W/(l/s)`
+
+  const dhwPrimLabel = dhwOpts.find(o => o.value === (systems.dhw_primary ?? 'gas_boiler_dhw'))?.label ?? 'Gas Boiler'
+  const dhwSummary   = `${dhwPrimLabel} · ${systems.dhw_setpoint ?? 60}°C${(systems.dhw_preheat ?? 'none') !== 'none' ? ' · ASHP preheat' : ''}`
+
+  const lightSummary = `${lpd} W/m² · ${lightingControlOpts.find(o => o.value === (systems.lighting_control ?? 'occupancy_sensing'))?.label ?? 'Occupancy sensing'}`
+
+  const powerSummary = `${epd} W/m²`
+
   return (
     <div className="h-full overflow-y-auto overflow-x-hidden bg-white border-r border-light-grey">
       {/* Module header with teal accent */}
@@ -150,11 +207,10 @@ function InputsColumn({ library }) {
         <p className="text-xxs text-mid-grey">HVAC, ventilation, DHW &amp; lighting</p>
       </div>
 
-      <div className="p-3">
-
-        {/* ── Simulation Mode ── */}
-        <SectionHeader title="Simulation Mode" />
-        <div className="flex gap-1.5 mb-3">
+      {/* ── Simulation Mode — always visible ── */}
+      <div className="px-3 py-2 border-b border-light-grey">
+        <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1.5">Simulation Mode</p>
+        <div className="flex gap-1.5">
           {[{ v: 'detailed', l: 'Detailed' }, { v: 'ideal', l: 'Ideal Loads' }].map(opt => (
             <button
               key={opt.v}
@@ -170,42 +226,48 @@ function InputsColumn({ library }) {
           ))}
         </div>
         {isIdeal && (
-          <p className="text-xxs text-amber-600 mb-2 -mt-1">
-            ⚠ Ideal Loads bypasses real HVAC — EUI will be lower than actuals
+          <p className="text-xxs text-amber-600 mt-1.5">
+            ⚠ Ideal Loads bypasses real HVAC
           </p>
         )}
+      </div>
 
-        {/* ── HVAC ── */}
-        <div className="border-t border-light-grey pt-3">
-          <SectionHeader title="HVAC" />
-          <div className={isIdeal ? 'opacity-40 pointer-events-none' : ''}>
-            <Field label="System type">
-              <CompactSelect
-                value={systems.hvac_type ?? 'vrf_standard'}
-                onChange={v => updateSystem('hvac_type', v)}
-                options={hvacOpts}
-              />
-            </Field>
-            <Field label="Heating COP">
-              <SliderWithNumber
-                value={systems.cop_heating ?? 3.5}
-                onChange={v => updateSystem('cop_heating', v)}
-                min={1.0} max={6.0} step={0.1}
-              />
-            </Field>
-            <Field label="Cooling EER">
-              <SliderWithNumber
-                value={systems.cop_cooling ?? 3.2}
-                onChange={v => updateSystem('cop_cooling', v)}
-                min={1.0} max={6.0} step={0.1}
-              />
-            </Field>
-          </div>
+      {/* ── HVAC ── */}
+      <AccordionSection
+        id="hvac" title="HVAC" summary={hvacSummary}
+        isOpen={openSection === 'hvac'} onToggle={toggleSection}
+      >
+        <div className={`mt-2 space-y-1 ${isIdeal ? 'opacity-40 pointer-events-none' : ''}`}>
+          <Field label="System type">
+            <CompactSelect
+              value={systems.hvac_type ?? 'vrf_standard'}
+              onChange={v => updateSystem('hvac_type', v)}
+              options={hvacOpts}
+            />
+          </Field>
+          <Field label="Heating COP">
+            <SliderWithNumber
+              value={systems.cop_heating ?? 3.5}
+              onChange={v => updateSystem('cop_heating', v)}
+              min={1.0} max={6.0} step={0.1}
+            />
+          </Field>
+          <Field label="Cooling EER">
+            <SliderWithNumber
+              value={systems.cop_cooling ?? 3.2}
+              onChange={v => updateSystem('cop_cooling', v)}
+              min={1.0} max={6.0} step={0.1}
+            />
+          </Field>
         </div>
+      </AccordionSection>
 
-        {/* ── Ventilation ── */}
-        <div className="border-t border-light-grey pt-3">
-          <SectionHeader title="Ventilation" />
+      {/* ── Ventilation ── */}
+      <AccordionSection
+        id="ventilation" title="Ventilation" summary={ventSummary}
+        isOpen={openSection === 'ventilation'} onToggle={toggleSection}
+      >
+        <div className="mt-2 space-y-1">
           <Field label="System type">
             <CompactSelect
               value={systems.ventilation_type ?? 'mev_standard'}
@@ -256,10 +318,14 @@ function InputsColumn({ library }) {
             </Field>
           )}
         </div>
+      </AccordionSection>
 
-        {/* ── DHW ── */}
-        <div className="border-t border-light-grey pt-3">
-          <SectionHeader title="DHW" />
+      {/* ── DHW ── */}
+      <AccordionSection
+        id="dhw" title="DHW" summary={dhwSummary}
+        isOpen={openSection === 'dhw'} onToggle={toggleSection}
+      >
+        <div className="mt-2 space-y-1">
           <Field label="Primary system">
             <CompactSelect
               value={systems.dhw_primary ?? 'gas_boiler_dhw'}
@@ -295,10 +361,14 @@ function InputsColumn({ library }) {
             )}
           </div>
         </div>
+      </AccordionSection>
 
-        {/* ── Lighting ── */}
-        <div className="border-t border-light-grey pt-3">
-          <SectionHeader title="Lighting" />
+      {/* ── Lighting ── */}
+      <AccordionSection
+        id="lighting" title="Lighting" summary={lightSummary}
+        isOpen={openSection === 'lighting'} onToggle={toggleSection}
+      >
+        <div className="mt-2 space-y-1">
           <div className="flex items-center justify-between mb-1">
             <label className="text-xxs uppercase tracking-wider text-mid-grey">
               LPD — {lpd} W/m²
@@ -333,10 +403,14 @@ function InputsColumn({ library }) {
             />
           </Field>
         </div>
+      </AccordionSection>
 
-        {/* ── Small Power ── */}
-        <div className="border-t border-light-grey pt-3">
-          <SectionHeader title="Small Power" />
+      {/* ── Small Power ── */}
+      <AccordionSection
+        id="smallpower" title="Small Power" summary={powerSummary}
+        isOpen={openSection === 'smallpower'} onToggle={toggleSection}
+      >
+        <div className="mt-2">
           <Field label={`Equipment density — ${epd} W/m²`}>
             <SliderWithNumber
               value={epd}
@@ -345,12 +419,12 @@ function InputsColumn({ library }) {
               unit="W/m²"
             />
           </Field>
-          <p className="text-xxs text-mid-grey">
+          <p className="text-xxs text-mid-grey mt-1">
             CIBSE Guide A hotel default: 15 W/m²
           </p>
         </div>
+      </AccordionSection>
 
-      </div>
     </div>
   )
 }
@@ -358,8 +432,9 @@ function InputsColumn({ library }) {
 // ── Main three-column layout ──────────────────────────────────────────────────
 
 export default function SystemsZones() {
-  const [library, setLibrary]     = useState([])
-  const [libraryData, setLibraryData] = useState({})
+  const [library, setLibrary]           = useState([])
+  const [libraryData, setLibraryData]   = useState({})
+  const [openSection, setOpenSection]   = useState('hvac')  // HVAC open by default
 
   useEffect(() => {
     // Fetch systems library for type dropdowns
@@ -379,12 +454,16 @@ export default function SystemsZones() {
     <div className="flex h-[calc(100vh-3rem)]">
       {/* Left: inputs */}
       <div className="w-64 flex-shrink-0">
-        <InputsColumn library={library} />
+        <InputsColumn
+          library={library}
+          openSection={openSection}
+          setOpenSection={setOpenSection}
+        />
       </div>
 
       {/* Centre: system schematic */}
       <div className="flex-1 bg-off-white overflow-hidden">
-        <SystemSchematic />
+        <SystemSchematic openSection={openSection} setOpenSection={setOpenSection} />
       </div>
 
       {/* Right: live results */}
