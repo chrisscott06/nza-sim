@@ -67,7 +67,8 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
   const { params, constructions, systems } = useContext(ProjectContext)
   const containerRef = useRef(null)
   const [dims, setDims] = useState({ width: 600, height: 400 })
-  const [tooltip, setTooltip] = useState(null)  // { x, y, node }
+  const [tooltip, setTooltip] = useState(null)        // { x, y, node }
+  const [hoveredNodeId, setHoveredNodeId] = useState(null)
 
   const result = useMemo(
     () => calculateInstant(params, constructions, systems, libraryData),
@@ -136,9 +137,13 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
     const outFlow = sankeyResult?.links.filter(l => (typeof l.source === 'object' ? l.source.id : l.source) === node.id)
                       .reduce((s, l) => s + (l.value ?? 0), 0) ?? 0
     setTooltip({ x, y, node, inFlow, outFlow })
+    setHoveredNodeId(node.id)
   }, [sankeyResult])
 
-  const handleNodeLeave = useCallback(() => setTooltip(null), [])
+  const handleNodeLeave = useCallback(() => {
+    setTooltip(null)
+    setHoveredNodeId(null)
+  }, [])
 
   // ── Click on node → expand accordion ─────────────────────────────────────
   const handleNodeClick = useCallback((node) => {
@@ -200,14 +205,23 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
               const color  = LINK_COLORS[style] ?? LINK_COLORS.default
               const isRecovered = style === 'recovered' || style === 'waste'
               const w = Math.max(1, link.width ?? 2)
+              const srcId = typeof link.source === 'object' ? link.source.id : link.source
+              const tgtId = typeof link.target === 'object' ? link.target.id : link.target
+              const isConnected = hoveredNodeId
+                ? (srcId === hoveredNodeId || tgtId === hoveredNodeId)
+                : true
+              const baseOpacity = isRecovered ? 0.7 : 0.45
+              const opacity = hoveredNodeId
+                ? (isConnected ? Math.min(baseOpacity + 0.35, 1) : 0.08)
+                : baseOpacity
               return (
                 <path
                   key={i}
                   d={linkPath(link)}
                   fill="none"
                   stroke={color}
-                  strokeWidth={w}
-                  strokeOpacity={isRecovered ? 0.7 : 0.45}
+                  strokeWidth={isConnected && hoveredNodeId ? w * 1.15 : w}
+                  strokeOpacity={opacity}
                   strokeDasharray={isRecovered ? '6 3' : undefined}
                   style={{ transition: 'stroke-width 300ms ease, stroke-opacity 300ms ease' }}
                 />
@@ -236,11 +250,17 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
               const c  = NODE_COLORS[type] ?? NODE_COLORS.system
               const isClickable = ['vrf','mvhr','boiler','lighting','small_power'].includes(node.id)
               const labelX = x1 + 5
+              const isNodeDimmed = hoveredNodeId && node.id !== hoveredNodeId
+                && !sankeyResult.links.some(l => {
+                    const s = typeof l.source === 'object' ? l.source.id : l.source
+                    const t = typeof l.target === 'object' ? l.target.id : l.target
+                    return (s === hoveredNodeId && t === node.id) || (t === hoveredNodeId && s === node.id)
+                  })
 
               return (
                 <g
                   key={i}
-                  style={{ cursor: isClickable ? 'pointer' : 'default' }}
+                  style={{ cursor: isClickable ? 'pointer' : 'default', opacity: isNodeDimmed ? 0.3 : 1, transition: 'opacity 300ms ease' }}
                   onClick={() => handleNodeClick(node)}
                   onMouseEnter={e => handleNodeEnter(e, node)}
                   onMouseLeave={handleNodeLeave}
