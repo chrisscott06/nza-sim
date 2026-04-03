@@ -1,7 +1,8 @@
-import { useRef, useMemo } from 'react'
+import { useRef, useMemo, useState } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls, Environment, Sky } from '@react-three/drei'
 import * as THREE from 'three'
+import { getSolarRadiation, SOLAR_BY_COMPASS } from '../../../utils/instantCalc.js'
 
 /* ── Architectural material palette ───────────────────────────────────────── */
 const COLORS = {
@@ -12,9 +13,25 @@ const COLORS = {
   groundPlane: '#EBEBEB',  // off-white ground
 }
 
+/* ── Solar tint helper ─────────────────────────────────────────────────────── */
+const SOLAR_MIN = 350  // N
+const SOLAR_MAX = 750  // S
+const COOL_COLOR = new THREE.Color('#A8C4D0')  // cool grey-blue for low-solar faces
+const WARM_COLOR = new THREE.Color('#D4883A')  // warm amber for high-solar faces
+const BASE_COLOR = new THREE.Color(COLORS.wall)
+
+function solarFaceColor(facadeLabel, orientationDeg, enabled) {
+  if (!enabled) return COLORS.wall
+  const solar = getSolarRadiation(facadeLabel, orientationDeg)
+  const t = Math.max(0, Math.min(1, (solar - SOLAR_MIN) / (SOLAR_MAX - SOLAR_MIN)))
+  const tint = COOL_COLOR.clone().lerp(WARM_COLOR, t)
+  // Blend 55% base wall, 45% tint — subtle effect
+  return '#' + BASE_COLOR.clone().lerp(tint, 0.45).getHexString()
+}
+
 /* ── Building geometry from params ────────────────────────────────────────── */
-function Building({ params }) {
-  const { length, width, num_floors, floor_height, wwr, window_count } = params
+function Building({ params, solarOverlay }) {
+  const { length, width, num_floors, floor_height, wwr, window_count, orientation } = params
 
   const totalHeight = num_floors * floor_height
 
@@ -99,10 +116,21 @@ function Building({ params }) {
 
   return (
     <group position={[0, 0, 0]}>
-      {/* Main building box */}
+      {/* Main building box — per-face solar tint (BoxGeometry face order: +X,-X,+Y,-Y,+Z,-Z) */}
       <mesh position={[0, totalHeight / 2, 0]} castShadow receiveShadow>
         <boxGeometry args={[width, totalHeight, length]} />
-        <meshStandardMaterial color={COLORS.wall} roughness={0.85} metalness={0.0} />
+        {/* +X = East */}
+        <meshStandardMaterial attach="material-0" color={solarFaceColor('east',  orientation, solarOverlay)} roughness={0.85} metalness={0} />
+        {/* -X = West */}
+        <meshStandardMaterial attach="material-1" color={solarFaceColor('west',  orientation, solarOverlay)} roughness={0.85} metalness={0} />
+        {/* +Y = Top (use roof color) */}
+        <meshStandardMaterial attach="material-2" color={COLORS.roof} roughness={0.7} metalness={0} />
+        {/* -Y = Bottom (underground, doesn't matter) */}
+        <meshStandardMaterial attach="material-3" color={COLORS.wall} roughness={1} metalness={0} />
+        {/* +Z = North */}
+        <meshStandardMaterial attach="material-4" color={solarFaceColor('north', orientation, solarOverlay)} roughness={0.85} metalness={0} />
+        {/* -Z = South */}
+        <meshStandardMaterial attach="material-5" color={solarFaceColor('south', orientation, solarOverlay)} roughness={0.85} metalness={0} />
       </mesh>
 
       {/* Roof cap — slightly wider for overhang effect */}
@@ -175,10 +203,18 @@ export default function BuildingViewer3D({ params }) {
   const { length, width, num_floors, floor_height, orientation } = params
   const maxDim  = Math.max(length, width, num_floors * floor_height)
   const camDist = maxDim * 2.2
-  const midH    = (num_floors * floor_height) / 2
+
+  const [solarOverlay, setSolarOverlay] = useState(true)
+
+  // Legend: map compass directions to solar values for current orientation
+  const legendStops = [
+    { label: `${SOLAR_MAX} kWh/m²/yr`, color: '#' + BASE_COLOR.clone().lerp(WARM_COLOR, 0.45).getHexString() },
+    { label: `${Math.round((SOLAR_MIN + SOLAR_MAX) / 2)}`, color: COLORS.wall },
+    { label: `${SOLAR_MIN}`, color: '#' + BASE_COLOR.clone().lerp(COOL_COLOR, 0.45).getHexString() },
+  ]
 
   return (
-    <div className="w-full h-full" style={{ background: '#D8E8F0' }}>
+    <div className="w-full h-full relative" style={{ background: '#D8E8F0' }}>
       <Canvas
         shadows
         camera={{
@@ -216,7 +252,7 @@ export default function BuildingViewer3D({ params }) {
 
         {/* Rotate building group by orientation */}
         <group rotation={[0, (-orientation * Math.PI) / 180, 0]}>
-          <Building params={params} />
+          <Building params={params} solarOverlay={solarOverlay} />
           <OrientationIndicator orientation={0} />
         </group>
 
@@ -238,6 +274,37 @@ export default function BuildingViewer3D({ params }) {
         <p className="text-xxs text-mid-grey">
           {(length * width * num_floors).toLocaleString()} m² GIA
         </p>
+      </div>
+
+      {/* Solar overlay toggle */}
+      <div className="absolute bottom-3 right-3 flex flex-col items-end gap-1.5">
+        <button
+          onClick={() => setSolarOverlay(v => !v)}
+          className={`text-xxs px-2 py-1 rounded border backdrop-blur-sm transition-colors ${
+            solarOverlay
+              ? 'bg-amber-50/90 text-amber-700 border-amber-300'
+              : 'bg-white/80 text-mid-grey border-light-grey'
+          }`}
+        >
+          ☀ Solar overlay {solarOverlay ? 'on' : 'off'}
+        </button>
+
+        {/* Solar legend */}
+        {solarOverlay && (
+          <div className="bg-white/85 backdrop-blur-sm rounded border border-light-grey px-2 py-1.5 space-y-0.5">
+            <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1">kWh/m²/yr</p>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-16 rounded" style={{
+                background: `linear-gradient(to bottom, ${legendStops[0].color}, ${legendStops[1].color}, ${legendStops[2].color})`
+              }} />
+              <div className="flex flex-col justify-between h-16">
+                {legendStops.map(s => (
+                  <span key={s.label} className="text-xxs text-dark-grey leading-none">{s.label}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Orbit hint */}
