@@ -16,6 +16,16 @@
 
 import { useState } from 'react'
 
+// ── Facade label helper ───────────────────────────────────────────────────────
+// F1=north (0°), F2=east (90°), F3=south (180°), F4=west (270°)
+function facadeLabel(facadeNumber, orientationDeg) {
+  const baseAngles = { 1: 0, 2: 90, 3: 180, 4: 270 }
+  const trueAngle = (baseAngles[facadeNumber] + (orientationDeg ?? 0)) % 360
+  const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+  const compass = directions[Math.round(trueAngle / 45) % 8]
+  return `F${facadeNumber} (${compass})`
+}
+
 // ── Layout constants ──────────────────────────────────────────────────────────
 const ROW_H   = 13    // px per row
 const BAR_MAX = 84    // max half-bar width (px)
@@ -77,12 +87,18 @@ function Divider({ y }) {
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function GainsLossesChart({ result, onExpand }) {
+export default function GainsLossesChart({ result, orientation, onExpand }) {
   if (!result || result.gia_m2 === 0) return null
 
   const hs = result.gains_losses?.heating_side
   const cs = result.gains_losses?.cooling_side
   if (!hs || !cs) return null
+
+  // Shorthand for compass-annotated solar row labels
+  const fl1 = facadeLabel(1, orientation)  // north facade
+  const fl2 = facadeLabel(2, orientation)  // east facade
+  const fl3 = facadeLabel(3, orientation)  // south facade
+  const fl4 = facadeLabel(4, orientation)  // west facade
 
   // ── Section A: Heating losses (left bars only) ────────────────────────────
   const LOSS_ROWS = [
@@ -100,7 +116,7 @@ export default function GainsLossesChart({ result, onExpand }) {
 
   const GAIN_ROWS = [
     {
-      id: 'sol_s', label: 'S solar',
+      id: 'sol_s', label: `${fl3} solar`,
       left:  hs.solar_south ?? 0,  lc: C.solar,
       right: cs.solar_south ?? 0,  rc: C.solar,
     },
@@ -120,12 +136,12 @@ export default function GainsLossesChart({ result, onExpand }) {
       right: cs.people ?? 0,       rc: C.people,
     },
     {
-      id: 'sol_ew', label: 'E/W solar',
+      id: 'sol_ew', label: `${fl2.slice(0,2)}/${fl4.slice(0,2)} solar`,
       left:  solarEWh,              lc: C.solar_dim,
       right: solarEWc,              rc: C.solar_dim,
     },
     {
-      id: 'sol_n', label: 'N solar',
+      id: 'sol_n', label: `${fl1} solar`,
       left:  hs.solar_north ?? 0,  lc: C.solar_dim,
       right: cs.solar_north ?? 0,  rc: C.solar_dim,
     },

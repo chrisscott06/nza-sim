@@ -219,7 +219,7 @@ export default function LiveResultsPanel({ libraryData = {} }) {
         <EUIGauge eui={result.eui_kWh_m2} />
 
         {/* Gains & Losses butterfly chart */}
-        <GainsLossesChart result={result} />
+        <GainsLossesChart result={result} orientation={params.orientation ?? 0} />
 
         {/* Key metrics */}
         <div>

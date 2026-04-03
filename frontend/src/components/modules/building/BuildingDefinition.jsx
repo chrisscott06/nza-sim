@@ -11,6 +11,24 @@ import BuildingViewer3D from './BuildingViewer3D.jsx'
 import LiveResultsPanel from './LiveResultsPanel.jsx'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 
+// ── Facade numbering helpers ──────────────────────────────────────────────────
+// F1=north (0°), F2=east (90°), F3=south (180°), F4=west (270°)
+function facadeLabel(facadeNumber, orientationDeg) {
+  const baseAngles = { 1: 0, 2: 90, 3: 180, 4: 270 }
+  const trueAngle = (baseAngles[facadeNumber] + orientationDeg) % 360
+  const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+  const compass = directions[Math.round(trueAngle / 45) % 8]
+  return `F${facadeNumber} (${compass})`
+}
+
+// Ordered facade definitions for the WWR sliders
+const FACADES = [
+  { num: 1, key: 'north', defaultCount: 8 },
+  { num: 2, key: 'east',  defaultCount: 3 },
+  { num: 3, key: 'south', defaultCount: 8 },
+  { num: 4, key: 'west',  defaultCount: 3 },
+]
+
 // ── Shared input components ───────────────────────────────────────────────────
 
 function SectionHeader({ title }) {
@@ -215,22 +233,22 @@ function InputsColumn({ library }) {
         {/* ── Glazing ── */}
         <div className="border-t border-light-grey pt-3">
           <SectionHeader title="Glazing (WWR)" />
-          {['north', 'south', 'east', 'west'].map(dir => (
-            <div key={dir} className="flex items-center gap-1 mb-1">
-              <span className="text-xxs text-mid-grey w-3">{dir[0].toUpperCase()}</span>
+          {FACADES.map(fac => (
+            <div key={fac.key} className="flex items-center gap-1 mb-1">
+              <span className="text-xxs text-mid-grey w-14 flex-shrink-0">{facadeLabel(fac.num, orientation)}</span>
               <input
                 type="range" min={0} max={100} step={1}
-                value={Math.round((wwr[dir] ?? 0.25) * 100)}
-                onChange={e => updateParam('wwr', { [dir]: Number(e.target.value) / 100 })}
+                value={Math.round((wwr[fac.key] ?? 0.25) * 100)}
+                onChange={e => updateParam('wwr', { [fac.key]: Number(e.target.value) / 100 })}
                 className="flex-1 h-[3px] accent-navy"
               />
-              <span className="text-xxs text-navy w-7 text-right">{Math.round((wwr[dir] ?? 0.25) * 100)}%</span>
+              <span className="text-xxs text-navy w-7 text-right">{Math.round((wwr[fac.key] ?? 0.25) * 100)}%</span>
               <input
                 type="number" min={1} max={30} step={1}
-                value={window_count?.[dir] ?? (dir === 'north' || dir === 'south' ? 8 : 3)}
-                onChange={e => updateParam('window_count', { [dir]: Math.max(1, Number(e.target.value)) })}
+                value={window_count?.[fac.key] ?? fac.defaultCount}
+                onChange={e => updateParam('window_count', { [fac.key]: Math.max(1, Number(e.target.value)) })}
                 className="w-8 px-1 py-0.5 text-xxs text-navy border border-light-grey rounded text-center focus:outline-none focus:border-teal"
-                title={`${dir} window count`}
+                title={`${facadeLabel(fac.num, orientation)} window count`}
               />
               <span className="text-xxs text-mid-grey w-5">win</span>
             </div>

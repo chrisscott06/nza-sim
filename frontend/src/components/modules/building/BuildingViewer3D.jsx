@@ -4,6 +4,16 @@ import { OrbitControls, Environment, Sky, useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import { getSolarRadiation, SOLAR_BY_COMPASS } from '../../../utils/instantCalc.js'
 
+/* ── Facade label helper ────────────────────────────────────────────────────── */
+// F1=north (0°), F2=east (90°), F3=south (180°), F4=west (270°)
+function facadeLabel(facadeNumber, orientationDeg) {
+  const baseAngles = { 1: 0, 2: 90, 3: 180, 4: 270 }
+  const trueAngle = (baseAngles[facadeNumber] + (orientationDeg ?? 0)) % 360
+  const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+  const compass = directions[Math.round(trueAngle / 45) % 8]
+  return `F${facadeNumber} (${compass})`
+}
+
 /* ── Architectural material palette ───────────────────────────────────────── */
 const COLORS = {
   wall:        '#D4C5B8',  // warm light stone
@@ -116,13 +126,14 @@ function Building({ params, solarOverlay, onFacadeHover }) {
 
   // Facade metadata for hover tooltip (BoxGeometry materialIndex order: +X,-X,+Y,-Y,+Z,-Z)
   // Face area: East/West = length × totalHeight; North/South = width × totalHeight
+  // F1=north, F2=east, F3=south, F4=west
   const facadeMap = [
-    { label: 'East',  key: 'east',  faceW: length, area: length * totalHeight, wwrVal: wwr.east  },
-    { label: 'West',  key: 'west',  faceW: length, area: length * totalHeight, wwrVal: wwr.west  },
+    { label: facadeLabel(2, orientation), key: 'east',  faceW: length, area: length * totalHeight, wwrVal: wwr.east  },  // +X
+    { label: facadeLabel(4, orientation), key: 'west',  faceW: length, area: length * totalHeight, wwrVal: wwr.west  },  // -X
     null,  // +Y top — not a facade
     null,  // -Y bottom
-    { label: 'North', key: 'north', faceW: width,  area: width  * totalHeight, wwrVal: wwr.north },
-    { label: 'South', key: 'south', faceW: width,  area: width  * totalHeight, wwrVal: wwr.south },
+    { label: facadeLabel(1, orientation), key: 'north', faceW: width,  area: width  * totalHeight, wwrVal: wwr.north },  // +Z
+    { label: facadeLabel(3, orientation), key: 'south', faceW: width,  area: width  * totalHeight, wwrVal: wwr.south },  // -Z
   ]
 
   return (
@@ -384,7 +395,7 @@ export default function BuildingViewer3D({ params }) {
       {/* Facade hover tooltip */}
       {hoverInfo && (
         <div className="absolute top-12 left-3 bg-white/92 backdrop-blur-sm rounded-lg border border-light-grey px-3 py-2 pointer-events-none space-y-0.5 shadow-sm">
-          <p className="text-xxs uppercase tracking-wider text-mid-grey">{hoverInfo.label} facade</p>
+          <p className="text-xxs uppercase tracking-wider text-mid-grey">{hoverInfo.label}</p>
           <p className="text-caption text-navy font-medium">{hoverInfo.solar} kWh/m²/yr solar</p>
           <div className="text-xxs text-dark-grey space-y-0.5 pt-0.5">
             <p>Wall area: <span className="text-navy font-medium">{hoverInfo.area} m²</span></p>
