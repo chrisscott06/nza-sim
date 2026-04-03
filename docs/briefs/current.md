@@ -1,4 +1,4 @@
-# Brief 12: Systems Module Overhaul — Sankey Schematic, 3D Fixes, Collapsible Inputs
+# Brief 14: Hourly Instant Calc, Live Fabric Sankey & Heating Fix
 
 BEFORE DOING ANYTHING:
 1. Read CLAUDE.md
@@ -16,429 +16,530 @@ BEFORE DOING ANYTHING:
 
 ## Context
 
-The Building module is in good shape. Now it's time to make the Systems module equally impressive. Chris has identified several issues and a vision for the centre schematic:
+The instant calc currently uses an annual steady-state degree-day method that produces zero heating demand because summer gains swamp winter losses in the annual sum. In reality, the building needs heating in winter and cooling in summer — but the annual method can't distinguish seasons.
 
-**Bugs to fix:**
-- 3D shadow z-fighting on the base plate (jittery flickering)
-- Wall colour too brown — should be clean grey
-- Glass lacks blue tint — should be consistent blue regardless of viewing angle
-- System type dropdowns showing "Loading..." — the frontend filters by `l.type` but the API returns `l.category`
-- Heating demand showing 0 MWh in instant calc (likely gains overweighting losses after units fix)
+This brief replaces the degree-day method with an **hourly calculation using real weather data from the EPW file**. For each of the 8,760 hours in a year, it computes losses, gains, heating, and cooling separately. This runs in <5ms in the browser and produces dramatically more accurate results — including non-zero heating demand in winter.
 
-**Systems module vision:**
-The centre schematic should be a **Sankey-style flow diagram** with proportional line widths, showing energy flowing from sources (grid, gas) through systems (VRF, MVHR, boiler, lighting) to end uses (heating, cooling, DHW, light). Crucially, it should show **inter-system connections** — heat rejected by VRF cooling feeding into DHW preheat, MVHR recovering heat from exhaust air. The diagram changes dynamically when systems are switched (add MVHR → heat recovery loop appears, enable ASHP preheat → VRF→DHW link appears).
+Additionally, this brief builds a **live fabric Sankey diagram** for the Building module centre column (alongside or toggled with the 3D viewer), matching the dynamic Sankey experience in the Systems module.
 
-**Left panel improvements:**
-Collapsible accordion sections so all systems are visible at once (collapsed) and can be expanded one at a time for detail.
-
-12 parts. Do them in order.
+10 parts. Do them in order.
 
 ---
 
-## PART 1: Fix 3D shadow z-fighting
+## PART 1: EPW weather file parser
 
-**File(s):** `frontend/src/components/modules/building/BuildingViewer3D.jsx`
+**File(s):** `frontend/src/utils/epwParser.js` (new)
 
-The base plate and shadow/ground plane are at nearly the same Y coordinate, causing the GPU to flicker between them (z-fighting).
+Create a client-side EPW file parser that extracts the hourly data needed for the instant calc.
 
-**Fix options (try in order):**
-1. Remove the separate shadow-receiving plane if there is one — let the base plate receive shadows directly
-2. If using `<ContactShadows>`, position it slightly above the base plate (y = base_y + 0.02)
-3. Increase the gap between the base plate top surface and any shadow plane
-4. If using a standard shadow map, increase `shadow-camera` near/far range and shadow map resolution
-5. Disable auto-rotate as a test — if z-fighting stops, the issue is shadow map updates during rotation. Fix by increasing shadow map bias: `directionalLight.shadow.bias = -0.001`
-
-**Also fix materials:**
-- **Walls:** Change from the current warm brown/stone colour to a clean light grey (`#E8E6E3` or `#EBEBEB`). Matte finish (roughness 0.9, metalness 0).
-- **Glass:** Use `MeshPhysicalMaterial` with a consistent blue tint:
-  - `color: '#A8C8E0'` (cool blue)
-  - `transparent: true`
-  - `opacity: 0.35`
-  - `roughness: 0.1`
-  - `metalness: 0.1`
-  - This gives a constant blue-tinted glass look from any angle, matching Chris's reference image
-
-**Commit message:** "Part 1: Fix z-fighting, grey walls, blue-tinted glass"
-
-**Verify:**
-1. Navigate to /building
-2. **Z-FIGHTING TEST:** Let the building auto-rotate for 10 seconds. The base plate should NOT flicker or jitter.
-3. **SCREENSHOT 1:** The building showing clean grey walls and blue-tinted glass panels
-4. The glass should look blue from every angle — orbit around to confirm
-5. The solar overlay should still work — when "Solar on", walls tint toward amber. When off, they should be the clean grey.
-6. Report: "Z-fighting fixed via [method]. Walls now light grey. Glass consistently blue-tinted from all angles. Auto-rotate smooth — no flickering on base plate. Solar overlay still functional."
-
----
-
-## PART 2: Fix system type dropdowns
-
-**File(s):** `frontend/src/components/modules/SystemsZones.jsx`
-
-**The bug:** The library items from `/api/library/systems` have a `category` field (e.g. `"hvac"`, `"ventilation"`, `"dhw"`) but the frontend filters by `l.type` which doesn't exist.
-
-**Fix:**
-```js
-// BEFORE (broken):
-const items = library.filter(l => l.type === 'hvac')
-
-// AFTER (fixed):
-const items = library.filter(l => l.category === 'hvac')
-```
-
-Apply this fix for all three dropdowns: hvacOpts, ventOpts, dhwOpts.
-
-**Commit message:** "Part 2: Fix system dropdowns — filter by category not type"
-
-**Verify:**
-1. Navigate to /systems
-2. **HVAC dropdown:** Should show actual system names (e.g. "VRF System — Standard", "VRF — High Efficiency") instead of "Loading..."
-3. **Ventilation dropdown:** Should show "MEV — Standard", "MVHR — Standard" etc.
-4. **DHW dropdown:** Should show "Gas Boiler — DHW" etc.
-5. **INTERACT:** Select a different HVAC system — it should save and the live results should update
-6. Report: "Dropdowns now populated. HVAC: [X] options. Ventilation: [X] options. DHW: [X] options. Selection saves and triggers instant calc update."
-
----
-
-## PART 3: Fix heating demand showing zero
-
-**File(s):** `frontend/src/utils/instantCalc.js`
-
-Investigate why the instant calc shows 0 MWh heating. After the solar units fix, the heat balance is:
-
-```
-heating = MAX(0, losses - gains × util_factor)
-```
-
-If gains × 0.75 > losses, heating is zero. For Bridgewater with MVHR (85% recovery), ventilation losses are very small. With good fabric and high internal + solar gains, it's plausible that the building is cooling-dominated in the instant calc.
-
-**Check:**
-1. Log `heat_losses` and `heat_gains * util_factor` — if gains > losses, heating = 0 is correct
-2. Compare with EnergyPlus result — does EnergyPlus also show very low heating?
-3. If the instant calc is correct (building genuinely cooling-dominated), this is fine — it just means the hotel has high internal gains relative to its losses
-4. If the instant calc disagrees with EnergyPlus significantly, adjust the utilisation factor or check that the gains aren't still overweighted
-
-**If heating is genuinely zero:** The display should show "< 1 MWh" or "Negligible" rather than "0 MWh" which looks like an error. Update the display formatting in `SystemsLiveResults.jsx` and `LiveResultsPanel.jsx`.
-
-**If heating should NOT be zero:** Adjust the utilisation factor. The current 0.75 may be too generous for a hotel with 24-hour occupancy. Consider reducing to 0.60 (meaning less of the gains are useful for heating) or making it dependent on the building's loss/gain ratio.
-
-**Commit message:** "Part 3: Investigate heating zero — [fix applied / display improved / util factor adjusted]"
-
-**Verify:**
-1. Check instant calc debug output: losses = [X], gains × util = [X]. If gains > losses, heating = 0 is physically reasonable.
-2. If zero is correct: display should show "< 1 MWh" instead of "0 MWh"
-3. If zero is wrong: adjusted util factor to [X], heating now shows [X] MWh
-4. Report: "Heating [is genuinely zero because gains exceed losses / was incorrectly zero, fixed by adjusting util factor to X]. Instant calc losses: [X] kWh, gains×util: [X] kWh. Display now shows [value]."
-
----
-
-## PART 4: Collapsible accordion inputs on Systems left panel
-
-**File(s):** `frontend/src/components/modules/SystemsZones.jsx`
-
-Replace the current flat list of system inputs with collapsible accordion sections. Each section shows a one-line summary when collapsed and expands to show all parameters.
-
-**Accordion sections:**
-
-1. **Simulation Mode** — always visible (not collapsible), stays at the top
-2. **HVAC** — collapsed summary: "VRF Standard — COP 3.5 / EER 3.2". Expanded: system dropdown, COP slider, EER slider
-3. **Ventilation** — collapsed summary: "MVHR — SFP 1.1, 85% HR". Expanded: type dropdown, SFP slider, heat recovery slider, control strategy, natural vent toggle
-4. **DHW** — collapsed summary: "Gas Boiler — 60°C, No preheat". Expanded: primary system, preheat option, setpoint, estimated demand
-5. **Lighting** — collapsed summary: "11 W/m² — Occupancy sensing". Expanded: LPD slider with presets, control strategy
-6. **Small Power** — collapsed summary: "15 W/m²". Expanded: equipment density slider
-
-**Interaction:**
-- Click the section header to expand/collapse
-- Only one section expanded at a time (clicking a new one collapses the previous) — or allow multiple open if space permits
-- Chevron icon rotates on expand/collapse
-- The one-line summary shows the most important parameters so the user can scan all systems without expanding
-
-**Visual:**
-- Each section has a thin left border in the teal module accent colour
-- Expanded section has a subtle teal background tint
-- Smooth height animation on expand/collapse (CSS transition on max-height)
-
-**Commit message:** "Part 4: Collapsible accordion system inputs with one-line summaries"
-
-**Verify:**
-1. Navigate to /systems
-2. **SCREENSHOT 1:** All sections collapsed — each showing a one-line summary. All 5 system sections visible without scrolling.
-3. **INTERACT:** Click HVAC — it expands to show COP/EER sliders. Other sections stay collapsed.
-4. **INTERACT:** Click Ventilation — HVAC collapses, Ventilation expands showing SFP/HR sliders.
-5. The summaries should update in real time: change COP to 4.0, collapse HVAC — summary should show "COP 4.0"
-6. Report: "Accordion working. 5 collapsible sections. Summaries update in real time. [Single/multiple] expand mode. All visible without scrolling when collapsed."
-
----
-
-## PART 5: Systems Sankey — data model and instant calc extension
-
-**File(s):** `frontend/src/utils/instantCalc.js`
-
-Extend the instant calc to provide the data structure needed for the systems Sankey diagram.
-
-Add a new `systems_flow` field to the return object:
+**EPW format:** The file has 8 header lines, then 8,760 data rows (one per hour). Each row is comma-separated. The key fields by column index:
+- Column 0: Year
+- Column 1: Month (1-12)
+- Column 2: Day (1-31)
+- Column 3: Hour (1-24, where 1 = midnight to 1am)
+- Column 6: Dry Bulb Temperature (°C) — **this is the main one**
+- Column 13: Direct Normal Radiation (Wh/m²)
+- Column 14: Diffuse Horizontal Radiation (Wh/m²)
 
 ```js
-systems_flow: {
-  nodes: [
-    { id: 'grid',        label: 'Grid Electricity',  type: 'source',  energy_kWh: electricity_kWh },
-    { id: 'gas',         label: 'Natural Gas',        type: 'source',  energy_kWh: gas_kWh },
-    { id: 'vrf',         label: 'VRF',               type: 'system',  category: 'hvac' },
-    { id: 'mvhr',        label: 'MVHR',              type: 'system',  category: 'ventilation' },
-    { id: 'boiler',      label: 'Gas Boiler',        type: 'system',  category: 'dhw' },
-    { id: 'lighting',    label: 'Lighting',          type: 'system',  category: 'lighting' },
-    { id: 'small_power', label: 'Small Power',       type: 'system',  category: 'equipment' },
-    { id: 'space_heat',  label: 'Space Heating',     type: 'end_use' },
-    { id: 'space_cool',  label: 'Space Cooling',     type: 'end_use' },
-    { id: 'dhw_del',     label: 'Hot Water',         type: 'end_use' },
-    { id: 'fresh_air',   label: 'Fresh Air',         type: 'end_use' },
-    { id: 'light_del',   label: 'Light',             type: 'end_use' },
-    { id: 'equip_del',   label: 'Equipment Use',     type: 'end_use' },
-    { id: 'heat_reject', label: 'Heat Rejection',    type: 'waste' },
-    { id: 'mvhr_recov',  label: 'Recovered Heat',    type: 'recovered' },
-  ],
-  links: [
-    // Sources → Systems
-    { source: 'grid', target: 'vrf',         value_kWh: vrf_electricity },
-    { source: 'grid', target: 'mvhr',        value_kWh: fan_electricity },
-    { source: 'grid', target: 'lighting',    value_kWh: lighting_kWh },
-    { source: 'grid', target: 'small_power', value_kWh: equipment_kWh },
-    { source: 'gas',  target: 'boiler',      value_kWh: dhw_gas_kWh },
+/**
+ * Parse an EPW weather file and return hourly data arrays.
+ * @param {string} epwText — raw text content of the EPW file
+ * @returns {{ 
+ *   temperature: Float32Array(8760),
+ *   direct_normal: Float32Array(8760),
+ *   diffuse_horizontal: Float32Array(8760),
+ *   month: Uint8Array(8760),
+ *   hour: Uint8Array(8760),
+ *   location: { city, latitude, longitude }
+ * }}
+ */
+export function parseEPW(epwText) { ... }
+```
 
-    // Systems → End uses
-    { source: 'vrf',         target: 'space_heat',  value_kWh: heating_delivered },
-    { source: 'vrf',         target: 'space_cool',  value_kWh: cooling_delivered },
-    { source: 'vrf',         target: 'heat_reject', value_kWh: heat_rejected },
-    { source: 'boiler',      target: 'dhw_del',     value_kWh: dhw_delivered },
-    { source: 'mvhr',        target: 'fresh_air',   value_kWh: ventilation_air_kWh },
-    { source: 'lighting',    target: 'light_del',   value_kWh: lighting_kWh },
-    { source: 'small_power', target: 'equip_del',   value_kWh: equipment_kWh },
+Use `Float32Array` for memory efficiency — we're holding 8,760 × 3 floats.
 
-    // Inter-system connections
-    { source: 'mvhr_recov',  target: 'space_heat',  value_kWh: mvhr_heat_recovery_kWh, style: 'recovered' },
-  ]
+Parse the header to extract location info (line 1 of the EPW has city name, latitude, longitude, timezone, elevation).
+
+**Loading the EPW:** The EPW file is stored on the backend (already used by EnergyPlus). Add an API endpoint:
+```
+GET /api/weather/{filename}/hourly → returns the parsed hourly arrays as JSON
+```
+
+Or, more efficiently, serve the raw EPW file and parse it client-side:
+```
+GET /api/weather/{filename}/raw → returns the EPW text
+```
+
+The frontend fetches this once on project load and caches it in a React context or module-level variable. The weather file name is already stored in the project config.
+
+**Commit message:** "Part 1: EPW parser — extracts hourly temperature and solar radiation from weather file"
+
+**Verify:**
+1. Load the EPW file via the API
+2. Check: 8,760 temperature values, ranging roughly from -5°C to 30°C for a UK climate
+3. Check: month array — January values (month=1) should have lower temperatures than July (month=7)
+4. Check: solar radiation — should be zero at night hours, positive during day, higher in summer
+5. Report: "EPW parsed. [X] hourly records. Temperature range: [min]°C to [max]°C. Location: [city]. Jan avg: [X]°C, Jul avg: [X]°C. Solar: max direct normal [X] Wh/m²."
+
+---
+
+## PART 2: Solar decomposition onto building facades
+
+**File(s):** `frontend/src/utils/solarCalc.js` (new)
+
+Calculate the hourly solar radiation incident on each building facade, given the direct normal and diffuse horizontal radiation from the EPW, the building orientation, and the facade directions.
+
+**Solar geometry (simplified for feasibility accuracy):**
+
+For each hour, calculate the sun position:
+```js
+function sunPosition(latitude, dayOfYear, hourOfDay) {
+  // Declination angle
+  const decl = 23.45 * Math.sin(2 * Math.PI * (284 + dayOfYear) / 365)
+  // Hour angle (degrees, solar noon = 0, morning negative, afternoon positive)
+  const hourAngle = (hourOfDay - 12) * 15
+  // Solar altitude (elevation above horizon)
+  const sinAlt = Math.sin(lat_rad) * Math.sin(decl_rad) + 
+                 Math.cos(lat_rad) * Math.cos(decl_rad) * Math.cos(hourAngle_rad)
+  const altitude = Math.asin(sinAlt)
+  // Solar azimuth (compass bearing, 0=N, 90=E, 180=S, 270=W)
+  const cosAz = (Math.sin(decl_rad) - Math.sin(lat_rad) * sinAlt) / 
+                (Math.cos(lat_rad) * Math.cos(Math.asin(sinAlt)))
+  const azimuth = /* resolve quadrant based on hour angle */
+  return { altitude, azimuth }
 }
 ```
 
-**Key calculations for new fields:**
+For each facade, calculate the incident radiation:
+```js
+function facadeRadiation(directNormal, diffuseHorizontal, sunAltitude, sunAzimuth, facadeAzimuth) {
+  // Angle of incidence on the vertical facade
+  const cosIncidence = Math.cos(sunAltitude) * Math.cos(sunAzimuth - facadeAzimuth)
+  // Direct component (only if sun is in front of the facade and above horizon)
+  const direct = (cosIncidence > 0 && sunAltitude > 0) ? directNormal * cosIncidence : 0
+  // Diffuse component (isotropic sky model — half the sky dome visible to a vertical surface)
+  const diffuse = diffuseHorizontal * 0.5
+  // Ground reflected (assume 0.2 albedo)
+  const globalHorizontal = directNormal * Math.sin(sunAltitude) + diffuseHorizontal
+  const reflected = globalHorizontal * 0.2 * 0.5
+  return direct + diffuse + reflected  // Wh/m² for this hour
+}
+```
 
-- `vrf_electricity` = heating_electricity + cooling_electricity + vrf_fan_kWh
-- `heating_delivered` = heating_thermal (what the VRF delivers to the space)
-- `cooling_delivered` = cooling_thermal
-- `heat_rejected` = cooling_thermal + cooling_electricity (total heat rejected to outdoor air = cooling load + compressor waste heat). In reality this is COP × cooling_electricity but simplified: heat_rejected ≈ cooling_thermal × (1 + 1/EER)
-- `mvhr_heat_recovery_kWh` = ventilation_loss_without_recovery - ventilation_loss_with_recovery (the heat MVHR recovers)
-- If ASHP DHW preheat is enabled, add: `{ source: 'grid', target: 'boiler', value_kWh: dhw_elec_kWh, style: 'preheat' }` and `{ source: 'heat_reject', target: 'boiler', value_kWh: ashp_preheat_kWh, style: 'recovered' }` — showing the heat cascade
+**Precompute for all 8,760 hours × 4 facades:**
+```js
+export function computeHourlySolarByFacade(weather, latitude, orientationDeg) {
+  // Returns: { f1: Float32Array(8760), f2: Float32Array(8760), f3: Float32Array(8760), f4: Float32Array(8760), roof: Float32Array(8760) }
+  // Facade azimuths based on building orientation:
+  // F1 = orientationDeg (faces the orientation direction)
+  // F2 = orientationDeg + 90
+  // F3 = orientationDeg + 180
+  // F4 = orientationDeg + 270
+  // Roof = horizontal (receives global horizontal radiation)
+}
+```
 
-**Nodes and links should be conditional:**
-- If ventilation is MEV (no recovery): omit `mvhr_recov` node and the recovery link
-- If no gas boiler: omit `gas` source node and `boiler` system node
-- If no ASHP preheat: omit the heat_reject→boiler link
-- Filter out any links with value_kWh ≤ 0
+This computation takes maybe 5-10ms for 8,760 × 5 calculations — run it once when orientation changes, cache the result.
 
-**Commit message:** "Part 5: Systems flow data model in instant calc — nodes, links, inter-system connections"
+**Commit message:** "Part 2: Hourly solar decomposition onto building facades from EPW data"
 
 **Verify:**
-1. Check instant calc output includes `systems_flow` with correct structure
-2. With VRF + MVHR + Gas boiler: should have grid, gas, vrf, mvhr, boiler, lighting, small_power nodes
-3. With MVHR: should have mvhr_recov node and recovery link
-4. With ASHP preheat: should have heat_reject→boiler link
-5. With MEV: no recovery node/link
-6. All link values > 0
-7. Report: "Systems flow data model working. [X] nodes, [X] links for current config. Recovery link present for MVHR: [X] kWh. Heat rejection: [X] kWh. Links filter to >0 correctly."
+1. Compute hourly solar for Bridgewater at 0° orientation
+2. **DATA CHECK:** South-facing facade (F3 at 0°) should get more annual radiation than north (F1). Annual total: south ~700-800 kWh/m², north ~300-400 kWh/m². These should be close to the fixed values we used before (750/350).
+3. **HOURLY CHECK:** Night hours should be zero. Summer midday should be highest. South facade should peak around solar noon.
+4. Change orientation to 180° — the facade that was getting south radiation should now get north radiation.
+5. Report: "Hourly solar computed. Annual totals: F1(N) [X] kWh/m², F2(E) [X] kWh/m², F3(S) [X] kWh/m², F4(W) [X] kWh/m². Roof: [X] kWh/m². Night hours: 0 ✓. Peak: [X] Wh/m² on F3 at [hour] in [month]."
 
 ---
 
-## PART 6: Systems Sankey diagram — centre panel
+## PART 3: Hourly instant calc replacing degree-day method
 
-**File(s):** `frontend/src/components/modules/systems/SystemSankey.jsx` (new), update `frontend/src/components/modules/SystemsZones.jsx`
+**File(s):** `frontend/src/utils/instantCalc.js`
 
-Replace the current `SystemSchematic.jsx` with a proper Sankey-style flow diagram that uses the `systems_flow` data from the instant calc.
+Replace the annual degree-day calculation with an hourly loop using the EPW data and solar decomposition.
 
-**Layout:**
-Use d3-sankey (already in the project) with a three-column layout:
-- Left: Source nodes (Grid, Gas) — coloured circles or rounded rectangles
-- Centre: System nodes (VRF, MVHR, Boiler, Lighting, Small Power) — rounded rectangles with system name, key metric (COP, HR%, efficiency), and icon
-- Right: End use nodes (Space Heating, Space Cooling, Hot Water, Fresh Air, Light, Equipment) — rounded rectangles
+```js
+export function calculateInstant(building, constructions, systems, libraryData, weatherData, hourlySolar) {
+  // If no weather data available, fall back to the existing degree-day method
+  if (!weatherData || !hourlySolar) return calculateInstantDegreeDay(building, constructions, systems, libraryData)
+  
+  const geo = computeGeometry(building)
+  const { gia, volume, ... } = geo
+  
+  // Pre-compute static values
+  const u_wall = getUValue(constructions, 'external_wall', libraryData)
+  // ... etc for all U-values
+  const UA_total = u_wall * wall_area + u_roof * roof_area + ... // total fabric UA (W/K)
+  const UA_infiltration = 0.33 * ach * volume  // W/K equivalent
+  const UA_ventilation = 0.33 * vent_ach * volume * (1 - heat_recovery)  // W/K, reduced by HR
+  
+  const T_heat_setpoint = 21  // °C
+  const T_cool_setpoint = 24  // °C
+  
+  // Internal gains schedule (hourly, simplified)
+  const lpd_W = lpd * gia
+  const epd_W = epd * gia
+  const occ_W = 60 * avg_occupants  // Watts from people
+  
+  // Hourly loop
+  let total_heating = 0, total_cooling = 0
+  let total_solar_by_facade = { f1: 0, f2: 0, f3: 0, f4: 0, roof: 0 }
+  const monthly_heating = new Float32Array(12)
+  const monthly_cooling = new Float32Array(12)
+  
+  for (let h = 0; h < 8760; h++) {
+    const T_out = weatherData.temperature[h]
+    const month = weatherData.month[h] - 1  // 0-indexed
+    const hourOfDay = weatherData.hour[h] - 1  // 0-23
+    
+    // Occupancy schedule (simplified: hotel pattern)
+    const occ_frac = hotelOccupancyFraction(hourOfDay)
+    const light_frac = hotelLightingFraction(hourOfDay)
+    const equip_frac = hotelEquipmentFraction(hourOfDay)
+    
+    // Fabric heat loss this hour (W → kWh by /1000)
+    const dT_heat = Math.max(0, T_heat_setpoint - T_out)
+    const fabric_loss_kWh = (UA_total + UA_infiltration + UA_ventilation) * dT_heat / 1000
+    
+    // Solar gains this hour (Wh/m² from solar calc × glazing area × g-value → kWh)
+    const solar_kWh = (
+      hourlySolar.f1[h] * glazing.f1 * g_value +
+      hourlySolar.f2[h] * glazing.f2 * g_value +
+      hourlySolar.f3[h] * glazing.f3 * g_value +
+      hourlySolar.f4[h] * glazing.f4 * g_value
+    ) / 1000
+    
+    // Internal gains this hour (kWh)
+    const internal_kWh = (
+      lpd_W * light_frac +
+      epd_W * equip_frac +
+      occ_W * occ_frac
+    ) / 1000
+    
+    // Heat balance
+    const net_loss = fabric_loss_kWh - solar_kWh - internal_kWh
+    
+    if (net_loss > 0) {
+      total_heating += net_loss
+      monthly_heating[month] += net_loss
+    } else {
+      // Excess gains → cooling needed (only if T_out + excess would push above cooling setpoint)
+      const dT_cool = Math.max(0, T_out - T_cool_setpoint)
+      const excess_gain = -net_loss
+      // Simplified: cooling = excess gains + fabric gain when T_out > T_cool_setpoint
+      const cooling_kWh = excess_gain + (UA_total + UA_infiltration) * dT_cool / 1000
+      total_cooling += cooling_kWh
+      monthly_cooling[month] += cooling_kWh
+    }
+    
+    // Accumulate solar by facade for display
+    total_solar_by_facade.f1 += hourlySolar.f1[h] * glazing.f1 * g_value / 1000
+    total_solar_by_facade.f2 += hourlySolar.f2[h] * glazing.f2 * g_value / 1000
+    total_solar_by_facade.f3 += hourlySolar.f3[h] * glazing.f3 * g_value / 1000
+    total_solar_by_facade.f4 += hourlySolar.f4[h] * glazing.f4 * g_value / 1000
+    total_solar_by_facade.roof += hourlySolar.roof[h] * roof_area * 0.04 / 1000  // opaque gain
+  }
+  
+  // Now total_heating and total_cooling are annual kWh thermal demands
+  // Apply system efficiencies from demand-based assignments...
+  // ... rest of calculation as before
+}
+```
 
-**Link styling:**
-- Width proportional to energy flow (kWh)
-- Electricity links: gold/amber (`#ECB01F`)
-- Gas links: red-orange (`#E74C3C`)
-- Heat delivery links: red (`#DC2626`) for heating, blue (`#3B82F6`) for cooling
-- Recovered heat links: dashed green (`#16A34A`) — shows heat that's being recovered/reused
-- Waste heat links: dashed grey (`#9E9E9E`)
+**Simplified hotel schedule functions** (built-in, no library lookup needed for instant calc):
+```js
+function hotelOccupancyFraction(hour) {
+  // Hotel bedroom: high overnight, low midday
+  if (hour >= 22 || hour < 7) return 0.85
+  if (hour >= 10 && hour < 16) return 0.15
+  return 0.45  // morning/evening transition
+}
+```
 
-**Inter-system connections (the showstopper):**
-- MVHR heat recovery: a green dashed link from "MVHR" back to "Space Heating" (or from a "Recovered Heat" node), showing the ventilation heat being recovered and reused
-- ASHP preheat: if enabled, a green dashed link from "VRF Heat Rejection" to "Gas Boiler" (or to a "DHW Preheat" intermediate node), showing waste heat being cascaded to DHW
-- These recovered/cascaded flows are the key visual insight — they show energy being reused rather than wasted
+**Performance:** The loop is 8,760 iterations of ~10 multiplications each. This should run in <3ms. The solar precomputation (Part 2) adds ~5ms but is cached when orientation doesn't change. Total: <10ms, well within the <50ms target.
 
-**Labels:**
-- Each link shows its value: "158 MWh" or "43%" — togglable between absolute and percentage
-- Each system node shows its key metric inside: "COP 3.5", "85% HR", "92% eff"
+**Keep the old degree-day method as fallback** for when weather data isn't loaded yet (first render before EPW fetch completes).
 
-**Responsive sizing:**
-- The Sankey should fill the available centre column space
-- Use a ResizeObserver (same pattern as the existing Sankey in EnergyFlowsTab) to adapt to container width
+**Commit message:** "Part 3: Hourly instant calc with 8760 iterations — replaces degree-day method"
+
+**Verify:**
+1. Open /building — the instant calc should now use hourly data (check console log or add a debug indicator)
+2. **CRITICAL CHECK:** Heating demand should be NON-ZERO. For Bridgewater with standard fabric: expect 50-200 MWh heating (EnergyPlus gives ~131 MWh).
+3. **ACCURACY CHECK:** Compare instant calc EUI with EnergyPlus EUI. The gap should be smaller than before (~6% was degree-day, aim for <20% with hourly).
+4. **SEASONAL CHECK:** Monthly heating should peak in January/December, be zero or near-zero in June-August. Monthly cooling should peak in July/August.
+5. **SPEED CHECK:** Drag a slider rapidly — results should update without perceptible lag. Check with performance profiler if concerned.
+6. **ORIENTATION CHECK:** Change orientation with asymmetric glazing — EUI should change (more than before, since hourly solar decomposition is more sensitive to orientation than annual averages).
+7. Report: "Hourly instant calc working. Heating: [X] MWh (was 0 with degree-day). Cooling: [X] MWh. EUI: [X] kWh/m² (EnergyPlus: [X], gap: [X]%). Calc time: [X]ms. Monthly heating peaks in [month] at [X] MWh. Orientation swing: [X] kWh/m²."
+
+---
+
+## PART 4: Weather data context and caching
+
+**File(s):** `frontend/src/context/WeatherContext.jsx` (new), update `frontend/src/App.jsx`, update API if needed
+
+Create a WeatherContext that loads the EPW data once and provides it to all components.
+
+```jsx
+export function WeatherProvider({ children }) {
+  const [weatherData, setWeatherData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const { params } = useContext(ProjectContext)
+  const weatherFile = params?.weather_file ?? 'default'
+  
+  useEffect(() => {
+    setLoading(true)
+    fetch(`/api/weather/${encodeURIComponent(weatherFile)}/hourly`)
+      .then(r => r.json())
+      .then(data => setWeatherData(data))
+      .catch(err => console.warn('Weather data not available:', err))
+      .finally(() => setLoading(false))
+  }, [weatherFile])
+  
+  return (
+    <WeatherContext.Provider value={{ weatherData, loading }}>
+      {children}
+    </WeatherContext.Provider>
+  )
+}
+```
+
+**Backend endpoint:** Add `GET /api/weather/{filename}/hourly` that:
+1. Reads the EPW file from the weather directory
+2. Parses it (using a Python EPW parser — simple line-by-line CSV)
+3. Returns JSON: `{ temperature: [...8760], direct_normal: [...8760], diffuse_horizontal: [...8760], month: [...8760], hour: [...8760], location: {...} }`
+4. Caches the parsed result in memory (EPW files don't change)
+
+The frontend caches via the context — only fetches when the weather file changes.
+
+**Commit message:** "Part 4: WeatherContext — loads and caches EPW hourly data for instant calc"
+
+**Verify:**
+1. Open the app — WeatherContext should load the EPW data
+2. Check network tab: one request to `/api/weather/.../hourly`, not repeated on navigation
+3. The hourly instant calc should receive the weather data and use it (verify via heating being non-zero)
+4. Report: "WeatherContext loading [X] hourly records. Cached — no repeat fetches. Instant calc receiving weather data. Heating: [X] MWh (non-zero confirmed)."
+
+---
+
+## PART 5: Precomputed solar — cache on orientation change
+
+**File(s):** `frontend/src/utils/instantCalc.js` or new `frontend/src/hooks/useHourlySolar.js`
+
+The solar decomposition (Part 2) depends on building orientation and latitude. It should be computed once when these change, then cached for the 8,760-iteration loop.
+
+Create a custom hook or memoised computation:
+```js
+const hourlySolar = useMemo(() => {
+  if (!weatherData) return null
+  return computeHourlySolarByFacade(weatherData, latitude, orientation)
+}, [weatherData, latitude, orientation])
+```
+
+This ensures:
+- Solar is recomputed when orientation changes (slider drag) — ~5ms
+- Solar is NOT recomputed when other parameters change (U-value, occupancy) — uses cached result
+- The 8,760-iteration calc only does the simple heat balance loop — solar values come from the cache
+
+**Commit message:** "Part 5: Memoised solar precomputation — recomputes only on orientation change"
+
+**Verify:**
+1. Drag the orientation slider rapidly — instant calc should still feel responsive
+2. Change a U-value — instant calc should update even faster (no solar recomputation)
+3. Performance profiler: solar computation should show ~5ms, heat balance loop ~2ms
+4. Report: "Solar cached on orientation change. Orientation drag: [X]ms total. U-value change: [X]ms (no solar recompute). Smooth interaction confirmed."
+
+---
+
+## PART 6: Live fabric Sankey in Building module
+
+**File(s):** `frontend/src/components/modules/building/FabricSankey.jsx` (new), update `frontend/src/components/modules/building/BuildingDefinition.jsx`
+
+Build a live Sankey diagram for the Building module that shows the thermal energy balance through the fabric, updating in real time as inputs change. This sits in the centre column alongside or toggled with the 3D viewer.
+
+**Add a view toggle** at the top of the centre column: **"3D Model" | "Energy Flow"**
+
+When "Energy Flow" is selected, show the FabricSankey instead of the 3D viewer.
+
+**FabricSankey layout:**
+
+Left side (gains — energy entering the building):
+- Solar F1 (with compass direction)
+- Solar F2
+- Solar F3
+- Solar F4
+- Solar Roof (opaque gains)
+- People
+- Lighting (waste heat)
+- Equipment (waste heat)
+
+Centre node:
+- "Building Thermal Balance"
+
+Right side (losses + demands — energy leaving the building):
+- Walls (per facade or total — total is cleaner)
+- Glazing conduction
+- Roof
+- Floor
+- Infiltration
+- Ventilation
+- **Space Heating demand** (red) — what the HVAC system needs to provide
+- **Space Cooling demand** (blue) — what the cooling system needs to remove
+
+**The key visual:**
+- Gains flow IN from the left
+- Losses flow OUT to the right
+- If total gains > total losses at any given moment: excess becomes cooling demand (blue, right side)
+- If total losses > total gains: deficit becomes heating demand (red, right side)
+- The relative thickness of heating vs cooling shows the heating/cooling balance
+
+**Link colours:**
+- Solar: warm amber/yellow graduated by facade (south = darkest)
+- Internal gains: purple/orange tones
+- Fabric losses: brown/grey tones per element
+- Heating demand: red
+- Cooling demand: blue
+- Waste (rejected heat, if shown): light grey
 
 **Dynamic updates:**
-- The Sankey reads from the instant calc `systems_flow` and re-renders when it changes
-- Switching MEV → MVHR: the MVHR node appears with a heat recovery link; the MEV node (if it was separate) disappears
-- Enabling ASHP preheat: the heat_reject→boiler cascade link appears
-- Changing COP: the electricity→VRF link width changes (higher COP = less electricity for same heating)
+- Change orientation → solar gains links shift width
+- Change WWR → glazing solar increases, glazing conduction loss increases
+- Change wall U-value → walls loss link width changes
+- Change infiltration → infiltration link changes
+- All updates in <10ms (data comes from the hourly instant calc)
 
-**Header:** "Energy Flow — Systems" with "Detailed" / "MVHR" badges (showing current system mode and ventilation type)
-
-**Commit message:** "Part 6: Systems Sankey flow diagram with proportional links and inter-system connections"
+**Commit message:** "Part 6: Live fabric Sankey in Building module centre column"
 
 **Verify:**
-1. Navigate to /systems
-2. **SCREENSHOT 1:** The Sankey diagram showing energy flowing from Grid/Gas through systems to end uses. Link widths should be proportional.
-3. **INTERACT:** Switch ventilation from MEV to MVHR — a heat recovery link should appear (green dashed)
-4. **INTERACT:** Enable ASHP preheat — a cascade link from heat rejection to boiler should appear
-5. **INTERACT:** Increase COP from 3.5 to 5.0 — the electricity→VRF link should get thinner (more efficient)
-6. **INTERACT:** Switch to Ideal Loads mode — the Sankey should simplify (no system efficiencies, just direct energy)
-7. **DATA CHECK:** Grid electricity total across all links should match the instant calc total. Gas should match.
-8. Report: "Systems Sankey working. [X] nodes, [X] links rendered. MVHR recovery link: [X] MWh (green dashed). ASHP cascade: [visible/N/A]. COP change visibly affects link width. All energy values balance."
+1. Navigate to /building, toggle to "Energy Flow" view
+2. **SCREENSHOT 1:** The fabric Sankey showing gains on left, building in centre, losses + demands on right
+3. **INTERACT:** Change orientation — solar gain links should shift
+4. **INTERACT:** Change wall U-value — wall loss link should change
+5. **INTERACT:** Increase south WWR — south solar gain grows, glazing loss grows
+6. **INTERACT:** Increase infiltration — infiltration loss grows, heating demand grows
+7. Toggle back to "3D Model" — 3D viewer should appear
+8. **DATA CHECK:** Heating demand link should be non-zero (>0 kWh) thanks to the hourly calc
+9. Report: "Fabric Sankey working. [X] gain links, [X] loss links. Heating demand: [X] MWh (non-zero ✓). Cooling demand: [X] MWh. Responds to orientation, WWR, U-value, infiltration. View toggle 3D/Energy Flow works."
 
 ---
 
-## PART 7: System nodes — detail and interaction
+## PART 7: Fabric Sankey — smooth transitions and hover
 
-**File(s):** `frontend/src/components/modules/systems/SystemSankey.jsx`
+**File(s):** `frontend/src/components/modules/building/FabricSankey.jsx`
 
-Enhance the system nodes in the Sankey to be more informative and interactive.
+Add the same interaction polish as the Systems Sankey:
 
-**Node content:**
-Each system node should display:
-- System name (e.g. "VRF Standard")
-- Key metric (e.g. "COP 3.5 / EER 3.2")
-- A small icon or colour indicator for the system type
-- Energy in → Energy out summary: "In: 45 MWh → Out: 158 MWh" (for heat pumps where output > input)
+**Animated transitions:**
+- Link widths animate over 300ms when values change
+- Smooth response when dragging orientation slider
 
 **Hover interaction:**
-Hovering on a system node highlights all its connected links and dims everything else. This lets the user trace one system's energy flow. Show a tooltip with:
-- System name and description
-- Energy input (kWh)
-- Energy output (kWh)
-- Efficiency / COP / recovery rate
-- "Edit in Library →" link
+- Hover a gain link: highlight it and its source node, dim everything else
+- Hover a loss link: highlight it and its end-use node
+- Tooltip: "[Element]: [X] MWh/yr — [X]% of total [gains/losses]"
 
-**Click interaction:**
-Clicking a system node expands the corresponding accordion section in the left panel (from Part 4). This creates a direct link between the visual diagram and the input controls.
+**Hover on the building node:**
+- Show total gains, total losses, net balance
+- "Gains: 210 MWh — Losses: 180 MWh — Net cooling load: 30 MWh"
 
-**Commit message:** "Part 7: Enhanced system nodes with hover highlighting and click-to-expand"
+**Commit message:** "Part 7: Fabric Sankey transitions and hover interaction"
 
 **Verify:**
-1. **INTERACT:** Hover on VRF node — its links should highlight, others dim. Tooltip shows COP, energy in/out.
-2. **INTERACT:** Hover on MVHR node — its links highlight, including the recovery link.
-3. **INTERACT:** Click on VRF node — the HVAC section in the left panel should expand/scroll into view.
-4. **INTERACT:** Click on Boiler node — the DHW section should expand.
-5. Report: "Node hover highlighting working. Tooltips show [energy in]/[energy out]/[efficiency]. Click-to-expand links to correct accordion section."
+1. Drag orientation slider — Sankey links should animate smoothly
+2. Hover on south solar link — highlights with tooltip showing MWh and percentage
+3. Hover on building node — shows total balance
+4. Report: "Transitions smooth. Hover working with tooltips. [X]ms animation."
 
 ---
 
-## PART 8: Sankey — dynamic system changes and animation
+## PART 8: Monthly breakdown from hourly calc
 
-**File(s):** `frontend/src/components/modules/systems/SystemSankey.jsx`
+**File(s):** `frontend/src/utils/instantCalc.js`, update `frontend/src/components/modules/building/LiveResultsPanel.jsx`
 
-Make the Sankey respond smoothly to system changes.
+The hourly calc already accumulates monthly totals. Expose these for display.
 
-**Transitions:**
-When a parameter changes (COP slider, system type switch), the Sankey should animate:
-- Link widths smoothly transition to new values (CSS transition on width)
-- New nodes/links fade in (opacity 0 → 1)
-- Removed nodes/links fade out (opacity 1 → 0)
-- Use a 300ms transition duration
+Add to the instant calc return:
+```js
+monthly: {
+  heating_kWh: [jan, feb, ..., dec],  // 12 monthly heating demand values
+  cooling_kWh: [jan, feb, ..., dec],
+  solar_kWh:   [jan, feb, ..., dec],  // total solar gains per month
+}
+```
 
-**System mode badges:**
-At the top of the Sankey, show small badges indicating active configurations:
-- "Detailed" (teal) or "Ideal Loads" (amber)
-- "MVHR" (green) or "MEV" (grey)
-- "ASHP Preheat" (green) — only if enabled
-- "Natural Vent" (blue) — only if enabled
+Add a small monthly bar chart to the LiveResultsPanel (below the butterfly chart):
+- 12 mini bars showing heating (red, downward) and cooling (blue, upward) by month
+- This gives a quick seasonal view: "heavy heating Nov-Mar, cooling Jun-Aug"
+- Updates in real time
 
-These badges give quick context about what the Sankey is showing.
-
-**Energy balance watermark:**
-Show a subtle total at the bottom: "Total site energy: 276 MWh/yr — Electricity 158 MWh (57%) / Gas 118 MWh (43%)"
-
-**Commit message:** "Part 8: Animated Sankey transitions and system mode badges"
+**Commit message:** "Part 8: Monthly heating/cooling breakdown from hourly calc displayed in live results"
 
 **Verify:**
-1. **INTERACT:** Drag the COP slider — link widths should animate smoothly, not jump
-2. **INTERACT:** Switch MEV → MVHR — the recovery link should fade in, the diagram should rearrange smoothly
-3. **INTERACT:** Enable ASHP preheat — cascade link fades in
-4. Mode badges should update correctly
-5. Energy balance total should match instant calc
-6. Report: "Animated transitions working. [X]ms transition on link width changes. Fade in/out for new/removed elements. Badges: [Detailed, MVHR, ASHP]. Total: [X] MWh."
+1. Navigate to /building
+2. **SCREENSHOT:** Monthly mini-chart showing seasonal heating and cooling pattern
+3. Heating should be concentrated in winter months (Nov-Mar)
+4. Cooling should be concentrated in summer months (Jun-Aug)
+5. Spring/autumn should have low/zero for both
+6. Report: "Monthly breakdown working. Peak heating: [month] at [X] MWh. Peak cooling: [month] at [X] MWh. Clear seasonal pattern visible."
 
 ---
 
-## PART 9: Systems live results — update for consistency
+## PART 9: Fix heating in Systems Sankey
 
-**File(s):** `frontend/src/components/modules/systems/SystemsLiveResults.jsx`
+**File(s):** `frontend/src/utils/instantCalc.js` — the `systems_flow` generation
 
-Update the right panel to be consistent with the Sankey and include the same inter-system insights.
+Now that the hourly calc produces non-zero heating, the Systems Sankey should automatically show space heating links. Verify this works and fix any issues.
 
-**Updates:**
-1. Fix heating showing "0 MWh" — display as "< 1 MWh" or show actual decimal value if non-zero
-2. Add a "System Efficiency" section:
-   - VRF: "45 MWh electricity → 158 MWh heating + 32 MWh cooling" (shows the COP multiplier effect)
-   - MVHR: "4 MWh fan energy → 86 MWh recovered heat" (shows the massive ratio of recovery to fan energy)
-   - Boiler: "118 MWh gas → 109 MWh hot water (92% efficiency)"
-3. Add an "Energy Recovery" callout if MVHR or ASHP preheat is active:
-   - "MVHR recovers 86 MWh of ventilation heat — equivalent to £X/yr at current gas prices" (use 5p/kWh gas)
-   - "ASHP preheat saves 35 MWh gas — reducing carbon by X kgCO₂/yr"
-4. Ensure the fuel split bar matches the Sankey totals
+**Check:**
+1. With gas boiler for heating: gas → boiler → space heating link should appear with non-zero width
+2. With VRF for heating: grid → VRF → space heating link should appear
+3. The heating delivered value should match the `total_heating` from the hourly calc (after dividing by system efficiency)
 
-**Commit message:** "Part 9: Systems live results — efficiency insights and recovery callouts"
+If heating was zero before and is now non-zero, the Systems Sankey links that were previously filtered out (value ≤ 0) should now appear. If there are any hardcoded zero-checks or conditions that prevent the heating link from showing, remove them.
+
+**Commit message:** "Part 9: Verify space heating appears in Systems Sankey with hourly calc"
 
 **Verify:**
-1. Navigate to /systems
-2. The right panel should show system efficiency summaries with in → out format
-3. MVHR recovery callout should show kWh and estimated cost saving
-4. Fuel split should match Sankey totals
-5. Report: "Systems results updated. VRF: [X] MWh in → [X] MWh delivered. MVHR recovery: [X] MWh ([£X/yr]). Fuel split: [X]% elec / [X]% gas."
+1. Navigate to /systems with gas boiler heating
+2. **SCREENSHOT:** The Sankey should now show a gas → boiler → space heating link
+3. The space heating node should have a non-zero value
+4. With VRF heating: grid → VRF → space heating link visible
+5. Report: "Space heating now visible in Systems Sankey. Gas boiler: [X] MWh gas → [X] MWh heating. VRF: [X] MWh elec → [X] MWh heating. Heating node no longer zero."
 
 ---
 
-## PART 10: Integration test — Systems module
+## PART 10: Full integration test
 
-Run a complete Systems module walkthrough:
+Complete walkthrough:
 
-1. Navigate to /systems — three-column layout, Sankey in centre
-2. All dropdowns populated (HVAC, Ventilation, DHW)
-3. Accordion sections: collapse all, verify summaries. Expand HVAC, change COP — Sankey animates
-4. Switch MEV → MVHR: recovery link appears in Sankey, heating demand drops in right panel
-5. Enable ASHP preheat: cascade link appears, gas fraction drops
-6. Switch to Ideal Loads: Sankey simplifies, right panel shows lower EUI
-7. Change LPD from 11 to 4 (LED): lighting link shrinks
-8. Change equipment density: small power link changes
-9. Auto-simulation triggers: verified results replace instant estimates
-10. Navigate to /building: 3D model has grey walls, blue glass, no z-fighting
+1. Open /building — hourly instant calc active (verify heating non-zero)
+2. Check EUI against EnergyPlus: instant calc [X], EnergyPlus [X], gap [X]%
+3. Toggle to Energy Flow view — fabric Sankey shows gains and losses
+4. Change orientation 0° → 180° with asymmetric glazing — EUI changes, Sankey responds
+5. Monthly chart shows seasonal pattern
+6. Navigate to /systems — space heating link visible in Sankey
+7. Switch heating from gas boiler to VRF — gas link disappears, electricity grows
+8. Switch MVHR to MEV — exhaust waste appears
+9. Auto-simulation triggers and refines estimates
+10. Navigate to /results — all tabs still working
 
 **SCREENSHOTS:**
-1. Systems Sankey with VRF + MVHR + Gas Boiler (showing recovery link)
-2. Accordion inputs — all collapsed with summaries
-3. Sankey after enabling ASHP preheat (showing cascade link)
-4. 3D building with grey walls and blue glass
+1. Building fabric Sankey showing gains/losses with heating demand
+2. Monthly heating/cooling pattern
+3. Systems Sankey with space heating link visible
+4. 3D view / Energy Flow toggle
 
-**Commit message:** "Part 10: Full integration test — Systems Sankey, collapsible inputs, 3D fixes"
+**Commit message:** "Part 10: Full integration test — hourly calc, fabric Sankey, heating fixed"
 
 **Verify — report:**
-- Z-fighting fixed: ✓/✗
-- Grey walls: ✓/✗
-- Blue glass: ✓/✗
-- Dropdowns populated: ✓/✗
-- Heating display: ✓/✗ (shows [value] not "0 MWh")
-- Accordion sections: ✓/✗
-- Sankey rendering: ✓/✗ with [X] nodes, [X] links
-- MVHR recovery link: ✓/✗ at [X] MWh
-- ASHP cascade link: ✓/✗
-- Animated transitions: ✓/✗
-- Click-to-expand: ✓/✗
-- System efficiency callouts: ✓/✗
-- Auto-simulation: ✓/✗
+- Hourly calc running: ✓/✗ in [X]ms
+- Heating demand non-zero: ✓/✗ at [X] MWh
+- EUI accuracy vs EnergyPlus: instant [X] vs EP [X] = [X]% gap
+- Fabric Sankey: ✓/✗ with [X] links
+- Monthly seasonal pattern: ✓/✗
+- Systems Sankey heating link: ✓/✗
+- Orientation swing (asymmetric): [X] kWh/m²
+- View toggle 3D/Energy Flow: ✓/✗
 - Zero console errors
 
 ---
@@ -447,4 +548,4 @@ Run a complete Systems module walkthrough:
 
 Update STATUS.md. Push to GitHub.
 
-Tell Chris: "Brief 12 complete. Systems module overhauled — Sankey flow diagram shows energy from Grid/Gas through VRF/MVHR/Boiler to end uses with proportional link widths. MVHR heat recovery shown as green link ([X] MWh recovered). ASHP preheat cascade visible when enabled. Collapsible accordion inputs with one-line summaries. Click a system node → expands its inputs. 3D fixed — grey walls, blue glass, no z-fighting."
+Tell Chris: "Brief 14 complete. Hourly instant calc running 8,760 iterations in [X]ms using real EPW weather data. Heating demand now [X] MWh (was 0 with degree-day method). EUI gap vs EnergyPlus: [X]%. Live fabric Sankey in Building module shows energy flowing through every element — updates as you drag sliders. Monthly heating peaks in [month]. Space heating now visible in Systems Sankey. Ready for Brief 15 — performance gap calibration."

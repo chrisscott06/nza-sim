@@ -26,6 +26,7 @@ from nza_engine.config import ENERGYPLUS_BIN, ENERGYPLUS_DIR, DEFAULT_WEATHER_DI
 from api.routers import simulate, library
 from api.routers import projects as projects_router
 from api.routers import scenarios as scenarios_router
+from api.routers import weather as weather_router
 from api.db.database import init_db
 
 
@@ -56,6 +57,7 @@ app.include_router(simulate.router)
 app.include_router(library.router)
 app.include_router(projects_router.router)
 app.include_router(scenarios_router.router)
+app.include_router(weather_router.router)
 
 
 @app.get("/api/health")
