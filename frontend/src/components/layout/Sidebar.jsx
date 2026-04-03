@@ -8,6 +8,7 @@ import {
   GitCompare,
   BookOpen,
 } from 'lucide-react'
+import { accentForPath } from '../../data/moduleThemes.js'
 
 const TOP_ITEMS = [
   { to: '/',         icon: Home,        label: 'Home' },
@@ -28,6 +29,9 @@ function NavItem({ to, icon: Icon, label }) {
     ? location.pathname === '/'
     : location.pathname.startsWith(to)
 
+  // Use current path's accent for active indicator (shows active module colour)
+  const accent = accentForPath(location.pathname)
+
   return (
     <div className="relative group">
       <NavLink
@@ -41,10 +45,11 @@ function NavItem({ to, icon: Icon, label }) {
           }
         `}
       >
-        {/* Teal active indicator */}
+        {/* Module-coloured active indicator */}
         {isActive && (
           <span
-            className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full bg-teal"
+            className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full"
+            style={{ backgroundColor: accent }}
           />
         )}
         <Icon
