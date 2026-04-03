@@ -149,7 +149,7 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
   const handleNodeClick = useCallback((node) => {
     if (!setOpenSection) return
     const sectionMap = {
-      vrf: 'hvac', mvhr: 'ventilation',
+      vrf: 'space_heating', mvhr: 'ventilation',
       boiler: 'dhw', lighting: 'lighting', small_power: 'smallpower',
     }
     const section = sectionMap[node.id]
@@ -319,7 +319,7 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
             {tooltip.inFlow > 0 && tooltip.outFlow > 0 && tooltip.inFlow < tooltip.outFlow && (
               <p className="text-xxs text-green-600">×{(tooltip.outFlow / tooltip.inFlow).toFixed(1)} multiplier (COP)</p>
             )}
-            {['vrf','mvhr','boiler','lighting','small_power'].includes(tooltip.node.id) && (
+            {['vrf','mvhr','boiler','lighting','small_power','vrf_heating','vrf_cooling','gas_boiler_heating'].includes(tooltip.node.id) && (
               <p className="text-xxs text-teal mt-0.5 italic">click to edit ↗</p>
             )}
           </div>
