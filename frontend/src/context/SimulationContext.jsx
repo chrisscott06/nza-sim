@@ -11,7 +11,7 @@
  *   came from a live run or were loaded from the DB.
  */
 
-import { createContext, useState, useContext, useEffect } from 'react'
+import { createContext, useState, useContext, useEffect, useRef } from 'react'
 import { ProjectContext } from './ProjectContext.jsx'
 
 export const SimulationContext = createContext(null)
@@ -56,8 +56,10 @@ export function SimulationProvider({ children }) {
   const [results,        setResults]        = useState(null)
   const [error,          setError]          = useState(null)
   const [resultsLoading, setResultsLoading] = useState(false)   // true while fetching from DB
+  const [autoSimulate,   setAutoSimulate]   = useState(true)    // auto-trigger after 3s inactivity
 
-  const { currentProjectId } = useContext(ProjectContext)
+  const { currentProjectId, saveStatus } = useContext(ProjectContext)
+  const autoTimerRef = useRef(null)
 
   // When the project changes, restore the latest complete simulation from the DB
   useEffect(() => {
@@ -86,6 +88,31 @@ export function SimulationProvider({ children }) {
       .catch(err => console.error('[SimulationContext] Failed to load latest results:', err))
       .finally(() => setResultsLoading(false))
   }, [currentProjectId])
+
+  // ── Auto-simulate: fire 2 seconds after save completes ───────────────────
+  useEffect(() => {
+    if (!autoSimulate || !currentProjectId) return
+
+    if (saveStatus === 'saving') {
+      // User is still making changes — cancel any pending auto-sim timer
+      if (autoTimerRef.current) {
+        clearTimeout(autoTimerRef.current)
+        autoTimerRef.current = null
+      }
+    }
+
+    if (saveStatus === 'saved') {
+      // Save just completed — start 2s delay before triggering simulation
+      autoTimerRef.current = setTimeout(() => {
+        autoTimerRef.current = null
+        runSimulation()
+      }, 2000)
+    }
+
+    return () => {
+      if (autoTimerRef.current) clearTimeout(autoTimerRef.current)
+    }
+  }, [saveStatus, autoSimulate, currentProjectId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Run simulation ─────────────────────────────────────────────────────────
 
@@ -121,7 +148,7 @@ export function SimulationProvider({ children }) {
   }
 
   return (
-    <SimulationContext.Provider value={{ status, runId, results, error, resultsLoading, runSimulation }}>
+    <SimulationContext.Provider value={{ status, runId, results, error, resultsLoading, runSimulation, autoSimulate, setAutoSimulate }}>
       {children}
     </SimulationContext.Provider>
   )

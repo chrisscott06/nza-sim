@@ -51,7 +51,7 @@ function SaveIndicator({ status }) {
 }
 
 export default function TopBar() {
-  const { status, results, error, runSimulation } = useContext(SimulationContext)
+  const { status, results, error, runSimulation, autoSimulate, setAutoSimulate } = useContext(SimulationContext)
   const projectCtx = useContext(ProjectContext)
   const buildingName = projectCtx?.params?.name || 'NZA Simulate'
   const saveStatus = projectCtx?.saveStatus ?? 'idle'
@@ -70,7 +70,7 @@ export default function TopBar() {
     }
   }, [status, results, error])
 
-  /* Auto-trigger simulation once a pending save completes */
+  /* Trigger simulation once a pending save completes (manual run queued during save) */
   useEffect(() => {
     if (pendingRunRef.current && saveStatus === 'saved') {
       pendingRunRef.current = false
@@ -126,6 +126,20 @@ export default function TopBar() {
         <SaveIndicator status={saveStatus} />
 
         <div className="flex-1" />
+
+        {/* Auto-simulate toggle */}
+        <button
+          onClick={() => setAutoSimulate(v => !v)}
+          title={autoSimulate ? 'Auto-simulate: On — click to disable' : 'Auto-simulate: Off — click to enable'}
+          className={`flex items-center gap-1 px-2 py-1 rounded text-xxs border transition-colors ${
+            autoSimulate
+              ? 'bg-teal/10 text-teal border-teal/30 hover:bg-teal/20'
+              : 'bg-white text-mid-grey border-light-grey hover:border-teal'
+          }`}
+        >
+          <span className={`w-2 h-2 rounded-full ${autoSimulate ? 'bg-teal' : 'bg-mid-grey'}`} />
+          Auto-simulate
+        </button>
 
         {/* Run Simulation button */}
         <button
