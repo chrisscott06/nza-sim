@@ -183,6 +183,64 @@ function SolarBars({ solar }) {
   )
 }
 
+// ── Monthly heating/cooling chart ─────────────────────────────────────────────
+
+const MONTH_ABBR = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D']
+
+function MonthlyChart({ monthly }) {
+  if (!monthly) return null
+  const { heating_kWh = [], cooling_kWh = [] } = monthly
+  if (!heating_kWh.length) return null
+
+  const maxVal = Math.max(...heating_kWh, ...cooling_kWh, 1)
+  const BAR_H = 36   // max bar height in px
+
+  return (
+    <div>
+      <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1.5">Monthly profile</p>
+      <div className="flex items-end gap-px justify-between" style={{ height: BAR_H * 2 + 10 }}>
+        {heating_kWh.map((hKwh, i) => {
+          const cKwh   = cooling_kWh[i] ?? 0
+          const hH     = Math.round((hKwh / maxVal) * BAR_H)
+          const cH     = Math.round((cKwh / maxVal) * BAR_H)
+          return (
+            <div key={i} className="flex flex-col items-center" style={{ flex: 1 }}>
+              {/* Cooling bar (upward) */}
+              <div style={{ height: BAR_H, display: 'flex', alignItems: 'flex-end' }}>
+                <div
+                  style={{ height: cH, background: '#3B82F6', width: '100%', borderRadius: '1px 1px 0 0', minWidth: 4 }}
+                  title={`${MONTH_ABBR[i]}: cooling ${Math.round(cKwh)} kWh`}
+                />
+              </div>
+              {/* Centre line */}
+              <div style={{ height: 1, background: '#E5E7EB', width: '100%' }} />
+              {/* Heating bar (downward) */}
+              <div style={{ height: BAR_H, display: 'flex', alignItems: 'flex-start' }}>
+                <div
+                  style={{ height: hH, background: '#DC2626', width: '100%', borderRadius: '0 0 1px 1px', minWidth: 4 }}
+                  title={`${MONTH_ABBR[i]}: heating ${Math.round(hKwh)} kWh`}
+                />
+              </div>
+              {/* Month label */}
+              <span className="text-xxs text-mid-grey mt-0.5" style={{ fontSize: 8 }}>{MONTH_ABBR[i]}</span>
+            </div>
+          )
+        })}
+      </div>
+      <div className="flex gap-3 mt-1">
+        <div className="flex items-center gap-1">
+          <div className="w-2 h-1.5 rounded-sm bg-blue-500" />
+          <span className="text-xxs text-mid-grey">Cooling</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-2 h-1.5 rounded-sm bg-red-600" />
+          <span className="text-xxs text-mid-grey">Heating</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Key metric row ────────────────────────────────────────────────────────────
 
 /** Format kWh as MWh, showing "< 1" instead of "0" for very small non-zero values */
@@ -301,6 +359,9 @@ export default function LiveResultsPanel({ libraryData = {}, onSankeyExpand }) {
             </div>
           </div>
         )}
+
+        {/* Monthly heating/cooling profile (hourly calc only) */}
+        {result.monthly && <MonthlyChart monthly={result.monthly} />}
 
         {/* Run full simulation link */}
         <div className="pt-1 border-t border-light-grey">

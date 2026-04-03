@@ -9,6 +9,8 @@
 
 import { useContext, useMemo } from 'react'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
+import { useWeather } from '../../../context/WeatherContext.jsx'
+import { useHourlySolar } from '../../../hooks/useHourlySolar.js'
 import { calculateInstant } from '../../../utils/instantCalc.js'
 
 // ── EUI gauge ─────────────────────────────────────────────────────────────────
@@ -274,10 +276,13 @@ function sysFuel(key) { return (SYSTEM_DEFAULTS[key] ?? {}).fuel ?? 'electricity
 
 export default function SystemsLiveResults({ libraryData = {} }) {
   const { params, constructions, systems } = useContext(ProjectContext)
+  const { weatherData } = useWeather()
+  const orientationDeg = Number(params?.orientation ?? 0)
+  const hourlySolar = useHourlySolar(weatherData, orientationDeg)
 
   const result = useMemo(
-    () => calculateInstant(params, constructions, systems, libraryData),
-    [params, constructions, systems, libraryData]
+    () => calculateInstant(params, constructions, systems, libraryData, weatherData, hourlySolar),
+    [params, constructions, systems, libraryData, weatherData, hourlySolar]
   )
 
   const isIdeal = systems.mode !== 'detailed'

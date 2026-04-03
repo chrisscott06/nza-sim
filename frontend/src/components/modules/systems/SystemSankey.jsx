@@ -15,6 +15,8 @@
 import { useContext, useRef, useEffect, useState, useMemo, useCallback } from 'react'
 import { sankey, sankeyLeft, sankeyLinkHorizontal } from 'd3-sankey'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
+import { useWeather } from '../../../context/WeatherContext.jsx'
+import { useHourlySolar } from '../../../hooks/useHourlySolar.js'
 import { calculateInstant } from '../../../utils/instantCalc.js'
 
 // ── Colour palette ────────────────────────────────────────────────────────────
@@ -69,6 +71,9 @@ function fmtMWh(kWh) {
 
 export default function SystemSankey({ openSection, setOpenSection, libraryData = {} }) {
   const { params, constructions, systems } = useContext(ProjectContext)
+  const { weatherData } = useWeather()
+  const orientationDeg = Number(params?.orientation ?? 0)
+  const hourlySolar = useHourlySolar(weatherData, orientationDeg)
   const containerRef = useRef(null)
   const [dims, setDims] = useState({ width: 600, height: 400 })
   const [tooltip, setTooltip] = useState(null)        // { x, y, node } | { x, y, link, srcLabel, tgtLabel }
@@ -76,8 +81,8 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
   const [hoveredLinkIdx, setHoveredLinkIdx] = useState(null)
 
   const result = useMemo(
-    () => calculateInstant(params, constructions, systems, libraryData),
-    [params, constructions, systems, libraryData]
+    () => calculateInstant(params, constructions, systems, libraryData, weatherData, hourlySolar),
+    [params, constructions, systems, libraryData, weatherData, hourlySolar]
   )
 
   const systemsFlow = result.systems_flow
