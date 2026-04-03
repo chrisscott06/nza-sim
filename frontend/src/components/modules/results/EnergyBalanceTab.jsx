@@ -14,10 +14,13 @@ import { BarChart3 } from 'lucide-react'
 const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 const SERIES = [
-  { key: 'heating_kWh',   label: 'Heating',   color: '#DC2626' },
-  { key: 'cooling_kWh',   label: 'Cooling',   color: '#3B82F6' },
-  { key: 'lighting_kWh',  label: 'Lighting',  color: '#ECB01F' },
-  { key: 'equipment_kWh', label: 'Equipment', color: '#8B5CF6' },
+  { key: 'heating_kWh',     label: 'Heating',     color: '#DC2626' },
+  { key: 'cooling_kWh',     label: 'Cooling',     color: '#3B82F6' },
+  { key: 'fans_kWh',        label: 'Fans',        color: '#8B5CF6' },
+  { key: 'lighting_kWh',    label: 'Lighting',    color: '#F59E0B' },
+  { key: 'equipment_kWh',   label: 'Equipment',   color: '#64748B' },
+  { key: 'dhw_kWh',         label: 'DHW',         color: '#F97316' },
+  { key: 'ventilation_kWh', label: 'Ventilation', color: '#06B6D4' },
 ]
 
 function CustomTooltip({ active, payload, label }) {
@@ -61,18 +64,27 @@ export default function EnergyBalanceTab({ activeResults } = {}) {
   // Transform dict of arrays → array of month objects
   const chartData = MONTH_LABELS.map((month, i) => ({
     month,
-    heating_kWh:   Math.round(me.heating_kWh?.[i]   ?? 0),
-    cooling_kWh:   Math.round(me.cooling_kWh?.[i]   ?? 0),
-    lighting_kWh:  Math.round(me.lighting_kWh?.[i]  ?? 0),
-    equipment_kWh: Math.round(me.equipment_kWh?.[i] ?? 0),
+    heating_kWh:     Math.round(me.heating_kWh?.[i]     ?? 0),
+    cooling_kWh:     Math.round(me.cooling_kWh?.[i]     ?? 0),
+    fans_kWh:        Math.round(me.fans_kWh?.[i]        ?? 0),
+    lighting_kWh:    Math.round(me.lighting_kWh?.[i]    ?? 0),
+    equipment_kWh:   Math.round(me.equipment_kWh?.[i]   ?? 0),
+    dhw_kWh:         Math.round(me.dhw_kWh?.[i]         ?? 0),
+    ventilation_kWh: Math.round(me.ventilation_kWh?.[i] ?? 0),
   }))
 
-  // Annual totals
-  const totals = SERIES.map(s => ({
-    label: s.label,
-    color: s.color,
-    total: chartData.reduce((sum, r) => sum + (r[s.key] ?? 0), 0),
-  }))
+  // Annual totals — only show series with non-zero data
+  const totals = SERIES
+    .map(s => ({
+      ...s,
+      total: chartData.reduce((sum, r) => sum + (r[s.key] ?? 0), 0),
+    }))
+    .filter(s => s.total > 0)
+
+  // Active series (non-zero) for bar rendering
+  const activeSeries = SERIES.filter(s =>
+    chartData.some(r => (r[s.key] ?? 0) > 0)
+  )
 
   return (
     <div className="p-4 space-y-4">
@@ -96,14 +108,14 @@ export default function EnergyBalanceTab({ activeResults } = {}) {
               />
               <Tooltip content={<CustomTooltip />} wrapperStyle={TOOLTIP_WRAPPER_STYLE} />
               <Legend wrapperStyle={LEGEND_STYLE} iconType="square" iconSize={8} />
-              {SERIES.map(s => (
+              {activeSeries.map((s, idx) => (
                 <Bar
                   key={s.key}
                   dataKey={s.key}
                   name={s.label}
                   stackId="a"
                   fill={s.color}
-                  radius={s.key === 'equipment_kWh' ? [2, 2, 0, 0] : [0, 0, 0, 0]}
+                  radius={idx === activeSeries.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]}
                 />
               ))}
             </BarChart>
