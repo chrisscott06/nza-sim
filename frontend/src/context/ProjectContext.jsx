@@ -56,18 +56,108 @@ const DEFAULT_CONSTRUCTIONS = {
 }
 
 const DEFAULT_SYSTEMS = {
-  mode:                   'detailed',  // Brief 07: default to detailed HVAC
-  hvac_type:              'vrf_standard',
-  ventilation_type:       'mev_standard',
-  natural_ventilation:    false,
-  natural_vent_threshold: 22.0,
-  dhw_primary:            'gas_boiler_dhw',
-  dhw_preheat:            'ashp_dhw',
-  dhw_setpoint:           60.0,
-  dhw_preheat_setpoint:   45.0,
-  lighting_power_density: 8.0,
-  lighting_control:       'occupancy_sensing',
-  pump_type:              'variable_speed',
+  mode: 'detailed',
+
+  // ── Demand-based system assignments (Brief 13) ────────────────────────────
+  space_heating: {
+    primary:   { system: 'gas_boiler_standard', share: 1.0, efficiency_override: null },
+    secondary: null,
+    tertiary:  null,
+  },
+  space_cooling: {
+    primary:   { system: 'vrf_standard', share: 1.0, efficiency_override: null },
+    secondary: null,
+    tertiary:  null,
+  },
+  dhw: {
+    primary:   { system: 'gas_boiler_dhw', share: 1.0, efficiency_override: null },
+    secondary: null,
+    tertiary:  null,
+  },
+  ventilation: {
+    primary:   { system: 'mvhr_standard', share: 1.0, efficiency_override: null },
+    secondary: null,
+    tertiary:  null,
+  },
+
+  // ── Direct parameters ─────────────────────────────────────────────────────
+  lighting_power_density:   8.0,
+  lighting_control:         'occupancy_sensing',
+  equipment_power_density:  15.0,
+  natural_ventilation:      false,
+  window_opening_threshold: 22.0,
+  dhw_setpoint:             60.0,
+  dhw_preheat_setpoint:     45.0,
+  hre_override:             85,
+  sfp_override:             1.8,
+
+  // ── Backward-compat aliases (kept until UI migrated in Parts 3-5) ─────────
+  hvac_type:        'vrf_standard',
+  ventilation_type: 'mvhr_standard',
+  dhw_primary:      'gas_boiler_dhw',
+  dhw_preheat:      'none',
+}
+
+// ── Migrate old flat systems_config → demand-based structure ─────────────────
+
+function migrateSystemsConfig(raw) {
+  if (!raw) return DEFAULT_SYSTEMS
+  // Already in new format if demand structure is present
+  if (raw.space_heating?.primary) return raw
+
+  const hvacType   = raw.hvac_type        ?? 'vrf_standard'
+  const ventType   = raw.ventilation_type ?? 'mvhr_standard'
+  const dhwPrimary = raw.dhw_primary      ?? 'gas_boiler_dhw'
+  const dhwPreheat = raw.dhw_preheat      ?? 'none'
+
+  // VRF types handle both heating and cooling from one system
+  const isVRF = hvacType.startsWith('vrf')
+  const coolingSystem = isVRF ? hvacType : 'vrf_standard'
+
+  const dhwSecondary = (dhwPreheat && dhwPreheat !== 'none')
+    ? { system: dhwPreheat, share: 0.7, efficiency_override: null }
+    : null
+
+  return {
+    mode: raw.mode ?? 'detailed',
+
+    space_heating: {
+      primary:   { system: hvacType, share: 1.0, efficiency_override: raw.cop_override ?? null },
+      secondary: null,
+      tertiary:  null,
+    },
+    space_cooling: {
+      primary:   { system: coolingSystem, share: 1.0, efficiency_override: raw.eer_override ?? null },
+      secondary: null,
+      tertiary:  null,
+    },
+    dhw: {
+      primary:   { system: dhwPrimary, share: dhwSecondary ? 0.3 : 1.0, efficiency_override: null },
+      secondary: dhwSecondary,
+      tertiary:  null,
+    },
+    ventilation: {
+      primary:   { system: ventType, share: 1.0, efficiency_override: null },
+      secondary: null,
+      tertiary:  null,
+    },
+
+    lighting_power_density:   raw.lighting_power_density   ?? 8.0,
+    lighting_control:         raw.lighting_control         ?? 'occupancy_sensing',
+    equipment_power_density:  raw.equipment_power_density  ?? 15.0,
+    natural_ventilation:      raw.natural_ventilation      ?? false,
+    window_opening_threshold: raw.natural_vent_threshold   ?? 22.0,
+    dhw_setpoint:             raw.dhw_setpoint             ?? 60.0,
+    dhw_preheat_setpoint:     raw.dhw_preheat_setpoint     ?? 45.0,
+    hre_override:             raw.hre_override             ?? 85,
+    sfp_override:             raw.sfp_override             ?? 1.8,
+
+    // Backward-compat aliases
+    hvac_type:        hvacType,
+    ventilation_type: ventType,
+    dhw_primary:      dhwPrimary,
+    dhw_preheat:      dhwPreheat,
+  }
 }
 
 // ── Save status: 'idle' | 'saving' | 'saved' | 'error' ──────────────────────
@@ -126,7 +216,7 @@ export function ProjectProvider({ children }) {
       location:     bc.location     ?? DEFAULT_PARAMS.location,
     })
     setConstructions(project.construction_choices ?? DEFAULT_CONSTRUCTIONS)
-    setSystems(project.systems_config ?? DEFAULT_SYSTEMS)
+    setSystems(migrateSystemsConfig(project.systems_config))
   }
 
   // ── Startup: fetch project list, load most recent (or create default) ────
@@ -221,10 +311,58 @@ export function ProjectProvider({ children }) {
   }, [currentProjectId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── updateSystem ─────────────────────────────────────────────────────────
+  // Supports both old flat keys (backward compat) and new demand-based keys.
+  // Keeps both structures in sync so old and new components work simultaneously.
 
   const updateSystem = useCallback((key, value) => {
     setSystems(s => {
-      const next = { ...s, [key]: value }
+      let next = { ...s, [key]: value }
+
+      // ── Old flat key → sync to new demand structure ────────────────────
+      if (key === 'hvac_type') {
+        const isVRF = value?.startsWith('vrf')
+        next = {
+          ...next,
+          space_heating: { ...s.space_heating, primary: { ...(s.space_heating?.primary ?? {}), system: value } },
+          space_cooling:  isVRF
+            ? { ...s.space_cooling, primary: { ...(s.space_cooling?.primary ?? {}), system: value } }
+            : s.space_cooling,
+        }
+      } else if (key === 'ventilation_type') {
+        next = {
+          ...next,
+          ventilation: { ...s.ventilation, primary: { ...(s.ventilation?.primary ?? {}), system: value } },
+        }
+      } else if (key === 'dhw_primary') {
+        next = {
+          ...next,
+          dhw: { ...s.dhw, primary: { ...(s.dhw?.primary ?? {}), system: value } },
+        }
+      } else if (key === 'dhw_preheat') {
+        const hasPreheat = value && value !== 'none'
+        next = {
+          ...next,
+          dhw: {
+            ...s.dhw,
+            secondary: hasPreheat ? { system: value, share: 0.7, efficiency_override: null } : null,
+          },
+        }
+
+      // ── New demand key → sync to old flat aliases ─────────────────────
+      } else if (key === 'space_heating') {
+        next = { ...next, hvac_type: value?.primary?.system ?? s.hvac_type }
+      } else if (key === 'space_cooling') {
+        // no direct legacy alias — cooling was combined with hvac_type
+      } else if (key === 'ventilation') {
+        next = { ...next, ventilation_type: value?.primary?.system ?? s.ventilation_type }
+      } else if (key === 'dhw') {
+        next = {
+          ...next,
+          dhw_primary: value?.primary?.system ?? s.dhw_primary,
+          dhw_preheat: value?.secondary?.system ?? 'none',
+        }
+      }
+
       _scheduleSave('systems', next)
       return next
     })
