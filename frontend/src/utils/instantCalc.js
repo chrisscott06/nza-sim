@@ -172,29 +172,32 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
   const heat_recovery  = is_mvhr ? mvhr_eff : 0
   const vent_kWh       = AIR_HEAT_CAPACITY * vent_ach * volume * UK_HDD * 24 / 1000 * (1 - heat_recovery)
 
-  // ── Solar gains (orientation-aware) ──────────────────────────────────────
+  // ── Solar gains (orientation-aware) — all values in kWh ─────────────────
+  // IMPORTANT: do NOT divide by 1000 here — keep in kWh so units match
+  // internal gains and fabric losses for the heat balance calculation.
+  // Division to MWh happens only in the gains_losses display output below.
   const orientation = Number(building.orientation ?? 0)
   const g_value = getGValue(constructions, libraryData)
   const solar_gains = {
-    north: glazing.north * getSolarRadiation('north', orientation) * g_value / 1000,
-    south: glazing.south * getSolarRadiation('south', orientation) * g_value / 1000,
-    east:  glazing.east  * getSolarRadiation('east',  orientation) * g_value / 1000,
-    west:  glazing.west  * getSolarRadiation('west',  orientation) * g_value / 1000,
+    north: glazing.north * getSolarRadiation('north', orientation) * g_value,
+    south: glazing.south * getSolarRadiation('south', orientation) * g_value,
+    east:  glazing.east  * getSolarRadiation('east',  orientation) * g_value,
+    west:  glazing.west  * getSolarRadiation('west',  orientation) * g_value,
   }
 
-  // ── Sol-air opaque conduction gains ────────────────────────────────────────
+  // ── Sol-air opaque conduction gains (kWh) ─────────────────────────────────
   // Fraction of incident solar on opaque wall that conducts through as internal gain
   const OPAQUE_GAIN_FRACTION = 0.04   // ~4% of incident irradiance per CIBSE simplified
   const UK_HORIZONTAL_SOLAR  = 950    // kWh/m²/yr (horizontal irradiance, UK average)
   const wall_op = geo.wall_opaque     // { north, south, east, west } in m²
   const opaque_wall_solar = {
-    north: getSolarRadiation('north', orientation) * (wall_op.north ?? 0) * OPAQUE_GAIN_FRACTION / 1000,
-    south: getSolarRadiation('south', orientation) * (wall_op.south ?? 0) * OPAQUE_GAIN_FRACTION / 1000,
-    east:  getSolarRadiation('east',  orientation) * (wall_op.east  ?? 0) * OPAQUE_GAIN_FRACTION / 1000,
-    west:  getSolarRadiation('west',  orientation) * (wall_op.west  ?? 0) * OPAQUE_GAIN_FRACTION / 1000,
+    north: getSolarRadiation('north', orientation) * (wall_op.north ?? 0) * OPAQUE_GAIN_FRACTION,
+    south: getSolarRadiation('south', orientation) * (wall_op.south ?? 0) * OPAQUE_GAIN_FRACTION,
+    east:  getSolarRadiation('east',  orientation) * (wall_op.east  ?? 0) * OPAQUE_GAIN_FRACTION,
+    west:  getSolarRadiation('west',  orientation) * (wall_op.west  ?? 0) * OPAQUE_GAIN_FRACTION,
   }
   const opaque_wall_total = Object.values(opaque_wall_solar).reduce((a, b) => a + b, 0)
-  const roof_solar_kWh = UK_HORIZONTAL_SOLAR * roof_area * OPAQUE_GAIN_FRACTION / 1000
+  const roof_solar_kWh = UK_HORIZONTAL_SOLAR * roof_area * OPAQUE_GAIN_FRACTION
 
   const total_solar = Object.values(solar_gains).reduce((a, b) => a + b, 0) + opaque_wall_total + roof_solar_kWh
 
@@ -303,22 +306,24 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
         infiltration:       infiltration_kWh / 1000,
         ventilation:        vent_kWh        / 1000,
         // Offsets in MWh (reduce heating demand — only util_factor fraction is useful)
-        solar_south:  solar_gains.south    * util_factor,
-        solar_east:   solar_gains.east     * util_factor,
-        solar_west:   solar_gains.west     * util_factor,
-        solar_north:  solar_gains.north    * util_factor,
-        wall_solar:   opaque_wall_total    * util_factor,
-        roof_solar:   roof_solar_kWh       * util_factor,
+        // solar_gains are now in kWh → divide by 1000 for MWh display
+        solar_south:  solar_gains.south / 1000 * util_factor,
+        solar_east:   solar_gains.east  / 1000 * util_factor,
+        solar_west:   solar_gains.west  / 1000 * util_factor,
+        solar_north:  solar_gains.north / 1000 * util_factor,
+        wall_solar:   opaque_wall_total / 1000 * util_factor,
+        roof_solar:   roof_solar_kWh    / 1000 * util_factor,
         equipment:    equip_internal       * util_factor / 1000,
         lighting:     lighting_internal    * util_factor / 1000,
         people:       people_internal      * util_factor / 1000,
       },
       cooling_side: {
         // Drivers in MWh (increase cooling demand — only cooling_fraction drives cooling)
-        solar_south:  solar_gains.south    * COOLING_GAIN_FRACTION,
-        solar_east:   solar_gains.east     * COOLING_GAIN_FRACTION,
-        solar_west:   solar_gains.west     * COOLING_GAIN_FRACTION,
-        solar_north:  solar_gains.north    * COOLING_GAIN_FRACTION,
+        // solar_gains are now in kWh → divide by 1000 for MWh display
+        solar_south:  solar_gains.south / 1000 * COOLING_GAIN_FRACTION,
+        solar_east:   solar_gains.east  / 1000 * COOLING_GAIN_FRACTION,
+        solar_west:   solar_gains.west  / 1000 * COOLING_GAIN_FRACTION,
+        solar_north:  solar_gains.north / 1000 * COOLING_GAIN_FRACTION,
         equipment:    equip_internal       * COOLING_GAIN_FRACTION / 1000,
         lighting:     lighting_internal    * COOLING_GAIN_FRACTION / 1000,
         people:       people_internal      * COOLING_GAIN_FRACTION / 1000,
