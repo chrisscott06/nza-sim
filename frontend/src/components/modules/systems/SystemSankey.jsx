@@ -71,8 +71,9 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
   const { params, constructions, systems } = useContext(ProjectContext)
   const containerRef = useRef(null)
   const [dims, setDims] = useState({ width: 600, height: 400 })
-  const [tooltip, setTooltip] = useState(null)        // { x, y, node }
+  const [tooltip, setTooltip] = useState(null)        // { x, y, node } | { x, y, link, srcLabel, tgtLabel }
   const [hoveredNodeId, setHoveredNodeId] = useState(null)
+  const [hoveredLinkIdx, setHoveredLinkIdx] = useState(null)
 
   const result = useMemo(
     () => calculateInstant(params, constructions, systems, libraryData),
@@ -144,11 +145,29 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
                       .reduce((s, l) => s + (l.value ?? 0), 0) ?? 0
     setTooltip({ x, y, node, inFlow, outFlow })
     setHoveredNodeId(node.id)
+    setHoveredLinkIdx(null)
   }, [sankeyResult])
 
   const handleNodeLeave = useCallback(() => {
     setTooltip(null)
     setHoveredNodeId(null)
+  }, [])
+
+  // ── Tooltip on link hover ──────────────────────────────────────────────────
+  const handleLinkEnter = useCallback((e, link, idx) => {
+    const rect = containerRef.current?.getBoundingClientRect() ?? { left: 0, top: 0 }
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    const srcLabel = (typeof link.source === 'object' ? link.source.label : link.source) ?? link.source
+    const tgtLabel = (typeof link.target === 'object' ? link.target.label : link.target) ?? link.target
+    setTooltip({ x, y, link, srcLabel, tgtLabel })
+    setHoveredLinkIdx(idx)
+    setHoveredNodeId(null)
+  }, [])
+
+  const handleLinkLeave = useCallback(() => {
+    setTooltip(null)
+    setHoveredLinkIdx(null)
   }, [])
 
   // ── Click on node → expand demand accordion ──────────────────────────────
@@ -224,24 +243,45 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
               const w = Math.max(1, link.width ?? 2)
               const srcId = typeof link.source === 'object' ? link.source.id : link.source
               const tgtId = typeof link.target === 'object' ? link.target.id : link.target
-              const isConnected = hoveredNodeId
-                ? (srcId === hoveredNodeId || tgtId === hoveredNodeId)
-                : true
+
+              // Determine highlight state from node hover OR link hover
+              let isHighlighted = true
+              if (hoveredNodeId) {
+                isHighlighted = srcId === hoveredNodeId || tgtId === hoveredNodeId
+              } else if (hoveredLinkIdx !== null) {
+                isHighlighted = i === hoveredLinkIdx
+              }
+
               const baseOpacity = isRecovered ? 0.7 : 0.45
-              const opacity = hoveredNodeId
-                ? (isConnected ? Math.min(baseOpacity + 0.35, 1) : 0.08)
+              const anyHover = hoveredNodeId || hoveredLinkIdx !== null
+              const opacity = anyHover
+                ? (isHighlighted ? Math.min(baseOpacity + 0.35, 1) : 0.08)
                 : baseOpacity
+              const strokeW = isHighlighted && anyHover ? w * 1.2 : w
+
+              const d = linkPath(link)
               return (
-                <path
-                  key={i}
-                  d={linkPath(link)}
-                  fill="none"
-                  stroke={color}
-                  strokeWidth={isConnected && hoveredNodeId ? w * 1.15 : w}
-                  strokeOpacity={opacity}
-                  strokeDasharray={isRecovered ? '6 3' : undefined}
-                  style={{ transition: 'stroke-width 300ms ease, stroke-opacity 300ms ease' }}
-                />
+                <g key={i}>
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth={strokeW}
+                    strokeOpacity={opacity}
+                    strokeDasharray={isRecovered ? '6 3' : undefined}
+                    style={{ transition: 'stroke-width 300ms ease, stroke-opacity 300ms ease' }}
+                  />
+                  {/* Invisible wider path for easier mouse targeting */}
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke="transparent"
+                    strokeWidth={Math.max(10, strokeW + 6)}
+                    style={{ cursor: 'crosshair' }}
+                    onMouseEnter={e => handleLinkEnter(e, link, i)}
+                    onMouseLeave={handleLinkLeave}
+                  />
+                </g>
               )
             })}
 
@@ -272,12 +312,24 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
                 // legacy IDs
                 nid === 'vrf' || nid === 'mvhr' || nid === 'boiler'
               const labelX = x1 + 5
-              const isNodeDimmed = hoveredNodeId && node.id !== hoveredNodeId
-                && !sankeyResult.links.some(l => {
+              const isNodeDimmed = (() => {
+                if (hoveredNodeId) {
+                  if (node.id === hoveredNodeId) return false
+                  return !sankeyResult.links.some(l => {
                     const s = typeof l.source === 'object' ? l.source.id : l.source
                     const t = typeof l.target === 'object' ? l.target.id : l.target
                     return (s === hoveredNodeId && t === node.id) || (t === hoveredNodeId && s === node.id)
                   })
+                }
+                if (hoveredLinkIdx !== null) {
+                  const hl = sankeyResult.links[hoveredLinkIdx]
+                  if (!hl) return false
+                  const hSrc = typeof hl.source === 'object' ? hl.source.id : hl.source
+                  const hTgt = typeof hl.target === 'object' ? hl.target.id : hl.target
+                  return node.id !== hSrc && node.id !== hTgt
+                }
+                return false
+              })()
 
               return (
                 <g
@@ -329,8 +381,8 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
           </svg>
         )}
 
-        {/* Tooltip */}
-        {tooltip && (
+        {/* Tooltip — node variant */}
+        {tooltip?.node && (
           <div
             className="absolute pointer-events-none bg-white border border-light-grey rounded shadow-sm px-2 py-1.5 z-10"
             style={{ left: tooltip.x + 12, top: Math.max(4, tooltip.y - 40) }}
@@ -361,6 +413,24 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
                 tid === 'vrf' || tid === 'mvhr' || tid === 'boiler'
               return showEdit ? <p className="text-xxs text-teal mt-0.5 italic">click to edit ↗</p> : null
             })()}
+          </div>
+        )}
+
+        {/* Tooltip — link variant */}
+        {tooltip?.link && (
+          <div
+            className="absolute pointer-events-none bg-white border border-light-grey rounded shadow-sm px-2 py-1.5 z-10"
+            style={{ left: tooltip.x + 12, top: Math.max(4, tooltip.y - 40) }}
+          >
+            <p className="text-xxs font-semibold text-navy mb-0.5">
+              {fmtMWh(tooltip.link.value ?? 0)}
+            </p>
+            <p className="text-xxs text-mid-grey">
+              {tooltip.srcLabel} → {tooltip.tgtLabel}
+            </p>
+            {tooltip.link.style && tooltip.link.style !== 'default' && (
+              <p className="text-xxs text-mid-grey capitalize">{tooltip.link.style}</p>
+            )}
           </div>
         )}
       </div>
