@@ -161,12 +161,29 @@ def _collect_construction_epjson(construction_names: set[str]) -> dict:
     return merged
 
 
-def _build_people_objects(zones: dict, zone_type: str = "hotel_bedroom") -> dict:
-    """Build EnergyPlus People objects for each zone."""
+def _build_people_objects(
+    zones: dict,
+    zone_type: str = "hotel_bedroom",
+    density_override: float | None = None,
+) -> dict:
+    """
+    Build EnergyPlus People objects for each zone.
+
+    Parameters
+    ----------
+    zones : dict
+        Zone names to create People objects for.
+    zone_type : str
+        Library zone type (default "hotel_bedroom").
+    density_override : float | None
+        If provided, use this occupancy density (people/m²) instead of the
+        library default.  Computed from: avg_occupants / GIA where
+        avg_occupants = num_bedrooms × occupancy_rate × people_per_room.
+    """
     loads = get_zone_loads(zone_type)
-    density = loads["occupancy_density_people_per_m2"]
-    m2_per_person = 1.0 / density if density > 0 else 100.0
-    metabolic = loads["metabolic_rate_W_per_person"]
+    density = density_override if density_override is not None else loads["occupancy_density_people_per_m2"]
+    # Guard against zero density
+    density = max(density, 1e-4)
 
     people = {}
     for zone_name in zones:
@@ -174,7 +191,7 @@ def _build_people_objects(zones: dict, zone_type: str = "hotel_bedroom") -> dict
             "zone_or_zonelist_or_space_or_spacelist_name": zone_name,
             "number_of_people_schedule_name": loads["occupancy_schedule"],
             "number_of_people_calculation_method": "People/Area",
-            "people_per_floor_area": density,
+            "people_per_floor_area": round(density, 6),
             "fraction_radiant": 0.30,
             "sensible_heat_fraction": 1.0 - loads["latent_fraction"],
             "activity_level_schedule_name": "hotel_bedroom_occupancy",
@@ -585,7 +602,20 @@ def assemble_epjson(
     sc = systems_config or {}
     lpd_override = sc.get("lighting_power_density")  # W/m², None = use library default
 
-    people_objects  = _build_people_objects(zones)
+    # Occupancy density — compute from building params when available
+    _num_bedrooms    = int(building_params.get("num_bedrooms",    0) or 0)
+    _occupancy_rate  = float(building_params.get("occupancy_rate",  0.75) or 0.75)
+    _people_per_room = float(building_params.get("people_per_room", 1.5)  or 1.5)
+    _gia = (float(building_params.get("length", 60)) *
+            float(building_params.get("width",  15)) *
+            float(building_params.get("num_floors", 4)))
+    if _num_bedrooms > 0 and _gia > 0:
+        _avg_occupants = _num_bedrooms * _occupancy_rate * _people_per_room
+        _density_override = _avg_occupants / _gia
+    else:
+        _density_override = None  # use library default
+
+    people_objects  = _build_people_objects(zones, density_override=_density_override)
     lights_objects  = _build_lights_objects(zones, lpd_override=lpd_override)
     equip_objects   = _build_equipment_objects(zones)
     infil_objects   = _build_infiltration_objects(
@@ -638,9 +668,12 @@ def assemble_epjson(
             hvac_objects.setdefault(obj_type, {}).update(items)
 
         # DHW — gas boiler (+ optional ASHP preheat)
+        # Pass actual bedroom count + occupancy so peak flow scales with real demand
         dhw_objects = generate_dhw_system(
             zone_floor_area_m2=zone_floor_area,
             num_zones=len(zones),
+            num_bedrooms=_num_bedrooms if _num_bedrooms > 0 else None,
+            occupancy_rate=_occupancy_rate,
             dhw_primary=sc.get("dhw_primary", "gas_boiler_dhw"),
             dhw_preheat=sc.get("dhw_preheat", "none"),
             boiler_efficiency=float(sc.get("dhw_efficiency", 0.92)),

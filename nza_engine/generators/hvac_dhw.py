@@ -79,7 +79,31 @@ def _constant_schedules() -> dict:
     }
 
 
-def _peak_flow_m3s(zone_floor_area_m2: float, num_zones: int) -> float:
+def _effective_rooms(
+    zone_floor_area_m2: float,
+    num_zones: int,
+    num_bedrooms: int | None = None,
+    occupancy_rate: float = 1.0,
+) -> float:
+    """
+    Return effective occupied room count for DHW sizing.
+
+    When num_bedrooms is supplied (from building params), scale it by
+    occupancy_rate so that DHW demand reflects actual hotel occupancy.
+    Falls back to GIA-based estimate when num_bedrooms is not available.
+    """
+    if num_bedrooms is not None and num_bedrooms > 0:
+        return max(num_bedrooms * occupancy_rate, 1.0)
+    gia_m2 = zone_floor_area_m2 * num_zones
+    return max(gia_m2 / _M2_PER_ROOM, 5.0)
+
+
+def _peak_flow_m3s(
+    zone_floor_area_m2: float,
+    num_zones: int,
+    num_bedrooms: int | None = None,
+    occupancy_rate: float = 1.0,
+) -> float:
     """
     Estimate DHW peak use flow rate (m³/s) from building size.
 
@@ -88,21 +112,24 @@ def _peak_flow_m3s(zone_floor_area_m2: float, num_zones: int) -> float:
     To achieve the target daily volume, set:
       peak_flow = daily_volume_m3 / (avg_schedule_fraction × 86400)
 
-    Without this correction, peak_flow would be set too high and the water
-    heater would deliver many times more DHW than the building actually uses.
+    When num_bedrooms is supplied, peak flow scales with actual occupied rooms
+    rather than a GIA-based estimate, giving occupancy-sensitive DHW demand.
     """
-    gia_m2 = zone_floor_area_m2 * num_zones
-    estimated_rooms = max(gia_m2 / _M2_PER_ROOM, 5.0)
-    daily_m3 = estimated_rooms * _LITRES_PER_ROOM_PER_DAY / 1000.0
+    rooms = _effective_rooms(zone_floor_area_m2, num_zones, num_bedrooms, occupancy_rate)
+    daily_m3 = rooms * _LITRES_PER_ROOM_PER_DAY / 1000.0
     peak_flow = daily_m3 / (_DHW_SCHEDULE_AVG_FRACTION * 86400.0)
     return round(peak_flow, 7)
 
 
-def _tank_volume_m3(zone_floor_area_m2: float, num_zones: int) -> float:
+def _tank_volume_m3(
+    zone_floor_area_m2: float,
+    num_zones: int,
+    num_bedrooms: int | None = None,
+    occupancy_rate: float = 1.0,
+) -> float:
     """Estimate tank volume — approx 1 hour of peak demand (m³)."""
-    gia_m2 = zone_floor_area_m2 * num_zones
-    estimated_rooms = max(gia_m2 / _M2_PER_ROOM, 5.0)
-    daily_m3 = estimated_rooms * _LITRES_PER_ROOM_PER_DAY / 1000.0
+    rooms = _effective_rooms(zone_floor_area_m2, num_zones, num_bedrooms, occupancy_rate)
+    daily_m3 = rooms * _LITRES_PER_ROOM_PER_DAY / 1000.0
     return round(max(daily_m3 / 24.0, 0.2), 3)
 
 
@@ -202,6 +229,8 @@ def _ashp_preheat_tank(
 def generate_dhw_system(
     zone_floor_area_m2: float,
     num_zones: int,
+    num_bedrooms: int | None = None,
+    occupancy_rate: float = 1.0,
     dhw_primary: str = "gas_boiler_dhw",
     dhw_preheat: str = "none",
     boiler_efficiency: float = 0.92,
@@ -239,8 +268,8 @@ def generate_dhw_system(
             for obj_type, items in dhw_objects.items():
                 hvac_objects.setdefault(obj_type, {}).update(items)
     """
-    peak_flow = _peak_flow_m3s(zone_floor_area_m2, num_zones)
-    tank_vol  = _tank_volume_m3(zone_floor_area_m2, num_zones)
+    peak_flow = _peak_flow_m3s(zone_floor_area_m2, num_zones, num_bedrooms, occupancy_rate)
+    tank_vol  = _tank_volume_m3(zone_floor_area_m2, num_zones, num_bedrooms, occupancy_rate)
 
     result: dict = {}
 
