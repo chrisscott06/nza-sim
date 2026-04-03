@@ -221,7 +221,8 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
 
   // ── Cooling demand ────────────────────────────────────────────────────────
   // Simplified: excess solar + internal gains in summer, minus natural cooling effect
-  const cooling_thermal = Math.max(0, (total_solar + total_internal) * 0.25 - UK_CDD * gia * 0.001)
+  const COOLING_GAIN_FRACTION = 0.25  // ~25% of gains become cooling load (UK climate)
+  const cooling_thermal = Math.max(0, (total_solar + total_internal) * COOLING_GAIN_FRACTION - UK_CDD * gia * 0.001)
   const cop_cooling = Number(systems.cop_cooling ?? 3.2)
   const cooling_electricity = cooling_thermal / cop_cooling
 
@@ -280,6 +281,41 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
     eui_kWh_m2:            Math.round(eui_kWh_m2 * 10) / 10,
     annual_heating_kWh:    Math.round(heating_thermal),
     annual_cooling_kWh:    Math.round(cooling_thermal),
+    // ── Gains & Losses butterfly data — separated heating vs cooling contributions ──
+    gains_losses: {
+      heating_side: {
+        // Losses in MWh (increase heating demand)
+        wall_conduction:    walls_kWh       / 1000,
+        roof_conduction:    roof_kWh        / 1000,
+        floor_conduction:   floor_kWh       / 1000,
+        glazing_conduction: glazing_kWh     / 1000,
+        infiltration:       infiltration_kWh / 1000,
+        ventilation:        vent_kWh        / 1000,
+        // Offsets in MWh (reduce heating demand — only util_factor fraction is useful)
+        solar_south:  solar_gains.south    * util_factor,
+        solar_east:   solar_gains.east     * util_factor,
+        solar_west:   solar_gains.west     * util_factor,
+        solar_north:  solar_gains.north    * util_factor,
+        wall_solar:   opaque_wall_total    * util_factor,
+        roof_solar:   roof_solar_kWh       * util_factor,
+        equipment:    equip_internal       * util_factor / 1000,
+        lighting:     lighting_internal    * util_factor / 1000,
+        people:       people_internal      * util_factor / 1000,
+      },
+      cooling_side: {
+        // Drivers in MWh (increase cooling demand — only cooling_fraction drives cooling)
+        solar_south:  solar_gains.south    * COOLING_GAIN_FRACTION,
+        solar_east:   solar_gains.east     * COOLING_GAIN_FRACTION,
+        solar_west:   solar_gains.west     * COOLING_GAIN_FRACTION,
+        solar_north:  solar_gains.north    * COOLING_GAIN_FRACTION,
+        equipment:    equip_internal       * COOLING_GAIN_FRACTION / 1000,
+        lighting:     lighting_internal    * COOLING_GAIN_FRACTION / 1000,
+        people:       people_internal      * COOLING_GAIN_FRACTION / 1000,
+        // Free cooling offsets in MWh (reduce cooling demand)
+        infiltration_cooling: infiltration_kWh * 0.15 / 1000,
+        ventilation_cooling:  vent_kWh         * 0.10 / 1000,
+      },
+    },
     annual_lighting_kWh:   Math.round(lighting_kWh),
     annual_equipment_kWh:  Math.round(equipment_kWh),
     annual_fans_kWh:       Math.round(fans_kWh),
@@ -323,9 +359,23 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
 }
 
 function _empty() {
+  const _gl = {
+    heating_side: {
+      wall_conduction: 0, roof_conduction: 0, floor_conduction: 0,
+      glazing_conduction: 0, infiltration: 0, ventilation: 0,
+      solar_south: 0, solar_east: 0, solar_west: 0, solar_north: 0,
+      wall_solar: 0, roof_solar: 0, equipment: 0, lighting: 0, people: 0,
+    },
+    cooling_side: {
+      solar_south: 0, solar_east: 0, solar_west: 0, solar_north: 0,
+      equipment: 0, lighting: 0, people: 0,
+      infiltration_cooling: 0, ventilation_cooling: 0,
+    },
+  }
   return {
     eui_kWh_m2: 0, annual_heating_kWh: 0, annual_cooling_kWh: 0,
     annual_lighting_kWh: 0, annual_equipment_kWh: 0, annual_fans_kWh: 0, annual_dhw_kWh: 0,
+    gains_losses: _gl,
     fabric_losses: { walls_kWh: 0, roof_kWh: 0, floor_kWh: 0, glazing_kWh: 0, infiltration_kWh: 0, ventilation_kWh: 0, total_kWh: 0 },
     solar_gains: { north_kWh: 0, south_kWh: 0, east_kWh: 0, west_kWh: 0, opaque_wall_kWh: 0, roof_solar_kWh: 0, total_kWh: 0 },
     internal_gains: { lighting_kWh: 0, equipment_kWh: 0, people_kWh: 0, total_kWh: 0 },

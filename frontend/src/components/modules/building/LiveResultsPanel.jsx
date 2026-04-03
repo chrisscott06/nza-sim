@@ -221,9 +221,6 @@ export default function LiveResultsPanel({ libraryData = {} }) {
         {/* Gains & Losses butterfly chart */}
         <GainsLossesChart result={result} />
 
-        {/* Solar gains by facade */}
-        <SolarBars solar={result.solar_gains} />
-
         {/* Key metrics */}
         <div>
           <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1.5">Key metrics</p>
