@@ -50,6 +50,10 @@ from nza_engine.library.loads import get_zone_loads
 from nza_engine.generators.hvac_vrf import generate_vrf_system
 from nza_engine.generators.hvac_ventilation import generate_ventilation_system
 from nza_engine.generators.hvac_dhw import generate_dhw_system
+from nza_engine.generators.hvac_heating_boiler import (
+    generate_gas_baseboard_system,
+    add_vrf_cooling_to_baseboard,
+)
 
 
 # ── Construction placeholder → construction_choices key ───────────────────────
@@ -479,6 +483,10 @@ def _output_variables() -> dict:
         "Surface Window Transmitted Solar Radiation Energy",
         "Zone Ideal Loads Heat Recovery Total Heating Energy",
         "Zone Ideal Loads Heat Recovery Total Cooling Energy",
+        # Gas convective baseboard (ZoneHVAC:Baseboard:Convective:Gas)
+        "Baseboard Gas Energy",
+        "Baseboard Total Heating Energy",
+        "Baseboard Electricity Energy",
     ]
     result = {}
     for i, var in enumerate(vars_to_request, start=1):
@@ -640,14 +648,53 @@ def assemble_epjson(
     mode = sc.get("mode", "ideal_loads")
 
     if mode == "detailed":
-        heating_cop = float(sc.get("cop_heating", 3.5))
-        cooling_eer = float(sc.get("cop_cooling", 3.2))
-        # Currently VRF is the detailed HVAC system (vrf_standard, vrf_high_efficiency, ashp_system)
-        hvac_objects = generate_vrf_system(
-            zone_names=list(zones.keys()),
-            heating_cop=heating_cop,
-            cooling_eer=cooling_eer,
-        )
+        # ── Parse demand-based system assignments (with flat-key fallbacks) ──
+        systems_cfg = sc.get("systems", {})
+
+        # Space heating
+        sh_prim    = systems_cfg.get("space_heating", {}).get("primary", {})
+        sh_sys_key = sh_prim.get("system") or sc.get("hvac_type", "vrf_standard")
+        sh_eff     = float(sh_prim.get("efficiency_override") or sc.get("cop_heating", 3.5))
+
+        # Space cooling
+        sc_prim    = systems_cfg.get("space_cooling", {}).get("primary", {})
+        sc_sys_key = sc_prim.get("system") or sc.get("hvac_type", "vrf_standard")
+        sc_eer     = float(sc_prim.get("efficiency_override") or sc.get("cop_cooling", 3.2))
+
+        # Gas-fired heating systems modelled as ZoneHVAC:Baseboard:Convective:Gas
+        _GAS_HEATING_KEYS = {"gas_boiler_heating", "gas_boiler_combi"}
+        sh_is_gas  = sh_sys_key in _GAS_HEATING_KEYS
+        sc_is_none = sc_sys_key in {"none_cooling"}
+
+        if sh_is_gas:
+            # Gas baseboard heating; VRF added on top if cooling is required
+            bb_objects = generate_gas_baseboard_system(
+                zone_names=list(zones.keys()),
+                efficiency=sh_eff,
+            )
+            if sc_is_none:
+                # Heating only — no active cooling system
+                hvac_objects = bb_objects
+            else:
+                # Gas baseboard heating + VRF cooling-only
+                vrf_cool_objects = generate_vrf_system(
+                    zone_names=list(zones.keys()),
+                    heating_cop=sh_eff,   # not used for heating; COP field required
+                    cooling_eer=sc_eer,
+                    provide_heating=False,
+                    provide_cooling=True,
+                )
+                hvac_objects = add_vrf_cooling_to_baseboard(bb_objects, vrf_cool_objects)
+        else:
+            # VRF (or ASHP) handles both heating and optionally cooling
+            hvac_objects = generate_vrf_system(
+                zone_names=list(zones.keys()),
+                heating_cop=sh_eff,
+                cooling_eer=sc_eer,
+                provide_heating=True,
+                provide_cooling=not sc_is_none,
+            )
+
         # Zone sizing objects are required for Fan:SystemModel and VRF coil autosizing
         sizing_objects = _build_sizing_objects(zones)
         hvac_objects.update(sizing_objects)
@@ -655,8 +702,14 @@ def assemble_epjson(
         # Ventilation — MEV (exhaust only) or MVHR (balanced ERV with heat recovery)
         # Must merge at the object-type level (setdefault+update) so that VRF Fan:SystemModel
         # entries are preserved while MVHR Fan:SystemModel entries are added alongside them.
-        vent_type = sc.get("ventilation_type", "mev_standard")
-        mvhr_eff  = float(sc.get("mvhr_efficiency", 0.85))
+        vent_prim    = systems_cfg.get("ventilation", {}).get("primary", {})
+        vent_type    = vent_prim.get("system") or sc.get("ventilation_type", "mev_standard")
+        # efficiency_override is stored as 0–100 integer (percentage); convert to 0–1 fraction
+        _vent_eff_raw = vent_prim.get("efficiency_override")
+        if _vent_eff_raw is not None:
+            mvhr_eff = float(_vent_eff_raw) / 100.0
+        else:
+            mvhr_eff = float(sc.get("mvhr_efficiency", 0.85))
         zone_floor_area = building_params["length"] * building_params["width"]
         vent_objects = generate_ventilation_system(
             zone_names=list(zones.keys()),
@@ -667,19 +720,30 @@ def assemble_epjson(
         for obj_type, items in vent_objects.items():
             hvac_objects.setdefault(obj_type, {}).update(items)
 
-        # DHW — gas boiler (+ optional ASHP preheat)
+        # DHW — read demand-based structure first, fall back to flat keys
+        dhw_prim_cfg   = systems_cfg.get("dhw", {}).get("primary", {})
+        dhw_sec_cfg    = systems_cfg.get("dhw", {}).get("secondary", {})
+        dhw_primary    = dhw_prim_cfg.get("system") or sc.get("dhw_primary", "gas_boiler_dhw")
+        dhw_preheat    = dhw_sec_cfg.get("system") or sc.get("dhw_preheat", "none")
+        dhw_efficiency = float(
+            dhw_prim_cfg.get("efficiency_override") or sc.get("dhw_efficiency", 0.92)
+        )
+        ashp_cop       = float(
+            dhw_sec_cfg.get("efficiency_override") or sc.get("ashp_cop_dhw", 2.8)
+        )
+
         # Pass actual bedroom count + occupancy so peak flow scales with real demand
         dhw_objects = generate_dhw_system(
             zone_floor_area_m2=zone_floor_area,
             num_zones=len(zones),
             num_bedrooms=_num_bedrooms if _num_bedrooms > 0 else None,
             occupancy_rate=_occupancy_rate,
-            dhw_primary=sc.get("dhw_primary", "gas_boiler_dhw"),
-            dhw_preheat=sc.get("dhw_preheat", "none"),
-            boiler_efficiency=float(sc.get("dhw_efficiency", 0.92)),
+            dhw_primary=dhw_primary,
+            dhw_preheat=dhw_preheat,
+            boiler_efficiency=dhw_efficiency,
             dhw_setpoint=float(sc.get("dhw_setpoint", 60.0)),
             dhw_preheat_setpoint=float(sc.get("dhw_preheat_setpoint", 45.0)),
-            ashp_cop=float(sc.get("ashp_cop_dhw", 2.8)),
+            ashp_cop=ashp_cop,
         )
         for obj_type, items in dhw_objects.items():
             hvac_objects.setdefault(obj_type, {}).update(items)

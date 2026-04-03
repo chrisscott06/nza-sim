@@ -399,7 +399,11 @@ def _build_outdoor_unit(
     }
 
 
-def _build_zone_vrf(zone_name: str) -> dict:
+def _build_zone_vrf(
+    zone_name: str,
+    provide_heating: bool = True,
+    provide_cooling: bool = True,
+) -> dict:
     """
     Build all per-zone VRF objects:
       - ZoneHVAC:TerminalUnit:VariableRefrigerantFlow
@@ -410,6 +414,15 @@ def _build_zone_vrf(zone_name: str) -> dict:
       - ZoneHVAC:EquipmentConnections
       - ThermostatSetpoint:DualSetpoint
       - ZoneControl:Thermostat
+
+    Parameters
+    ----------
+    provide_heating : bool
+        If False the equipment list heating_or_no_load_sequence is set to 0,
+        meaning the VRF TU never handles heating (used when a gas baseboard
+        heater covers heating and VRF is cooling-only).
+    provide_cooling : bool
+        If False the equipment list cooling_sequence is set to 0.
 
     Node chain (draw-through fan placement):
       Zone exhaust → TU Inlet → CCoil Inlet → CCoil Outlet → HCoil Inlet
@@ -511,8 +524,8 @@ def _build_zone_vrf(zone_name: str) -> dict:
                     {
                         "zone_equipment_object_type": "ZoneHVAC:TerminalUnit:VariableRefrigerantFlow",
                         "zone_equipment_name":        tu_name,
-                        "zone_equipment_cooling_sequence":               1,
-                        "zone_equipment_heating_or_no_load_sequence":    1,
+                        "zone_equipment_cooling_sequence":            1 if provide_cooling else 0,
+                        "zone_equipment_heating_or_no_load_sequence": 1 if provide_heating else 0,
                     }
                 ]
             }
@@ -551,6 +564,8 @@ def generate_vrf_system(
     zone_names: list[str],
     heating_cop: float = 3.5,
     cooling_eer: float = 3.2,
+    provide_heating: bool = True,
+    provide_cooling: bool = True,
 ) -> dict:
     """
     Generate all EnergyPlus epJSON objects for a multi-zone VRF system.
@@ -572,6 +587,11 @@ def generate_vrf_system(
         Rated system heating COP at standard conditions (7°C OA, 20°C RA).
     cooling_eer : float
         Rated system cooling EER/COP at standard conditions (35°C OA, 27°C WB RA).
+    provide_heating : bool
+        If False the per-zone equipment list heating sequence is set to 0 (VRF
+        is cooling-only; a separate gas baseboard handles heating).
+    provide_cooling : bool
+        If False the per-zone equipment list cooling sequence is set to 0.
     """
     # Start with shared performance curves
     result: dict[str, dict] = {}
@@ -600,7 +620,11 @@ def generate_vrf_system(
 
     # Per-zone objects
     for zone_name in zone_names:
-        zone_objs = _build_zone_vrf(zone_name)
+        zone_objs = _build_zone_vrf(
+            zone_name,
+            provide_heating=provide_heating,
+            provide_cooling=provide_cooling,
+        )
         for obj_type, items in zone_objs.items():
             result.setdefault(obj_type, {}).update(items)
 
