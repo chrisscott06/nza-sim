@@ -139,7 +139,7 @@ function SankeyChart({ data, width, height }) {
     return <p className="text-caption text-mid-grey text-center py-8">Insufficient data to render Sankey diagram.</p>
   }
 
-  const PADDING = { top: 20, right: 140, bottom: 20, left: 10 }
+  const PADDING = { top: 20, right: 160, bottom: 20, left: 14 }
   const innerW = width  - PADDING.left - PADDING.right
   const innerH = height - PADDING.top  - PADDING.bottom
 
@@ -237,7 +237,7 @@ function SankeyChart({ data, width, height }) {
                 fontSize={9}
                 fill="#58595B"
               >
-                {node.label}
+                {node.label.length > 18 ? node.label.slice(0, 17) + '…' : node.label}
               </text>
               {/* Value label inside node if tall enough */}
               {nodeH > 20 && (
@@ -340,7 +340,7 @@ export default function EnergyFlowsTab({ activeResults } = {}) {
         </p>
       </div>
 
-      <div ref={containerRef} className="bg-white rounded-lg border border-light-grey p-3 overflow-hidden">
+      <div ref={containerRef} className="bg-white rounded-lg border border-light-grey p-3 overflow-x-auto overflow-y-hidden">
         <SankeyChart data={sankeyData} width={dims.width - 24} height={dims.height} />
       </div>
 
