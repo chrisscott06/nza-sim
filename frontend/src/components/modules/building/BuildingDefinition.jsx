@@ -9,6 +9,7 @@
 import { useState, useContext, useEffect } from 'react'
 import BuildingViewer3D from './BuildingViewer3D.jsx'
 import LiveResultsPanel from './LiveResultsPanel.jsx'
+import ExpandedSankeyOverlay from './ExpandedSankeyOverlay.jsx'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 
 // ── Facade numbering helpers ──────────────────────────────────────────────────
@@ -298,6 +299,8 @@ export default function BuildingDefinition() {
   const { params } = useContext(ProjectContext)
   const [library, setLibrary] = useState([])
   const [libraryData, setLibraryData] = useState({})
+  const [showSankey, setShowSankey] = useState(false)
+  const [sankeyResult, setSankeyResult] = useState(null)
 
   useEffect(() => {
     fetch('/api/library/constructions')
@@ -311,9 +314,9 @@ export default function BuildingDefinition() {
   }, [])
 
   return (
-    <div className="flex h-[calc(100vh-3rem)]">
+    <div className="flex h-[calc(100vh-3rem)] relative">
       {/* Left: inputs */}
-      <div className="w-64 flex-shrink-0">
+      <div className="w-64 flex-shrink-0 z-10">
         <InputsColumn library={library} />
       </div>
 
@@ -324,8 +327,22 @@ export default function BuildingDefinition() {
 
       {/* Right: live results */}
       <div className="w-80 flex-shrink-0">
-        <LiveResultsPanel libraryData={libraryData} />
+        <LiveResultsPanel
+          libraryData={libraryData}
+          onSankeyExpand={(result) => { setSankeyResult(result); setShowSankey(true) }}
+        />
       </div>
+
+      {/* Expanded Sankey overlay — covers centre + right columns */}
+      {showSankey && sankeyResult && (
+        <div className="absolute top-0 bottom-0 right-0 z-20" style={{ left: '16rem' }}>
+          <ExpandedSankeyOverlay
+            result={sankeyResult}
+            orientation={params.orientation ?? 0}
+            onClose={() => setShowSankey(false)}
+          />
+        </div>
+      )}
     </div>
   )
 }

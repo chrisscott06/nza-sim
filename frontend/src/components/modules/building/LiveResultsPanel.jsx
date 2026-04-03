@@ -196,7 +196,7 @@ function Metric({ label, value, unit, color }) {
 
 // ── Main panel ────────────────────────────────────────────────────────────────
 
-export default function LiveResultsPanel({ libraryData = {} }) {
+export default function LiveResultsPanel({ libraryData = {}, onSankeyExpand }) {
   const { params, constructions, systems } = useContext(ProjectContext)
 
   const result = useMemo(
@@ -219,7 +219,11 @@ export default function LiveResultsPanel({ libraryData = {} }) {
         <EUIGauge eui={result.eui_kWh_m2} />
 
         {/* Gains & Losses butterfly chart */}
-        <GainsLossesChart result={result} orientation={params.orientation ?? 0} />
+        <GainsLossesChart
+          result={result}
+          orientation={params.orientation ?? 0}
+          onExpand={onSankeyExpand ? () => onSankeyExpand(result) : undefined}
+        />
 
         {/* Key metrics */}
         <div>
