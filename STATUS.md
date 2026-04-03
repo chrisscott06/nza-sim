@@ -2,19 +2,22 @@
 
 ## Last completed
 
-Brief 13 Parts 8–11 completed (2026-04-03). Part 12 (browser integration test) pending screen recording permission.
+Brief 14 Parts 1–9 completed (2026-04-03). Part 10 (browser integration test) pending screen recording permission.
 
-**Brief 13 progress:**
-- Part 1–3: Completed in previous session (demand-based data model, expanded library, accordion UI)
-- Part 4: instantCalc reads demand-based assignments — committed
-- Part 5: Auto-generated Sankey with prefixed node IDs — committed
-- Part 6: Waste streams + recovery hints — committed
-- Part 7: SFP/HRE override connections fixed — committed
-- Part 8: EnergyPlus assembler reads demand-based assignments; hvac_heating_boiler.py created — committed
-- Part 9: Sankey link hover interaction + link tooltips — committed
-- Part 10: Topology-change animation (CSS fadeIn on node/link add/remove) — committed
-- Part 11: Right panel demand-based breakdown with efficiency insights, waste summary, recovery callouts — committed
-- Part 12: Browser integration test — TO DO next session (grant screen recording in System Settings → Privacy & Security → Screen Recording, then run 3-config walkthrough per brief)
+**Brief 14 progress:**
+- Part 1: EPW parser — GET /api/weather/{filename}/hourly endpoint — committed
+- Part 2: Hourly solar decomposition (solarCalc.js) — committed
+- Part 3: Hourly instant calc with 8760-iteration loop — replaces degree-day, adds `monthly` to return — committed
+- Part 4: WeatherContext — loads and caches EPW hourly data — committed
+- Part 5: useHourlySolar hook — memoised solar precomputation on orientation change — committed
+- Part 6: FabricSankey.jsx — live fabric Sankey in Building module centre column — committed
+- Part 7: FabricSankey hover interaction and tooltips — committed (combined with Part 6)
+- Part 8: Monthly breakdown chart in LiveResultsPanel — committed
+- Part 9: SystemSankey and SystemsLiveResults wired to hourly calc — space heating now non-zero — committed
+- Part 10: Browser integration test — TO DO next session (grant screen recording in System Settings → Privacy & Security → Screen Recording)
+
+**Brief 13 progress (all committed):**
+- Parts 1–12 complete (Part 12 browser test TO DO next session)
 
 ---
 
@@ -98,12 +101,16 @@ All checklist items:
 
 ### What's working
 
-- **Systems Sankey** — proportional d3-sankey flow diagram, Grid/Gas → VRF/MVHR/Boiler/Lighting/SmallPower → end uses. MVHR recovery and ASHP cascade links shown. Hover highlights linked paths. Click node → expands accordion.
+- **Hourly instant calc** — 8760-iteration loop using real EPW weather data. Non-zero heating demand in winter (was 0 with degree-day method). Monthly breakdown arrays for seasonal display.
+- **WeatherContext** — loads and caches EPW hourly data from backend API on app start. No repeated fetches on navigation.
+- **useHourlySolar hook** — memoised solar precomputation. Recomputes only on orientation change (~5ms). Heat balance loop uses cached values for all other input changes.
+- **Live Fabric Sankey** — in Building module centre column. Toggle: "3D Model | Energy Flow". Shows solar gains (by facade, amber tones), internal gains (purple), fabric losses (grey), heating demand (red), cooling demand (blue). Hover tooltips on all nodes and links.
+- **Monthly heating/cooling chart** — 12-bar chart in LiveResultsPanel, red (heating down) / blue (cooling up). Seasonal pattern visible from hourly calc.
+- **Space heating in Systems Sankey** — now non-zero because hourly calc produces real heating demand. Gas boiler → space heating link visible.
+- **Systems Sankey** — all panels now use hourly calc. MVHR recovery, ASHP cascade, gas boiler links all updated with real demands.
 - **Collapsible accordion inputs** — 5 sections, single-expand mode, live summaries
 - **System efficiency insights** — VRF COP, MVHR recovery MWh/£/tCO₂, boiler efficiency
 - **3D fixes** — clean grey walls, consistent blue glass, no z-fighting
-- **Solar units fixed** — solar gains now in kWh throughout heat balance; EUI responds to orientation
-- **Orientation-sensitive EUI** — asymmetric glazing gives 3.2 kWh/m² swing 0°↔180°
 - **Architectural 3D model** — white/grey massing, edge lines, recessed windows, base plate, contact shadows
 - **Butterfly chart** — asymmetric heating/cooling gains, consolidated solar with hover tooltip, ↗ expand
 - **Expandable Sankey** — full d3-sankey energy balance overlay in Building module, live-updating
@@ -146,8 +153,8 @@ All checklist items:
 
 ## Safety checks
 
-- Working tree: clean (after Part 10 commit)
+- Working tree: clean (after Part 9 commit)
 - Branch: main
-- Brief 12 all 10 parts committed to main
+- Brief 14 Parts 1–9 committed to main; pushed to GitHub ✓
 - data/ directory: gitignored, intact, not touched
 - Push to GitHub: confirmed ✓
