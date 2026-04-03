@@ -265,22 +265,46 @@ function OrientationIndicator({ orientation }) {
   )
 }
 
-/* ── Camera auto-fit based on building size ────────────────────────────────── */
-function CameraRig({ params, resetSignal }) {
+/* ── Camera rig — auto-fit, idle auto-rotate, polar limits ─────────────────── */
+function CameraRig({ params, resetSignal, autoRotateEnabled }) {
   const { length, width, num_floors, floor_height } = params
   const maxDim = Math.max(length, width, num_floors * floor_height)
   const dist = maxDim * 2.2
   const controlsRef = useRef()
+  const lastInteract = useRef(Date.now())
+  const listenerAdded = useRef(false)
 
-  // Reset camera when resetSignal changes (increments)
+  // Reset camera + manage auto-rotate in frame loop
+  // Attach OrbitControls 'start' listener on first frame (avoids useEffect inside R3F)
   const prevReset = useRef(resetSignal)
   useFrame(({ camera }) => {
-    if (resetSignal !== prevReset.current && controlsRef.current) {
+    const ctrl = controlsRef.current
+    if (!ctrl) return
+
+    // One-time setup: attach interaction listener to track idle time
+    if (!listenerAdded.current) {
+      ctrl.addEventListener('start', () => {
+        lastInteract.current = Date.now()
+        ctrl.autoRotate = false
+      })
+      listenerAdded.current = true
+    }
+
+    // Camera reset
+    if (resetSignal !== prevReset.current) {
       prevReset.current = resetSignal
-      const target = new THREE.Vector3(0, (num_floors * floor_height) / 2, 0)
-      controlsRef.current.target.copy(target)
-      camera.position.set(dist * 0.6, dist * 0.5, dist * 0.8)
-      controlsRef.current.update()
+      ctrl.target.copy(new THREE.Vector3(0, (num_floors * floor_height) / 2, 0))
+      camera.position.set(dist * 0.5, dist * 0.32, dist * 0.7)
+      ctrl.update()
+      lastInteract.current = Date.now()
+    }
+
+    // Enable auto-rotate after 5s idle (if toggle is on)
+    if (autoRotateEnabled) {
+      const idle = Date.now() - lastInteract.current > 5000
+      if (idle !== ctrl.autoRotate) ctrl.autoRotate = idle
+    } else if (ctrl.autoRotate) {
+      ctrl.autoRotate = false
     }
   })
 
@@ -294,6 +318,9 @@ function CameraRig({ params, resetSignal }) {
       enablePan={true}
       enableDamping={true}
       dampingFactor={0.08}
+      autoRotateSpeed={0.6}
+      minPolarAngle={0}
+      maxPolarAngle={Math.PI / 2 - 0.04}
     />
   )
 }
@@ -349,10 +376,11 @@ export default function BuildingViewer3D({ params }) {
   const maxDim  = Math.max(length, width, num_floors * floor_height)
   const camDist = maxDim * 2.2
 
-  const [solarOverlay, setSolarOverlay] = useState(true)
-  const [mapVisible, setMapVisible]     = useState(false)
-  const [resetSignal, setResetSignal]   = useState(0)
-  const [hoverInfo, setHoverInfo]       = useState(null)
+  const [solarOverlay, setSolarOverlay]       = useState(true)
+  const [mapVisible, setMapVisible]           = useState(false)
+  const [resetSignal, setResetSignal]         = useState(0)
+  const [hoverInfo, setHoverInfo]             = useState(null)
+  const [autoRotateEnabled, setAutoRotate]    = useState(true)
 
   // Legend: map compass directions to solar values for current orientation
   const legendStops = [
@@ -368,8 +396,8 @@ export default function BuildingViewer3D({ params }) {
       <Canvas
         shadows
         camera={{
-          position: [camDist * 0.6, camDist * 0.5, camDist * 0.8],
-          fov: 45,
+          position: [camDist * 0.5, camDist * 0.32, camDist * 0.7],
+          fov: 42,
           near: 0.1,
           far: 2000,
         }}
@@ -428,7 +456,7 @@ export default function BuildingViewer3D({ params }) {
           <GreyGroundPlane />
         )}
 
-        <CameraRig params={params} resetSignal={resetSignal} />
+        <CameraRig params={params} resetSignal={resetSignal} autoRotateEnabled={autoRotateEnabled} />
       </Canvas>
 
       {/* Overlay — building metrics */}
@@ -451,6 +479,18 @@ export default function BuildingViewer3D({ params }) {
           title="Reset view"
         >
           ⌖ Reset
+        </button>
+        {/* Auto-rotate toggle */}
+        <button
+          onClick={() => setAutoRotate(v => !v)}
+          className={`text-xxs px-2 py-1 rounded border backdrop-blur-sm transition-colors ${
+            autoRotateEnabled
+              ? 'bg-teal/10 text-teal border-teal/40'
+              : 'bg-white/85 text-mid-grey border-light-grey'
+          }`}
+          title="Auto-rotate after 5s idle"
+        >
+          ↻ Auto
         </button>
       </div>
 
