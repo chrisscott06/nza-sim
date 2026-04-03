@@ -294,6 +294,96 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
   // ── Carbon (2026 grid) ────────────────────────────────────────────────────
   const carbon_kgCO2_m2 = (electricity_kWh * GRID_INTENSITY_2026 + gas_kWh * GAS_CARBON_KG_KWH) / gia
 
+  // ── Systems flow data model for Sankey diagram ────────────────────────────
+  // VRF electricity = heating + cooling + fans
+  const vrf_electricity_kWh = heating_electricity + cooling_electricity + vrf_fans_kWh
+  // Heat delivered by VRF to space (what the building receives, not what grid provides)
+  const heating_delivered_kWh = heating_thermal
+  const cooling_delivered_kWh = cooling_thermal
+  // Heat rejected by VRF cooling to outdoors: cooling load + compressor work = cooling × (1 + 1/EER)
+  const eer = Number(systems.cop_cooling ?? 3.2)
+  const heat_rejected_kWh = cooling_thermal > 0 ? cooling_thermal * (1 + 1 / eer) : 0
+  // MVHR heat recovered from exhaust air
+  const vent_kWh_no_recovery = AIR_HEAT_CAPACITY * vent_ach * volume * UK_HDD * 24 / 1000
+  const mvhr_recovery_kWh   = is_mvhr ? vent_kWh_no_recovery - vent_kWh : 0
+
+  const _addLink = (links, source, target, value_kWh, style) => {
+    if (value_kWh > 0) links.push({ source, target, value_kWh: Math.round(value_kWh), style })
+  }
+
+  const sf_nodes = []
+  const sf_links = []
+
+  // Source nodes
+  if (electricity_kWh > 0) sf_nodes.push({ id: 'grid',        label: 'Grid Electricity', type: 'source' })
+  if (gas_kWh > 0)          sf_nodes.push({ id: 'gas',         label: 'Natural Gas',       type: 'source' })
+
+  // System nodes (conditional)
+  if (vrf_electricity_kWh > 0 || heating_thermal > 0 || cooling_thermal > 0) {
+    const hvacLabel = systems.hvac_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) ?? 'VRF'
+    sf_nodes.push({ id: 'vrf',         label: hvacLabel,         type: 'system',   category: 'hvac',
+      metric: `COP ${Number(systems.cop_heating ?? 3.5).toFixed(1)} / EER ${eer.toFixed(1)}` })
+  }
+  if (vent_fans_kWh > 0) {
+    const ventLabel = is_mvhr ? 'MVHR' : 'MEV'
+    sf_nodes.push({ id: 'mvhr',        label: ventLabel,          type: 'system',   category: 'ventilation',
+      metric: is_mvhr ? `${systems.hre_override ?? 85}% HR` : 'Extract only' })
+  }
+  if (dhw_thermal > 0) {
+    const dhwLabel = dhw_primary === 'gas_boiler_dhw' ? 'Gas Boiler' : 'Electric DHW'
+    sf_nodes.push({ id: 'boiler',      label: dhwLabel,           type: 'system',   category: 'dhw',
+      metric: `${Math.round(boiler_eff * 100)}% eff` })
+  }
+  if (lighting_kWh > 0)
+    sf_nodes.push({ id: 'lighting',    label: 'Lighting',         type: 'system',   category: 'lighting',
+      metric: `${lpd} W/m²` })
+  if (equipment_kWh > 0)
+    sf_nodes.push({ id: 'small_power', label: 'Small Power',      type: 'system',   category: 'equipment',
+      metric: `${epd} W/m²` })
+
+  // Recovery node (MVHR)
+  if (mvhr_recovery_kWh > 0)
+    sf_nodes.push({ id: 'mvhr_recov',  label: 'Recovered Heat',   type: 'recovered' })
+
+  // End use nodes
+  if (heating_thermal > 0)     sf_nodes.push({ id: 'space_heat',  label: 'Space Heating',  type: 'end_use' })
+  if (cooling_thermal > 0)     sf_nodes.push({ id: 'space_cool',  label: 'Space Cooling',  type: 'end_use' })
+  if (dhw_thermal > 0)         sf_nodes.push({ id: 'dhw_del',     label: 'Hot Water',      type: 'end_use' })
+  if (vent_fans_kWh > 0)       sf_nodes.push({ id: 'fresh_air',   label: 'Fresh Air',      type: 'end_use' })
+  if (lighting_kWh > 0)        sf_nodes.push({ id: 'light_del',   label: 'Light',          type: 'end_use' })
+  if (equipment_kWh > 0)       sf_nodes.push({ id: 'equip_del',   label: 'Equipment',      type: 'end_use' })
+  if (heat_rejected_kWh > 0)   sf_nodes.push({ id: 'heat_reject', label: 'Heat Rejection', type: 'waste'   })
+
+  // Sources → Systems
+  _addLink(sf_links, 'grid',  'vrf',         vrf_electricity_kWh,  'electricity')
+  _addLink(sf_links, 'grid',  'mvhr',        vent_fans_kWh,         'electricity')
+  _addLink(sf_links, 'grid',  'lighting',    lighting_kWh,          'electricity')
+  _addLink(sf_links, 'grid',  'small_power', equipment_kWh,         'electricity')
+  _addLink(sf_links, 'gas',   'boiler',      dhw_gas_kWh,           'gas')
+  if (dhw_primary !== 'gas_boiler_dhw' || dhw_preheat === 'ashp_dhw') {
+    _addLink(sf_links, 'grid', 'boiler', dhw_elec_kWh, 'electricity')
+  }
+
+  // Systems → End uses
+  _addLink(sf_links, 'vrf',         'space_heat',  heating_delivered_kWh,  'heating')
+  _addLink(sf_links, 'vrf',         'space_cool',  cooling_delivered_kWh,  'cooling')
+  _addLink(sf_links, 'vrf',         'heat_reject', heat_rejected_kWh,      'waste')
+  _addLink(sf_links, 'boiler',      'dhw_del',     dhw_thermal,             'heating')
+  _addLink(sf_links, 'mvhr',        'fresh_air',   vent_fans_kWh,           'air')
+  _addLink(sf_links, 'lighting',    'light_del',   lighting_kWh,            'electricity')
+  _addLink(sf_links, 'small_power', 'equip_del',   equipment_kWh,           'electricity')
+
+  // Inter-system: MVHR heat recovery → space heating benefit
+  _addLink(sf_links, 'mvhr_recov',  'space_heat',  mvhr_recovery_kWh,      'recovered')
+
+  // Inter-system: ASHP preheat cascade — heat rejection feeds into boiler preheat
+  if (dhw_preheat === 'ashp_dhw' && dhw_elec_kWh > 0) {
+    const ashp_preheat_heat_kWh = dhw_elec_kWh * (ashp_cop - 1)  // COP-1 = heat extracted from source
+    _addLink(sf_links, 'heat_reject', 'boiler', ashp_preheat_heat_kWh, 'recovered')
+  }
+
+  const systems_flow = { nodes: sf_nodes, links: sf_links }
+
   return {
     eui_kWh_m2:            Math.round(eui_kWh_m2 * 10) / 10,
     annual_heating_kWh:    Math.round(heating_thermal),
@@ -373,6 +463,7 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
     },
     carbon_kgCO2_m2: Math.round(carbon_kgCO2_m2 * 10) / 10,
     gia_m2:  Math.round(gia),
+    systems_flow,
     _inputs: { u_wall, u_roof, u_floor, u_glaz, ach, is_mvhr, heat_recovery, lpd, cop_heating, cop_cooling },
   }
 }
@@ -399,6 +490,8 @@ function _empty() {
     solar_gains: { north_kWh: 0, south_kWh: 0, east_kWh: 0, west_kWh: 0, opaque_wall_kWh: 0, roof_solar_kWh: 0, total_kWh: 0 },
     internal_gains: { lighting_kWh: 0, equipment_kWh: 0, people_kWh: 0, total_kWh: 0 },
     fuel_split: { electricity_kWh: 0, gas_kWh: 0, total_kWh: 0, electricity_pct: 100, gas_pct: 0 },
-    carbon_kgCO2_m2: 0, gia_m2: 0, _inputs: {},
+    carbon_kgCO2_m2: 0, gia_m2: 0,
+    systems_flow: { nodes: [], links: [] },
+    _inputs: {},
   }
 }
