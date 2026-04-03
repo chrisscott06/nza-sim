@@ -14,16 +14,16 @@ function facadeLabel(facadeNumber, orientationDeg) {
   return `F${facadeNumber} (${compass})`
 }
 
-/* ── Architectural material palette — clean white massing model ────────────── */
+/* ── Architectural material palette — clean grey massing model ─────────────── */
 const COLORS = {
-  wall:        '#F5F3F0',  // near-white matte wall
-  roof:        '#E8E5E0',  // slightly darker than walls
-  glazing:     '#D8E8F0',  // subtle blue-tinted glass
-  floorLine:   '#CCCCCC',  // soft floor band line on white wall
-  groundPlane: '#EBEBEB',  // off-white ground
-  frame:       '#C0C0C0',  // medium grey window reveal frame (contrast on white wall)
-  basePlate:   '#F0EFEC',  // base platform — slightly darker than wall
-  edges:       '#909090',  // soft edge lines
+  wall:        '#EBEBEB',  // clean light grey wall (brief Part 1 fix)
+  roof:        '#D8D8D8',  // slightly darker than walls
+  glazing:     '#A8C8E0',  // blue-tinted glass — consistent blue from all angles
+  floorLine:   '#BBBBBB',  // floor band line
+  groundPlane: '#E0E0E0',  // off-white ground
+  frame:       '#B0B0B0',  // medium grey window reveal frame
+  basePlate:   '#E4E4E4',  // base platform — slightly darker than wall
+  edges:       '#888888',  // soft edge lines
 }
 
 /* ── Solar tint helper ─────────────────────────────────────────────────────── */
@@ -31,7 +31,7 @@ const SOLAR_MIN = 350  // N
 const SOLAR_MAX = 750  // S
 const COOL_COLOR = new THREE.Color('#A8C4D0')  // cool grey-blue for low-solar faces
 const WARM_COLOR = new THREE.Color('#D4883A')  // warm amber for high-solar faces
-const BASE_COLOR = new THREE.Color(COLORS.wall)
+const BASE_COLOR = new THREE.Color('#EBEBEB')  // matches COLORS.wall — used for solar tint blending
 
 function solarFaceColor(facadeLabel, orientationDeg, enabled) {
   if (!enabled) return COLORS.wall
@@ -108,11 +108,11 @@ function Building({ params, solarOverlay, onFacadeHover }) {
                 <planeGeometry args={[gw, winH]} />
                 <meshPhysicalMaterial
                   color={COLORS.glazing}
-                  roughness={0.05}
-                  metalness={0.15}
+                  roughness={0.10}
+                  metalness={0.10}
                   transparent
-                  opacity={0.30}
-                  reflectivity={0.8}
+                  opacity={0.35}
+                  reflectivity={0.6}
                   side={THREE.DoubleSide}
                 />
               </mesh>
@@ -434,10 +434,10 @@ export default function BuildingViewer3D({ params }) {
           <OrientationIndicator orientation={0} />
         </group>
 
-        {/* Soft contact shadow where building meets base plate */}
+        {/* Soft contact shadow — positioned at y=0.02 to avoid z-fighting with ground plane at y=-0.01 */}
         <ContactShadows
-          position={[0, -0.01, 0]}
-          opacity={0.35}
+          position={[0, 0.02, 0]}
+          opacity={0.30}
           scale={Math.max(length, width) * 3}
           blur={2.5}
           far={Math.max(length, width) * 1.5}
