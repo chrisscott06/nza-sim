@@ -8,7 +8,7 @@
 
 import { useContext, useEffect, useState } from 'react'
 import { ProjectContext } from '../../context/ProjectContext.jsx'
-import SystemSchematic from './systems/SystemSchematic.jsx'
+import SystemSankey from './systems/SystemSankey.jsx'
 import SystemsLiveResults from './systems/SystemsLiveResults.jsx'
 
 // ── Shared compact input components ──────────────────────────────────────────
@@ -461,9 +461,13 @@ export default function SystemsZones() {
         />
       </div>
 
-      {/* Centre: system schematic */}
-      <div className="flex-1 bg-off-white overflow-hidden">
-        <SystemSchematic openSection={openSection} setOpenSection={setOpenSection} />
+      {/* Centre: systems Sankey flow diagram */}
+      <div className="flex-1 bg-white overflow-hidden">
+        <SystemSankey
+          openSection={openSection}
+          setOpenSection={setOpenSection}
+          libraryData={libraryData}
+        />
       </div>
 
       {/* Right: live results */}
