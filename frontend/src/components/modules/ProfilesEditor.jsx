@@ -1,196 +1,37 @@
 /**
- * ProfilesEditor.jsx
+ * ProfilesEditor.jsx — three-column live workspace
  *
- * Profiles & Schedules module — /profiles route.
- * ExplorerLayout: sidebar with filters + schedule list, main area with ScheduleViewer.
+ * Left (w-64):   Schedule list with type filter (no zone filter), prev/next nav, create button
+ * Centre (flex-1): Schedule viewer/editor (day chart + heatmap)
+ * Right (w-80):  ProfilesLiveResults — statistics + 24-hour preview
  */
 
 import { useState, useEffect, useContext } from 'react'
-import { Clock, Search, X, Check, Plus } from 'lucide-react'
-import ExplorerLayout  from '../ui/ExplorerLayout.jsx'
+import { Search, X, Check, Plus, ChevronLeft, ChevronRight } from 'lucide-react'
 import ScheduleViewer  from './profiles/ScheduleViewer.jsx'
 import ScheduleEditor  from './profiles/ScheduleEditor.jsx'
+import ProfilesLiveResults from './profiles/ProfilesLiveResults.jsx'
 import { ProjectContext } from '../../context/ProjectContext.jsx'
 
-// ── Filter config ──────────────────────────────────────────────────────────────
+// ── Type config ───────────────────────────────────────────────────────────────
 
 const SCHEDULE_TYPES = [
-  { id: 'all',              label: 'All Types' },
+  { id: 'all',              label: 'All' },
   { id: 'occupancy',        label: 'Occupancy' },
   { id: 'lighting',         label: 'Lighting' },
   { id: 'equipment',        label: 'Equipment' },
-  { id: 'heating_setpoint', label: 'Heating Setpoint' },
-  { id: 'cooling_setpoint', label: 'Cooling Setpoint' },
+  { id: 'heating_setpoint', label: 'Heating SP' },
+  { id: 'cooling_setpoint', label: 'Cooling SP' },
   { id: 'dhw',              label: 'DHW' },
 ]
 
-const ZONE_TYPES = [
-  { id: 'all',        label: 'All Zones' },
-  { id: 'bedroom',    label: 'Bedroom' },
-  { id: 'corridor',   label: 'Corridor' },
-  { id: 'reception',  label: 'Reception' },
-  { id: 'office',     label: 'Office' },
-  { id: 'retail',     label: 'Retail' },
-]
-
-// ── Type colour dots ───────────────────────────────────────────────────────────
-
 const TYPE_DOT = {
-  occupancy:         'bg-blue-400',
-  lighting:          'bg-yellow-400',
-  equipment:         'bg-orange-400',
-  heating_setpoint:  'bg-red-400',
-  cooling_setpoint:  'bg-sky-400',
-  dhw:               'bg-teal-400',
-}
-
-// ── Sidebar ────────────────────────────────────────────────────────────────────
-
-function ProfilesSidebar({
-  schedules, loading, error,
-  typeFilter, setTypeFilter,
-  zoneFilter, setZoneFilter,
-  search, setSearch,
-  selectedId, onSelect,
-  onCreateClick,
-}) {
-  const filtered = schedules.filter(s => {
-    const cfg = s.config_json ?? {}
-    if (typeFilter !== 'all' && cfg.schedule_type !== typeFilter) return false
-    if (zoneFilter !== 'all' && cfg.zone_type !== zoneFilter)     return false
-    if (search) {
-      const q = search.toLowerCase()
-      if (!(s.display_name ?? s.name ?? '').toLowerCase().includes(q)) return false
-    }
-    return true
-  })
-
-  return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex-shrink-0 px-3 pt-3 pb-2 border-b border-light-grey">
-        <p className="text-caption font-medium text-navy">Profiles & Schedules</p>
-        <p className="text-xxs text-mid-grey mt-0.5">Browse and assign schedule templates</p>
-      </div>
-
-      {/* Search */}
-      <div className="flex-shrink-0 px-3 py-2 border-b border-light-grey">
-        <div className="relative">
-          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-mid-grey" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search schedules…"
-            className="w-full pl-7 pr-7 py-1.5 text-caption border border-light-grey rounded bg-white focus:outline-none focus:border-teal transition-colors"
-          />
-          {search && (
-            <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-mid-grey hover:text-navy">
-              <X size={12} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Schedule type filter — compact horizontal pills */}
-      <div className="flex-shrink-0 px-3 py-2 border-b border-light-grey">
-        <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1.5">Type</p>
-        <div className="flex flex-wrap gap-1">
-          {SCHEDULE_TYPES.map(t => (
-            <button
-              key={t.id}
-              onClick={() => setTypeFilter(t.id)}
-              className={`
-                flex items-center gap-1 px-2 py-0.5 rounded text-xxs transition-colors border
-                ${typeFilter === t.id
-                  ? 'bg-navy text-white border-navy'
-                  : 'text-mid-grey border-light-grey hover:border-navy hover:text-navy'}
-              `}
-            >
-              {t.id !== 'all' && (
-                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${TYPE_DOT[t.id] ?? 'bg-gray-400'} ${typeFilter === t.id ? 'opacity-70' : ''}`} />
-              )}
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Zone type filter */}
-      <div className="flex-shrink-0 px-3 py-2 border-b border-light-grey">
-        <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1.5">Zone</p>
-        <div className="flex flex-wrap gap-1">
-          {ZONE_TYPES.map(z => (
-            <button
-              key={z.id}
-              onClick={() => setZoneFilter(z.id)}
-              className={`
-                px-2 py-0.5 rounded text-xxs transition-colors border
-                ${zoneFilter === z.id
-                  ? 'bg-navy text-white border-navy'
-                  : 'text-mid-grey border-light-grey hover:border-navy hover:text-navy'}
-              `}
-            >
-              {z.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Schedule list */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        {loading && (
-          <div className="p-4 text-center text-caption text-mid-grey">Loading schedules…</div>
-        )}
-        {error && (
-          <div className="p-4 text-center text-caption text-red-600">Failed to load: {error}</div>
-        )}
-        {!loading && !error && filtered.length === 0 && (
-          <div className="p-4 text-center text-caption text-mid-grey">No schedules match your filters</div>
-        )}
-
-        {!loading && !error && filtered.map(s => {
-          const cfg = s.config_json ?? {}
-          const isSelected = s.id === selectedId
-          const dotCls = TYPE_DOT[cfg.schedule_type] ?? 'bg-gray-400'
-
-          return (
-            <button
-              key={s.id}
-              onClick={() => onSelect(s)}
-              className={`
-                w-full text-left px-3 py-2.5 border-b border-light-grey/60 transition-colors
-                ${isSelected ? 'bg-navy/5 border-l-2 border-l-navy pl-2.5' : 'hover:bg-off-white'}
-              `}
-            >
-              <div className="flex items-start gap-2">
-                <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1 ${dotCls}`} />
-                <div className="min-w-0">
-                  <p className={`text-caption truncate ${isSelected ? 'font-medium text-navy' : 'text-dark-grey'}`}>
-                    {s.display_name ?? s.name}
-                  </p>
-                  <p className="text-xxs text-mid-grey truncate capitalize">
-                    {cfg.zone_type?.replace(/_/g, ' ')}
-                    {cfg.building_type ? ` · ${cfg.building_type}` : ''}
-                  </p>
-                </div>
-                {isSelected && <Check size={12} className="flex-shrink-0 text-navy ml-auto mt-0.5" />}
-              </div>
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Footer: create button */}
-      <div className="flex-shrink-0 border-t border-light-grey p-3">
-        <button
-          onClick={onCreateClick}
-          className="w-full flex items-center justify-center gap-1.5 py-1.5 text-caption border border-dashed border-navy/40 rounded-lg text-navy hover:bg-navy/5 transition-colors"
-        >
-          <Plus size={12} /> Create Custom Schedule
-        </button>
-      </div>
-    </div>
-  )
+  occupancy:         '#3B82F6',
+  lighting:          '#F59E0B',
+  equipment:         '#8B5CF6',
+  heating_setpoint:  '#DC2626',
+  cooling_setpoint:  '#06B6D4',
+  dhw:               '#F97316',
 }
 
 // ── Create dialog ──────────────────────────────────────────────────────────────
@@ -202,92 +43,215 @@ function CreateDialog({ schedules, onConfirm, onCancel }) {
   const [template,  setTemplate]  = useState('')
 
   function handleCreate() {
-    // Find base template schedule (if selected) or use blanks
     const base = schedules.find(s => s.id === template)
     const blankDays = { weekday: Array(24).fill(0.5), saturday: Array(24).fill(0.5), sunday: Array(24).fill(0.5) }
     const blankMult = Array(12).fill(1)
-    const initialSchedule = {
+    onConfirm({
       display_name: name,
-      name: name,
+      name,
       config_json: {
         schedule_type:       schedType,
         zone_type:           zoneType,
         day_types:           base ? { ...(base.config_json?.day_types ?? blankDays) } : blankDays,
         monthly_multipliers: base ? [...(base.config_json?.monthly_multipliers ?? blankMult)] : blankMult,
       },
-    }
-    onConfirm(initialSchedule)
+    })
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
       <div className="bg-white rounded-xl border border-light-grey shadow-xl p-6 w-80 space-y-4">
         <h3 className="text-caption font-semibold text-navy">Create Custom Schedule</h3>
-
         <div className="space-y-3">
           <div>
             <label className="block text-xxs uppercase tracking-wider text-mid-grey mb-1">Name</label>
-            <input
-              value={name}
-              onChange={e => setName(e.target.value)}
-              className="w-full px-2 py-1.5 text-caption border border-light-grey rounded focus:outline-none focus:border-teal"
-              autoFocus
-            />
+            <input value={name} onChange={e => setName(e.target.value)} autoFocus
+              className="w-full px-2 py-1.5 text-caption border border-light-grey rounded focus:outline-none focus:border-teal" />
           </div>
           <div>
             <label className="block text-xxs uppercase tracking-wider text-mid-grey mb-1">Schedule Type</label>
-            <select
-              value={schedType}
-              onChange={e => setSchedType(e.target.value)}
-              className="w-full px-2 py-1.5 text-caption border border-light-grey rounded bg-white focus:outline-none"
-            >
+            <select value={schedType} onChange={e => setSchedType(e.target.value)}
+              className="w-full px-2 py-1.5 text-caption border border-light-grey rounded bg-white focus:outline-none">
               {['occupancy','lighting','equipment','heating_setpoint','cooling_setpoint','dhw'].map(t => (
                 <option key={t} value={t}>{t.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</option>
               ))}
             </select>
           </div>
           <div>
-            <label className="block text-xxs uppercase tracking-wider text-mid-grey mb-1">Zone Type</label>
-            <select
-              value={zoneType}
-              onChange={e => setZoneType(e.target.value)}
-              className="w-full px-2 py-1.5 text-caption border border-light-grey rounded bg-white focus:outline-none"
-            >
-              {['bedroom','corridor','reception','office','retail','general'].map(z => (
-                <option key={z} value={z}>{z.replace(/\b\w/g,c=>c.toUpperCase())}</option>
-              ))}
-            </select>
-          </div>
-          <div>
             <label className="block text-xxs uppercase tracking-wider text-mid-grey mb-1">Base Template (optional)</label>
-            <select
-              value={template}
-              onChange={e => setTemplate(e.target.value)}
-              className="w-full px-2 py-1.5 text-caption border border-light-grey rounded bg-white focus:outline-none"
-            >
-              <option value="">— blank schedule —</option>
+            <select value={template} onChange={e => setTemplate(e.target.value)}
+              className="w-full px-2 py-1.5 text-caption border border-light-grey rounded bg-white focus:outline-none">
+              <option value="">— blank —</option>
               {schedules.map(s => (
                 <option key={s.id} value={s.id}>{s.display_name ?? s.name}</option>
               ))}
             </select>
           </div>
         </div>
-
         <div className="flex gap-2 pt-1">
-          <button
-            onClick={onCancel}
-            className="flex-1 py-1.5 text-caption border border-light-grey rounded-lg text-mid-grey hover:text-navy transition-colors"
-          >
+          <button onClick={onCancel}
+            className="flex-1 py-1.5 text-caption border border-light-grey rounded-lg text-mid-grey hover:text-navy transition-colors">
             Cancel
           </button>
-          <button
-            onClick={handleCreate}
-            disabled={!name.trim()}
-            className="flex-1 py-1.5 text-caption bg-navy text-white rounded-lg hover:bg-opacity-90 transition-colors disabled:opacity-60"
-          >
+          <button onClick={handleCreate} disabled={!name.trim()}
+            className="flex-1 py-1.5 text-caption bg-navy text-white rounded-lg hover:bg-opacity-90 transition-colors disabled:opacity-60">
             Create
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Left column ───────────────────────────────────────────────────────────────
+
+function ScheduleListColumn({
+  schedules, loading, error,
+  typeFilter, setTypeFilter,
+  search, setSearch,
+  selectedId, onSelect, onNavigate,
+  onCreateClick,
+}) {
+  const filtered = schedules.filter(s => {
+    const cfg = s.config_json ?? {}
+    if (typeFilter !== 'all' && cfg.schedule_type !== typeFilter) return false
+    if (search) {
+      const q = search.toLowerCase()
+      if (!(s.display_name ?? s.name ?? '').toLowerCase().includes(q)) return false
+    }
+    return true
+  })
+
+  const currentIdx = filtered.findIndex(s => s.id === selectedId)
+
+  function handlePrev() {
+    if (currentIdx > 0) onNavigate(filtered[currentIdx - 1])
+  }
+  function handleNext() {
+    if (currentIdx < filtered.length - 1) onNavigate(filtered[currentIdx + 1])
+  }
+
+  return (
+    <div className="h-full flex flex-col bg-white border-r border-light-grey">
+      {/* Module header with purple accent */}
+      <div
+        className="flex-shrink-0 px-3 pt-2.5 pb-2 border-b border-light-grey"
+        style={{ borderTopWidth: '3px', borderTopColor: '#8B5CF6', borderTopStyle: 'solid' }}
+      >
+        <p className="text-caption font-medium" style={{ color: '#8B5CF6' }}>Profiles</p>
+        <p className="text-xxs text-mid-grey">Browse and assign schedule templates</p>
+      </div>
+
+      {/* Search */}
+      <div className="flex-shrink-0 px-3 py-2 border-b border-light-grey">
+        <div className="relative">
+          <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-mid-grey" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search…"
+            className="w-full pl-6 pr-6 py-1 text-caption border border-light-grey rounded bg-white focus:outline-none focus:border-purple-400 transition-colors"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-mid-grey hover:text-navy">
+              <X size={11} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Type filter pills */}
+      <div className="flex-shrink-0 px-3 py-2 border-b border-light-grey">
+        <div className="flex flex-wrap gap-1">
+          {SCHEDULE_TYPES.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTypeFilter(t.id)}
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xxs transition-colors border ${
+                typeFilter === t.id
+                  ? 'bg-purple-600 text-white border-purple-600'
+                  : 'text-mid-grey border-light-grey hover:border-purple-400 hover:text-purple-700'
+              }`}
+            >
+              {t.id !== 'all' && (
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: TYPE_DOT[t.id] ?? '#9E9E9E', opacity: typeFilter === t.id ? 0.7 : 1 }} />
+              )}
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Prev / Next navigation */}
+      {filtered.length > 1 && currentIdx >= 0 && (
+        <div className="flex-shrink-0 flex items-center justify-between px-3 py-1.5 border-b border-light-grey bg-off-white">
+          <button
+            onClick={handlePrev}
+            disabled={currentIdx === 0}
+            className="flex items-center gap-0.5 text-xxs text-mid-grey hover:text-navy disabled:opacity-30 transition-colors"
+          >
+            <ChevronLeft size={12} /> Prev
+          </button>
+          <span className="text-xxs text-mid-grey">{currentIdx + 1} / {filtered.length}</span>
+          <button
+            onClick={handleNext}
+            disabled={currentIdx === filtered.length - 1}
+            className="flex items-center gap-0.5 text-xxs text-mid-grey hover:text-navy disabled:opacity-30 transition-colors"
+          >
+            Next <ChevronRight size={12} />
+          </button>
+        </div>
+      )}
+
+      {/* Schedule list */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {loading && (
+          <div className="p-4 text-center text-caption text-mid-grey">Loading schedules…</div>
+        )}
+        {error && (
+          <div className="p-4 text-center text-caption text-red-600">Failed to load: {error}</div>
+        )}
+        {!loading && !error && filtered.length === 0 && (
+          <div className="p-4 text-center text-caption text-mid-grey">No schedules match</div>
+        )}
+        {!loading && !error && filtered.map(s => {
+          const cfg = s.config_json ?? {}
+          const isSelected = s.id === selectedId
+          const dotColor = TYPE_DOT[cfg.schedule_type] ?? '#9E9E9E'
+
+          return (
+            <button
+              key={s.id}
+              onClick={() => onSelect(s)}
+              className={`w-full text-left px-3 py-2 border-b border-light-grey/60 transition-colors ${
+                isSelected ? 'bg-purple-50 border-l-2 border-l-purple-400 pl-2.5' : 'hover:bg-off-white'
+              }`}
+            >
+              <div className="flex items-start gap-2">
+                <span className="w-2 h-2 rounded-full flex-shrink-0 mt-1" style={{ backgroundColor: dotColor }} />
+                <div className="min-w-0 flex-1">
+                  <p className={`text-caption truncate ${isSelected ? 'font-medium text-navy' : 'text-dark-grey'}`}>
+                    {s.display_name ?? s.name}
+                  </p>
+                  <p className="text-xxs text-mid-grey truncate capitalize">
+                    {(cfg.building_type ?? cfg.zone_type ?? '').replace(/_/g, ' ')}
+                  </p>
+                </div>
+                {isSelected && <Check size={11} className="flex-shrink-0 text-purple-600 ml-auto mt-0.5" />}
+              </div>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Footer: create button */}
+      <div className="flex-shrink-0 border-t border-light-grey p-3">
+        <button
+          onClick={onCreateClick}
+          className="w-full flex items-center justify-center gap-1.5 py-1.5 text-caption border border-dashed border-purple-300 rounded-lg text-purple-700 hover:bg-purple-50 transition-colors"
+        >
+          <Plus size={12} /> Create Custom
+        </button>
       </div>
     </div>
   )
@@ -303,15 +267,10 @@ export default function ProfilesEditor() {
   const [error,       setError]       = useState(null)
   const [selected,    setSelected]    = useState(null)
   const [typeFilter,  setTypeFilter]  = useState('all')
-  const [zoneFilter,  setZoneFilter]  = useState('all')
   const [search,      setSearch]      = useState('')
   const [assignMsg,   setAssignMsg]   = useState(null)
-
-  // Editor mode state
-  const [showCreateDialog, setShowCreateDialog] = useState(false)
-  const [editingSchedule,  setEditingSchedule]  = useState(null) // non-null = editor visible
-
-  // Fetch full detail when a schedule is selected
+  const [showCreate,  setShowCreate]  = useState(false)
+  const [editingSched, setEditingSched] = useState(null)
   const [detailCache, setDetailCache] = useState({})
 
   function loadSchedules() {
@@ -323,23 +282,17 @@ export default function ProfilesEditor() {
 
   useEffect(() => { loadSchedules() }, [])
 
-  // When selected changes, load full detail if not cached
   useEffect(() => {
-    if (!selected) return
-    if (detailCache[selected.id]) return
+    if (!selected || detailCache[selected.id]) return
     fetch(`/api/library/${selected.id}`)
       .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data) setDetailCache(c => ({ ...c, [data.id]: data }))
-      })
+      .then(data => { if (data) setDetailCache(c => ({ ...c, [data.id]: data })) })
       .catch(() => {})
   }, [selected])
 
-  // Auto-select first schedule on load
   useEffect(() => {
     if (schedules.length > 0 && !selected) {
-      const defaultSched = schedules.find(s => s.name === 'hotel_bedroom_occupancy') ?? schedules[0]
-      setSelected(defaultSched)
+      setSelected(schedules.find(s => s.name === 'hotel_bedroom_occupancy') ?? schedules[0])
     }
   }, [schedules])
 
@@ -353,84 +306,77 @@ export default function ProfilesEditor() {
       body: JSON.stringify({ schedule_assignments: { [key]: schedule.id } }),
     })
       .then(r => r.ok ? r.json() : Promise.reject())
-      .then(() => {
-        setAssignMsg(`Assigned: ${schedule.display_name ?? schedule.name}`)
-        setTimeout(() => setAssignMsg(null), 3000)
-      })
-      .catch(() => {
-        setAssignMsg('Assignment failed')
-        setTimeout(() => setAssignMsg(null), 3000)
-      })
+      .then(() => { setAssignMsg(`Assigned: ${schedule.display_name ?? schedule.name}`); setTimeout(() => setAssignMsg(null), 3000) })
+      .catch(() => { setAssignMsg('Assignment failed'); setTimeout(() => setAssignMsg(null), 3000) })
   }
 
   function handleEditorSaved(newItem) {
-    // Reload the schedule list to show the new item, then switch to browsing it
     loadSchedules()
     setDetailCache(c => ({ ...c, [newItem.id]: newItem }))
     setSelected(newItem)
-    setEditingSchedule(null)
-    setAssignMsg(`"${newItem.display_name ?? newItem.name}" saved to library`)
+    setEditingSched(null)
+    setAssignMsg(`"${newItem.display_name ?? newItem.name}" saved`)
     setTimeout(() => setAssignMsg(null), 3000)
   }
 
-  // Use the cached full detail if available, otherwise the list item
-  const selectedDetail = selected
-    ? (detailCache[selected.id] ?? selected)
-    : null
+  const selectedDetail = selected ? (detailCache[selected.id] ?? selected) : null
 
   return (
     <>
-      {showCreateDialog && (
+      {showCreate && (
         <CreateDialog
           schedules={schedules}
-          onConfirm={initial => {
-            setShowCreateDialog(false)
-            setEditingSchedule(initial)
-          }}
-          onCancel={() => setShowCreateDialog(false)}
+          onConfirm={initial => { setShowCreate(false); setEditingSched(initial) }}
+          onCancel={() => setShowCreate(false)}
         />
       )}
 
-      <ExplorerLayout
-        sidebarWidth="w-72"
-        sidebar={
-          <ProfilesSidebar
+      {assignMsg && (
+        <div className="fixed bottom-4 right-4 z-50 bg-navy text-white text-caption px-4 py-2 rounded-lg shadow-lg">
+          {assignMsg}
+        </div>
+      )}
+
+      <div className="flex h-[calc(100vh-3rem)]">
+        {/* Left: schedule list */}
+        <div className="w-64 flex-shrink-0">
+          <ScheduleListColumn
             schedules={schedules}
             loading={loading}
             error={error}
             typeFilter={typeFilter}
             setTypeFilter={setTypeFilter}
-            zoneFilter={zoneFilter}
-            setZoneFilter={setZoneFilter}
             search={search}
             setSearch={setSearch}
             selectedId={selected?.id}
-            onSelect={s => { setSelected(s); setEditingSchedule(null) }}
-            onCreateClick={() => setShowCreateDialog(true)}
+            onSelect={s => { setSelected(s); setEditingSched(null) }}
+            onNavigate={s => { setSelected(s); setEditingSched(null) }}
+            onCreateClick={() => setShowCreate(true)}
           />
-        }
-      >
-        {/* Assign notification toast */}
-        {assignMsg && (
-          <div className="fixed bottom-4 right-4 z-50 bg-navy text-white text-caption px-4 py-2 rounded-lg shadow-lg">
-            {assignMsg}
-          </div>
-        )}
+        </div>
 
-        {editingSchedule ? (
-          <ScheduleEditor
-            initialSchedule={editingSchedule}
-            onSaved={handleEditorSaved}
-            onCancel={() => setEditingSchedule(null)}
-          />
-        ) : (
-          <ScheduleViewer
-            schedule={selectedDetail}
-            onAssign={handleAssign}
-            onEditCopy={s => setEditingSchedule(detailCache[s.id] ?? s)}
-          />
-        )}
-      </ExplorerLayout>
+        {/* Centre: schedule viewer / editor */}
+        <div className="flex-1 overflow-y-auto bg-off-white">
+          {editingSched ? (
+            <ScheduleEditor
+              initialSchedule={editingSched}
+              onSaved={handleEditorSaved}
+              onCancel={() => setEditingSched(null)}
+            />
+          ) : (
+            <ScheduleViewer
+              schedule={selectedDetail}
+              onAssign={handleAssign}
+              onEditCopy={s => setEditingSched(detailCache[s.id] ?? s)}
+            />
+          )}
+        </div>
+
+        {/* Right: live results / statistics */}
+        <div className="w-80 flex-shrink-0">
+          <ProfilesLiveResults schedule={selectedDetail} />
+        </div>
+      </div>
     </>
   )
 }
