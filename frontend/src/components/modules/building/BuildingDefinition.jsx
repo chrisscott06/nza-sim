@@ -159,12 +159,20 @@ const CONSTRUCTION_ELEMENTS = [
 
 function InputsColumn({ library }) {
   const { params, updateParam, constructions, updateConstruction } = useContext(ProjectContext)
-  const { length, width, num_floors, floor_height, orientation, wwr, name, infiltration_ach, window_count } = params
+  const { length, width, num_floors, floor_height, orientation, wwr, name, infiltration_ach, window_count,
+          num_bedrooms, occupancy_rate, people_per_room } = params
   const ach = infiltration_ach ?? 0.5
+  const bedrooms    = num_bedrooms    ?? 138
+  const occRate     = occupancy_rate  ?? 0.75
+  const peoplePerRm = people_per_room ?? 1.5
 
   // Derived metrics
   const gia  = length * width * num_floors
   const vol  = gia * floor_height
+
+  // Derived occupancy metrics
+  const avgOccupants   = bedrooms * occRate * peoplePerRm
+  const occDensity     = gia > 0 ? avgOccupants / gia : 0
 
   const { text: achText, color: achColor } = achLabel(ach)
 
@@ -254,6 +262,47 @@ function InputsColumn({ library }) {
               <span className="text-xxs text-mid-grey w-5">win</span>
             </div>
           ))}
+        </div>
+
+        {/* ── Occupancy ── */}
+        <div className="border-t border-light-grey pt-3">
+          <SectionHeader title="Occupancy" />
+
+          <div className="grid grid-cols-2 gap-1.5 mb-2">
+            <Field label="Bedrooms">
+              <NumberInput
+                value={bedrooms} min={1} max={1000} step={1}
+                onChange={v => updateParam('num_bedrooms', v)}
+              />
+            </Field>
+            <Field label="People / room">
+              <NumberInput
+                value={peoplePerRm} min={1} max={4} step={0.5}
+                onChange={v => updateParam('people_per_room', v)}
+              />
+            </Field>
+          </div>
+
+          <Field label={`Occupancy rate — ${Math.round(occRate * 100)}%`}>
+            <input
+              type="range" min={10} max={100} step={1}
+              value={Math.round(occRate * 100)}
+              onChange={e => updateParam('occupancy_rate', Number(e.target.value) / 100)}
+              className="w-full h-[3px] accent-navy"
+            />
+          </Field>
+
+          {/* Derived metrics */}
+          <div className="grid grid-cols-2 gap-1 mb-1 mt-1 bg-off-white rounded p-2">
+            <div>
+              <p className="text-xxs text-mid-grey">Avg occupants</p>
+              <p className="text-caption font-medium text-navy">{Math.round(avgOccupants)} people</p>
+            </div>
+            <div>
+              <p className="text-xxs text-mid-grey">Occ. density</p>
+              <p className="text-caption font-medium text-navy">{occDensity.toFixed(3)} p/m²</p>
+            </div>
+          </div>
         </div>
 
         {/* ── Fabric ── */}

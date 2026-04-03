@@ -37,6 +37,10 @@ const DEFAULT_PARAMS = {
   wwr:             { north: 0.25, south: 0.25, east: 0.25, west: 0.25 },
   infiltration_ach: 0.5,
   window_count:    { north: 8, south: 8, east: 3, west: 3 },
+  // Occupancy (hotel-specific)
+  num_bedrooms:    138,
+  occupancy_rate:  0.75,
+  people_per_room: 1.5,
   location: {
     latitude:  51.127,
     longitude: -2.992,
@@ -116,6 +120,9 @@ export function ProjectProvider({ children }) {
       wwr:             bc.wwr             ?? DEFAULT_PARAMS.wwr,
       infiltration_ach: bc.infiltration_ach ?? DEFAULT_PARAMS.infiltration_ach,
       window_count: bc.window_count ?? DEFAULT_PARAMS.window_count,
+      num_bedrooms:    bc.num_bedrooms    ?? DEFAULT_PARAMS.num_bedrooms,
+      occupancy_rate:  bc.occupancy_rate  ?? DEFAULT_PARAMS.occupancy_rate,
+      people_per_room: bc.people_per_room ?? DEFAULT_PARAMS.people_per_room,
       location:     bc.location     ?? DEFAULT_PARAMS.location,
     })
     setConstructions(project.construction_choices ?? DEFAULT_CONSTRUCTIONS)

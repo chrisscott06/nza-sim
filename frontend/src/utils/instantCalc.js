@@ -198,14 +198,22 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
 
   const total_solar = Object.values(solar_gains).reduce((a, b) => a + b, 0) + opaque_wall_total + roof_solar_kWh
 
+  // ── Occupancy ─────────────────────────────────────────────────────────────
+  const num_bedrooms    = Number(building.num_bedrooms    ?? 138)
+  const occupancy_rate  = Math.max(0, Math.min(1, Number(building.occupancy_rate  ?? 0.75)))
+  const people_per_room = Number(building.people_per_room ?? 1.5)
+  const avg_occupants   = num_bedrooms * occupancy_rate * people_per_room
+
   // ── Internal gains ────────────────────────────────────────────────────────
-  const lpd    = Number(systems.lighting_power_density ?? 8)   // W/m²
-  const epd    = Number(systems.equipment_power_density ?? 10) // W/m² (CIBSE hotel bedroom)
-  const occ    = 60   // W/person (metabolic)
-  const occ_m2 = 0.04 // persons/m² in hotel bedroom zone
+  const lpd = Number(systems.lighting_power_density ?? 8)   // W/m²
+  const epd = Number(systems.equipment_power_density ?? 10) // W/m² (CIBSE hotel bedroom)
+  const OCC_WATTS = 60  // W/person (metabolic)
+  // Lighting: area-based (corridors, public areas always lit regardless of occupancy)
   const lighting_internal = lpd * gia * HOTEL_OPERATING_HOURS / 1000
-  const equip_internal    = epd * gia * HOTEL_EQUIP_HOURS     / 1000
-  const people_internal   = occ * gia * occ_m2 * HOTEL_OCCUPIED_FRACTION * HOTEL_EQUIP_HOURS / 1000
+  // Equipment: scales with occupancy — more rooms occupied = more TVs, chargers running
+  const equip_internal    = epd * gia * HOTEL_EQUIP_HOURS * occupancy_rate / 1000
+  // People: occupant count directly from occupancy inputs
+  const people_internal   = OCC_WATTS * avg_occupants * HOTEL_OCCUPIED_FRACTION * HOTEL_EQUIP_HOURS / 1000
   const total_internal    = lighting_internal + equip_internal + people_internal
 
   // ── Heating demand ────────────────────────────────────────────────────────
@@ -242,8 +250,11 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
   const fans_kWh = vrf_fans_kWh + vent_fans_kWh
 
   // ── DHW energy ────────────────────────────────────────────────────────────
-  // Area-based DHW benchmark (CIBSE Guide F) — calibrated against EnergyPlus
-  const daily_vol   = DHW_LITRES_PER_M2_DAY * gia
+  // Occupant-based DHW — scales with actual occupants rather than area.
+  // Calibrated against CIBSE Guide F area benchmark (1.1 L/m²/day):
+  //   at default occupancy (155 people, 3750m² GIA) → 1.1×3750/155 ≈ 26.6 L/person/day
+  const DHW_L_PER_PERSON_DAY = 26.6
+  const daily_vol   = DHW_L_PER_PERSON_DAY * Math.max(1, avg_occupants)
   const dhw_thermal = daily_vol * 365 * WATER_SHC * (DHW_SETPOINT - DHW_COLD_TEMP)
   const dhw_primary    = systems.dhw_primary ?? 'gas_boiler_dhw'
   const dhw_preheat    = systems.dhw_preheat ?? 'none'
