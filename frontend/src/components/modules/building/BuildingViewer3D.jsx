@@ -1,6 +1,6 @@
 import { useRef, useMemo, useState, Suspense, Component } from 'react'
 import { Canvas, useFrame, useLoader } from '@react-three/fiber'
-import { OrbitControls, Environment, Sky, useTexture } from '@react-three/drei'
+import { OrbitControls, Environment, Sky, useTexture, Edges, ContactShadows } from '@react-three/drei'
 import * as THREE from 'three'
 import { getSolarRadiation, SOLAR_BY_COMPASS } from '../../../utils/instantCalc.js'
 
@@ -14,14 +14,16 @@ function facadeLabel(facadeNumber, orientationDeg) {
   return `F${facadeNumber} (${compass})`
 }
 
-/* ── Architectural material palette ───────────────────────────────────────── */
+/* ── Architectural material palette — clean white massing model ────────────── */
 const COLORS = {
-  wall:        '#D4C5B8',  // warm light stone
-  roof:        '#8A8A8A',  // medium grey
-  glazing:     '#88C8E8',  // subtle blue glass
-  floorLine:   '#B8A898',  // subtle floor band line
+  wall:        '#F5F3F0',  // near-white matte wall
+  roof:        '#E8E5E0',  // slightly darker than walls
+  glazing:     '#D8E8F0',  // subtle blue-tinted glass
+  floorLine:   '#CCCCCC',  // soft floor band line on white wall
   groundPlane: '#EBEBEB',  // off-white ground
-  frame:       '#3A3A3A',  // dark grey window reveal frame
+  frame:       '#C0C0C0',  // medium grey window reveal frame (contrast on white wall)
+  basePlate:   '#F0EFEC',  // base platform — slightly darker than wall
+  edges:       '#909090',  // soft edge lines
 }
 
 /* ── Solar tint helper ─────────────────────────────────────────────────────── */
@@ -107,10 +109,10 @@ function Building({ params, solarOverlay, onFacadeHover }) {
                 <meshPhysicalMaterial
                   color={COLORS.glazing}
                   roughness={0.05}
-                  metalness={0.1}
+                  metalness={0.15}
                   transparent
-                  opacity={0.55}
-                  reflectivity={0.6}
+                  opacity={0.30}
+                  reflectivity={0.8}
                   side={THREE.DoubleSide}
                 />
               </mesh>
@@ -196,23 +198,32 @@ function Building({ params, solarOverlay, onFacadeHover }) {
       >
         <boxGeometry args={[width, totalHeight, length]} />
         {/* +X = East */}
-        <meshStandardMaterial attach="material-0" color={solarFaceColor('east',  orientation, solarOverlay)} roughness={0.85} metalness={0} />
+        <meshStandardMaterial attach="material-0" color={solarFaceColor('east',  orientation, solarOverlay)} roughness={0.9} metalness={0} />
         {/* -X = West */}
-        <meshStandardMaterial attach="material-1" color={solarFaceColor('west',  orientation, solarOverlay)} roughness={0.85} metalness={0} />
-        {/* +Y = Top (use roof color) */}
-        <meshStandardMaterial attach="material-2" color={COLORS.roof} roughness={0.7} metalness={0} />
-        {/* -Y = Bottom (underground, doesn't matter) */}
-        <meshStandardMaterial attach="material-3" color={COLORS.wall} roughness={1} metalness={0} />
+        <meshStandardMaterial attach="material-1" color={solarFaceColor('west',  orientation, solarOverlay)} roughness={0.9} metalness={0} />
+        {/* +Y = Top (roof) */}
+        <meshStandardMaterial attach="material-2" color={COLORS.roof} roughness={0.85} metalness={0} />
+        {/* -Y = Bottom */}
+        <meshStandardMaterial attach="material-3" color={COLORS.wall} roughness={0.9} metalness={0} />
         {/* +Z = North */}
-        <meshStandardMaterial attach="material-4" color={solarFaceColor('north', orientation, solarOverlay)} roughness={0.85} metalness={0} />
+        <meshStandardMaterial attach="material-4" color={solarFaceColor('north', orientation, solarOverlay)} roughness={0.9} metalness={0} />
         {/* -Z = South */}
-        <meshStandardMaterial attach="material-5" color={solarFaceColor('south', orientation, solarOverlay)} roughness={0.85} metalness={0} />
+        <meshStandardMaterial attach="material-5" color={solarFaceColor('south', orientation, solarOverlay)} roughness={0.9} metalness={0} />
+        <Edges color={COLORS.edges} threshold={15} />
       </mesh>
 
       {/* Roof cap — slightly wider for overhang effect */}
       <mesh position={[0, totalHeight + 0.05, 0]} castShadow receiveShadow>
-        <boxGeometry args={[width + 0.4, 0.15, length + 0.4]} />
-        <meshStandardMaterial color={COLORS.roof} roughness={0.7} metalness={0.0} />
+        <boxGeometry args={[width + 0.4, 0.2, length + 0.4]} />
+        <meshStandardMaterial color={COLORS.roof} roughness={0.85} metalness={0} />
+        <Edges color={COLORS.edges} threshold={15} />
+      </mesh>
+
+      {/* Base plate — raised platform extending 2m beyond footprint on all sides */}
+      <mesh position={[0, -0.15, 0]} receiveShadow>
+        <boxGeometry args={[width + 4, 0.3, length + 4]} />
+        <meshStandardMaterial color={COLORS.basePlate} roughness={0.95} metalness={0} />
+        <Edges color={COLORS.edges} threshold={15} />
       </mesh>
 
       {/* Floor lines */}
@@ -394,6 +405,17 @@ export default function BuildingViewer3D({ params }) {
           <Building params={params} solarOverlay={solarOverlay} onFacadeHover={setHoverInfo} />
           <OrientationIndicator orientation={0} />
         </group>
+
+        {/* Soft contact shadow where building meets base plate */}
+        <ContactShadows
+          position={[0, -0.01, 0]}
+          opacity={0.35}
+          scale={Math.max(length, width) * 3}
+          blur={2.5}
+          far={Math.max(length, width) * 1.5}
+          resolution={256}
+          color="#000000"
+        />
 
         {/* Ground plane — map tile if visible and location set, else solid grey */}
         {mapVisible && hasLocation ? (
