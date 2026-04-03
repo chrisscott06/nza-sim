@@ -9,9 +9,11 @@
  *
  * Right of centre → COOLING IMPACT
  *   Gain rows:  right bars only (gains × cooling_fraction that DRIVE cooling demand)
- *   Free-cool:  small left bars (ventilation/infiltration that help reduce cooling)
  *
  * All values already in MWh from instantCalc gains_losses object.
+ *
+ * Solar rows consolidated into a single "Solar Gains" bar with hover tooltip
+ * showing per-facade breakdown.
  */
 
 import { useState } from 'react'
@@ -43,15 +45,13 @@ const C = {
   roof:         '#8D6E63',
   floor:        '#6D4C41',
   solar:        '#F59E0B',
-  solar_dim:    '#FDE68A',
   equipment:    '#64748B',
   lighting:     '#8B5CF6',
   people:       '#EC4899',
-  sol_air:      '#BCAAA4',
 }
 
 // ── Row renderer ──────────────────────────────────────────────────────────────
-function Row({ label, leftVal, rightVal, leftColor, rightColor, maxVal, y, note }) {
+function Row({ label, leftVal, rightVal, leftColor, rightColor, maxVal, y }) {
   const lw = maxVal > 0 ? Math.max(0, (leftVal  / maxVal) * BAR_MAX) : 0
   const rw = maxVal > 0 ? Math.max(0, (rightVal / maxVal) * BAR_MAX) : 0
 
@@ -86,19 +86,84 @@ function Divider({ y }) {
   )
 }
 
+// ── Solar hover tooltip ───────────────────────────────────────────────────────
+function SolarTooltip({ pos, breakdownH, breakdownC, totalH, totalC }) {
+  if (!pos) return null
+  return (
+    <div
+      className="fixed z-[9999] bg-white border border-light-grey rounded shadow-lg pointer-events-none"
+      style={{ left: pos.x + 14, top: pos.y - 8, minWidth: '170px' }}
+    >
+      <div className="px-2.5 pt-2 pb-1.5">
+        <p className="text-xxs font-semibold text-navy mb-1.5">
+          Solar Gains — {totalH.toFixed(1)} MWh (heating offset)
+        </p>
+        <div className="space-y-0.5 mb-2">
+          {breakdownH.map(b => (
+            <div key={b.label} className="flex items-center justify-between gap-3">
+              <span className="text-xxs text-mid-grey">{b.label}</span>
+              <span className="text-xxs text-navy font-medium">{b.val.toFixed(1)}</span>
+            </div>
+          ))}
+        </div>
+        {totalC > 0.1 && (
+          <>
+            <p className="text-xxs font-semibold text-navy mb-1" style={{ color: '#3B82F6' }}>
+              Cooling driver — {totalC.toFixed(1)} MWh
+            </p>
+            <div className="space-y-0.5">
+              {breakdownC.map(b => (
+                <div key={b.label} className="flex items-center justify-between gap-3">
+                  <span className="text-xxs text-mid-grey">{b.label}</span>
+                  <span className="text-xxs font-medium" style={{ color: '#3B82F6' }}>{b.val.toFixed(1)}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function GainsLossesChart({ result, orientation, onExpand }) {
+  const [solarHover, setSolarHover] = useState(null) // { x, y } mouse coords or null
+
   if (!result || result.gia_m2 === 0) return null
 
   const hs = result.gains_losses?.heating_side
   const cs = result.gains_losses?.cooling_side
   if (!hs || !cs) return null
 
-  // Shorthand for compass-annotated solar row labels
+  // Compass labels
   const fl1 = facadeLabel(1, orientation)  // north facade
   const fl2 = facadeLabel(2, orientation)  // east facade
   const fl3 = facadeLabel(3, orientation)  // south facade
   const fl4 = facadeLabel(4, orientation)  // west facade
+
+  // ── Consolidated solar totals ────────────────────────────────────────────
+  const solarTotalH = (hs.solar_south ?? 0) + (hs.solar_east ?? 0) +
+                      (hs.solar_west  ?? 0) + (hs.solar_north ?? 0) +
+                      (hs.wall_solar  ?? 0) + (hs.roof_solar  ?? 0)
+  const solarTotalC = (cs.solar_south ?? 0) + (cs.solar_east ?? 0) +
+                      (cs.solar_west  ?? 0) + (cs.solar_north ?? 0)
+
+  // Heating-side breakdown for tooltip (filter zero values)
+  const solarBreakdownH = [
+    { label: `${fl3} solar`, val: hs.solar_south ?? 0 },
+    { label: `${fl2.slice(0,2)}/${fl4.slice(0,2)} solar`, val: (hs.solar_east ?? 0) + (hs.solar_west ?? 0) },
+    { label: `${fl1} solar`, val: hs.solar_north ?? 0 },
+    { label: 'Wall solar',   val: hs.wall_solar ?? 0 },
+    { label: 'Roof solar',   val: hs.roof_solar ?? 0 },
+  ].filter(b => b.val > 0.1)
+
+  // Cooling-side breakdown for tooltip
+  const solarBreakdownC = [
+    { label: `${fl3} solar`, val: cs.solar_south ?? 0 },
+    { label: `${fl2.slice(0,2)}/${fl4.slice(0,2)} solar`, val: (cs.solar_east ?? 0) + (cs.solar_west ?? 0) },
+    { label: `${fl1} solar`, val: cs.solar_north ?? 0 },
+  ].filter(b => b.val > 0.1)
 
   // ── Section A: Heating losses (left bars only) ────────────────────────────
   const LOSS_ROWS = [
@@ -110,15 +175,13 @@ export default function GainsLossesChart({ result, orientation, onExpand }) {
     { id: 'floor', label: 'Floor',        left: hs.floor_conduction,   color: C.floor       },
   ].filter(r => r.left > 0.01)
 
-  // ── Section B: Gains — asymmetric left (heating offset) / right (cooling driver)
-  const solarEWh = (hs.solar_east ?? 0) + (hs.solar_west ?? 0)
-  const solarEWc = (cs.solar_east ?? 0) + (cs.solar_west ?? 0)
-
+  // ── Section B: Gains — single solar row + internal gains ────────────────
   const GAIN_ROWS = [
     {
-      id: 'sol_s', label: `${fl3} solar`,
-      left:  hs.solar_south ?? 0,  lc: C.solar,
-      right: cs.solar_south ?? 0,  rc: C.solar,
+      id: 'solar', label: 'Solar Gains',
+      left: solarTotalH,       lc: C.solar,
+      right: solarTotalC,      rc: C.solar,
+      isSolar: true,
     },
     {
       id: 'equip', label: 'Equipment',
@@ -135,33 +198,16 @@ export default function GainsLossesChart({ result, orientation, onExpand }) {
       left:  hs.people ?? 0,       lc: C.people,
       right: cs.people ?? 0,       rc: C.people,
     },
-    {
-      id: 'sol_ew', label: `${fl2.slice(0,2)}/${fl4.slice(0,2)} solar`,
-      left:  solarEWh,              lc: C.solar_dim,
-      right: solarEWc,              rc: C.solar_dim,
-    },
-    {
-      id: 'sol_n', label: `${fl1} solar`,
-      left:  hs.solar_north ?? 0,  lc: C.solar_dim,
-      right: cs.solar_north ?? 0,  rc: C.solar_dim,
-    },
-    {
-      id: 'sol_air', label: 'Sol-air',
-      left:  (hs.wall_solar ?? 0) + (hs.roof_solar ?? 0),  lc: C.sol_air,
-      right: 0,                                              rc: C.sol_air,
-    },
   ].filter(r => r.left > 0.01 || r.right > 0.01)
 
-  // ── Scale: single max across all values ───────────────────────────────────
+  // ── Scale ─────────────────────────────────────────────────────────────────
   const allVals = [
     ...LOSS_ROWS.map(r => r.left),
     ...GAIN_ROWS.flatMap(r => [r.left, r.right]),
-    cs.infiltration_cooling ?? 0,
-    cs.ventilation_cooling  ?? 0,
   ]
   const maxVal = Math.max(...allVals, 1)
 
-  // ── Dimensions ───────────────────────────────────────────────────────────
+  // ── Dimensions ────────────────────────────────────────────────────────────
   const nLoss = LOSS_ROWS.length
   const nGain = GAIN_ROWS.length
   const SEP   = 5
@@ -169,10 +215,10 @@ export default function GainsLossesChart({ result, orientation, onExpand }) {
   const centerX = PAD_X + BAR_MAX + LABEL_W / 2
 
   const topLoss = LOSS_ROWS[0]
-  const topGain = GAIN_ROWS[0]
+  const topGain = GAIN_ROWS[0]  // solar — always first if present
 
   return (
-    <div>
+    <div className="relative">
       <div className="flex items-center justify-between mb-1">
         <p className="text-xxs uppercase tracking-wider text-mid-grey">Gains &amp; Losses</p>
         <div className="flex items-center gap-2">
@@ -212,15 +258,46 @@ export default function GainsLossesChart({ result, orientation, onExpand }) {
 
         <Divider y={HEADER + nLoss * ROW_H + SEP / 2} />
 
-        {/* Gain rows — asymmetric: left=heating offset (×0.75), right=cooling driver (×0.25) */}
-        {GAIN_ROWS.map((r, i) => (
-          <Row key={r.id} label={r.label}
-            leftVal={r.left} rightVal={r.right}
-            leftColor={r.lc} rightColor={r.rc}
-            maxVal={maxVal}
-            y={HEADER + nLoss * ROW_H + SEP + i * ROW_H + ROW_H / 2}
-          />
-        ))}
+        {/* Gain rows */}
+        {GAIN_ROWS.map((r, i) => {
+          const y = HEADER + nLoss * ROW_H + SEP + i * ROW_H + ROW_H / 2
+          if (r.isSolar) {
+            return (
+              <g
+                key={r.id}
+                onMouseEnter={(e) => setSolarHover({ x: e.clientX, y: e.clientY })}
+                onMouseMove={(e) => setSolarHover({ x: e.clientX, y: e.clientY })}
+                onMouseLeave={() => setSolarHover(null)}
+                style={{ cursor: 'default' }}
+              >
+                <Row label={r.label}
+                  leftVal={r.left} rightVal={r.right}
+                  leftColor={r.lc} rightColor={r.rc}
+                  maxVal={maxVal}
+                  y={y}
+                />
+                {/* Expand hit area for easier hover */}
+                <rect
+                  x={0} y={y - ROW_H / 2} width={TOTAL_W} height={ROW_H}
+                  fill="transparent"
+                />
+                {/* Subtle indicator that this row has detail */}
+                <text x={PAD_X + BAR_MAX + LABEL_W / 2} y={y + 8.5}
+                  textAnchor="middle" fontSize={4.5} fill="#F59E0B" opacity={0.8}>
+                  ▼
+                </text>
+              </g>
+            )
+          }
+          return (
+            <Row key={r.id} label={r.label}
+              leftVal={r.left} rightVal={r.right}
+              leftColor={r.lc} rightColor={r.rc}
+              maxVal={maxVal}
+              y={y}
+            />
+          )
+        })}
 
         {/* Value callout — largest loss */}
         {topLoss && (() => {
@@ -233,8 +310,8 @@ export default function GainsLossesChart({ result, orientation, onExpand }) {
           )
         })()}
 
-        {/* Value callout — largest gain (right bar) */}
-        {topGain && topGain.right > 0.01 && (() => {
+        {/* Value callout — solar gains (right bar) */}
+        {topGain && topGain.right > 0.01 && topGain.isSolar && (() => {
           const rw = (topGain.right / maxVal) * BAR_MAX
           const gy = HEADER + nLoss * ROW_H + SEP + ROW_H / 2
           return (
@@ -244,8 +321,16 @@ export default function GainsLossesChart({ result, orientation, onExpand }) {
             </text>
           )
         })()}
-
       </svg>
+
+      {/* Solar hover tooltip (portal-style fixed position) */}
+      <SolarTooltip
+        pos={solarHover}
+        breakdownH={solarBreakdownH}
+        breakdownC={solarBreakdownC}
+        totalH={solarTotalH}
+        totalC={solarTotalC}
+      />
     </div>
   )
 }
