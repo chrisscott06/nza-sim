@@ -8,6 +8,8 @@
 
 import { useContext, useMemo } from 'react'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
+import { useWeather } from '../../../context/WeatherContext.jsx'
+import { useHourlySolar } from '../../../hooks/useHourlySolar.js'
 import { calculateInstant } from '../../../utils/instantCalc.js'
 import { FABRIC_COLORS } from '../../../data/chartTokens.js'
 import GainsLossesChart from './GainsLossesChart.jsx'
@@ -205,10 +207,13 @@ function Metric({ label, value, unit, color }) {
 
 export default function LiveResultsPanel({ libraryData = {}, onSankeyExpand }) {
   const { params, constructions, systems } = useContext(ProjectContext)
+  const { weatherData } = useWeather()
+  const orientationDeg = Number(params?.orientation ?? 0)
+  const hourlySolar = useHourlySolar(weatherData, orientationDeg)
 
   const result = useMemo(
-    () => calculateInstant(params, constructions, systems, libraryData),
-    [params, constructions, systems, libraryData]
+    () => calculateInstant(params, constructions, systems, libraryData, weatherData, hourlySolar),
+    [params, constructions, systems, libraryData, weatherData, hourlySolar]
   )
 
   return (

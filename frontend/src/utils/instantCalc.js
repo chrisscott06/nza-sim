@@ -165,10 +165,34 @@ function getUValue(constructionChoices, element, libraryData) {
   return DEFAULT_U_VALUES[element] ?? 1.0
 }
 
-// ── Main calculation ──────────────────────────────────────────────────────────
+// ── Hotel schedule fractions (simplified for hourly instant calc) ──────────────
+
+/** Fraction of max occupancy for a hotel bedroom at each hour of day (0-23) */
+function hotelOccupancyFraction(hour) {
+  if (hour >= 22 || hour < 7)  return 0.85  // overnight — rooms occupied
+  if (hour >= 10 && hour < 16) return 0.15  // midday — rooms empty
+  return 0.45                                 // morning/evening transition
+}
+
+/** Fraction of installed lighting power in use at each hour of day */
+function hotelLightingFraction(hour) {
+  if (hour >= 22 || hour < 7)  return 0.40  // nightlights + corridor only
+  if (hour >= 9  && hour < 18) return 0.55  // daytime — natural light supplement
+  return 0.85                                 // evening — full occupancy lighting
+}
+
+/** Fraction of installed equipment power in use at each hour of day */
+function hotelEquipmentFraction(hour) {
+  if (hour >= 22 || hour < 7)  return 0.50  // TVs standby/sleep
+  if (hour >= 10 && hour < 16) return 0.20  // low room occupancy
+  return 0.70                                 // morning/evening peak
+}
+
+// ── Degree-day steady-state calc (fallback) ───────────────────────────────────
 
 /**
- * Calculate simplified annual energy for a building.
+ * Calculate simplified annual energy using degree-day steady-state method.
+ * Used as fallback when EPW weather data is not yet loaded.
  *
  * @param {object} building     — ProjectContext building_config
  * @param {object} constructions — ProjectContext construction_choices
@@ -176,7 +200,7 @@ function getUValue(constructionChoices, element, libraryData) {
  * @param {object} libraryData  — { constructions: [...] } from library API
  * @returns {object} Energy breakdown in kWh (see below)
  */
-export function calculateInstant(building = {}, constructions = {}, systems = {}, libraryData = {}) {
+export function calculateInstantDegreeDay(building = {}, constructions = {}, systems = {}, libraryData = {}) {
   const geo = computeGeometry(building)
   const { gia, volume, total_wall_opaque, total_glazing, glazing, roof_area, ground_area } = geo
 
@@ -679,6 +703,488 @@ function _empty() {
     fuel_split: { electricity_kWh: 0, gas_kWh: 0, total_kWh: 0, electricity_pct: 100, gas_pct: 0 },
     carbon_kgCO2_m2: 0, gia_m2: 0,
     systems_flow: { nodes: [], links: [] },
+    monthly: { heating_kWh: new Array(12).fill(0), cooling_kWh: new Array(12).fill(0), solar_kWh: new Array(12).fill(0) },
     _inputs: {},
+  }
+}
+
+// ── Hourly instant calc ────────────────────────────────────────────────────────
+
+/**
+ * Calculate simplified annual energy using hourly EPW weather data.
+ * Falls back to degree-day method if weather/solar data is not available.
+ *
+ * @param {object} building      — ProjectContext building_config
+ * @param {object} constructions — ProjectContext construction_choices
+ * @param {object} systems       — ProjectContext systems_config
+ * @param {object} libraryData   — { constructions: [...] } from library API
+ * @param {object|null} weatherData  — EPW hourly arrays from WeatherContext
+ * @param {object|null} hourlySolar  — { f1,f2,f3,f4,roof } Float32Array from solarCalc
+ * @returns {object} Same structure as calculateInstantDegreeDay + monthly breakdown
+ */
+export function calculateInstant(building = {}, constructions = {}, systems = {}, libraryData = {}, weatherData = null, hourlySolar = null) {
+  if (!weatherData || !hourlySolar) {
+    return calculateInstantDegreeDay(building, constructions, systems, libraryData)
+  }
+
+  const geo = computeGeometry(building)
+  const { gia, volume, total_wall_opaque, total_glazing, glazing, wall_opaque, roof_area, ground_area } = geo
+
+  if (gia <= 0) return _empty()
+
+  // ── U-values ─────────────────────────────────────────────────────────────
+  const u_wall  = getUValue(constructions, 'external_wall', libraryData)
+  const u_roof  = getUValue(constructions, 'roof',          libraryData)
+  const u_floor = getUValue(constructions, 'ground_floor',  libraryData)
+  const u_glaz  = getUValue(constructions, 'glazing',       libraryData)
+
+  // ── Infiltration / ventilation ────────────────────────────────────────────
+  const ach = Number(building.infiltration_ach ?? 0.5)
+  const vent_sys_key = systems.ventilation?.primary?.system ?? systems.ventilation_type ?? 'mev_standard'
+  const ventDef      = sysDefaults(vent_sys_key)
+  const is_mvhr      = ventDef.hre != null ? ventDef.hre > 0 : vent_sys_key.startsWith('mvhr')
+  const hre_fraction = systems.ventilation?.primary?.efficiency_override != null
+    ? systems.ventilation.primary.efficiency_override / 100
+    : (ventDef.hre ?? (is_mvhr ? 0.82 : 0.0))
+  const vent_ach     = 0.5
+  const heat_recovery = hre_fraction
+  const sfp_override  = systems.sfp_override
+
+  // ── Solar / g-value ───────────────────────────────────────────────────────
+  const g_value = getGValue(constructions, libraryData)
+  const OPAQUE_GAIN_FRACTION = 0.04
+
+  // ── Setpoints and util factors ────────────────────────────────────────────
+  const T_heat_setpoint   = 21   // °C
+  const T_cool_setpoint   = 24   // °C
+  const util_factor       = 0.60
+  const COOLING_GAIN_FRACTION = 0.25
+
+  // ── Occupancy ─────────────────────────────────────────────────────────────
+  const num_bedrooms    = Number(building.num_bedrooms    ?? 138)
+  const occupancy_rate  = Math.max(0, Math.min(1, Number(building.occupancy_rate  ?? 0.75)))
+  const people_per_room = Number(building.people_per_room ?? 1.5)
+  const avg_occupants   = num_bedrooms * occupancy_rate * people_per_room
+
+  // ── Internal gain watts (peak, before schedule fraction) ──────────────────
+  const lpd = Number(systems.lighting_power_density ?? 8)
+  const epd = Number(systems.equipment_power_density ?? 10)
+  const OCC_WATTS = 60
+  const lpd_W = lpd * gia                           // W — lighting
+  const epd_W = epd * gia * occupancy_rate          // W — equipment (scales with occupancy)
+  const occ_W = OCC_WATTS * avg_occupants           // W — people
+
+  // ── UA products (Wh/K per hour = W/K, used as: kWh = UA * dT / 1000) ─────
+  const UA_wall       = u_wall  * total_wall_opaque
+  const UA_roof       = u_roof  * roof_area
+  const UA_floor      = u_floor * ground_area
+  const UA_glaz       = u_glaz  * total_glazing
+  const UA_infil      = AIR_HEAT_CAPACITY * ach     * volume   // Wh/K
+  const UA_vent_no_hr = AIR_HEAT_CAPACITY * vent_ach * volume
+  const UA_vent       = UA_vent_no_hr * (1 - heat_recovery)
+  const UA_fabric_cool = UA_wall + UA_glaz + UA_roof + UA_infil  // for fabric heat gain in cooling
+
+  // ── 8760-hour loop ────────────────────────────────────────────────────────
+  let total_heating = 0, total_cooling = 0
+
+  // Annual fabric loss accumulators (heating-season only where dT_heat > 0)
+  let acc_walls_loss = 0, acc_roof_loss = 0, acc_floor_loss = 0, acc_glaz_loss = 0
+  let acc_infil_loss = 0, acc_vent_loss = 0, acc_vent_no_hr = 0
+
+  // Annual solar gain accumulators (all hours — used for butterfly chart & display)
+  let acc_solar_n = 0, acc_solar_e = 0, acc_solar_s = 0, acc_solar_w = 0
+  let acc_roof_solar = 0, acc_opaque_wall_solar = 0
+
+  // Annual internal gain accumulators (all hours)
+  let acc_lighting_internal = 0, acc_equip_internal = 0, acc_people_internal = 0
+
+  // Monthly accumulators (0-indexed, Jan=0)
+  const monthly_heating = new Float32Array(12)
+  const monthly_cooling = new Float32Array(12)
+  const monthly_solar   = new Float32Array(12)
+
+  const n = weatherData.temperature.length
+  for (let h = 0; h < n; h++) {
+    const T_out    = weatherData.temperature[h]
+    const mo_idx   = (weatherData.month[h] - 1) | 0    // 0-11
+    const hourOfDay = (weatherData.hour[h] - 1) | 0    // 0-23
+
+    const dT_heat = Math.max(0, T_heat_setpoint - T_out)
+    const dT_cool = Math.max(0, T_out - T_cool_setpoint)
+
+    // Fabric losses this hour (kWh — only non-zero when T_out < heating setpoint)
+    const hour_walls     = UA_wall    * dT_heat / 1000
+    const hour_roof_loss = UA_roof    * dT_heat / 1000
+    const hour_floor     = UA_floor   * dT_heat / 1000
+    const hour_glaz      = UA_glaz    * dT_heat / 1000
+    const hour_infil     = UA_infil   * dT_heat / 1000
+    const hour_vent      = UA_vent    * dT_heat / 1000
+    const hour_vent_nohr = UA_vent_no_hr * dT_heat / 1000
+    const fabric_loss    = hour_walls + hour_roof_loss + hour_floor + hour_glaz + hour_infil + hour_vent
+
+    // Solar gains this hour from precomputed facade arrays (kWh)
+    const solar_n    = hourlySolar.f1[h] * glazing.north * g_value / 1000
+    const solar_e    = hourlySolar.f2[h] * glazing.east  * g_value / 1000
+    const solar_s    = hourlySolar.f3[h] * glazing.south * g_value / 1000
+    const solar_w    = hourlySolar.f4[h] * glazing.west  * g_value / 1000
+    const solar_roof_h = hourlySolar.roof[h] * roof_area * OPAQUE_GAIN_FRACTION / 1000
+    const solar_opq_h  = (
+      hourlySolar.f1[h] * wall_opaque.north +
+      hourlySolar.f2[h] * wall_opaque.east  +
+      hourlySolar.f3[h] * wall_opaque.south +
+      hourlySolar.f4[h] * wall_opaque.west
+    ) * OPAQUE_GAIN_FRACTION / 1000
+    const solar_kWh  = solar_n + solar_e + solar_s + solar_w + solar_roof_h + solar_opq_h
+
+    // Internal gains this hour from schedules (kWh)
+    const occ_frac   = hotelOccupancyFraction(hourOfDay)
+    const light_frac = hotelLightingFraction(hourOfDay)
+    const equip_frac = hotelEquipmentFraction(hourOfDay)
+    const light_h    = lpd_W * light_frac / 1000
+    const equip_h    = epd_W * equip_frac / 1000
+    const people_h   = occ_W * occ_frac   / 1000
+    const internal_kWh = light_h + equip_h + people_h
+
+    // Hourly heat balance
+    const net_loss = fabric_loss - solar_kWh - internal_kWh
+
+    if (net_loss > 0) {
+      // Heating needed
+      total_heating += net_loss
+      monthly_heating[mo_idx] += net_loss
+      // Accumulate fabric losses only in heating hours
+      acc_walls_loss  += hour_walls
+      acc_roof_loss   += hour_roof_loss
+      acc_floor_loss  += hour_floor
+      acc_glaz_loss   += hour_glaz
+      acc_infil_loss  += hour_infil
+      acc_vent_loss   += hour_vent
+      acc_vent_no_hr  += hour_vent_nohr
+    } else {
+      // Excess gains → cooling; add fabric heat gain from hot exterior
+      const excess = -net_loss
+      const fabric_heat_gain = UA_fabric_cool * dT_cool / 1000
+      const cooling_h = excess + fabric_heat_gain
+      if (cooling_h > 0) {
+        total_cooling += cooling_h
+        monthly_cooling[mo_idx] += cooling_h
+      }
+    }
+
+    // Annual accumulators (all hours regardless of heating/cooling)
+    acc_solar_n           += solar_n
+    acc_solar_e           += solar_e
+    acc_solar_s           += solar_s
+    acc_solar_w           += solar_w
+    acc_roof_solar        += solar_roof_h
+    acc_opaque_wall_solar += solar_opq_h
+    monthly_solar[mo_idx] += solar_kWh
+    acc_lighting_internal += light_h
+    acc_equip_internal    += equip_h
+    acc_people_internal   += people_h
+  }
+
+  const heating_thermal = total_heating
+  const cooling_thermal = total_cooling
+  const total_solar     = acc_solar_n + acc_solar_e + acc_solar_s + acc_solar_w + acc_roof_solar + acc_opaque_wall_solar
+  const total_internal  = acc_lighting_internal + acc_equip_internal + acc_people_internal
+
+  // MVHR recovery: ventilation heat that would have been lost without HRE
+  const mvhr_recovery_kWh = is_mvhr ? acc_vent_no_hr - acc_vent_loss : 0
+
+  // ── Space heating system dispatch ─────────────────────────────────────────
+  const sh_primary    = systems.space_heating?.primary
+  const sh_sys_key    = sh_primary?.system ?? systems.hvac_type ?? 'vrf_standard'
+  const shDef         = sysDefaults(sh_sys_key)
+  const sh_eff        = sh_primary?.efficiency_override ?? shDef.eff ?? 3.5
+  const sh_secondary  = systems.space_heating?.secondary
+  const sh_sec_key    = sh_secondary?.system
+  const shSecDef      = sh_sec_key ? sysDefaults(sh_sec_key) : null
+  const sh_sec_eff    = sh_secondary?.efficiency_override ?? shSecDef?.eff ?? 1.0
+  const sh_prim_share = sh_secondary ? (1 - (sh_secondary.share ?? 0)) : 1.0
+  const sh_sec_share  = sh_secondary?.share ?? 0
+
+  let heating_electricity = 0
+  let heating_gas         = 0
+  if (shDef.fuel === 'gas') {
+    heating_gas += heating_thermal * sh_prim_share / sh_eff
+  } else if (shDef.fuel === 'electricity') {
+    heating_electricity += heating_thermal * sh_prim_share / sh_eff
+  }
+  if (shSecDef && sh_sec_share > 0) {
+    if (shSecDef.fuel === 'gas') {
+      heating_gas += heating_thermal * sh_sec_share / sh_sec_eff
+    } else if (shSecDef.fuel === 'electricity') {
+      heating_electricity += heating_thermal * sh_sec_share / sh_sec_eff
+    }
+  }
+  const cop_heating = sh_eff
+
+  // ── Space cooling system dispatch ─────────────────────────────────────────
+  const sc_primary  = systems.space_cooling?.primary
+  const sc_sys_key  = sc_primary?.system ?? systems.hvac_type ?? 'vrf_standard'
+  const scDef       = sysDefaults(sc_sys_key)
+  const sc_eer_val  = sc_primary?.efficiency_override ?? scDef.eer ?? 3.2
+  const sc_is_none  = sc_sys_key === 'none_cooling' || scDef.fuel === null
+  const cop_cooling = sc_eer_val
+  const cooling_electricity = sc_is_none ? 0 : cooling_thermal / (sc_eer_val || 1)
+
+  // ── Lighting / equipment annual electricity (for Sankey) ──────────────────
+  const lighting_kWh  = lpd * gia * HOTEL_OPERATING_HOURS / 1000
+  const equipment_kWh = epd * gia * HOTEL_EQUIP_HOURS / 1000
+
+  // ── Fan energy ────────────────────────────────────────────────────────────
+  const vrf_fan_sfp   = 0.5
+  const vent_sfp      = sfp_override != null ? sfp_override : (is_mvhr ? 1.2 : 0.8)
+  const q_vent_ls     = vent_ach * volume / 3.6
+  const vrf_fans_kWh  = vrf_fan_sfp * (gia / 10) * HOTEL_OPERATING_HOURS / 1000
+  const vent_fans_kWh = vent_sfp * q_vent_ls * HOTEL_OPERATING_HOURS / 1000
+  const fans_kWh      = vrf_fans_kWh + vent_fans_kWh
+
+  // ── DHW energy ────────────────────────────────────────────────────────────
+  const DHW_L_PER_PERSON_DAY = 26.6
+  const daily_vol   = DHW_L_PER_PERSON_DAY * Math.max(1, avg_occupants)
+  const dhw_thermal = daily_vol * 365 * WATER_SHC * (DHW_SETPOINT - DHW_COLD_TEMP)
+
+  const dhw_prim_slot  = systems.dhw?.primary
+  const dhw_sec_slot   = systems.dhw?.secondary
+  const dhw_prim_key   = dhw_prim_slot?.system  ?? systems.dhw_primary ?? 'gas_boiler_dhw'
+  const _dhw_legacy_sec = (systems.dhw_preheat && systems.dhw_preheat !== 'none') ? systems.dhw_preheat : null
+  const dhw_sec_key    = dhw_sec_slot?.system ?? _dhw_legacy_sec
+  const dhwPrimDef     = sysDefaults(dhw_prim_key)
+  const dhwSecDef      = dhw_sec_key ? sysDefaults(dhw_sec_key) : null
+
+  const dhw_prim_eff   = dhw_prim_slot?.efficiency_override ?? dhwPrimDef.eff ?? 0.92
+  const dhw_sec_eff    = dhw_sec_slot?.efficiency_override  ?? dhwSecDef?.eff ?? 2.8
+  const dhw_prim_share = dhw_prim_slot?.share ?? (dhwSecDef ? 0.3 : 1.0)
+  const dhw_sec_share  = dhw_sec_slot?.share  ?? (dhwSecDef ? 0.7 : 0.0)
+
+  let dhw_gas_kWh  = 0
+  let dhw_elec_kWh = 0
+  if (dhwPrimDef.fuel === 'gas') {
+    dhw_gas_kWh  += dhw_thermal * dhw_prim_share / (dhw_prim_eff || 1)
+  } else if (dhwPrimDef.fuel === 'electricity') {
+    dhw_elec_kWh += dhw_thermal * dhw_prim_share / (dhw_prim_eff || 1)
+  }
+  if (dhwSecDef && dhw_sec_share > 0) {
+    if (dhwSecDef.fuel === 'gas') {
+      dhw_gas_kWh  += dhw_thermal * dhw_sec_share / (dhw_sec_eff || 1)
+    } else if (dhwSecDef.fuel === 'electricity') {
+      dhw_elec_kWh += dhw_thermal * dhw_sec_share / (dhw_sec_eff || 1)
+    }
+  }
+
+  // ── Totals and fuel split ─────────────────────────────────────────────────
+  const electricity_kWh = heating_electricity + cooling_electricity + lighting_kWh + equipment_kWh + fans_kWh + dhw_elec_kWh
+  const gas_kWh         = dhw_gas_kWh + heating_gas
+  const total_kWh       = electricity_kWh + gas_kWh
+  const eui_kWh_m2      = gia > 0 ? total_kWh / gia : 0
+  const carbon_kgCO2_m2 = (electricity_kWh * GRID_INTENSITY_2026 + gas_kWh * GAS_CARBON_KG_KWH) / gia
+
+  // ── Systems flow (Sankey) ─────────────────────────────────────────────────
+  const eer = sc_eer_val
+  const heat_rejected_kWh = (!sc_is_none && cooling_thermal > 0) ? cooling_thermal * (1 + 1 / (eer || 1)) : 0
+  const vent_kWh = acc_vent_loss       // heating-season vent loss with HRE
+  const vent_kWh_no_recovery = acc_vent_no_hr
+  const heating_flue_kWh = (shDef.fuel === 'gas' && heating_gas > 0) ? heating_gas * (1 - sh_eff) : 0
+  const dhw_flue_kWh     = (dhwPrimDef.fuel === 'gas' && dhw_gas_kWh > 0) ? dhw_gas_kWh * (1 - dhw_prim_eff) : 0
+
+  const same_hvac      = !sc_is_none && sh_sys_key === sc_sys_key
+  const sh_node_id     = `sh_${sh_sys_key}`
+  const sc_node_id     = same_hvac ? null : (sc_is_none ? null : `sc_${sc_sys_key}`)
+  const vent_node_id   = `vent_${vent_sys_key}`
+  const dhw_node_id    = `dhw_${dhw_prim_key}`
+  const dhw_sec_node_id = (dhwSecDef && dhw_sec_share > 0) ? `dhw_sec_${dhw_sec_key}` : null
+
+  const _addLink = (links, source, target, value_kWh, style) => {
+    if (value_kWh > 0 && source && target)
+      links.push({ source, target, value_kWh: Math.round(value_kWh), style })
+  }
+  const _sysLabel = key => key?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) ?? 'System'
+
+  const sf_nodes = []
+  const sf_links = []
+
+  if (electricity_kWh > 0) sf_nodes.push({ id: 'grid', label: 'Grid Electricity', type: 'source' })
+  if (gas_kWh > 0)          sf_nodes.push({ id: 'gas',  label: 'Natural Gas',       type: 'source' })
+
+  if (heating_thermal > 0 || heating_electricity > 0 || heating_gas > 0) {
+    const sh_metric = shDef.fuel === 'gas'
+      ? `${Math.round(sh_eff * 100)}% eff`
+      : `SCOP ${sh_eff.toFixed(1)}${same_hvac ? ` / EER ${(sc_eer_val ?? 3.2).toFixed(1)}` : ''}`
+    const sh_label = same_hvac ? _sysLabel(sh_sys_key) + ' (H+C)' : _sysLabel(sh_sys_key)
+    sf_nodes.push({ id: sh_node_id, label: sh_label, type: 'system', category: 'hvac', metric: sh_metric })
+  }
+  if (sc_node_id && cooling_thermal > 0) {
+    sf_nodes.push({ id: sc_node_id, label: _sysLabel(sc_sys_key), type: 'system', category: 'hvac',
+      metric: `EER ${(sc_eer_val ?? 3.2).toFixed(1)}` })
+  }
+  if (vent_fans_kWh > 0) {
+    const ventLabel = is_mvhr ? 'MVHR'
+      : vent_sys_key === 'natural_vent_windows' ? 'Natural Vent' : 'MEV'
+    sf_nodes.push({ id: vent_node_id, label: ventLabel, type: 'system', category: 'ventilation',
+      metric: is_mvhr ? `${Math.round(heat_recovery * 100)}% HR` : 'Extract only' })
+  }
+  if (dhw_sec_node_id) {
+    const secLabel = dhw_sec_key?.includes('ashp')  ? 'ASHP DHW Preheat'
+                   : dhw_sec_key?.includes('solar') ? 'Solar Thermal'
+                   : _sysLabel(dhw_sec_key)
+    const secMetric = dhwSecDef.fuel === 'electricity' ? `COP ${dhw_sec_eff.toFixed(1)}`
+                    : dhwSecDef.fuel === 'renewable'   ? 'Solar'
+                    : `${Math.round(dhw_sec_eff * 100)}% eff`
+    sf_nodes.push({ id: dhw_sec_node_id, label: secLabel, type: 'system', category: 'dhw', metric: secMetric })
+  }
+  if (dhw_thermal > 0) {
+    const dhwLabel  = dhwPrimDef.fuel === 'gas' ? 'DHW Boiler' : _sysLabel(dhw_prim_key)
+    const dhwMetric = dhwPrimDef.fuel === 'gas'
+      ? `${Math.round(dhw_prim_eff * 100)}% eff`
+      : `COP ${dhw_prim_eff.toFixed(1)}`
+    sf_nodes.push({ id: dhw_node_id, label: dhwLabel, type: 'system', category: 'dhw', metric: dhwMetric })
+  }
+  if (lighting_kWh > 0)
+    sf_nodes.push({ id: 'lighting',    label: 'Lighting',    type: 'system', category: 'lighting',  metric: `${lpd} W/m²` })
+  if (equipment_kWh > 0)
+    sf_nodes.push({ id: 'small_power', label: 'Small Power', type: 'system', category: 'equipment', metric: `${epd} W/m²` })
+  if (mvhr_recovery_kWh > 0)
+    sf_nodes.push({ id: 'mvhr_recov', label: 'Recovered Heat', type: 'recovered' })
+
+  const has_ashp_dhw_preheat = !!dhw_sec_node_id && (dhw_sec_key?.includes('ashp') || dhw_sec_key?.includes('heat_pump'))
+  const heat_reject_hint = heat_rejected_kWh > 0 && !has_ashp_dhw_preheat
+    ? 'Recovery opportunity: add ASHP preheat to DHW — use this heat to reduce gas consumption' : null
+  const vent_exhaust_hint = vent_kWh > 0 && !is_mvhr
+    ? 'Recovery opportunity: switch to MVHR to recover ~82% of this ventilation heat loss' : null
+
+  if (heating_thermal > 0) sf_nodes.push({ id: 'space_heat',  label: 'Space Heating', type: 'building' })
+  if (cooling_thermal > 0) sf_nodes.push({ id: 'space_cool',  label: 'Space Cooling', type: 'end_use' })
+  if (dhw_thermal > 0)     sf_nodes.push({ id: 'dhw_del',     label: 'Hot Water',     type: 'end_use' })
+  if (vent_fans_kWh > 0)   sf_nodes.push({ id: 'fresh_air',   label: 'Fresh Air',     type: 'end_use' })
+  if (lighting_kWh > 0)    sf_nodes.push({ id: 'light_del',   label: 'Light',         type: 'end_use' })
+  if (equipment_kWh > 0)   sf_nodes.push({ id: 'equip_del',   label: 'Equipment',     type: 'end_use' })
+  if (heat_rejected_kWh > 0) sf_nodes.push({ id: 'heat_reject', label: 'Heat Rejection', type: 'waste', recovery_hint: heat_reject_hint })
+  if (vent_kWh > 0) sf_nodes.push({ id: 'vent_exhaust', label: 'Vent Exhaust', type: 'waste', recovery_hint: vent_exhaust_hint })
+  if (heating_flue_kWh > 0)  sf_nodes.push({ id: 'heating_flue', label: 'Heating Flue',  type: 'waste' })
+  if (dhw_flue_kWh > 0)      sf_nodes.push({ id: 'dhw_flue',     label: 'DHW Flue Loss', type: 'waste' })
+
+  const sh_elec_total = same_hvac
+    ? heating_electricity + cooling_electricity + vrf_fans_kWh
+    : heating_electricity + vrf_fans_kWh
+  _addLink(sf_links, 'grid', sh_node_id,    sh_elec_total,       'electricity')
+  _addLink(sf_links, 'gas',  sh_node_id,    heating_gas,         'gas')
+  if (sc_node_id) _addLink(sf_links, 'grid', sc_node_id, cooling_electricity, 'electricity')
+  _addLink(sf_links, 'grid', vent_node_id,  vent_fans_kWh,       'electricity')
+  if (dhw_sec_node_id && dhwSecDef.fuel === 'electricity')
+    _addLink(sf_links, 'grid', dhw_sec_node_id, dhw_elec_kWh,   'electricity')
+  if (dhwPrimDef.fuel === 'gas') {
+    _addLink(sf_links, 'gas',  dhw_node_id, dhw_gas_kWh,         'gas')
+  } else if (dhwPrimDef.fuel === 'electricity' && !dhw_sec_node_id) {
+    _addLink(sf_links, 'grid', dhw_node_id, dhw_elec_kWh,        'electricity')
+  }
+  _addLink(sf_links, 'grid', 'lighting',    lighting_kWh,        'electricity')
+  _addLink(sf_links, 'grid', 'small_power', equipment_kWh,       'electricity')
+  _addLink(sf_links, sh_node_id, 'space_heat', heating_thermal,  'heating')
+  if (same_hvac) {
+    _addLink(sf_links, sh_node_id, 'space_cool', cooling_thermal, 'cooling')
+  } else if (sc_node_id) {
+    _addLink(sf_links, sc_node_id, 'space_cool', cooling_thermal, 'cooling')
+  }
+  _addLink(sf_links, dhw_node_id,   'dhw_del',    dhw_thermal,   'dhw')
+  _addLink(sf_links, vent_node_id,  'fresh_air',  vent_fans_kWh, 'air')
+  _addLink(sf_links, 'lighting',    'light_del',  lighting_kWh,  'electricity')
+  _addLink(sf_links, 'small_power', 'equip_del',  equipment_kWh, 'electricity')
+  const cooling_sys_id = same_hvac ? sh_node_id : sc_node_id
+  _addLink(sf_links, cooling_sys_id, 'heat_reject',  heat_rejected_kWh, 'waste')
+  _addLink(sf_links, sh_node_id,     'heating_flue', heating_flue_kWh,  'waste')
+  _addLink(sf_links, dhw_node_id,    'dhw_flue',     dhw_flue_kWh,      'waste')
+  _addLink(sf_links, 'space_heat',   'vent_exhaust', vent_kWh,           'waste')
+  _addLink(sf_links, 'mvhr_recov',   'space_heat',   mvhr_recovery_kWh, 'recovered')
+  if (dhw_sec_node_id && dhw_thermal > 0) {
+    const sec_heat_output = dhwSecDef.fuel === 'electricity'
+      ? dhw_elec_kWh * dhw_sec_eff
+      : dhw_thermal * dhw_sec_share
+    _addLink(sf_links, dhw_sec_node_id, dhw_node_id, sec_heat_output, 'recovered')
+  }
+
+  const systems_flow = { nodes: sf_nodes, links: sf_links }
+
+  // ── Return ────────────────────────────────────────────────────────────────
+  return {
+    eui_kWh_m2:            Math.round(eui_kWh_m2 * 10) / 10,
+    annual_heating_kWh:    Math.round(heating_thermal),
+    annual_cooling_kWh:    Math.round(cooling_thermal),
+    gains_losses: {
+      heating_side: {
+        wall_conduction:    acc_walls_loss      / 1000,
+        roof_conduction:    acc_roof_loss       / 1000,
+        floor_conduction:   acc_floor_loss      / 1000,
+        glazing_conduction: acc_glaz_loss       / 1000,
+        infiltration:       acc_infil_loss      / 1000,
+        ventilation:        acc_vent_loss       / 1000,
+        solar_south:  acc_solar_s           / 1000 * util_factor,
+        solar_east:   acc_solar_e           / 1000 * util_factor,
+        solar_west:   acc_solar_w           / 1000 * util_factor,
+        solar_north:  acc_solar_n           / 1000 * util_factor,
+        wall_solar:   acc_opaque_wall_solar / 1000 * util_factor,
+        roof_solar:   acc_roof_solar        / 1000 * util_factor,
+        equipment:    acc_equip_internal    * util_factor / 1000,
+        lighting:     acc_lighting_internal * util_factor / 1000,
+        people:       acc_people_internal   * util_factor / 1000,
+      },
+      cooling_side: {
+        solar_south:  acc_solar_s           / 1000 * COOLING_GAIN_FRACTION,
+        solar_east:   acc_solar_e           / 1000 * COOLING_GAIN_FRACTION,
+        solar_west:   acc_solar_w           / 1000 * COOLING_GAIN_FRACTION,
+        solar_north:  acc_solar_n           / 1000 * COOLING_GAIN_FRACTION,
+        equipment:    acc_equip_internal    * COOLING_GAIN_FRACTION / 1000,
+        lighting:     acc_lighting_internal * COOLING_GAIN_FRACTION / 1000,
+        people:       acc_people_internal   * COOLING_GAIN_FRACTION / 1000,
+        infiltration_cooling: acc_infil_loss * 0.15 / 1000,
+        ventilation_cooling:  acc_vent_loss  * 0.10 / 1000,
+      },
+    },
+    annual_lighting_kWh:   Math.round(lighting_kWh),
+    annual_equipment_kWh:  Math.round(equipment_kWh),
+    annual_fans_kWh:       Math.round(fans_kWh),
+    annual_dhw_kWh:        Math.round(dhw_thermal),
+    fabric_losses: {
+      walls_kWh:        Math.round(acc_walls_loss),
+      roof_kWh:         Math.round(acc_roof_loss),
+      floor_kWh:        Math.round(acc_floor_loss),
+      glazing_kWh:      Math.round(acc_glaz_loss),
+      infiltration_kWh: Math.round(acc_infil_loss),
+      ventilation_kWh:  Math.round(acc_vent_loss),
+      total_kWh:        Math.round(acc_walls_loss + acc_roof_loss + acc_floor_loss + acc_glaz_loss + acc_infil_loss + acc_vent_loss),
+    },
+    solar_gains: {
+      north_kWh:       Math.round(acc_solar_n),
+      south_kWh:       Math.round(acc_solar_s),
+      east_kWh:        Math.round(acc_solar_e),
+      west_kWh:        Math.round(acc_solar_w),
+      opaque_wall_kWh: Math.round(acc_opaque_wall_solar),
+      roof_solar_kWh:  Math.round(acc_roof_solar),
+      total_kWh:       Math.round(total_solar),
+    },
+    internal_gains: {
+      lighting_kWh:   Math.round(acc_lighting_internal),
+      equipment_kWh:  Math.round(acc_equip_internal),
+      people_kWh:     Math.round(acc_people_internal),
+      total_kWh:      Math.round(total_internal),
+    },
+    fuel_split: {
+      electricity_kWh: Math.round(electricity_kWh),
+      gas_kWh:         Math.round(gas_kWh),
+      total_kWh:       Math.round(total_kWh),
+      electricity_pct: total_kWh > 0 ? Math.round(electricity_kWh / total_kWh * 100) : 100,
+      gas_pct:         total_kWh > 0 ? Math.round(gas_kWh / total_kWh * 100) : 0,
+    },
+    carbon_kgCO2_m2: Math.round(carbon_kgCO2_m2 * 10) / 10,
+    gia_m2:  Math.round(gia),
+    systems_flow,
+    monthly: {
+      heating_kWh: Array.from(monthly_heating),
+      cooling_kWh: Array.from(monthly_cooling),
+      solar_kWh:   Array.from(monthly_solar),
+    },
+    _inputs: { u_wall, u_roof, u_floor, u_glaz, ach, is_mvhr, heat_recovery, lpd, cop_heating, cop_cooling,
+               sh_sys_key, sc_sys_key, vent_sys_key, dhw_prim_key },
   }
 }
