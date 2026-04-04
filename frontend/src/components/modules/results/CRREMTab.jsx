@@ -119,7 +119,7 @@ function ChartTooltip({ active, payload, label, unit }) {
 
 // ── EUI Chart (single or multi-scenario) ──────────────────────────────────────
 
-function EuiTrajectoryChart({ scenarioLines, euiTargets }) {
+function EuiTrajectoryChart({ scenarioLines, euiTargets, actualEui = null, actualYear = CURRENT_YEAR }) {
   // scenarioLines: [{ name, eui, color }]
   const data = CHART_YEARS.map(year => {
     const row = {
@@ -209,6 +209,25 @@ function EuiTrajectoryChart({ scenarioLines, euiTargets }) {
             strokeWidth={2}
           />
         ))}
+
+        {/* Actual consumption data point — red dot at actual year */}
+        {actualEui != null && (
+          <ReferenceDot
+            x={actualYear}
+            y={actualEui}
+            r={7}
+            fill="#DC2626"
+            stroke="#fff"
+            strokeWidth={2}
+            label={{
+              value: `Actual ${actualYear}: ${actualEui}`,
+              position: 'top',
+              fontSize: 9,
+              fill: '#DC2626',
+              fontWeight: 600,
+            }}
+          />
+        )}
       </ComposedChart>
     </ChartContainer>
   )
@@ -329,10 +348,11 @@ function StrandingTable({ scenarioLines, euiTargets, carbonTargets, gia }) {
 
 export default function CRREMTab({ scenarios = [], scenarioResults = {} }) {
   const { status, results } = useContext(SimulationContext)
-  const { params }          = useContext(ProjectContext)
+  const { params, currentProjectId } = useContext(ProjectContext)
 
-  const [crremData, setCrremData] = useState(null)
-  const [loading, setLoading]     = useState(true)
+  const [crremData,    setCrremData]    = useState(null)
+  const [loading,      setLoading]      = useState(true)
+  const [actualDatasets, setActualDatasets] = useState([])  // imported consumption datasets
 
   useEffect(() => {
     fetch('/api/library/benchmarks?building_type=hotel')
@@ -344,6 +364,15 @@ export default function CRREMTab({ scenarios = [], scenarioResults = {} }) {
       .catch(() => setCrremData(null))
       .finally(() => setLoading(false))
   }, [])
+
+  // ── Load actual consumption datasets ──────────────────────────────────────
+  useEffect(() => {
+    if (!currentProjectId) return
+    fetch(`/api/projects/${currentProjectId}/consumption`)
+      .then(r => r.ok ? r.json() : { datasets: [] })
+      .then(data => setActualDatasets(data.datasets ?? []))
+      .catch(() => setActualDatasets([]))
+  }, [currentProjectId])
 
   if (loading) {
     return (
@@ -446,6 +475,23 @@ export default function CRREMTab({ scenarios = [], scenarioResults = {} }) {
     ? findCarbonStrandingYear(primaryFuels, effectiveGia, carbonTargets)
     : null
 
+  // ── Actual consumption EUI from imported datasets ─────────────────────────
+  const electricityDataset = actualDatasets.find(d => d.fuel_type === 'electricity')
+  const gasDataset         = actualDatasets.find(d => d.fuel_type === 'gas')
+
+  const actualTotalKwh = (electricityDataset?.total_kwh ?? 0) + (gasDataset?.total_kwh ?? 0)
+  const actualEui      = effectiveGia > 0 && actualTotalKwh > 0
+    ? Math.round(actualTotalKwh / effectiveGia)
+    : null
+  const actualStrandingYearEui = actualEui ? findStrandingYear(actualEui, euiTargets) : null
+
+  // Determine which year the actual data covers (prefer electricity dataset)
+  const actualYear = (() => {
+    const ds = electricityDataset ?? gasDataset
+    if (!ds?.data_start) return CURRENT_YEAR
+    return Number(ds.data_start.slice(0, 4)) || CURRENT_YEAR
+  })()
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -481,6 +527,8 @@ export default function CRREMTab({ scenarios = [], scenarioResults = {} }) {
       <EuiTrajectoryChart
         scenarioLines={scenarioLines}
         euiTargets={euiTargets}
+        actualEui={actualEui}
+        actualYear={actualYear}
       />
 
       {/* EUI DataCards (primary scenario) */}
@@ -510,6 +558,40 @@ export default function CRREMTab({ scenarios = [], scenarioResults = {} }) {
           accent={strandingYearEui ? 'red' : 'green'}
         />
       </div>
+
+      {/* Actual consumption data cards (if imported) */}
+      {actualEui != null && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-3 h-3 rounded-full bg-red-500" />
+            <p className="text-caption font-semibold text-red-800">
+              Actual metered consumption — {actualYear}
+            </p>
+            {electricityDataset && <span className="text-xxs text-red-600 ml-auto">⚡ {Math.round((electricityDataset.total_kwh ?? 0) / 1000)} MWh electricity</span>}
+            {gasDataset && <span className="text-xxs text-red-600 ml-1">🔥 {Math.round((gasDataset.total_kwh ?? 0) / 1000)} MWh gas</span>}
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <DataCard
+              label={`Actual EUI ${actualYear}`}
+              value={actualEui.toString()}
+              unit="kWh/m²"
+              accent="red"
+            />
+            <DataCard
+              label="Performance gap"
+              value={primaryEui > 0 ? `+${(actualEui - primaryEui).toFixed(0)}` : '—'}
+              unit="kWh/m² vs model"
+              accent="red"
+            />
+            <DataCard
+              label="Actual stranding year"
+              value={actualStrandingYearEui ?? 'Compliant'}
+              unit={actualStrandingYearEui && strandingYearEui && actualStrandingYearEui < strandingYearEui ? '← earlier than modelled' : ''}
+              accent={actualStrandingYearEui ? 'red' : 'green'}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Multi-scenario stranding table */}
       <StrandingTable
