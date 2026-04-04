@@ -2,6 +2,20 @@
 
 ## Last completed
 
+Brief 17 all parts complete (2026-04-04). Committed and pushed to GitHub.
+
+**Brief 17 progress (all committed — single combined commit):**
+- Part 1: HomePage rewritten — project cards (name, GIA, EUI badge, last modified, run count); New Project card; N logo links home; magenta border on current project
+- Part 2: projects.py list_projects — json_extract for bc_length/width/num_floors/floor_height/latest_eui; requires backend restart to activate (building_config keys confirmed correct)
+- Part 3: index.css — mid-grey darkened to #6B7280, dark-grey to #4B5563; panel font-size token (9px) added
+- Part 4: BuildingDefinition — CollapsibleSection replaces SectionHeader; #A1887F accent background, ▾/▸ chevron, defaultOpen=true for all 5 sections
+- Part 5: SystemsZones — AccordionSection header uses solid accentColor background with white text (teal #00AEEF for Systems module)
+- Part 6: FabricSankey — facade nodes renamed Glazing F1(N)/F2(E)/F3(S)/F4(W); Roof Solar split from Wall Solar; accepts orientation prop
+- Part 7: BuildingViewer3D — WWR-proportional window height (linear scale 80–100%: 60%→95% height, near-zero sill at 100%); camera presets Iso+F1–F4 with smooth lerp (factor 0.12/frame); active preset highlighted navy
+- Part 8: BuildingViewer3D — auto-rotate defaults to false
+
+**Action required:** Restart backend to activate project list dimensions/EUI (`python -m uvicorn api.main:app --host 127.0.0.1 --port 8002`)
+
 Brief 16 all parts complete (2026-04-04).
 
 **Brief 16 progress (all committed):**
@@ -162,7 +176,7 @@ All checklist items:
 
 ## Safety checks
 
-- Working tree: clean (after Brief 16 Part 4 commit)
+- Working tree: clean (after Brief 17 commit)
 - Branch: main
-- Brief 16 all parts committed to main; push to GitHub pending
+- Brief 17 all parts committed to main; pushed to GitHub ✓ (bca7a24)
 - data/ directory: gitignored, intact, not touched
