@@ -32,6 +32,25 @@ import pandas as pd
 import numpy as np
 
 
+# ── Meta-sheet detection (Excel multi-sheet files) ────────────────────────────
+
+def _is_meta_sheet(name: str, df: pd.DataFrame) -> bool:
+    """Detect instruction/meta sheets that don't contain consumption data."""
+    meta_keywords = ['instruct', 'readme', 'info', 'meta', 'notes', 'help', 'about', 'template']
+    if any(k in name.lower() for k in meta_keywords):
+        return True
+    if len(df) < 5:
+        return True
+    # Check if first 10 rows have fewer than 3 numeric values
+    sample = df.head(10)
+    numeric_count = sum(
+        1 for col in sample.columns
+        for val in sample[col]
+        if isinstance(val, (int, float)) and not pd.isna(val)
+    )
+    return numeric_count < 3
+
+
 # ── Fuel type detection ────────────────────────────────────────────────────────
 
 def _detect_fuel(filename: str, columns: list[str]) -> str:
@@ -103,11 +122,27 @@ def _score_columns(df: pd.DataFrame) -> dict:
     value_keywords = ["kwh", "energy", "consumption", "import", "usage", "value"]
     ts_keywords    = ["timestamp", "datetime", "time", "halfhour", "interval"]
 
+    # High-confidence patterns (worth extra points)
+    ts_high_patterns    = ["interval start", "datetime", "timestamp"]
+    energy_high_patterns = ["import from grid", "import kwh", "total kwh"]
+
     for col in cols:
         col_l = str(col).lower()
-        ds = sum(2 for k in date_keywords if k in col_l)
-        vs = sum(2 for k in value_keywords if k in col_l)
-        tss = sum(2 for k in ts_keywords if k in col_l)
+        ds  = sum(2 for k in date_keywords  if k in col_l)
+        vs  = sum(2 for k in value_keywords if k in col_l)
+        tss = sum(2 for k in ts_keywords    if k in col_l)
+
+        # Boost high-confidence patterns
+        for pattern in ts_high_patterns:
+            if pattern in col_l:
+                tss += 10
+        for pattern in energy_high_patterns:
+            if pattern in col_l:
+                vs += 10
+        if "kwh" in col_l:
+            vs += 5
+        if "import" in col_l and "kwh" in col_l:
+            vs += 8
 
         # Sample up to 10 non-null values to infer type
         sample = df[col].dropna().head(10)
@@ -249,7 +284,15 @@ def parse_consumption_file(file_bytes: bytes, filename: str) -> dict:
     # Load into DataFrame
     try:
         if fn_lower.endswith((".xlsx", ".xls")):
-            df = pd.read_excel(io.BytesIO(file_bytes), header=0)
+            xls = pd.ExcelFile(io.BytesIO(file_bytes))
+            df = None
+            for sheet_name in xls.sheet_names:
+                candidate = pd.read_excel(xls, sheet_name=sheet_name, header=0)
+                if not _is_meta_sheet(sheet_name, candidate):
+                    df = candidate
+                    break
+            if df is None:
+                raise ValueError("No data sheets found in Excel file")
         else:
             # Try comma first, then tab, then semicolon
             for sep in (",", "\t", ";"):
