@@ -52,18 +52,26 @@ function Building({ params, solarOverlay, onFacadeHover }) {
   const hw = length / 2
   const hd = width / 2
 
-  // Window height as proportion of floor height (leaving sill + head clearance)
-  const winHeightFraction = 0.6
-  const winSill = floor_height * 0.2
-
   // Individual window panels per facade — with recessed reveal frames
+  // Window height scales with WWR: at ≤80% use 60% height; above 80% scale up to 95% at 100%
   const GlassFace = useMemo(() => {
     return function GlassFaceInner({ axis, sign, wwr: wwrFace, faceW, count }) {
       if (!wwrFace || wwrFace < 0.01) return null
 
-      const n     = Math.max(1, Math.round(count ?? 4))
+      const n = Math.max(1, Math.round(count ?? 4))
+
+      // Scale window height with WWR above 80%
+      let winHeightFraction, sillFrac
+      if (wwrFace <= 0.8) {
+        winHeightFraction = 0.6
+        sillFrac          = 0.2
+      } else {
+        const t           = (wwrFace - 0.8) / 0.2          // 0 at 80%, 1 at 100%
+        winHeightFraction = 0.6 + t * (0.95 - 0.6)
+        sillFrac          = 0.2 * (1 - t * 0.9)
+      }
       const winH  = floor_height * winHeightFraction
-      const winY0 = winSill
+      const winY0 = floor_height * sillFrac
 
       const totalGlaz = faceW * wwrFace
       const winW  = totalGlaz / n
@@ -144,7 +152,7 @@ function Building({ params, solarOverlay, onFacadeHover }) {
       }
       return <>{panels}</>
     }
-  }, [num_floors, floor_height, winHeightFraction, winSill, hd, hw])
+  }, [num_floors, floor_height, hd, hw])
 
   // Floor-line edges for depth
   const floorLines = useMemo(() => {
@@ -265,41 +273,84 @@ function OrientationIndicator({ orientation }) {
   )
 }
 
-/* ── Camera rig — auto-fit, idle auto-rotate, polar limits ─────────────────── */
-function CameraRig({ params, resetSignal, autoRotateEnabled }) {
+/* ── Camera rig — auto-fit, idle auto-rotate, preset views, polar limits ─────── */
+function CameraRig({ params, resetSignal, autoRotateEnabled, cameraPreset, onPresetDone }) {
   const { length, width, num_floors, floor_height } = params
-  const maxDim = Math.max(length, width, num_floors * floor_height)
-  const dist = maxDim * 2.2
-  const controlsRef = useRef()
-  const lastInteract = useRef(Date.now())
-  const listenerAdded = useRef(false)
+  const maxDim    = Math.max(length, width, num_floors * floor_height)
+  const dist      = maxDim * 2.2
+  const midH      = (num_floors * floor_height) / 2
+  const controlsRef    = useRef()
+  const lastInteract   = useRef(Date.now())
+  const listenerAdded  = useRef(false)
+  const prevReset      = useRef(resetSignal)
+  const prevPreset     = useRef(null)
+  const lerpTarget     = useRef(null)   // { pos: THREE.Vector3, lookAt: THREE.Vector3 }
 
-  // Reset camera + manage auto-rotate in frame loop
-  // Attach OrbitControls 'start' listener on first frame (avoids useEffect inside R3F)
-  const prevReset = useRef(resetSignal)
+  // ISO camera position (default 3/4 view)
+  const isoPos = new THREE.Vector3(dist * 0.5, dist * 0.32, dist * 0.7)
+
+  // Preset camera positions per facade (in world space)
+  function presetPos(preset) {
+    const facePos = { x: 0, y: midH, z: 0 }
+    switch (preset) {
+      case 'f1':  return new THREE.Vector3(0,          midH, dist)    // north face
+      case 'f2':  return new THREE.Vector3(dist,       midH, 0)       // east face
+      case 'f3':  return new THREE.Vector3(0,          midH, -dist)   // south face
+      case 'f4':  return new THREE.Vector3(-dist,      midH, 0)       // west face
+      case 'iso': return isoPos.clone()
+      default:    return isoPos.clone()
+    }
+    void facePos
+  }
+
   useFrame(({ camera }) => {
     const ctrl = controlsRef.current
     if (!ctrl) return
 
-    // One-time setup: attach interaction listener to track idle time
     if (!listenerAdded.current) {
       ctrl.addEventListener('start', () => {
         lastInteract.current = Date.now()
         ctrl.autoRotate = false
+        lerpTarget.current = null    // cancel any in-progress lerp on manual interact
       })
       listenerAdded.current = true
     }
 
-    // Camera reset
+    // Camera reset (Iso button)
     if (resetSignal !== prevReset.current) {
       prevReset.current = resetSignal
-      ctrl.target.copy(new THREE.Vector3(0, (num_floors * floor_height) / 2, 0))
-      camera.position.set(dist * 0.5, dist * 0.32, dist * 0.7)
-      ctrl.update()
+      lerpTarget.current = { pos: isoPos.clone(), lookAt: new THREE.Vector3(0, midH, 0) }
       lastInteract.current = Date.now()
     }
 
-    // Enable auto-rotate after 5s idle (if toggle is on)
+    // Preset view — start lerp on new preset
+    if (cameraPreset !== prevPreset.current) {
+      prevPreset.current = cameraPreset
+      if (cameraPreset) {
+        lerpTarget.current = {
+          pos:    presetPos(cameraPreset),
+          lookAt: new THREE.Vector3(0, midH, 0),
+        }
+        lastInteract.current = Date.now()
+      }
+    }
+
+    // Smooth lerp toward target
+    if (lerpTarget.current) {
+      camera.position.lerp(lerpTarget.current.pos, 0.12)
+      ctrl.target.lerp(lerpTarget.current.lookAt, 0.12)
+      ctrl.update()
+      // Done when close enough
+      if (camera.position.distanceTo(lerpTarget.current.pos) < 0.5) {
+        camera.position.copy(lerpTarget.current.pos)
+        ctrl.target.copy(lerpTarget.current.lookAt)
+        ctrl.update()
+        lerpTarget.current = null
+        onPresetDone?.()
+      }
+    }
+
+    // Auto-rotate after 5s idle
     if (autoRotateEnabled) {
       const idle = Date.now() - lastInteract.current > 5000
       if (idle !== ctrl.autoRotate) ctrl.autoRotate = idle
@@ -312,7 +363,7 @@ function CameraRig({ params, resetSignal, autoRotateEnabled }) {
     <OrbitControls
       ref={controlsRef}
       makeDefault
-      target={[0, (num_floors * floor_height) / 2, 0]}
+      target={[0, midH, 0]}
       minDistance={5}
       maxDistance={dist * 3}
       enablePan={true}
@@ -380,7 +431,8 @@ export default function BuildingViewer3D({ params }) {
   const [mapVisible, setMapVisible]           = useState(false)
   const [resetSignal, setResetSignal]         = useState(0)
   const [hoverInfo, setHoverInfo]             = useState(null)
-  const [autoRotateEnabled, setAutoRotate]    = useState(true)
+  const [autoRotateEnabled, setAutoRotate]    = useState(false)
+  const [cameraPreset, setCameraPreset]       = useState(null)
 
   // Legend: map compass directions to solar values for current orientation
   const legendStops = [
@@ -456,7 +508,13 @@ export default function BuildingViewer3D({ params }) {
           <GreyGroundPlane />
         )}
 
-        <CameraRig params={params} resetSignal={resetSignal} autoRotateEnabled={autoRotateEnabled} />
+        <CameraRig
+          params={params}
+          resetSignal={resetSignal}
+          autoRotateEnabled={autoRotateEnabled}
+          cameraPreset={cameraPreset}
+          onPresetDone={() => setCameraPreset(null)}
+        />
       </Canvas>
 
       {/* Overlay — building metrics */}
@@ -472,26 +530,49 @@ export default function BuildingViewer3D({ params }) {
 
       {/* Toolbar — top-left */}
       <div className="absolute top-3 left-3 flex flex-col gap-1">
-        {/* Reset view */}
-        <button
-          onClick={() => setResetSignal(s => s + 1)}
-          className="text-xxs px-2 py-1 rounded border bg-white/85 text-mid-grey border-light-grey backdrop-blur-sm hover:bg-white transition-colors"
-          title="Reset view"
-        >
-          ⌖ Reset
-        </button>
-        {/* Auto-rotate toggle */}
-        <button
-          onClick={() => setAutoRotate(v => !v)}
-          className={`text-xxs px-2 py-1 rounded border backdrop-blur-sm transition-colors ${
-            autoRotateEnabled
-              ? 'bg-teal/10 text-teal border-teal/40'
-              : 'bg-white/85 text-mid-grey border-light-grey'
-          }`}
-          title="Auto-rotate after 5s idle"
-        >
-          ↻ Auto
-        </button>
+        {/* Row 1: Iso + Auto */}
+        <div className="flex gap-1">
+          <button
+            onClick={() => setResetSignal(s => s + 1)}
+            className="text-xxs px-2 py-1 rounded border bg-white/85 text-mid-grey border-light-grey backdrop-blur-sm hover:bg-white transition-colors"
+            title="Isometric view"
+          >
+            ⌖ Iso
+          </button>
+          <button
+            onClick={() => setAutoRotate(v => !v)}
+            className={`text-xxs px-2 py-1 rounded border backdrop-blur-sm transition-colors ${
+              autoRotateEnabled
+                ? 'bg-teal/10 text-teal border-teal/40'
+                : 'bg-white/85 text-mid-grey border-light-grey hover:bg-white'
+            }`}
+            title="Auto-rotate after 5s idle"
+          >
+            ↻ Auto
+          </button>
+        </div>
+        {/* Row 2: Facade preset views */}
+        <div className="flex gap-1">
+          {[1, 2, 3, 4].map(n => {
+            const key = `f${n}`
+            const label = facadeLabel(n, orientation)
+            const active = cameraPreset === key
+            return (
+              <button
+                key={key}
+                onClick={() => setCameraPreset(key)}
+                className={`text-xxs px-1.5 py-1 rounded border backdrop-blur-sm transition-colors ${
+                  active
+                    ? 'bg-navy text-white border-navy'
+                    : 'bg-white/85 text-mid-grey border-light-grey hover:bg-white'
+                }`}
+                title={`Face ${label}`}
+              >
+                F{n}
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* Facade hover tooltip */}

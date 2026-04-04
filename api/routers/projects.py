@@ -155,7 +155,15 @@ async def list_projects():
         cursor = await db.execute(
             """
             SELECT p.id, p.name, p.description, p.created_at, p.updated_at,
-                   COUNT(s.id) AS simulation_count
+                   COUNT(s.id) AS simulation_count,
+                   json_extract(p.building_config, '$.length')      AS bc_length,
+                   json_extract(p.building_config, '$.width')       AS bc_width,
+                   json_extract(p.building_config, '$.num_floors')  AS bc_num_floors,
+                   json_extract(p.building_config, '$.floor_height') AS bc_floor_height,
+                   (SELECT json_extract(sr.results_summary, '$.eui_kWh_per_m2')
+                    FROM simulation_runs sr
+                    WHERE sr.project_id = p.id AND sr.status = 'complete'
+                    ORDER BY sr.created_at DESC LIMIT 1) AS latest_eui
             FROM projects p
             LEFT JOIN simulation_runs s ON s.project_id = p.id
             GROUP BY p.id
@@ -172,6 +180,11 @@ async def list_projects():
             "created_at":       row["created_at"],
             "updated_at":       row["updated_at"],
             "simulation_count": row["simulation_count"],
+            "bc_length":        row["bc_length"],
+            "bc_width":         row["bc_width"],
+            "bc_num_floors":    row["bc_num_floors"],
+            "bc_floor_height":  row["bc_floor_height"],
+            "latest_eui":       row["latest_eui"],
         }
         for row in rows
     ]

@@ -89,34 +89,25 @@ function Toggle({ value, onChange, label }) {
 
 function AccordionSection({ id, title, summary, isOpen, onToggle, children, accentColor = '#00AEEF' }) {
   return (
-    <div
-      className="border-t border-light-grey"
-      style={{ borderLeft: `3px solid ${isOpen ? accentColor : 'transparent'}` }}
-    >
+    <div className="mb-2">
       <button
         onClick={() => onToggle(id)}
-        className={`w-full flex items-center justify-between px-2 py-2 text-left transition-colors ${
-          isOpen ? 'bg-teal/5' : 'hover:bg-off-white'
-        }`}
+        className="w-full flex items-center justify-between px-2.5 py-1.5 rounded text-left"
+        style={{ backgroundColor: accentColor }}
       >
         <div className="flex-1 min-w-0">
-          <p className="text-xxs font-semibold text-navy uppercase tracking-wider">{title}</p>
+          <span className="text-white text-xxs font-semibold uppercase tracking-wider">{title}</span>
           {!isOpen && summary && (
-            <p className="text-xxs text-mid-grey truncate mt-0.5">{summary}</p>
+            <span className="text-white/70 text-xxs ml-2 truncate">{summary}</span>
           )}
         </div>
-        <svg
-          className={`flex-shrink-0 ml-1 w-3 h-3 text-mid-grey transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
-          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
+        <span className="text-white/70 text-xs leading-none ml-1">{isOpen ? '▾' : '▸'}</span>
       </button>
       <div
         className="overflow-hidden transition-all duration-200"
         style={{ maxHeight: isOpen ? '600px' : '0px' }}
       >
-        <div className={`px-2 pb-3 ${isOpen ? 'bg-teal/5' : ''}`}>
+        <div className="px-2 pt-2 pb-3">
           {children}
         </div>
       </div>

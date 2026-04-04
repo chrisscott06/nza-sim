@@ -80,9 +80,13 @@ export default function Sidebar() {
   return (
     <nav className="w-14 min-h-screen bg-navy flex flex-col flex-shrink-0 select-none">
       {/* Logo mark */}
-      <div className="h-12 flex items-center justify-center border-b border-white/8">
+      <NavLink
+        to="/"
+        className="h-12 flex items-center justify-center border-b border-white/8 hover:bg-white/8 transition-colors"
+        title="Projects"
+      >
         <span className="text-white font-medium text-caption tracking-widest">N</span>
-      </div>
+      </NavLink>
 
       {/* Top navigation items */}
       <div className="flex flex-col pt-1">

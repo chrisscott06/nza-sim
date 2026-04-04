@@ -10,8 +10,8 @@
   --color-gold:        #ECB01F;
   --color-off-white:   #F8F9FA;
   --color-light-grey:  #E6E6E6;
-  --color-mid-grey:    #95A5A6;
-  --color-dark-grey:   #58595B;
+  --color-mid-grey:    #6B7280;
+  --color-dark-grey:   #4B5563;
 
   /* Building simulation tokens */
   --color-heating-red:     #DC2626;
@@ -29,6 +29,7 @@
   --font-family-sans: "Stolzl", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
   --font-size-xxs:        0.55rem;    /* 8.8px  — micro labels, axis text */
+  --font-size-panel:      0.5625rem;  /* 9px    — body text inside side panels */
   --font-size-xs:         0.6rem;     /* 9.6px  — compact controls, badges */
   --font-size-caption:    0.625rem;   /* 10px   — card labels, sidebar items */
   --font-size-table:      0.6875rem;  /* 11px   — table cells */
@@ -41,6 +42,7 @@
   --font-size-metric-lg:  1.3rem;     /* 20.8px — hero metrics */
 
   --line-height-xxs:        0.8rem;
+  --line-height-panel:      0.8rem;
   --line-height-xs:         0.85rem;
   --line-height-caption:    0.9rem;
   --line-height-table:      0.95rem;

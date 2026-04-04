@@ -1,186 +1,192 @@
-import { useContext } from 'react'
-import { Link } from 'react-router-dom'
-import { Building2, Thermometer, BarChart3, ArrowRight, Play, Clock } from 'lucide-react'
+/**
+ * HomePage.jsx — project landing page
+ *
+ * Shows all projects as cards. Click a card to load the project and
+ * navigate to /building. "New Project" card creates a new project.
+ */
+
+import { useContext, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Building2, Plus, Clock, Zap, BarChart3 } from 'lucide-react'
 import { ProjectContext } from '../context/ProjectContext.jsx'
-import { SimulationContext } from '../context/SimulationContext.jsx'
 
 function formatDate(ts) {
   if (!ts) return '—'
   const d = new Date(ts.replace(' ', 'T') + 'Z')
+  const now = new Date()
+  const diffDays = Math.floor((now - d) / 86400000)
+  if (diffDays === 0) return 'Today'
+  if (diffDays === 1) return 'Yesterday'
+  if (diffDays < 7)  return `${diffDays} days ago`
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-function MetricPill({ label, value, unit }) {
-  if (value == null) return null
+function dimSummary(p) {
+  const L   = p.bc_length     ?? null
+  const W   = p.bc_width      ?? null
+  const fl  = p.bc_num_floors ?? null
+  const gia = (L && W && fl) ? Math.round(L * W * fl).toLocaleString() : null
+  return { L, W, fl, gia }
+}
+
+function ProjectCard({ project, isCurrent, onLoad }) {
+  const { L, W, fl, gia } = dimSummary(project)
+  const eui = project.latest_eui != null ? Math.round(project.latest_eui) : null
+
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-navy/5 text-xs text-navy">
-      <span className="font-semibold">{typeof value === 'number' ? value.toFixed(1) : value}</span>
-      <span className="text-mid-grey">{unit}</span>
-      <span className="text-mid-grey text-xs">{label}</span>
-    </span>
+    <button
+      onClick={() => onLoad(project.id)}
+      className={`
+        w-full text-left p-4 rounded-xl border transition-all group
+        hover:shadow-md hover:border-magenta/40
+        ${isCurrent ? 'border-magenta/50 bg-white shadow-sm' : 'border-light-grey bg-white'}
+      `}
+    >
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+            isCurrent ? 'bg-magenta/10' : 'bg-off-white'
+          }`}>
+            <Building2 size={16} className={isCurrent ? 'text-magenta' : 'text-mid-grey'} />
+          </div>
+          <div className="min-w-0">
+            <p className={`text-caption font-semibold truncate group-hover:text-magenta transition-colors ${
+              isCurrent ? 'text-magenta' : 'text-navy'
+            }`}>
+              {project.name}
+            </p>
+            {isCurrent && (
+              <p className="text-xxs text-magenta/70">Currently loaded</p>
+            )}
+          </div>
+        </div>
+        {eui != null && (
+          <div className="flex items-center gap-1 flex-shrink-0 bg-navy/5 rounded px-1.5 py-0.5">
+            <Zap size={9} className="text-gold" />
+            <span className="text-xxs font-semibold text-navy">{eui}</span>
+            <span className="text-xxs text-mid-grey">kWh/m²</span>
+          </div>
+        )}
+      </div>
+
+      {gia && (
+        <p className="text-xxs text-dark-grey mb-2">
+          {L}m × {W}m × {fl} fl — <span className="font-medium text-navy">{gia} m² GIA</span>
+        </p>
+      )}
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1 text-xxs text-mid-grey">
+          <Clock size={9} />
+          <span>{formatDate(project.updated_at)}</span>
+        </div>
+        {project.simulation_count > 0 && (
+          <div className="flex items-center gap-1 text-xxs text-mid-grey">
+            <BarChart3 size={9} />
+            <span>{project.simulation_count} run{project.simulation_count !== 1 ? 's' : ''}</span>
+          </div>
+        )}
+      </div>
+    </button>
   )
 }
 
-const QUICK_LINKS = [
-  {
-    href: '/building',
-    icon: <Building2 size={20} />,
-    title: 'Define Building',
-    description: 'Set geometry, fabric and orientation',
-    colour: 'text-blue-600 bg-blue-50',
-  },
-  {
-    href: '/systems',
-    icon: <Thermometer size={20} />,
-    title: 'Configure Systems',
-    description: 'HVAC, ventilation, DHW and lighting',
-    colour: 'text-teal-600 bg-teal-50',
-  },
-  {
-    href: '/results',
-    icon: <BarChart3 size={20} />,
-    title: 'View Results',
-    description: 'Energy flows, profiles and analysis',
-    colour: 'text-magenta bg-pink-50',
-  },
-]
+function NewProjectCard({ onCreate }) {
+  return (
+    <button
+      onClick={onCreate}
+      className="
+        w-full p-4 rounded-xl border border-dashed border-light-grey bg-white
+        hover:border-magenta/40 transition-all group
+        flex flex-col items-center justify-center gap-2 min-h-[120px]
+      "
+    >
+      <div className="w-8 h-8 rounded-full border border-dashed border-mid-grey flex items-center justify-center group-hover:border-magenta/60 transition-colors">
+        <Plus size={16} className="text-mid-grey group-hover:text-magenta transition-colors" />
+      </div>
+      <p className="text-caption text-mid-grey group-hover:text-magenta transition-colors font-medium">
+        New Project
+      </p>
+    </button>
+  )
+}
 
 export default function HomePage() {
-  const projectCtx = useContext(ProjectContext)
-  const simCtx     = useContext(SimulationContext)
+  const { projects, currentProjectId, loadProject, createProject, isLoading } = useContext(ProjectContext)
+  const navigate = useNavigate()
 
-  const project         = projectCtx?.currentProjectId ? {
-    name:        projectCtx?.params?.name,
-    created_at:  projectCtx?.projects?.find(p => p.id === projectCtx.currentProjectId)?.created_at,
-    updated_at:  projectCtx?.projects?.find(p => p.id === projectCtx.currentProjectId)?.updated_at,
-  } : null
-  const simulations     = projectCtx?.projects?.find(p => p.id === projectCtx?.currentProjectId)
-  const hasRuns         = simCtx?.results != null
-  const latestResults   = simCtx?.results
+  const handleLoad = useCallback(async (id) => {
+    if (id !== currentProjectId) await loadProject(id)
+    navigate('/building')
+  }, [currentProjectId, loadProject, navigate])
 
-  if (projectCtx?.isLoading) {
+  const handleCreate = useCallback(async () => {
+    await createProject()
+    navigate('/building')
+  }, [createProject, navigate])
+
+  if (isLoading) {
     return (
       <div className="h-full flex items-center justify-center text-mid-grey text-caption">
-        Loading project…
+        Loading projects…
       </div>
     )
   }
 
+  const recent = projects.slice(0, 3)
+  const older  = projects.slice(3)
+
   return (
-    <div className="h-full overflow-y-auto p-8 max-w-3xl mx-auto">
-      {/* Project header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-navy mb-1">
-          {project?.name ?? 'NZA Simulate'}
-        </h1>
-        <div className="flex items-center gap-4 text-xs text-mid-grey">
-          {project?.created_at && (
-            <span>Created {formatDate(project.created_at)}</span>
-          )}
-          {project?.updated_at && (
-            <span className="flex items-center gap-1">
-              <Clock size={11} />
-              Last updated {formatDate(project.updated_at)}
-            </span>
-          )}
+    <div className="h-full overflow-y-auto">
+      <div className="max-w-3xl mx-auto px-8 py-10">
+
+        <div className="mb-8">
+          <h1 className="text-2xl font-semibold text-navy mb-1">NZA Simulate</h1>
+          <p className="text-xs text-mid-grey">Building energy simulation — select a project or create a new one</p>
         </div>
-      </div>
 
-      {/* Quick links */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
-        {QUICK_LINKS.map(link => (
-          <Link
-            key={link.href}
-            to={link.href}
-            className="
-              flex flex-col gap-3 p-4 rounded-xl border border-light-grey
-              bg-white hover:border-magenta/30 hover:shadow-sm transition-all group
-            "
-          >
-            <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${link.colour}`}>
-              {link.icon}
+        {recent.length > 0 && (
+          <section className="mb-8">
+            <p className="text-xxs uppercase tracking-wider text-mid-grey mb-3">
+              {projects.length <= 3 ? 'Projects' : 'Recent'}
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {recent.map(p => (
+                <ProjectCard key={p.id} project={p} isCurrent={p.id === currentProjectId} onLoad={handleLoad} />
+              ))}
+              {projects.length < 6 && <NewProjectCard onCreate={handleCreate} />}
             </div>
-            <div>
-              <p className="text-caption font-semibold text-navy group-hover:text-magenta transition-colors flex items-center gap-1">
-                {link.title}
-                <ArrowRight size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
-              </p>
-              <p className="text-xs text-mid-grey mt-0.5">{link.description}</p>
-            </div>
-          </Link>
-        ))}
-      </div>
+          </section>
+        )}
 
-      {/* Simulation summary / getting started */}
-      {hasRuns && latestResults ? (
-        <div className="bg-white border border-light-grey rounded-xl p-5 mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-caption font-semibold text-navy">Latest Simulation</h2>
-            <Link
-              to="/results"
-              className="text-xs text-magenta hover:underline flex items-center gap-1"
+        {older.length > 0 && (
+          <section className="mb-8">
+            <p className="text-xxs uppercase tracking-wider text-mid-grey mb-3">All Projects</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {older.map(p => (
+                <ProjectCard key={p.id} project={p} isCurrent={p.id === currentProjectId} onLoad={handleLoad} />
+              ))}
+              <NewProjectCard onCreate={handleCreate} />
+            </div>
+          </section>
+        )}
+
+        {projects.length === 0 && (
+          <div className="rounded-xl border border-dashed border-light-grey bg-white p-10 text-center">
+            <Building2 size={32} className="text-light-grey mx-auto mb-3" />
+            <p className="text-caption font-medium text-navy mb-1">No projects yet</p>
+            <p className="text-xs text-mid-grey mb-4">Create your first building energy simulation project</p>
+            <button
+              onClick={handleCreate}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-navy text-white text-caption font-medium hover:bg-navy/85 transition-colors"
             >
-              View full results <ArrowRight size={11} />
-            </Link>
+              <Plus size={14} />
+              New Project
+            </button>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <MetricPill
-              label="EUI"
-              value={latestResults.summary?.eui_kWh_per_m2}
-              unit="kWh/m²"
-            />
-            <MetricPill
-              label="Heating"
-              value={latestResults.summary?.heating_kWh != null
-                ? Math.round(latestResults.summary.heating_kWh / 1000)
-                : null}
-              unit="MWh"
-            />
-            <MetricPill
-              label="Cooling"
-              value={latestResults.summary?.cooling_kWh != null
-                ? Math.round(latestResults.summary.cooling_kWh / 1000)
-                : null}
-              unit="MWh"
-            />
-            <MetricPill
-              label="GIA"
-              value={latestResults.summary?.gia_m2}
-              unit="m²"
-            />
-          </div>
-        </div>
-      ) : (
-        <div className="bg-white border border-light-grey rounded-xl p-6">
-          <h2 className="text-caption font-semibold text-navy mb-1">Getting started</h2>
-          <p className="text-xs text-mid-grey mb-4">Follow these steps to run your first simulation.</p>
-          <ol className="space-y-3">
-            {[
-              { step: '1', label: 'Define building geometry',    href: '/building', desc: 'Set floor dimensions, number of floors, height, and orientation' },
-              { step: '2', label: 'Select fabric constructions', href: '/building', desc: 'Choose walls, roof, floor, and glazing from the construction library' },
-              { step: '3', label: 'Configure systems',           href: '/systems',  desc: 'Choose HVAC, ventilation, DHW, and set lighting power density' },
-              { step: '4', label: 'Run simulation',              href: null,        desc: 'Click "Run Simulation" in the top bar — EnergyPlus runs in seconds' },
-              { step: '5', label: 'View results',                href: '/results',  desc: 'Explore load profiles, energy flows, fabric analysis, and carbon trajectory' },
-            ].map(item => (
-              <li key={item.step} className="flex items-start gap-3">
-                <span className="w-6 h-6 rounded-full bg-navy text-white flex-shrink-0 flex items-center justify-center text-xs font-semibold">
-                  {item.step}
-                </span>
-                <div>
-                  {item.href ? (
-                    <Link to={item.href} className="text-caption font-medium text-navy hover:text-magenta transition-colors">
-                      {item.label} →
-                    </Link>
-                  ) : (
-                    <span className="text-caption font-medium text-navy">{item.label}</span>
-                  )}
-                  <p className="text-xs text-mid-grey mt-0.5">{item.desc}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
+        )}
+
+      </div>
     </div>
   )
 }

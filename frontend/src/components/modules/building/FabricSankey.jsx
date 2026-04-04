@@ -50,9 +50,18 @@ function linkColor(id) {
   return GAIN_COLORS[id] ?? LOSS_COLORS[id] ?? '#CBD5E1'
 }
 
+// ── Facade label helper (mirrors BuildingViewer3D) ────────────────────────────
+// F1=north (0°), F2=east (90°), F3=south (180°), F4=west (270°)
+function facadeLabel(num, orientationDeg) {
+  const baseAngles = { 1: 0, 2: 90, 3: 180, 4: 270 }
+  const trueAngle  = (baseAngles[num] + (orientationDeg ?? 0)) % 360
+  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+  return `F${num} (${dirs[Math.round(trueAngle / 45) % 8]})`
+}
+
 // ── Build Sankey data from instantCalc result ─────────────────────────────────
 
-function buildFabricSankeyData(result) {
+function buildFabricSankeyData(result, orientationDeg = 0) {
   if (!result) return null
 
   const sg = result.solar_gains    ?? {}
@@ -61,7 +70,6 @@ function buildFabricSankeyData(result) {
   const heating_kWh = result.annual_heating_kWh ?? 0
   const cooling_kWh = result.annual_cooling_kWh ?? 0
 
-  // Need at least some data to render
   const totalGains = (sg.total_kWh ?? 0) + (ig.total_kWh ?? 0)
   if (totalGains < 1) return null
 
@@ -72,13 +80,21 @@ function buildFabricSankeyData(result) {
     if (value > 1) links.push({ source, target, value: Math.round(value), colorId })
   }
 
-  // ── Gain source nodes (left) ──────────────────────────────────────────────
-  const opaque_solar = (sg.opaque_wall_kWh ?? 0) + (sg.roof_solar_kWh ?? 0)
-  if ((sg.south_kWh ?? 0) > 1) addNode('solar_s', 'Solar South', 'gain')
-  if ((sg.east_kWh  ?? 0) > 1) addNode('solar_e', 'Solar East',  'gain')
-  if ((sg.west_kWh  ?? 0) > 1) addNode('solar_w', 'Solar West',  'gain')
-  if ((sg.north_kWh ?? 0) > 1) addNode('solar_n', 'Solar North', 'gain')
-  if (opaque_solar           > 1) addNode('solar_opq', 'Solar Opaque', 'gain')
+  // ── Glazing solar gain nodes — labelled by facade number + dynamic compass ─
+  const fl3 = facadeLabel(3, orientationDeg)  // south face
+  const fl2 = facadeLabel(2, orientationDeg)  // east face
+  const fl4 = facadeLabel(4, orientationDeg)  // west face
+  const fl1 = facadeLabel(1, orientationDeg)  // north face
+  if ((sg.south_kWh ?? 0) > 1) addNode('solar_f3', `Glazing ${fl3}`, 'gain')
+  if ((sg.east_kWh  ?? 0) > 1) addNode('solar_f2', `Glazing ${fl2}`, 'gain')
+  if ((sg.west_kWh  ?? 0) > 1) addNode('solar_f4', `Glazing ${fl4}`, 'gain')
+  if ((sg.north_kWh ?? 0) > 1) addNode('solar_f1', `Glazing ${fl1}`, 'gain')
+
+  // ── Opaque solar: split into wall and roof ────────────────────────────────
+  if ((sg.opaque_wall_kWh ?? 0) > 1) addNode('wall_solar', 'Wall Solar',  'gain')
+  if ((sg.roof_solar_kWh  ?? 0) > 1) addNode('roof_solar', 'Roof Solar',  'gain')
+
+  // ── Internal gain nodes ───────────────────────────────────────────────────
   if ((ig.people_kWh    ?? 0) > 1) addNode('people',    'Occupants', 'gain')
   if ((ig.equipment_kWh ?? 0) > 1) addNode('equipment', 'Equipment', 'gain')
   if ((ig.lighting_kWh  ?? 0) > 1) addNode('lighting',  'Lighting',  'gain')
@@ -97,14 +113,15 @@ function buildFabricSankeyData(result) {
   if (cooling_kWh > 1) addNode('demand_cool', 'Cooling Demand', 'demand_cool')
 
   // ── Gain links (sources → building) ──────────────────────────────────────
-  addLink('solar_s',   'building', sg.south_kWh     ?? 0, 'solar_s')
-  addLink('solar_e',   'building', sg.east_kWh      ?? 0, 'solar_e')
-  addLink('solar_w',   'building', sg.west_kWh      ?? 0, 'solar_w')
-  addLink('solar_n',   'building', sg.north_kWh     ?? 0, 'solar_n')
-  addLink('solar_opq', 'building', opaque_solar,           'solar_opq')
-  addLink('people',    'building', ig.people_kWh    ?? 0, 'people')
-  addLink('equipment', 'building', ig.equipment_kWh ?? 0, 'equipment')
-  addLink('lighting',  'building', ig.lighting_kWh  ?? 0, 'lighting')
+  addLink('solar_f3',   'building', sg.south_kWh      ?? 0, 'solar_s')
+  addLink('solar_f2',   'building', sg.east_kWh       ?? 0, 'solar_e')
+  addLink('solar_f4',   'building', sg.west_kWh       ?? 0, 'solar_w')
+  addLink('solar_f1',   'building', sg.north_kWh      ?? 0, 'solar_n')
+  addLink('wall_solar', 'building', sg.opaque_wall_kWh ?? 0, 'solar_opq')
+  addLink('roof_solar', 'building', sg.roof_solar_kWh  ?? 0, 'solar_opq')
+  addLink('people',    'building', ig.people_kWh     ?? 0, 'people')
+  addLink('equipment', 'building', ig.equipment_kWh  ?? 0, 'equipment')
+  addLink('lighting',  'building', ig.lighting_kWh   ?? 0, 'lighting')
 
   // ── Loss links (building → sinks) ────────────────────────────────────────
   addLink('building', 'loss_walls',  fl.walls_kWh        ?? 0, 'loss_walls')
@@ -143,7 +160,7 @@ function nodeStyle(type) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export default function FabricSankey({ result }) {
+export default function FabricSankey({ result, orientation = 0 }) {
   const containerRef = useRef(null)
   const [dims, setDims]     = useState({ width: 600, height: 460 })
   const [tooltip, setTooltip] = useState(null)
@@ -160,7 +177,7 @@ export default function FabricSankey({ result }) {
     return () => ro.disconnect()
   }, [])
 
-  const fabricData = useMemo(() => buildFabricSankeyData(result), [result])
+  const fabricData = useMemo(() => buildFabricSankeyData(result, orientation), [result, orientation])
 
   const sankeyResult = useMemo(() => {
     if (!fabricData) return null

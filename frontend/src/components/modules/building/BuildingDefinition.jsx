@@ -36,11 +36,26 @@ const FACADES = [
 
 // ── Shared input components ───────────────────────────────────────────────────
 
-function SectionHeader({ title }) {
+const BUILDING_ACCENT = '#A1887F'  // warm earth — building module
+
+function CollapsibleSection({ title, children, defaultOpen = true }) {
+  const [open, setOpen] = useState(defaultOpen)
   return (
-    <p className="text-xxs uppercase tracking-wider text-mid-grey mb-2 mt-3 first:mt-0">
-      {title}
-    </p>
+    <div className="mb-2">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-2.5 py-1.5 rounded text-left transition-opacity"
+        style={{ backgroundColor: BUILDING_ACCENT }}
+      >
+        <span className="text-white text-xxs font-semibold uppercase tracking-wider">{title}</span>
+        <span className="text-white/70 text-xs leading-none">{open ? '▾' : '▸'}</span>
+      </button>
+      {open && (
+        <div className="pt-2 pb-1">
+          {children}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -191,61 +206,60 @@ function InputsColumn({ library }) {
         <p className="text-xxs text-mid-grey">Geometry, fabric &amp; airtightness</p>
       </div>
 
-      <div className="p-3">
+      <div className="p-3 space-y-0">
+
         {/* ── Geometry ── */}
-        <SectionHeader title="Geometry" />
-
-        <Field label="Building name">
-          <input
-            type="text"
-            value={name}
-            onChange={e => updateParam('name', e.target.value)}
-            className="w-full px-2 py-1 text-caption text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-teal transition-colors"
-          />
-        </Field>
-
-        <div className="grid grid-cols-2 gap-1.5 mb-2">
-          <Field label="Length (m)">
-            <NumberInput value={length} min={1} max={500} onChange={v => updateParam('length', v)} />
-          </Field>
-          <Field label="Width (m)">
-            <NumberInput value={width} min={1} max={500} onChange={v => updateParam('width', v)} />
-          </Field>
-          <Field label="Floors">
-            <NumberInput value={num_floors} min={1} max={20} onChange={v => updateParam('num_floors', v)} />
-          </Field>
-          <Field label="Floor height (m)">
-            <NumberInput value={floor_height} min={2.0} max={6.0} step={0.1} onChange={v => updateParam('floor_height', v)} />
-          </Field>
-        </div>
-
-        <Field label={`Orientation — ${orientation}°`}>
-          <div className="flex items-center gap-2">
+        <CollapsibleSection title="Geometry">
+          <Field label="Building name">
             <input
-              type="range" min={0} max={359} step={1}
-              value={orientation}
-              onChange={e => updateParam('orientation', Number(e.target.value))}
-              className="flex-1 h-[3px] accent-navy"
+              type="text"
+              value={name}
+              onChange={e => updateParam('name', e.target.value)}
+              className="w-full px-2 py-1 text-caption text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-teal transition-colors"
             />
-            <CompassRose orientation={orientation} />
-          </div>
-        </Field>
+          </Field>
 
-        {/* Derived metrics */}
-        <div className="grid grid-cols-2 gap-1 mb-3 mt-1 bg-off-white rounded p-2">
-          <div>
-            <p className="text-xxs text-mid-grey">GIA</p>
-            <p className="text-caption font-medium text-navy">{Math.round(gia).toLocaleString()} m²</p>
+          <div className="grid grid-cols-2 gap-1.5 mb-2">
+            <Field label="Length (m)">
+              <NumberInput value={length} min={1} max={500} onChange={v => updateParam('length', v)} />
+            </Field>
+            <Field label="Width (m)">
+              <NumberInput value={width} min={1} max={500} onChange={v => updateParam('width', v)} />
+            </Field>
+            <Field label="Floors">
+              <NumberInput value={num_floors} min={1} max={20} onChange={v => updateParam('num_floors', v)} />
+            </Field>
+            <Field label="Floor height (m)">
+              <NumberInput value={floor_height} min={2.0} max={6.0} step={0.1} onChange={v => updateParam('floor_height', v)} />
+            </Field>
           </div>
-          <div>
-            <p className="text-xxs text-mid-grey">Volume</p>
-            <p className="text-caption font-medium text-navy">{Math.round(vol).toLocaleString()} m³</p>
+
+          <Field label={`Orientation — ${orientation}°`}>
+            <div className="flex items-center gap-2">
+              <input
+                type="range" min={0} max={359} step={1}
+                value={orientation}
+                onChange={e => updateParam('orientation', Number(e.target.value))}
+                className="flex-1 h-[3px] accent-navy"
+              />
+              <CompassRose orientation={orientation} />
+            </div>
+          </Field>
+
+          <div className="grid grid-cols-2 gap-1 mt-1 bg-off-white rounded p-2">
+            <div>
+              <p className="text-xxs text-mid-grey">GIA</p>
+              <p className="text-caption font-medium text-navy">{Math.round(gia).toLocaleString()} m²</p>
+            </div>
+            <div>
+              <p className="text-xxs text-mid-grey">Volume</p>
+              <p className="text-caption font-medium text-navy">{Math.round(vol).toLocaleString()} m³</p>
+            </div>
           </div>
-        </div>
+        </CollapsibleSection>
 
         {/* ── Glazing ── */}
-        <div className="border-t border-light-grey pt-3">
-          <SectionHeader title="Glazing (WWR)" />
+        <CollapsibleSection title="Glazing (WWR)">
           {FACADES.map(fac => (
             <div key={fac.key} className="flex items-center gap-1 mb-1">
               <span className="text-xxs text-mid-grey w-14 flex-shrink-0">{facadeLabel(fac.num, orientation)}</span>
@@ -266,24 +280,16 @@ function InputsColumn({ library }) {
               <span className="text-xxs text-mid-grey w-5">win</span>
             </div>
           ))}
-        </div>
+        </CollapsibleSection>
 
         {/* ── Occupancy ── */}
-        <div className="border-t border-light-grey pt-3">
-          <SectionHeader title="Occupancy" />
-
+        <CollapsibleSection title="Occupancy">
           <div className="grid grid-cols-2 gap-1.5 mb-2">
             <Field label="Bedrooms">
-              <NumberInput
-                value={bedrooms} min={1} max={1000} step={1}
-                onChange={v => updateParam('num_bedrooms', v)}
-              />
+              <NumberInput value={bedrooms} min={1} max={1000} step={1} onChange={v => updateParam('num_bedrooms', v)} />
             </Field>
             <Field label="People / room">
-              <NumberInput
-                value={peoplePerRm} min={1} max={4} step={0.5}
-                onChange={v => updateParam('people_per_room', v)}
-              />
+              <NumberInput value={peoplePerRm} min={1} max={4} step={0.5} onChange={v => updateParam('people_per_room', v)} />
             </Field>
           </div>
 
@@ -296,8 +302,7 @@ function InputsColumn({ library }) {
             />
           </Field>
 
-          {/* Derived metrics */}
-          <div className="grid grid-cols-2 gap-1 mb-1 mt-1 bg-off-white rounded p-2">
+          <div className="grid grid-cols-2 gap-1 mt-1 bg-off-white rounded p-2">
             <div>
               <p className="text-xxs text-mid-grey">Avg occupants</p>
               <p className="text-caption font-medium text-navy">{Math.round(avgOccupants)} people</p>
@@ -307,11 +312,10 @@ function InputsColumn({ library }) {
               <p className="text-caption font-medium text-navy">{occDensity.toFixed(3)} p/m²</p>
             </div>
           </div>
-        </div>
+        </CollapsibleSection>
 
         {/* ── Fabric ── */}
-        <div className="border-t border-light-grey pt-3">
-          <SectionHeader title="Fabric" />
+        <CollapsibleSection title="Fabric">
           {CONSTRUCTION_ELEMENTS.map(el => (
             <ConstructionSelect
               key={el.key}
@@ -323,11 +327,10 @@ function InputsColumn({ library }) {
               onSelect={updateConstruction}
             />
           ))}
-        </div>
+        </CollapsibleSection>
 
         {/* ── Airtightness ── */}
-        <div className="border-t border-light-grey pt-3">
-          <SectionHeader title="Airtightness" />
+        <CollapsibleSection title="Airtightness">
           <div className="flex items-center gap-2 mb-1">
             <input
               type="range" min={0.1} max={2.0} step={0.05}
@@ -340,7 +343,8 @@ function InputsColumn({ library }) {
             </span>
           </div>
           <p className={`text-xxs ${achColor}`}>{achText}</p>
-        </div>
+        </CollapsibleSection>
+
       </div>
     </div>
   )
@@ -405,7 +409,7 @@ export default function BuildingDefinition() {
           <BuildingViewer3D params={params} />
         ) : (
           <div className="flex-1 w-full h-full pt-8">
-            <FabricSankey result={instantResult} />
+            <FabricSankey result={instantResult} orientation={orientationDeg} />
           </div>
         )}
       </div>
