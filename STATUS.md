@@ -2,6 +2,14 @@
 
 ## Last completed
 
+Brief 16 all parts complete (2026-04-04).
+
+**Brief 16 progress (all committed):**
+- Part 1: window_count merge fix in ProjectContext.updateParam — changing one facade no longer resets others. Left panel widened to w-72.
+- Part 2: Parser — _is_meta_sheet() skips Instructions/README sheets in multi-sheet Excel; boosted column scoring for "Interval start datetime" and "Import from grid (kWh)"; has_time long-format detection already in place from Brief 15.
+- Part 3: Removed ↗ expand button from butterfly chart (was redundant with centre-column Energy Flow toggle). Increased FabricSankey left extent from 32→90px — all left-side labels now fully visible.
+- Part 4: Regression test ✓ — window counts, Sankey labels, no expand button, consumption, systems Sankey, auto-sim, zero console errors.
+
 Brief 15 all parts complete (2026-04-04).
 
 **Brief 15 progress (all committed):**
@@ -154,7 +162,7 @@ All checklist items:
 
 ## Safety checks
 
-- Working tree: clean (after Part 10 commit)
+- Working tree: clean (after Brief 16 Part 4 commit)
 - Branch: main
-- Brief 15 all parts committed to main; push to GitHub pending
+- Brief 16 all parts committed to main; push to GitHub pending
 - data/ directory: gitignored, intact, not touched
