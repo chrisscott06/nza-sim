@@ -12,16 +12,19 @@ import {
   FileSpreadsheet, AlertCircle, RefreshCw,
 } from 'lucide-react'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
+import { SimulationContext } from '../../../context/SimulationContext.jsx'
 import ConsumptionUpload from './ConsumptionUpload.jsx'
 import MonthlyComparisonChart from './MonthlyComparisonChart.jsx'
 import DailyProfileChart from './DailyProfileChart.jsx'
 import HalfHourlyHeatmap from './HalfHourlyHeatmap.jsx'
+import ModelComparisonChart from './ModelComparisonChart.jsx'
 
 // Accent colour for this module
 const TEAL = '#2D6A7A'
 
 export default function ConsumptionManager() {
   const { currentProjectId: projectId, params } = useContext(ProjectContext)
+  const { results: simResults } = useContext(SimulationContext) ?? {}
   const gia = (params?.length ?? 0) * (params?.width ?? 0) * (params?.num_floors ?? 0)
 
   const [datasets,     setDatasets]     = useState([])
@@ -155,7 +158,7 @@ export default function ConsumptionManager() {
       {/* ── Centre panel — visualisations ─────────────────────────────────── */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {selectedDataset ? (
-          <DatasetDetail dataset={selectedDataset} projectId={projectId} gia={gia} />
+          <DatasetDetail dataset={selectedDataset} projectId={projectId} gia={gia} simResult={simResults} />
         ) : (
           <EmptyState onUpload={() => setShowUpload(true)} />
         )}
@@ -245,7 +248,7 @@ const TABS = [
   { id: 'model',   label: 'vs Model'    },
 ]
 
-function DatasetDetail({ dataset, projectId, gia }) {
+function DatasetDetail({ dataset, projectId, gia, simResult }) {
   const [monthly,  setMonthly]  = useState(null)
   const [loading,  setLoading]  = useState(false)
   const [error,    setError]    = useState(null)
@@ -293,7 +296,7 @@ function DatasetDetail({ dataset, projectId, gia }) {
       {/* Tab bar */}
       <div className="flex border-b border-light-grey flex-shrink-0 px-5">
         {TABS.map(tab => {
-          const isComingSoon = tab.id === 'model'
+          const isComingSoon = false
           return (
             <button
               key={tab.id}
@@ -364,11 +367,12 @@ function DatasetDetail({ dataset, projectId, gia }) {
         )}
 
         {!loading && !error && activeTab === 'model' && (
-          <div className="flex flex-col items-center justify-center py-12 gap-2 text-center">
-            <BarChart3 size={24} className="text-light-grey" />
-            <p className="text-xxs text-mid-grey font-medium">Coming in Brief 15 Part 7</p>
-            <p className="text-xxs text-mid-grey/60">Actual vs modelled energy — performance gap breakdown</p>
-          </div>
+          <ModelComparisonChart
+            monthly={monthly ?? []}
+            fuelType={dataset.fuel_type}
+            gia={gia}
+            simResult={simResult}
+          />
         )}
       </div>
     </div>
