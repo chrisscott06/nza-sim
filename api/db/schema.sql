@@ -69,8 +69,38 @@ CREATE TABLE IF NOT EXISTS scenarios (
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
 
+-- Consumption datasets (one row per imported file)
+CREATE TABLE IF NOT EXISTS consumption_data (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    fuel_type TEXT NOT NULL,           -- 'electricity' or 'gas'
+    meter_id TEXT,                     -- MPAN or MPRN (optional)
+    interval_minutes INTEGER DEFAULT 30,
+    data_start DATE,
+    data_end DATE,
+    total_kwh REAL,
+    record_count INTEGER,
+    source_filename TEXT,
+    provenance_json JSON,              -- gap-fill provenance stats
+    imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
+-- Individual consumption records (one row per half-hour interval)
+CREATE TABLE IF NOT EXISTS consumption_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    consumption_id TEXT NOT NULL,
+    timestamp TEXT NOT NULL,           -- ISO 8601 format
+    kwh REAL,
+    quality TEXT DEFAULT 'actual',     -- 'actual', 'filled', 'estimated', 'missing'
+    fill_method TEXT,                  -- null for actual; e.g. 'donor-year:2023:scaled:1.12'
+    FOREIGN KEY (consumption_id) REFERENCES consumption_data(id) ON DELETE CASCADE
+);
+
 -- Index for fast project lookups
 CREATE INDEX IF NOT EXISTS idx_projects_updated_at ON projects (updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_simruns_project_id ON simulation_runs (project_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_library_type ON library_items (library_type);
 CREATE INDEX IF NOT EXISTS idx_scenarios_project_id ON scenarios (project_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_consumption_project ON consumption_data (project_id);
+CREATE INDEX IF NOT EXISTS idx_records_consumption ON consumption_records (consumption_id, timestamp);
