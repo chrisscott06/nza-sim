@@ -13,40 +13,50 @@ import { useWeather } from '../../../context/WeatherContext.jsx'
 import { useHourlySolar } from '../../../hooks/useHourlySolar.js'
 import { calculateInstant } from '../../../utils/instantCalc.js'
 
-// ── EUI gauge ─────────────────────────────────────────────────────────────────
+// ── EUI bar gauge ─────────────────────────────────────────────────────────────
+// Horizontal bar — stable rendering, no SVG arc floating-point jitter.
 
-const EUI_MAX = 200
+const EUI_MAX = 300
 const CRREM_TARGET = 85
 
 function EUIGauge({ eui }) {
-  const pct = Math.min(eui / EUI_MAX, 1)
-  const cx = 60, cy = 60, r = 46
-  const bgStart  = { x: cx - r, y: cy }
-  const bgEnd    = { x: cx + r, y: cy }
-  const bgPath   = `M ${bgStart.x} ${bgStart.y} A ${r} ${r} 0 0 1 ${bgEnd.x} ${bgEnd.y}`
-  const valEndAngle = Math.PI * (1 - pct)
-  const valEnd = { x: cx + r * Math.cos(valEndAngle), y: cy - r * Math.sin(valEndAngle) }
-  const largeArc = pct > 0.5 ? 1 : 0
-  const valPath = pct > 0
-    ? `M ${bgStart.x} ${bgStart.y} A ${r} ${r} 0 ${largeArc} 1 ${valEnd.x} ${valEnd.y}`
-    : null
-  const targetAngle = Math.PI * (1 - CRREM_TARGET / EUI_MAX)
-  const targetOuter = { x: cx + (r + 4) * Math.cos(targetAngle), y: cy - (r + 4) * Math.sin(targetAngle) }
-  const targetInner = { x: cx + (r - 4) * Math.cos(targetAngle), y: cy - (r - 4) * Math.sin(targetAngle) }
-  const arcColor = eui <= CRREM_TARGET ? '#16A34A' : eui <= CRREM_TARGET * 1.3 ? '#F59E0B' : '#DC2626'
+  const clamped  = Math.max(0, Math.min(Math.round(eui ?? 0), EUI_MAX))
+  const pct      = clamped / EUI_MAX
+  const targetPct = CRREM_TARGET / EUI_MAX
+  const color = clamped <= CRREM_TARGET ? '#16A34A'
+              : clamped <= CRREM_TARGET * 1.5 ? '#F59E0B'
+              : '#DC2626'
 
   return (
     <div className="flex flex-col items-center">
       <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1">EUI (instant estimate)</p>
-      <svg width="120" height="72" viewBox="0 0 120 72">
-        <path d={bgPath} fill="none" stroke="#E6E6E6" strokeWidth="8" strokeLinecap="round" />
-        {valPath && <path d={valPath} fill="none" stroke={arcColor} strokeWidth="8" strokeLinecap="round" />}
-        <line x1={targetInner.x} y1={targetInner.y} x2={targetOuter.x} y2={targetOuter.y} stroke="#ECB01F" strokeWidth="2" strokeLinecap="round" />
-        <text x="60" y="55" textAnchor="middle" fontSize="18" fontWeight="600" fill={arcColor}>{Math.round(eui)}</text>
-        <text x="60" y="65" textAnchor="middle" fontSize="7" fill="#95A5A6">kWh/m²</text>
-      </svg>
-      <p className="text-xxs text-mid-grey -mt-1">
+      <div className="flex items-baseline gap-1 mb-2">
+        <span className="text-2xl font-bold tabular-nums" style={{ color }}>{clamped}</span>
+        <span className="text-xxs text-mid-grey">kWh/m²</span>
+      </div>
+      <div className="relative w-full h-3 bg-light-grey rounded-full overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all duration-300"
+          style={{ width: `${Math.round(pct * 10000) / 100}%`, background: color }}
+        />
+        <div
+          className="absolute top-0 bottom-0 w-0.5 bg-gold"
+          style={{ left: `${Math.round(targetPct * 10000) / 100}%` }}
+        />
+      </div>
+      <div className="relative w-full mt-0.5">
+        <span
+          className="absolute text-xxs text-gold"
+          style={{ left: `${Math.round(targetPct * 10000) / 100}%`, transform: 'translateX(-50%)' }}
+        >
+          {CRREM_TARGET}
+        </span>
+      </div>
+      <p className="text-xxs text-mid-grey mt-3">
         CRREM target <span className="text-gold font-medium">{CRREM_TARGET}</span> kWh/m²
+        {clamped > CRREM_TARGET && (
+          <span className="ml-1" style={{ color }}>(+{clamped - CRREM_TARGET})</span>
+        )}
       </p>
     </div>
   )

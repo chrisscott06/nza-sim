@@ -14,77 +14,62 @@ import { calculateInstant } from '../../../utils/instantCalc.js'
 import { FABRIC_COLORS } from '../../../data/chartTokens.js'
 import GainsLossesChart from './GainsLossesChart.jsx'
 
-// ── EUI Arc Gauge (SVG, 180° sweep) ──────────────────────────────────────────
+// ── EUI Bar Gauge ─────────────────────────────────────────────────────────────
+// Simple horizontal bar gauge — stable rendering, no SVG arc floating-point jitter.
 
-const EUI_MAX = 200  // kWh/m² — top of gauge scale
+const EUI_MAX = 300  // kWh/m² — top of gauge scale (raised to accommodate high-consumption buildings)
 const CRREM_TARGET = 85  // approximate UK hotel CRREM pathway 2026
 
 function EUIGauge({ eui }) {
-  const pct = Math.min(eui / EUI_MAX, 1)
+  // Clamp to valid range — prevents NaN/Infinity and out-of-bounds rendering
+  const clamped  = Math.max(0, Math.min(Math.round(eui ?? 0), EUI_MAX))
+  const pct      = clamped / EUI_MAX                        // 0–1
   const targetPct = CRREM_TARGET / EUI_MAX
 
-  // Arc params — 180° from left to right along the top of a circle
-  const cx = 60, cy = 60, r = 46
-  const startAngle = Math.PI   // left (180°)
-  const endAngle   = 0         // right (0°)
-
-  function polarToXY(angle, radius) {
-    return {
-      x: cx + radius * Math.cos(angle),
-      y: cy - radius * Math.sin(angle),
-    }
-  }
-
-  // Full background arc (grey)
-  const bgStart  = polarToXY(startAngle, r)
-  const bgEnd    = polarToXY(endAngle,   r)
-  const bgPath   = `M ${bgStart.x} ${bgStart.y} A ${r} ${r} 0 0 1 ${bgEnd.x} ${bgEnd.y}`
-
-  // Value arc
-  const valAngle = startAngle + (endAngle - startAngle) * pct  // goes from left to right
-  // Actually: left = π, right = 0. As pct increases, angle decreases from π to 0.
-  const valEndAngle = Math.PI * (1 - pct)
-  const valEnd = polarToXY(valEndAngle, r)
-  const largeArc = pct > 0.5 ? 1 : 0
-  const valPath = pct > 0
-    ? `M ${bgStart.x} ${bgStart.y} A ${r} ${r} 0 ${largeArc} 1 ${valEnd.x} ${valEnd.y}`
-    : null
-
-  // Target marker
-  const targetAngle = Math.PI * (1 - targetPct)
-  const targetOuter = polarToXY(targetAngle, r + 4)
-  const targetInner = polarToXY(targetAngle, r - 4)
-
-  const arcColor = eui <= CRREM_TARGET ? '#16A34A' : eui <= CRREM_TARGET * 1.3 ? '#F59E0B' : '#DC2626'
+  const color = clamped <= CRREM_TARGET ? '#16A34A'
+              : clamped <= CRREM_TARGET * 1.5 ? '#F59E0B'
+              : '#DC2626'
 
   return (
     <div className="flex flex-col items-center">
       <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1">EUI (instant estimate)</p>
-      <div className="relative">
-        <svg width="120" height="72" viewBox="0 0 120 72">
-          {/* Background arc */}
-          <path d={bgPath} fill="none" stroke="#E6E6E6" strokeWidth="8" strokeLinecap="round" />
-          {/* Value arc */}
-          {valPath && (
-            <path d={valPath} fill="none" stroke={arcColor} strokeWidth="8" strokeLinecap="round" />
-          )}
-          {/* CRREM target marker */}
-          <line
-            x1={targetInner.x} y1={targetInner.y}
-            x2={targetOuter.x} y2={targetOuter.y}
-            stroke="#ECB01F" strokeWidth="2" strokeLinecap="round"
-          />
-          {/* Centre value */}
-          <text x="60" y="55" textAnchor="middle" fontSize="18" fontWeight="600" fill={arcColor}>
-            {Math.round(eui)}
-          </text>
-          <text x="60" y="65" textAnchor="middle" fontSize="7" fill="#95A5A6">
-            kWh/m²
-          </text>
-        </svg>
+
+      {/* Value display */}
+      <div className="flex items-baseline gap-1 mb-2">
+        <span className="text-2xl font-bold tabular-nums" style={{ color }}>{clamped}</span>
+        <span className="text-xxs text-mid-grey">kWh/m²</span>
       </div>
-      <p className="text-xxs text-mid-grey -mt-1">
+
+      {/* Gauge bar */}
+      <div className="relative w-full h-3 bg-light-grey rounded-full overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all duration-300"
+          style={{ width: `${Math.round(pct * 10000) / 100}%`, background: color }}
+        />
+        {/* CRREM target marker */}
+        <div
+          className="absolute top-0 bottom-0 w-0.5 bg-gold"
+          style={{ left: `${Math.round(targetPct * 10000) / 100}%` }}
+        />
+      </div>
+
+      {/* Labels */}
+      <div className="relative w-full mt-0.5">
+        <span
+          className="absolute text-xxs text-gold"
+          style={{ left: `${Math.round(targetPct * 10000) / 100}%`, transform: 'translateX(-50%)' }}
+        >
+          {CRREM_TARGET}
+        </span>
+      </div>
+
+      <p className="text-xxs text-mid-grey mt-3">
         CRREM target <span className="text-gold font-medium">{CRREM_TARGET}</span> kWh/m²
+        {clamped > CRREM_TARGET && (
+          <span className="ml-1" style={{ color }}>
+            (+{clamped - CRREM_TARGET})
+          </span>
+        )}
       </p>
     </div>
   )
