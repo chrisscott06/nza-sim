@@ -14,6 +14,7 @@ Usage
         rows = await db.execute("SELECT * FROM projects")
         ...
 """
+from __future__ import annotations
 
 import json
 import uuid

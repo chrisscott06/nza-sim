@@ -10,6 +10,7 @@ PUT    /api/projects/{project_id}/scenarios/{scenario_id}           — Update s
 DELETE /api/projects/{project_id}/scenarios/{scenario_id}           — Delete scenario
 POST   /api/projects/{project_id}/scenarios/{scenario_id}/simulate  — Run simulation for scenario
 """
+from __future__ import annotations
 
 import json
 import uuid

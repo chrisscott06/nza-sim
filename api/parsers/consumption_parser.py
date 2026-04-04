@@ -279,10 +279,24 @@ def parse_consumption_file(file_bytes: bytes, filename: str) -> dict:
         records   = _parse_wide(df, date_col, time_cols)
         interval  = 30
         fmt       = "wide"
-    elif scores["ts_col"] and scores["ts_col"] != scores["date_col"] and scores["value_col"]:
-        # Long format (timestamp + value)
-        records, interval = _parse_long(df, scores["ts_col"], scores["value_col"])
-        fmt = "long"
+    elif scores["ts_col"] and scores["value_col"]:
+        # Long format (timestamp + value).
+        # ts_col may equal date_col when a single column contains full datetime
+        # strings — that is still valid long format if the values have time components.
+        ts_col_candidate = scores["ts_col"]
+        col_sample = df[ts_col_candidate].dropna().head(5).astype(str)
+        has_time = any(re.search(r"\d{2}:\d{2}", v) for v in col_sample)
+
+        if has_time or scores["ts_col"] != scores["date_col"]:
+            records, interval = _parse_long(df, ts_col_candidate, scores["value_col"])
+            fmt = "long"
+        elif scores["value_col"] and scores["date_col"]:
+            # Monthly billing format (small number of columns, dates only)
+            records  = _parse_monthly(df, scores["date_col"], scores["value_col"])
+            interval = 1440  # daily
+            fmt      = "monthly"
+        else:
+            raise ValueError(f"Could not detect data format. Headers: {list(df.columns)[:10]}")
     elif scores["value_col"] and scores["date_col"]:
         # Monthly billing format (small number of columns)
         records  = _parse_monthly(df, scores["date_col"], scores["value_col"])

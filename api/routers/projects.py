@@ -13,6 +13,7 @@ PUT    /api/projects/{id}/systems         — Update systems config
 POST   /api/projects/{id}/simulate        — Run simulation, store results
 GET    /api/projects/{id}/simulations     — List simulation runs for a project
 """
+from __future__ import annotations
 
 import json
 import uuid

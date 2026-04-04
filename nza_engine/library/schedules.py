@@ -21,6 +21,7 @@ Hotel building schedule basis:
 
 Source basis: CIBSE Guide A Table 6.x, NCM activity database (hotel).
 """
+from __future__ import annotations
 
 from copy import deepcopy
 from typing import Any

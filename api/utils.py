@@ -3,6 +3,7 @@ api/utils.py
 
 Shared utilities used across API routers.
 """
+from __future__ import annotations
 
 from pathlib import Path
 

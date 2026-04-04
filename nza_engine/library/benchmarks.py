@@ -12,6 +12,7 @@ Sources
 These values are approximations for initial use and can be replaced with
 official CRREM tool outputs when available.
 """
+from __future__ import annotations
 
 # ── CRREM 1.5°C Pathway — UK Hotel ────────────────────────────────────────────
 

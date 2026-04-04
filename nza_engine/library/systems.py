@@ -24,6 +24,7 @@ Usage
     all_systems = list_systems()
     vrf = get_system("vrf_standard")
 """
+from __future__ import annotations
 
 from typing import Any
 

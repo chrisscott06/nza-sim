@@ -14,6 +14,7 @@ Usage
     )
     print(result.success, result.sql_path)
 """
+from __future__ import annotations
 
 import subprocess
 import time

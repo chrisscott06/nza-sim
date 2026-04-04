@@ -18,6 +18,7 @@ Each zone type entry contains:
   metabolic_rate_W_per_person      — sensible heat gain per person (CIBSE)
   latent_fraction                  — fraction of metabolic heat that is latent
 """
+from __future__ import annotations
 
 from typing import Any
 

@@ -16,6 +16,7 @@ GET    /api/library/systems               — List systems
 GET    /api/library/systems/{name}        — Get system detail
 GET    /api/library/schedules             — List schedules
 """
+from __future__ import annotations
 
 import json
 import uuid

@@ -26,6 +26,7 @@ Usage
         output_path="data/simulations/test/input.epJSON",
     )
 """
+from __future__ import annotations
 
 import json
 import re

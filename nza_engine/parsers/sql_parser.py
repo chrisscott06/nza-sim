@@ -20,6 +20,7 @@ Notes on KeyValue:
   (e.g. "FLOOR_1_IDEALLOADS"). Zone-level energy is recovered by matching
   KeyValue prefixes against zone names.
 """
+from __future__ import annotations
 
 import sqlite3
 from pathlib import Path

@@ -121,6 +121,10 @@ function ChartTooltip({ active, payload, label, unit }) {
 
 function EuiTrajectoryChart({ scenarioLines, euiTargets, actualEui = null, actualYear = CURRENT_YEAR }) {
   // scenarioLines: [{ name, eui, color }]
+  const yMax = actualEui != null
+    ? Math.ceil(Math.max(actualEui * 1.1, interpolate(euiTargets, 2020) * 1.1) / 50) * 50
+    : undefined  // let Recharts auto-scale when no actual data
+
   const data = CHART_YEARS.map(year => {
     const row = {
       year,
@@ -149,6 +153,7 @@ function EuiTrajectoryChart({ scenarioLines, euiTargets, actualEui = null, actua
         <XAxis dataKey="year" {...AXIS_PROPS} tickCount={9} />
         <YAxis
           {...AXIS_PROPS}
+          domain={yMax != null ? [0, yMax] : ['auto', 'auto']}
           label={{ value: 'kWh/m²', angle: -90, position: 'insideLeft', fontSize: 9, fill: '#95A5A6', dx: 12 }}
         />
         <Tooltip content={<ChartTooltip unit="kWh/m²" />} wrapperStyle={TOOLTIP_WRAPPER_STYLE} />

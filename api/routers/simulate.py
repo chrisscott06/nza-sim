@@ -9,6 +9,7 @@ The primary simulation endpoint is POST /api/projects/{id}/simulate which reads
 all inputs from the database.  This endpoint remains for quick testing without
 a project context but is not used by the frontend.
 """
+from __future__ import annotations
 
 import json
 import uuid

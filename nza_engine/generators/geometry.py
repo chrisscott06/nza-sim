@@ -21,6 +21,7 @@ Coordinate system:
   - Building orientation is applied via the EnergyPlus Building object
     north-axis field, not by rotating the geometry here.
 """
+from __future__ import annotations
 
 import math
 from typing import Any

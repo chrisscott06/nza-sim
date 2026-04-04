@@ -24,6 +24,7 @@ Usage
     all_constructions = list_constructions()
     epjson_objects = get_construction("cavity_wall_standard")
 """
+from __future__ import annotations
 
 from copy import deepcopy
 from typing import Any
