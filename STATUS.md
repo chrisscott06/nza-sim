@@ -2,22 +2,25 @@
 
 ## Last completed
 
-Brief 14 Parts 1–9 completed (2026-04-03). Part 10 (browser integration test) pending screen recording permission.
+Brief 15 Parts 1–9 completed (2026-04-04). Part 10 (integration test with synthetic data) pending browser verification.
 
-**Brief 14 progress:**
-- Part 1: EPW parser — GET /api/weather/{filename}/hourly endpoint — committed
-- Part 2: Hourly solar decomposition (solarCalc.js) — committed
-- Part 3: Hourly instant calc with 8760-iteration loop — replaces degree-day, adds `monthly` to return — committed
-- Part 4: WeatherContext — loads and caches EPW hourly data — committed
-- Part 5: useHourlySolar hook — memoised solar precomputation on orientation change — committed
-- Part 6: FabricSankey.jsx — live fabric Sankey in Building module centre column — committed
-- Part 7: FabricSankey hover interaction and tooltips — committed (combined with Part 6)
-- Part 8: Monthly breakdown chart in LiveResultsPanel — committed
-- Part 9: SystemSankey and SystemsLiveResults wired to hourly calc — space heating now non-zero — committed
-- Part 10: Browser integration test — TO DO next session (grant screen recording in System Settings → Privacy & Security → Screen Recording)
+**Brief 15 progress:**
+- Part 1: EUI gauge fix — replaced SVG arc with horizontal bar gauge (no jitter) — committed in previous session
+- Part 2: Consumption schema (`consumption_data`, `consumption_records`), CRUD API — committed in previous session
+- Part 3: CSV/Excel parser (`consumption_parser.py`) + gap-filling assembly engine (`assembly_engine.py`) — committed in previous session
+- Part 4: ConsumptionUpload.jsx (drag-drop, parse summary, fuel type override, provenance bar), ConsumptionManager.jsx (three-column layout, dataset cards, delete), Sidebar icon (FileSpreadsheet, #2D6A7A), moduleThemes, App.jsx route — committed
+- Part 5: MonthlyComparisonChart.jsx (actual bars + CRREM reference line, status banner, EUI gap %) — committed
+- Part 6: DailyProfileChart.jsx (AreaChart with Brush zoom), HalfHourlyHeatmap.jsx (canvas carpet plot, HSL ramp, tooltip) — committed
+- Part 7: ModelComparisonChart.jsx (actual solid bars + modelled outline bars, gap cards, explanation panel) — committed
+- Part 8: CRREMTab updated — red ReferenceDot at actual year, actual EUI panel with performance gap and actual stranding year — committed
+- Part 9: Navigation wiring — /consumption route, sidebar, moduleThemes, App.jsx — all done in Part 4, committed
+- Part 10: Integration test — TO DO (requires browser verification at 1440×900, grant screen recording in System Settings → Privacy & Security → Screen Recording)
+
+**Brief 14 progress (all committed):**
+- Parts 1–9 complete. Part 10 browser integration test TO DO.
 
 **Brief 13 progress (all committed):**
-- Parts 1–12 complete (Part 12 browser test TO DO next session)
+- Parts 1–12 complete. Part 12 browser test TO DO.
 
 ---
 
@@ -101,22 +104,21 @@ All checklist items:
 
 ### What's working
 
-- **Hourly instant calc** — 8760-iteration loop using real EPW weather data. Non-zero heating demand in winter (was 0 with degree-day method). Monthly breakdown arrays for seasonal display.
-- **WeatherContext** — loads and caches EPW hourly data from backend API on app start. No repeated fetches on navigation.
-- **useHourlySolar hook** — memoised solar precomputation. Recomputes only on orientation change (~5ms). Heat balance loop uses cached values for all other input changes.
-- **Live Fabric Sankey** — in Building module centre column. Toggle: "3D Model | Energy Flow". Shows solar gains (by facade, amber tones), internal gains (purple), fabric losses (grey), heating demand (red), cooling demand (blue). Hover tooltips on all nodes and links.
-- **Monthly heating/cooling chart** — 12-bar chart in LiveResultsPanel, red (heating down) / blue (cooling up). Seasonal pattern visible from hourly calc.
-- **Space heating in Systems Sankey** — now non-zero because hourly calc produces real heating demand. Gas boiler → space heating link visible.
-- **Systems Sankey** — all panels now use hourly calc. MVHR recovery, ASHP cascade, gas boiler links all updated with real demands.
-- **Collapsible accordion inputs** — 5 sections, single-expand mode, live summaries
-- **System efficiency insights** — VRF COP, MVHR recovery MWh/£/tCO₂, boiler efficiency
-- **3D fixes** — clean grey walls, consistent blue glass, no z-fighting
-- **Architectural 3D model** — white/grey massing, edge lines, recessed windows, base plate, contact shadows
-- **Butterfly chart** — asymmetric heating/cooling gains, consolidated solar with hover tooltip, ↗ expand
-- **Expandable Sankey** — full d3-sankey energy balance overlay in Building module, live-updating
-- **Three-column live workspaces** — Building, Systems, Profiles
-- **Auto-simulation** — triggers 3s after last change
-- **Project persistence** — all params saved to SQLite
+- **Consumption module** — `/consumption` route with FileSpreadsheet sidebar icon (#2D6A7A). Three-column layout: dataset list + upload (left), visualisation tabs (centre), metrics panel (right).
+- **Consumption upload** — Drag-and-drop or file picker. Accepts CSV/XLSX. Uploads to API, shows parse summary with provenance stacked bar. Fuel type override (electricity/gas). Confirm import button.
+- **Monthly comparison chart** — Recharts ComposedChart with monthly kWh bars and CRREM average monthly reference line. Status banner (compliant/at-risk/non-compliant) with actual EUI vs target.
+- **Daily profile chart** — AreaChart with Brush zoom. Summary stats. Hint when zoomed to ≤14 days.
+- **Half-hourly heatmap** — Canvas carpet plot. Time-of-day (Y) vs date (X). HSL colour ramp by kWh intensity. Crosshair tooltip. Colour legend.
+- **Model vs Actual chart** — Solid actual bars + outline modelled bars. Gap summary cards. 5-item performance gap explanation panel.
+- **CRREM trajectory updated** — Red ReferenceDot at actual year shows actual EUI above modelled line. Actual EUI panel below chart shows performance gap and actual stranding year (vs modelled).
+- **Gap-filling assembly engine** — donor year (scaled 0.5–2.0) → weekday average → interpolation → monthly average cascade. Provenance tracking per slot. Complete annual profile guaranteed.
+- **Hourly instant calc** — 8760-iteration loop using real EPW weather data. Non-zero heating demand in winter. Monthly breakdown arrays for seasonal display.
+- **WeatherContext** — loads and caches EPW hourly data from backend API on app start.
+- **useHourlySolar hook** — memoised solar precomputation. Recomputes only on orientation change.
+- **Live Fabric Sankey** — in Building module centre column. Toggle: "3D Model | Energy Flow".
+- **Monthly heating/cooling chart** — 12-bar chart in LiveResultsPanel.
+- **Space heating in Systems Sankey** — now non-zero from hourly calc.
+- **Systems Sankey** — all panels wired to hourly calc.
 - **Full results suite** — Energy Flows, Energy Balance, Load Profiles, Fabric Analysis, CRREM & Carbon
 - **Scenario Manager** — create/run/compare scenarios
 
@@ -128,7 +130,8 @@ All checklist items:
 - **uvicorn must be restarted** after backend code changes
 - Full-year hourly data requires EnergyPlus .sql output file on disk
 - MVHR raises cooling demand significantly in summer (physically consistent but counterintuitive)
-- `SolarBars` component in `LiveResultsPanel.jsx` is dead code (function defined but never rendered) — harmless
+- `SolarBars` component in `LiveResultsPanel.jsx` is dead code — harmless
+- Heatmap fetches all records at once (no pagination) — could be slow for large datasets with full year HH data
 
 ---
 
@@ -142,19 +145,16 @@ All checklist items:
 - CSV export of simulation results
 - "Duplicate project" in project picker
 - Surrounding building massing for shading analysis
-- Infiltration ACH from airtightness test (q50 → ACH conversion)
-- EV charging demand modelling
+- Brief 16: Reality factors — adjust occupancy, system efficiency, unmetered loads to close model vs actual gap
+- Pagination for heatmap records API call (e.g. ?limit=17520 or stream)
 - Clean up dead `SolarBars` function in LiveResultsPanel.jsx
 - Node hover link labels (show kWh value on hovered links)
-- Sankey link value toggle: absolute MWh ↔ percentage
-- Natural ventilation mode in Sankey (bypass VRF for cooling)
 
 ---
 
 ## Safety checks
 
-- Working tree: clean (after Part 9 commit)
+- Working tree: clean (after Part 8 commit)
 - Branch: main
-- Brief 14 Parts 1–9 committed to main; pushed to GitHub ✓
+- Brief 15 Parts 1–9 committed to main; push to GitHub pending
 - data/ directory: gitignored, intact, not touched
-- Push to GitHub: confirmed ✓
