@@ -14,6 +14,8 @@ import {
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import ConsumptionUpload from './ConsumptionUpload.jsx'
 import MonthlyComparisonChart from './MonthlyComparisonChart.jsx'
+import DailyProfileChart from './DailyProfileChart.jsx'
+import HalfHourlyHeatmap from './HalfHourlyHeatmap.jsx'
 
 // Accent colour for this module
 const TEAL = '#2D6A7A'
@@ -291,7 +293,7 @@ function DatasetDetail({ dataset, projectId, gia }) {
       {/* Tab bar */}
       <div className="flex border-b border-light-grey flex-shrink-0 px-5">
         {TABS.map(tab => {
-          const isComingSoon = ['daily', 'heatmap', 'model'].includes(tab.id)
+          const isComingSoon = tab.id === 'model'
           return (
             <button
               key={tab.id}
@@ -344,15 +346,28 @@ function DatasetDetail({ dataset, projectId, gia }) {
           </div>
         )}
 
-        {!loading && !error && ['daily', 'heatmap', 'model'].includes(activeTab) && (
+        {!loading && !error && activeTab === 'daily' && (
+          <DailyProfileChart
+            datasetId={dataset.id}
+            projectId={projectId}
+            fuelType={dataset.fuel_type}
+          />
+        )}
+
+        {!loading && !error && activeTab === 'heatmap' && (
+          <HalfHourlyHeatmap
+            datasetId={dataset.id}
+            projectId={projectId}
+            fuelType={dataset.fuel_type}
+            intervalMinutes={dataset.interval_minutes ?? 30}
+          />
+        )}
+
+        {!loading && !error && activeTab === 'model' && (
           <div className="flex flex-col items-center justify-center py-12 gap-2 text-center">
             <BarChart3 size={24} className="text-light-grey" />
-            <p className="text-xxs text-mid-grey font-medium">Coming in Brief 15 Part {activeTab === 'model' ? 7 : 6}</p>
-            <p className="text-xxs text-mid-grey/60">
-              {activeTab === 'daily'   && 'Daily consumption profile with half-hourly zoom'}
-              {activeTab === 'heatmap' && 'Time-of-day vs date carpet plot showing baseload'}
-              {activeTab === 'model'   && 'Actual vs modelled energy — performance gap breakdown'}
-            </p>
+            <p className="text-xxs text-mid-grey font-medium">Coming in Brief 15 Part 7</p>
+            <p className="text-xxs text-mid-grey/60">Actual vs modelled energy — performance gap breakdown</p>
           </div>
         )}
       </div>
