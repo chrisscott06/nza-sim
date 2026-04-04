@@ -290,6 +290,8 @@ export function ProjectProvider({ children }) {
       let next
       if (key === 'wwr') {
         next = { ...p, wwr: { ...p.wwr, ...value } }
+      } else if (key === 'window_count') {
+        next = { ...p, window_count: { ...p.window_count, ...value } }
       } else if (key === 'location') {
         next = { ...p, location: { ...p.location, ...value } }
       } else {

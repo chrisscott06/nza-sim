@@ -1,7 +1,7 @@
 /**
  * BuildingDefinition.jsx — three-column live workspace
  *
- * Left (w-64):   All building inputs (geometry + fabric + airtightness)
+ * Left (w-72):   All building inputs (geometry + fabric + airtightness)
  * Centre (flex-1): 3D building viewer
  * Right (w-80):  LiveResultsPanel — instant-calc results
  */
@@ -379,7 +379,7 @@ export default function BuildingDefinition() {
   return (
     <div className="flex h-[calc(100vh-3rem)] relative">
       {/* Left: inputs */}
-      <div className="w-64 flex-shrink-0 z-10">
+      <div className="w-72 flex-shrink-0 z-10">
         <InputsColumn library={library} />
       </div>
 
