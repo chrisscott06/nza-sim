@@ -164,7 +164,9 @@ export default function FabricSankey({ result }) {
 
   const sankeyResult = useMemo(() => {
     if (!fabricData) return null
-    const pad   = 32
+    const leftPad  = 90   // wide enough for longest left-side label ("Solar Opaque")
+    const rightPad = 16   // right nodes extend further; the -80 margin handles right labels
+    const topPad   = 16
     const nodeW = 16
     const nodeP = 12
     const g = {
@@ -177,7 +179,7 @@ export default function FabricSankey({ result }) {
         .nodeAlign(sankeyLeft)
         .nodeWidth(nodeW)
         .nodePadding(nodeP)
-        .extent([[pad, pad], [dims.width - pad - 80, dims.height - pad]])
+        .extent([[leftPad, topPad], [dims.width - rightPad - 80, dims.height - topPad]])
       layout(g)
       return g
     } catch (e) {

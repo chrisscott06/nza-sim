@@ -414,7 +414,6 @@ export default function BuildingDefinition() {
       <div className="w-80 flex-shrink-0">
         <LiveResultsPanel
           libraryData={libraryData}
-          onSankeyExpand={(result) => { setSankeyResult(result); setShowSankey(true) }}
         />
       </div>
 
