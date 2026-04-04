@@ -2,19 +2,19 @@
 
 ## Last completed
 
-Brief 15 Parts 1–9 completed (2026-04-04). Part 10 (integration test with synthetic data) pending browser verification.
+Brief 15 all parts complete (2026-04-04).
 
-**Brief 15 progress:**
-- Part 1: EUI gauge fix — replaced SVG arc with horizontal bar gauge (no jitter) — committed in previous session
-- Part 2: Consumption schema (`consumption_data`, `consumption_records`), CRUD API — committed in previous session
-- Part 3: CSV/Excel parser (`consumption_parser.py`) + gap-filling assembly engine (`assembly_engine.py`) — committed in previous session
-- Part 4: ConsumptionUpload.jsx (drag-drop, parse summary, fuel type override, provenance bar), ConsumptionManager.jsx (three-column layout, dataset cards, delete), Sidebar icon (FileSpreadsheet, #2D6A7A), moduleThemes, App.jsx route — committed
-- Part 5: MonthlyComparisonChart.jsx (actual bars + CRREM reference line, status banner, EUI gap %) — committed
-- Part 6: DailyProfileChart.jsx (AreaChart with Brush zoom), HalfHourlyHeatmap.jsx (canvas carpet plot, HSL ramp, tooltip) — committed
-- Part 7: ModelComparisonChart.jsx (actual solid bars + modelled outline bars, gap cards, explanation panel) — committed
-- Part 8: CRREMTab updated — red ReferenceDot at actual year, actual EUI panel with performance gap and actual stranding year — committed
-- Part 9: Navigation wiring — /consumption route, sidebar, moduleThemes, App.jsx — all done in Part 4, committed
-- Part 10: Integration test — TO DO (requires browser verification at 1440×900, grant screen recording in System Settings → Privacy & Security → Screen Recording)
+**Brief 15 progress (all committed):**
+- Part 1: EUI gauge fix — replaced SVG arc with horizontal bar gauge (no jitter)
+- Part 2: Consumption schema (`consumption_data`, `consumption_records`), CRUD API
+- Part 3: CSV/Excel parser (`consumption_parser.py`) + gap-filling assembly engine (`assembly_engine.py`)
+- Part 4: ConsumptionUpload.jsx (drag-drop, parse summary, fuel type override, provenance bar), ConsumptionManager.jsx (three-column layout, dataset cards, delete), Sidebar icon (FileSpreadsheet, #2D6A7A), moduleThemes, App.jsx route
+- Part 5: MonthlyComparisonChart.jsx (actual bars + CRREM reference line, status banner, EUI gap %)
+- Part 6: DailyProfileChart.jsx (AreaChart with Brush zoom), HalfHourlyHeatmap.jsx (canvas carpet plot, HSL ramp, tooltip)
+- Part 7: ModelComparisonChart.jsx (actual solid bars + modelled outline bars, gap cards, explanation panel)
+- Part 8: CRREMTab updated — red ReferenceDot at actual year, actual EUI panel with performance gap and actual stranding year
+- Part 9: Navigation wiring — /consumption route, sidebar, moduleThemes, App.jsx
+- Part 10: Integration test ✓ — synthetic hotel HH CSV (17,568 records, 1,124,814 kWh, 312 kWh/m² EUI, 30-min, 99.7% coverage). All tabs verified. CRREM red dot visible. Zero console errors.
 
 **Brief 14 progress (all committed):**
 - Parts 1–9 complete. Part 10 browser integration test TO DO.
@@ -154,7 +154,7 @@ All checklist items:
 
 ## Safety checks
 
-- Working tree: clean (after Part 8 commit)
+- Working tree: clean (after Part 10 commit)
 - Branch: main
-- Brief 15 Parts 1–9 committed to main; push to GitHub pending
+- Brief 15 all parts committed to main; push to GitHub pending
 - data/ directory: gitignored, intact, not touched
