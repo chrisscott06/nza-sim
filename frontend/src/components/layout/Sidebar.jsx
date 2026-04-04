@@ -4,6 +4,7 @@ import {
   Building2,
   Thermometer,
   Clock,
+  FileSpreadsheet,
   BarChart3,
   GitCompare,
   BookOpen,
@@ -18,8 +19,9 @@ const TOP_ITEMS = [
 ]
 
 const BOTTOM_ITEMS = [
-  { to: '/results',   icon: BarChart3,  label: 'Results' },
-  { to: '/scenarios', icon: GitCompare, label: 'Scenarios' },
+  { to: '/consumption', icon: FileSpreadsheet, label: 'Consumption' },
+  { to: '/results',     icon: BarChart3,       label: 'Results'     },
+  { to: '/scenarios',   icon: GitCompare,      label: 'Scenarios'   },
 ]
 
 function NavItem({ to, icon: Icon, label }) {
