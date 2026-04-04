@@ -13,12 +13,14 @@ import {
 } from 'lucide-react'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import ConsumptionUpload from './ConsumptionUpload.jsx'
+import MonthlyComparisonChart from './MonthlyComparisonChart.jsx'
 
 // Accent colour for this module
 const TEAL = '#2D6A7A'
 
 export default function ConsumptionManager() {
-  const { currentProjectId: projectId } = useContext(ProjectContext)
+  const { currentProjectId: projectId, params } = useContext(ProjectContext)
+  const gia = (params?.length ?? 0) * (params?.width ?? 0) * (params?.num_floors ?? 0)
 
   const [datasets,     setDatasets]     = useState([])
   const [loading,      setLoading]      = useState(true)
@@ -151,7 +153,7 @@ export default function ConsumptionManager() {
       {/* ── Centre panel — visualisations ─────────────────────────────────── */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {selectedDataset ? (
-          <DatasetDetail dataset={selectedDataset} projectId={projectId} />
+          <DatasetDetail dataset={selectedDataset} projectId={projectId} gia={gia} />
         ) : (
           <EmptyState onUpload={() => setShowUpload(true)} />
         )}
@@ -233,10 +235,19 @@ function DatasetCard({ dataset, isSelected, isDeleting, onClick, onDelete }) {
 
 // ── DatasetDetail (centre column content) ─────────────────────────────────
 
-function DatasetDetail({ dataset, projectId }) {
-  const [monthly, setMonthly]   = useState(null)
-  const [loading, setLoading]   = useState(false)
-  const [error,   setError]     = useState(null)
+const TABS = [
+  { id: 'crrem',   label: 'vs CRREM'    },
+  { id: 'monthly', label: 'Monthly'     },
+  { id: 'daily',   label: 'Daily'       },
+  { id: 'heatmap', label: 'Heatmap'     },
+  { id: 'model',   label: 'vs Model'    },
+]
+
+function DatasetDetail({ dataset, projectId, gia }) {
+  const [monthly,  setMonthly]  = useState(null)
+  const [loading,  setLoading]  = useState(false)
+  const [error,    setError]    = useState(null)
+  const [activeTab, setActiveTab] = useState('crrem')
 
   useEffect(() => {
     if (!dataset?.id) return
@@ -253,72 +264,97 @@ function DatasetDetail({ dataset, projectId }) {
   const barColor = isElec ? '#CA8A04' : '#DC2626'
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto p-5 gap-5">
+    <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 px-5 py-3 border-b border-light-grey flex-shrink-0">
         <div
           className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0"
           style={{ backgroundColor: isElec ? '#FEF9C3' : '#FEF2F2' }}
         >
           {isElec ? <Zap size={15} style={{ color: '#CA8A04' }} /> : <Flame size={15} style={{ color: '#DC2626' }} />}
         </div>
-        <div>
-          <h3 className="text-sm font-semibold text-navy capitalize">{dataset.fuel_type} consumption</h3>
-          <p className="text-xxs text-mid-grey">
+        <div className="flex-1 min-w-0">
+          <h3 className="text-xs font-semibold text-navy capitalize">{dataset.fuel_type} consumption</h3>
+          <p className="text-xxs text-mid-grey truncate">
             {dataset.source_filename}
             {dataset.interval_minutes && ` · ${dataset.interval_minutes}-minute intervals`}
           </p>
         </div>
-        <div className="ml-auto flex items-baseline gap-1">
-          <span className="text-xl font-bold tabular-nums text-navy">
+        <div className="flex items-baseline gap-1">
+          <span className="text-lg font-bold tabular-nums text-navy">
             {Math.round(dataset.total_kwh ?? 0).toLocaleString()}
           </span>
           <span className="text-xxs text-mid-grey">kWh total</span>
         </div>
       </div>
 
-      {/* Monthly chart */}
-      <div className="flex flex-col gap-2">
-        <h4 className="text-xxs font-semibold text-mid-grey uppercase tracking-wide">Monthly totals</h4>
+      {/* Tab bar */}
+      <div className="flex border-b border-light-grey flex-shrink-0 px-5">
+        {TABS.map(tab => {
+          const isComingSoon = ['daily', 'heatmap', 'model'].includes(tab.id)
+          return (
+            <button
+              key={tab.id}
+              onClick={() => !isComingSoon && setActiveTab(tab.id)}
+              disabled={isComingSoon}
+              className={`
+                px-3 py-2 text-xxs font-medium border-b-2 transition-colors duration-100
+                ${activeTab === tab.id
+                  ? 'border-[#2D6A7A] text-[#2D6A7A]'
+                  : isComingSoon
+                    ? 'border-transparent text-mid-grey/50 cursor-not-allowed'
+                    : 'border-transparent text-mid-grey hover:text-navy'
+                }
+              `}
+            >
+              {tab.label}
+              {isComingSoon && <span className="ml-1 text-xxs text-mid-grey/40">•••</span>}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Tab content */}
+      <div className="flex-1 overflow-y-auto p-5">
         {loading && (
-          <div className="flex items-center justify-center py-6">
+          <div className="flex items-center justify-center py-10">
             <RefreshCw size={14} className="text-mid-grey animate-spin" />
           </div>
         )}
-        {error && (
-          <p className="text-xxs text-red-500">Failed to load monthly data: {error}</p>
-        )}
-        {monthly && monthly.length > 0 && (
-          <MonthlyBarChart data={monthly} color={barColor} />
-        )}
-        {monthly && monthly.length === 0 && !loading && (
-          <p className="text-xxs text-mid-grey">No monthly data available.</p>
-        )}
-      </div>
 
-      {/* Coming soon panels */}
-      <div className="flex flex-col gap-2">
-        <h4 className="text-xxs font-semibold text-mid-grey uppercase tracking-wide">Visualisations</h4>
-        <div className="grid grid-cols-2 gap-2">
-          {[
-            { label: 'vs CRREM Target',    sub: 'Actual EUI against decarbonisation pathway',  part: 5 },
-            { label: 'Daily Profile',      sub: 'Daily totals with zoom to half-hourly',        part: 6 },
-            { label: 'Load Heatmap',       sub: 'Time-of-day vs date carpet plot',              part: 6 },
-            { label: 'vs Model',           sub: 'Actual vs EnergyPlus modelled demand',         part: 7 },
-          ].map(({ label, sub, part }) => (
-            <div
-              key={label}
-              className="p-3 rounded border border-light-grey border-dashed flex flex-col gap-1 opacity-60"
-            >
-              <div className="flex items-center gap-1.5">
-                <BarChart3 size={12} className="text-mid-grey" />
-                <span className="text-xxs font-medium text-navy">{label}</span>
-              </div>
-              <p className="text-xxs text-mid-grey">{sub}</p>
-              <p className="text-xxs text-mid-grey/60 mt-auto">Brief 15 Part {part}</p>
-            </div>
-          ))}
-        </div>
+        {error && !loading && (
+          <p className="text-xxs text-red-500">Failed to load data: {error}</p>
+        )}
+
+        {!loading && !error && monthly && activeTab === 'crrem' && (
+          <MonthlyComparisonChart
+            monthly={monthly}
+            fuelType={dataset.fuel_type}
+            gia={gia}
+          />
+        )}
+
+        {!loading && !error && monthly && activeTab === 'monthly' && (
+          <div className="flex flex-col gap-2">
+            <h4 className="text-xxs font-semibold text-mid-grey uppercase tracking-wide">Monthly totals</h4>
+            {monthly.length > 0
+              ? <MonthlyBarChart data={monthly} color={barColor} />
+              : <p className="text-xxs text-mid-grey">No monthly data available.</p>
+            }
+          </div>
+        )}
+
+        {!loading && !error && ['daily', 'heatmap', 'model'].includes(activeTab) && (
+          <div className="flex flex-col items-center justify-center py-12 gap-2 text-center">
+            <BarChart3 size={24} className="text-light-grey" />
+            <p className="text-xxs text-mid-grey font-medium">Coming in Brief 15 Part {activeTab === 'model' ? 7 : 6}</p>
+            <p className="text-xxs text-mid-grey/60">
+              {activeTab === 'daily'   && 'Daily consumption profile with half-hourly zoom'}
+              {activeTab === 'heatmap' && 'Time-of-day vs date carpet plot showing baseload'}
+              {activeTab === 'model'   && 'Actual vs modelled energy — performance gap breakdown'}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )
