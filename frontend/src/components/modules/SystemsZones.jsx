@@ -7,6 +7,7 @@
  */
 
 import { useContext, useEffect, useState } from 'react'
+import { NavLink } from 'react-router-dom'
 import { ProjectContext } from '../../context/ProjectContext.jsx'
 import SystemSankey from './systems/SystemSankey.jsx'
 import SystemsLiveResults from './systems/SystemsLiveResults.jsx'
@@ -238,8 +239,11 @@ function InputsColumn({ library, openSection, setOpenSection }) {
   return (
     <div className="h-full overflow-y-auto overflow-x-hidden bg-white border-r border-light-grey">
       {/* Header */}
-      <div className="px-3 pt-2.5 pb-2 border-b border-light-grey" style={{ borderTopWidth: '3px', borderTopColor: '#00AEEF', borderTopStyle: 'solid' }}>
-        <p className="text-caption font-medium" style={{ color: '#00AEEF' }}>Systems</p>
+      <div className="px-3 pt-2 pb-2 border-b border-light-grey" style={{ borderTopWidth: '3px', borderTopColor: '#00AEEF', borderTopStyle: 'solid' }}>
+        <NavLink to="/project" className="text-xxs text-mid-grey hover:text-navy transition-colors">
+          ← Overview
+        </NavLink>
+        <p className="text-caption font-medium mt-0.5" style={{ color: '#00AEEF' }}>Systems</p>
         <p className="text-xxs text-mid-grey">Assign systems to each energy demand</p>
       </div>
 

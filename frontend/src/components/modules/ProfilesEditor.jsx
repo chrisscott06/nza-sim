@@ -13,6 +13,19 @@ import ScheduleEditor  from './profiles/ScheduleEditor.jsx'
 import ProfilesLiveResults from './profiles/ProfilesLiveResults.jsx'
 import { ProjectContext } from '../../context/ProjectContext.jsx'
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Strip zone-type words from schedule display names (e.g. "Hotel Bedroom — Occupancy" → "Hotel — Occupancy") */
+function cleanScheduleName(name) {
+  if (!name) return name
+  const ZONE_WORDS = ['Bedroom', 'Corridor', 'Reception', 'Office', 'Retail', 'Bathroom', 'Common Area']
+  let cleaned = name
+  for (const word of ZONE_WORDS) {
+    cleaned = cleaned.replace(new RegExp(`\\b${word}\\b\\s*—?\\s*`, 'i'), '').trim()
+  }
+  return cleaned.replace(/^[— ]+/, '').replace(/[— ]+$/, '').trim() || name
+}
+
 // ── Type config ───────────────────────────────────────────────────────────────
 
 const SCHEDULE_TYPES = [
@@ -39,7 +52,6 @@ const TYPE_DOT = {
 function CreateDialog({ schedules, onConfirm, onCancel }) {
   const [name,      setName]      = useState('My Custom Schedule')
   const [schedType, setSchedType] = useState('occupancy')
-  const [zoneType,  setZoneType]  = useState('bedroom')
   const [template,  setTemplate]  = useState('')
 
   function handleCreate() {
@@ -51,7 +63,6 @@ function CreateDialog({ schedules, onConfirm, onCancel }) {
       name,
       config_json: {
         schedule_type:       schedType,
-        zone_type:           zoneType,
         day_types:           base ? { ...(base.config_json?.day_types ?? blankDays) } : blankDays,
         monthly_multipliers: base ? [...(base.config_json?.monthly_multipliers ?? blankMult)] : blankMult,
       },
@@ -231,10 +242,10 @@ function ScheduleListColumn({
                 <span className="w-2 h-2 rounded-full flex-shrink-0 mt-1" style={{ backgroundColor: dotColor }} />
                 <div className="min-w-0 flex-1">
                   <p className={`text-caption truncate ${isSelected ? 'font-medium text-navy' : 'text-dark-grey'}`}>
-                    {s.display_name ?? s.name}
+                    {cleanScheduleName(s.display_name ?? s.name)}
                   </p>
                   <p className="text-xxs text-mid-grey truncate capitalize">
-                    {(cfg.building_type ?? cfg.zone_type ?? '').replace(/_/g, ' ')}
+                    {(cfg.schedule_type ?? '').replace(/_/g, ' ')}
                   </p>
                 </div>
                 {isSelected && <Check size={11} className="flex-shrink-0 text-purple-600 ml-auto mt-0.5" />}

@@ -117,7 +117,7 @@ export default function HomePage() {
 
   const handleLoad = useCallback(async (id) => {
     if (id !== currentProjectId) await loadProject(id)
-    navigate('/building')
+    navigate('/project')
   }, [currentProjectId, loadProject, navigate])
 
   const handleCreate = useCallback(async () => {

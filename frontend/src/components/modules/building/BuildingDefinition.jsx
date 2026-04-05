@@ -7,6 +7,7 @@
  */
 
 import { useState, useContext, useEffect, useMemo } from 'react'
+import { NavLink } from 'react-router-dom'
 import BuildingViewer3D from './BuildingViewer3D.jsx'
 import LiveResultsPanel from './LiveResultsPanel.jsx'
 import FabricSankey from './FabricSankey.jsx'
@@ -199,10 +200,13 @@ function InputsColumn({ library }) {
     <div className="h-full overflow-y-auto overflow-x-hidden bg-white border-r border-light-grey">
       {/* Module header with warm earth accent */}
       <div
-        className="px-3 pt-2.5 pb-2 border-b border-light-grey"
+        className="px-3 pt-2 pb-2 border-b border-light-grey"
         style={{ borderTopWidth: '3px', borderTopColor: '#A1887F', borderTopStyle: 'solid' }}
       >
-        <p className="text-caption font-medium" style={{ color: '#A1887F' }}>Building</p>
+        <NavLink to="/project" className="text-xxs text-mid-grey hover:text-navy transition-colors">
+          ← Overview
+        </NavLink>
+        <p className="text-caption font-medium mt-0.5" style={{ color: '#A1887F' }}>Building</p>
         <p className="text-xxs text-mid-grey">Geometry, fabric &amp; airtightness</p>
       </div>
 
