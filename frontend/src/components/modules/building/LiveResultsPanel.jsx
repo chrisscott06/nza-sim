@@ -17,8 +17,8 @@ import GainsLossesChart from './GainsLossesChart.jsx'
 // ── EUI Bar Gauge ─────────────────────────────────────────────────────────────
 // Simple horizontal bar gauge — stable rendering, no SVG arc floating-point jitter.
 
-const EUI_MAX = 300  // kWh/m² — top of gauge scale (raised to accommodate high-consumption buildings)
-const CRREM_TARGET = 85  // approximate UK hotel CRREM pathway 2026
+const EUI_MAX = 400  // kWh/m² — top of gauge scale (covers 2020 CRREM start at 264 + headroom)
+const CRREM_TARGET = 184  // CRREM V2.07 — UK Hotel 1.5°C target for 2026 (kWh/m²)
 
 function EUIGauge({ eui }) {
   // Clamp to valid range — prevents NaN/Infinity and out-of-bounds rendering

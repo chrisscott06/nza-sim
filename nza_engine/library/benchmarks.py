@@ -20,33 +20,33 @@ CRREM_HOTEL_UK_15 = {
     "name":          "CRREM 1.5°C — UK Hotel",
     "display_name":  "CRREM 1.5°C Pathway — UK Hotel",
     "description":   "CRREM 1.5°C decarbonisation pathway for UK hotels. "
-                     "Year-by-year EUI (kWh/m²) and carbon intensity (kgCO₂/m²) targets.",
+                     "Real values from CRREM V2.07 Risk Assessment Tool. "
+                     "EUI based on gross energy demand. EUI plateaus at 95 kWh/m² from 2037 "
+                     "(grid decarbonisation means further EUI reduction is not needed).",
     "pathway":       "1.5C",
     "country":       "UK",
     "building_type": "hotel",
-    # EUI targets (kWh/m² per year)
+    "source":        "CRREM V2.07 Risk Assessment Tool — 1.5°C, United Kingdom, Hotel",
+    # EUI targets (kWh/m² per year) — real values from CRREM V2.07
     "eui_targets": {
-        2020: 280, 2021: 268, 2022: 257, 2023: 246, 2024: 235,
-        2025: 225, 2026: 215, 2027: 205, 2028: 196, 2029: 188,
-        2030: 180, 2031: 171, 2032: 162, 2033: 154, 2034: 147,
-        2035: 140, 2036: 133, 2037: 127, 2038: 121, 2039: 116,
-        2040: 110, 2041: 106, 2042: 102, 2043:  98, 2044:  94,
-        2045:  90, 2046:  87, 2047:  84, 2048:  81, 2049:  78,
-        2050:  75, 2051:  72, 2052:  69, 2053:  67, 2054:  65,
-        2055:  63, 2056:  61, 2057:  59, 2058:  57, 2059:  56,
-        2060:  55,
+        2020: 264.0, 2021: 248.6, 2022: 234.1, 2023: 220.4, 2024: 207.6,
+        2025: 195.5, 2026: 184.1, 2027: 173.3, 2028: 163.2, 2029: 153.7,
+        2030: 144.7, 2031: 136.3, 2032: 128.3, 2033: 120.8, 2034: 113.8,
+        2035: 107.1, 2036: 100.9,
+        2037:  95.0,  # PLATEAU: grid decarbonisation means no further EUI reduction needed
+        2038:  95.0, 2039:  95.0, 2040:  95.0, 2041:  95.0, 2042:  95.0,
+        2043:  95.0, 2044:  95.0, 2045:  95.0, 2046:  95.0, 2047:  95.0,
+        2048:  95.0, 2049:  95.0, 2050:  95.0,
     },
-    # Carbon intensity targets (kgCO₂/m² per year)
+    # Carbon intensity targets (kgCO₂/m² per year) — real values from CRREM V2.07
     "carbon_targets": {
-        2020:  80, 2021:  73, 2022:  66, 2023:  60, 2024:  57,
-        2025:  55, 2026:  50, 2027:  45, 2028:  41, 2029:  39,
-        2030:  38, 2031:  34, 2032:  30, 2033:  27, 2034:  26,
-        2035:  25, 2036:  23, 2037:  21, 2038:  19, 2039:  18,
-        2040:  18, 2041:  16, 2042:  15, 2043:  14, 2044:  13,
-        2045:  12, 2046:  11, 2047:  10, 2048:   9, 2049:   8,
-        2050:   8, 2051:   7, 2052:   6, 2053:   6, 2054:   5,
-        2055:   5, 2056:   4, 2057:   4, 2058:   3, 2059:   3,
-        2060:   2,
+        2020: 56.13, 2021: 52.95, 2022: 49.09, 2023: 45.32, 2024: 41.66,
+        2025: 38.28, 2026: 34.74, 2027: 31.49, 2028: 28.38, 2029: 25.42,
+        2030: 22.51, 2031: 20.04, 2032: 17.61, 2033: 15.30, 2034: 13.13,
+        2035: 11.08, 2036:  9.14, 2037:  7.33, 2038:  5.78, 2039:  4.54,
+        2040:  3.53, 2041:  2.98, 2042:  2.56, 2043:  2.19, 2044:  1.86,
+        2045:  1.56, 2046:  1.34, 2047:  1.13, 2048:  0.94, 2049:  0.77,
+        2050:  0.60,
     },
 }
 
@@ -55,7 +55,10 @@ CRREM_HOTEL_UK_15 = {
 CRREM_HOTEL_UK_2 = {
     "name":          "CRREM 2°C — UK Hotel",
     "display_name":  "CRREM 2°C Pathway — UK Hotel",
-    "description":   "CRREM 2°C decarbonisation pathway for UK hotels.",
+    "description":   "CRREM 2°C decarbonisation pathway for UK hotels. "
+                     "NOTE: These values are approximations — NOT verified against the official "
+                     "CRREM V2.07 tool. Use the 1.5°C pathway (crrem_hotel_uk_15) for "
+                     "client-facing output.",
     "pathway":       "2C",
     "country":       "UK",
     "building_type": "hotel",

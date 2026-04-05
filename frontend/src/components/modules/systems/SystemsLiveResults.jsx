@@ -16,8 +16,8 @@ import { calculateInstant } from '../../../utils/instantCalc.js'
 // ── EUI bar gauge ─────────────────────────────────────────────────────────────
 // Horizontal bar — stable rendering, no SVG arc floating-point jitter.
 
-const EUI_MAX = 300
-const CRREM_TARGET = 85
+const EUI_MAX = 400  // covers 2020 CRREM start at 264 + headroom
+const CRREM_TARGET = 184  // CRREM V2.07 — UK Hotel 1.5°C target for 2026 (kWh/m²)
 
 function EUIGauge({ eui }) {
   const clamped  = Math.max(0, Math.min(Math.round(eui ?? 0), EUI_MAX))
