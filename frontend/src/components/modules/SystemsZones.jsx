@@ -6,11 +6,13 @@
  * Right (w-80):  SystemsLiveResults — instant-calc results
  */
 
-import { useContext, useEffect, useState } from 'react'
+import { useContext, useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
+import { AreaChart, Area, ResponsiveContainer } from 'recharts'
 import { ProjectContext } from '../../context/ProjectContext.jsx'
 import SystemSankey from './systems/SystemSankey.jsx'
 import SystemsLiveResults from './systems/SystemsLiveResults.jsx'
+import SchedulePreview from './systems/SchedulePreview.jsx'
 
 // ── Shared compact input components ──────────────────────────────────────────
 
@@ -116,6 +118,53 @@ function AccordionSection({ id, title, summary, isOpen, onToggle, children, acce
   )
 }
 
+// ── Mini schedule sparkline (shown at bottom of each open accordion section) ──
+
+const SCHED_COLOURS = {
+  heating_setpoint: '#DC2626',
+  cooling_setpoint: '#06B6D4',
+  lighting:         '#F59E0B',
+  equipment:        '#8B5CF6',
+  occupancy:        '#3B82F6',
+  dhw:              '#F97316',
+}
+
+function MiniScheduleSparkline({ schedule, onClick }) {
+  if (!schedule) return null
+  const cfg     = schedule.config_json ?? {}
+  const weekday = cfg.day_types?.weekday ?? Array(24).fill(0)
+  const type    = cfg.schedule_type ?? ''
+  const color   = SCHED_COLOURS[type] ?? '#9CA3AF'
+  const data    = weekday.map((v, i) => ({ h: i, v }))
+  const name    = schedule.display_name ?? schedule.name ?? ''
+
+  return (
+    <div
+      className="mt-2 pt-2 border-t border-light-grey cursor-pointer hover:bg-teal/5 rounded px-1 transition-colors"
+      onClick={onClick}
+    >
+      <div className="flex items-center justify-between mb-0.5">
+        <p className="text-xxs text-mid-grey truncate">Schedule: {name}</p>
+        <p className="text-xxs text-teal flex-shrink-0 ml-1">view →</p>
+      </div>
+      <ResponsiveContainer width="100%" height={38}>
+        <AreaChart data={data} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
+          <Area
+            type="monotone"
+            dataKey="v"
+            stroke={color}
+            fill={color}
+            fillOpacity={0.12}
+            dot={false}
+            strokeWidth={1.5}
+            isAnimationActive={false}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
 // ── Demand section helpers ─────────────────────────────────────────────────────
 
 /** Get the label for a system name from the library array */
@@ -130,8 +179,11 @@ function sysItem(library, name) {
 
 // ── Left inputs column (demand-based) ────────────────────────────────────────
 
-function InputsColumn({ library, openSection, setOpenSection }) {
+function InputsColumn({ library, openSection, setOpenSection, librarySchedules = [], onPreviewSchedule }) {
   const { systems, updateSystem } = useContext(ProjectContext)
+
+  /** Find the first library schedule matching a given schedule_type */
+  const findSched = (type) => librarySchedules.find(s => s.config_json?.schedule_type === type) ?? null
 
   const isIdeal = systems.mode !== 'detailed'
   const toggleSection = (id) => setOpenSection(prev => prev === id ? null : id)
@@ -284,6 +336,10 @@ function InputsColumn({ library, openSection, setOpenSection }) {
           {isCombinedVRF && (
             <p className="text-xxs text-teal italic mt-1">Also serving Space Cooling</p>
           )}
+          <MiniScheduleSparkline
+            schedule={findSched('heating_setpoint')}
+            onClick={() => onPreviewSchedule?.('space_heating')}
+          />
           {/* Secondary system */}
           {!hasShSec ? (
             <button onClick={() => setSecondary('space_heating', { system: 'gas_boiler_heating', share: 0.2, efficiency_override: null })}
@@ -332,6 +388,10 @@ function InputsColumn({ library, openSection, setOpenSection }) {
           {isCombinedVRF && (
             <p className="text-xxs text-teal italic mt-1">Linked to Space Heating — same VRF unit</p>
           )}
+          <MiniScheduleSparkline
+            schedule={findSched('cooling_setpoint')}
+            onClick={() => onPreviewSchedule?.('space_cooling')}
+          />
           {!hasScSec ? (
             <button onClick={() => setSecondary('space_cooling', { system: 'split_system_cooling', share: 0.2, efficiency_override: null })}
               className="text-xxs text-teal hover:underline mt-1 block"
@@ -387,6 +447,7 @@ function InputsColumn({ library, openSection, setOpenSection }) {
           {hasDhwSec && (
             <p className="text-xxs text-green-700 italic">ASHP heats 10→{systems.dhw_preheat_setpoint ?? 45}°C · Boiler tops up to {systems.dhw_setpoint ?? 60}°C</p>
           )}
+          <MiniScheduleSparkline schedule={findSched('dhw')} onClick={() => onPreviewSchedule?.('dhw')} />
           <div className="grid grid-cols-2 gap-1.5">
             <Field label="Setpoint (°C)">
               <input type="number" min={45} max={70} step={1} value={systems.dhw_setpoint ?? 60}
@@ -448,6 +509,7 @@ function InputsColumn({ library, openSection, setOpenSection }) {
               />
             </Field>
           )}
+          <MiniScheduleSparkline schedule={findSched('occupancy')} onClick={() => onPreviewSchedule?.('occupancy')} />
         </div>
       </AccordionSection>
 
@@ -472,6 +534,7 @@ function InputsColumn({ library, openSection, setOpenSection }) {
               onChange={v => updateSystem('lighting_control', v)} options={lightingControlOpts}
             />
           </Field>
+          <MiniScheduleSparkline schedule={findSched('lighting')} onClick={() => onPreviewSchedule?.('lighting')} />
         </div>
       </AccordionSection>
 
@@ -484,6 +547,7 @@ function InputsColumn({ library, openSection, setOpenSection }) {
             <SliderWithNumber value={epd} onChange={v => updateSystem('equipment_power_density', v)} min={0} max={30} step={0.5} unit="W/m²" />
           </Field>
           <p className="text-xxs text-mid-grey mt-1">CIBSE Guide A hotel default: 15 W/m²</p>
+          <MiniScheduleSparkline schedule={findSched('equipment')} onClick={() => onPreviewSchedule?.('small_power')} />
         </div>
       </AccordionSection>
     </div>
@@ -495,21 +559,55 @@ function InputsColumn({ library, openSection, setOpenSection }) {
 export default function SystemsZones() {
   const [library, setLibrary]           = useState([])
   const [libraryData, setLibraryData]   = useState({})
-  const [openSection, setOpenSection]   = useState('space_heating')  // Space Heating open by default
+  const [openSection, setOpenSection]   = useState('space_heating')
+  const [librarySchedules, setLibrarySchedules] = useState([])
+  const [rightTab, setRightTab]         = useState('results')       // 'results' | 'schedule'
+  const [previewType, setPreviewType]   = useState('occupancy')     // demand key for schedule preview
+  const [scheduleAssignments, setScheduleAssignments] = useState({}) // { [demandKey]: scheduleId }
 
   useEffect(() => {
-    // Fetch systems library for type dropdowns
     fetch('/api/library/systems')
       .then(r => r.ok ? r.json() : { systems: [] })
       .then(d => setLibrary(d.systems ?? []))
       .catch(() => {})
 
-    // Fetch constructions for instant calc
     fetch('/api/library/constructions')
       .then(r => r.ok ? r.json() : { constructions: [] })
       .then(d => setLibraryData({ constructions: d.constructions ?? [] }))
       .catch(() => {})
+
+    fetch('/api/library?type=schedule')
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setLibrarySchedules(Array.isArray(d) ? d : []))
+      .catch(() => {})
   }, [])
+
+  // Derive schedule profiles (24-value weekday arrays) from assignments
+  // Used by SystemsLiveResults to pass to the instant calc
+  const scheduleProfiles = useMemo(() => {
+    const result = {}
+    // Map demand key → schedule_type → profile key used by instantCalc
+    const DEMAND_TO_SCHED_TYPE = {
+      occupancy:  'occupancy',
+      lighting:   'lighting',
+      small_power: 'equipment',
+    }
+    for (const [demandKey, profileKey] of Object.entries({ occupancy: 'occupancy', lighting: 'lighting', small_power: 'equipment' })) {
+      const schedId  = scheduleAssignments[demandKey]
+      const schedType = DEMAND_TO_SCHED_TYPE[demandKey]
+      const sched    = schedId
+        ? librarySchedules.find(s => s.id === schedId)
+        : librarySchedules.find(s => s.config_json?.schedule_type === schedType)
+      const weekday = sched?.config_json?.day_types?.weekday
+      if (weekday?.length === 24) result[profileKey] = weekday
+    }
+    return Object.keys(result).length > 0 ? result : null
+  }, [scheduleAssignments, librarySchedules])
+
+  function handlePreviewSchedule(demandKey) {
+    setPreviewType(demandKey)
+    setRightTab('schedule')
+  }
 
   return (
     <div className="flex h-[calc(100vh-3rem)]">
@@ -519,6 +617,8 @@ export default function SystemsZones() {
           library={library}
           openSection={openSection}
           setOpenSection={setOpenSection}
+          librarySchedules={librarySchedules}
+          onPreviewSchedule={handlePreviewSchedule}
         />
       </div>
 
@@ -531,9 +631,40 @@ export default function SystemsZones() {
         />
       </div>
 
-      {/* Right: live results */}
-      <div className="w-80 flex-shrink-0">
-        <SystemsLiveResults libraryData={libraryData} />
+      {/* Right: Live Results | Schedule toggle */}
+      <div className="w-80 flex-shrink-0 flex flex-col border-l border-light-grey">
+        {/* Tab toggle */}
+        <div className="flex flex-shrink-0 border-b border-light-grey bg-white">
+          {['results', 'schedule'].map(tab => (
+            <button
+              key={tab}
+              onClick={() => setRightTab(tab)}
+              className={`flex-1 py-2 text-xxs font-semibold uppercase tracking-wider transition-colors border-b-2 ${
+                rightTab === tab
+                  ? 'text-teal border-teal'
+                  : 'text-mid-grey border-transparent hover:text-dark-grey'
+              }`}
+            >
+              {tab === 'results' ? 'Live Results' : 'Schedule'}
+            </button>
+          ))}
+        </div>
+        {/* Content */}
+        <div className="flex-1 min-h-0 overflow-hidden">
+          {rightTab === 'results' ? (
+            <SystemsLiveResults libraryData={libraryData} scheduleProfiles={scheduleProfiles} />
+          ) : (
+            <SchedulePreview
+              schedules={librarySchedules}
+              scheduleType={previewType}
+              onScheduleTypeChange={setPreviewType}
+              assignments={scheduleAssignments}
+              onAssign={(demandKey, schedId) =>
+                setScheduleAssignments(prev => ({ ...prev, [demandKey]: schedId }))
+              }
+            />
+          )}
+        </div>
       </div>
     </div>
   )

@@ -284,15 +284,15 @@ function sysFuel(key) { return (SYSTEM_DEFAULTS[key] ?? {}).fuel ?? 'electricity
 
 // ── Main panel ────────────────────────────────────────────────────────────────
 
-export default function SystemsLiveResults({ libraryData = {} }) {
+export default function SystemsLiveResults({ libraryData = {}, scheduleProfiles = null }) {
   const { params, constructions, systems } = useContext(ProjectContext)
   const { weatherData } = useWeather()
   const orientationDeg = Number(params?.orientation ?? 0)
   const hourlySolar = useHourlySolar(weatherData, orientationDeg)
 
   const result = useMemo(
-    () => calculateInstant(params, constructions, systems, libraryData, weatherData, hourlySolar),
-    [params, constructions, systems, libraryData, weatherData, hourlySolar]
+    () => calculateInstant(params, constructions, systems, libraryData, weatherData, hourlySolar, scheduleProfiles),
+    [params, constructions, systems, libraryData, weatherData, hourlySolar, scheduleProfiles]
   )
 
   const isIdeal = systems.mode !== 'detailed'

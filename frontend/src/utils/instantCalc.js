@@ -722,7 +722,7 @@ function _empty() {
  * @param {object|null} hourlySolar  — { f1,f2,f3,f4,roof } Float32Array from solarCalc
  * @returns {object} Same structure as calculateInstantDegreeDay + monthly breakdown
  */
-export function calculateInstant(building = {}, constructions = {}, systems = {}, libraryData = {}, weatherData = null, hourlySolar = null) {
+export function calculateInstant(building = {}, constructions = {}, systems = {}, libraryData = {}, weatherData = null, hourlySolar = null, scheduleProfiles = null) {
   if (!weatherData || !hourlySolar) {
     return calculateInstantDegreeDay(building, constructions, systems, libraryData)
   }
@@ -837,9 +837,10 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
     const solar_kWh  = solar_n + solar_e + solar_s + solar_w + solar_roof_h + solar_opq_h
 
     // Internal gains this hour from schedules (kWh)
-    const occ_frac   = hotelOccupancyFraction(hourOfDay)
-    const light_frac = hotelLightingFraction(hourOfDay)
-    const equip_frac = hotelEquipmentFraction(hourOfDay)
+    // Use actual library schedule if provided (Part 4), otherwise hardcoded hotel defaults
+    const occ_frac   = scheduleProfiles?.occupancy?.[hourOfDay]  ?? hotelOccupancyFraction(hourOfDay)
+    const light_frac = scheduleProfiles?.lighting?.[hourOfDay]   ?? hotelLightingFraction(hourOfDay)
+    const equip_frac = scheduleProfiles?.equipment?.[hourOfDay]  ?? hotelEquipmentFraction(hourOfDay)
     const light_h    = lpd_W * light_frac / 1000
     const equip_h    = epd_W * equip_frac / 1000
     const people_h   = occ_W * occ_frac   / 1000
