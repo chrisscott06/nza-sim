@@ -1,5 +1,5 @@
 import { useContext, useEffect, useRef, useState } from 'react'
-import { Play, Loader2, CheckCircle2, AlertCircle, ChevronDown } from 'lucide-react'
+import { Play, Loader2, CheckCircle2, AlertCircle, ChevronDown, ExternalLink } from 'lucide-react'
 import { SimulationContext } from '../../context/SimulationContext.jsx'
 import { ProjectContext } from '../../context/ProjectContext.jsx'
 import ProjectPicker from './ProjectPicker.jsx'
@@ -78,6 +78,18 @@ export default function TopBar() {
     }
   }, [saveStatus]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const handleOpenPopOut = () => {
+    const width  = 1200
+    const height = 800
+    const left   = window.screenX + window.outerWidth
+    const top    = window.screenY
+    window.open(
+      '/popout',
+      'nza-simulate-popout',
+      `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no`,
+    )
+  }
+
   const handleRun = () => {
     if (status === 'running') return
     setToast(null)
@@ -126,6 +138,16 @@ export default function TopBar() {
         <SaveIndicator status={saveStatus} />
 
         <div className="flex-1" />
+
+        {/* Pop-out results window */}
+        <button
+          onClick={handleOpenPopOut}
+          title="Open results pop-out window (second screen)"
+          className="flex items-center gap-1 px-2 py-1 rounded text-xxs border border-light-grey bg-white text-mid-grey hover:border-navy hover:text-navy transition-colors"
+        >
+          <ExternalLink size={11} />
+          Pop Out
+        </button>
 
         {/* Auto-simulate toggle */}
         <button

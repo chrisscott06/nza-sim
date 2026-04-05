@@ -7,6 +7,7 @@ import ErrorBoundary from './components/ui/ErrorBoundary.jsx'
 import HomePage from './pages/HomePage.jsx'
 import ProjectDashboard from './pages/ProjectDashboard.jsx'
 import PlaceholderPage from './pages/PlaceholderPage.jsx'
+import PopOutResults from './pages/PopOutResults.jsx'
 import BuildingDefinition from './components/modules/building/BuildingDefinition.jsx'
 import ResultsDashboard from './components/modules/results/ResultsDashboard.jsx'
 import SystemsZones from './components/modules/SystemsZones.jsx'
@@ -22,6 +23,9 @@ export default function App() {
         <WeatherProvider>
           <SimulationProvider>
             <Routes>
+              {/* Pop-out results window — standalone, no sidebar/topbar */}
+              <Route path="/popout" element={<PopOutResults />} />
+
               <Route element={<AppShell />}>
                 <Route path="/"          element={<ErrorBoundary moduleName="Home"><HomePage /></ErrorBoundary>} />
                 <Route path="/project"  element={<ErrorBoundary moduleName="Project Dashboard"><ProjectDashboard /></ErrorBoundary>} />

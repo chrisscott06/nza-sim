@@ -2,6 +2,21 @@
 
 ## Last completed
 
+Brief 18 Parts 1–7 in progress (2026-04-05). Not yet committed.
+
+**Brief 18 progress so far:**
+- Part 1: ProjectDashboard.jsx — `/project` route with summary cards, data checklist, mini CRREM chart, scenario table; HomePage navigates to `/project` on load
+- Part 2: ProfilesEditor — zone-type filter removed from CreateDialog; `cleanScheduleName()` strips zone prefixes
+- Part 3: SchedulePreview.jsx — schedule preview panel in Systems right panel; demand dropdown, DayProfileChart, assignment picker; tab toggle "Live Results | Schedule"
+- Part 4: instantCalc.js — `scheduleProfiles` 7th parameter; hourly loop reads `scheduleProfiles?.occupancy?.[h] ?? hotelOccupancyFraction(h)` etc.
+- Part 5: BroadcastChannel — `broadcastChannel.js` (publishState, subscribeToState, requestInitialState, onInitialStateRequest); ProjectContext debounced broadcast on updateParam/updateConstruction/updateSystem; onInitialStateRequest handler
+- Part 6: PopOutResults.jsx — `/popout` route (outside AppShell); 2×2 panel grid; subscribes to BroadcastChannel; runs own instantCalc; fetches own weather + solar; 6 panel types (systems-sankey, fabric-sankey, monthly, crrem, eui-gauge, performance-gap); ⚙ panel swap menu
+- Part 7: TopBar.jsx — "Pop Out" button with ExternalLink icon opens /popout in sized window to right of main window
+
+**Parts 8–12:** NOT YET DONE (panel implementations are inside PopOutResults.jsx from Part 6)
+
+**Note:** `current.md` updated to Brief 18.
+
 Brief 17 all parts complete (2026-04-04). Committed and pushed to GitHub.
 
 **Brief 17 progress (all committed — single combined commit):**

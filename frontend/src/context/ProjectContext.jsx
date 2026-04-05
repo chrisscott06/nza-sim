@@ -22,6 +22,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { publishState, onInitialStateRequest } from '../utils/broadcastChannel.js'
 
 export const ProjectContext = createContext(null)
 
@@ -177,8 +178,18 @@ export function ProjectProvider({ children }) {
 
   // ── Save status indicator
   const [saveStatus, setSaveStatus]   = useState('idle') // 'idle'|'saving'|'saved'|'error'
-  const saveTimerRef = useRef(null)   // debounce timeout
-  const savedTimerRef = useRef(null)  // auto-dismiss 'saved' message
+  const saveTimerRef    = useRef(null)   // debounce timeout
+  const savedTimerRef   = useRef(null)   // auto-dismiss 'saved' message
+  const broadcastTimer  = useRef(null)   // debounced broadcast to pop-out
+
+  // ── Broadcast helpers ─────────────────────────────────────────────────────
+  // Called after any state change to publish to the pop-out window (debounced 200ms)
+  function _broadcast(overrides = {}) {
+    if (broadcastTimer.current) clearTimeout(broadcastTimer.current)
+    broadcastTimer.current = setTimeout(() => {
+      publishState({ building: params, constructions, systems, ...overrides })
+    }, 200)
+  }
 
   // ── API helpers ───────────────────────────────────────────────────────────
 
@@ -298,6 +309,7 @@ export function ProjectProvider({ children }) {
         next = { ...p, [key]: value }
       }
       _scheduleSave('building', next)
+      _broadcast({ building: next })
       return next
     })
   }, [currentProjectId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -308,6 +320,7 @@ export function ProjectProvider({ children }) {
     setConstructions(c => {
       const next = { ...c, [key]: value }
       _scheduleSave(null, { construction_choices: next })
+      _broadcast({ constructions: next })
       return next
     })
   }, [currentProjectId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -366,9 +379,17 @@ export function ProjectProvider({ children }) {
       }
 
       _scheduleSave('systems', next)
+      _broadcast({ systems: next })
       return next
     })
   }, [currentProjectId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Respond to pop-out state requests ────────────────────────────────────
+  useEffect(() => {
+    return onInitialStateRequest(() => {
+      publishState({ building: params, constructions, systems })
+    })
+  }, [params, constructions, systems]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Project management actions ────────────────────────────────────────────
 
