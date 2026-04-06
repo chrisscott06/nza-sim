@@ -2,6 +2,18 @@
 
 ## Last completed
 
+**Brief 20** — Information module with CRREM executive summary, navigation restructure, weather fixes (2026-04-06). Committed (bad02c7) and pushed to GitHub.
+
+**Brief 20 parts completed:**
+- Part 1: InformationModule.jsx — /information route with project header, location & climate (WeatherSelector), building summary, occupancy, energy data (multi-year annual form), CRREM executive summary (EUI + carbon charts, stranding year), data completeness checklist, quick actions
+- Part 2: BuildingDefinition.jsx — Occupancy and Location & Climate sections removed; now purely geometry, glazing, fabric, airtightness
+- Part 3: api/routers/weather.py — fixed postcodes.io URL encoding (strip spaces, don't replace with +); uk_stations.json confirmed present at 424 stations
+- Part 4: api/utils.py already scans current/ and future/ directories; no change needed
+- Part 5: projectStrandingYear() linear regression in InformationModule.jsx; stranding banner (red/amber/green) per time horizon
+- Part 6: ProfilesEditor.jsx — already clean (zone-type words stripped, schedule-type filters only); no change needed
+- Part 7: HomePage.jsx — project card click navigates to /information; Sidebar has ClipboardList icon for /information
+- Part 8: Clean build ✓; committed and pushed
+
 **Brief 19** — Auto-download nearest UK weather station from climate.onebuilding.org via postcode lookup (2026-04-06). Committed (13c821e) and pushed to GitHub.
 
 **Brief 19 parts completed:**
@@ -205,9 +217,9 @@ All checklist items:
 
 ## Safety checks
 
-- Working tree: clean (after Brief 19 commit)
+- Working tree: clean (after Brief 20 commit)
 - Branch: main
-- Brief 19 committed to main; pushed to GitHub ✓ (13c821e)
+- Brief 20 committed to main; pushed to GitHub ✓ (bad02c7)
 - Branch: main
 - Brief 18b committed to main; pushed to GitHub ✓ (30bfb9d)
 - data/ directory: gitignored, intact, not touched
