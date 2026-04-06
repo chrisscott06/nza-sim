@@ -2,20 +2,19 @@
 
 ## Last completed
 
-Brief 18 Parts 1–7 in progress (2026-04-05). Not yet committed.
+**Brief 18b** — Font fix, Bridgewater corrections, weather file management, PROMETHEUS setup, manual multi-fuel consumption, multi-year CRREM trajectory (2026-04-06). Committed (30bfb9d) and pushed to GitHub.
 
-**Brief 18 progress so far:**
-- Part 1: ProjectDashboard.jsx — `/project` route with summary cards, data checklist, mini CRREM chart, scenario table; HomePage navigates to `/project` on load
-- Part 2: ProfilesEditor — zone-type filter removed from CreateDialog; `cleanScheduleName()` strips zone prefixes
-- Part 3: SchedulePreview.jsx — schedule preview panel in Systems right panel; demand dropdown, DayProfileChart, assignment picker; tab toggle "Live Results | Schedule"
-- Part 4: instantCalc.js — `scheduleProfiles` 7th parameter; hourly loop reads `scheduleProfiles?.occupancy?.[h] ?? hotelOccupancyFraction(h)` etc.
-- Part 5: BroadcastChannel — `broadcastChannel.js` (publishState, subscribeToState, requestInitialState, onInitialStateRequest); ProjectContext debounced broadcast on updateParam/updateConstruction/updateSystem; onInitialStateRequest handler
-- Part 6: PopOutResults.jsx — `/popout` route (outside AppShell); 2×2 panel grid; subscribes to BroadcastChannel; runs own instantCalc; fetches own weather + solar; 6 panel types (systems-sankey, fabric-sankey, monthly, crrem, eui-gauge, performance-gap); ⚙ panel swap menu
-- Part 7: TopBar.jsx — "Pop Out" button with ExternalLink icon opens /popout in sized window to right of main window
+**Brief 18b parts completed:**
+- Part 1: Body font-weight 300→400 (Regular) in index.css
+- Part 2: Bridgewater DEFAULT_PARAMS corrected: 63×13.4×5fl = 4,221m² GIA, 134 rooms, Bridgwater Somerset location (lat 51.087, lon -2.985)
+- Part 3: Weather multi-directory resolver (current/ → future/ → EnergyPlus fallback); GET /api/weather list endpoint with PROMETHEUS metadata parsing; BuildingDefinition Location & Climate section with current + future weather dropdowns and location mismatch warning; WeatherContext future_weather_file support
+- Part 4: scripts/setup_weather.py — unpacks PROMETHEUS nested city.zip → scenario.zip → .epw into current/ and future/{period}_{scenario}/ structure
+- Part 5: POST /api/projects/{id}/consumption/manual (ManualFuelEntry, ManualConsumptionRequest models); ManualConsumptionInput.jsx (multi-fuel annual form, live EUI/carbon metrics, CRREM V2.07 status badge); ConsumptionManager Upload File / Manual toggle; fix stale setShowUpload reference
+- Part 7: CRREMTab multi-year actual data — group actualDatasets by year, compute EUI + carbon per year; EuiTrajectoryChart shows red Line with dots for actual trend; CarbonTrajectoryChart shows actual carbon dots; inline year-by-year mini-table; methodology note updated to CRREM V2.07
 
-**Parts 8–12:** NOT YET DONE (panel implementations are inside PopOutResults.jsx from Part 6)
+**Parts 6, 8, 9, 10 (Brief 18b):** Part 6 = data entry (manual — done via UI); Parts 8–10 = dashboard/weather auto-select/future weather (deferred — Brief 18b Part 3 covers the dropdowns)
 
-**Note:** `current.md` updated to Brief 18.
+**Brief 18 Parts 1–7** committed (c3109b9) — ProjectDashboard, ProfilesEditor zone filter, SchedulePreview, instantCalc schedules, BroadcastChannel, PopOutResults, TopBar Pop Out button.
 
 Brief 17 all parts complete (2026-04-04). Committed and pushed to GitHub.
 
@@ -191,7 +190,7 @@ All checklist items:
 
 ## Safety checks
 
-- Working tree: clean (after Brief 17 commit)
+- Working tree: clean (after Brief 18b commit)
 - Branch: main
-- Brief 17 all parts committed to main; pushed to GitHub ✓ (bca7a24)
+- Brief 18b committed to main; pushed to GitHub ✓ (30bfb9d)
 - data/ directory: gitignored, intact, not touched
