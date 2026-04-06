@@ -12,6 +12,7 @@ import BuildingViewer3D from './BuildingViewer3D.jsx'
 import LiveResultsPanel from './LiveResultsPanel.jsx'
 import FabricSankey from './FabricSankey.jsx'
 import ExpandedSankeyOverlay from './ExpandedSankeyOverlay.jsx'
+import WeatherSelector from './WeatherSelector.jsx'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { useWeather } from '../../../context/WeatherContext.jsx'
 import { useHourlySolar } from '../../../hooks/useHourlySolar.js'
@@ -207,23 +208,7 @@ function InputsColumn({ library }) {
 
   const selectedWeather = params?.weather_file ?? 'default'
   const selectedFuture  = params?.future_weather_file ?? ''
-
-  const currentFiles = weatherFiles.filter(f => f.category === 'current' || f.category === 'bundled')
-  const futureFiles  = weatherFiles.filter(f => f.category?.startsWith('future'))
-
-  // Group future files by period for <optgroup>
-  const futureByPeriod = futureFiles.reduce((acc, f) => {
-    const key = f.period ?? 'Other'
-    if (!acc[key]) acc[key] = []
-    acc[key].push(f)
-    return acc
-  }, {})
-
-  // Warning if selected weather city is far from project location
-  const selectedFileMeta = weatherFiles.find(f => f.filename === selectedWeather)
   const projLat = params?.location?.latitude ?? 51.5
-  const weatherLat = selectedFileMeta?.latitude ?? null
-  const locationMismatch = weatherLat !== null && Math.abs(weatherLat - projLat) > 1.5
 
   return (
     <div className="h-full overflow-y-auto overflow-x-hidden bg-white border-r border-light-grey">
@@ -380,54 +365,14 @@ function InputsColumn({ library }) {
 
         {/* ── Location & Climate ── */}
         <CollapsibleSection title="Location & Climate" defaultOpen={false}>
-          <div className="space-y-2">
-            <Field label="Current weather file">
-              <select
-                value={selectedWeather}
-                onChange={e => updateParam('weather_file', e.target.value)}
-                className="w-full px-2 py-1 text-xxs border border-light-grey rounded focus:outline-none focus:border-teal bg-white"
-              >
-                <option value="default">Auto-select (default)</option>
-                {currentFiles.map(f => (
-                  <option key={f.filename} value={f.filename}>{f.display_name}</option>
-                ))}
-              </select>
-              {locationMismatch && (
-                <p className="text-xxs text-amber-600 mt-0.5">
-                  ⚠ Weather file latitude ({weatherLat?.toFixed(1)}°) may not match project location ({projLat.toFixed(1)}°N)
-                </p>
-              )}
-              {selectedFileMeta && (
-                <p className="text-xxs text-mid-grey mt-0.5">
-                  {selectedFileMeta.city} — {selectedFileMeta.latitude?.toFixed(2)}°N
-                </p>
-              )}
-            </Field>
-
-            {futureFiles.length > 0 && (
-              <Field label="Future climate (optional)">
-                <select
-                  value={selectedFuture}
-                  onChange={e => updateParam('future_weather_file', e.target.value || null)}
-                  className="w-full px-2 py-1 text-xxs border border-light-grey rounded focus:outline-none focus:border-teal bg-white"
-                >
-                  <option value="">None (current climate only)</option>
-                  {Object.entries(futureByPeriod).sort().map(([period, files]) => (
-                    <optgroup key={period} label={`${period}s`}>
-                      {files.map(f => (
-                        <option key={f.filename} value={f.filename}>{f.display_name}</option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-                {selectedFuture && (
-                  <p className="text-xxs text-teal mt-0.5">
-                    ℹ Modelling with future climate scenario
-                  </p>
-                )}
-              </Field>
-            )}
-          </div>
+          <WeatherSelector
+            currentWeatherFile={selectedWeather}
+            futureWeatherFile={selectedFuture}
+            weatherFiles={weatherFiles}
+            onWeatherChange={filename => updateParam('weather_file', filename)}
+            onFutureChange={filename => updateParam('future_weather_file', filename)}
+            projectLat={projLat}
+          />
         </CollapsibleSection>
 
       </div>

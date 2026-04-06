@@ -10,9 +10,16 @@ GET /api/weather/{filename}/hourly
 
 from __future__ import annotations
 
+import io
+import json
+import math
+import re as _re
+import zipfile
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+import httpx
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 
 from nza_engine.config import (
     DEFAULT_WEATHER_DIR,
@@ -25,8 +32,6 @@ router = APIRouter()
 
 
 # ── Weather file categorisation helpers ───────────────────────────────────────
-
-import re as _re
 
 def _categorise_epw(filepath: Path) -> dict:
     """
@@ -238,3 +243,159 @@ async def get_weather_hourly(filename: str):
             ) from exc
 
     return _EPW_CACHE[cache_key]
+
+
+# ── UK Station Index ──────────────────────────────────────────────────────────
+
+_STATIONS_CACHE: list[dict] | None = None
+_STATIONS_FILE  = Path("data/weather/uk_stations.json")
+
+
+def _load_stations() -> list[dict]:
+    global _STATIONS_CACHE
+    if _STATIONS_CACHE is not None:
+        return _STATIONS_CACHE
+    if not _STATIONS_FILE.exists():
+        return []
+    try:
+        with open(_STATIONS_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        _STATIONS_CACHE = data.get("stations", [])
+    except Exception:
+        _STATIONS_CACHE = []
+    return _STATIONS_CACHE
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance in km (Haversine formula)."""
+    R    = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a    = (math.sin(dlat / 2) ** 2
+            + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2))
+            * math.sin(dlon / 2) ** 2)
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+@router.get("/api/weather/nearest")
+async def nearest_station(
+    postcode: str | None = Query(None, description="UK postcode, e.g. TA6 6DF"),
+    lat:      float | None = Query(None),
+    lon:      float | None = Query(None),
+):
+    """
+    Find the nearest climate.onebuilding.org TMYx station to a postcode or coordinates.
+
+    Returns the nearest station plus up to 3 alternatives.
+    """
+    # Resolve postcode → lat/lon via postcodes.io
+    resolved_lat, resolved_lon = lat, lon
+    location_name: str | None = None
+
+    if postcode and (resolved_lat is None or resolved_lon is None):
+        clean = postcode.strip().replace(" ", "+")
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                r = await client.get(f"https://api.postcodes.io/postcodes/{clean}")
+            if not r.is_success:
+                raise HTTPException(status_code=400, detail=f"Could not resolve postcode '{postcode}' — postcodes.io returned {r.status_code}")
+            result = r.json().get("result") or {}
+            resolved_lat = result.get("latitude")
+            resolved_lon = result.get("longitude")
+            location_name = result.get("admin_district") or result.get("region")
+        except httpx.RequestError as exc:
+            raise HTTPException(status_code=503, detail=f"Postcode lookup failed: {exc}")
+
+    if resolved_lat is None or resolved_lon is None:
+        raise HTTPException(status_code=400, detail="Provide postcode or lat/lon query parameters")
+
+    stations = _load_stations()
+    if not stations:
+        raise HTTPException(
+            status_code=503,
+            detail="UK station index not available. Run: python scripts/build_station_index.py",
+        )
+
+    # Sort by haversine distance
+    ranked = sorted(
+        stations,
+        key=lambda s: _haversine_km(resolved_lat, resolved_lon, s["latitude"], s["longitude"]),
+    )
+
+    def _enrich(s: dict) -> dict:
+        return {**s, "distance_km": round(_haversine_km(resolved_lat, resolved_lon, s["latitude"], s["longitude"]), 1)}
+
+    nearest      = _enrich(ranked[0])
+    alternatives = [_enrich(s) for s in ranked[1:4]]
+
+    # Check if the nearest station is already downloaded
+    epw_name = nearest["filename"].replace(".zip", ".epw")
+    already_downloaded = (PROJECT_WEATHER_CURRENT / epw_name).exists()
+
+    return {
+        "location": {
+            "latitude":  resolved_lat,
+            "longitude": resolved_lon,
+            "name":      location_name,
+        },
+        "nearest":              {**nearest, "already_downloaded": already_downloaded},
+        "alternatives":         alternatives,
+        "station_count":        len(stations),
+    }
+
+
+class DownloadRequest(BaseModel):
+    filename:     str  # e.g. "GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.zip"
+    download_url: str
+    station_name: str
+
+
+@router.post("/api/weather/download")
+async def download_station_epw(body: DownloadRequest):
+    """
+    Download an EPW from climate.onebuilding.org, extract it, and save to
+    data/weather/current/. No-ops if the file already exists.
+    """
+    epw_name  = body.filename.replace(".zip", ".epw")
+    dest_path = PROJECT_WEATHER_CURRENT / epw_name
+
+    if dest_path.exists():
+        # Invalidate list cache so the new file appears
+        return {
+            "status":       "already_exists",
+            "filename":     epw_name,
+            "message":      f"Already downloaded: {epw_name}",
+        }
+
+    # Download the zip from climate.onebuilding.org
+    try:
+        async with httpx.AsyncClient(timeout=120.0, follow_redirects=True) as client:
+            r = await client.get(body.download_url)
+        if not r.is_success:
+            raise HTTPException(status_code=502, detail=f"Download failed: HTTP {r.status_code} from {body.download_url}")
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=503, detail=f"Network error downloading EPW: {exc}")
+
+    # Extract .epw from zip
+    try:
+        with zipfile.ZipFile(io.BytesIO(r.content)) as z:
+            epw_members = [n for n in z.namelist() if n.lower().endswith(".epw")]
+            if not epw_members:
+                raise HTTPException(status_code=502, detail="No .epw file found in downloaded zip")
+            epw_content = z.read(epw_members[0])
+    except zipfile.BadZipFile as exc:
+        raise HTTPException(status_code=502, detail=f"Downloaded file is not a valid zip: {exc}")
+
+    # Save to current weather directory
+    PROJECT_WEATHER_CURRENT.mkdir(parents=True, exist_ok=True)
+    dest_path.write_bytes(epw_content)
+
+    # Invalidate EPW list cache so the new file is immediately visible
+    # (The _EPW_CACHE for hourly data is keyed by filepath, not affected here)
+
+    return {
+        "status":       "downloaded",
+        "filename":     epw_name,
+        "station_name": body.station_name,
+        "size_bytes":   len(epw_content),
+    }
