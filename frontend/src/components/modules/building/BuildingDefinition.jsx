@@ -182,7 +182,7 @@ function InputsColumn({ library }) {
   const { length, width, num_floors, floor_height, orientation, wwr, name, infiltration_ach, window_count,
           num_bedrooms, occupancy_rate, people_per_room } = params
   const ach = infiltration_ach ?? 0.5
-  const bedrooms    = num_bedrooms    ?? 138
+  const bedrooms    = num_bedrooms    ?? 134
   const occRate     = occupancy_rate  ?? 0.75
   const peoplePerRm = people_per_room ?? 1.5
 
@@ -195,6 +195,35 @@ function InputsColumn({ library }) {
   const occDensity     = gia > 0 ? avgOccupants / gia : 0
 
   const { text: achText, color: achColor } = achLabel(ach)
+
+  // ── Weather file list ─────────────────────────────────────────────────────
+  const [weatherFiles, setWeatherFiles] = useState([])
+  useEffect(() => {
+    fetch('/api/weather')
+      .then(r => r.ok ? r.json() : [])
+      .then(setWeatherFiles)
+      .catch(() => {})
+  }, [])
+
+  const selectedWeather = params?.weather_file ?? 'default'
+  const selectedFuture  = params?.future_weather_file ?? ''
+
+  const currentFiles = weatherFiles.filter(f => f.category === 'current' || f.category === 'bundled')
+  const futureFiles  = weatherFiles.filter(f => f.category?.startsWith('future'))
+
+  // Group future files by period for <optgroup>
+  const futureByPeriod = futureFiles.reduce((acc, f) => {
+    const key = f.period ?? 'Other'
+    if (!acc[key]) acc[key] = []
+    acc[key].push(f)
+    return acc
+  }, {})
+
+  // Warning if selected weather city is far from project location
+  const selectedFileMeta = weatherFiles.find(f => f.filename === selectedWeather)
+  const projLat = params?.location?.latitude ?? 51.5
+  const weatherLat = selectedFileMeta?.latitude ?? null
+  const locationMismatch = weatherLat !== null && Math.abs(weatherLat - projLat) > 1.5
 
   return (
     <div className="h-full overflow-y-auto overflow-x-hidden bg-white border-r border-light-grey">
@@ -347,6 +376,58 @@ function InputsColumn({ library }) {
             </span>
           </div>
           <p className={`text-xxs ${achColor}`}>{achText}</p>
+        </CollapsibleSection>
+
+        {/* ── Location & Climate ── */}
+        <CollapsibleSection title="Location & Climate" defaultOpen={false}>
+          <div className="space-y-2">
+            <Field label="Current weather file">
+              <select
+                value={selectedWeather}
+                onChange={e => updateParam('weather_file', e.target.value)}
+                className="w-full px-2 py-1 text-xxs border border-light-grey rounded focus:outline-none focus:border-teal bg-white"
+              >
+                <option value="default">Auto-select (default)</option>
+                {currentFiles.map(f => (
+                  <option key={f.filename} value={f.filename}>{f.display_name}</option>
+                ))}
+              </select>
+              {locationMismatch && (
+                <p className="text-xxs text-amber-600 mt-0.5">
+                  ⚠ Weather file latitude ({weatherLat?.toFixed(1)}°) may not match project location ({projLat.toFixed(1)}°N)
+                </p>
+              )}
+              {selectedFileMeta && (
+                <p className="text-xxs text-mid-grey mt-0.5">
+                  {selectedFileMeta.city} — {selectedFileMeta.latitude?.toFixed(2)}°N
+                </p>
+              )}
+            </Field>
+
+            {futureFiles.length > 0 && (
+              <Field label="Future climate (optional)">
+                <select
+                  value={selectedFuture}
+                  onChange={e => updateParam('future_weather_file', e.target.value || null)}
+                  className="w-full px-2 py-1 text-xxs border border-light-grey rounded focus:outline-none focus:border-teal bg-white"
+                >
+                  <option value="">None (current climate only)</option>
+                  {Object.entries(futureByPeriod).sort().map(([period, files]) => (
+                    <optgroup key={period} label={`${period}s`}>
+                      {files.map(f => (
+                        <option key={f.filename} value={f.filename}>{f.display_name}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                {selectedFuture && (
+                  <p className="text-xxs text-teal mt-0.5">
+                    ℹ Modelling with future climate scenario
+                  </p>
+                )}
+              </Field>
+            )}
+          </div>
         </CollapsibleSection>
 
       </div>

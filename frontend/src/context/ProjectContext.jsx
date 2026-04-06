@@ -29,23 +29,25 @@ export const ProjectContext = createContext(null)
 // ── Defaults (mirror api/db/database.py) ─────────────────────────────────────
 
 const DEFAULT_PARAMS = {
-  name:            'New Project',
-  length:          60.0,
-  width:           15.0,
-  num_floors:      4,
-  floor_height:    3.2,
+  name:            'Bridgewater Hotel',
+  // Corrected from 505 Design / Zeal Hotels data — GIA 4,215 m²
+  // 63 × 13.4 × 5 = 4,221 m² ≈ 4,215 m² (confirmed from fire alarm drawings)
+  length:          63.0,
+  width:           13.4,
+  num_floors:      5,      // GF + 4 upper floors
+  floor_height:    3.0,    // typical Holiday Inn Express
   orientation:     0.0,
   wwr:             { north: 0.25, south: 0.25, east: 0.25, west: 0.25 },
   infiltration_ach: 0.5,
   window_count:    { north: 8, south: 8, east: 3, west: 3 },
-  // Occupancy (hotel-specific)
-  num_bedrooms:    138,
+  // Occupancy — confirmed from water consumption data (was 138)
+  num_bedrooms:    134,
   occupancy_rate:  0.75,
   people_per_room: 1.5,
   location: {
-    latitude:  51.127,
-    longitude: -2.992,
-    name:      'Bridgewater, Somerset',
+    latitude:  51.087,   // North Petherton / Bridgwater
+    longitude: -2.985,
+    name:      'Bridgwater, Somerset',
   },
 }
 

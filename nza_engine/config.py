@@ -26,5 +26,14 @@ DEFAULT_WEATHER_DIR = ENERGYPLUS_DIR / "WeatherData"
 DATA_DIR = PROJECT_ROOT / "data"
 SIMULATIONS_DIR = DATA_DIR / "simulations"
 
+# ── Project weather directories ───────────────────────────────────────────────
+# Organised EPW files for NZA Simulate. Searched before the EnergyPlus WeatherData
+# fallback so project-specific files take priority.
+PROJECT_WEATHER_DIR     = DATA_DIR / "weather"
+PROJECT_WEATHER_CURRENT = PROJECT_WEATHER_DIR / "current"    # current-climate EPW files
+PROJECT_WEATHER_FUTURE  = PROJECT_WEATHER_DIR / "future"     # PROMETHEUS future EPW files
+
 # ── Ensure runtime directories exist ─────────────────────────────────────────
 SIMULATIONS_DIR.mkdir(parents=True, exist_ok=True)
+PROJECT_WEATHER_CURRENT.mkdir(parents=True, exist_ok=True)
+PROJECT_WEATHER_FUTURE.mkdir(parents=True, exist_ok=True)

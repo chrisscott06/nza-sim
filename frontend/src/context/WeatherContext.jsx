@@ -18,9 +18,9 @@ export function WeatherProvider({ children }) {
   const [weatherData, setWeatherData] = useState(null)
   const [weatherLoading, setWeatherLoading] = useState(true)
 
-  // Read weather file from ProjectContext (params.weather_file or 'default')
+  // Use future weather file if selected, otherwise current weather file
   const { params } = useContext(ProjectContext)
-  const weatherFile = params?.weather_file ?? 'default'
+  const weatherFile = params?.future_weather_file || params?.weather_file || 'default'
 
   useEffect(() => {
     let cancelled = false

@@ -30,6 +30,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Query
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from api.db.database import get_db
 
@@ -158,6 +159,90 @@ async def upload_consumption(
         "provenance":   provenance,
         "source_filename": filename,
     }
+
+
+# ── Manual entry ─────────────────────────────────────────────────────────────
+
+class ManualFuelEntry(BaseModel):
+    type: str           # 'electricity' | 'gas' | 'oil' | 'lpg' | 'biomass' | 'district_heating'
+    kwh: float
+    source: str = "invoice"  # invoice | estimate | dec | utility_bill | sub_metered
+
+
+class ManualConsumptionRequest(BaseModel):
+    year: int
+    fuels: list[ManualFuelEntry]
+    gia_m2: float = 0.0
+
+
+@router.post("/manual")
+async def manual_consumption(project_id: str, body: ManualConsumptionRequest):
+    """
+    Record annual consumption totals by fuel type without uploading a file.
+
+    Creates one consumption_data row per fuel. Existing manual entries for the
+    same year + fuel type are replaced (deleted then re-inserted).
+    """
+    await _require_project(project_id)
+
+    if not body.fuels:
+        raise HTTPException(status_code=422, detail="At least one fuel entry is required")
+
+    year       = body.year
+    data_start = f"{year}-01-01"
+    data_end   = f"{year}-12-31"
+    created    = []
+
+    async with get_db() as db:
+        for fuel in body.fuels:
+            fuel_type = fuel.type.lower().replace(" ", "_").replace("-", "_")
+
+            # Delete any existing manual entry for this project/year/fuel
+            await db.execute(
+                """
+                DELETE FROM consumption_data
+                WHERE project_id = ? AND fuel_type = ?
+                  AND data_start = ? AND source_filename LIKE 'manual:%'
+                """,
+                (project_id, fuel_type, data_start),
+            )
+
+            consumption_id = str(uuid.uuid4())
+            provenance = {
+                "source":    "manual",
+                "data_source": fuel.source,
+                "year":      year,
+                "gia_m2":    body.gia_m2,
+            }
+
+            await db.execute(
+                """
+                INSERT INTO consumption_data
+                    (id, project_id, fuel_type, interval_minutes, data_start, data_end,
+                     total_kwh, record_count, source_filename, provenance_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    consumption_id, project_id, fuel_type,
+                    0,              # 0 = annual total, no interval records
+                    data_start, data_end,
+                    round(fuel.kwh, 1), 1,
+                    f"manual:{fuel.source}:{year}",
+                    json.dumps(provenance),
+                ),
+            )
+            created.append({
+                "id":           consumption_id,
+                "fuel_type":    fuel_type,
+                "total_kwh":    round(fuel.kwh, 1),
+                "data_start":   data_start,
+                "data_end":     data_end,
+                "source":       fuel.source,
+            })
+
+        await db.commit()
+
+    return {"created": created, "year": year}
 
 
 # ── List ──────────────────────────────────────────────────────────────────────

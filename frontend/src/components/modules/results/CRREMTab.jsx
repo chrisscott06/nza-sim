@@ -119,11 +119,20 @@ function ChartTooltip({ active, payload, label, unit }) {
 
 // ── EUI Chart (single or multi-scenario) ──────────────────────────────────────
 
-function EuiTrajectoryChart({ scenarioLines, euiTargets, actualEui = null, actualYear = CURRENT_YEAR }) {
+function EuiTrajectoryChart({ scenarioLines, euiTargets, actualDataPoints = [] }) {
   // scenarioLines: [{ name, eui, color }]
-  const yMax = actualEui != null
-    ? Math.ceil(Math.max(actualEui * 1.1, interpolate(euiTargets, 2020) * 1.1) / 50) * 50
-    : undefined  // let Recharts auto-scale when no actual data
+  // actualDataPoints: [{ year, eui }] — multi-year metered trend
+  const actualByYear = Object.fromEntries(actualDataPoints.map(p => [p.year, p.eui]))
+  const hasActual    = actualDataPoints.length > 0
+
+  const allEuis = [
+    ...actualDataPoints.map(p => p.eui),
+    ...scenarioLines.map(s => s.eui),
+    interpolate(euiTargets, 2020),
+  ].filter(Boolean)
+  const yMax = allEuis.length > 0
+    ? Math.ceil(Math.max(...allEuis) * 1.1 / 50) * 50
+    : undefined
 
   const data = CHART_YEARS.map(year => {
     const row = {
@@ -135,6 +144,10 @@ function EuiTrajectoryChart({ scenarioLines, euiTargets, actualEui = null, actua
       if (year >= CURRENT_YEAR - 1) {
         row[s.name] = Number(s.eui.toFixed(1))
       }
+    }
+    // Actual metered data — only at years where we have data
+    if (actualByYear[year] != null) {
+      row['Actual (metered)'] = actualByYear[year]
     }
     return row
   })
@@ -194,6 +207,19 @@ function EuiTrajectoryChart({ scenarioLines, euiTargets, actualEui = null, actua
           />
         ))}
 
+        {/* Actual metered performance trend — multi-year dots connected by line */}
+        {hasActual && (
+          <Line
+            type="linear"
+            dataKey="Actual (metered)"
+            stroke="#DC2626"
+            strokeWidth={2}
+            dot={{ r: 5, fill: '#DC2626', stroke: '#fff', strokeWidth: 2 }}
+            activeDot={{ r: 6 }}
+            connectNulls={false}
+          />
+        )}
+
         {/* Current year reference */}
         <ReferenceLine
           x={CURRENT_YEAR}
@@ -214,25 +240,6 @@ function EuiTrajectoryChart({ scenarioLines, euiTargets, actualEui = null, actua
             strokeWidth={2}
           />
         ))}
-
-        {/* Actual consumption data point — red dot at actual year */}
-        {actualEui != null && (
-          <ReferenceDot
-            x={actualYear}
-            y={actualEui}
-            r={7}
-            fill="#DC2626"
-            stroke="#fff"
-            strokeWidth={2}
-            label={{
-              value: `Actual ${actualYear}: ${actualEui}`,
-              position: 'top',
-              fontSize: 9,
-              fill: '#DC2626',
-              fontWeight: 600,
-            }}
-          />
-        )}
       </ComposedChart>
     </ChartContainer>
   )
@@ -240,8 +247,14 @@ function EuiTrajectoryChart({ scenarioLines, euiTargets, actualEui = null, actua
 
 // ── Carbon Chart (single or multi-scenario) ───────────────────────────────────
 
-function CarbonTrajectoryChart({ scenarioLines, defaultGia, carbonTargets }) {
+function CarbonTrajectoryChart({ scenarioLines, defaultGia, carbonTargets, actualDataPoints = [] }) {
   // scenarioLines: [{ name, totalKwh, electricityKwh, gasKwh, color, gia? }]
+  // actualDataPoints: [{ year, carbonPerM2 }] — metered actual carbon intensity per year
+  const actualCarbonByYear = Object.fromEntries(
+    actualDataPoints.map(p => [p.year, p.carbonPerM2])
+  )
+  const hasActual = actualDataPoints.length > 0
+
   const data = CHART_YEARS.map(year => {
     const row = {
       year,
@@ -259,6 +272,10 @@ function CarbonTrajectoryChart({ scenarioLines, defaultGia, carbonTargets }) {
           }).toFixed(1)
         )
       }
+    }
+    // Actual metered carbon — only at years where we have data
+    if (actualCarbonByYear[year] != null) {
+      row['Actual carbon'] = actualCarbonByYear[year]
     }
     return row
   })
@@ -282,6 +299,19 @@ function CarbonTrajectoryChart({ scenarioLines, defaultGia, carbonTargets }) {
         {scenarioLines.map(s => (
           <Line key={s.name} type="monotone" dataKey={s.name} stroke={s.color} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
         ))}
+
+        {/* Actual metered carbon trend — multi-year dots connected by line */}
+        {hasActual && (
+          <Line
+            type="linear"
+            dataKey="Actual carbon"
+            stroke="#DC2626"
+            strokeWidth={2}
+            dot={{ r: 5, fill: '#DC2626', stroke: '#fff', strokeWidth: 2 }}
+            activeDot={{ r: 6 }}
+            connectNulls={false}
+          />
+        )}
 
         <ReferenceLine
           x={CURRENT_YEAR}
@@ -480,22 +510,55 @@ export default function CRREMTab({ scenarios = [], scenarioResults = {} }) {
     ? findCarbonStrandingYear(primaryFuels, effectiveGia, carbonTargets)
     : null
 
-  // ── Actual consumption EUI from imported datasets ─────────────────────────
-  const electricityDataset = actualDatasets.find(d => d.fuel_type === 'electricity')
-  const gasDataset         = actualDatasets.find(d => d.fuel_type === 'gas')
+  // ── Actual consumption — multi-year grouped by year ───────────────────────
+  // Group all datasets by year, summing all fuel types
+  const dataByYear = {}
+  for (const ds of actualDatasets) {
+    const yr = Number(ds.data_start?.slice(0, 4))
+    if (!yr || isNaN(yr)) continue
+    if (!dataByYear[yr]) dataByYear[yr] = { electricity: 0, gas: 0, oil: 0, lpg: 0, biomass: 0, district_heating: 0 }
+    const fuel = ds.fuel_type?.toLowerCase()
+    if (fuel in dataByYear[yr]) {
+      dataByYear[yr][fuel] += ds.total_kwh ?? 0
+    }
+  }
 
-  const actualTotalKwh = (electricityDataset?.total_kwh ?? 0) + (gasDataset?.total_kwh ?? 0)
-  const actualEui      = effectiveGia > 0 && actualTotalKwh > 0
-    ? Math.round(actualTotalKwh / effectiveGia)
-    : null
+  // Carbon factors (fixed per fuel; electricity uses grid intensity per year)
+  const FUEL_CARBON = { gas: 0.183, oil: 0.247, lpg: 0.214, biomass: 0.015, district_heating: 0.168 }
+
+  // Compute one data point per year
+  const actualDataPoints = effectiveGia > 0
+    ? Object.entries(dataByYear)
+        .filter(([, fuels]) => Object.values(fuels).some(v => v > 0))
+        .map(([year, fuels]) => {
+          const yr       = Number(year)
+          const totalKwh = Object.values(fuels).reduce((s, v) => s + v, 0)
+          const eui      = Math.round(totalKwh / effectiveGia)
+          // Carbon: electricity uses grid factor for that year, others fixed
+          const gridFactor  = interpolate(GRID_INTENSITY, yr)
+          const carbonTotal = fuels.electricity * gridFactor
+            + (fuels.gas  * FUEL_CARBON.gas)
+            + (fuels.oil  * FUEL_CARBON.oil)
+            + (fuels.lpg  * FUEL_CARBON.lpg)
+            + (fuels.biomass * FUEL_CARBON.biomass)
+            + (fuels.district_heating * FUEL_CARBON.district_heating)
+          return {
+            year:           yr,
+            eui,
+            electricityKwh: fuels.electricity,
+            gasKwh:         fuels.gas,
+            totalKwh,
+            carbonPerM2:    Number((carbonTotal / effectiveGia).toFixed(1)),
+          }
+        })
+        .sort((a, b) => a.year - b.year)
+    : []
+
+  // Most-recent actual year for summary cards
+  const latestActual           = actualDataPoints.length > 0 ? actualDataPoints[actualDataPoints.length - 1] : null
+  const actualEui              = latestActual?.eui ?? null
+  const actualYear             = latestActual?.year ?? CURRENT_YEAR
   const actualStrandingYearEui = actualEui ? findStrandingYear(actualEui, euiTargets) : null
-
-  // Determine which year the actual data covers (prefer electricity dataset)
-  const actualYear = (() => {
-    const ds = electricityDataset ?? gasDataset
-    if (!ds?.data_start) return CURRENT_YEAR
-    return Number(ds.data_start.slice(0, 4)) || CURRENT_YEAR
-  })()
 
   return (
     <div className="p-6 space-y-6">
@@ -532,8 +595,7 @@ export default function CRREMTab({ scenarios = [], scenarioResults = {} }) {
       <EuiTrajectoryChart
         scenarioLines={scenarioLines}
         euiTargets={euiTargets}
-        actualEui={actualEui}
-        actualYear={actualYear}
+        actualDataPoints={actualDataPoints}
       />
 
       {/* EUI DataCards (primary scenario) */}
@@ -565,16 +627,43 @@ export default function CRREMTab({ scenarios = [], scenarioResults = {} }) {
       </div>
 
       {/* Actual consumption data cards (if imported) */}
-      {actualEui != null && (
+      {latestActual != null && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-3 h-3 rounded-full bg-red-500" />
             <p className="text-caption font-semibold text-red-800">
-              Actual metered consumption — {actualYear}
+              Actual metered consumption
+              {actualDataPoints.length > 1
+                ? ` — ${actualDataPoints[0].year}–${actualYear} (${actualDataPoints.length} years)`
+                : ` — ${actualYear}`
+              }
             </p>
-            {electricityDataset && <span className="text-xxs text-red-600 ml-auto">⚡ {Math.round((electricityDataset.total_kwh ?? 0) / 1000)} MWh electricity</span>}
-            {gasDataset && <span className="text-xxs text-red-600 ml-1">🔥 {Math.round((gasDataset.total_kwh ?? 0) / 1000)} MWh gas</span>}
+            {latestActual.electricityKwh > 0 && (
+              <span className="text-xxs text-red-600 ml-auto">⚡ {Math.round(latestActual.electricityKwh / 1000)} MWh elec</span>
+            )}
+            {latestActual.gasKwh > 0 && (
+              <span className="text-xxs text-red-600 ml-1">🔥 {Math.round(latestActual.gasKwh / 1000)} MWh gas</span>
+            )}
           </div>
+
+          {/* Multi-year EUI mini-table when we have more than one year */}
+          {actualDataPoints.length > 1 && (
+            <div className="grid gap-1 mb-3" style={{ gridTemplateColumns: `repeat(${actualDataPoints.length}, 1fr)` }}>
+              {actualDataPoints.map(p => {
+                const tgt   = interpolate(euiTargets, p.year)
+                const gap   = p.eui - tgt
+                const color = gap <= 0 ? '#16A34A' : gap <= 20 ? '#D97706' : '#DC2626'
+                return (
+                  <div key={p.year} className="bg-white/60 rounded p-1.5 text-center border border-red-100">
+                    <p className="text-xxs text-mid-grey">{p.year}</p>
+                    <p className="text-xs font-bold tabular-nums" style={{ color }}>{p.eui}</p>
+                    <p className="text-xxs text-mid-grey">kWh/m²</p>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
           <div className="grid grid-cols-3 gap-3">
             <DataCard
               label={`Actual EUI ${actualYear}`}
@@ -584,7 +673,7 @@ export default function CRREMTab({ scenarios = [], scenarioResults = {} }) {
             />
             <DataCard
               label="Performance gap"
-              value={primaryEui > 0 ? `+${(actualEui - primaryEui).toFixed(0)}` : '—'}
+              value={primaryEui > 0 ? `${(actualEui - primaryEui) >= 0 ? '+' : ''}${(actualEui - primaryEui).toFixed(0)}` : '—'}
               unit="kWh/m² vs model"
               accent="red"
             />
@@ -612,6 +701,7 @@ export default function CRREMTab({ scenarios = [], scenarioResults = {} }) {
           scenarioLines={scenarioLines}
           defaultGia={effectiveGia}
           carbonTargets={carbonTargets}
+          actualDataPoints={actualDataPoints}
         />
       )}
 
@@ -650,10 +740,12 @@ export default function CRREMTab({ scenarios = [], scenarioResults = {} }) {
       {/* Methodology note */}
       <div className="bg-off-white border border-light-grey rounded-lg px-4 py-3">
         <p className="text-xxs text-mid-grey">
-          <span className="font-semibold text-dark-grey">Carbon methodology:</span>{' '}
-          All energy modelled as electricity (VRF + ASHP DHW). Carbon intensity declines
-          as UK grid decarbonises (National Grid FES 2023 — Leading the Way).
-          CRREM 1.5°C UK Hotel pathway — indicative values pending official CRREM tool data.
+          <span className="font-semibold text-dark-grey">CRREM pathway:</span>{' '}
+          CRREM V2.07 Risk Assessment Tool — 1.5°C, United Kingdom, Hotel (2020: 264 kWh/m², plateau 95 kWh/m² from 2037).{' '}
+          <span className="font-semibold text-dark-grey">Carbon:</span>{' '}
+          Electricity decarbonises with UK grid (National Grid FES 2023 — Leading the Way).
+          Gas: 0.183 kgCO₂e/kWh (UK GHG Conversion Factors).{' '}
+          Actual carbon uses fuel split from metered data; modelled carbon uses EnergyPlus fuel split.
         </p>
       </div>
     </div>

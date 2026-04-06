@@ -14,10 +14,113 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
-from nza_engine.config import DEFAULT_WEATHER_DIR
-from api.utils import resolve_weather_file
+from nza_engine.config import (
+    DEFAULT_WEATHER_DIR,
+    PROJECT_WEATHER_CURRENT,
+    PROJECT_WEATHER_FUTURE,
+)
+from api.utils import resolve_weather_file, all_epw_files
 
 router = APIRouter()
+
+
+# ── Weather file categorisation helpers ───────────────────────────────────────
+
+import re as _re
+
+def _categorise_epw(filepath: Path) -> dict:
+    """
+    Return metadata for an EPW file by inspecting its path and filename.
+
+    PROMETHEUS filenames look like:
+      cntr_Bristol_TRY.epw                      → current, TRY
+      Bristol_2030_a1b_50_percentile_TRY.epw    → future_2030, medium, TRY
+      Bristol_2050_rcp85_90_percentile_DSY.epw  → future_2050, high, DSY
+    """
+    name = filepath.stem  # filename without .epw
+
+    # Determine category from parent directory
+    try:
+        rel = filepath.relative_to(PROJECT_WEATHER_CURRENT)
+        category = "current"
+    except ValueError:
+        try:
+            rel = filepath.relative_to(PROJECT_WEATHER_FUTURE)
+            # Use subdirectory name as category hint, e.g. "2030_medium"
+            parts = filepath.relative_to(PROJECT_WEATHER_FUTURE).parts
+            category = f"future_{parts[0]}" if parts else "future"
+        except ValueError:
+            category = "bundled"
+
+    # Try to parse type (TRY / DSY)
+    file_type = "TRY" if "_TRY" in name.upper() else ("DSY" if "_DSY" in name.upper() else None)
+
+    # Parse period and scenario from PROMETHEUS future filename
+    period = None
+    scenario = None
+    percentile = None
+    m = _re.search(r'(\d{4}).*?(a1b|rcp\d+|med|high)', name, _re.IGNORECASE)
+    if m:
+        period = m.group(1)
+        raw_scen = m.group(2).lower()
+        scenario = "medium" if raw_scen in ("a1b", "med") else "high"
+    perc_m = _re.search(r'(\d+)_percentile', name, _re.IGNORECASE)
+    if perc_m:
+        percentile = f"{perc_m.group(1)}th"
+
+    # Human-readable display name
+    city_m = _re.match(r'cntr_(\w+)_', name, _re.IGNORECASE) or _re.match(r'(\w+)_\d{4}', name)
+    city = city_m.group(1).replace('_', ' ') if city_m else name
+
+    if category == "current":
+        display = f"{city} — Control {file_type or 'EPW'}"
+    elif period:
+        display = f"{city} — {period} {scenario.capitalize() if scenario else ''} {file_type or 'EPW'}"
+    else:
+        display = name
+
+    return {
+        "filename":     filepath.name,
+        "display_name": display,
+        "category":     category,
+        "period":       period,
+        "scenario":     scenario,
+        "percentile":   percentile,
+        "type":         file_type,
+    }
+
+
+@router.get("/api/weather")
+async def list_weather_files():
+    """
+    List all available EPW weather files across all weather directories.
+    Returns metadata parsed from filenames plus lat/lon from EPW headers.
+    """
+    files = all_epw_files()
+    result = []
+    for fp in files:
+        meta = _categorise_epw(fp)
+        # Peek at EPW header for location (use cache if already parsed)
+        cache_key = str(fp.resolve())
+        if cache_key in _EPW_CACHE:
+            loc = _EPW_CACHE[cache_key].get("location", {})
+        else:
+            try:
+                with open(fp, encoding="latin-1") as fh:
+                    hdr = fh.readline().split(",")
+                loc = {
+                    "city":      hdr[1].strip() if len(hdr) > 1 else meta["filename"],
+                    "latitude":  float(hdr[6]) if len(hdr) > 6 else None,
+                    "longitude": float(hdr[7]) if len(hdr) > 7 else None,
+                }
+            except Exception:
+                loc = {}
+        meta["city"]      = loc.get("city", meta["filename"])
+        meta["latitude"]  = loc.get("latitude")
+        meta["longitude"] = loc.get("longitude")
+        result.append(meta)
+    return result
+
 
 # ── Module-level EPW parse cache ──────────────────────────────────────────────
 # Maps resolved filepath string → parsed dict.  EPW files never change at

@@ -14,6 +14,7 @@ import {
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { SimulationContext } from '../../../context/SimulationContext.jsx'
 import ConsumptionUpload from './ConsumptionUpload.jsx'
+import ManualConsumptionInput from './ManualConsumptionInput.jsx'
 import MonthlyComparisonChart from './MonthlyComparisonChart.jsx'
 import DailyProfileChart from './DailyProfileChart.jsx'
 import HalfHourlyHeatmap from './HalfHourlyHeatmap.jsx'
@@ -30,7 +31,7 @@ export default function ConsumptionManager() {
   const [datasets,     setDatasets]     = useState([])
   const [loading,      setLoading]      = useState(true)
   const [fetchError,   setFetchError]   = useState(null)
-  const [showUpload,   setShowUpload]   = useState(false)
+  const [inputMode,    setInputMode]    = useState(null)   // null | 'upload' | 'manual'
   const [selected,     setSelected]     = useState(null)   // id of selected dataset
   const [deleting,     setDeleting]     = useState(null)   // id being deleted
 
@@ -60,10 +61,14 @@ export default function ConsumptionManager() {
     }
   }, [datasets]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Import complete callback ──────────────────────────────────────────────
+  // ── Import / manual-save callbacks ─────────────────────────────────────────
   function handleImported(summary) {
-    setShowUpload(false)
+    setInputMode(null)
     loadDatasets().then(() => setSelected(summary.id))
+  }
+
+  function handleManualSaved() {
+    loadDatasets()
   }
 
   // ── Delete ────────────────────────────────────────────────────────────────
@@ -93,26 +98,56 @@ export default function ConsumptionManager() {
       <aside className="w-64 flex-shrink-0 border-r border-light-grey flex flex-col overflow-hidden">
 
         {/* Panel header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-light-grey">
-          <h2 className="text-xs font-semibold text-navy">Metered Data</h2>
-          <button
-            onClick={() => setShowUpload(v => !v)}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xxs font-medium text-white transition-colors"
-            style={{ backgroundColor: TEAL }}
-            title="Upload new dataset"
-          >
-            <Upload size={10} />
-            Upload
-          </button>
+        <div className="px-4 py-3 border-b border-light-grey">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-xs font-semibold text-navy">Metered Data</h2>
+          </div>
+          <div className="flex gap-1">
+            <button
+              onClick={() => setInputMode(inputMode === 'upload' ? null : 'upload')}
+              className={`flex items-center gap-1 px-2 py-1 rounded text-xxs font-medium transition-colors ${
+                inputMode === 'upload'
+                  ? 'text-white'
+                  : 'bg-white border border-light-grey text-dark-grey hover:border-teal'
+              }`}
+              style={inputMode === 'upload' ? { backgroundColor: TEAL } : {}}
+              title="Upload HH / CSV file"
+            >
+              <Upload size={10} />
+              Upload File
+            </button>
+            <button
+              onClick={() => setInputMode(inputMode === 'manual' ? null : 'manual')}
+              className={`flex items-center gap-1 px-2 py-1 rounded text-xxs font-medium transition-colors ${
+                inputMode === 'manual'
+                  ? 'text-white'
+                  : 'bg-white border border-light-grey text-dark-grey hover:border-teal'
+              }`}
+              style={inputMode === 'manual' ? { backgroundColor: TEAL } : {}}
+              title="Enter annual totals manually"
+            >
+              <BarChart3 size={10} />
+              Manual
+            </button>
+          </div>
         </div>
 
-        {/* Upload panel (inline) */}
-        {showUpload && (
+        {/* Input panel (upload or manual) */}
+        {inputMode === 'upload' && (
           <div className="border-b border-light-grey p-3 bg-light-grey/20">
             <ConsumptionUpload
               projectId={projectId}
               onImported={handleImported}
-              onCancel={() => setShowUpload(false)}
+              onCancel={() => setInputMode(null)}
+            />
+          </div>
+        )}
+        {inputMode === 'manual' && (
+          <div className="border-b border-light-grey p-3 bg-light-grey/20 overflow-y-auto max-h-96">
+            <ManualConsumptionInput
+              projectId={projectId}
+              gia={gia}
+              onSaved={handleManualSaved}
             />
           </div>
         )}
@@ -160,7 +195,7 @@ export default function ConsumptionManager() {
         {selectedDataset ? (
           <DatasetDetail dataset={selectedDataset} projectId={projectId} gia={gia} simResult={simResults} />
         ) : (
-          <EmptyState onUpload={() => setShowUpload(true)} />
+          <EmptyState onUpload={() => setInputMode('upload')} />
         )}
       </main>
 
