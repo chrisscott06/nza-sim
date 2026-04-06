@@ -293,7 +293,7 @@ async def nearest_station(
     location_name: str | None = None
 
     if postcode and (resolved_lat is None or resolved_lon is None):
-        clean = postcode.strip().replace(" ", "+")
+        clean = postcode.strip().replace(" ", "")
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 r = await client.get(f"https://api.postcodes.io/postcodes/{clean}")

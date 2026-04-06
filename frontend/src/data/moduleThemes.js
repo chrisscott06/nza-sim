@@ -2,6 +2,7 @@
 // Used by Sidebar active indicators and module header accent bars.
 
 export const MODULE_THEMES = {
+  information: { accent: '#2B2A4C', label: 'Information' },
   building:    { accent: '#A1887F', label: 'Building'    },
   systems:     { accent: '#00AEEF', label: 'Systems'     },
   profiles:    { accent: '#8B5CF6', label: 'Profiles'    },
@@ -14,6 +15,7 @@ export const MODULE_THEMES = {
 
 /** Return the accent colour for a given pathname */
 export function accentForPath(pathname) {
+  if (pathname.startsWith('/information')) return MODULE_THEMES.information.accent
   if (pathname.startsWith('/building'))    return MODULE_THEMES.building.accent
   if (pathname.startsWith('/systems'))     return MODULE_THEMES.systems.accent
   if (pathname.startsWith('/profiles'))    return MODULE_THEMES.profiles.accent

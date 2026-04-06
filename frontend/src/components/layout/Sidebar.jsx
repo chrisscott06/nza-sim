@@ -1,6 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import {
   Home,
+  ClipboardList,
   Building2,
   Thermometer,
   Clock,
@@ -12,10 +13,11 @@ import {
 import { accentForPath } from '../../data/moduleThemes.js'
 
 const TOP_ITEMS = [
-  { to: '/',         icon: Home,        label: 'Home' },
-  { to: '/building', icon: Building2,   label: 'Building' },
-  { to: '/systems',  icon: Thermometer, label: 'Systems' },
-  { to: '/profiles', icon: Clock,       label: 'Profiles' },
+  { to: '/',            icon: Home,          label: 'Home' },
+  { to: '/information', icon: ClipboardList, label: 'Information' },
+  { to: '/building',    icon: Building2,     label: 'Building' },
+  { to: '/systems',     icon: Thermometer,   label: 'Systems' },
+  { to: '/profiles',    icon: Clock,         label: 'Profiles' },
 ]
 
 const BOTTOM_ITEMS = [

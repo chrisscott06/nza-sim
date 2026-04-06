@@ -12,7 +12,6 @@ import BuildingViewer3D from './BuildingViewer3D.jsx'
 import LiveResultsPanel from './LiveResultsPanel.jsx'
 import FabricSankey from './FabricSankey.jsx'
 import ExpandedSankeyOverlay from './ExpandedSankeyOverlay.jsx'
-import WeatherSelector from './WeatherSelector.jsx'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { useWeather } from '../../../context/WeatherContext.jsx'
 import { useHourlySolar } from '../../../hooks/useHourlySolar.js'
@@ -180,35 +179,14 @@ const CONSTRUCTION_ELEMENTS = [
 
 function InputsColumn({ library }) {
   const { params, updateParam, constructions, updateConstruction } = useContext(ProjectContext)
-  const { length, width, num_floors, floor_height, orientation, wwr, name, infiltration_ach, window_count,
-          num_bedrooms, occupancy_rate, people_per_room } = params
+  const { length, width, num_floors, floor_height, orientation, wwr, name, infiltration_ach, window_count } = params
   const ach = infiltration_ach ?? 0.5
-  const bedrooms    = num_bedrooms    ?? 134
-  const occRate     = occupancy_rate  ?? 0.75
-  const peoplePerRm = people_per_room ?? 1.5
 
   // Derived metrics
   const gia  = length * width * num_floors
   const vol  = gia * floor_height
 
-  // Derived occupancy metrics
-  const avgOccupants   = bedrooms * occRate * peoplePerRm
-  const occDensity     = gia > 0 ? avgOccupants / gia : 0
-
   const { text: achText, color: achColor } = achLabel(ach)
-
-  // ── Weather file list ─────────────────────────────────────────────────────
-  const [weatherFiles, setWeatherFiles] = useState([])
-  useEffect(() => {
-    fetch('/api/weather')
-      .then(r => r.ok ? r.json() : [])
-      .then(setWeatherFiles)
-      .catch(() => {})
-  }, [])
-
-  const selectedWeather = params?.weather_file ?? 'default'
-  const selectedFuture  = params?.future_weather_file ?? ''
-  const projLat = params?.location?.latitude ?? 51.5
 
   return (
     <div className="h-full overflow-y-auto overflow-x-hidden bg-white border-r border-light-grey">
@@ -300,38 +278,6 @@ function InputsColumn({ library }) {
           ))}
         </CollapsibleSection>
 
-        {/* ── Occupancy ── */}
-        <CollapsibleSection title="Occupancy">
-          <div className="grid grid-cols-2 gap-1.5 mb-2">
-            <Field label="Bedrooms">
-              <NumberInput value={bedrooms} min={1} max={1000} step={1} onChange={v => updateParam('num_bedrooms', v)} />
-            </Field>
-            <Field label="People / room">
-              <NumberInput value={peoplePerRm} min={1} max={4} step={0.5} onChange={v => updateParam('people_per_room', v)} />
-            </Field>
-          </div>
-
-          <Field label={`Occupancy rate — ${Math.round(occRate * 100)}%`}>
-            <input
-              type="range" min={10} max={100} step={1}
-              value={Math.round(occRate * 100)}
-              onChange={e => updateParam('occupancy_rate', Number(e.target.value) / 100)}
-              className="w-full h-[3px] accent-navy"
-            />
-          </Field>
-
-          <div className="grid grid-cols-2 gap-1 mt-1 bg-off-white rounded p-2">
-            <div>
-              <p className="text-xxs text-mid-grey">Avg occupants</p>
-              <p className="text-caption font-medium text-navy">{Math.round(avgOccupants)} people</p>
-            </div>
-            <div>
-              <p className="text-xxs text-mid-grey">Occ. density</p>
-              <p className="text-caption font-medium text-navy">{occDensity.toFixed(3)} p/m²</p>
-            </div>
-          </div>
-        </CollapsibleSection>
-
         {/* ── Fabric ── */}
         <CollapsibleSection title="Fabric">
           {CONSTRUCTION_ELEMENTS.map(el => (
@@ -361,18 +307,6 @@ function InputsColumn({ library }) {
             </span>
           </div>
           <p className={`text-xxs ${achColor}`}>{achText}</p>
-        </CollapsibleSection>
-
-        {/* ── Location & Climate ── */}
-        <CollapsibleSection title="Location & Climate" defaultOpen={false}>
-          <WeatherSelector
-            currentWeatherFile={selectedWeather}
-            futureWeatherFile={selectedFuture}
-            weatherFiles={weatherFiles}
-            onWeatherChange={filename => updateParam('weather_file', filename)}
-            onFutureChange={filename => updateParam('future_weather_file', filename)}
-            projectLat={projLat}
-          />
         </CollapsibleSection>
 
       </div>
