@@ -2,6 +2,17 @@
 
 ## Last completed
 
+**Brief 19** — Auto-download nearest UK weather station from climate.onebuilding.org via postcode lookup (2026-04-06). Committed (13c821e) and pushed to GitHub.
+
+**Brief 19 parts completed:**
+- Part 1: scripts/build_station_index.py — 424 UK TMYx.2011-2025 stations (ENG/SCT/WAL/NIR) embedded as Python constants; generates data/weather/uk_stations.json with lat/lon, wmo_id, download_url per station
+- Part 2: api/routers/weather.py — GET /api/weather/nearest (postcode → postcodes.io → haversine nearest + top-3 alternatives + already_downloaded flag); POST /api/weather/download (downloads zip from climate.onebuilding.org, extracts .epw, saves to data/weather/current/); httpx added to requirements.txt
+- Part 3: frontend/WeatherSelector.jsx — postcode input + Find button, nearest station card with distance, Download & Use button, alternatives list; integrates current/future weather dropdowns; BuildingDefinition.jsx updated to use WeatherSelector in Location & Climate section
+- Part 4: (deferred — auto-suggest on project creation not yet implemented)
+- Part 5: Verified — TA6 6DF → Yeovilton AF (27 km, nearest UK station); SW1A 1AA → London St James Park (0.9 km); EH1 1JF → Edinburgh Gogarbank (10.0 km)
+
+**Action required:** Restart backend to activate new /api/weather/nearest and /api/weather/download endpoints. Also run: `pip install httpx` if not already installed.
+
 **Brief 18b** — Font fix, Bridgewater corrections, weather file management, PROMETHEUS setup, manual multi-fuel consumption, multi-year CRREM trajectory (2026-04-06). Committed (30bfb9d) and pushed to GitHub.
 
 **Brief 18b parts completed:**
@@ -146,7 +157,9 @@ All checklist items:
 - **Daily profile chart** — AreaChart with Brush zoom. Summary stats. Hint when zoomed to ≤14 days.
 - **Half-hourly heatmap** — Canvas carpet plot. Time-of-day (Y) vs date (X). HSL colour ramp by kWh intensity. Crosshair tooltip. Colour legend.
 - **Model vs Actual chart** — Solid actual bars + outline modelled bars. Gap summary cards. 5-item performance gap explanation panel.
-- **CRREM trajectory updated** — Red ReferenceDot at actual year shows actual EUI above modelled line. Actual EUI panel below chart shows performance gap and actual stranding year (vs modelled).
+- **CRREM trajectory updated** — Multi-year actual EUI trend line (red, with dots per year). Carbon trajectory counterpart. Inline year-by-year mini-table. Methodology note updated to CRREM V2.07.
+- **Weather station index** — 424 UK TMYx.2011-2025 stations in data/weather/uk_stations.json. Postcode lookup via postcodes.io → haversine nearest. Download EPW zip from climate.onebuilding.org, extract, save to data/weather/current/.
+- **WeatherSelector component** — Postcode search in Building module Location & Climate section. Shows nearest station + distance + 3 alternatives. Download & Use button. Green tick when already downloaded.
 - **Gap-filling assembly engine** — donor year (scaled 0.5–2.0) → weekday average → interpolation → monthly average cascade. Provenance tracking per slot. Complete annual profile guaranteed.
 - **Hourly instant calc** — 8760-iteration loop using real EPW weather data. Non-zero heating demand in winter. Monthly breakdown arrays for seasonal display.
 - **WeatherContext** — loads and caches EPW hourly data from backend API on app start.
@@ -185,12 +198,16 @@ All checklist items:
 - Pagination for heatmap records API call (e.g. ?limit=17520 or stream)
 - Clean up dead `SolarBars` function in LiveResultsPanel.jsx
 - Node hover link labels (show kWh value on hovered links)
+- Brief 19 Part 4: Auto-suggest nearest weather station on new project creation (postcode entered during project setup → find + download prompt)
+- Validate SCT/WAL/NIR station filenames against climate.onebuilding.org directory listings (ENG filenames confirmed; others derived via derive_stem())
 
 ---
 
 ## Safety checks
 
-- Working tree: clean (after Brief 18b commit)
+- Working tree: clean (after Brief 19 commit)
+- Branch: main
+- Brief 19 committed to main; pushed to GitHub ✓ (13c821e)
 - Branch: main
 - Brief 18b committed to main; pushed to GitHub ✓ (30bfb9d)
 - data/ directory: gitignored, intact, not touched
