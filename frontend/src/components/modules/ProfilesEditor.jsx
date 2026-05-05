@@ -270,8 +270,57 @@ function ScheduleListColumn({
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
+// ── Project occupancy header ──────────────────────────────────────────────────
+
+function OccupancyHeader({ params, updateParam }) {
+  const numBedrooms  = params?.num_bedrooms    ?? 0
+  const occRate      = params?.occupancy_rate  ?? 0
+  const peoplePerRm  = params?.people_per_room ?? 1.5
+  const avgOccupants = Math.round(numBedrooms * occRate * peoplePerRm)
+
+  return (
+    <div className="flex-shrink-0 bg-white border-b border-light-grey px-4 py-3">
+      <div className="flex items-end gap-6">
+        <div>
+          <label className="block text-xxs uppercase tracking-wider text-mid-grey mb-1">Rooms / units</label>
+          <input
+            type="number" min={1} max={2000} step={1}
+            value={numBedrooms || ''}
+            onChange={e => updateParam('num_bedrooms', Number(e.target.value) || 0)}
+            className="w-24 px-2 py-1 text-caption text-navy border border-light-grey rounded focus:outline-none focus:border-purple-400 bg-white"
+            placeholder="0"
+          />
+        </div>
+        <div className="flex-1 max-w-xs">
+          <label className="block text-xxs uppercase tracking-wider text-mid-grey mb-1">
+            Occupancy rate — <span className="text-navy font-medium">{Math.round(occRate * 100)}%</span>
+          </label>
+          <input
+            type="range" min={10} max={100} step={1}
+            value={Math.round(occRate * 100)}
+            onChange={e => updateParam('occupancy_rate', Number(e.target.value) / 100)}
+            className="w-full h-[3px] accent-purple-500 mt-2"
+          />
+        </div>
+        <div className="flex items-end gap-4 text-caption">
+          <div className="text-center">
+            <p className="text-xxs uppercase tracking-wider text-mid-grey">People / room</p>
+            <p className="text-caption font-semibold text-navy">{peoplePerRm.toFixed(1)}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-xxs uppercase tracking-wider text-mid-grey">Avg occupants</p>
+            <p className="text-caption font-semibold text-navy">{avgOccupants}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Main component ─────────────────────────────────────────────────────────────
+
 export default function ProfilesEditor() {
-  const { currentProjectId } = useContext(ProjectContext)
+  const { currentProjectId, params, updateParam } = useContext(ProjectContext)
 
   const [schedules,   setSchedules]   = useState([])
   const [loading,     setLoading]     = useState(true)
@@ -348,7 +397,10 @@ export default function ProfilesEditor() {
         </div>
       )}
 
-      <div className="flex h-[calc(100vh-3rem)]">
+      <div className="flex flex-col h-[calc(100vh-3rem)]">
+        <OccupancyHeader params={params} updateParam={updateParam} />
+
+        <div className="flex flex-1 min-h-0">
         {/* Left: schedule list */}
         <div className="w-64 flex-shrink-0">
           <ScheduleListColumn
@@ -386,6 +438,7 @@ export default function ProfilesEditor() {
         {/* Right: live results / statistics */}
         <div className="w-80 flex-shrink-0">
           <ProfilesLiveResults schedule={selectedDetail} />
+        </div>
         </div>
       </div>
     </>

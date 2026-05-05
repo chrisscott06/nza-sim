@@ -227,6 +227,13 @@ export function ProjectProvider({ children }) {
       occupancy_rate:  bc.occupancy_rate  ?? DEFAULT_PARAMS.occupancy_rate,
       people_per_room: bc.people_per_room ?? DEFAULT_PARAMS.people_per_room,
       location:     bc.location     ?? DEFAULT_PARAMS.location,
+      // Project-level metadata stored alongside building_config for now
+      address:       bc.address       ?? '',
+      postcode:      bc.postcode      ?? '',
+      building_type: bc.building_type ?? '',
+      operator:      bc.operator      ?? '',
+      weather_file:        bc.weather_file        ?? null,
+      future_weather_file: bc.future_weather_file ?? null,
     })
     setConstructions(project.construction_choices ?? DEFAULT_CONSTRUCTIONS)
     setSystems(migrateSystemsConfig(project.systems_config))

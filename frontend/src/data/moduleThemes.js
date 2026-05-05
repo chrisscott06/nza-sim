@@ -8,6 +8,7 @@ export const MODULE_THEMES = {
   profiles:    { accent: '#8B5CF6', label: 'Profiles'    },
   consumption: { accent: '#2D6A7A', label: 'Consumption' },
   results:     { accent: '#2B2A4C', label: 'Results'     },
+  crrem:       { accent: '#DC2626', label: 'CRREM'       },
   scenarios:   { accent: '#E84393', label: 'Scenarios'   },
   library:     { accent: '#16A34A', label: 'Library'     },
   home:        { accent: '#2B2A4C', label: 'Home'        },
@@ -21,6 +22,7 @@ export function accentForPath(pathname) {
   if (pathname.startsWith('/profiles'))    return MODULE_THEMES.profiles.accent
   if (pathname.startsWith('/consumption')) return MODULE_THEMES.consumption.accent
   if (pathname.startsWith('/results'))     return MODULE_THEMES.results.accent
+  if (pathname.startsWith('/crrem'))       return MODULE_THEMES.crrem.accent
   if (pathname.startsWith('/scenarios'))   return MODULE_THEMES.scenarios.accent
   if (pathname.startsWith('/library'))     return MODULE_THEMES.library.accent
   return MODULE_THEMES.home.accent
