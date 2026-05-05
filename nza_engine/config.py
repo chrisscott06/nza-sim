@@ -14,7 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # ── EnergyPlus installation ───────────────────────────────────────────────────
 ENERGYPLUS_DIR = Path(
-    os.environ.get("ENERGYPLUS_DIR", "/Applications/EnergyPlus-25-2-0")
+    os.environ.get("ENERGYPLUS_DIR", "/Applications/EnergyPlus-25-2-0").strip()
 )
 
 ENERGYPLUS_BIN = ENERGYPLUS_DIR / ("energyplus.exe" if os.name == "nt" else "energyplus")
