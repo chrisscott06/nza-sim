@@ -17,7 +17,7 @@ ENERGYPLUS_DIR = Path(
     os.environ.get("ENERGYPLUS_DIR", "/Applications/EnergyPlus-25-2-0")
 )
 
-ENERGYPLUS_BIN = ENERGYPLUS_DIR / "energyplus"
+ENERGYPLUS_BIN = ENERGYPLUS_DIR / ("energyplus.exe" if os.name == "nt" else "energyplus")
 ENERGYPLUS_IDD = ENERGYPLUS_DIR / "Energy+.idd"
 ENERGYPLUS_SCHEMA = ENERGYPLUS_DIR / "Energy+.schema.epJSON"
 DEFAULT_WEATHER_DIR = ENERGYPLUS_DIR / "WeatherData"
