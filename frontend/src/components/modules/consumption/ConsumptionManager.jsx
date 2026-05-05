@@ -132,22 +132,13 @@ export default function ConsumptionManager() {
           </div>
         </div>
 
-        {/* Input panel (upload or manual) */}
+        {/* Upload panel (compact, in the sidebar) */}
         {inputMode === 'upload' && (
           <div className="border-b border-light-grey p-3 bg-light-grey/20">
             <ConsumptionUpload
               projectId={projectId}
               onImported={handleImported}
               onCancel={() => setInputMode(null)}
-            />
-          </div>
-        )}
-        {inputMode === 'manual' && (
-          <div className="border-b border-light-grey p-3 bg-light-grey/20 overflow-y-auto max-h-96">
-            <ManualConsumptionInput
-              projectId={projectId}
-              gia={gia}
-              onSaved={handleManualSaved}
             />
           </div>
         )}
@@ -190,25 +181,37 @@ export default function ConsumptionManager() {
         </div>
       </aside>
 
-      {/* ── Centre panel — visualisations ─────────────────────────────────── */}
-      <main className="flex-1 flex flex-col overflow-hidden">
-        {selectedDataset ? (
-          <DatasetDetail dataset={selectedDataset} projectId={projectId} gia={gia} simResult={simResults} />
-        ) : (
-          <EmptyState onUpload={() => setInputMode('upload')} />
-        )}
-      </main>
+      {/* ── Centre + right area ────────────────────────────────────────────── */}
+      {inputMode === 'manual' ? (
+        <main className="flex-1 flex flex-col overflow-hidden">
+          <ManualConsumptionInput
+            projectId={projectId}
+            gia={gia}
+            onSaved={handleManualSaved}
+            onClose={() => setInputMode(null)}
+          />
+        </main>
+      ) : (
+        <>
+          <main className="flex-1 flex flex-col overflow-hidden">
+            {selectedDataset ? (
+              <DatasetDetail dataset={selectedDataset} projectId={projectId} gia={gia} simResult={simResults} />
+            ) : (
+              <EmptyState onUpload={() => setInputMode('upload')} onManual={() => setInputMode('manual')} />
+            )}
+          </main>
 
-      {/* ── Right panel — summary metrics ─────────────────────────────────── */}
-      <aside className="w-56 flex-shrink-0 border-l border-light-grey flex flex-col overflow-y-auto">
-        {selectedDataset ? (
-          <MetricsPanel dataset={selectedDataset} />
-        ) : (
-          <div className="flex-1 flex items-center justify-center p-4">
-            <p className="text-xxs text-mid-grey text-center">Select a dataset to see metrics</p>
-          </div>
-        )}
-      </aside>
+          <aside className="w-56 flex-shrink-0 border-l border-light-grey flex flex-col overflow-y-auto">
+            {selectedDataset ? (
+              <MetricsPanel dataset={selectedDataset} />
+            ) : (
+              <div className="flex-1 flex items-center justify-center p-4">
+                <p className="text-xxs text-mid-grey text-center">Select a dataset to see metrics</p>
+              </div>
+            )}
+          </aside>
+        </>
+      )}
     </div>
   )
 }
@@ -560,7 +563,7 @@ function QualityRow({ label, count, total, color }) {
 
 // ── Empty state ────────────────────────────────────────────────────────────
 
-function EmptyState({ onUpload }) {
+function EmptyState({ onUpload, onManual }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8 text-center">
       <div className="w-14 h-14 rounded-full bg-light-grey/60 flex items-center justify-center">
@@ -569,18 +572,29 @@ function EmptyState({ onUpload }) {
       <div>
         <p className="text-sm font-semibold text-navy">No consumption data</p>
         <p className="text-xxs text-mid-grey mt-1 max-w-xs">
-          Upload a half-hourly CSV or Excel file to visualise actual energy consumption
-          against CRREM decarbonisation targets.
+          Upload a half-hourly CSV/Excel file for full visualisations,
+          or enter annual totals manually.
         </p>
       </div>
-      <button
-        onClick={onUpload}
-        className="flex items-center gap-2 px-4 py-2 rounded text-xs font-semibold text-white transition-opacity hover:opacity-90"
-        style={{ backgroundColor: TEAL }}
-      >
-        <Upload size={13} />
-        Upload consumption data
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={onUpload}
+          className="flex items-center gap-2 px-4 py-2 rounded text-xs font-semibold text-white transition-opacity hover:opacity-90"
+          style={{ backgroundColor: TEAL }}
+        >
+          <Upload size={13} />
+          Upload data
+        </button>
+        {onManual && (
+          <button
+            onClick={onManual}
+            className="flex items-center gap-2 px-4 py-2 rounded text-xs font-semibold text-dark-grey bg-white border border-light-grey hover:border-teal transition-colors"
+          >
+            <BarChart3 size={13} />
+            Enter manually
+          </button>
+        )}
+      </div>
     </div>
   )
 }

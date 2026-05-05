@@ -214,7 +214,9 @@ export function ProjectProvider({ children }) {
     setCurrentProjectId(project.id)
     const bc = project.building_config ?? {}
     setParams({
-      name:         bc.name         ?? DEFAULT_PARAMS.name,
+      // Project name lives on the top-level row (so the Home list shows it
+      // correctly). Fall back to building_config.name for old projects, then default.
+      name:         project.name    ?? bc.name ?? DEFAULT_PARAMS.name,
       length:       bc.length       ?? DEFAULT_PARAMS.length,
       width:        bc.width        ?? DEFAULT_PARAMS.width,
       num_floors:   bc.num_floors   ?? DEFAULT_PARAMS.num_floors,
@@ -317,7 +319,14 @@ export function ProjectProvider({ children }) {
       } else {
         next = { ...p, [key]: value }
       }
-      _scheduleSave('building', next)
+      if (key === 'name') {
+        // Name lives on the top-level project row (used by /api/projects list
+        // for the Home page). Also persist building_config in the same PUT so
+        // we don't lose other in-flight edits.
+        _scheduleSave(null, { name: value, building_config: next })
+      } else {
+        _scheduleSave('building', next)
+      }
       _broadcast({ building: next })
       return next
     })
