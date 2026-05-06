@@ -247,6 +247,14 @@ function InputsColumn({ library }) {
   const { params, updateParam, constructions, updateConstruction } = useContext(ProjectContext)
   const { length, width, num_floors, floor_height, orientation, wwr, name, infiltration_ach, window_count } = params
   const ach = infiltration_ach ?? 0.5
+  const shadingOverhang = params.shading_overhang ?? {}
+  const shadingFin      = params.shading_fin      ?? {}
+  // Any non-zero shading on any facade?
+  const anyShading = ['north','south','east','west'].some(f =>
+    (shadingOverhang[f]?.depth_m ?? 0) > 0 ||
+    (shadingFin[f]?.left_depth_m ?? 0) > 0 ||
+    (shadingFin[f]?.right_depth_m ?? 0) > 0
+  )
 
   // Derived metrics
   const gia  = length * width * num_floors
@@ -342,6 +350,41 @@ function InputsColumn({ library }) {
               <span className="text-xxs text-mid-grey w-5">win</span>
             </div>
           ))}
+        </CollapsibleSection>
+
+        {/* ── Shading ── */}
+        <CollapsibleSection title={`Shading${anyShading ? ' · active' : ''}`} defaultOpen={anyShading}>
+          {FACADES.map(fac => {
+            const o  = shadingOverhang[fac.key] ?? { depth_m: 0, offset_m: 0 }
+            const f  = shadingFin[fac.key]      ?? { left_depth_m: 0, right_depth_m: 0 }
+            const setOverhang = (field, v) =>
+              updateParam('shading_overhang', { [fac.key]: { [field]: v } })
+            const setFin = (field, v) =>
+              updateParam('shading_fin',      { [fac.key]: { [field]: v } })
+            return (
+              <div key={fac.key} className="mb-2 pb-2 border-b border-light-grey/50 last:border-b-0 last:mb-0 last:pb-0">
+                <p className="text-xxs text-mid-grey mb-1">{facadeLabel(fac.num, orientation)}</p>
+                <div className="grid grid-cols-2 gap-1.5 mb-1">
+                  <Field label="Overhang depth (m)">
+                    <NumberInput value={o.depth_m ?? 0} min={0} max={3} step={0.05}
+                      onChange={v => setOverhang('depth_m', v)} />
+                  </Field>
+                  <Field label="Offset above (m)">
+                    <NumberInput value={o.offset_m ?? 0} min={0} max={2} step={0.05}
+                      onChange={v => setOverhang('offset_m', v)} />
+                  </Field>
+                  <Field label="Fin left (m)">
+                    <NumberInput value={f.left_depth_m ?? 0} min={0} max={3} step={0.05}
+                      onChange={v => setFin('left_depth_m', v)} />
+                  </Field>
+                  <Field label="Fin right (m)">
+                    <NumberInput value={f.right_depth_m ?? 0} min={0} max={3} step={0.05}
+                      onChange={v => setFin('right_depth_m', v)} />
+                  </Field>
+                </div>
+              </div>
+            )
+          })}
         </CollapsibleSection>
 
         {/* ── Fabric ── */}
