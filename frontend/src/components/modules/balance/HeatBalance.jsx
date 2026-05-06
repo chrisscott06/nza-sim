@@ -152,9 +152,31 @@ function StackColumn({ items, scale, unit, side, onClick }) {
   )
 }
 
+// ── Tooltip pill (shared by Stacked + Sankey) ───────────────────────────────
+
+export function TooltipPill({ x, y, label, value }) {
+  if (label == null) return null
+  return (
+    <div
+      className="fixed pointer-events-none z-50 bg-white border border-light-grey rounded shadow-md px-2.5 py-1.5 text-xxs whitespace-nowrap"
+      style={{ left: x + 12, top: y + 12 }}
+    >
+      <span className="text-dark-grey font-medium">{label}</span>
+      {value != null && (
+        <>
+          <span className="text-mid-grey mx-1">·</span>
+          <span className="text-navy font-semibold tabular-nums">{value}</span>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ── Stacked vertical (single bar per side) ───────────────────────────────────
 
 function StackedColumns({ gains, losses, unit, onClick }) {
+  const [tip, setTip] = useState(null) // {x, y, label, value} | null
+
   const totalGains  = gains.reduce((s, i) => s + i.value, 0)
   const totalLosses = losses.reduce((s, i) => s + i.value, 0)
   const max = Math.max(totalGains, totalLosses, 0.1)
@@ -179,13 +201,14 @@ function StackedColumns({ gains, losses, unit, onClick }) {
               <button
                 key={it.key}
                 onClick={() => onClick?.(it.key, it.meta)}
+                onMouseMove={(e) => setTip({ x: e.clientX, y: e.clientY, label: it.label, value: fmt(it.value, unit) })}
+                onMouseLeave={() => setTip(null)}
                 className="w-full transition-all duration-500 ease-out hover:brightness-110 group/seg relative"
                 style={{
                   height: `${(it.value / total) * 100}%`,
                   backgroundColor: it.colour,
                   minHeight: 1,
                 }}
-                title={`${it.label} · ${fmt(it.value, unit)}`}
               >
                 {/* In-bar label if segment is tall enough */}
                 {(it.value / total) > 0.07 && (
@@ -240,6 +263,8 @@ function StackedColumns({ gains, losses, unit, onClick }) {
         <p className="text-xxs uppercase tracking-wider text-mid-grey mb-3">Losses</p>
         {renderColumn(losses, 'losses')}
       </div>
+
+      {tip && <TooltipPill {...tip} />}
     </div>
   )
 }

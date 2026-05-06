@@ -24,6 +24,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { sankey, sankeyLeft, sankeyLinkHorizontal } from 'd3-sankey'
 import { colourForElement, LABELS } from '../../../data/balanceColours.js'
+import { TooltipPill } from './HeatBalance.jsx'
 
 const BUILDING_NODE_ID = '_zone'
 const BUILDING_NODE_COLOUR = '#0F172A'   // dark navy
@@ -105,6 +106,7 @@ export default function BalanceSankey({ data, unit, onElementClick }) {
   const containerRef = useRef(null)
   const [dims, setDims] = useState({ width: 720, height: 420 })
   const [hover, setHover] = useState(null)
+  const [tip, setTip] = useState(null)   // {x, y, label, value}
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -166,13 +168,14 @@ export default function BalanceSankey({ data, unit, onElementClick }) {
                 strokeWidth={Math.max(1, l.width)}
                 strokeOpacity={isDim ? 0.18 : 0.55}
                 onMouseEnter={() => setHover(`link-${i}`)}
-                onMouseLeave={() => setHover(null)}
-                style={{ transition: 'stroke-opacity 200ms' }}
-              >
-                <title>
-                  {l.source.label} → {l.target.label}: {fmt(l.value, unit)}
-                </title>
-              </path>
+                onMouseLeave={() => { setHover(null); setTip(null) }}
+                onMouseMove={(e) => setTip({
+                  x: e.clientX, y: e.clientY,
+                  label: `${l.source.label} → ${l.target.label}`,
+                  value: fmt(l.value, unit),
+                })}
+                style={{ transition: 'stroke-opacity 200ms', cursor: 'default' }}
+              />
             )
           })}
         </g>
@@ -183,11 +186,17 @@ export default function BalanceSankey({ data, unit, onElementClick }) {
             const isCenter = n.id === BUILDING_NODE_ID
             const isHover  = hover === `node-${n.id}`
             const isDim    = hover && !isHover && !isCenter
+            const flow     = n.value ?? 0
             return (
               <g
                 key={n.id}
                 onMouseEnter={() => setHover(`node-${n.id}`)}
-                onMouseLeave={() => setHover(null)}
+                onMouseLeave={() => { setHover(null); setTip(null) }}
+                onMouseMove={(e) => setTip({
+                  x: e.clientX, y: e.clientY,
+                  label: n.label,
+                  value: isCenter ? null : fmt(flow, unit),
+                })}
                 onClick={() => !isCenter && onElementClick?.(n.id)}
                 style={{ cursor: isCenter ? 'default' : 'pointer' }}
               >
@@ -228,6 +237,7 @@ export default function BalanceSankey({ data, unit, onElementClick }) {
           </text>
         </g>
       </svg>
+      {tip && <TooltipPill {...tip} />}
     </div>
   )
 }
