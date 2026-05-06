@@ -43,6 +43,23 @@ DEFAULT_BUILDING_CONFIG = {
     "floor_height": 3.2,
     "orientation":  0.0,
     "wwr": {"north": 0.25, "south": 0.25, "east": 0.25, "west": 0.25},
+    # Per-facade external shading. Defaults are zero (no shading).
+    # depth_m   = projection out from the facade (m)
+    # offset_m  = vertical gap from window head to underside of overhang (m)
+    # left_depth_m / right_depth_m = vertical fin projection on each side
+    # of the window (looking at the facade from outside)
+    "shading_overhang": {
+        "north": {"depth_m": 0.0, "offset_m": 0.0},
+        "south": {"depth_m": 0.0, "offset_m": 0.0},
+        "east":  {"depth_m": 0.0, "offset_m": 0.0},
+        "west":  {"depth_m": 0.0, "offset_m": 0.0},
+    },
+    "shading_fin": {
+        "north": {"left_depth_m": 0.0, "right_depth_m": 0.0},
+        "south": {"left_depth_m": 0.0, "right_depth_m": 0.0},
+        "east":  {"left_depth_m": 0.0, "right_depth_m": 0.0},
+        "west":  {"left_depth_m": 0.0, "right_depth_m": 0.0},
+    },
 }
 
 DEFAULT_CONSTRUCTION_CHOICES = {

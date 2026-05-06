@@ -317,11 +317,27 @@ async def update_building(project_id: str, body: dict):
 
         current_config = json.loads(row["building_config"])
 
-        # Deep-merge: handle nested 'wwr' dict specially
+        # Deep-merge: handle nested dicts specially
+        # - wwr is one-level (face → number)
+        # - shading_overhang / shading_fin are two-level (face → {depth, offset})
         merged = {**current_config}
         for key, value in body.items():
             if key == "wwr" and isinstance(value, dict) and isinstance(merged.get("wwr"), dict):
                 merged["wwr"] = {**merged["wwr"], **value}
+            elif key in ("shading_overhang", "shading_fin") and isinstance(value, dict):
+                current = merged.get(key) or {}
+                if not isinstance(current, dict):
+                    current = {}
+                deep_merged = dict(current)
+                for face, face_val in value.items():
+                    if isinstance(face_val, dict):
+                        existing_face = current.get(face) or {}
+                        if not isinstance(existing_face, dict):
+                            existing_face = {}
+                        deep_merged[face] = {**existing_face, **face_val}
+                    else:
+                        deep_merged[face] = face_val
+                merged[key] = deep_merged
             else:
                 merged[key] = value
 

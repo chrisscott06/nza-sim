@@ -236,6 +236,19 @@ export function ProjectProvider({ children }) {
       operator:      bc.operator      ?? '',
       weather_file:        bc.weather_file        ?? null,
       future_weather_file: bc.future_weather_file ?? null,
+      // Shading defaults to zero on all four facades for older projects
+      shading_overhang: bc.shading_overhang ?? {
+        north: { depth_m: 0, offset_m: 0 },
+        south: { depth_m: 0, offset_m: 0 },
+        east:  { depth_m: 0, offset_m: 0 },
+        west:  { depth_m: 0, offset_m: 0 },
+      },
+      shading_fin: bc.shading_fin ?? {
+        north: { left_depth_m: 0, right_depth_m: 0 },
+        south: { left_depth_m: 0, right_depth_m: 0 },
+        east:  { left_depth_m: 0, right_depth_m: 0 },
+        west:  { left_depth_m: 0, right_depth_m: 0 },
+      },
     })
     setConstructions(project.construction_choices ?? DEFAULT_CONSTRUCTIONS)
     setSystems(migrateSystemsConfig(project.systems_config))
@@ -316,6 +329,15 @@ export function ProjectProvider({ children }) {
         next = { ...p, window_count: { ...p.window_count, ...value } }
       } else if (key === 'location') {
         next = { ...p, location: { ...p.location, ...value } }
+      } else if (key === 'shading_overhang' || key === 'shading_fin') {
+        // Two levels: face → field. Deep-merge so a single face update
+        // doesn't wipe the other faces or sibling fields.
+        const current = p[key] ?? {}
+        const merged = { ...current }
+        for (const face of Object.keys(value ?? {})) {
+          merged[face] = { ...(current[face] ?? {}), ...(value[face] ?? {}) }
+        }
+        next = { ...p, [key]: merged }
       } else {
         next = { ...p, [key]: value }
       }
