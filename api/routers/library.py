@@ -162,6 +162,8 @@ async def get_constructions():
             "u_value_W_per_m2K": cfg.get("u_value_W_per_m2K"),
             "g_value":           cfg.get("g_value"),
             "thermal_mass":      cfg.get("thermal_mass"),
+            "y_factor":          cfg.get("y_factor"),
+            "u_value_effective_W_per_m2K": cfg.get("u_value_effective_W_per_m2K"),
         })
 
     return {"constructions": constructions}
@@ -187,6 +189,8 @@ async def get_construction_detail(name: str):
         "summary":    {
             "type":              cfg.get("type"),
             "u_value_W_per_m2K": cfg.get("u_value_W_per_m2K"),
+            "u_value_effective_W_per_m2K": cfg.get("u_value_effective_W_per_m2K"),
+            "y_factor":          cfg.get("y_factor"),
             "g_value":           cfg.get("g_value"),
             "thermal_mass":      cfg.get("thermal_mass"),
             "description":       cfg.get("description", ""),

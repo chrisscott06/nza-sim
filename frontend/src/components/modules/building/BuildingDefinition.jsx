@@ -8,7 +8,7 @@
 
 import { useState, useContext, useEffect, useMemo, useRef, useCallback } from 'react'
 import { NavLink } from 'react-router-dom'
-import { PanelRightClose, PanelRightOpen } from 'lucide-react'
+import { PanelRightClose, PanelRightOpen, Pencil, Lock, Unlock } from 'lucide-react'
 import BuildingViewer3D from './BuildingViewer3D.jsx'
 import LiveResultsPanel from './LiveResultsPanel.jsx'
 import ExpandedSankeyOverlay from './ExpandedSankeyOverlay.jsx'
@@ -210,9 +210,10 @@ function ConstructionSelect({ elementKey, label, library, types, selectedId, onS
           <button
             type="button"
             onClick={() => onInspect?.(selected.name)}
-            title="Inspect / edit construction layers"
-            className="cursor-pointer focus:outline-none"
+            title="Click to inspect / edit construction layers"
+            className="flex items-center gap-1 cursor-pointer focus:outline-none group"
           >
+            <Pencil size={10} className="text-mid-grey group-hover:text-navy transition-colors" />
             <UValueBadge u={selected.u_value_W_per_m2K} />
           </button>
         )}
@@ -256,6 +257,8 @@ const CONSTRUCTION_ELEMENTS = [
 ]
 
 function PreviewToggle({ label, checked, onChange }) {
+  // Retained as a thin wrapper in case anything else imports it; no longer used
+  // here. The per-facade Include checkboxes write straight to params.
   return (
     <label className="flex items-center gap-2 mb-2 px-2 py-1.5 rounded bg-off-white text-xxs cursor-pointer hover:bg-light-grey/30 transition-colors">
       <input
@@ -272,7 +275,7 @@ function PreviewToggle({ label, checked, onChange }) {
   )
 }
 
-function InputsColumn({ library, showWindows, setShowWindows, showShading, setShowShading, onInspectConstruction }) {
+function InputsColumn({ library, onInspectConstruction }) {
   const { params, updateParam, constructions, updateConstruction } = useContext(ProjectContext)
   const { length, width, num_floors, floor_height, orientation, wwr, name, infiltration_ach, window_count } = params
   const ach = infiltration_ach ?? 0.5
@@ -283,6 +286,117 @@ function InputsColumn({ library, showWindows, setShowWindows, showShading, setSh
     (shadingOverhang[f]?.depth_m ?? 0) > 0 ||
     (shadingFin[f]?.left_depth_m ?? 0) > 0 ||
     (shadingFin[f]?.right_depth_m ?? 0) > 0
+  )
+
+  // ── Orientation lock ──────────────────────────────────────────────────────
+  // Local-only lock to prevent accidental drift of the orientation slider
+  // once a project is dialled in. Doesn't persist — re-tick on each session.
+  const [orientationLocked, setOrientationLocked] = useState(false)
+
+  // ── Per-facade Include memory ─────────────────────────────────────────────
+  // Remembers the last non-zero WWR / shading depth per facade so unchecking
+  // and re-checking the Include box restores the slider to where it was.
+  const [wwrMemory, setWwrMemory] = useState(() => ({
+    north: (wwr?.north ?? 0) > 0 ? wwr.north : 0.25,
+    south: (wwr?.south ?? 0) > 0 ? wwr.south : 0.25,
+    east:  (wwr?.east  ?? 0) > 0 ? wwr.east  : 0.25,
+    west:  (wwr?.west  ?? 0) > 0 ? wwr.west  : 0.25,
+  }))
+  const [shadingMemory, setShadingMemory] = useState(() => {
+    const init = (f) => Math.max(
+      Number(shadingOverhang[f]?.depth_m   ?? 0),
+      Number(shadingFin[f]?.left_depth_m   ?? 0),
+      Number(shadingFin[f]?.right_depth_m  ?? 0),
+    )
+    return {
+      north: init('north') > 0 ? init('north') : 0.5,
+      south: init('south') > 0 ? init('south') : 0.5,
+      east:  init('east')  > 0 ? init('east')  : 0.5,
+      west:  init('west')  > 0 ? init('west')  : 0.5,
+    }
+  })
+
+  const setWwrFor = (face, v) => {
+    if (v > 0) setWwrMemory(m => ({ ...m, [face]: v }))
+    updateParam('wwr', { [face]: v })
+  }
+  const toggleWindowInclude = (face, include) => {
+    const current = wwr?.[face] ?? 0
+    if (include) {
+      const restore = wwrMemory[face] > 0 ? wwrMemory[face] : 0.25
+      updateParam('wwr', { [face]: restore })
+    } else {
+      if (current > 0) setWwrMemory(m => ({ ...m, [face]: current }))
+      updateParam('wwr', { [face]: 0 })
+    }
+  }
+
+  const setShadingFor = (face, v) => {
+    if (v > 0) setShadingMemory(m => ({ ...m, [face]: v }))
+    updateParam('shading_overhang', { [face]: { depth_m: v, offset_m: 0 } })
+    updateParam('shading_fin',      { [face]: { left_depth_m: v, right_depth_m: v } })
+  }
+  const toggleShadingInclude = (face, include) => {
+    const current = Math.max(
+      Number(shadingOverhang[face]?.depth_m   ?? 0),
+      Number(shadingFin[face]?.left_depth_m   ?? 0),
+      Number(shadingFin[face]?.right_depth_m  ?? 0),
+    )
+    if (include) {
+      const restore = shadingMemory[face] > 0 ? shadingMemory[face] : 0.5
+      setShadingFor(face, restore)
+    } else {
+      if (current > 0) setShadingMemory(m => ({ ...m, [face]: current }))
+      setShadingFor(face, 0)
+    }
+  }
+
+  // ── Openings — per-facade Include memory ──────────────────────────────────
+  const openings = params.openings ?? {}
+  const [louvreMemory, setLouvreMemory] = useState(() => ({
+    north: (openings?.north?.louvre_area_m2 ?? 0) > 0 ? openings.north.louvre_area_m2 : 0.5,
+    south: (openings?.south?.louvre_area_m2 ?? 0) > 0 ? openings.south.louvre_area_m2 : 0.5,
+    east:  (openings?.east?.louvre_area_m2  ?? 0) > 0 ? openings.east.louvre_area_m2  : 0.5,
+    west:  (openings?.west?.louvre_area_m2  ?? 0) > 0 ? openings.west.louvre_area_m2  : 0.5,
+  }))
+  const [openableMemory, setOpenableMemory] = useState(() => ({
+    north: (openings?.north?.openable_fraction ?? 0) > 0 ? openings.north.openable_fraction : 0.30,
+    south: (openings?.south?.openable_fraction ?? 0) > 0 ? openings.south.openable_fraction : 0.30,
+    east:  (openings?.east?.openable_fraction  ?? 0) > 0 ? openings.east.openable_fraction  : 0.30,
+    west:  (openings?.west?.openable_fraction  ?? 0) > 0 ? openings.west.openable_fraction  : 0.30,
+  }))
+
+  const setLouvreFor = (face, v) => {
+    if (v > 0) setLouvreMemory(m => ({ ...m, [face]: v }))
+    updateParam('openings', { [face]: { louvre_area_m2: v } })
+  }
+  const toggleLouvreInclude = (face, include) => {
+    const current = Number(openings?.[face]?.louvre_area_m2 ?? 0)
+    if (include) {
+      setLouvreFor(face, louvreMemory[face] > 0 ? louvreMemory[face] : 0.5)
+    } else {
+      if (current > 0) setLouvreMemory(m => ({ ...m, [face]: current }))
+      setLouvreFor(face, 0)
+    }
+  }
+
+  const setOpenableFor = (face, v) => {
+    if (v > 0) setOpenableMemory(m => ({ ...m, [face]: v }))
+    updateParam('openings', { [face]: { openable_fraction: v } })
+  }
+  const toggleOpenableInclude = (face, include) => {
+    const current = Number(openings?.[face]?.openable_fraction ?? 0)
+    if (include) {
+      setOpenableFor(face, openableMemory[face] > 0 ? openableMemory[face] : 0.30)
+    } else {
+      if (current > 0) setOpenableMemory(m => ({ ...m, [face]: current }))
+      setOpenableFor(face, 0)
+    }
+  }
+
+  const anyOpenings = ['north','south','east','west'].some(f =>
+    (openings?.[f]?.louvre_area_m2 ?? 0) > 0 ||
+    (openings?.[f]?.openable_fraction ?? 0) > 0
   )
 
   // Derived metrics
@@ -333,14 +447,23 @@ function InputsColumn({ library, showWindows, setShowWindows, showShading, setSh
             </Field>
           </div>
 
-          <Field label={`Orientation — ${orientation}°`}>
+          <Field label={`Orientation — ${orientation}°${orientationLocked ? ' (locked)' : ''}`}>
             <div className="flex items-center gap-2">
               <input
                 type="range" min={0} max={359} step={1}
                 value={orientation}
                 onChange={e => updateParam('orientation', Number(e.target.value))}
-                className="flex-1 h-[3px] accent-navy"
+                disabled={orientationLocked}
+                className="flex-1 h-[3px] accent-navy disabled:opacity-30"
               />
+              <button
+                type="button"
+                onClick={() => setOrientationLocked(l => !l)}
+                title={orientationLocked ? 'Unlock orientation' : 'Lock orientation'}
+                className="p-1 rounded hover:bg-off-white text-mid-grey hover:text-navy transition-colors"
+              >
+                {orientationLocked ? <Lock size={12} /> : <Unlock size={12} />}
+              </button>
               <CompassRose orientation={orientation} />
             </div>
           </Field>
@@ -359,31 +482,42 @@ function InputsColumn({ library, showWindows, setShowWindows, showShading, setSh
 
         {/* ── Glazing ── */}
         <CollapsibleSection title="Glazing (WWR)">
-          <PreviewToggle
-            label="Show windows in 3D + live calc"
-            checked={showWindows}
-            onChange={setShowWindows}
-          />
-          {FACADES.map(fac => (
-            <div key={fac.key} className="flex items-center gap-1 mb-1">
-              <span className="text-xxs text-mid-grey w-14 flex-shrink-0">{facadeLabel(fac.num, orientation)}</span>
-              <input
-                type="range" min={0} max={100} step={1}
-                value={Math.round((wwr[fac.key] ?? 0.25) * 100)}
-                onChange={e => updateParam('wwr', { [fac.key]: Number(e.target.value) / 100 })}
-                className="flex-1 h-[3px] accent-navy"
-              />
-              <span className="text-xxs text-navy w-7 text-right">{Math.round((wwr[fac.key] ?? 0.25) * 100)}%</span>
-              <input
-                type="number" min={1} max={30} step={1}
-                value={window_count?.[fac.key] ?? fac.defaultCount}
-                onChange={e => updateParam('window_count', { [fac.key]: Math.max(1, Number(e.target.value)) })}
-                className="w-8 px-1 py-0.5 text-xxs text-navy border border-light-grey rounded text-center focus:outline-none focus:border-teal"
-                title={`${facadeLabel(fac.num, orientation)} window count`}
-              />
-              <span className="text-xxs text-mid-grey w-5">win</span>
-            </div>
-          ))}
+          {FACADES.map(fac => {
+            const included = (wwr[fac.key] ?? 0) > 0
+            return (
+              <div key={fac.key} className="flex items-center gap-1 mb-1">
+                <input
+                  type="checkbox"
+                  checked={included}
+                  onChange={e => toggleWindowInclude(fac.key, e.target.checked)}
+                  className="accent-navy w-3 h-3 flex-shrink-0"
+                  title={`Include windows on ${facadeLabel(fac.num, orientation)}`}
+                />
+                <span className={`text-xxs w-14 flex-shrink-0 ${included ? 'text-navy' : 'text-light-grey'}`}>
+                  {facadeLabel(fac.num, orientation)}
+                </span>
+                <input
+                  type="range" min={0} max={100} step={1}
+                  value={Math.round((wwr[fac.key] ?? 0) * 100)}
+                  onChange={e => setWwrFor(fac.key, Number(e.target.value) / 100)}
+                  disabled={!included}
+                  className="flex-1 h-[3px] accent-navy disabled:opacity-30"
+                />
+                <span className={`text-xxs w-7 text-right ${included ? 'text-navy' : 'text-light-grey'}`}>
+                  {Math.round((wwr[fac.key] ?? 0) * 100)}%
+                </span>
+                <input
+                  type="number" min={1} max={30} step={1}
+                  value={window_count?.[fac.key] ?? fac.defaultCount}
+                  onChange={e => updateParam('window_count', { [fac.key]: Math.max(1, Number(e.target.value)) })}
+                  disabled={!included}
+                  className="w-8 px-1 py-0.5 text-xxs text-navy border border-light-grey rounded text-center focus:outline-none focus:border-teal disabled:opacity-30 disabled:bg-off-white"
+                  title={`${facadeLabel(fac.num, orientation)} window count`}
+                />
+                <span className={`text-xxs w-5 ${included ? 'text-mid-grey' : 'text-light-grey'}`}>win</span>
+              </div>
+            )
+          })}
         </CollapsibleSection>
 
         {/* ── Shading — one Reveal depth per facade applied as a 4-edge frame
@@ -391,35 +525,133 @@ function InputsColumn({ library, showWindows, setShowWindows, showShading, setSh
               together so the per-window 3D frame matches the EnergyPlus
               shading objects emitted per fenestration. ── */}
         <CollapsibleSection title={`Shading${anyShading ? ' · active' : ''}`} defaultOpen={anyShading}>
-          <PreviewToggle
-            label="Show shading in 3D + live calc"
-            checked={showShading}
-            onChange={setShowShading}
-          />
-          <p className="text-xxs text-mid-grey mb-2">
-            Reveal depth per facade — frame extruded outward around each window.
-          </p>
           {FACADES.map(fac => {
             const reveal = Math.max(
               Number(shadingOverhang[fac.key]?.depth_m   ?? 0),
               Number(shadingFin[fac.key]?.left_depth_m   ?? 0),
               Number(shadingFin[fac.key]?.right_depth_m  ?? 0),
             )
-            const setReveal = (v) => {
-              updateParam('shading_overhang', { [fac.key]: { depth_m: v, offset_m: 0 } })
-              updateParam('shading_fin',      { [fac.key]: { left_depth_m: v, right_depth_m: v } })
-            }
+            const included = reveal > 0
             return (
               <div key={fac.key} className="flex items-center gap-2 mb-1.5">
-                <span className="text-xxs text-mid-grey w-14 flex-shrink-0">{facadeLabel(fac.num, orientation)}</span>
+                <input
+                  type="checkbox"
+                  checked={included}
+                  onChange={e => toggleShadingInclude(fac.key, e.target.checked)}
+                  className="accent-navy w-3 h-3 flex-shrink-0"
+                  title={`Include shading on ${facadeLabel(fac.num, orientation)}`}
+                />
+                <span className={`text-xxs w-14 flex-shrink-0 ${included ? 'text-navy' : 'text-light-grey'}`}>
+                  {facadeLabel(fac.num, orientation)}
+                </span>
                 <input
                   type="range" min={0} max={1.5} step={0.05}
                   value={reveal}
-                  onChange={e => setReveal(Number(e.target.value))}
-                  className="flex-1 h-[3px] accent-navy"
+                  onChange={e => setShadingFor(fac.key, Number(e.target.value))}
+                  disabled={!included}
+                  className="flex-1 h-[3px] accent-navy disabled:opacity-30"
                 />
-                <span className="text-xxs text-navy w-12 text-right tabular-nums">
+                <span className={`text-xxs w-12 text-right tabular-nums ${included ? 'text-navy' : 'text-light-grey'}`}>
                   {reveal.toFixed(2)} m
+                </span>
+              </div>
+            )
+          })}
+        </CollapsibleSection>
+
+        {/* ── Openings ── Wind-driven natural ventilation: louvres always-open,
+              operable window fraction on a schedule. Single-zone, no stack term —
+              flow ∝ Cd · A · √Cw · v_wind (CIBSE AM10 single-sided wind). */}
+        <CollapsibleSection title={`Openings${anyOpenings ? ' · active' : ''}`} defaultOpen={anyOpenings}>
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <div>
+              <label className="text-xxs text-mid-grey block mb-0.5">Site exposure</label>
+              <select
+                value={openings.site_exposure ?? 'normal'}
+                onChange={e => updateParam('openings', { site_exposure: e.target.value })}
+                className="w-full px-2 py-1 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-teal cursor-pointer"
+              >
+                <option value="sheltered">Sheltered</option>
+                <option value="normal">Normal</option>
+                <option value="exposed">Exposed</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xxs text-mid-grey block mb-0.5">Window-open schedule</label>
+              <select
+                value={openings.schedule ?? 'never'}
+                onChange={e => updateParam('openings', { schedule: e.target.value })}
+                className="w-full px-2 py-1 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-teal cursor-pointer"
+              >
+                <option value="never">Never</option>
+                <option value="occupied">Occupied hours</option>
+                <option value="summer_day">Summer day only</option>
+                <option value="always">Always open</option>
+              </select>
+            </div>
+          </div>
+
+          <p className="text-xxs text-mid-grey mt-2 mb-1">Louvres (always open, m²)</p>
+          {FACADES.map(fac => {
+            const area = Number(openings?.[fac.key]?.louvre_area_m2 ?? 0)
+            const included = area > 0
+            return (
+              <div key={`louvre-${fac.key}`} className="flex items-center gap-1 mb-1">
+                <input
+                  type="checkbox"
+                  checked={included}
+                  onChange={e => toggleLouvreInclude(fac.key, e.target.checked)}
+                  className="accent-navy w-3 h-3 flex-shrink-0"
+                  title={`Include louvre on ${facadeLabel(fac.num, orientation)}`}
+                />
+                <span className={`text-xxs w-14 flex-shrink-0 ${included ? 'text-navy' : 'text-light-grey'}`}>
+                  {facadeLabel(fac.num, orientation)}
+                </span>
+                <input
+                  type="range" min={0} max={5} step={0.1}
+                  value={area}
+                  onChange={e => setLouvreFor(fac.key, Number(e.target.value))}
+                  disabled={!included}
+                  className="flex-1 h-[3px] accent-navy disabled:opacity-30"
+                />
+                <input
+                  type="number" min={0} max={20} step={0.05}
+                  value={area.toFixed(2)}
+                  onChange={e => setLouvreFor(fac.key, Math.max(0, Number(e.target.value)))}
+                  disabled={!included}
+                  className="w-14 px-1 py-0.5 text-xxs text-navy border border-light-grey rounded text-right tabular-nums focus:outline-none focus:border-teal disabled:opacity-30 disabled:bg-off-white"
+                  title={`${facadeLabel(fac.num, orientation)} louvre area (m²)`}
+                />
+                <span className={`text-xxs w-4 ${included ? 'text-mid-grey' : 'text-light-grey'}`}>m²</span>
+              </div>
+            )
+          })}
+
+          <p className="text-xxs text-mid-grey mt-3 mb-1">Openable windows (% of glazing)</p>
+          {FACADES.map(fac => {
+            const frac = Number(openings?.[fac.key]?.openable_fraction ?? 0)
+            const included = frac > 0
+            return (
+              <div key={`openable-${fac.key}`} className="flex items-center gap-1 mb-1">
+                <input
+                  type="checkbox"
+                  checked={included}
+                  onChange={e => toggleOpenableInclude(fac.key, e.target.checked)}
+                  className="accent-navy w-3 h-3 flex-shrink-0"
+                  title={`Include openable windows on ${facadeLabel(fac.num, orientation)}`}
+                />
+                <span className={`text-xxs w-14 flex-shrink-0 ${included ? 'text-navy' : 'text-light-grey'}`}>
+                  {facadeLabel(fac.num, orientation)}
+                </span>
+                <input
+                  type="range" min={0} max={100} step={1}
+                  value={Math.round(frac * 100)}
+                  onChange={e => setOpenableFor(fac.key, Number(e.target.value) / 100)}
+                  disabled={!included}
+                  className="flex-1 h-[3px] accent-navy disabled:opacity-30"
+                />
+                <span className={`text-xxs w-9 text-right tabular-nums ${included ? 'text-navy' : 'text-light-grey'}`}>
+                  {Math.round(frac * 100)}%
                 </span>
               </div>
             )
@@ -473,51 +705,16 @@ export default function BuildingDefinition() {
   const [showSankey, setShowSankey] = useState(false)
   const [sankeyResult, setSankeyResult] = useState(null)
 
-  // ── Live preview toggles ──────────────────────────────────────────────────
-  // Quick what-if checkboxes that override the saved geometry without
-  // touching it on disk. Useful for "what if we removed the windows" tests.
-  const [showWindows, setShowWindows] = useState(true)
-  const [showShading, setShowShading] = useState(true)
-
   // ── Construction Inspector — opens when user clicks a U-value badge ───────
   const [inspectConstruction, setInspectConstruction] = useState(null)
-
-  // Build a "preview params" object with WWR / shading zeroed out when
-  // their toggles are off. The 3D viewer, instantCalc, and HeatBalance
-  // all read from this — saved params are never mutated.
-  const previewParams = useMemo(() => {
-    if (!params) return params
-    let p = { ...params }
-    if (!showWindows) {
-      p = { ...p, wwr: { north: 0, south: 0, east: 0, west: 0 } }
-    }
-    if (!showShading) {
-      p = {
-        ...p,
-        shading_overhang: {
-          north: { depth_m: 0, offset_m: 0 },
-          south: { depth_m: 0, offset_m: 0 },
-          east:  { depth_m: 0, offset_m: 0 },
-          west:  { depth_m: 0, offset_m: 0 },
-        },
-        shading_fin: {
-          north: { left_depth_m: 0, right_depth_m: 0 },
-          south: { left_depth_m: 0, right_depth_m: 0 },
-          east:  { left_depth_m: 0, right_depth_m: 0 },
-          west:  { left_depth_m: 0, right_depth_m: 0 },
-        },
-      }
-    }
-    return p
-  }, [params, showWindows, showShading])
 
   // Weather + solar (shared computation with LiveResultsPanel)
   const { weatherData } = useWeather()
   const orientationDeg = Number(params?.orientation ?? 0)
   const hourlySolar = useHourlySolar(weatherData, orientationDeg)
   const instantResult = useMemo(
-    () => calculateInstant(previewParams, constructions, systems, libraryData, weatherData, hourlySolar),
-    [previewParams, constructions, systems, libraryData, weatherData, hourlySolar]
+    () => calculateInstant(params, constructions, systems, libraryData, weatherData, hourlySolar),
+    [params, constructions, systems, libraryData, weatherData, hourlySolar]
   )
 
   // Simulation balance — fetched per (projectId, runId). Lets the Live |
@@ -558,8 +755,6 @@ export default function BuildingDefinition() {
       <div className="flex-shrink-0 z-10" style={{ width: layout.left }}>
         <InputsColumn
           library={library}
-          showWindows={showWindows} setShowWindows={setShowWindows}
-          showShading={showShading} setShowShading={setShowShading}
           onInspectConstruction={setInspectConstruction}
         />
       </div>
@@ -597,7 +792,7 @@ export default function BuildingDefinition() {
         </button>
 
         {layout.centre === '3d' ? (
-          <BuildingViewer3D params={previewParams} />
+          <BuildingViewer3D params={params} />
         ) : (
           <div className="flex-1 w-full h-full pt-9">
             <HeatBalance

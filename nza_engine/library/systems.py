@@ -326,23 +326,8 @@ _SYSTEMS: dict[str, dict[str, Any]] = {
         "has_exhaust_waste":    False,   # heat is recovered
     },
 
-    "natural_vent_windows": {
-        "display_name":         "Natural Ventilation — Opening Windows",
-        "type":                 "natural_ventilation",
-        "category":             "ventilation",
-        "serves":               "ventilation",
-        "description":          "Openable windows with occupant-controlled ventilation. Provides summer cooling potential but causes heating losses in winter.",
-        "specific_fan_power":   0.0,
-        "sfp":                  0.0,
-        "heat_recovery_efficiency": 0.0,
-        "efficiency_type":      "sfp",
-        "efficiency_value":     0.0,
-        "opening_threshold_temp_c": 22.0,
-        "max_opening_fraction": 0.5,
-        "fuel_type":            None,
-        "has_heat_rejection":   False,
-        "has_exhaust_waste":    True,    # no recovery
-    },
+    # Openable windows + louvres are now configured in Building → Openings as a
+    # passive envelope feature (wind-driven, single-zone). No system entry.
 }
 
 # ── Public API ────────────────────────────────────────────────────────────────

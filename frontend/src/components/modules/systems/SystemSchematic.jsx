@@ -76,7 +76,6 @@ export default function SystemSchematic() {
   const isMVHR     = systems.ventilation_type?.startsWith('mvhr')
   const isGasBoiler = systems.dhw_primary === 'gas_boiler_dhw'
   const hasASHP    = systems.dhw_preheat === 'ashp_dhw'
-  const hasNatVent = systems.natural_ventilation
 
   const hvacLabel   = systems.hvac_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) ?? 'VRF'
   const ventLabel   = isMVHR ? 'MVHR' : 'MEV'
@@ -197,13 +196,6 @@ export default function SystemSchematic() {
                 fill="none" stroke="#06B6D4" strokeWidth="1.5" strokeDasharray="4 2"
               />
               <text x={335} y={115} fontSize="7" fill="#06B6D4">heat recovery</text>
-            </g>
-          )}
-
-          {/* Natural vent indicator */}
-          {hasNatVent && (
-            <g>
-              <text x={360} y={105} fontSize="7" fill="#16A34A">+ nat. vent</text>
             </g>
           )}
 

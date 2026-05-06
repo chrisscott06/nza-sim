@@ -39,6 +39,17 @@ const DEFAULT_PARAMS = {
   orientation:     0.0,
   wwr:             { north: 0.25, south: 0.25, east: 0.25, west: 0.25 },
   infiltration_ach: 0.5,
+  // Openings — wind-driven natural ventilation through windows and louvres.
+  // Each facade can carry an always-open louvre (m²) and an operable window
+  // fraction (% of glazing area). Both default off; user opts in per facade.
+  openings: {
+    schedule:      'never',   // 'never' | 'occupied' | 'summer_day' | 'always'
+    site_exposure: 'normal',  // 'sheltered' | 'normal' | 'exposed'
+    north: { louvre_area_m2: 0, openable_fraction: 0 },
+    south: { louvre_area_m2: 0, openable_fraction: 0 },
+    east:  { louvre_area_m2: 0, openable_fraction: 0 },
+    west:  { louvre_area_m2: 0, openable_fraction: 0 },
+  },
   window_count:    { north: 8, south: 8, east: 3, west: 3 },
   // Occupancy — confirmed from water consumption data (was 138)
   num_bedrooms:    134,
@@ -87,8 +98,6 @@ const DEFAULT_SYSTEMS = {
   lighting_power_density:   8.0,
   lighting_control:         'occupancy_sensing',
   equipment_power_density:  15.0,
-  natural_ventilation:      false,
-  window_opening_threshold: 22.0,
   dhw_setpoint:             60.0,
   dhw_preheat_setpoint:     45.0,
   hre_override:             85,
@@ -148,8 +157,6 @@ function migrateSystemsConfig(raw) {
     lighting_power_density:   raw.lighting_power_density   ?? 8.0,
     lighting_control:         raw.lighting_control         ?? 'occupancy_sensing',
     equipment_power_density:  raw.equipment_power_density  ?? 15.0,
-    natural_ventilation:      raw.natural_ventilation      ?? false,
-    window_opening_threshold: raw.natural_vent_threshold   ?? 22.0,
     dhw_setpoint:             raw.dhw_setpoint             ?? 60.0,
     dhw_preheat_setpoint:     raw.dhw_preheat_setpoint     ?? 45.0,
     hre_override:             raw.hre_override             ?? 85,
@@ -249,6 +256,7 @@ export function ProjectProvider({ children }) {
         east:  { left_depth_m: 0, right_depth_m: 0 },
         west:  { left_depth_m: 0, right_depth_m: 0 },
       },
+      openings: bc.openings ?? DEFAULT_PARAMS.openings,
     })
     setConstructions(project.construction_choices ?? DEFAULT_CONSTRUCTIONS)
     setSystems(migrateSystemsConfig(project.systems_config))
@@ -338,6 +346,19 @@ export function ProjectProvider({ children }) {
           merged[face] = { ...(current[face] ?? {}), ...(value[face] ?? {}) }
         }
         next = { ...p, [key]: merged }
+      } else if (key === 'openings') {
+        // Two-level merge: top-level fields (schedule, site_exposure) plus
+        // per-face nested objects ({north, south, east, west}).
+        const current = p.openings ?? {}
+        const merged = { ...current }
+        for (const k of Object.keys(value ?? {})) {
+          if (['north','south','east','west'].includes(k)) {
+            merged[k] = { ...(current[k] ?? {}), ...(value[k] ?? {}) }
+          } else {
+            merged[k] = value[k]
+          }
+        }
+        next = { ...p, openings: merged }
       } else {
         next = { ...p, [key]: value }
       }

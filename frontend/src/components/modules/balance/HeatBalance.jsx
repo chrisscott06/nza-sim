@@ -54,6 +54,9 @@ function flattenLosses(data, unit) {
   const losses = data?.annual?.losses ?? {}
   return LOSS_ORDER
     .filter(k => losses[k] != null)
+    // Hide opening-line items when there's no opening flow — keeps the chart
+    // clean for projects that haven't opted in to wind-driven openings.
+    .filter(k => !k.startsWith('openings_') || (losses[k].kwh ?? 0) > 0.01)
     .map(k => ({
       key: k,
       label: LABELS[k],

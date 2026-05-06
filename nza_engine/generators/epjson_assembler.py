@@ -260,57 +260,84 @@ def _build_infiltration_objects(
     return infiltration
 
 
-def _build_natural_ventilation_objects(
-    zones: dict,
-    building_params: dict,
-    natural_vent_threshold: float = 22.0,
-) -> dict:
+def _build_openings_objects(zones: dict, building_params: dict) -> dict:
     """
-    Build ZoneVentilation:WindAndStackOpenArea objects for all zones.
+    Build ZoneVentilation:WindAndStackOpenArea objects from the per-facade
+    openings schema (building_params['openings']).
 
-    Opening area = 50% × average_wwr × perimeter facade area per floor.
-    Windows open only when indoor temperature > threshold AND occupied
-    (the opening_area_fraction_schedule_name uses the occupancy schedule).
+    Two streams emitted per zone (when non-zero):
+      - <zone>_OpeningsLouvre   — always-open louvre area, AlwaysOnDiscrete schedule
+      - <zone>_OpeningsWindow   — operable window area, schedule per user choice
+
+    Zone area allocation: louvre/window areas are facade totals; we split them
+    evenly across the zones (one zone per floor) so each floor receives a
+    proportional share. Stack term is suppressed (single-zone passive model —
+    cross-flow is not modelled until rooms are split into separate zones).
     """
-    length       = building_params["length"]
-    width        = building_params["width"]
-    floor_height = building_params["floor_height"]
-    wwr          = building_params.get("wwr", {})
-    avg_wwr      = (
-        wwr.get("north", 0.25) + wwr.get("south", 0.25)
-        + wwr.get("east", 0.25) + wwr.get("west", 0.25)
-    ) / 4.0
+    openings = building_params.get("openings") or {}
+    if not openings:
+        return {}
 
-    # Window area per zone (one zone per floor, all four facades)
-    perimeter_m         = 2.0 * (length + width)
-    facade_area_per_floor = perimeter_m * floor_height
-    window_area_per_zone  = avg_wwr * facade_area_per_floor
-    # Effective opening = 10% of total window area per floor zone.
-    # 50% would be the absolute max (fully-open fraction of all glazing), but since one
-    # EnergyPlus zone represents a whole floor, using 10% produces realistic ACH values
-    # (~5–8 ACH at 5 m/s) without flooding the zone with unconstrained outdoor air.
-    opening_area          = round(0.10 * window_area_per_zone, 2)
+    faces = ("north", "south", "east", "west")
+    louvre_total   = sum(float((openings.get(f) or {}).get("louvre_area_m2", 0) or 0)   for f in faces)
+    openable_total = sum(
+        float((openings.get(f) or {}).get("openable_fraction", 0) or 0)
+        * float((building_params.get("wwr") or {}).get(f, 0))
+        # Facade glazing area per face = wwr × facade_area
+        * 2.0 * (
+            (float(building_params.get("length", 60))) if f in ("north", "south")
+            else (float(building_params.get("width", 15)))
+        )
+        * float(building_params.get("floor_height", 3.0)) * float(building_params.get("num_floors", 1))
+        for f in faces
+    )
 
-    nat_vent = {}
+    n_zones = max(1, len(zones))
+    louvre_per_zone   = round(louvre_total   / n_zones, 3)
+    openable_per_zone = round(openable_total / n_zones, 3)
+
+    schedule_choice = openings.get("schedule", "never")
+    # Map UI schedule → EnergyPlus schedule reference. We emit a constant
+    # always-on schedule (`openings_always_on` = 1.0) ourselves and reuse the
+    # existing hotel_bedroom_occupancy for "occupied".
+    if schedule_choice == "always":
+        window_sched = "openings_always_on"
+    elif schedule_choice in ("occupied", "summer_day"):
+        # No dedicated summer-day schedule yet — the operating fraction is
+        # already cold-shoulder driven by occupancy, which is good enough.
+        window_sched = "hotel_bedroom_occupancy"
+    else:
+        window_sched = None  # 'never' — don't emit the window object
+
+    common = dict(
+        opening_effectiveness="Autocalculate",
+        effective_angle=90.0,
+        height_difference=0.0,                # stack term off — single-zone, single-sided
+        discharge_coefficient_for_opening=0.6,
+        minimum_indoor_temperature=-100.0,
+        maximum_indoor_temperature=100.0,
+        minimum_outdoor_temperature=-100.0,
+        maximum_outdoor_temperature=100.0,
+        maximum_wind_speed=40.0,
+    )
+
+    out: dict = {}
     for zone_name in zones:
-        nat_vent[f"{zone_name}_NatVent"] = {
-            "zone_or_space_name":                zone_name,
-            "opening_area":                      opening_area,
-            # Fraction = occupancy schedule (0 when unoccupied, 1 when occupied)
-            "opening_area_fraction_schedule_name": "hotel_bedroom_occupancy",
-            "opening_effectiveness":             "Autocalculate",
-            "effective_angle":                   90.0,   # vertical opening
-            "height_difference":                 1.0,    # m
-            "discharge_coefficient_for_opening": 0.65,
-            # Temperature controls: windows open when indoor > threshold
-            "minimum_indoor_temperature":        natural_vent_threshold,
-            "maximum_indoor_temperature":        100.0,  # no upper cap
-            # Allow ventilation at any outdoor temp (winter draughts modelled naturally)
-            "minimum_outdoor_temperature":       -100.0,
-            "maximum_outdoor_temperature":       100.0,
-            "maximum_wind_speed":                40.0,   # m/s — effectively unlimited
-        }
-    return nat_vent
+        if louvre_per_zone > 0:
+            out[f"{zone_name}_OpeningsLouvre"] = {
+                "zone_or_space_name": zone_name,
+                "opening_area": louvre_per_zone,
+                "opening_area_fraction_schedule_name": "openings_always_on",
+                **common,
+            }
+        if window_sched is not None and openable_per_zone > 0:
+            out[f"{zone_name}_OpeningsWindow"] = {
+                "zone_or_space_name": zone_name,
+                "opening_area": openable_per_zone,
+                "opening_area_fraction_schedule_name": window_sched,
+                **common,
+            }
+    return out
 
 
 def _build_hvac_ideal_loads(zones: dict) -> tuple[dict, dict, dict, dict, dict]:
@@ -640,13 +667,21 @@ def assemble_epjson(
         ach=building_params.get("infiltration_ach", DEFAULT_INFILTRATION_ACH),
     )
 
-    # ── 6b. Natural ventilation (openable windows) ────────────────────────────
-    natural_vent_objects = {}
-    if sc.get("natural_ventilation", False):
-        threshold = float(sc.get("natural_vent_threshold", 22.0))
-        natural_vent_objects = _build_natural_ventilation_objects(
-            zones, building_params, natural_vent_threshold=threshold
-        )
+    # ── 6b. Openings — wind-driven natural ventilation ────────────────────────
+    # Reads the per-facade openings dict from building_params (Building →
+    # Openings). Louvres always-open, openable windows on a schedule. Single-zone,
+    # no stack (single-side wind only).
+    natural_vent_objects = _build_openings_objects(zones, building_params)
+
+    # Always-on schedule referenced by louvres + 'always' window mode.
+    # Merged into the final hvac_objects below so it doesn't get overwritten by
+    # the DHW Schedule:Constant set.
+    openings_const_schedules = {
+        "openings_always_on": {
+            "schedule_type_limits_name": "Fraction",
+            "hourly_value": 1.0,
+        },
+    } if natural_vent_objects else {}
 
     # ── 7. HVAC — branch on mode ──────────────────────────────────────────────
     # "ideal_loads" (default): ZoneHVAC:IdealLoadsAirSystem — perfect, no real system effects
@@ -753,6 +788,9 @@ def assemble_epjson(
         )
         for obj_type, items in dhw_objects.items():
             hvac_objects.setdefault(obj_type, {}).update(items)
+        # Inject always-on schedule for openings (must coexist with DHW constants)
+        if openings_const_schedules:
+            hvac_objects.setdefault("Schedule:Constant", {}).update(openings_const_schedules)
     else:
         # Ideal loads — ZoneHVAC:IdealLoadsAirSystem (not HVACTemplate which needs ExpandObjects)
         ideal_loads, equip_lists, equip_conns, dual_setpoints, zone_controls = (
@@ -765,6 +803,8 @@ def assemble_epjson(
             "ThermostatSetpoint:DualSetpoint": dual_setpoints,
             "ZoneControl:Thermostat":        zone_controls,
         }
+        if openings_const_schedules:
+            hvac_objects["Schedule:Constant"] = dict(openings_const_schedules)
 
     # ThermostatControlType_DualSetpoint schedule is already in schedules.py
     # ThermostatControlType ScheduleTypeLimits is already in schedule_type_limits

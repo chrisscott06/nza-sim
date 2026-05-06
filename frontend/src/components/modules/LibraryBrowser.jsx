@@ -11,6 +11,7 @@ import { Search, X, Layers, Thermometer, Clock, Check, Plus, Copy, Trash2 } from
 import ExplorerLayout from '../ui/ExplorerLayout.jsx'
 import ConstructionEditor from './library/ConstructionEditor.jsx'
 import SystemEditor from './library/SystemEditor.jsx'
+import ConstructionInspector from '../library/ConstructionInspector.jsx'
 
 // ── Type config ───────────────────────────────────────────────────────────────
 
@@ -554,8 +555,19 @@ export default function LibraryBrowser() {
         ))}
       </div>
 
-      {/* Detail panel */}
-      {selectedItem && (
+      {/* Detail panel — Construction items use the new ConstructionInspector
+          (full layer build-up + Y-factor + edit). Other types still use the
+          legacy DetailPanel for now. */}
+      {selectedItem && selectedItem.library_type === 'construction' && (
+        <ConstructionInspector
+          open={true}
+          constructionName={selectedItem.name}
+          initialMode="edit"
+          onClose={() => setSelectedItem(null)}
+          onSaved={() => loadItems()}
+        />
+      )}
+      {selectedItem && selectedItem.library_type !== 'construction' && (
         <DetailPanel
           item={selectedItem}
           onClose={() => setSelectedItem(null)}

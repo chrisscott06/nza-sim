@@ -130,42 +130,12 @@ export default function VentilationTab() {
         </div>
       )}
 
-      {/* Natural ventilation toggle */}
+      {/* Openable windows live in Building → Openings (passive, geometry-driven). */}
       <div className="pt-2 border-t border-light-grey">
-        <p className="text-xxs uppercase tracking-wider text-mid-grey mb-3">Natural ventilation</p>
-        <Toggle
-          value={systems.natural_ventilation}
-          onChange={v => updateSystem('natural_ventilation', v)}
-          label="Openable windows"
-          description="Guests can open windows. Interacts with VRF cooling — increases heat loss in winter, may reduce cooling demand in summer."
-        />
+        <p className="text-xxs text-mid-grey">
+          Openable windows and louvres are configured in <span className="font-medium text-navy">Building → Openings</span> — they're a passive feature of the envelope, not a system.
+        </p>
       </div>
-
-      {/* Threshold temperature (only shown when natural vent is on) */}
-      {systems.natural_ventilation && (
-        <Field
-          label={`Window opening threshold — ${systems.natural_vent_threshold}°C indoor temp`}
-          note="Windows open when indoor temperature exceeds this threshold (occupied hours only)"
-        >
-          <Slider
-            value={systems.natural_vent_threshold}
-            onChange={v => updateSystem('natural_vent_threshold', v)}
-            min={18} max={28} step={1}
-            unit="°C"
-          />
-        </Field>
-      )}
-
-      {systems.natural_ventilation && (
-        <div className="bg-gold/10 border border-gold/30 rounded p-3">
-          <p className="text-xxs text-navy font-medium">Key interaction</p>
-          <p className="text-xxs text-mid-grey mt-1">
-            Natural ventilation and VRF cooling run simultaneously in EnergyPlus.
-            When windows are open and the VRF is cooling, the system works harder.
-            This Bridgewater-specific behaviour is why natural ventilation analysis is important.
-          </p>
-        </div>
-      )}
 
     </div>
   )

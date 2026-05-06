@@ -146,6 +146,7 @@ def parse_epw(filepath: Path) -> dict:
         6  Dry Bulb Temperature (°C)
         13 Direct Normal Irradiance (Wh/m²)
         14 Diffuse Horizontal Irradiance (Wh/m²)
+        21 Wind Speed (m/s)
 
     Header line 1 format:
         LOCATION, City, State, Country, DataSource, WMO, Latitude, Longitude,
@@ -173,12 +174,13 @@ def parse_epw(filepath: Path) -> dict:
     temperature:          list[float] = []
     direct_normal:        list[float] = []
     diffuse_horizontal:   list[float] = []
+    wind_speed_arr:       list[float] = []
     month_arr:            list[int]   = []
     hour_arr:             list[int]   = []
 
     for line in lines[8 : 8 + 8760]:
         parts = line.split(",")
-        if len(parts) < 15:
+        if len(parts) < 22:
             continue
         try:
             month_arr.append(int(parts[1]))
@@ -186,6 +188,7 @@ def parse_epw(filepath: Path) -> dict:
             temperature.append(float(parts[6]))
             direct_normal.append(float(parts[13]))
             diffuse_horizontal.append(float(parts[14]))
+            wind_speed_arr.append(float(parts[21]))
         except (IndexError, ValueError):
             # Corrupt row — insert zeros to keep arrays aligned
             month_arr.append(1)
@@ -193,11 +196,13 @@ def parse_epw(filepath: Path) -> dict:
             temperature.append(0.0)
             direct_normal.append(0.0)
             diffuse_horizontal.append(0.0)
+            wind_speed_arr.append(0.0)
 
     return {
         "temperature":        temperature,
         "direct_normal":      direct_normal,
         "diffuse_horizontal": diffuse_horizontal,
+        "wind_speed":         wind_speed_arr,
         "month":              month_arr,
         "hour":               hour_arr,
         "location": {

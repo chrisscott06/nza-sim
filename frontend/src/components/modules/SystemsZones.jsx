@@ -495,20 +495,6 @@ function InputsColumn({ library, openSection, setOpenSection, librarySchedules =
               onChange={v => updateSystem('ventilation_control', v)} options={ventControlOpts}
             />
           </Field>
-          <div className="mt-1.5">
-            <Toggle value={systems.natural_ventilation ?? false}
-              onChange={v => updateSystem('natural_ventilation', v)}
-              label="Natural ventilation (openable windows)"
-            />
-          </div>
-          {systems.natural_ventilation && (
-            <Field label={`Window opening threshold — ${systems.window_opening_threshold ?? 22}°C`}>
-              <SliderWithNumber value={systems.window_opening_threshold ?? 22}
-                onChange={v => updateSystem('window_opening_threshold', v)}
-                min={18} max={28} step={0.5} unit="°C"
-              />
-            </Field>
-          )}
           <MiniScheduleSparkline schedule={findSched('occupancy')} onClick={() => onPreviewSchedule?.('occupancy')} />
         </div>
       </AccordionSection>

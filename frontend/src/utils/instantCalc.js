@@ -38,7 +38,6 @@ const SYSTEM_DEFAULTS = {
   // Ventilation
   mev_standard:           { fuel: 'electricity', sfp: 1.5,  hre: 0.0 },
   mvhr_standard:          { fuel: 'electricity', sfp: 1.8,  hre: 0.82 },
-  natural_vent_windows:   { fuel: null,          sfp: 0.0,  hre: 0.0 },
 }
 
 /** Look up a system default, falling back gracefully */
@@ -229,7 +228,17 @@ function getUValue(constructionChoices, element, libraryData) {
   const name = constructionChoices?.[element]
   if (name && libraryData?.constructions) {
     const item = libraryData.constructions.find(c => c.name === name)
-    if (item?.u_value_W_per_m2K != null) return Number(item.u_value_W_per_m2K)
+    if (item?.u_value_W_per_m2K != null) {
+      // Apply thermal-bridging Y-factor if the library item has one. This
+      // makes the live engine consistent with the BR443/SAP/Passivhaus
+      // convention of uplifting U to account for 2-D heat flow at junctions.
+      // EnergyPlus 1-D conduction can't see junctions, so the simulation
+      // run uses the centre-of-element U — the resulting drill-down
+      // divergence is the bridging contribution made visible.
+      const u_centre = Number(item.u_value_W_per_m2K)
+      const y = Number(item.y_factor ?? 1.0)
+      return u_centre * (isFinite(y) && y > 0 ? y : 1.0)
+    }
   }
   return DEFAULT_U_VALUES[element] ?? 1.0
 }
@@ -529,8 +538,7 @@ export function calculateInstantDegreeDay(building = {}, constructions = {}, sys
 
   // ── Ventilation system node ───────────────────────────────────────────────
   if (vent_fans_kWh > 0) {
-    const ventLabel = is_mvhr ? 'MVHR'
-      : vent_sys_key === 'natural_vent_windows' ? 'Natural Vent' : 'MEV'
+    const ventLabel = is_mvhr ? 'MVHR' : 'MEV'
     sf_nodes.push({ id: vent_node_id, label: ventLabel, type: 'system', category: 'ventilation',
       metric: is_mvhr ? `${Math.round(heat_recovery * 100)}% HR` : 'Extract only' })
   }
@@ -806,6 +814,7 @@ function _buildHeatBalance({
   geo,
   walls_kWh = 0, roof_kWh = 0, floor_kWh = 0, glazing_kWh = 0,
   infiltration_kWh = 0, vent_kWh = 0, cooling_thermal = 0,
+  openings_louvre_kWh = 0, openings_window_kWh = 0,
   solar_north = 0, solar_south = 0, solar_east = 0, solar_west = 0,
   people_kWh = 0, equipment_kWh = 0, lighting_kWh = 0,
   heating_thermal = 0,
@@ -830,6 +839,8 @@ function _buildHeatBalance({
     ground_floor:  { kwh: r1(floor_kWh),       kwh_per_m2: perM(floor_kWh),       area_m2: Math.round(geo?.ground_area || 0) },
     glazing:       { kwh: r1(glazing_kWh),     kwh_per_m2: perM(glazing_kWh),     area_m2: Math.round(geo?.total_glazing || 0) },
     infiltration:  { kwh: r1(infiltration_kWh),kwh_per_m2: perM(infiltration_kWh),ach },
+    openings_louvre: { kwh: r1(openings_louvre_kWh), kwh_per_m2: perM(openings_louvre_kWh) },
+    openings_window: { kwh: r1(openings_window_kWh), kwh_per_m2: perM(openings_window_kWh) },
     ventilation:   { kwh: r1(vent_kWh),        kwh_per_m2: perM(vent_kWh) },
     cooling:       { kwh: r1(cooling_thermal), kwh_per_m2: perM(cooling_thermal) },
   }
@@ -856,7 +867,8 @@ function _buildHeatBalance({
 
   const gains = { solar, internal, heating: { kwh: r1(heating_thermal), kwh_per_m2: perM(heating_thermal) } }
 
-  const totalLosses = walls_kWh + roof_kWh + floor_kWh + glazing_kWh + infiltration_kWh + vent_kWh + cooling_thermal
+  const totalLosses = walls_kWh + roof_kWh + floor_kWh + glazing_kWh + infiltration_kWh
+                    + openings_louvre_kWh + openings_window_kWh + vent_kWh + cooling_thermal
   const totalGains  = solarTotal + internalTotal + heating_thermal
 
   return {
@@ -953,10 +965,23 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
   const UA_roof       = u_roof  * roof_area
   const UA_floor      = u_floor * ground_area
   const UA_glaz       = u_glaz  * total_glazing
-  const UA_infil      = AIR_HEAT_CAPACITY * ach     * volume   // Wh/K
+  const UA_infil      = AIR_HEAT_CAPACITY * ach     * volume   // Wh/K — crack infiltration only
   const UA_vent_no_hr = AIR_HEAT_CAPACITY * vent_ach * volume
   const UA_vent       = UA_vent_no_hr * (1 - heat_recovery)
   const UA_fabric_cool = UA_wall + UA_glaz + UA_roof + UA_infil  // for fabric heat gain in cooling
+
+  // ── Openings (wind-driven natural ventilation) ────────────────────────────
+  // Per-facade always-open louvre area + operable window fraction. Q = Cd · A · √Cw · v_wind
+  // (no stack term per single-zone model — see CIBSE AM10 single-sided wind formula).
+  const openings = building.openings ?? {}
+  const Cd = 0.6
+  const Cw = ({ sheltered: 0.05, normal: 0.10, exposed: 0.20 })[openings.site_exposure] ?? 0.10
+  const sqrtCw = Math.sqrt(Cw)
+  const louvre_area_total = ['north','south','east','west']
+    .reduce((s, f) => s + Number(openings?.[f]?.louvre_area_m2 ?? 0), 0)
+  const openable_area_per_face = (f) => Number(openings?.[f]?.openable_fraction ?? 0) * (glazing[f] ?? 0)
+  const openable_area_total = openable_area_per_face('north') + openable_area_per_face('south') +
+                              openable_area_per_face('east') + openable_area_per_face('west')
 
   // ── 8760-hour loop ────────────────────────────────────────────────────────
   let total_heating = 0, total_cooling = 0
@@ -964,6 +989,8 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
   // Annual fabric loss accumulators (heating-season only where dT_heat > 0)
   let acc_walls_loss = 0, acc_roof_loss = 0, acc_floor_loss = 0, acc_glaz_loss = 0
   let acc_infil_loss = 0, acc_vent_loss = 0, acc_vent_no_hr = 0
+  // Openings: split into louvres (always open) vs operable windows (schedule-gated)
+  let acc_openings_louvre_loss = 0, acc_openings_window_loss = 0
 
   // Annual solar gain accumulators (all hours — used for butterfly chart & display)
   let acc_solar_n = 0, acc_solar_e = 0, acc_solar_s = 0, acc_solar_w = 0
@@ -986,6 +1013,11 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
     const dT_heat = Math.max(0, T_heat_setpoint - T_out)
     const dT_cool = Math.max(0, T_out - T_cool_setpoint)
 
+    // Schedule fractions this hour (used by openings + internal gains)
+    const occ_frac   = scheduleProfiles?.occupancy?.[hourOfDay]  ?? hotelOccupancyFraction(hourOfDay)
+    const light_frac = scheduleProfiles?.lighting?.[hourOfDay]   ?? hotelLightingFraction(hourOfDay)
+    const equip_frac = scheduleProfiles?.equipment?.[hourOfDay]  ?? hotelEquipmentFraction(hourOfDay)
+
     // Fabric losses this hour (kWh — only non-zero when T_out < heating setpoint)
     const hour_walls     = UA_wall    * dT_heat / 1000
     const hour_roof_loss = UA_roof    * dT_heat / 1000
@@ -994,7 +1026,21 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
     const hour_infil     = UA_infil   * dT_heat / 1000
     const hour_vent      = UA_vent    * dT_heat / 1000
     const hour_vent_nohr = UA_vent_no_hr * dT_heat / 1000
-    const fabric_loss    = hour_walls + hour_roof_loss + hour_floor + hour_glaz + hour_infil + hour_vent
+
+    // Openings — wind-driven flow (m³/s) → ACH-equivalent → Wh/K → kWh
+    const v_wind = weatherData.wind_speed?.[h] ?? 0
+    const Q_louvre = Cd * louvre_area_total * sqrtCw * v_wind
+    const windowsOpen = (
+      openings.schedule === 'always' ||
+      (openings.schedule === 'occupied'   && occ_frac > 0.1) ||
+      (openings.schedule === 'summer_day' && (mo_idx >= 4 && mo_idx <= 8) && hourOfDay >= 8 && hourOfDay <= 20)
+    )
+    const Q_window = windowsOpen ? Cd * openable_area_total * sqrtCw * v_wind : 0
+    const hour_openings_louvre = AIR_HEAT_CAPACITY * (Q_louvre * 3600) * dT_heat / 1000
+    const hour_openings_window = AIR_HEAT_CAPACITY * (Q_window * 3600) * dT_heat / 1000
+
+    const fabric_loss = hour_walls + hour_roof_loss + hour_floor + hour_glaz + hour_infil
+                      + hour_vent + hour_openings_louvre + hour_openings_window
 
     // Solar gains this hour from precomputed facade arrays (kWh)
     const solar_n    = hourlySolar.f1[h] * glazing.north * g_value * shadingFactors.north / 1000
@@ -1011,10 +1057,6 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
     const solar_kWh  = solar_n + solar_e + solar_s + solar_w + solar_roof_h + solar_opq_h
 
     // Internal gains this hour from schedules (kWh)
-    // Use actual library schedule if provided (Part 4), otherwise hardcoded hotel defaults
-    const occ_frac   = scheduleProfiles?.occupancy?.[hourOfDay]  ?? hotelOccupancyFraction(hourOfDay)
-    const light_frac = scheduleProfiles?.lighting?.[hourOfDay]   ?? hotelLightingFraction(hourOfDay)
-    const equip_frac = scheduleProfiles?.equipment?.[hourOfDay]  ?? hotelEquipmentFraction(hourOfDay)
     const light_h    = lpd_W * light_frac / 1000
     const equip_h    = epd_W * equip_frac / 1000
     const people_h   = occ_W * occ_frac   / 1000
@@ -1035,6 +1077,8 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
       acc_infil_loss  += hour_infil
       acc_vent_loss   += hour_vent
       acc_vent_no_hr  += hour_vent_nohr
+      acc_openings_louvre_loss += hour_openings_louvre
+      acc_openings_window_loss += hour_openings_window
     } else {
       // Excess gains → cooling; add fabric heat gain from hot exterior
       const excess = -net_loss
@@ -1195,8 +1239,7 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
       metric: `EER ${(sc_eer_val ?? 3.2).toFixed(1)}` })
   }
   if (vent_fans_kWh > 0) {
-    const ventLabel = is_mvhr ? 'MVHR'
-      : vent_sys_key === 'natural_vent_windows' ? 'Natural Vent' : 'MEV'
+    const ventLabel = is_mvhr ? 'MVHR' : 'MEV'
     sf_nodes.push({ id: vent_node_id, label: ventLabel, type: 'system', category: 'ventilation',
       metric: is_mvhr ? `${Math.round(heat_recovery * 100)}% HR` : 'Extract only' })
   }
@@ -1288,6 +1331,8 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
     floor_kWh: acc_floor_loss,
     glazing_kWh: acc_glaz_loss,
     infiltration_kWh: acc_infil_loss,
+    openings_louvre_kWh: acc_openings_louvre_loss,
+    openings_window_kWh: acc_openings_window_loss,
     vent_kWh: acc_vent_loss,
     cooling_thermal,
     solar_north: acc_solar_n,

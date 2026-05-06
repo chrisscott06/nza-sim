@@ -137,7 +137,6 @@ const SYS_LABELS = {
   solar_thermal_dhw:  'Solar Thermal',
   mev_standard:       'MEV',
   mvhr_standard:      'MVHR',
-  natural_ventilation:'Natural',
 }
 
 function sysLabel(key) {
@@ -277,7 +276,6 @@ const SYSTEM_DEFAULTS = {
   solar_thermal_dhw:  { fuel: 'renewable',   eff: 0.60 },
   mev_standard:       { fuel: 'electricity' },
   mvhr_standard:      { fuel: 'electricity' },
-  natural_ventilation:{ fuel: null },
 }
 
 function sysFuel(key) { return (SYSTEM_DEFAULTS[key] ?? {}).fuel ?? 'electricity' }

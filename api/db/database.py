@@ -73,8 +73,6 @@ DEFAULT_SYSTEMS_CONFIG = {
     "mode":                    "ideal",
     "hvac_type":               "vrf_standard",
     "ventilation_type":        "mev_standard",
-    "natural_ventilation":     False,
-    "natural_vent_threshold":  22.0,
     "dhw_primary":             "gas_boiler_dhw",
     "dhw_preheat":             "ashp_dhw",
     "dhw_setpoint":            60.0,
@@ -206,9 +204,19 @@ async def _seed_systems(db: aiosqlite.Connection) -> None:
     """Seed all system templates from the Python library into library_items.
 
     Uses INSERT OR REPLACE so new fields (serves, efficiency_type, etc.) are
-    propagated to existing items when the library is updated.
+    propagated to existing items when the library is updated. Default rows that
+    no longer exist in the Python library are removed (covers the case where a
+    template — e.g. the old ``natural_vent_windows`` system — is retired).
     """
     from nza_engine.library.systems import _SYSTEMS  # type: ignore[attr-defined]
+
+    # Drop any default system rows whose name no longer exists in the library.
+    valid_names = list(_SYSTEMS.keys())
+    placeholders = ",".join("?" * len(valid_names)) or "''"
+    await db.execute(
+        f"DELETE FROM library_items WHERE library_type='system' AND is_default=1 AND name NOT IN ({placeholders})",
+        valid_names,
+    )
 
     for name, data in _SYSTEMS.items():
         item_id = f"lib_system_{name}"

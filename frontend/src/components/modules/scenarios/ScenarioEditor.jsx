@@ -363,33 +363,6 @@ export default function ScenarioEditor({ scenario, baseline, projectId, onDone, 
           )
         })}
 
-        {/* Natural ventilation toggle */}
-        <FieldRow
-          label="Natural Vent"
-          baselineValue={baselineSys.natural_ventilation}
-          currentValue={systems.natural_ventilation}
-        >
-          <div className="flex items-center gap-2 py-1">
-            <button
-              className={`relative w-9 h-5 rounded-full transition-colors ${
-                systems.natural_ventilation ? 'bg-teal' : 'bg-light-grey'
-              }`}
-              onClick={() => updateSystem('natural_ventilation', !systems.natural_ventilation)}
-              aria-checked={systems.natural_ventilation}
-              role="switch"
-            >
-              <span
-                className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                  systems.natural_ventilation ? 'translate-x-4' : ''
-                }`}
-              />
-            </button>
-            <span className="text-xxs text-dark-grey">
-              {systems.natural_ventilation ? 'Enabled' : 'Disabled'}
-            </span>
-          </div>
-        </FieldRow>
-
         {/* LPD slider */}
         <FieldRow
           label="Lighting (LPD)"

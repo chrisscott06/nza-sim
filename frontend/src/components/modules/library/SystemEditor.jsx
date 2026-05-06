@@ -18,7 +18,6 @@ const SYSTEM_TYPES = [
   { value: 'gas_boiler_dhw',   label: 'Gas Boiler (DHW)',     category: 'dhw'        },
   { value: 'mev',              label: 'MEV',                  category: 'ventilation' },
   { value: 'mvhr',             label: 'MVHR',                 category: 'ventilation' },
-  { value: 'natural_ventilation', label: 'Natural Ventilation', category: 'ventilation' },
 ]
 
 // Default parameter values per system type
@@ -30,7 +29,6 @@ const TYPE_DEFAULTS = {
   gas_boiler_dhw:   { efficiency: 0.90, fuel_type: 'gas' },
   mev:              { specific_fan_power: 0.8, fuel_type: 'electricity' },
   mvhr:             { specific_fan_power: 1.2, heat_recovery_efficiency: 0.85, fuel_type: 'electricity' },
-  natural_ventilation: { opening_threshold_c: 22, max_opening_fraction: 0.5, fuel_type: 'none' },
 }
 
 // ── Field component ───────────────────────────────────────────────────────────
@@ -284,15 +282,6 @@ export default function SystemEditor({ initialItem = null, onSave, onClose }) {
               </FieldRow>
             </>}
 
-            {/* Natural ventilation */}
-            {systemType === 'natural_ventilation' && <>
-              <FieldRow label="Opening threshold" note="Windows open when indoor temp exceeds this">
-                <NumberInput value={params.opening_threshold_c} onChange={v => setParam('opening_threshold_c', v)} min={16} max={30} step={1} unit="°C" />
-              </FieldRow>
-              <FieldRow label="Max opening fraction" note="Fraction of window area that can open (0–1)">
-                <NumberInput value={params.max_opening_fraction} onChange={v => setParam('max_opening_fraction', Math.min(1, Math.max(0, v)))} min={0.05} max={1.0} step={0.05} />
-              </FieldRow>
-            </>}
           </div>
 
           {error && (
