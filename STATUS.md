@@ -2,6 +2,27 @@
 
 ## Last completed
 
+**Brief 21** — Heat Balance view: PHPP-style gains-vs-losses with engine toggle, drill-down, stacked layout (2026-05-06). 8 parts committed and pushed.
+
+**Brief 21 parts completed:**
+- Part 1: `nza_engine/parsers/sql_parser.py` — `get_heat_balance()` extracts per-surface losses + per-orientation solar + internal gains from `eplusout.sql`. New endpoint `GET /api/projects/{id}/simulations/{run_id}/balance`. HDD/CDD computed from EPW (base 18°C / 22°C). Internal gain heat-energy variables added to `Output:Variable` list.
+- Part 2: `frontend/src/utils/instantCalc.js` — `_buildHeatBalance()` helper produces the same JSON shape as the backend. Both `calculateInstant` (hourly) and `calculateInstantDegreeDay` returns include `heat_balance`.
+- Part 3: `frontend/src/components/modules/balance/HeatBalance.jsx` — gains-IN / losses-OUT bars with the canonical palette in `frontend/src/data/balanceColours.js`. kWh ↔ kWh/m²·a unit toggle. IN/OUT arrows. Net residual badge.
+- Part 4: Engine toggle `[Live | Simulation]` in HeatBalance header; CSS bar-width transitions animate divergence between sources. `useSimulationBalance` hook fetches/caches by (projectId, runId). Stale indicator from `saveStatus`.
+- Part 5: `frontend/src/components/modules/balance/DrillDown.jsx` + `frontend/src/utils/firstPrinciples.js` — three-row comparison (first-principles · instantCalc · EnergyPlus) with spread tolerance flagging and per-element divergence notes. Plus `[Rows | Stacked]` layout toggle in HeatBalance.
+- Part 6: `frontend/src/pages/PopOutResults.jsx` — `heat-balance` panel type added; default layout updated.
+- Part 7: New "Heat Balance" tab in `/results` (between Overview and Energy Flows) via `HeatBalanceTab.jsx`. Building module's `[3D Model | Energy Flow]` toggle removed; centre is just the 3D viewer now.
+- Part 8: End-to-end verification at 1440×900 — Solar South > West > E/N (matches Northern hemisphere expectation); engine toggle animates; drill-down opens for all element types; pop-out renders heat-balance; `npm run build` clean (3137 modules transformed).
+
+**Action required:** Restart the backend after pulling so the new `Output:Variable` requests for `Zone People Total Heating Energy`, `Zone Electric Equipment Total Heating Energy`, `Zone Lights Total Heating Energy` and the new `/balance` endpoint are active.
+
+**Known limitations carried over to a follow-up brief:**
+- Glazing transmission loss reads 0 from `eplusout.sql` because window conduction surfaces aren't tagged the same way as walls. Solar gains through glazing are correct.
+- East-facing solar reads 0 in some Bridgewater runs — likely the geometry generator's facade orientation tagging needs review.
+- Engine toggle's "isStale" heuristic is conservative (any save event marks sim stale).
+
+---
+
 **Brief 20** — Information module with CRREM executive summary, navigation restructure, weather fixes (2026-04-06). Committed (bad02c7) and pushed to GitHub.
 
 **Brief 20 parts completed:**
