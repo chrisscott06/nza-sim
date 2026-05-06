@@ -594,10 +594,26 @@ export function calculateInstantDegreeDay(building = {}, constructions = {}, sys
 
   const systems_flow = { nodes: sf_nodes, links: sf_links }
 
+  const heat_balance = _buildHeatBalance({
+    geo,
+    walls_kWh, roof_kWh, floor_kWh, glazing_kWh,
+    infiltration_kWh, vent_kWh, cooling_thermal,
+    solar_north: solar_gains.north,
+    solar_south: solar_gains.south,
+    solar_east:  solar_gains.east,
+    solar_west:  solar_gains.west,
+    people_kWh: people_internal,
+    equipment_kWh: equip_internal,
+    lighting_kWh: lighting_internal,
+    heating_thermal,
+    ach,
+  })
+
   return {
     eui_kWh_m2:            Math.round(eui_kWh_m2 * 10) / 10,
     annual_heating_kWh:    Math.round(heating_thermal),
     annual_cooling_kWh:    Math.round(cooling_thermal),
+    heat_balance,
     // ── Gains & Losses butterfly data — separated heating vs cooling contributions ──
     gains_losses: {
       heating_side: {
@@ -697,6 +713,7 @@ function _empty() {
     eui_kWh_m2: 0, annual_heating_kWh: 0, annual_cooling_kWh: 0,
     annual_lighting_kWh: 0, annual_equipment_kWh: 0, annual_fans_kWh: 0, annual_dhw_kWh: 0,
     gains_losses: _gl,
+    heat_balance: _buildHeatBalance({ geo: { gia: 0, total_wall_opaque: 0, total_glazing: 0, roof_area: 0, ground_area: 0, glazing: { north: 0, south: 0, east: 0, west: 0 }, wall_opaque: { north: 0, south: 0, east: 0, west: 0 } } }),
     fabric_losses: { walls_kWh: 0, roof_kWh: 0, floor_kWh: 0, glazing_kWh: 0, infiltration_kWh: 0, ventilation_kWh: 0, total_kWh: 0 },
     solar_gains: { north_kWh: 0, south_kWh: 0, east_kWh: 0, west_kWh: 0, opaque_wall_kWh: 0, roof_solar_kWh: 0, total_kWh: 0 },
     internal_gains: { lighting_kWh: 0, equipment_kWh: 0, people_kWh: 0, total_kWh: 0 },
@@ -705,6 +722,86 @@ function _empty() {
     systems_flow: { nodes: [], links: [] },
     monthly: { heating_kWh: new Array(12).fill(0), cooling_kWh: new Array(12).fill(0), solar_kWh: new Array(12).fill(0) },
     _inputs: {},
+  }
+}
+
+// ── Heat balance shape (matches backend get_heat_balance) ────────────────────
+//
+// Builds the same JSON shape returned by GET .../simulations/{run_id}/balance
+// so the HeatBalance component can read either source via a single prop.
+//
+// All inputs in kWh (annual). geo is the object returned by computeGeometry.
+
+function _buildHeatBalance({
+  geo,
+  walls_kWh = 0, roof_kWh = 0, floor_kWh = 0, glazing_kWh = 0,
+  infiltration_kWh = 0, vent_kWh = 0, cooling_thermal = 0,
+  solar_north = 0, solar_south = 0, solar_east = 0, solar_west = 0,
+  people_kWh = 0, equipment_kWh = 0, lighting_kWh = 0,
+  heating_thermal = 0,
+  ach = 0,
+}) {
+  const gia = Math.max(geo?.gia || 0, 1)
+  const r1   = (kwh) => Math.round(kwh * 10) / 10
+  const perM = (kwh) => Math.round((kwh / gia) * 100) / 100
+
+  const wall_opaque = geo?.wall_opaque ?? { north: 0, south: 0, east: 0, west: 0 }
+  const totalWallArea = (wall_opaque.north + wall_opaque.south + wall_opaque.east + wall_opaque.west) || 1
+  const wallByFace = {
+    north: r1(walls_kWh * (wall_opaque.north / totalWallArea)),
+    south: r1(walls_kWh * (wall_opaque.south / totalWallArea)),
+    east:  r1(walls_kWh * (wall_opaque.east  / totalWallArea)),
+    west:  r1(walls_kWh * (wall_opaque.west  / totalWallArea)),
+  }
+
+  const losses = {
+    external_wall: { kwh: r1(walls_kWh),       kwh_per_m2: perM(walls_kWh),       area_m2: Math.round(geo?.total_wall_opaque || 0), by_face: wallByFace },
+    roof:          { kwh: r1(roof_kWh),        kwh_per_m2: perM(roof_kWh),        area_m2: Math.round(geo?.roof_area || 0) },
+    ground_floor:  { kwh: r1(floor_kWh),       kwh_per_m2: perM(floor_kWh),       area_m2: Math.round(geo?.ground_area || 0) },
+    glazing:       { kwh: r1(glazing_kWh),     kwh_per_m2: perM(glazing_kWh),     area_m2: Math.round(geo?.total_glazing || 0) },
+    infiltration:  { kwh: r1(infiltration_kWh),kwh_per_m2: perM(infiltration_kWh),ach },
+    ventilation:   { kwh: r1(vent_kWh),        kwh_per_m2: perM(vent_kWh) },
+    cooling:       { kwh: r1(cooling_thermal), kwh_per_m2: perM(cooling_thermal) },
+  }
+
+  const glazingFace = geo?.glazing ?? { north: 0, south: 0, east: 0, west: 0 }
+  const solarTotal  = solar_north + solar_south + solar_east + solar_west
+  const solar = {
+    north: { kwh: r1(solar_north), kwh_per_m2: perM(solar_north), area_m2: Math.round(glazingFace.north) },
+    south: { kwh: r1(solar_south), kwh_per_m2: perM(solar_south), area_m2: Math.round(glazingFace.south) },
+    east:  { kwh: r1(solar_east),  kwh_per_m2: perM(solar_east),  area_m2: Math.round(glazingFace.east) },
+    west:  { kwh: r1(solar_west),  kwh_per_m2: perM(solar_west),  area_m2: Math.round(glazingFace.west) },
+    total_kwh:        r1(solarTotal),
+    total_kwh_per_m2: perM(solarTotal),
+  }
+
+  const internalTotal = people_kWh + equipment_kWh + lighting_kWh
+  const internal = {
+    people:    { kwh: r1(people_kWh),    kwh_per_m2: perM(people_kWh) },
+    equipment: { kwh: r1(equipment_kWh), kwh_per_m2: perM(equipment_kWh) },
+    lighting:  { kwh: r1(lighting_kWh),  kwh_per_m2: perM(lighting_kWh) },
+    total_kwh:        r1(internalTotal),
+    total_kwh_per_m2: perM(internalTotal),
+  }
+
+  const gains = { solar, internal, heating: { kwh: r1(heating_thermal), kwh_per_m2: perM(heating_thermal) } }
+
+  const totalLosses = walls_kWh + roof_kWh + floor_kWh + glazing_kWh + infiltration_kWh + vent_kWh + cooling_thermal
+  const totalGains  = solarTotal + internalTotal + heating_thermal
+
+  return {
+    annual: {
+      losses,
+      gains,
+      totals: {
+        losses_kwh:        r1(totalLosses),
+        gains_kwh:         r1(totalGains),
+        losses_kwh_per_m2: perM(totalLosses),
+        gains_kwh_per_m2:  perM(totalGains),
+        net_kwh_per_m2:    perM(totalGains - totalLosses),
+      },
+    },
+    metadata: { gia_m2: Math.round(gia) },
   }
 }
 
@@ -1107,11 +1204,32 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
 
   const systems_flow = { nodes: sf_nodes, links: sf_links }
 
+  const heat_balance = _buildHeatBalance({
+    geo,
+    walls_kWh: acc_walls_loss,
+    roof_kWh:  acc_roof_loss,
+    floor_kWh: acc_floor_loss,
+    glazing_kWh: acc_glaz_loss,
+    infiltration_kWh: acc_infil_loss,
+    vent_kWh: acc_vent_loss,
+    cooling_thermal,
+    solar_north: acc_solar_n,
+    solar_south: acc_solar_s,
+    solar_east:  acc_solar_e,
+    solar_west:  acc_solar_w,
+    people_kWh: acc_people_internal,
+    equipment_kWh: acc_equip_internal,
+    lighting_kWh: acc_lighting_internal,
+    heating_thermal,
+    ach,
+  })
+
   // ── Return ────────────────────────────────────────────────────────────────
   return {
     eui_kWh_m2:            Math.round(eui_kWh_m2 * 10) / 10,
     annual_heating_kWh:    Math.round(heating_thermal),
     annual_cooling_kWh:    Math.round(cooling_thermal),
+    heat_balance,
     gains_losses: {
       heating_side: {
         wall_conduction:    acc_walls_loss      / 1000,
