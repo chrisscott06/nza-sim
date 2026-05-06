@@ -11,7 +11,7 @@
  * All formulae deliberately simple; full-detail dynamics are EnergyPlus's job.
  */
 
-import { SOLAR_BY_COMPASS, getSolarRadiation } from './instantCalc.js'
+import { SOLAR_BY_COMPASS, getSolarRadiation, computeShadingFactors } from './instantCalc.js'
 
 // UK averages — annual heating-degree-hours (base 15.5°C × 24 h/day × 365 d/yr)
 // Backend's HDD uses 18°C base; this is a rough approximation. For a precise
@@ -213,18 +213,23 @@ export function firstPrinciplesFor(elementKey, building, constructions, libraryD
       const A = areas.glazing[face] || 0
       const g = getG(constructions, libraryData)
       const G = getSolarRadiation(face, orient)   // kWh/m²/yr through this orientation
-      // Useful gain ≈ A × g × G × frame_factor.  Frame ~0.8 typical.
       const FRAME = 0.8
-      const Q = A * g * G * FRAME
+      // Same per-facade shading factor the live engine applies — keeps
+      // first-principles consistent with instantCalc when shading is
+      // active, so any divergence in the drill-down points at EnergyPlus.
+      const sf = computeShadingFactors(building)
+      const SF = sf[face] ?? 1.0
+      const Q = A * g * G * FRAME * SF
       return {
         kwh: Math.round(Q),
         kwh_per_m2: perM(Q),
-        formula: 'A × g × G_solar × frame_factor',
+        formula: 'A × g × G_solar × frame_factor × shading_factor',
         terms: [
-          { label: 'Glazing area',         value: r1(A),  unit: 'm²' },
-          { label: 'g-value',              value: g,      unit: '—' },
-          { label: 'Annual irradiation',   value: G,      unit: 'kWh/m²/yr' },
-          { label: 'Frame factor',         value: FRAME,  unit: '—' },
+          { label: 'Glazing area',         value: r1(A),     unit: 'm²' },
+          { label: 'g-value',              value: g,         unit: '—' },
+          { label: 'Annual irradiation',   value: G,         unit: 'kWh/m²/yr' },
+          { label: 'Frame factor',         value: FRAME,     unit: '—' },
+          { label: 'Shading factor',       value: r1(SF),    unit: '—' },
         ],
       }
     }

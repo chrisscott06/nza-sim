@@ -305,8 +305,11 @@ function WindowShadingFrames({
   const winW = totalGlaz / n
   const gap  = (faceW - totalGlaz) / (n + 1)
 
-  // Wall surface offset from origin along the perpendicular axis
-  const wallFace = axis === 'z' ? hd : hw
+  // Wall surface offset from origin along the perpendicular axis.
+  // Axis convention (matches GlassFace): length along Z, width along X.
+  //   axis='z' (N/S faces): wall at z = ±length/2 = ±hw
+  //   axis='x' (E/W faces): wall at x = ±width/2  = ±hd
+  const wallFace = axis === 'z' ? hw : hd
 
   // Slab thickness — 4 cm reads as architectural detail
   const T = 0.04
