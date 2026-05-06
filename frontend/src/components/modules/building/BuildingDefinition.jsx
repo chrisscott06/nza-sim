@@ -352,36 +352,36 @@ function InputsColumn({ library }) {
           ))}
         </CollapsibleSection>
 
-        {/* ── Shading ── */}
+        {/* ── Shading — one Reveal depth per facade applied as a 4-edge frame
+              wrapping every window. Drives overhang.depth_m + fin.left/right
+              together so the per-window 3D frame matches the EnergyPlus
+              shading objects emitted per fenestration. ── */}
         <CollapsibleSection title={`Shading${anyShading ? ' · active' : ''}`} defaultOpen={anyShading}>
+          <p className="text-xxs text-mid-grey mb-2">
+            Reveal depth per facade — frame extruded outward around each window.
+          </p>
           {FACADES.map(fac => {
-            const o  = shadingOverhang[fac.key] ?? { depth_m: 0, offset_m: 0 }
-            const f  = shadingFin[fac.key]      ?? { left_depth_m: 0, right_depth_m: 0 }
-            const setOverhang = (field, v) =>
-              updateParam('shading_overhang', { [fac.key]: { [field]: v } })
-            const setFin = (field, v) =>
-              updateParam('shading_fin',      { [fac.key]: { [field]: v } })
+            const reveal = Math.max(
+              Number(shadingOverhang[fac.key]?.depth_m   ?? 0),
+              Number(shadingFin[fac.key]?.left_depth_m   ?? 0),
+              Number(shadingFin[fac.key]?.right_depth_m  ?? 0),
+            )
+            const setReveal = (v) => {
+              updateParam('shading_overhang', { [fac.key]: { depth_m: v, offset_m: 0 } })
+              updateParam('shading_fin',      { [fac.key]: { left_depth_m: v, right_depth_m: v } })
+            }
             return (
-              <div key={fac.key} className="mb-2 pb-2 border-b border-light-grey/50 last:border-b-0 last:mb-0 last:pb-0">
-                <p className="text-xxs text-mid-grey mb-1">{facadeLabel(fac.num, orientation)}</p>
-                <div className="grid grid-cols-2 gap-1.5 mb-1">
-                  <Field label="Overhang depth (m)">
-                    <NumberInput value={o.depth_m ?? 0} min={0} max={3} step={0.05}
-                      onChange={v => setOverhang('depth_m', v)} />
-                  </Field>
-                  <Field label="Offset above (m)">
-                    <NumberInput value={o.offset_m ?? 0} min={0} max={2} step={0.05}
-                      onChange={v => setOverhang('offset_m', v)} />
-                  </Field>
-                  <Field label="Fin left (m)">
-                    <NumberInput value={f.left_depth_m ?? 0} min={0} max={3} step={0.05}
-                      onChange={v => setFin('left_depth_m', v)} />
-                  </Field>
-                  <Field label="Fin right (m)">
-                    <NumberInput value={f.right_depth_m ?? 0} min={0} max={3} step={0.05}
-                      onChange={v => setFin('right_depth_m', v)} />
-                  </Field>
-                </div>
+              <div key={fac.key} className="flex items-center gap-2 mb-1.5">
+                <span className="text-xxs text-mid-grey w-14 flex-shrink-0">{facadeLabel(fac.num, orientation)}</span>
+                <input
+                  type="range" min={0} max={1.5} step={0.05}
+                  value={reveal}
+                  onChange={e => setReveal(Number(e.target.value))}
+                  className="flex-1 h-[3px] accent-navy"
+                />
+                <span className="text-xxs text-navy w-12 text-right tabular-nums">
+                  {reveal.toFixed(2)} m
+                </span>
               </div>
             )
           })}
