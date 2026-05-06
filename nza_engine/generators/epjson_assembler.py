@@ -839,6 +839,9 @@ def assemble_epjson(
         "Zone": zones,
         "BuildingSurface:Detailed": surfaces,
         "FenestrationSurface:Detailed": windows,
+        # Pass-through any shading objects the geometry generator produced
+        **({"Shading:Overhang": geom["Shading:Overhang"]} if geom.get("Shading:Overhang") else {}),
+        **({"Shading:Fin":      geom["Shading:Fin"]}      if geom.get("Shading:Fin")      else {}),
 
         "Material": construction_epjson["Material"],
         "Material:NoMass": construction_epjson["Material:NoMass"],

@@ -212,6 +212,51 @@ def _window_vertices_on_wall(
     ]
 
 
+def _shading_overhang(name: str, window_name: str, depth_m: float, offset_m: float) -> dict:
+    """
+    Shading:Overhang — horizontal projection above a window/door.
+
+    EnergyPlus computes per-timestep shadow patches automatically from the
+    sun position. Tilt 90° = strict horizontal overhang.
+    """
+    # Note: EP 26 epJSON schema uses 'window_door' (no '_or_') for these field
+    # names. Earlier versions had '_or_' — wrong field names are silently
+    # dropped by EnergyPlus, leaving the shading object with no effect.
+    return {
+        "window_or_door_name": window_name,
+        "height_above_window_or_door": float(offset_m or 0.0),
+        "tilt_angle_from_window_door": 90.0,
+        "left_extension_from_window_door_width": 0.0,
+        "right_extension_from_window_door_width": 0.0,
+        "depth": float(depth_m),
+    }
+
+
+def _shading_fin(
+    name: str, window_name: str,
+    left_depth_m: float = 0.0, right_depth_m: float = 0.0,
+) -> dict | None:
+    """
+    Shading:Fin — vertical fins on either side of a window/door.
+    Returns None if both depths are zero (caller skips emission).
+    """
+    if (left_depth_m or 0) <= 0 and (right_depth_m or 0) <= 0:
+        return None
+    return {
+        "window_or_door_name": window_name,
+        "left_extension_from_window_door": 0.0,
+        "left_distance_above_top_of_window": 0.0,
+        "left_distance_below_bottom_of_window": 0.0,
+        "left_tilt_angle_from_window_door": 90.0,
+        "left_depth": float(left_depth_m or 0.0),
+        "right_extension_from_window_door": 0.0,
+        "right_distance_above_top_of_window": 0.0,
+        "right_distance_below_bottom_of_window": 0.0,
+        "right_tilt_angle_from_window_door": 90.0,
+        "right_depth": float(right_depth_m or 0.0),
+    }
+
+
 def generate_building_geometry(params: dict) -> dict[str, Any]:
     """
     Generate EnergyPlus zone and surface definitions for a rectangular building.
@@ -244,9 +289,14 @@ def generate_building_geometry(params: dict) -> dict[str, Any]:
     fh = float(params["floor_height"])
     wwr = params["wwr"]                # dict: north/south/east/west
 
+    shading_overhang_cfg = params.get("shading_overhang") or {}
+    shading_fin_cfg      = params.get("shading_fin")      or {}
+
     zones: dict[str, Any] = {}
     surfaces: dict[str, Any] = {}
     windows: dict[str, Any] = {}
+    overhangs: dict[str, Any] = {}
+    fins: dict[str, Any]      = {}
 
     for i in range(nf):
         floor_num = i + 1
@@ -328,6 +378,24 @@ def generate_building_geometry(params: dict) -> dict[str, Any]:
                 windows[win_name] = _window_surface(
                     win_name, wall_name, PLACEHOLDER_GLAZING, win_verts
                 )
+
+                # ── Shading on this window ─────────────────────────────────
+                oh = shading_overhang_cfg.get(facade) or {}
+                if (oh.get("depth_m") or 0) > 0:
+                    oh_name = f"{win_name}_Overhang"
+                    overhangs[oh_name] = _shading_overhang(
+                        oh_name, win_name,
+                        depth_m=float(oh.get("depth_m") or 0.0),
+                        offset_m=float(oh.get("offset_m") or 0.0),
+                    )
+                fc = shading_fin_cfg.get(facade) or {}
+                fin_obj = _shading_fin(
+                    f"{win_name}_Fin", win_name,
+                    left_depth_m=float(fc.get("left_depth_m") or 0.0),
+                    right_depth_m=float(fc.get("right_depth_m") or 0.0),
+                )
+                if fin_obj:
+                    fins[f"{win_name}_Fin"] = fin_obj
 
         # ── Floor slab ────────────────────────────────────────────────────────
         slab_name = f"{zone_name}_Slab"
@@ -411,9 +479,14 @@ def generate_building_geometry(params: dict) -> dict[str, Any]:
         "num_windows": len(windows),
     }
 
-    return {
+    result = {
         "Zone": zones,
         "BuildingSurface:Detailed": surfaces,
         "FenestrationSurface:Detailed": windows,
         "_metadata": metadata,
     }
+    if overhangs:
+        result["Shading:Overhang"] = overhangs
+    if fins:
+        result["Shading:Fin"] = fins
+    return result
