@@ -10,7 +10,6 @@ import { useState, useContext, useEffect, useMemo } from 'react'
 import { NavLink } from 'react-router-dom'
 import BuildingViewer3D from './BuildingViewer3D.jsx'
 import LiveResultsPanel from './LiveResultsPanel.jsx'
-import FabricSankey from './FabricSankey.jsx'
 import ExpandedSankeyOverlay from './ExpandedSankeyOverlay.jsx'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { useWeather } from '../../../context/WeatherContext.jsx'
@@ -322,9 +321,7 @@ export default function BuildingDefinition() {
   const [libraryData, setLibraryData] = useState({})
   const [showSankey, setShowSankey] = useState(false)
   const [sankeyResult, setSankeyResult] = useState(null)
-  const [centreView, setCentreView] = useState('3d')   // '3d' | 'energy'
-
-  // Weather + solar for FabricSankey (shared computation with LiveResultsPanel)
+  // Weather + solar (shared computation with LiveResultsPanel)
   const { weatherData } = useWeather()
   const orientationDeg = Number(params?.orientation ?? 0)
   const hourlySolar = useHourlySolar(weatherData, orientationDeg)
@@ -351,31 +348,10 @@ export default function BuildingDefinition() {
         <InputsColumn library={library} />
       </div>
 
-      {/* Centre: 3D viewer or Energy Flow Sankey */}
+      {/* Centre: 3D viewer (the Energy Flow toggle was removed in Brief 21 —
+          heat balance now lives in Results tab and the pop-out panel) */}
       <div className="flex-1 relative bg-off-white flex flex-col">
-        {/* View toggle */}
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex bg-white border border-light-grey rounded shadow-sm text-xxs">
-          <button
-            onClick={() => setCentreView('3d')}
-            className={`px-3 py-1 rounded-l transition-colors ${centreView === '3d' ? 'bg-navy text-white' : 'text-mid-grey hover:text-navy'}`}
-          >
-            3D Model
-          </button>
-          <button
-            onClick={() => setCentreView('energy')}
-            className={`px-3 py-1 rounded-r transition-colors ${centreView === 'energy' ? 'bg-navy text-white' : 'text-mid-grey hover:text-navy'}`}
-          >
-            Energy Flow
-          </button>
-        </div>
-
-        {centreView === '3d' ? (
-          <BuildingViewer3D params={params} />
-        ) : (
-          <div className="flex-1 w-full h-full pt-8">
-            <FabricSankey result={instantResult} orientation={orientationDeg} />
-          </div>
-        )}
+        <BuildingViewer3D params={params} />
       </div>
 
       {/* Right: live results */}

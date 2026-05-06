@@ -7,6 +7,7 @@ import TabBar from '../../ui/TabBar.jsx'
 import OverviewTab from './OverviewTab.jsx'
 import EnergyFlowsTab from './EnergyFlowsTab.jsx'
 import EnergyBalanceTab from './EnergyBalanceTab.jsx'
+import HeatBalanceTab from './HeatBalanceTab.jsx'
 import LoadProfilesTab from './LoadProfilesTab.jsx'
 import FabricAnalysisTab from './FabricAnalysisTab.jsx'
 import CRREMTab from './CRREMTab.jsx'
@@ -29,12 +30,13 @@ function ResultsSkeleton() {
 }
 
 const TABS = [
-  { id: 'overview',  label: 'Overview'         },
-  { id: 'flows',     label: 'Energy Flows'     },
-  { id: 'balance',   label: 'Energy Balance'   },
-  { id: 'profiles',  label: 'Load Profiles'    },
-  { id: 'fabric',    label: 'Fabric Analysis'  },
-  { id: 'crrem',     label: 'CRREM & Carbon'   },
+  { id: 'overview',     label: 'Overview'         },
+  { id: 'heat-balance', label: 'Heat Balance'     },
+  { id: 'flows',        label: 'Energy Flows'     },
+  { id: 'balance',      label: 'Energy Balance'   },
+  { id: 'profiles',     label: 'Load Profiles'    },
+  { id: 'fabric',       label: 'Fabric Analysis'  },
+  { id: 'crrem',        label: 'CRREM & Carbon'   },
 ]
 
 function ResultsSidebar({ activeTab, onTabChange, scenarios, scenarioResults, selectedScenarioId, onScenarioChange }) {
@@ -190,7 +192,8 @@ export default function ResultsDashboard() {
     : null
 
   const tabContent = {
-    overview: <ErrorBoundary moduleName="Results Overview"><OverviewTab activeResults={activeResults} /></ErrorBoundary>,
+    overview:       <ErrorBoundary moduleName="Results Overview"><OverviewTab activeResults={activeResults} /></ErrorBoundary>,
+    'heat-balance': <ErrorBoundary moduleName="Heat Balance"><HeatBalanceTab /></ErrorBoundary>,
     flows:    <ErrorBoundary moduleName="Energy Flows"><EnergyFlowsTab activeResults={activeResults} /></ErrorBoundary>,
     balance:  <ErrorBoundary moduleName="Energy Balance"><EnergyBalanceTab activeResults={activeResults} /></ErrorBoundary>,
     profiles: <ErrorBoundary moduleName="Load Profiles"><LoadProfilesTab activeResults={activeResults} /></ErrorBoundary>,
