@@ -12,6 +12,7 @@ import { WeatherContext } from '../../../context/WeatherContext.jsx'
 import { SimulationContext } from '../../../context/SimulationContext.jsx'
 import { calculateInstant, calculateInstantDegreeDay } from '../../../utils/instantCalc.js'
 import HeatBalance from './HeatBalance.jsx'
+import DrillDown from './DrillDown.jsx'
 
 // ── Hook: fetch + cache the simulation balance for a (projectId, runId) ─────
 function useSimulationBalance(projectId, runId) {
@@ -36,6 +37,15 @@ export default function BalanceTestPage() {
   const { params, constructions, systems, currentProjectId, saveStatus } = useContext(ProjectContext)
   const weatherCtx = useContext(WeatherContext)
   const simCtx     = useContext(SimulationContext)
+  const [drillKey, setDrillKey] = useState(null)
+  const [libraryData, setLibraryData] = useState({ constructions: [] })
+
+  useEffect(() => {
+    fetch('/api/library?type=construction')
+      .then(r => r.ok ? r.json() : [])
+      .then(items => setLibraryData({ constructions: items ?? [] }))
+      .catch(() => {})
+  }, [])
 
   const liveResult = useMemo(() => {
     if (weatherCtx?.weatherData && weatherCtx?.hourlySolar) {
@@ -62,9 +72,19 @@ export default function BalanceTestPage() {
           liveData={liveResult?.heat_balance}
           simulationData={simBalance}
           simulationInfo={simulationInfo}
-          onElementClick={(key, meta) => console.log('clicked', key, meta)}
+          onElementClick={(key) => setDrillKey(key)}
         />
       </div>
+      <DrillDown
+        elementKey={drillKey}
+        open={!!drillKey}
+        onClose={() => setDrillKey(null)}
+        building={params}
+        constructions={constructions}
+        libraryData={libraryData}
+        liveData={liveResult?.heat_balance}
+        simulationData={simBalance}
+      />
     </div>
   )
 }

@@ -26,7 +26,8 @@ import {
   FABRIC_COLOURS, LABELS, LOSS_ORDER, GAIN_ORDER, colourForElement,
 } from '../../../data/balanceColours.js'
 
-const UNIT_KEY = 'nza-balance-unit'
+const UNIT_KEY   = 'nza-balance-unit'
+const LAYOUT_KEY = 'nza-balance-layout'   // 'rows' | 'stacked'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -150,6 +151,98 @@ function StackColumn({ items, scale, unit, side, onClick }) {
   )
 }
 
+// ── Stacked vertical (single bar per side) ───────────────────────────────────
+
+function StackedColumns({ gains, losses, unit, onClick }) {
+  const totalGains  = gains.reduce((s, i) => s + i.value, 0)
+  const totalLosses = losses.reduce((s, i) => s + i.value, 0)
+  const max = Math.max(totalGains, totalLosses, 0.1)
+
+  // chart height: fixed 360px; segments scale by share of max
+  const HEIGHT = 360
+
+  function renderColumn(items, totalKey) {
+    const total = totalKey === 'gains' ? totalGains : totalLosses
+    return (
+      <div className="flex flex-col items-center gap-3">
+        {/* Stacked bar */}
+        <div
+          className="relative w-24 rounded-md overflow-hidden border border-light-grey/60 flex flex-col-reverse"
+          style={{ height: HEIGHT }}
+        >
+          <div
+            className="absolute inset-0 flex flex-col-reverse"
+            style={{ height: `${(total / max) * 100}%`, top: 'auto', bottom: 0 }}
+          >
+            {items.filter(i => i.value > 0).map(it => (
+              <button
+                key={it.key}
+                onClick={() => onClick?.(it.key, it.meta)}
+                className="w-full transition-all duration-500 ease-out hover:brightness-110 group/seg relative"
+                style={{
+                  height: `${(it.value / total) * 100}%`,
+                  backgroundColor: it.colour,
+                  minHeight: 1,
+                }}
+                title={`${it.label} · ${fmt(it.value, unit)}`}
+              >
+                {/* In-bar label if segment is tall enough */}
+                {(it.value / total) > 0.07 && (
+                  <span className="absolute inset-0 flex items-center justify-center text-xxs font-medium text-white/95 px-1 truncate pointer-events-none">
+                    {it.label.replace(/^Solar — /, '')}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* Total */}
+        <p className="text-caption font-bold text-navy tabular-nums">{fmt(total, unit)}</p>
+      </div>
+    )
+  }
+
+  // Legend: union of items across sides, deduplicated, in the source order
+  const legendKeys = []
+  const seen = new Set()
+  for (const i of [...gains, ...losses]) {
+    if (i.value <= 0) continue
+    if (seen.has(i.key)) continue
+    seen.add(i.key)
+    legendKeys.push(i)
+  }
+
+  return (
+    <div className="grid grid-cols-[1fr_auto_1fr] gap-8 items-start">
+      {/* Left: gains column */}
+      <div className="flex flex-col items-center">
+        <p className="text-xxs uppercase tracking-wider text-mid-grey mb-3">Gains</p>
+        {renderColumn(gains, 'gains')}
+      </div>
+
+      {/* Centre: legend */}
+      <div className="flex flex-col gap-1.5 pt-8 max-w-[160px]">
+        {legendKeys.map(it => (
+          <button
+            key={it.key}
+            onClick={() => onClick?.(it.key, it.meta)}
+            className="flex items-center gap-2 text-xxs text-dark-grey hover:text-navy"
+          >
+            <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: it.colour }} />
+            <span className="truncate">{it.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Right: losses column */}
+      <div className="flex flex-col items-center">
+        <p className="text-xxs uppercase tracking-wider text-mid-grey mb-3">Losses</p>
+        {renderColumn(losses, 'losses')}
+      </div>
+    </div>
+  )
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 export default function HeatBalance({
@@ -165,6 +258,14 @@ export default function HeatBalance({
   useEffect(() => {
     try { localStorage.setItem(UNIT_KEY, unit) } catch {}
   }, [unit])
+
+  const [layout, setLayout] = useState(() => {
+    try { return localStorage.getItem(LAYOUT_KEY) || 'rows' }
+    catch { return 'rows' }
+  })
+  useEffect(() => {
+    try { localStorage.setItem(LAYOUT_KEY, layout) } catch {}
+  }, [layout])
 
   // Engine: prefer live by default. If only simulation is available, switch to it.
   const [engineMode, setEngineMode] = useState('live')
@@ -225,6 +326,7 @@ export default function HeatBalance({
             hasSimulation={!!simulationData}
             simulationInfo={simulationInfo}
           />
+          <LayoutToggle layout={layout} onChange={setLayout} />
           <UnitToggle unit={unit} onChange={setUnit} />
         </div>
       </div>
@@ -241,12 +343,16 @@ export default function HeatBalance({
         </div>
       </div>
 
-      {/* Two-column bar stack */}
+      {/* Bars: rows or stacked */}
       <div className="flex-1 overflow-y-auto px-5 pb-5">
-        <div className="grid grid-cols-2 gap-8">
-          <StackColumn items={gains}  scale={scale} unit={unit} side="gains"  onClick={onElementClick} />
-          <StackColumn items={losses} scale={scale} unit={unit} side="losses" onClick={onElementClick} />
-        </div>
+        {layout === 'rows' ? (
+          <div className="grid grid-cols-2 gap-8">
+            <StackColumn items={gains}  scale={scale} unit={unit} side="gains"  onClick={onElementClick} />
+            <StackColumn items={losses} scale={scale} unit={unit} side="losses" onClick={onElementClick} />
+          </div>
+        ) : (
+          <StackedColumns gains={gains} losses={losses} unit={unit} onClick={onElementClick} />
+        )}
 
         {/* Totals row */}
         <div className="grid grid-cols-2 gap-8 mt-4 pt-3 border-t border-light-grey">
@@ -307,6 +413,37 @@ function UnitToggle({ unit, onChange }) {
         }`}
       >
         kWh
+      </button>
+    </div>
+  )
+}
+
+// ── Layout toggle ────────────────────────────────────────────────────────────
+
+function LayoutToggle({ layout, onChange }) {
+  return (
+    <div className="flex items-center bg-off-white rounded-lg p-0.5 text-xxs">
+      <button
+        onClick={() => onChange('rows')}
+        className={`px-2.5 py-1 rounded transition-colors ${
+          layout === 'rows'
+            ? 'bg-white text-navy font-medium shadow-sm'
+            : 'text-mid-grey hover:text-navy'
+        }`}
+        title="Horizontal rows"
+      >
+        Rows
+      </button>
+      <button
+        onClick={() => onChange('stacked')}
+        className={`px-2.5 py-1 rounded transition-colors ${
+          layout === 'stacked'
+            ? 'bg-white text-navy font-medium shadow-sm'
+            : 'text-mid-grey hover:text-navy'
+        }`}
+        title="Stacked vertical bars"
+      >
+        Stacked
       </button>
     </div>
   )
