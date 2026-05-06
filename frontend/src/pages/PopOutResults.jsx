@@ -12,10 +12,10 @@
  *
  * Panel types:
  *   systems-sankey  — d3-sankey systems energy flow
- *   fabric-sankey   — d3-sankey fabric thermal balance (reuses FabricSankey)
+ *   heat-balance    — PHPP-style gains-vs-losses balance with three layouts
+ *                     (rows / stacked / sankey). Replaces fabric-sankey.
  *   monthly         — monthly heating / cooling bar chart
  *   crrem           — CRREM decarbonisation trajectory
- *   heat-balance    — PHPP-style gains-vs-losses balance (reuses HeatBalance)
  *   eui-gauge       — large EUI horizontal gauge
  *   performance-gap — text summary cards
  */
@@ -30,14 +30,12 @@ import { Settings } from 'lucide-react'
 import { subscribeToState, requestInitialState } from '../utils/broadcastChannel.js'
 import { calculateInstant } from '../utils/instantCalc.js'
 import { computeHourlySolarByFacade } from '../utils/solarCalc.js'
-import FabricSankey from '../components/modules/building/FabricSankey.jsx'
 import HeatBalance from '../components/modules/balance/HeatBalance.jsx'
 
 // ── Panel registry ─────────────────────────────────────────────────────────────
 
 const PANEL_OPTIONS = [
   { id: 'systems-sankey',   label: 'Systems Energy Flow' },
-  { id: 'fabric-sankey',    label: 'Fabric Energy Flow' },
   { id: 'heat-balance',     label: 'Heat Balance' },
   { id: 'monthly',          label: 'Monthly Heating & Cooling' },
   { id: 'crrem',            label: 'CRREM Trajectory' },
@@ -47,10 +45,15 @@ const PANEL_OPTIONS = [
 
 const DEFAULT_LAYOUT = ['heat-balance', 'systems-sankey', 'monthly', 'crrem']
 
+// Migrate any saved layout that still references the removed fabric-sankey
+function migrateLayout(layout) {
+  return layout.map(id => id === 'fabric-sankey' ? 'heat-balance' : id)
+}
+
 function loadLayout() {
   try {
     const saved = JSON.parse(localStorage.getItem('nza-popout-layout'))
-    if (Array.isArray(saved) && saved.length === 4) return saved
+    if (Array.isArray(saved) && saved.length === 4) return migrateLayout(saved)
   } catch {}
   return DEFAULT_LAYOUT
 }
@@ -402,8 +405,6 @@ function Panel({ panelId, state, instantResult, crremData, crremTarget, onSwap }
     switch (panelId) {
       case 'systems-sankey':
         return <SystemsSankeyPanel instantResult={instantResult} />
-      case 'fabric-sankey':
-        return <FabricSankey result={instantResult} orientation={orientationDeg} />
       case 'heat-balance':
         return (
           <HeatBalance

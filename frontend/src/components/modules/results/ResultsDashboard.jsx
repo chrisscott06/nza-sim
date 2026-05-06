@@ -33,7 +33,7 @@ const TABS = [
   { id: 'overview',     label: 'Overview'         },
   { id: 'heat-balance', label: 'Heat Balance'     },
   { id: 'flows',        label: 'Energy Flows'     },
-  { id: 'balance',      label: 'Energy Balance'   },
+  { id: 'balance',      label: 'Monthly Energy'   },
   { id: 'profiles',     label: 'Load Profiles'    },
   { id: 'fabric',       label: 'Fabric Analysis'  },
   { id: 'crrem',        label: 'CRREM & Carbon'   },

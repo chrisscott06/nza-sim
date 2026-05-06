@@ -6,15 +6,82 @@
  * Right (w-80):  LiveResultsPanel — instant-calc results
  */
 
-import { useState, useContext, useEffect, useMemo } from 'react'
+import { useState, useContext, useEffect, useMemo, useRef, useCallback } from 'react'
 import { NavLink } from 'react-router-dom'
+import { PanelRightClose, PanelRightOpen } from 'lucide-react'
 import BuildingViewer3D from './BuildingViewer3D.jsx'
 import LiveResultsPanel from './LiveResultsPanel.jsx'
 import ExpandedSankeyOverlay from './ExpandedSankeyOverlay.jsx'
+import HeatBalance from '../balance/HeatBalance.jsx'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { useWeather } from '../../../context/WeatherContext.jsx'
 import { useHourlySolar } from '../../../hooks/useHourlySolar.js'
 import { calculateInstant } from '../../../utils/instantCalc.js'
+
+// ── Layout: resizable columns ────────────────────────────────────────────────
+// Persisted column widths so users can size to their screen / focus area.
+const LAYOUT_STORAGE_KEY = 'nza-building-layout'
+const LEFT_DEFAULT  = 288   // px (was w-72)
+const RIGHT_DEFAULT = 320   // px (was w-80)
+const LEFT_MIN  = 220
+const LEFT_MAX  = 520
+const RIGHT_MIN = 240
+const RIGHT_MAX = 600
+
+function loadLayoutPrefs() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LAYOUT_STORAGE_KEY))
+    if (saved && typeof saved === 'object') {
+      return {
+        left:        clamp(Number(saved.left)  || LEFT_DEFAULT,  LEFT_MIN,  LEFT_MAX),
+        right:       clamp(Number(saved.right) || RIGHT_DEFAULT, RIGHT_MIN, RIGHT_MAX),
+        rightHidden: !!saved.rightHidden,
+        centre:      ['3d', 'heat-balance'].includes(saved.centre) ? saved.centre : '3d',
+      }
+    }
+  } catch {}
+  return { left: LEFT_DEFAULT, right: RIGHT_DEFAULT, rightHidden: false, centre: '3d' }
+}
+function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)) }
+
+/**
+ * ResizeHandle — vertical drag handle between columns. Calls onResize(dx)
+ * for every pixel of horizontal movement while the user drags.
+ */
+function ResizeHandle({ onResize }) {
+  const startX = useRef(null)
+  const handleMouseDown = useCallback((e) => {
+    e.preventDefault()
+    startX.current = e.clientX
+    const onMove = (ev) => {
+      if (startX.current == null) return
+      const dx = ev.clientX - startX.current
+      startX.current = ev.clientX
+      onResize(dx)
+    }
+    const onUp = () => {
+      startX.current = null
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [onResize])
+
+  return (
+    <div
+      className="w-1 flex-shrink-0 cursor-col-resize bg-light-grey/0 hover:bg-teal/40 active:bg-teal/60 transition-colors relative group"
+      onMouseDown={handleMouseDown}
+      title="Drag to resize"
+    >
+      <div className="absolute inset-y-0 -inset-x-1.5" />
+    </div>
+  )
+}
 
 // ── Facade numbering helpers ──────────────────────────────────────────────────
 // F1=north (0°), F2=east (90°), F3=south (180°), F4=west (270°)
@@ -341,29 +408,83 @@ export default function BuildingDefinition() {
       .catch(() => {})
   }, [])
 
+  // ── Layout state (resizable columns, centre view, right hide) ─────────────
+  const [layout, setLayout] = useState(loadLayoutPrefs)
+  useEffect(() => {
+    try { localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layout)) } catch {}
+  }, [layout])
+
+  const setLeft       = (dx) => setLayout(l => ({ ...l, left:  clamp(l.left  + dx, LEFT_MIN,  LEFT_MAX) }))
+  const setRight      = (dx) => setLayout(l => ({ ...l, right: clamp(l.right - dx, RIGHT_MIN, RIGHT_MAX) }))
+  const toggleRight   = () => setLayout(l => ({ ...l, rightHidden: !l.rightHidden }))
+  const setCentreView = (v) => setLayout(l => ({ ...l, centre: v }))
+
   return (
     <div className="flex h-[calc(100vh-3rem)] relative">
       {/* Left: inputs */}
-      <div className="w-72 flex-shrink-0 z-10">
+      <div className="flex-shrink-0 z-10" style={{ width: layout.left }}>
         <InputsColumn library={library} />
       </div>
 
-      {/* Centre: 3D viewer (the Energy Flow toggle was removed in Brief 21 —
-          heat balance now lives in Results tab and the pop-out panel) */}
-      <div className="flex-1 relative bg-off-white flex flex-col">
-        <BuildingViewer3D params={params} />
+      <ResizeHandle onResize={setLeft} />
+
+      {/* Centre: 3D viewer or live HeatBalance */}
+      <div className="flex-1 relative bg-off-white flex flex-col min-w-0">
+        {/* Centre view toggle */}
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex bg-white border border-light-grey rounded shadow-sm text-xxs">
+          <button
+            onClick={() => setCentreView('3d')}
+            className={`px-3 py-1 rounded-l transition-colors ${layout.centre === '3d' ? 'bg-navy text-white' : 'text-mid-grey hover:text-navy'}`}
+          >
+            3D Model
+          </button>
+          <button
+            onClick={() => setCentreView('heat-balance')}
+            className={`px-3 py-1 rounded-r transition-colors ${layout.centre === 'heat-balance' ? 'bg-navy text-white' : 'text-mid-grey hover:text-navy'}`}
+          >
+            Heat Balance
+          </button>
+        </div>
+
+        {/* Right-pane hide/show — sits on top so it's always reachable */}
+        <button
+          onClick={toggleRight}
+          className="absolute top-2 right-2 z-10 flex items-center gap-1 px-2 py-1 rounded bg-white border border-light-grey shadow-sm text-xxs text-mid-grey hover:text-navy transition-colors"
+          title={layout.rightHidden ? 'Show live results' : 'Hide live results'}
+        >
+          {layout.rightHidden
+            ? <PanelRightOpen size={11} />
+            : <PanelRightClose size={11} />}
+          {layout.rightHidden ? 'Show results' : 'Hide results'}
+        </button>
+
+        {layout.centre === '3d' ? (
+          <BuildingViewer3D params={params} />
+        ) : (
+          <div className="flex-1 w-full h-full pt-9">
+            <HeatBalance
+              liveData={instantResult?.heat_balance}
+              simulationData={null}
+              simulationInfo={null}
+              onElementClick={() => {}}
+            />
+          </div>
+        )}
       </div>
 
-      {/* Right: live results */}
-      <div className="w-80 flex-shrink-0">
-        <LiveResultsPanel
-          libraryData={libraryData}
-        />
-      </div>
+      {/* Right: live results (hidable) */}
+      {!layout.rightHidden && (
+        <>
+          <ResizeHandle onResize={setRight} />
+          <div className="flex-shrink-0" style={{ width: layout.right }}>
+            <LiveResultsPanel libraryData={libraryData} />
+          </div>
+        </>
+      )}
 
       {/* Expanded Sankey overlay — covers centre + right columns */}
       {showSankey && sankeyResult && (
-        <div className="absolute top-0 bottom-0 right-0 z-20" style={{ left: '16rem' }}>
+        <div className="absolute top-0 bottom-0 right-0 z-20" style={{ left: layout.left + 4 }}>
           <ExpandedSankeyOverlay
             result={sankeyResult}
             orientation={params.orientation ?? 0}

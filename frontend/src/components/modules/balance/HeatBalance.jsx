@@ -25,6 +25,7 @@ import {
   SOLAR_COLOURS, INTERNAL_COLOURS, HEATING_COLOUR, COOLING_COLOUR,
   FABRIC_COLOURS, LABELS, LOSS_ORDER, GAIN_ORDER, colourForElement,
 } from '../../../data/balanceColours.js'
+import BalanceSankey from './BalanceSankey.jsx'
 
 const UNIT_KEY   = 'nza-balance-unit'
 const LAYOUT_KEY = 'nza-balance-layout'   // 'rows' | 'stacked'
@@ -343,15 +344,21 @@ export default function HeatBalance({
         </div>
       </div>
 
-      {/* Bars: rows or stacked */}
-      <div className="flex-1 overflow-y-auto px-5 pb-5">
-        {layout === 'rows' ? (
-          <div className="grid grid-cols-2 gap-8">
+      {/* Bars: rows / stacked / sankey */}
+      <div className="flex-1 overflow-hidden px-5 pb-5">
+        {layout === 'rows' && (
+          <div className="grid grid-cols-2 gap-8 h-full overflow-y-auto">
             <StackColumn items={gains}  scale={scale} unit={unit} side="gains"  onClick={onElementClick} />
             <StackColumn items={losses} scale={scale} unit={unit} side="losses" onClick={onElementClick} />
           </div>
-        ) : (
-          <StackedColumns gains={gains} losses={losses} unit={unit} onClick={onElementClick} />
+        )}
+        {layout === 'stacked' && (
+          <div className="h-full overflow-y-auto">
+            <StackedColumns gains={gains} losses={losses} unit={unit} onClick={onElementClick} />
+          </div>
+        )}
+        {layout === 'sankey' && (
+          <BalanceSankey data={data} unit={unit} onElementClick={onElementClick} />
         )}
 
         {/* Totals row */}
@@ -421,30 +428,27 @@ function UnitToggle({ unit, onChange }) {
 // ── Layout toggle ────────────────────────────────────────────────────────────
 
 function LayoutToggle({ layout, onChange }) {
+  const opts = [
+    { id: 'rows',    label: 'Rows',    title: 'Horizontal rows' },
+    { id: 'stacked', label: 'Stacked', title: 'Stacked vertical bars' },
+    { id: 'sankey',  label: 'Sankey',  title: 'Sankey diagram' },
+  ]
   return (
     <div className="flex items-center bg-off-white rounded-lg p-0.5 text-xxs">
-      <button
-        onClick={() => onChange('rows')}
-        className={`px-2.5 py-1 rounded transition-colors ${
-          layout === 'rows'
-            ? 'bg-white text-navy font-medium shadow-sm'
-            : 'text-mid-grey hover:text-navy'
-        }`}
-        title="Horizontal rows"
-      >
-        Rows
-      </button>
-      <button
-        onClick={() => onChange('stacked')}
-        className={`px-2.5 py-1 rounded transition-colors ${
-          layout === 'stacked'
-            ? 'bg-white text-navy font-medium shadow-sm'
-            : 'text-mid-grey hover:text-navy'
-        }`}
-        title="Stacked vertical bars"
-      >
-        Stacked
-      </button>
+      {opts.map(o => (
+        <button
+          key={o.id}
+          onClick={() => onChange(o.id)}
+          className={`px-2.5 py-1 rounded transition-colors ${
+            layout === o.id
+              ? 'bg-white text-navy font-medium shadow-sm'
+              : 'text-mid-grey hover:text-navy'
+          }`}
+          title={o.title}
+        >
+          {o.label}
+        </button>
+      ))}
     </div>
   )
 }
