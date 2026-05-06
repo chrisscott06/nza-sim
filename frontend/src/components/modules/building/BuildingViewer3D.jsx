@@ -245,7 +245,114 @@ function Building({ params, solarOverlay, onFacadeHover }) {
       <GlassFace axis="x" sign={1}  wwr={wwr.east}  faceW={length} count={window_count?.east  ?? 8} />
       {/* Glazing — West face (negative X) */}
       <GlassFace axis="x" sign={-1} wwr={wwr.west}  faceW={length} count={window_count?.west  ?? 8} />
+
+      {/* Shading slabs — one full-facade-width overhang + fin pair per face
+          where shading_overhang/shading_fin > 0. Per-window precision is
+          handled by EnergyPlus; this is for visual confirmation. */}
+      <ShadingSlabs params={params} />
     </group>
+  )
+}
+
+/* ── Shading slabs ─────────────────────────────────────────────────────────── */
+function ShadingSlabs({ params }) {
+  const { length, width, num_floors, floor_height } = params
+  const overhang = params?.shading_overhang ?? {}
+  const fin      = params?.shading_fin      ?? {}
+
+  const totalHeight = num_floors * floor_height
+  const hw = length / 2   // half-length along x
+  const hd = width  / 2   // half-width  along z
+
+  // Top of the topmost floor's window band — matches GlassFace's window height
+  const winY0Top = (num_floors - 1) * floor_height + floor_height * 0.2
+  const winHTop  = floor_height * 0.6
+  const headTop  = winY0Top + winHTop
+
+  // For each facade: { axis, sign, faceLen, perp, faceKey }
+  const FACADES = [
+    { key: 'north', axis: 'z', sign:  1, faceLen: length, perp: hd },
+    { key: 'south', axis: 'z', sign: -1, faceLen: length, perp: hd },
+    { key: 'east',  axis: 'x', sign:  1, faceLen: width,  perp: hw },
+    { key: 'west',  axis: 'x', sign: -1, faceLen: width,  perp: hw },
+  ]
+
+  const SLAB_THICKNESS = 0.04
+  const SLAB_COLOUR    = '#9CA3AF'
+
+  return (
+    <>
+      {FACADES.map(f => {
+        const oh   = overhang[f.key] ?? {}
+        const depth  = Math.max(0, Number(oh.depth_m  ?? 0))
+        const offset = Math.max(0, Number(oh.offset_m ?? 0))
+        const fc   = fin[f.key] ?? {}
+        const finL = Math.max(0, Number(fc.left_depth_m  ?? 0))
+        const finR = Math.max(0, Number(fc.right_depth_m ?? 0))
+
+        // Y position of the slab — sits at window head + offset, slab vertical centre
+        const slabY = headTop + offset + SLAB_THICKNESS / 2
+
+        // Position perpendicular to the wall: outboard by depth/2 from the wall surface
+        const perpCentre = f.sign * (f.perp + depth / 2)
+
+        // Box dimensions per axis
+        // - For north/south (axis 'z'): box spans full length along x (faceLen),
+        //   thickness along y, depth along z
+        // - For east/west  (axis 'x'): box spans full width along z (faceLen),
+        //   thickness along y, depth along x
+        const slabArgs = f.axis === 'z'
+          ? [f.faceLen, SLAB_THICKNESS, depth]
+          : [depth, SLAB_THICKNESS, f.faceLen]
+        const slabPos = f.axis === 'z'
+          ? [0, slabY, perpCentre]
+          : [perpCentre, slabY, 0]
+
+        // Fin slabs — vertical, full window-band height (heuristic), sit at the
+        // facade ends. left = "first window's left edge"; right = "last window's right edge".
+        // We approximate as +/- faceLen/2 ± fin offset.
+        const finHeight = totalHeight   // full building height for visual emphasis
+        const finY      = totalHeight / 2
+
+        // Fin position along the facade — ends of the facade
+        const finAlongL = -f.faceLen / 2
+        const finAlongR =  f.faceLen / 2
+
+        const finArgs = (depth_m) => f.axis === 'z'
+          ? [SLAB_THICKNESS, finHeight, depth_m]
+          : [depth_m, finHeight, SLAB_THICKNESS]
+
+        const finPos = (alongPos, depth_m) => {
+          const finPerpCentre = f.sign * (f.perp + depth_m / 2)
+          return f.axis === 'z'
+            ? [alongPos, finY, finPerpCentre]
+            : [finPerpCentre, finY, alongPos]
+        }
+
+        return (
+          <group key={f.key}>
+            {depth > 0 && (
+              <mesh castShadow receiveShadow position={slabPos}>
+                <boxGeometry args={slabArgs} />
+                <meshStandardMaterial color={SLAB_COLOUR} roughness={0.85} metalness={0.05} />
+              </mesh>
+            )}
+            {finL > 0 && (
+              <mesh castShadow receiveShadow position={finPos(finAlongL, finL)}>
+                <boxGeometry args={finArgs(finL)} />
+                <meshStandardMaterial color={SLAB_COLOUR} roughness={0.85} metalness={0.05} />
+              </mesh>
+            )}
+            {finR > 0 && (
+              <mesh castShadow receiveShadow position={finPos(finAlongR, finR)}>
+                <boxGeometry args={finArgs(finR)} />
+                <meshStandardMaterial color={SLAB_COLOUR} roughness={0.85} metalness={0.05} />
+              </mesh>
+            )}
+          </group>
+        )
+      })}
+    </>
   )
 }
 
