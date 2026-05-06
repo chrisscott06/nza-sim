@@ -685,6 +685,125 @@ def _read_epw_temperatures(weather_file_path: str | Path) -> list[float]:
     return temps
 
 
+def _read_epw_wind_temp(weather_file_path: str | Path) -> tuple[list[float], list[int]]:
+    """
+    Read hourly wind speed (m/s, EPW field 21) and month index from an EPW.
+    Returns (wind_speed, month_idx_0_based). Empty lists on failure.
+    """
+    p = Path(weather_file_path)
+    if not p.exists() or not p.is_file():
+        return ([], [])
+    wind: list[float] = []
+    months: list[int] = []
+    try:
+        with open(p, "r", encoding="latin-1") as f:
+            for _ in range(8):
+                f.readline()
+            for line in f:
+                parts = line.strip().split(",")
+                if len(parts) > 21:
+                    try:
+                        months.append(int(parts[1]) - 1)
+                        wind.append(float(parts[21]))
+                    except (ValueError, IndexError):
+                        pass
+    except Exception:
+        return ([], [])
+    return (wind, months)
+
+
+def _attribute_openings_share(
+    total_vent_loss_kwh: float,
+    weather_file_path: str | Path | None,
+    building_config: dict | None,
+) -> tuple[float, float, float]:
+    """
+    Split the EP-reported total ZoneVentilation:Sensible Heat Loss Energy into
+    three streams: (louvre_kwh, window_kwh, mech_kwh).
+
+    EnergyPlus emits a single per-zone aggregate covering mechanical
+    ventilation AND every ZoneVentilation:WindandStackOpenArea object — there
+    are no per-object outputs. We attribute the lump by **design flow ratio**:
+
+        Q_louvre  ≈ Cd · A_louvre  · √Cw · v_design
+        Q_window  ≈ Cd · A_window  · √Cw · v_design  · sched_fraction
+        Q_mech    ≈ 8 L/s · N_people
+
+    The shares sum to 1, so each stream's kwh = share × total_vent_loss.
+    Honest about being a split estimate, not a per-object measurement.
+    """
+    if total_vent_loss_kwh <= 0 or not building_config:
+        return (0.0, 0.0, total_vent_loss_kwh)
+    openings = building_config.get("openings") or {}
+    if not openings:
+        return (0.0, 0.0, total_vent_loss_kwh)
+
+    Cd = 0.6
+    Cw = {"sheltered": 0.05, "normal": 0.10, "exposed": 0.20}.get(
+        openings.get("site_exposure", "normal"), 0.10
+    )
+    sqrt_Cw = Cw ** 0.5
+
+    # Design wind speed: annual mean from the EPW (matches what EP integrates)
+    if weather_file_path:
+        wind, _ = _read_epw_wind_temp(weather_file_path)
+        v_design = (sum(wind) / len(wind)) if wind else 4.0
+    else:
+        v_design = 4.0  # conservative UK default
+
+    faces = ("north", "south", "east", "west")
+    louvre_total = sum(
+        float((openings.get(f) or {}).get("louvre_area_m2", 0) or 0) for f in faces
+    )
+
+    length = float(building_config.get("length", 60))
+    width = float(building_config.get("width", 15))
+    floor_height = float(building_config.get("floor_height", 3))
+    num_floors = float(building_config.get("num_floors", 1))
+    wwr = building_config.get("wwr") or {}
+    facade_area = {
+        "north": length * floor_height * num_floors,
+        "south": length * floor_height * num_floors,
+        "east":  width  * floor_height * num_floors,
+        "west":  width  * floor_height * num_floors,
+    }
+    openable_total = sum(
+        float((openings.get(f) or {}).get("openable_fraction", 0) or 0)
+        * float(wwr.get(f, 0) or 0)
+        * facade_area[f]
+        for f in faces
+    )
+
+    # Schedule-fraction multiplier on the openable-window flow
+    sched = openings.get("schedule", "never")
+    sched_frac = {
+        "always":     1.0,
+        "occupied":   16 / 24,           # ~07:00-23:00 in the live calc
+        "summer_day": (5 / 12) * (12 / 24),
+        "never":      0.0,
+    }.get(sched, 0.0)
+
+    # Mechanical ventilation flow (8 L/s/person, fixed)
+    num_bedrooms = float(building_config.get("num_bedrooms", 0) or 0)
+    occ_rate = float(building_config.get("occupancy_rate", 0.75) or 0.75)
+    people_per_room = float(building_config.get("people_per_room", 1.5) or 1.5)
+    n_people = num_bedrooms * occ_rate * people_per_room
+    Q_mech = 0.008 * n_people  # m³/s
+
+    # Time-averaged design flows for attribution
+    Q_louvre = Cd * louvre_total * sqrt_Cw * v_design
+    Q_window = Cd * openable_total * sqrt_Cw * v_design * sched_frac
+
+    Q_sum = Q_louvre + Q_window + Q_mech
+    if Q_sum <= 0:
+        return (0.0, 0.0, total_vent_loss_kwh)
+
+    louvre_kwh = total_vent_loss_kwh * (Q_louvre / Q_sum)
+    window_kwh = total_vent_loss_kwh * (Q_window / Q_sum)
+    mech_kwh   = total_vent_loss_kwh * (Q_mech   / Q_sum)
+    return (louvre_kwh, window_kwh, mech_kwh)
+
+
 def _hdd_cdd(temps: list[float], heat_base_C: float = 18.0, cool_base_C: float = 22.0) -> tuple[float, float]:
     """
     Compute heating- and cooling-degree-days from an hourly temperature series.
@@ -813,7 +932,14 @@ def get_heat_balance(
         # Detailed mode reports Zone Ventilation Sensible Heat Loss Energy.
         # Ideal Loads bundles ventilation into the heating/cooling demand —
         # in that case we report 0 here (heating delta absorbs it).
-        vent_loss = _sum_annual(conn, "Zone Ventilation Sensible Heat Loss Energy")
+        # Note: this aggregate INCLUDES our ZoneVentilation:WindandStackOpenArea
+        # opening flows. EP doesn't report per-object — we attribute the lump
+        # by design flow ratio so louvres / windows / mechanical show as
+        # separate line items.
+        vent_loss_total = _sum_annual(conn, "Zone Ventilation Sensible Heat Loss Energy")
+        louvre_loss, window_loss, vent_loss = _attribute_openings_share(
+            vent_loss_total, weather_file_path, building_config
+        )
 
         # ── Solar gains by orientation (already split in env detailed) ────────
         solar_by_face = {
@@ -857,6 +983,14 @@ def get_heat_balance(
                 "kwh":         round(env["infiltration"]["annual_heat_loss_kWh"], 1),
                 "kwh_per_m2":  per_m2(env["infiltration"]["annual_heat_loss_kWh"]),
                 "ach":         float((building_config or {}).get("infiltration_ach", 0) or 0),
+            },
+            "openings_louvre": {
+                "kwh":         round(louvre_loss, 1),
+                "kwh_per_m2":  per_m2(louvre_loss),
+            },
+            "openings_window": {
+                "kwh":         round(window_loss, 1),
+                "kwh_per_m2":  per_m2(window_loss),
             },
             "ventilation": {
                 "kwh":         round(vent_loss, 1),
