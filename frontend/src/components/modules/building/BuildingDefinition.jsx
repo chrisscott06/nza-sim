@@ -388,6 +388,12 @@ function InputsColumn({ library, onInspectConstruction }) {
     const current = Number(openings?.[face]?.openable_fraction ?? 0)
     if (include) {
       setOpenableFor(face, openableMemory[face] > 0 ? openableMemory[face] : 0.30)
+      // If schedule is still 'Never', windows would be configured but never
+      // actually open (Q_window stays 0, no heat loss). Auto-bump to a sensible
+      // default so the engine sees flow as soon as the user enables an opening.
+      if ((openings.schedule ?? 'never') === 'never') {
+        updateParam('openings', { schedule: 'occupied' })
+      }
     } else {
       if (current > 0) setOpenableMemory(m => ({ ...m, [face]: current }))
       setOpenableFor(face, 0)
