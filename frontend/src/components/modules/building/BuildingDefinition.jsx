@@ -434,13 +434,49 @@ export default function BuildingDefinition() {
   const [libraryData, setLibraryData] = useState({})
   const [showSankey, setShowSankey] = useState(false)
   const [sankeyResult, setSankeyResult] = useState(null)
+
+  // ── Live preview toggles ──────────────────────────────────────────────────
+  // Quick what-if checkboxes that override the saved geometry without
+  // touching it on disk. Useful for "what if we removed the windows" tests.
+  const [showWindows, setShowWindows] = useState(true)
+  const [showShading, setShowShading] = useState(true)
+
+  // Build a "preview params" object with WWR / shading zeroed out when
+  // their toggles are off. The 3D viewer, instantCalc, and HeatBalance
+  // all read from this — saved params are never mutated.
+  const previewParams = useMemo(() => {
+    if (!params) return params
+    let p = { ...params }
+    if (!showWindows) {
+      p = { ...p, wwr: { north: 0, south: 0, east: 0, west: 0 } }
+    }
+    if (!showShading) {
+      p = {
+        ...p,
+        shading_overhang: {
+          north: { depth_m: 0, offset_m: 0 },
+          south: { depth_m: 0, offset_m: 0 },
+          east:  { depth_m: 0, offset_m: 0 },
+          west:  { depth_m: 0, offset_m: 0 },
+        },
+        shading_fin: {
+          north: { left_depth_m: 0, right_depth_m: 0 },
+          south: { left_depth_m: 0, right_depth_m: 0 },
+          east:  { left_depth_m: 0, right_depth_m: 0 },
+          west:  { left_depth_m: 0, right_depth_m: 0 },
+        },
+      }
+    }
+    return p
+  }, [params, showWindows, showShading])
+
   // Weather + solar (shared computation with LiveResultsPanel)
   const { weatherData } = useWeather()
   const orientationDeg = Number(params?.orientation ?? 0)
   const hourlySolar = useHourlySolar(weatherData, orientationDeg)
   const instantResult = useMemo(
-    () => calculateInstant(params, constructions, systems, libraryData, weatherData, hourlySolar),
-    [params, constructions, systems, libraryData, weatherData, hourlySolar]
+    () => calculateInstant(previewParams, constructions, systems, libraryData, weatherData, hourlySolar),
+    [previewParams, constructions, systems, libraryData, weatherData, hourlySolar]
   )
 
   // Simulation balance — fetched per (projectId, runId). Lets the Live |
@@ -502,6 +538,27 @@ export default function BuildingDefinition() {
           </button>
         </div>
 
+        {/* Preview toggles — what-if checkboxes that override saved geometry
+            without touching it. Live engine + 3D viewer respond instantly. */}
+        <div className="absolute top-2 left-2 z-10 flex items-center gap-3 bg-white border border-light-grey rounded shadow-sm px-2.5 py-1 text-xxs">
+          <span className="text-mid-grey">Show:</span>
+          <label className="flex items-center gap-1 cursor-pointer text-dark-grey hover:text-navy">
+            <input type="checkbox" checked={showWindows} onChange={e => setShowWindows(e.target.checked)}
+                   className="accent-navy w-3 h-3" />
+            Windows
+          </label>
+          <label className="flex items-center gap-1 cursor-pointer text-dark-grey hover:text-navy">
+            <input type="checkbox" checked={showShading} onChange={e => setShowShading(e.target.checked)}
+                   className="accent-navy w-3 h-3" />
+            Shading
+          </label>
+          {(!showWindows || !showShading) && (
+            <span className="text-amber-600 text-xxs italic" title="Saved values are unchanged — toggles only affect this preview">
+              preview only
+            </span>
+          )}
+        </div>
+
         {/* Right-pane hide/show — sits on top so it's always reachable */}
         <button
           onClick={toggleRight}
@@ -515,7 +572,7 @@ export default function BuildingDefinition() {
         </button>
 
         {layout.centre === '3d' ? (
-          <BuildingViewer3D params={params} />
+          <BuildingViewer3D params={previewParams} />
         ) : (
           <div className="flex-1 w-full h-full pt-9">
             <HeatBalance
