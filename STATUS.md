@@ -2,6 +2,26 @@
 
 ## Last completed
 
+**Brief 23 (partial)** — Debug EnergyPlus shading not visibly applied (2026-05-06). All three hypotheses tested; none produced solar reduction. Open issue carried over.
+
+**Brief 23 findings:**
+- H1 (explicit `ShadowCalculation` with `DetailedSkyDiffuseModeling` + Timestep updates): no effect
+- H2 (`solar_distribution: FullExterior`): no effect
+- H3 (`Shading:Building:Detailed` with explicit vertices, both vertex orderings): no effect
+- Even a 30 m south overhang produces zero solar-gain change
+- `eplusout.eio` confirms 8 detached + 24 attached shading surfaces are created
+- `Surface Outside Face Sunlit Fraction` for south windows = **0.411 with and without shading** — proves EP isn't applying the shading geometry to the window's sunlit fraction calculation
+- The shading surfaces themselves have computed sunlit fractions (overhang det = 0.0, mirror = 0.38), so EP IS including them in the geometry pool — just not as obstructions for windows
+
+**What's left to try (next session):**
+- Build a minimal isolated EP test case (one zone, one window, one Shading:Overhang) directly via .idf and run EnergyPlus from CLI. If shading works there, compare epJSON structures to find what differs in our generator.
+- Check if `Building.solar_distribution` interactions with a particular construction layer or schedule are silently degrading shading.
+- Try `Output:Variable: Surface Window Heat Gain Energy` instead of `Surface Window Transmitted Solar Radiation Energy` — possibly the wrong variable for shading-aware values.
+
+**Action required:** None. The frontend live engine still applies shading correctly via `computeShadingFactors`; only the EnergyPlus path is unaffected.
+
+---
+
 **Brief 22** — Solar shading inputs + balance polish + facade label consistency (2026-05-06). 8 parts committed and pushed.
 
 **Brief 22 parts completed:**

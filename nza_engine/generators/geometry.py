@@ -212,6 +212,67 @@ def _window_vertices_on_wall(
     ]
 
 
+# Per-facade outward normal (unit vector). Building length along Z, width
+# along X — see geometry below. North wall normal = +Y, south = -Y, etc.
+_FACADE_NORMAL = {
+    "north": (0.0,  1.0, 0.0),
+    "south": (0.0, -1.0, 0.0),
+    "east":  (1.0,  0.0, 0.0),
+    "west":  (-1.0, 0.0, 0.0),
+}
+
+
+def _shading_building_overhang_slab(
+    name: str, facade: str, win_verts: list[dict], depth_m: float, offset_m: float = 0.0,
+) -> dict | None:
+    """
+    Shading:Building:Detailed — explicit-vertex horizontal slab above the
+    window, extending outward by depth_m. Bypasses Shading:Overhang attached-
+    shading logic in case that's the path EP isn't applying.
+
+    win_verts (CCW from outside):  v0=bottom-left, v1=bottom-right,
+                                   v2=top-right,    v3=top-left
+    """
+    if depth_m <= 0:
+        return None
+    n = _FACADE_NORMAL.get(facade)
+    if not n:
+        return None
+
+    # Top edge of window: v3 (TL) → v2 (TR), at z = head_z
+    tl, tr = win_verts[3], win_verts[2]
+    head_z = tl["vertex_z_coordinate"]
+    # Slab inner edge sits offset_m above the window head
+    inner_z = head_z + float(offset_m or 0.0)
+
+    # Inner edge points along the wall: from TL.xy to TR.xy at z=inner_z
+    inner_a = (tl["vertex_x_coordinate"], tl["vertex_y_coordinate"], inner_z)
+    inner_b = (tr["vertex_x_coordinate"], tr["vertex_y_coordinate"], inner_z)
+    # Outer edge: extruded by depth_m along the facade outward normal
+    outer_b = (inner_b[0] + n[0] * depth_m, inner_b[1] + n[1] * depth_m, inner_z)
+    outer_a = (inner_a[0] + n[0] * depth_m, inner_a[1] + n[1] * depth_m, inner_z)
+
+    # GlobalGeometryRules: starting_vertex_position=UpperLeftCorner +
+    # vertex_entry_direction=Counterclockwise. For a horizontal slab the
+    # "upper left" is the NW corner when viewed from above. CCW from above
+    # means the outward (upward) normal is +Z so the slab blocks sun
+    # coming from above. Going inner_b → outer_b → outer_a → inner_a
+    # (NE wall → NE outer → SW outer → SW wall, looking from above) is
+    # CCW for a south-facing facade. For a north-facing one the outward
+    # normal direction reverses, so the same vertex order naturally flips.
+    # Empirically: this order gives EP a slab that actually shades.
+    return {
+        "transmittance_schedule_name": "",
+        "number_of_vertices": 4,
+        "vertices": [
+            {"vertex_x_coordinate": inner_b[0], "vertex_y_coordinate": inner_b[1], "vertex_z_coordinate": inner_b[2]},
+            {"vertex_x_coordinate": outer_b[0], "vertex_y_coordinate": outer_b[1], "vertex_z_coordinate": outer_b[2]},
+            {"vertex_x_coordinate": outer_a[0], "vertex_y_coordinate": outer_a[1], "vertex_z_coordinate": outer_a[2]},
+            {"vertex_x_coordinate": inner_a[0], "vertex_y_coordinate": inner_a[1], "vertex_z_coordinate": inner_a[2]},
+        ],
+    }
+
+
 def _shading_overhang(name: str, window_name: str, depth_m: float, offset_m: float) -> dict:
     """
     Shading:Overhang — horizontal projection above a window/door.
@@ -295,8 +356,9 @@ def generate_building_geometry(params: dict) -> dict[str, Any]:
     zones: dict[str, Any] = {}
     surfaces: dict[str, Any] = {}
     windows: dict[str, Any] = {}
-    overhangs: dict[str, Any] = {}
-    fins: dict[str, Any]      = {}
+    overhangs: dict[str, Any]            = {}
+    fins: dict[str, Any]                  = {}
+    detailed_shadings: dict[str, Any]    = {}
 
     for i in range(nf):
         floor_num = i + 1
@@ -380,14 +442,25 @@ def generate_building_geometry(params: dict) -> dict[str, Any]:
                 )
 
                 # ── Shading on this window ─────────────────────────────────
+                # Two parallel emissions:
+                #  1. Shading:Overhang / Shading:Fin (attached) — was the
+                #     original approach. Visible in eplusout.eio but does
+                #     not visibly reduce solar in EP 26 for our model.
+                #  2. Shading:Building:Detailed (explicit vertices) — the
+                #     fallback being tested in Brief 23 H3.
                 oh = shading_overhang_cfg.get(facade) or {}
-                if (oh.get("depth_m") or 0) > 0:
+                depth = float(oh.get("depth_m") or 0.0)
+                offset = float(oh.get("offset_m") or 0.0)
+                if depth > 0:
                     oh_name = f"{win_name}_Overhang"
-                    overhangs[oh_name] = _shading_overhang(
-                        oh_name, win_name,
-                        depth_m=float(oh.get("depth_m") or 0.0),
-                        offset_m=float(oh.get("offset_m") or 0.0),
+                    overhangs[oh_name] = _shading_overhang(oh_name, win_name, depth_m=depth, offset_m=offset)
+                    # Also emit explicit-vertex slab as a parallel test.
+                    slab = _shading_building_overhang_slab(
+                        f"{win_name}_OverhangDet", facade, win_verts, depth, offset
                     )
+                    if slab:
+                        detailed_shadings[f"{win_name}_OverhangDet"] = slab
+
                 fc = shading_fin_cfg.get(facade) or {}
                 fin_obj = _shading_fin(
                     f"{win_name}_Fin", win_name,
@@ -489,4 +562,6 @@ def generate_building_geometry(params: dict) -> dict[str, Any]:
         result["Shading:Overhang"] = overhangs
     if fins:
         result["Shading:Fin"] = fins
+    if detailed_shadings:
+        result["Shading:Building:Detailed"] = detailed_shadings
     return result

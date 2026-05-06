@@ -481,6 +481,8 @@ def _output_variables() -> dict:
         "Zone Ventilation Sensible Heat Gain Energy",    # mechanical vent heat gain
         "Fan Electricity Energy",                        # fan energy (if fan objects present)
         "Surface Inside Face Conduction Heat Transfer Energy",
+        # Diagnostic — should drop below 1.0 when external shading reaches the surface
+        "Surface Outside Face Sunlit Fraction",
         # Solar gains — use Energy (J) which works with SimpleGlazingSystem
         # Rate (W) is not generated with simplified glazing in EP 25.2
         "Zone Windows Total Transmitted Solar Radiation Energy",
@@ -779,7 +781,7 @@ def assemble_epjson(
                 "terrain": "Urban",
                 "loads_convergence_tolerance_value": 0.04,
                 "temperature_convergence_tolerance_value": 0.4,
-                "solar_distribution": "FullInteriorAndExteriorWithReflections",
+                "solar_distribution": "FullExterior",
                 "maximum_number_of_warmup_days": 25,
                 "minimum_number_of_warmup_days": 6,
             }
@@ -797,6 +799,22 @@ def assemble_epjson(
 
         "Timestep": {
             "Timestep 1": {"number_of_timesteps_per_hour": 4}
+        },
+
+        # Explicit ShadowCalculation — defaults are PolygonClipping +
+        # Periodic 20-day + SimpleSkyDiffuseModeling. The simple sky
+        # diffuse algorithm doesn't account for shading reductions on
+        # diffuse solar; switch to detailed so external overhangs/fins
+        # actually reduce solar gain.
+        "ShadowCalculation": {
+            "ShadowCalculation 1": {
+                "shading_calculation_method": "PolygonClipping",
+                "shading_calculation_update_frequency_method": "Timestep",
+                "shading_calculation_update_frequency": 1,
+                "maximum_figures_in_shadow_overlap_calculations": 15000,
+                "polygon_clipping_algorithm": "SutherlandHodgman",
+                "sky_diffuse_modeling_algorithm": "DetailedSkyDiffuseModeling",
+            }
         },
 
         "RunPeriod": {
@@ -842,6 +860,8 @@ def assemble_epjson(
         # Pass-through any shading objects the geometry generator produced
         **({"Shading:Overhang": geom["Shading:Overhang"]} if geom.get("Shading:Overhang") else {}),
         **({"Shading:Fin":      geom["Shading:Fin"]}      if geom.get("Shading:Fin")      else {}),
+        **({"Shading:Building:Detailed": geom["Shading:Building:Detailed"]}
+           if geom.get("Shading:Building:Detailed") else {}),
 
         "Material": construction_epjson["Material"],
         "Material:NoMass": construction_epjson["Material:NoMass"],
