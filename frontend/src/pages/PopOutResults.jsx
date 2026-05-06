@@ -15,6 +15,7 @@
  *   fabric-sankey   — d3-sankey fabric thermal balance (reuses FabricSankey)
  *   monthly         — monthly heating / cooling bar chart
  *   crrem           — CRREM decarbonisation trajectory
+ *   heat-balance    — PHPP-style gains-vs-losses balance (reuses HeatBalance)
  *   eui-gauge       — large EUI horizontal gauge
  *   performance-gap — text summary cards
  */
@@ -30,19 +31,21 @@ import { subscribeToState, requestInitialState } from '../utils/broadcastChannel
 import { calculateInstant } from '../utils/instantCalc.js'
 import { computeHourlySolarByFacade } from '../utils/solarCalc.js'
 import FabricSankey from '../components/modules/building/FabricSankey.jsx'
+import HeatBalance from '../components/modules/balance/HeatBalance.jsx'
 
 // ── Panel registry ─────────────────────────────────────────────────────────────
 
 const PANEL_OPTIONS = [
   { id: 'systems-sankey',   label: 'Systems Energy Flow' },
   { id: 'fabric-sankey',    label: 'Fabric Energy Flow' },
+  { id: 'heat-balance',     label: 'Heat Balance' },
   { id: 'monthly',          label: 'Monthly Heating & Cooling' },
   { id: 'crrem',            label: 'CRREM Trajectory' },
   { id: 'eui-gauge',        label: 'EUI Gauge' },
   { id: 'performance-gap',  label: 'Performance Gap' },
 ]
 
-const DEFAULT_LAYOUT = ['systems-sankey', 'fabric-sankey', 'monthly', 'crrem']
+const DEFAULT_LAYOUT = ['heat-balance', 'systems-sankey', 'monthly', 'crrem']
 
 function loadLayout() {
   try {
@@ -401,6 +404,14 @@ function Panel({ panelId, state, instantResult, crremData, crremTarget, onSwap }
         return <SystemsSankeyPanel instantResult={instantResult} />
       case 'fabric-sankey':
         return <FabricSankey result={instantResult} orientation={orientationDeg} />
+      case 'heat-balance':
+        return (
+          <HeatBalance
+            liveData={instantResult?.heat_balance}
+            simulationData={null}
+            simulationInfo={null}
+          />
+        )
       case 'monthly':
         return <MonthlyPanel instantResult={instantResult} />
       case 'crrem':
