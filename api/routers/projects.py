@@ -35,6 +35,7 @@ from nza_engine.parsers.sql_parser import (
     get_zone_summary,
     get_envelope_heat_flow,
     get_envelope_heat_flow_detailed,
+    get_heat_balance,
     get_hourly_profiles,
     get_typical_day_profiles,
 )
@@ -591,3 +592,55 @@ async def get_simulation_result(project_id: str, run_id: str):
             )
 
     return _row_to_sim_run(row)
+
+
+@router.get("/{project_id}/simulations/{run_id}/balance")
+async def get_simulation_balance(project_id: str, run_id: str):
+    """
+    Return the heat-balance object for a specific simulation run.
+    Computes per-element losses + per-orientation solar + internal gains,
+    plus HDD/CDD from the project's weather file.
+    """
+    async with get_db() as db:
+        # Need building_config (for areas) and weather_file (for HDD/CDD), both
+        # of which are stored on the project at simulation time, plus the
+        # eplusout.sql path which we derive from results_hourly_path.
+        cursor = await db.execute(
+            "SELECT * FROM simulation_runs WHERE id = ? AND project_id = ?",
+            (run_id, project_id),
+        )
+        sim_row = await cursor.fetchone()
+        if not sim_row:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Simulation run '{run_id}' not found for project '{project_id}'",
+            )
+
+        cursor = await db.execute(
+            "SELECT building_config, weather_file FROM projects WHERE id = ?",
+            (project_id,),
+        )
+        proj_row = await cursor.fetchone()
+        if not proj_row:
+            raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
+
+    building_config = json.loads(proj_row["building_config"])
+    sql_path = sim_row["results_hourly_path"]
+    if not sql_path:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Simulation run '{run_id}' has no eplusout.sql on disk (likely an errored run).",
+        )
+
+    # Resolve the EPW path the same way simulate did
+    weather_path = None
+    try:
+        weather_path = resolve_weather_file(proj_row["weather_file"])
+    except Exception:
+        pass
+
+    return get_heat_balance(
+        sql_path=sql_path,
+        building_config=building_config,
+        weather_file_path=weather_path,
+    )

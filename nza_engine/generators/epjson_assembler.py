@@ -469,8 +469,11 @@ def _output_variables() -> dict:
         "Zone Ideal Loads Supply Air Total Heating Energy",
         "Zone Ideal Loads Supply Air Total Cooling Energy",
         "Zone People Occupant Count",
+        "Zone People Total Heating Energy",         # internal gain from occupants
         "Zone Lights Electricity Energy",
+        "Zone Lights Total Heating Energy",         # actual heat dumped to zone (often == elec)
         "Zone Electric Equipment Electricity Energy",
+        "Zone Electric Equipment Total Heating Energy",  # heat to zone from equipment
         "Zone Hot Water Equipment Electricity Energy",   # DHW if modeled as hot water equip
         "Zone Infiltration Sensible Heat Loss Energy",
         "Zone Infiltration Sensible Heat Gain Energy",

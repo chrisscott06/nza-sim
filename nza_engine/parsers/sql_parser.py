@@ -657,6 +657,271 @@ def get_typical_day_profiles(sql_path) -> dict:
     }
 
 
+def _read_epw_temperatures(weather_file_path: str | Path) -> list[float]:
+    """
+    Read 8760 hourly outdoor dry-bulb temperatures from an EnergyPlus EPW file.
+    Returns an empty list if the file can't be read.
+
+    EPW format: 8 header lines, then 8760 data rows (one per hour).
+    Comma-separated; field index 6 (0-indexed) = Dry Bulb Temperature in °C.
+    """
+    p = Path(weather_file_path)
+    if not p.exists() or not p.is_file():
+        return []
+    temps: list[float] = []
+    try:
+        with open(p, "r", encoding="latin-1") as f:
+            for _ in range(8):
+                f.readline()
+            for line in f:
+                parts = line.strip().split(",")
+                if len(parts) > 6:
+                    try:
+                        temps.append(float(parts[6]))
+                    except ValueError:
+                        pass
+    except Exception:
+        return []
+    return temps
+
+
+def _hdd_cdd(temps: list[float], heat_base_C: float = 18.0, cool_base_C: float = 22.0) -> tuple[float, float]:
+    """
+    Compute heating- and cooling-degree-days from an hourly temperature series.
+    Hour-degrees / 24 → degree-days. Returns (HDD, CDD) in K·days.
+    """
+    if not temps:
+        return (0.0, 0.0)
+    hdh = sum(max(0.0, heat_base_C - t) for t in temps)
+    cdh = sum(max(0.0, t - cool_base_C) for t in temps)
+    return (round(hdh / 24.0, 1), round(cdh / 24.0, 1))
+
+
+def _building_areas(building_config: dict | None) -> dict:
+    """
+    Compute fabric areas from building_config.
+    Returns {gia_m2, external_wall_m2, roof_m2, ground_floor_m2, glazing_m2_by_facade}.
+    """
+    bc = building_config or {}
+    L  = float(bc.get("length", 0) or 0)
+    W  = float(bc.get("width", 0) or 0)
+    nf = float(bc.get("num_floors", 0) or 0)
+    fh = float(bc.get("floor_height", 0) or 0)
+    wwr = bc.get("wwr") or {}
+
+    perim_height = nf * fh
+    # Per-facade gross wall length (north/south faces are length L; east/west are width W)
+    face_lengths = {"north": L, "south": L, "east": W, "west": W}
+    glazing = {}
+    wall_net = {}
+    for face, fl in face_lengths.items():
+        gross = fl * perim_height
+        ratio = float(wwr.get(face, 0) or 0)
+        glazing[face]   = round(gross * ratio, 1)
+        wall_net[face]  = round(gross * (1 - ratio), 1)
+
+    return {
+        "gia_m2":            round(L * W * nf, 1),
+        "external_wall_m2":  round(sum(wall_net.values()), 1),
+        "external_wall_by_face_m2": wall_net,
+        "roof_m2":           round(L * W, 1),
+        "ground_floor_m2":   round(L * W, 1),
+        "glazing_by_face_m2": glazing,
+        "glazing_total_m2":  round(sum(glazing.values()), 1),
+    }
+
+
+def get_heat_balance(
+    sql_path: str | Path,
+    building_config: dict | None = None,
+    weather_file_path: str | Path | None = None,
+) -> dict:
+    """
+    Return a balanced view of all annual heat flows from a simulation run.
+
+    Output shape (consumed by the frontend HeatBalance component):
+
+      {
+        "annual": {
+          "losses": {
+            "external_wall":  {kwh, kwh_per_m2, area_m2, by_face},
+            "roof":           {kwh, kwh_per_m2, area_m2},
+            "ground_floor":   {kwh, kwh_per_m2, area_m2},
+            "glazing":        {kwh, kwh_per_m2, area_m2},   # transmission only
+            "infiltration":   {kwh, kwh_per_m2, ach},
+            "ventilation":    {kwh, kwh_per_m2},
+            "cooling":        {kwh, kwh_per_m2},
+          },
+          "gains": {
+            "solar":          {north, east, south, west — each {kwh, kwh_per_m2, area_m2}, total},
+            "internal":       {people, equipment, lighting — each {kwh, kwh_per_m2}, total},
+            "heating":        {kwh, kwh_per_m2},
+          },
+          "totals": { losses_kwh_per_m2, gains_kwh_per_m2, net_kwh_per_m2 },
+        },
+        "metadata": { gia_m2, hdd_18C, cdd_22C, weather_file },
+      }
+
+    All values in kWh (annual) or kWh/m²·a.
+    """
+    conn = _connect(sql_path)
+    try:
+        # ── Reuse existing detailed envelope parser for fabric ────────────────
+        env = get_envelope_heat_flow_detailed(sql_path)
+
+        # ── Areas from building config (authoritative) ────────────────────────
+        areas = _building_areas(building_config)
+        gia = max(areas["gia_m2"], 1.0)  # avoid div by 0
+
+        # ── Fabric losses per element ─────────────────────────────────────────
+        wall_loss_total = sum(env["walls"][f]["annual_heat_loss_kWh"] for f in env["walls"])
+        wall_loss_by_face = {f: round(env["walls"][f]["annual_heat_loss_kWh"], 1) for f in env["walls"]}
+
+        # Glazing transmission losses: filter Surface Inside Face Conduction by _WIN_*
+        # (separate from solar gains which come through windows)
+        win_cond_rows = _query(
+            conn,
+            "SELECT ReportDataDictionaryIndex, KeyValue FROM ReportDataDictionary "
+            "WHERE Name = 'Surface Inside Face Conduction Heat Transfer Energy' COLLATE NOCASE",
+        )
+        glazing_loss = 0.0
+        for row in win_cond_rows:
+            kv = (row["KeyValue"] or "").upper()
+            if "_WIN_" not in kv:
+                continue
+            v = _query(conn, "SELECT SUM(Value) FROM ReportData WHERE ReportDataDictionaryIndex = ?", (row["ReportDataDictionaryIndex"],))
+            kwh = (v[0][0] or 0.0) * J_TO_KWH
+            if kwh < 0:
+                glazing_loss += abs(kwh)
+
+        # ── Internal gains ────────────────────────────────────────────────────
+        people_kwh    = _sum_annual(conn, "Zone People Total Heating Energy")
+        # Fall back to electricity * 1.0 if heat-energy variant is missing
+        equip_heat    = _sum_annual(conn, "Zone Electric Equipment Total Heating Energy")
+        if equip_heat == 0.0:
+            equip_heat = _sum_annual(conn, "Zone Electric Equipment Electricity Energy")
+        light_heat    = _sum_annual(conn, "Zone Lights Total Heating Energy")
+        if light_heat == 0.0:
+            light_heat = _sum_annual(conn, "Zone Lights Electricity Energy")
+
+        # ── Heating / cooling delivered to zone ───────────────────────────────
+        eu = get_annual_energy_by_enduse(sql_path)
+        heating_kwh = float(eu.get("heating_kWh") or 0.0)
+        cooling_kwh = float(eu.get("cooling_kWh") or 0.0)
+
+        # ── Ventilation losses ────────────────────────────────────────────────
+        # Detailed mode reports Zone Ventilation Sensible Heat Loss Energy.
+        # Ideal Loads bundles ventilation into the heating/cooling demand —
+        # in that case we report 0 here (heating delta absorbs it).
+        vent_loss = _sum_annual(conn, "Zone Ventilation Sensible Heat Loss Energy")
+
+        # ── Solar gains by orientation (already split in env detailed) ────────
+        solar_by_face = {
+            f: env["glazing"][f]["solar_gain_kWh"]
+            for f in env["glazing"]
+        }
+
+        # ── HDD / CDD from EPW ────────────────────────────────────────────────
+        hdd, cdd = (0.0, 0.0)
+        if weather_file_path:
+            temps = _read_epw_temperatures(weather_file_path)
+            hdd, cdd = _hdd_cdd(temps, 18.0, 22.0)
+
+        # ── Build response ────────────────────────────────────────────────────
+        def per_m2(kwh):
+            return round(kwh / gia, 2)
+
+        losses = {
+            "external_wall": {
+                "kwh":         round(wall_loss_total, 1),
+                "kwh_per_m2":  per_m2(wall_loss_total),
+                "area_m2":     areas["external_wall_m2"],
+                "by_face":     wall_loss_by_face,
+            },
+            "roof": {
+                "kwh":         round(env["roof"]["annual_heat_loss_kWh"], 1),
+                "kwh_per_m2":  per_m2(env["roof"]["annual_heat_loss_kWh"]),
+                "area_m2":     areas["roof_m2"],
+            },
+            "ground_floor": {
+                "kwh":         round(env["ground_floor"]["annual_heat_loss_kWh"], 1),
+                "kwh_per_m2":  per_m2(env["ground_floor"]["annual_heat_loss_kWh"]),
+                "area_m2":     areas["ground_floor_m2"],
+            },
+            "glazing": {
+                "kwh":         round(glazing_loss, 1),
+                "kwh_per_m2":  per_m2(glazing_loss),
+                "area_m2":     areas["glazing_total_m2"],
+            },
+            "infiltration": {
+                "kwh":         round(env["infiltration"]["annual_heat_loss_kWh"], 1),
+                "kwh_per_m2":  per_m2(env["infiltration"]["annual_heat_loss_kWh"]),
+                "ach":         float((building_config or {}).get("infiltration_ach", 0) or 0),
+            },
+            "ventilation": {
+                "kwh":         round(vent_loss, 1),
+                "kwh_per_m2":  per_m2(vent_loss),
+            },
+            "cooling": {
+                "kwh":         round(cooling_kwh, 1),
+                "kwh_per_m2":  per_m2(cooling_kwh),
+            },
+        }
+
+        gains = {
+            "solar": {
+                **{
+                    f: {
+                        "kwh":        round(solar_by_face[f], 1),
+                        "kwh_per_m2": per_m2(solar_by_face[f]),
+                        "area_m2":    areas["glazing_by_face_m2"].get(f, 0.0),
+                    }
+                    for f in solar_by_face
+                },
+                "total_kwh":        round(sum(solar_by_face.values()), 1),
+                "total_kwh_per_m2": per_m2(sum(solar_by_face.values())),
+            },
+            "internal": {
+                "people":    {"kwh": round(people_kwh, 1), "kwh_per_m2": per_m2(people_kwh)},
+                "equipment": {"kwh": round(equip_heat, 1), "kwh_per_m2": per_m2(equip_heat)},
+                "lighting":  {"kwh": round(light_heat, 1), "kwh_per_m2": per_m2(light_heat)},
+                "total_kwh": round(people_kwh + equip_heat + light_heat, 1),
+                "total_kwh_per_m2": per_m2(people_kwh + equip_heat + light_heat),
+            },
+            "heating": {
+                "kwh":        round(heating_kwh, 1),
+                "kwh_per_m2": per_m2(heating_kwh),
+            },
+        }
+
+        total_losses = sum(losses[k]["kwh"] for k in losses)
+        total_gains  = (
+            sum(solar_by_face.values()) + people_kwh + equip_heat + light_heat + heating_kwh
+        )
+
+        return {
+            "annual": {
+                "losses": losses,
+                "gains":  gains,
+                "totals": {
+                    "losses_kwh":        round(total_losses, 1),
+                    "gains_kwh":         round(total_gains, 1),
+                    "losses_kwh_per_m2": per_m2(total_losses),
+                    "gains_kwh_per_m2":  per_m2(total_gains),
+                    "net_kwh_per_m2":    per_m2(total_gains - total_losses),
+                },
+            },
+            "metadata": {
+                "gia_m2":         areas["gia_m2"],
+                "hdd_18C":        hdd,
+                "cdd_22C":        cdd,
+                "weather_file":   str(weather_file_path) if weather_file_path else None,
+            },
+        }
+    finally:
+        conn.close()
+
+
 def get_envelope_heat_flow_detailed(sql_path) -> dict:
     """
     Return per-facade annual heat flow data grouped by element type and facade.
