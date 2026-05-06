@@ -13,6 +13,7 @@ import BuildingViewer3D from './BuildingViewer3D.jsx'
 import LiveResultsPanel from './LiveResultsPanel.jsx'
 import ExpandedSankeyOverlay from './ExpandedSankeyOverlay.jsx'
 import HeatBalance from '../balance/HeatBalance.jsx'
+import ConstructionInspector from '../../library/ConstructionInspector.jsx'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { SimulationContext } from '../../../context/SimulationContext.jsx'
 import { useWeather } from '../../../context/WeatherContext.jsx'
@@ -196,7 +197,7 @@ function UValueBadge({ u }) {
 
 // ── Construction dropdown ─────────────────────────────────────────────────────
 
-function ConstructionSelect({ elementKey, label, library, types, selectedId, onSelect }) {
+function ConstructionSelect({ elementKey, label, library, types, selectedId, onSelect, onInspect }) {
   const filtered = library.filter(c => types.some(t => (c.type ?? '').toLowerCase() === t))
   const items = filtered.length > 0 ? filtered : library
   const selected = items.find(c => c.name === selectedId)
@@ -205,7 +206,16 @@ function ConstructionSelect({ elementKey, label, library, types, selectedId, onS
     <div className="mb-2">
       <div className="flex items-center justify-between mb-0.5">
         <label className="text-xxs text-mid-grey">{label}</label>
-        {selected && <UValueBadge u={selected.u_value_W_per_m2K} />}
+        {selected && (
+          <button
+            type="button"
+            onClick={() => onInspect?.(selected.name)}
+            title="Inspect / edit construction layers"
+            className="cursor-pointer focus:outline-none"
+          >
+            <UValueBadge u={selected.u_value_W_per_m2K} />
+          </button>
+        )}
       </div>
       <select
         value={selectedId ?? ''}
@@ -262,7 +272,7 @@ function PreviewToggle({ label, checked, onChange }) {
   )
 }
 
-function InputsColumn({ library, showWindows, setShowWindows, showShading, setShowShading }) {
+function InputsColumn({ library, showWindows, setShowWindows, showShading, setShowShading, onInspectConstruction }) {
   const { params, updateParam, constructions, updateConstruction } = useContext(ProjectContext)
   const { length, width, num_floors, floor_height, orientation, wwr, name, infiltration_ach, window_count } = params
   const ach = infiltration_ach ?? 0.5
@@ -427,6 +437,7 @@ function InputsColumn({ library, showWindows, setShowWindows, showShading, setSh
               types={el.types}
               selectedId={constructions?.[el.key] ?? null}
               onSelect={updateConstruction}
+              onInspect={onInspectConstruction}
             />
           ))}
         </CollapsibleSection>
@@ -467,6 +478,9 @@ export default function BuildingDefinition() {
   // touching it on disk. Useful for "what if we removed the windows" tests.
   const [showWindows, setShowWindows] = useState(true)
   const [showShading, setShowShading] = useState(true)
+
+  // ── Construction Inspector — opens when user clicks a U-value badge ───────
+  const [inspectConstruction, setInspectConstruction] = useState(null)
 
   // Build a "preview params" object with WWR / shading zeroed out when
   // their toggles are off. The 3D viewer, instantCalc, and HeatBalance
@@ -546,6 +560,7 @@ export default function BuildingDefinition() {
           library={library}
           showWindows={showWindows} setShowWindows={setShowWindows}
           showShading={showShading} setShowShading={setShowShading}
+          onInspectConstruction={setInspectConstruction}
         />
       </div>
 
@@ -616,6 +631,25 @@ export default function BuildingDefinition() {
           />
         </div>
       )}
+
+      {/* Construction Inspector — opens when a U-value badge is clicked. */}
+      <ConstructionInspector
+        open={!!inspectConstruction}
+        constructionName={inspectConstruction}
+        initialMode="view"
+        onClose={() => setInspectConstruction(null)}
+        onSaved={() => {
+          // Re-fetch library after save so any U-value updates reflect immediately.
+          fetch('/api/library/constructions')
+            .then(r => r.ok ? r.json() : { constructions: [] })
+            .then(d => {
+              const items = d.constructions ?? []
+              setLibrary(items)
+              setLibraryData({ constructions: items })
+            })
+            .catch(() => {})
+        }}
+      />
     </div>
   )
 }
