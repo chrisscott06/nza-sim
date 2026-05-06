@@ -65,6 +65,8 @@ export default function BalanceTestPage() {
     isStale: saveStatus === 'saving' || saveStatus === 'saved',
   } : null
 
+  const orientationDeg = Number(params?.orientation ?? 0)
+
   return (
     <div className="h-[calc(100vh-3rem)] bg-off-white p-6">
       <div className="max-w-5xl mx-auto h-full bg-white rounded-xl border border-light-grey overflow-hidden">
@@ -72,6 +74,7 @@ export default function BalanceTestPage() {
           liveData={liveResult?.heat_balance}
           simulationData={simBalance}
           simulationInfo={simulationInfo}
+          orientationDeg={orientationDeg}
           onElementClick={(key) => setDrillKey(key)}
         />
       </div>
@@ -84,6 +87,7 @@ export default function BalanceTestPage() {
         libraryData={libraryData}
         liveData={liveResult?.heat_balance}
         simulationData={simBalance}
+        orientationDeg={orientationDeg}
       />
     </div>
   )

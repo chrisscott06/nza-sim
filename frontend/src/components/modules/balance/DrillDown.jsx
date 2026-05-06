@@ -17,6 +17,7 @@ import { useEffect, useState } from 'react'
 import { X as XIcon, ChevronDown, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { firstPrinciplesFor, computeSpread, classifySpread } from '../../../utils/firstPrinciples.js'
 import { LABELS, colourForElement } from '../../../data/balanceColours.js'
+import { solarLabel } from '../../../utils/facadeLabel.js'
 
 // ── Element-specific notes for divergence ────────────────────────────────────
 
@@ -77,6 +78,7 @@ export default function DrillDown({
   liveData,
   simulationData,
   unit = 'kwh_per_m2',
+  orientationDeg = 0,
 }) {
   const [showNote, setShowNote] = useState(false)
 
@@ -102,7 +104,9 @@ export default function DrillDown({
   const cls    = classifySpread(spread)
 
   const colour = colourForElement(elementKey)
-  const label  = LABELS[elementKey] ?? elementKey
+  const label  = elementKey?.startsWith('solar_')
+    ? solarLabel(elementKey.slice(6), orientationDeg)
+    : (LABELS[elementKey] ?? elementKey)
 
   return (
     <div className="fixed inset-0 z-40 pointer-events-none" aria-hidden={!open}>

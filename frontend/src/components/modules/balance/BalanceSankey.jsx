@@ -24,6 +24,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { sankey, sankeyLeft, sankeyLinkHorizontal } from 'd3-sankey'
 import { colourForElement, LABELS } from '../../../data/balanceColours.js'
+import { solarLabel } from '../../../utils/facadeLabel.js'
 import { TooltipPill } from './HeatBalance.jsx'
 
 const BUILDING_NODE_ID = '_zone'
@@ -43,7 +44,7 @@ function readValue(node, unit) {
 
 // ── Build Sankey graph from heat_balance ─────────────────────────────────────
 
-function buildGraph(data, unit) {
+function buildGraph(data, unit, orientationDeg = 0) {
   if (!data?.annual) return null
   const { gains, losses } = data.annual
 
@@ -60,12 +61,12 @@ function buildGraph(data, unit) {
   }
 
   // ── Gains in (left) ──────────────────────────────────────────────────────
-  // Solar by orientation
+  // Solar by orientation — facade label rotates with building orientation
   for (const face of ['south', 'east', 'west', 'north']) {
     const v = readValue(gains?.solar?.[face], unit)
     if (v > 0) {
       const id = `solar_${face}`
-      addNode(id, LABELS[id], colourForElement(id))
+      addNode(id, solarLabel(face, orientationDeg), colourForElement(id))
       addLink(id, BUILDING_NODE_ID, v, colourForElement(id))
     }
   }
@@ -102,7 +103,7 @@ function buildGraph(data, unit) {
 
 // ── Render ───────────────────────────────────────────────────────────────────
 
-export default function BalanceSankey({ data, unit, onElementClick }) {
+export default function BalanceSankey({ data, unit, orientationDeg = 0, onElementClick }) {
   const containerRef = useRef(null)
   const [dims, setDims] = useState({ width: 720, height: 420 })
   const [hover, setHover] = useState(null)
@@ -122,7 +123,7 @@ export default function BalanceSankey({ data, unit, onElementClick }) {
   }, [])
 
   const graph = useMemo(() => {
-    const raw = buildGraph(data, unit)
+    const raw = buildGraph(data, unit, orientationDeg)
     if (!raw) return null
     try {
       const layout = sankey()
@@ -140,7 +141,7 @@ export default function BalanceSankey({ data, unit, onElementClick }) {
     } catch (e) {
       return null
     }
-  }, [data, unit, dims])
+  }, [data, unit, orientationDeg, dims])
 
   if (!graph) {
     return (

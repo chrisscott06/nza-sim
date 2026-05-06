@@ -466,6 +466,7 @@ export default function BuildingDefinition() {
               liveData={instantResult?.heat_balance}
               simulationData={null}
               simulationInfo={null}
+              orientationDeg={orientationDeg}
               onElementClick={() => {}}
             />
           </div>

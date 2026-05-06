@@ -58,6 +58,8 @@ export default function HeatBalanceTab() {
     isStale: saveStatus === 'saving' || saveStatus === 'saved',
   } : null
 
+  const orientationDeg = Number(params?.orientation ?? 0)
+
   return (
     <div className="h-full bg-off-white p-4">
       <div className="h-full bg-white rounded-xl border border-light-grey overflow-hidden">
@@ -65,6 +67,7 @@ export default function HeatBalanceTab() {
           liveData={liveResult?.heat_balance}
           simulationData={simBalance}
           simulationInfo={simulationInfo}
+          orientationDeg={orientationDeg}
           onElementClick={(key) => setDrillKey(key)}
         />
       </div>
@@ -77,6 +80,7 @@ export default function HeatBalanceTab() {
         libraryData={libraryData}
         liveData={liveResult?.heat_balance}
         simulationData={simBalance}
+        orientationDeg={orientationDeg}
       />
     </div>
   )

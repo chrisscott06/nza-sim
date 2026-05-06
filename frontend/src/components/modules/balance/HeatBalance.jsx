@@ -25,6 +25,7 @@ import {
   SOLAR_COLOURS, INTERNAL_COLOURS, HEATING_COLOUR, COOLING_COLOUR,
   FABRIC_COLOURS, LABELS, LOSS_ORDER, GAIN_ORDER, colourForElement,
 } from '../../../data/balanceColours.js'
+import { solarLabel } from '../../../utils/facadeLabel.js'
 import BalanceSankey from './BalanceSankey.jsx'
 
 const UNIT_KEY   = 'nza-balance-unit'
@@ -65,17 +66,18 @@ function flattenLosses(data, unit) {
     }))
 }
 
-function flattenGains(data, unit) {
+function flattenGains(data, unit, orientationDeg = 0) {
   const gains = data?.annual?.gains ?? {}
   const out = []
-  // Solar — split by face
+  // Solar — split by face. Label uses facade convention F# (compass) so it
+  // matches the Glazing input panel and rotates with building orientation.
   const solar = gains.solar ?? {}
   for (const face of ['south', 'east', 'west', 'north']) {
     const node = solar[face]
     if (!node) continue
     out.push({
       key:   `solar_${face}`,
-      label: LABELS[`solar_${face}`],
+      label: solarLabel(face, orientationDeg),
       value: readValue(node, unit),
       raw_kwh: node.kwh ?? 0,
       raw_kwh_per_m2: node.kwh_per_m2 ?? 0,
@@ -275,6 +277,7 @@ export default function HeatBalance({
   liveData,
   simulationData,
   simulationInfo,
+  orientationDeg = 0,
   onElementClick,
 }) {
   const [unit, setUnit] = useState(() => {
@@ -304,7 +307,7 @@ export default function HeatBalance({
 
   const { losses, gains, scale, totalLosses, totalGains, gia } = useMemo(() => {
     const lossItems = flattenLosses(data, unit)
-    const gainItems = flattenGains(data, unit)
+    const gainItems = flattenGains(data, unit, orientationDeg)
     const allValues = [...lossItems.map(i => i.value), ...gainItems.map(i => i.value)]
     const scale = Math.max(...allValues, 0.1)
     const totalLosses = data?.annual?.totals?.[unit === 'kwh_per_m2' ? 'losses_kwh_per_m2' : 'losses_kwh'] ?? 0
@@ -317,7 +320,7 @@ export default function HeatBalance({
       totalGains,
       gia: data?.metadata?.gia_m2 ?? 0,
     }
-  }, [data, unit])
+  }, [data, unit, orientationDeg])
 
   if (!data || !data.annual) {
     return (
@@ -383,7 +386,12 @@ export default function HeatBalance({
           </div>
         )}
         {layout === 'sankey' && (
-          <BalanceSankey data={data} unit={unit} onElementClick={onElementClick} />
+          <BalanceSankey
+            data={data}
+            unit={unit}
+            orientationDeg={orientationDeg}
+            onElementClick={onElementClick}
+          />
         )}
 
         {/* Totals row */}

@@ -411,6 +411,7 @@ function Panel({ panelId, state, instantResult, crremData, crremTarget, onSwap }
             liveData={instantResult?.heat_balance}
             simulationData={null}
             simulationInfo={null}
+            orientationDeg={orientationDeg}
           />
         )
       case 'monthly':
