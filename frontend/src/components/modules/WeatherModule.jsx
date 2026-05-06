@@ -151,10 +151,10 @@ export default function WeatherModule() {
           <Section title="Year origin per month">
             <p className="text-xxs text-mid-grey mb-3">
               {methodology === 'TMYx' || methodology === 'TMY' || methodology === 'TMY3' || methodology === 'TRY'
-                ? `Each month is real hourly data from a single specific year, selected to be most representative across the ${years.all.length}-year record. Not an average — preserves real weather patterns (cold snaps, heat waves). Hover or read the table below for the year contributing each month.`
+                ? `Each month is real hourly data from a single specific year, selected to be most representative across the ${years.all.length}-year record. Not an average — preserves real weather patterns (cold snaps, heat waves). The year that contributed each month is shown below.`
                 : `Year contributing each month of the file.`}
             </p>
-            <div className="grid grid-cols-6 md:grid-cols-12 gap-1 text-xxs">
+            <div className="grid grid-cols-6 md:grid-cols-12 gap-1 text-xxs mb-4">
               {years.by_month.map(m => (
                 <div key={m.month} className="bg-off-white rounded p-2 text-center">
                   <p className="text-mid-grey">{MONTH_LABELS[m.month - 1]}</p>
@@ -162,6 +162,8 @@ export default function WeatherModule() {
                 </div>
               ))}
             </div>
+
+            <MethodologyDisclosure methodology={methodology} dataSource={location.data_source} />
           </Section>
         )}
 
@@ -285,6 +287,117 @@ export default function WeatherModule() {
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
+
+/**
+ * MethodologyDisclosure — explains who selected the months and how, plus
+ * what alternative file types are available. Collapsible so it doesn't
+ * dominate the page once the user understands.
+ */
+function MethodologyDisclosure({ methodology, dataSource }) {
+  const [open, setOpen] = useState(false)
+
+  // Map methodology → publisher attribution where we can detect it from
+  // the EPW DataSource header. climate.onebuilding.org marks its files
+  // with "OneBuilding" or specific WMO source codes; NREL TMY3 has its
+  // own. We keep this best-effort.
+  const publisher = (() => {
+    const ds = (dataSource || '').toLowerCase()
+    if (ds.includes('tmyx') || methodology === 'TMYx') return 'climate.onebuilding.org'
+    if (methodology === 'TMY3') return 'NREL (US National Renewable Energy Laboratory)'
+    if (methodology === 'TRY' || methodology === 'DSY') return 'CIBSE / PROMETHEUS'
+    return 'the data publisher'
+  })()
+
+  return (
+    <div className="border-t border-light-grey pt-3">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="text-xxs text-mid-grey hover:text-navy flex items-center gap-1 transition-colors"
+      >
+        <span style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 150ms' }}>▸</span>
+        How were these months chosen?
+      </button>
+      {open && (
+        <div className="mt-3 space-y-3 text-xxs text-dark-grey leading-relaxed">
+
+          <p>
+            <span className="font-semibold">Who chose them:</span>{' '}
+            {publisher}, when this EPW file was compiled. Not NZA Sim, not
+            EnergyPlus. The year column for each row is baked into the file —
+            this page just reads it back.
+          </p>
+
+          <p>
+            <span className="font-semibold">How they chose:</span>{' '}
+            the standard Finkelstein-Schafer (FS) statistic. For each candidate
+            month (e.g. all the Januaries in the multi-year record), build a
+            cumulative distribution of the key variables (dry-bulb temp, dew
+            point, wind speed, global solar). Build the same distribution for
+            the long-term record. The candidate year whose distributions most
+            closely match the long-term — by weighted mean absolute difference —
+            wins that month. Stitch the 12 winners together with a small
+            smoothing pass at month boundaries.
+          </p>
+
+          <p>
+            <span className="font-semibold">Why not a single real year:</span>{' '}
+            any individual year may have a freak heatwave or cold snap that
+            skews demand 10–20% off long-term typical. The TMY-family methods
+            give you a more representative single 8,760-hour file from one
+            simulation run.
+          </p>
+
+          <div>
+            <p className="font-semibold mb-1.5">Alternative file types if you need them:</p>
+            <table className="w-full text-xxs">
+              <tbody>
+                <tr className="border-b border-light-grey/60">
+                  <td className="py-1.5 pr-2 align-top whitespace-nowrap font-medium">AMY</td>
+                  <td className="py-1.5 text-mid-grey">
+                    <span className="font-medium text-dark-grey">Actual Meteorological Year</span> — every
+                    month from one specific real year. Use when calibrating
+                    against measured consumption from that exact year.
+                  </td>
+                </tr>
+                <tr className="border-b border-light-grey/60">
+                  <td className="py-1.5 pr-2 align-top whitespace-nowrap font-medium">TMY family</td>
+                  <td className="py-1.5 text-mid-grey">
+                    <span className="font-medium text-dark-grey">TMY / TMYx / TMY3 / TRY</span> — what
+                    we're using here. Best for typical-year energy demand at
+                    design stage.
+                  </td>
+                </tr>
+                <tr className="border-b border-light-grey/60">
+                  <td className="py-1.5 pr-2 align-top whitespace-nowrap font-medium">DSY</td>
+                  <td className="py-1.5 text-mid-grey">
+                    <span className="font-medium text-dark-grey">Design Summer Year</span> — an
+                    intentionally warm year (CIBSE convention) for overheating
+                    risk per TM52. Don't use for heating demand — it would be
+                    understated.
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-1.5 pr-2 align-top whitespace-nowrap font-medium">HDY / CDY</td>
+                  <td className="py-1.5 text-mid-grey">
+                    <span className="font-medium text-dark-grey">Heating / Cooling Design Year</span> — a
+                    cold or hot year for sizing peak loads. Don't use for
+                    typical-year demand.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p className="text-mid-grey italic">
+            None of this is computed by EnergyPlus or NZA Sim — EnergyPlus runs
+            whatever 8,760 hours we give it. The choice of which hours is the
+            data publisher's job.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function Section({ title, children }) {
   return (
