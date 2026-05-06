@@ -630,15 +630,21 @@ function InputsColumn({ library, onInspectConstruction }) {
           <p className="text-xxs text-mid-grey mt-3 mb-1">Openable windows (% of glazing)</p>
           {FACADES.map(fac => {
             const frac = Number(openings?.[fac.key]?.openable_fraction ?? 0)
-            const included = frac > 0
+            const glazingOn = (wwr[fac.key] ?? 0) > 0
+            // Openable windows need glass to open — gate the row on glazing.
+            const included = frac > 0 && glazingOn
+            const disabled = !glazingOn
             return (
               <div key={`openable-${fac.key}`} className="flex items-center gap-1 mb-1">
                 <input
                   type="checkbox"
                   checked={included}
                   onChange={e => toggleOpenableInclude(fac.key, e.target.checked)}
-                  className="accent-navy w-3 h-3 flex-shrink-0"
-                  title={`Include openable windows on ${facadeLabel(fac.num, orientation)}`}
+                  disabled={disabled}
+                  className="accent-navy w-3 h-3 flex-shrink-0 disabled:opacity-30"
+                  title={disabled
+                    ? `${facadeLabel(fac.num, orientation)} has no glazing — enable it in Glazing first`
+                    : `Include openable windows on ${facadeLabel(fac.num, orientation)}`}
                 />
                 <span className={`text-xxs w-14 flex-shrink-0 ${included ? 'text-navy' : 'text-light-grey'}`}>
                   {facadeLabel(fac.num, orientation)}
@@ -651,7 +657,7 @@ function InputsColumn({ library, onInspectConstruction }) {
                   className="flex-1 h-[3px] accent-navy disabled:opacity-30"
                 />
                 <span className={`text-xxs w-9 text-right tabular-nums ${included ? 'text-navy' : 'text-light-grey'}`}>
-                  {Math.round(frac * 100)}%
+                  {disabled ? '—' : `${Math.round(frac * 100)}%`}
                 </span>
               </div>
             )

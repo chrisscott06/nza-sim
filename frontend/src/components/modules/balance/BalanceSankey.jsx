@@ -23,7 +23,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { sankey, sankeyLeft, sankeyLinkHorizontal } from 'd3-sankey'
-import { colourForElement, LABELS } from '../../../data/balanceColours.js'
+import { colourForElement, LABELS, LOSS_ORDER } from '../../../data/balanceColours.js'
 import { solarLabel } from '../../../utils/facadeLabel.js'
 import { TooltipPill } from './HeatBalance.jsx'
 
@@ -89,7 +89,9 @@ function buildGraph(data, unit, orientationDeg = 0) {
   addNode(BUILDING_NODE_ID, 'Zone', BUILDING_NODE_COLOUR)
 
   // ── Losses out (right) ───────────────────────────────────────────────────
-  for (const k of ['external_wall', 'roof', 'ground_floor', 'glazing', 'infiltration', 'ventilation', 'cooling']) {
+  // Use the canonical LOSS_ORDER so new loss elements (e.g. openings_louvre,
+  // openings_window) appear automatically without needing to update this list.
+  for (const k of LOSS_ORDER) {
     const v = readValue(losses?.[k], unit)
     if (v > 0) {
       addNode(k, LABELS[k], colourForElement(k))
