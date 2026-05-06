@@ -17,6 +17,7 @@ import ProfilesEditor  from './components/modules/ProfilesEditor.jsx'
 import ScenarioManager from './components/modules/ScenarioManager.jsx'
 import ConsumptionManager from './components/modules/consumption/ConsumptionManager.jsx'
 import CRREMModule from './components/modules/CRREMModule.jsx'
+import BalanceTestPage from './components/modules/balance/BalanceTestPage.jsx'
 
 export default function App() {
   return (
@@ -38,6 +39,7 @@ export default function App() {
                 <Route path="/consumption" element={<ErrorBoundary moduleName="Consumption"><ConsumptionManager /></ErrorBoundary>} />
                 <Route path="/results"   element={<ErrorBoundary moduleName="Results Dashboard"><ResultsDashboard /></ErrorBoundary>} />
                 <Route path="/crrem"     element={<ErrorBoundary moduleName="CRREM"><CRREMModule /></ErrorBoundary>} />
+                <Route path="/balance-test" element={<ErrorBoundary moduleName="Heat Balance Test"><BalanceTestPage /></ErrorBoundary>} />
                 <Route path="/scenarios" element={<ErrorBoundary moduleName="Scenario Manager"><ScenarioManager /></ErrorBoundary>} />
                 <Route path="/library"   element={<ErrorBoundary moduleName="Library Browser"><LibraryBrowser /></ErrorBoundary>} />
               </Route>
