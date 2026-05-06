@@ -432,12 +432,13 @@ function CameraRig({ params, resetSignal, autoRotateEnabled, cameraPreset, onPre
   function presetPos(preset) {
     const facePos = { x: 0, y: midH, z: 0 }
     switch (preset) {
-      case 'f1':  return new THREE.Vector3(0,          midH, dist)    // north face
-      case 'f2':  return new THREE.Vector3(dist,       midH, 0)       // east face
-      case 'f3':  return new THREE.Vector3(0,          midH, -dist)   // south face
-      case 'f4':  return new THREE.Vector3(-dist,      midH, 0)       // west face
-      case 'iso': return isoPos.clone()
-      default:    return isoPos.clone()
+      case 'f1':   return new THREE.Vector3(0,          midH, dist)    // north face
+      case 'f2':   return new THREE.Vector3(dist,       midH, 0)       // east face
+      case 'f3':   return new THREE.Vector3(0,          midH, -dist)   // south face
+      case 'f4':   return new THREE.Vector3(-dist,      midH, 0)       // west face
+      case 'plan': return new THREE.Vector3(0.001,      dist * 1.4, 0) // top-down (tiny x to keep orbit controls happy)
+      case 'iso':  return isoPos.clone()
+      default:     return isoPos.clone()
     }
     void facePos
   }
@@ -690,7 +691,7 @@ export default function BuildingViewer3D({ params }) {
             ↻ Auto
           </button>
         </div>
-        {/* Row 2: Facade preset views */}
+        {/* Row 2: Facade preset views + Plan */}
         <div className="flex gap-1">
           {[1, 2, 3, 4].map(n => {
             const key = `f${n}`
@@ -711,6 +712,17 @@ export default function BuildingViewer3D({ params }) {
               </button>
             )
           })}
+          <button
+            onClick={() => setCameraPreset('plan')}
+            className={`text-xxs px-1.5 py-1 rounded border backdrop-blur-sm transition-colors ${
+              cameraPreset === 'plan'
+                ? 'bg-navy text-white border-navy'
+                : 'bg-white/85 text-mid-grey border-light-grey hover:bg-white'
+            }`}
+            title="Plan (top-down) view"
+          >
+            ◰ Plan
+          </button>
         </div>
       </div>
 

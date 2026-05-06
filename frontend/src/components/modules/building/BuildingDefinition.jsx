@@ -245,7 +245,24 @@ const CONSTRUCTION_ELEMENTS = [
   { key: 'glazing',       label: 'Glazing',       types: ['glazing', 'window'] },
 ]
 
-function InputsColumn({ library }) {
+function PreviewToggle({ label, checked, onChange }) {
+  return (
+    <label className="flex items-center gap-2 mb-2 px-2 py-1.5 rounded bg-off-white text-xxs cursor-pointer hover:bg-light-grey/30 transition-colors">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={e => onChange(e.target.checked)}
+        className="accent-navy w-3 h-3"
+      />
+      <span className="text-dark-grey">{label}</span>
+      {!checked && (
+        <span className="ml-auto text-amber-600 italic">preview only</span>
+      )}
+    </label>
+  )
+}
+
+function InputsColumn({ library, showWindows, setShowWindows, showShading, setShowShading }) {
   const { params, updateParam, constructions, updateConstruction } = useContext(ProjectContext)
   const { length, width, num_floors, floor_height, orientation, wwr, name, infiltration_ach, window_count } = params
   const ach = infiltration_ach ?? 0.5
@@ -332,6 +349,11 @@ function InputsColumn({ library }) {
 
         {/* ── Glazing ── */}
         <CollapsibleSection title="Glazing (WWR)">
+          <PreviewToggle
+            label="Show windows in 3D + live calc"
+            checked={showWindows}
+            onChange={setShowWindows}
+          />
           {FACADES.map(fac => (
             <div key={fac.key} className="flex items-center gap-1 mb-1">
               <span className="text-xxs text-mid-grey w-14 flex-shrink-0">{facadeLabel(fac.num, orientation)}</span>
@@ -359,6 +381,11 @@ function InputsColumn({ library }) {
               together so the per-window 3D frame matches the EnergyPlus
               shading objects emitted per fenestration. ── */}
         <CollapsibleSection title={`Shading${anyShading ? ' · active' : ''}`} defaultOpen={anyShading}>
+          <PreviewToggle
+            label="Show shading in 3D + live calc"
+            checked={showShading}
+            onChange={setShowShading}
+          />
           <p className="text-xxs text-mid-grey mb-2">
             Reveal depth per facade — frame extruded outward around each window.
           </p>
@@ -515,7 +542,11 @@ export default function BuildingDefinition() {
     <div className="flex h-[calc(100vh-3rem)] relative">
       {/* Left: inputs */}
       <div className="flex-shrink-0 z-10" style={{ width: layout.left }}>
-        <InputsColumn library={library} />
+        <InputsColumn
+          library={library}
+          showWindows={showWindows} setShowWindows={setShowWindows}
+          showShading={showShading} setShowShading={setShowShading}
+        />
       </div>
 
       <ResizeHandle onResize={setLeft} />
@@ -536,27 +567,6 @@ export default function BuildingDefinition() {
           >
             Heat Balance
           </button>
-        </div>
-
-        {/* Preview toggles — what-if checkboxes that override saved geometry
-            without touching it. Live engine + 3D viewer respond instantly. */}
-        <div className="absolute top-2 left-2 z-10 flex items-center gap-3 bg-white border border-light-grey rounded shadow-sm px-2.5 py-1 text-xxs">
-          <span className="text-mid-grey">Show:</span>
-          <label className="flex items-center gap-1 cursor-pointer text-dark-grey hover:text-navy">
-            <input type="checkbox" checked={showWindows} onChange={e => setShowWindows(e.target.checked)}
-                   className="accent-navy w-3 h-3" />
-            Windows
-          </label>
-          <label className="flex items-center gap-1 cursor-pointer text-dark-grey hover:text-navy">
-            <input type="checkbox" checked={showShading} onChange={e => setShowShading(e.target.checked)}
-                   className="accent-navy w-3 h-3" />
-            Shading
-          </label>
-          {(!showWindows || !showShading) && (
-            <span className="text-amber-600 text-xxs italic" title="Saved values are unchanged — toggles only affect this preview">
-              preview only
-            </span>
-          )}
         </div>
 
         {/* Right-pane hide/show — sits on top so it's always reachable */}
