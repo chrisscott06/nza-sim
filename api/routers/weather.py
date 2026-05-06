@@ -365,8 +365,33 @@ def _parse_epw_full(filepath: Path) -> dict:
         "wind_speed_avg": round(sum(wind_speed) / len(wind_speed), 1),
     }
 
-    # Year coverage — TMY-style files have varying years per month; report range
+    # Year coverage — TMY-style files have varying years per month; report
+    # the dominant (mode) year per month so the user can see what's actually
+    # being modelled (e.g. "Jan: 2017, Feb: 2019, ...").
     years_unique = sorted(set(year_arr))
+    from collections import Counter
+    months_to_years = []
+    for m in months_unique:
+        ys = [year_arr[i] for i, mm in enumerate(month_arr) if mm == m]
+        if ys:
+            mode_year, count = Counter(ys).most_common(1)[0]
+            months_to_years.append({
+                "month": m,
+                "year": mode_year,
+                "coverage": round(count / len(ys), 2),  # fraction of hours from that year
+            })
+
+    # Methodology — derive from filename so the UI can show "TMYx" /
+    # "TRY" / "DSY" etc. without needing separate metadata.
+    fname_upper = filepath.name.upper()
+    if   "_DSY" in fname_upper:  methodology = "DSY"
+    elif "_TRY" in fname_upper:  methodology = "TRY"
+    elif "_TMYX" in fname_upper: methodology = "TMYx"
+    elif "_TMY3" in fname_upper: methodology = "TMY3"
+    elif "_TMY"  in fname_upper: methodology = "TMY"
+    elif "_HDY"  in fname_upper: methodology = "HDY"
+    elif "_CDY"  in fname_upper: methodology = "CDY"
+    else: methodology = "Unknown"
 
     return {
         "filename": filepath.name,
@@ -374,10 +399,12 @@ def _parse_epw_full(filepath: Path) -> dict:
         "annual": annual,
         "monthly": monthly,
         "degree_days": degree_days,
+        "methodology": methodology,
         "years": {
             "min": min(years_unique) if years_unique else None,
             "max": max(years_unique) if years_unique else None,
             "all": years_unique,
+            "by_month": months_to_years,
         },
         "hourly": {
             "month":   month_arr,

@@ -14,11 +14,52 @@ import {
 } from 'lucide-react'
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, ComposedChart,
+  Area, AreaChart, Brush,
   XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Legend,
 } from 'recharts'
 import { ProjectContext } from '../../context/ProjectContext.jsx'
 
 const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
+// Methodology metadata — drives the badge in the header and the
+// "what does this mean" note. Keys match what the backend returns.
+const METHODOLOGY_META = {
+  TMYx: {
+    full: 'TMYx — Typical Meteorological Year (extended)',
+    bg: '#DBEAFE', colour: '#1D4ED8',
+    note: 'Each month is a real contiguous hourly record from a single year, selected (via the Finkelstein-Schafer statistic) to be most representative across a multi-year period. Best for typical-year energy demand. Sourced from climate.onebuilding.org.',
+  },
+  TMY: {
+    full: 'TMY — Typical Meteorological Year',
+    bg: '#DBEAFE', colour: '#1D4ED8',
+    note: 'A representative year synthesised from selected real months across a long-term record. Use for typical heating/cooling demand. Not suitable for overheating-risk or peak-load sizing.',
+  },
+  TMY3: {
+    full: 'TMY3 — Typical Meteorological Year (NREL, USA)',
+    bg: '#DBEAFE', colour: '#1D4ED8',
+    note: 'NREL\'s TMY3 dataset for US locations. Same idea as TMY: selected representative months from a long-term record. Best for typical-year demand.',
+  },
+  TRY: {
+    full: 'TRY — Test Reference Year (CIBSE convention)',
+    bg: '#DCFCE7', colour: '#15803D',
+    note: 'CIBSE test reference year. Typical-year selection for energy demand assessment. Use this for normal heating/cooling demand modelling.',
+  },
+  DSY: {
+    full: 'DSY — Design Summer Year (CIBSE convention)',
+    bg: '#FEE2E2', colour: '#B91C1C',
+    note: 'A near-95th-percentile warm year, used for overheating-risk assessment under CIBSE TM52. NOT suitable for typical-year energy demand — heating loads will be understated.',
+  },
+  HDY: {
+    full: 'HDY — Heating Design Year',
+    bg: '#FEE2E2', colour: '#B91C1C',
+    note: 'A cold year used for sizing heating systems against worst-case demand. NOT suitable for typical-year energy demand.',
+  },
+  CDY: {
+    full: 'CDY — Cooling Design Year',
+    bg: '#FED7AA', colour: '#C2410C',
+    note: 'A hot year used for sizing cooling systems. NOT suitable for typical-year energy demand.',
+  },
+}
 
 // Common UK and international HDD/CDD benchmarks for context.
 const HDD_BENCHMARKS_18C = {
@@ -56,26 +97,40 @@ export default function WeatherModule() {
   if (error)   return <Empty message={`Failed to load weather: ${error}`} icon={AlertCircle} />
   if (!data)   return null
 
-  const { location, annual, monthly, degree_days: dd, years, hourly } = data
+  const { location, annual, monthly, degree_days: dd, years, hourly, methodology } = data
 
   return (
     <div className="h-full overflow-y-auto bg-off-white">
       <div className="max-w-6xl mx-auto px-6 py-6 space-y-5">
 
-        {/* Header — location + period */}
+        {/* Header — location + period + methodology */}
         <Section>
-          <div className="flex items-baseline justify-between mb-1">
-            <div>
-              <h1 className="text-heading font-semibold text-navy">{location.city}</h1>
+          <div className="flex items-baseline justify-between mb-1 gap-4">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-heading font-semibold text-navy">{location.city}</h1>
+                {methodology && methodology !== 'Unknown' && (
+                  <span
+                    className="inline-flex items-center px-2 py-0.5 rounded text-xxs font-semibold"
+                    style={{
+                      backgroundColor: METHODOLOGY_META[methodology]?.bg ?? '#E5E7EB',
+                      color: METHODOLOGY_META[methodology]?.colour ?? '#1F2937',
+                    }}
+                    title={METHODOLOGY_META[methodology]?.full ?? methodology}
+                  >
+                    {methodology}
+                  </span>
+                )}
+              </div>
               <p className="text-xxs text-mid-grey mt-1">
                 {location.country ? `${location.country} · ` : ''}
                 {location.latitude.toFixed(3)}, {location.longitude.toFixed(3)} ·
                 Elev {Math.round(location.elevation_m)} m ·
                 TZ {location.time_zone >= 0 ? '+' : ''}{location.time_zone}
               </p>
-              <p className="text-xxs text-mid-grey mt-0.5 font-mono">{data.filename}</p>
+              <p className="text-xxs text-mid-grey mt-0.5 font-mono break-all">{data.filename}</p>
             </div>
-            <div className="text-right">
+            <div className="text-right flex-shrink-0">
               <p className="text-xxs uppercase tracking-wider text-mid-grey">Period</p>
               <p className="text-caption font-semibold text-navy">
                 {years.min === years.max ? years.min : `${years.min}–${years.max}`}
@@ -83,7 +138,32 @@ export default function WeatherModule() {
               <p className="text-xxs text-mid-grey mt-0.5">{years.all.length} year{years.all.length !== 1 ? 's' : ''} of data</p>
             </div>
           </div>
+          {METHODOLOGY_META[methodology]?.note && (
+            <p className="text-xxs text-dark-grey mt-3 pt-3 border-t border-light-grey leading-relaxed">
+              <span className="font-semibold">{METHODOLOGY_META[methodology].full}:</span>{' '}
+              {METHODOLOGY_META[methodology].note}
+            </p>
+          )}
         </Section>
+
+        {/* Year-per-month — which actual year contributed each month */}
+        {years.by_month && years.by_month.length > 0 && years.all.length > 1 && (
+          <Section title="Year origin per month">
+            <p className="text-xxs text-mid-grey mb-3">
+              {methodology === 'TMYx' || methodology === 'TMY' || methodology === 'TMY3' || methodology === 'TRY'
+                ? `Each month is real hourly data from a single specific year, selected to be most representative across the ${years.all.length}-year record. Not an average — preserves real weather patterns (cold snaps, heat waves). Hover or read the table below for the year contributing each month.`
+                : `Year contributing each month of the file.`}
+            </p>
+            <div className="grid grid-cols-6 md:grid-cols-12 gap-1 text-xxs">
+              {years.by_month.map(m => (
+                <div key={m.month} className="bg-off-white rounded p-2 text-center">
+                  <p className="text-mid-grey">{MONTH_LABELS[m.month - 1]}</p>
+                  <p className="font-semibold text-navy tabular-nums">{m.year}</p>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
 
         {/* Annual KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -181,12 +261,21 @@ export default function WeatherModule() {
           </div>
         </Section>
 
-        {/* Hourly variable picker + heatmap */}
-        <Section title="Hourly data">
-          <div className="flex items-center gap-2 mb-3 text-xxs">
+        {/* Time series — zoomable line chart with hourly / daily / monthly */}
+        <Section title="Time series">
+          <div className="flex flex-wrap items-center gap-3 mb-3 text-xxs">
             <span className="text-mid-grey">Variable:</span>
             <VariableToggle current={selectedVar} onChange={setSelectedVar} />
           </div>
+          <TimeSeriesChart hourly={hourly} variable={selectedVar} />
+        </Section>
+
+        {/* Calendar heatmap — same data, year-at-a-glance overview */}
+        <Section title="Year-at-a-glance heatmap">
+          <p className="text-xxs text-mid-grey mb-3">
+            24 hours × 365 days. Drag any cell on the time-series chart above
+            to zoom; this heatmap stays as the always-on overview.
+          </p>
           <DailyHeatmap hourly={hourly} variable={selectedVar} />
         </Section>
 
@@ -271,6 +360,191 @@ function VariableToggle({ current, onChange }) {
     </div>
   )
 }
+
+/**
+ * TimeSeriesChart — zoomable line/area chart for one variable.
+ *
+ * Three resolutions:
+ *   hourly   — 8760 points, brush enabled for drilling into a few days
+ *   daily    — 365 points, daily mean (and min/max band for temperatures)
+ *   monthly  — 12 points, monthly mean
+ *
+ * Switching resolution preserves the variable; switching variable preserves
+ * the resolution.
+ */
+function TimeSeriesChart({ hourly, variable }) {
+  const [resolution, setResolution] = useState('daily')
+  const meta = VARIABLES.find(v => v.id === variable)
+  const series = hourly[variable] ?? []
+
+  const data = useMemo(() => {
+    if (!series.length) return []
+
+    if (resolution === 'hourly') {
+      // 8760 points — keep month + day for tooltip
+      return series.map((v, i) => ({
+        idx: i,
+        label: `${MONTH_LABELS[hourly.month[i] - 1]} ${hourly.day[i]} · ${String((hourly.hour[i] - 1) % 24).padStart(2, '0')}:00`,
+        value: v,
+      }))
+    }
+
+    if (resolution === 'daily') {
+      // Bucket by (month, day) → mean / min / max
+      const buckets = {}
+      for (let i = 0; i < series.length; i++) {
+        const key = `${hourly.month[i]}-${hourly.day[i]}`
+        if (!buckets[key]) buckets[key] = []
+        buckets[key].push(series[i])
+      }
+      const sortedKeys = Object.keys(buckets).sort((a, b) => {
+        const [am, ad] = a.split('-').map(Number)
+        const [bm, bd] = b.split('-').map(Number)
+        return am === bm ? ad - bd : am - bm
+      })
+      return sortedKeys.map((k, idx) => {
+        const arr = buckets[k]
+        const [m, d] = k.split('-').map(Number)
+        const mean = arr.reduce((s, v) => s + v, 0) / arr.length
+        return {
+          idx,
+          label: `${MONTH_LABELS[m - 1]} ${d}`,
+          value: round1(mean),
+          min: round1(Math.min(...arr)),
+          max: round1(Math.max(...arr)),
+        }
+      })
+    }
+
+    // Monthly
+    const byMonth = {}
+    for (let i = 0; i < series.length; i++) {
+      const m = hourly.month[i]
+      if (!byMonth[m]) byMonth[m] = []
+      byMonth[m].push(series[i])
+    }
+    return Object.keys(byMonth).map(Number).sort((a, b) => a - b).map(m => {
+      const arr = byMonth[m]
+      const mean = arr.reduce((s, v) => s + v, 0) / arr.length
+      return {
+        idx: m - 1,
+        label: MONTH_LABELS[m - 1],
+        value: round1(mean),
+        min: round1(Math.min(...arr)),
+        max: round1(Math.max(...arr)),
+      }
+    })
+  }, [series, hourly, resolution])
+
+  const isTemperature = meta?.palette === 'temperature'
+  const lineColour = isTemperature ? '#DC2626' : meta?.palette === 'solar' ? '#F59E0B' :
+                     meta?.palette === 'wind' ? '#0369A1' : '#475569'
+
+  // Sensible default brush window for hourly: a representative summer week
+  const initialBrush = resolution === 'hourly'
+    ? { startIndex: 4344, endIndex: 4512 }    // ~ early July, ~7 days
+    : { startIndex: 0, endIndex: data.length - 1 }
+
+  return (
+    <>
+      <div className="flex items-center gap-2 mb-3 text-xxs">
+        <span className="text-mid-grey">Resolution:</span>
+        <ResolutionToggle current={resolution} onChange={setResolution} />
+        <span className="ml-auto text-mid-grey">
+          {resolution === 'hourly' && 'Drag the brush below to pan/zoom across the 8,760-hour series'}
+          {resolution === 'daily'  && '365 points (daily mean ± min/max band for temperatures)'}
+          {resolution === 'monthly' && '12 monthly means'}
+        </span>
+      </div>
+      <div className="h-[280px]">
+        <ResponsiveContainer>
+          <ComposedChart data={data} margin={{ top: 8, right: 16, left: -10, bottom: 24 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
+            <XAxis
+              dataKey="label"
+              tick={{ fontSize: 10, fill: '#9CA3AF' }}
+              interval={resolution === 'hourly' ? 999 : resolution === 'daily' ? 30 : 0}
+              tickLine={false}
+            />
+            <YAxis
+              tick={{ fontSize: 10, fill: '#9CA3AF' }}
+              tickLine={false}
+              axisLine={false}
+              width={40}
+              label={{
+                value: meta?.unit ?? '',
+                angle: -90, position: 'insideLeft', offset: 12,
+                style: { fontSize: 10, fill: '#9CA3AF' },
+              }}
+            />
+            <Tooltip
+              contentStyle={{ fontSize: 11, padding: '4px 8px', borderRadius: 4, border: '1px solid #E5E7EB' }}
+              formatter={(v) => [`${v} ${meta?.unit ?? ''}`, '']}
+            />
+            {/* min/max band for daily/monthly temperatures (where meaningful) */}
+            {resolution !== 'hourly' && data[0]?.min != null && (
+              <Area
+                type="monotone" dataKey="max" stroke="none" fill={lineColour} fillOpacity={0.12}
+                connectNulls dot={false} legendType="none"
+              />
+            )}
+            {resolution !== 'hourly' && data[0]?.min != null && (
+              <Area
+                type="monotone" dataKey="min" stroke="none" fill="#FFFFFF" fillOpacity={1}
+                connectNulls dot={false} legendType="none"
+              />
+            )}
+            <Line
+              type="monotone"
+              dataKey="value"
+              stroke={lineColour}
+              strokeWidth={2}
+              dot={resolution === 'monthly' ? { r: 3 } : false}
+              isAnimationActive={false}
+            />
+            {resolution === 'hourly' && (
+              <Brush
+                dataKey="label"
+                height={20}
+                stroke="#94A3B8"
+                travellerWidth={10}
+                startIndex={initialBrush.startIndex}
+                endIndex={initialBrush.endIndex}
+              />
+            )}
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    </>
+  )
+}
+
+function ResolutionToggle({ current, onChange }) {
+  const opts = [
+    { id: 'hourly',  label: 'Hourly'  },
+    { id: 'daily',   label: 'Daily'   },
+    { id: 'monthly', label: 'Monthly' },
+  ]
+  return (
+    <div className="flex items-center bg-off-white rounded-lg p-0.5">
+      {opts.map(o => (
+        <button
+          key={o.id}
+          onClick={() => onChange(o.id)}
+          className={`px-2.5 py-1 rounded text-xxs transition-colors ${
+            current === o.id
+              ? 'bg-white text-navy font-medium shadow-sm'
+              : 'text-mid-grey hover:text-navy'
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function round1(v) { return Math.round(v * 10) / 10 }
 
 /**
  * Calendar heatmap: 24 rows (hour of day) × 365 cols (day of year).
