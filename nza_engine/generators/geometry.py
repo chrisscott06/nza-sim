@@ -176,20 +176,45 @@ def _window_vertices_on_wall(
     wall_width = math.sqrt(dx * dx + dy * dy)   # horizontal span
     wall_area = wall_width * floor_height
 
-    win_area = wwr * wall_area
-    win_w = win_area / win_height
-
-    if win_w <= 0 or win_w > wall_width:
+    if wall_width <= 0:
         return None
+
+    # Cap WWR at 0.95 — leaves a thin frame so EP doesn't reject the surface
+    # for being coincident with the wall edges.
+    wwr_eff = min(0.95, max(0.0, float(wwr)))
+    win_area = wwr_eff * wall_area
+
+    # Strategy: keep the window at the default win_height when possible
+    # (looks like real punched openings). When WWR is high enough that
+    # win_area / win_height > wall_width, grow the height to make the
+    # window taller-and-wider, eventually capping at the floor height
+    # so the window approaches the full wall.
+    win_w = win_area / win_height
+    win_h = win_height
+    if win_w > wall_width:
+        # Use as much of the wall width as we can (95% leaves a thin
+        # margin) and grow the height to maintain the area.
+        win_w = wall_width * 0.95
+        win_h = win_area / win_w
+        # Cap height at 95% of the floor height so the window keeps a
+        # small reveal at top and bottom — EP's solar/conduction calcs
+        # work better when surfaces aren't co-planar with their edges.
+        if win_h > floor_height * 0.95:
+            win_h = floor_height * 0.95
+        if win_w <= 0 or win_h <= 0:
+            return None
 
     # Sill height — centred vertically, never below min_sill
-    sill_z = max(min_sill, (floor_height - win_height) / 2)
-    head_z = sill_z + win_height
+    sill_z = max(min_sill, (floor_height - win_h) / 2)
+    head_z = sill_z + win_h
+    # If a tall window would push the head above the floor, slide it down
+    # to keep a small margin under the ceiling.
+    if head_z > floor_height * 0.99:
+        head_z = floor_height * 0.99
+        sill_z = max(0.05, head_z - win_h)
 
-    if head_z > floor_height:
-        return None
-
-    # Horizontal offset from v0 (left edge when viewed from outside)
+    # Horizontal offset from v0 (left edge when viewed from outside).
+    # win_w may have been clamped above so recompute centred offset.
     h_offset = (wall_width - win_w) / 2
 
     # Unit horizontal vector along the wall bottom edge (v0 → v1)
