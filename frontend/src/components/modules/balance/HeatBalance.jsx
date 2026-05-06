@@ -6,18 +6,21 @@
  * Bars must balance — natural gains/losses + system fill = zero net.
  *
  * Props:
- *   data    — heat_balance object (matches the shape from instantCalc /
- *             /api/projects/{id}/simulations/{run_id}/balance)
- *   source  — 'live' | 'simulation' (cosmetic — affects nothing yet; will
- *             feed into Part 4's engine toggle)
- *   onElementClick — optional, called with elementKey when the user clicks
- *                    a segment (used by Part 5 drill-down)
+ *   liveData         — heat_balance from instantCalc (live, sub-second)
+ *   simulationData   — heat_balance from EnergyPlus (last run, fetched via API)
+ *   simulationInfo   — { runId, ranAt, isStale } — display only
+ *   onElementClick   — called with (elementKey, meta) when a segment clicks
  *
- * Unit toggle: kWh ↔ kWh/m²·a, internal state, persists to localStorage.
+ * Internal state:
+ *   - unit:       kWh | kwh_per_m2  (persists to localStorage)
+ *   - engineMode: 'live' | 'simulation'  (toggle between sources)
+ *
+ * Bar widths transition via CSS when the data source changes, so flipping
+ * between live and simulation animates the divergence.
  */
 
 import { useMemo, useState, useEffect } from 'react'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, Zap, Activity, AlertCircle } from 'lucide-react'
 import {
   SOLAR_COLOURS, INTERNAL_COLOURS, HEATING_COLOUR, COOLING_COLOUR,
   FABRIC_COLOURS, LABELS, LOSS_ORDER, GAIN_ORDER, colourForElement,
@@ -149,7 +152,12 @@ function StackColumn({ items, scale, unit, side, onClick }) {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
-export default function HeatBalance({ data, source = 'live', onElementClick }) {
+export default function HeatBalance({
+  liveData,
+  simulationData,
+  simulationInfo,
+  onElementClick,
+}) {
   const [unit, setUnit] = useState(() => {
     try { return localStorage.getItem(UNIT_KEY) || 'kwh_per_m2' }
     catch { return 'kwh_per_m2' }
@@ -157,6 +165,15 @@ export default function HeatBalance({ data, source = 'live', onElementClick }) {
   useEffect(() => {
     try { localStorage.setItem(UNIT_KEY, unit) } catch {}
   }, [unit])
+
+  // Engine: prefer live by default. If only simulation is available, switch to it.
+  const [engineMode, setEngineMode] = useState('live')
+  useEffect(() => {
+    if (!liveData && simulationData) setEngineMode('simulation')
+    if (!simulationData && !liveData) setEngineMode('live')
+  }, [liveData, simulationData])
+
+  const data = engineMode === 'live' ? liveData : simulationData
 
   const { losses, gains, scale, totalLosses, totalGains, gia } = useMemo(() => {
     const lossItems = flattenLosses(data, unit)
@@ -178,7 +195,9 @@ export default function HeatBalance({ data, source = 'live', onElementClick }) {
   if (!data || !data.annual) {
     return (
       <div className="h-full flex items-center justify-center text-mid-grey text-xxs">
-        No heat balance data available — run a simulation or load a project.
+        {engineMode === 'simulation'
+          ? 'No simulation results yet — click Run Simulation in the top bar.'
+          : 'No heat balance data available — load a project.'}
       </div>
     )
   }
@@ -188,18 +207,26 @@ export default function HeatBalance({ data, source = 'live', onElementClick }) {
   return (
     <div className="h-full flex flex-col bg-white overflow-hidden">
 
-      {/* Header bar — title + unit toggle */}
-      <div className="flex-shrink-0 px-5 py-3 border-b border-light-grey flex items-center justify-between">
-        <div>
+      {/* Header bar — title + engine + unit toggle */}
+      <div className="flex-shrink-0 px-5 py-3 border-b border-light-grey flex items-center justify-between gap-3">
+        <div className="min-w-0">
           <h2 className="text-caption font-semibold text-navy">Heat Balance</h2>
-          <p className="text-xxs text-mid-grey mt-0.5">
+          <p className="text-xxs text-mid-grey mt-0.5 truncate">
             Annual gains and losses. Mechanical heating balances natural deficit;
             cooling absorbs excess. Bars should match.
             {gia > 0 && <> · GIA <span className="font-medium text-dark-grey">{gia.toLocaleString()} m²</span></>}
-            {' · '}Source: <span className="font-medium text-dark-grey capitalize">{source}</span>
           </p>
         </div>
-        <UnitToggle unit={unit} onChange={setUnit} />
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <EngineToggle
+            engineMode={engineMode}
+            onChange={setEngineMode}
+            hasLive={!!liveData}
+            hasSimulation={!!simulationData}
+            simulationInfo={simulationInfo}
+          />
+          <UnitToggle unit={unit} onChange={setUnit} />
+        </div>
       </div>
 
       {/* IN / OUT side labels */}
@@ -280,6 +307,66 @@ function UnitToggle({ unit, onChange }) {
         }`}
       >
         kWh
+      </button>
+    </div>
+  )
+}
+
+// ── Engine toggle ────────────────────────────────────────────────────────────
+
+function relativeTime(iso) {
+  if (!iso) return ''
+  const t = new Date(iso).getTime()
+  if (isNaN(t)) return ''
+  const ms = Date.now() - t
+  const min = Math.floor(ms / 60000)
+  if (min < 1) return 'just now'
+  if (min < 60) return `${min} min ago`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr} hr ago`
+  const d = Math.floor(hr / 24)
+  return `${d} day${d > 1 ? 's' : ''} ago`
+}
+
+function EngineToggle({ engineMode, onChange, hasLive, hasSimulation, simulationInfo }) {
+  const isStale = !!simulationInfo?.isStale
+  return (
+    <div className="flex items-center bg-off-white rounded-lg p-0.5 text-xxs">
+      <button
+        onClick={() => onChange('live')}
+        disabled={!hasLive}
+        className={`flex items-center gap-1 px-2.5 py-1 rounded transition-colors ${
+          engineMode === 'live'
+            ? 'bg-white text-navy font-medium shadow-sm'
+            : 'text-mid-grey hover:text-navy disabled:opacity-40'
+        }`}
+        title="Live estimate — instant feedback as you edit inputs"
+      >
+        <Zap size={10} />
+        Live
+      </button>
+      <button
+        onClick={() => onChange('simulation')}
+        disabled={!hasSimulation}
+        className={`flex items-center gap-1 px-2.5 py-1 rounded transition-colors ${
+          engineMode === 'simulation'
+            ? 'bg-white text-navy font-medium shadow-sm'
+            : 'text-mid-grey hover:text-navy disabled:opacity-40'
+        }`}
+        title={hasSimulation
+          ? `Last EnergyPlus run${simulationInfo?.ranAt ? ` ${relativeTime(simulationInfo.ranAt)}` : ''}`
+          : 'No simulation has been run yet'}
+      >
+        <Activity size={10} />
+        Simulation
+        {simulationInfo?.ranAt && (
+          <span className="text-mid-grey font-normal ml-0.5">
+            · {relativeTime(simulationInfo.ranAt)}
+          </span>
+        )}
+        {isStale && (
+          <AlertCircle size={10} className="text-amber-500 ml-0.5" />
+        )}
       </button>
     </div>
   )
