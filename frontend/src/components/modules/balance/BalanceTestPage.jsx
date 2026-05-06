@@ -11,27 +11,9 @@ import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { WeatherContext } from '../../../context/WeatherContext.jsx'
 import { SimulationContext } from '../../../context/SimulationContext.jsx'
 import { calculateInstant, calculateInstantDegreeDay } from '../../../utils/instantCalc.js'
+import { useSimulationBalance } from '../../../hooks/useSimulationBalance.js'
 import HeatBalance from './HeatBalance.jsx'
 import DrillDown from './DrillDown.jsx'
-
-// ── Hook: fetch + cache the simulation balance for a (projectId, runId) ─────
-function useSimulationBalance(projectId, runId) {
-  const [data, setData]   = useState(null)
-  const [error, setError] = useState(null)
-
-  useEffect(() => {
-    setData(null); setError(null)
-    if (!projectId || !runId) return
-    let cancelled = false
-    fetch(`/api/projects/${projectId}/simulations/${runId}/balance`)
-      .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then(b => { if (!cancelled) setData(b) })
-      .catch(e => { if (!cancelled) setError(e.message) })
-    return () => { cancelled = true }
-  }, [projectId, runId])
-
-  return { data, error }
-}
 
 export default function BalanceTestPage() {
   const { params, constructions, systems, currentProjectId, saveStatus } = useContext(ProjectContext)

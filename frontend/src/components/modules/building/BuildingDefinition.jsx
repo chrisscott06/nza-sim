@@ -14,8 +14,10 @@ import LiveResultsPanel from './LiveResultsPanel.jsx'
 import ExpandedSankeyOverlay from './ExpandedSankeyOverlay.jsx'
 import HeatBalance from '../balance/HeatBalance.jsx'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
+import { SimulationContext } from '../../../context/SimulationContext.jsx'
 import { useWeather } from '../../../context/WeatherContext.jsx'
 import { useHourlySolar } from '../../../hooks/useHourlySolar.js'
+import { useSimulationBalance } from '../../../hooks/useSimulationBalance.js'
 import { calculateInstant } from '../../../utils/instantCalc.js'
 
 // ── Layout: resizable columns ────────────────────────────────────────────────
@@ -426,7 +428,8 @@ function InputsColumn({ library }) {
 // ── Main three-column layout ──────────────────────────────────────────────────
 
 export default function BuildingDefinition() {
-  const { params, constructions, systems } = useContext(ProjectContext)
+  const { params, constructions, systems, currentProjectId, saveStatus } = useContext(ProjectContext)
+  const simCtx = useContext(SimulationContext)
   const [library, setLibrary] = useState([])
   const [libraryData, setLibraryData] = useState({})
   const [showSankey, setShowSankey] = useState(false)
@@ -439,6 +442,16 @@ export default function BuildingDefinition() {
     () => calculateInstant(params, constructions, systems, libraryData, weatherData, hourlySolar),
     [params, constructions, systems, libraryData, weatherData, hourlySolar]
   )
+
+  // Simulation balance — fetched per (projectId, runId). Lets the Live |
+  // Simulation toggle in the centre panel actually flip between sources
+  // instead of being permanently disabled on the Simulation pill.
+  const { data: simBalance } = useSimulationBalance(currentProjectId, simCtx?.runId)
+  const simulationInfo = simCtx?.runId ? {
+    runId: simCtx.runId,
+    ranAt: simCtx.results?.created_at ?? null,
+    isStale: saveStatus === 'saving' || saveStatus === 'saved',
+  } : null
 
   useEffect(() => {
     fetch('/api/library/constructions')
@@ -507,8 +520,8 @@ export default function BuildingDefinition() {
           <div className="flex-1 w-full h-full pt-9">
             <HeatBalance
               liveData={instantResult?.heat_balance}
-              simulationData={null}
-              simulationInfo={null}
+              simulationData={simBalance}
+              simulationInfo={simulationInfo}
               orientationDeg={orientationDeg}
               onElementClick={() => {}}
             />
