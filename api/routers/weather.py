@@ -209,6 +209,222 @@ def parse_epw(filepath: Path) -> dict:
     }
 
 
+def _parse_epw_full(filepath: Path) -> dict:
+    """
+    Richer EPW parse for the Weather inspector module. Returns the full set
+    of hourly variables and a small year/period metadata block. Used by
+    /api/weather/{filename}/inspect.
+
+    EPW columns used (0-based, per the EnergyPlus EPW data dictionary):
+       0  Year                                           (int)
+       1  Month                                          (int 1-12)
+       2  Day                                            (int 1-31)
+       3  Hour                                           (int 1-24)
+       6  Dry Bulb Temperature                           (°C)
+       7  Dew Point Temperature                          (°C)
+       8  Relative Humidity                              (%)
+       9  Atmospheric Pressure                           (Pa)
+      12  Horizontal Infrared Radiation Intensity        (Wh/m²)
+      13  Direct Normal Irradiance                       (Wh/m²)
+      14  Diffuse Horizontal Irradiance                  (Wh/m²)
+      15  Global Horizontal Irradiance                   (Wh/m²)
+      21  Wind Direction                                 (deg)
+      22  Wind Speed                                     (m/s)
+      23  Total Sky Cover                                (tenths)
+
+    Wet-bulb is computed from dry-bulb + RH + pressure via the standard
+    Stull (2011) approximation — close enough for visualisation use.
+    """
+    with open(filepath, encoding="latin-1") as fh:
+        lines = fh.readlines()
+    if len(lines) < 9:
+        raise ValueError(f"EPW file too short: {len(lines)} lines")
+
+    hdr = lines[0].split(",")
+    location = {
+        "city":      hdr[1].strip() if len(hdr) > 1 else "Unknown",
+        "state":     hdr[2].strip() if len(hdr) > 2 else "",
+        "country":   hdr[3].strip() if len(hdr) > 3 else "",
+        "data_source": hdr[4].strip() if len(hdr) > 4 else "",
+        "wmo":       hdr[5].strip() if len(hdr) > 5 else "",
+    }
+    try: location["latitude"]  = float(hdr[6])
+    except: location["latitude"]  = 51.5
+    try: location["longitude"] = float(hdr[7])
+    except: location["longitude"] = -0.1
+    try: location["time_zone"] = float(hdr[8])
+    except: location["time_zone"] = 0.0
+    try: location["elevation_m"] = float(hdr[9])
+    except: location["elevation_m"] = 0.0
+
+    # Hourly arrays
+    year_arr: list[int]  = []
+    month_arr: list[int] = []
+    day_arr: list[int]   = []
+    hour_arr: list[int]  = []
+    dry_bulb: list[float] = []
+    dew_point: list[float] = []
+    humidity: list[float] = []
+    pressure: list[float] = []
+    direct_normal: list[float] = []
+    diffuse_horizontal: list[float] = []
+    global_horizontal: list[float] = []
+    wind_dir: list[float] = []
+    wind_speed: list[float] = []
+    sky_cover: list[float] = []
+
+    def _f(v, default=0.0):
+        try: return float(v)
+        except: return default
+    def _i(v, default=0):
+        try: return int(v)
+        except: return default
+
+    for line in lines[8 : 8 + 8760]:
+        parts = line.split(",")
+        if len(parts) < 24:
+            continue
+        year_arr.append(_i(parts[0]))
+        month_arr.append(_i(parts[1], 1))
+        day_arr.append(_i(parts[2], 1))
+        hour_arr.append(_i(parts[3], 1))
+        dry_bulb.append(_f(parts[6]))
+        dew_point.append(_f(parts[7]))
+        humidity.append(_f(parts[8]))
+        pressure.append(_f(parts[9]))
+        direct_normal.append(_f(parts[13]))
+        diffuse_horizontal.append(_f(parts[14]))
+        global_horizontal.append(_f(parts[15]))
+        wind_dir.append(_f(parts[20]))
+        wind_speed.append(_f(parts[21]))
+        try: sky_cover.append(_f(parts[22]))
+        except: sky_cover.append(0.0)
+
+    # Wet-bulb via Stull (2011): T_wb ≈ T*atan(0.151977*(RH+8.313659)^0.5)
+    #   + atan(T+RH) − atan(RH−1.676331) + 0.00391838*RH^1.5*atan(0.023101*RH)
+    #   − 4.686035
+    def _wet_bulb(T, RH):
+        try:
+            rh = max(0.0, min(100.0, RH))
+            return (T * math.atan(0.151977 * (rh + 8.313659) ** 0.5)
+                    + math.atan(T + rh) - math.atan(rh - 1.676331)
+                    + 0.00391838 * rh ** 1.5 * math.atan(0.023101 * rh)
+                    - 4.686035)
+        except Exception:
+            return T
+    wet_bulb = [_wet_bulb(t, h) for t, h in zip(dry_bulb, humidity)]
+
+    # ── Aggregations ──────────────────────────────────────────────────────────
+    # Monthly stats — min/avg/max dry-bulb + sum of solar
+    months_unique = sorted(set(month_arr))
+    monthly = []
+    for m in months_unique:
+        idx = [i for i, mm in enumerate(month_arr) if mm == m]
+        if not idx:
+            continue
+        ts = [dry_bulb[i] for i in idx]
+        gh = [global_horizontal[i] for i in idx]
+        monthly.append({
+            "month": m,
+            "t_min":  round(min(ts), 1),
+            "t_avg":  round(sum(ts) / len(ts), 1),
+            "t_max":  round(max(ts), 1),
+            "ghi_kwh_per_m2": round(sum(gh) / 1000.0, 1),  # Wh/m² → kWh/m²
+        })
+
+    # HDD / CDD at common bases
+    def _dd(temps, base, mode):
+        if mode == "heat":
+            hours = sum(max(0.0, base - t) for t in temps)
+        else:
+            hours = sum(max(0.0, t - base) for t in temps)
+        return round(hours / 24.0, 1)
+
+    degree_days = {
+        "hdd": {
+            "12":   _dd(dry_bulb, 12.0, "heat"),
+            "15":   _dd(dry_bulb, 15.0, "heat"),
+            "15.5": _dd(dry_bulb, 15.5, "heat"),
+            "18":   _dd(dry_bulb, 18.0, "heat"),
+        },
+        "cdd": {
+            "18":   _dd(dry_bulb, 18.0, "cool"),
+            "22":   _dd(dry_bulb, 22.0, "cool"),
+            "24":   _dd(dry_bulb, 24.0, "cool"),
+        },
+    }
+
+    # Annual extremes + sums
+    annual = {
+        "t_min": round(min(dry_bulb), 1),
+        "t_max": round(max(dry_bulb), 1),
+        "t_avg": round(sum(dry_bulb) / len(dry_bulb), 1),
+        "ghi_kwh_per_m2": round(sum(global_horizontal) / 1000.0, 1),
+        "dni_kwh_per_m2": round(sum(direct_normal) / 1000.0, 1),
+        "dhi_kwh_per_m2": round(sum(diffuse_horizontal) / 1000.0, 1),
+        "wind_speed_avg": round(sum(wind_speed) / len(wind_speed), 1),
+    }
+
+    # Year coverage — TMY-style files have varying years per month; report range
+    years_unique = sorted(set(year_arr))
+
+    return {
+        "filename": filepath.name,
+        "location": location,
+        "annual": annual,
+        "monthly": monthly,
+        "degree_days": degree_days,
+        "years": {
+            "min": min(years_unique) if years_unique else None,
+            "max": max(years_unique) if years_unique else None,
+            "all": years_unique,
+        },
+        "hourly": {
+            "month":   month_arr,
+            "day":     day_arr,
+            "hour":    hour_arr,
+            "dry_bulb": [round(v, 2) for v in dry_bulb],
+            "wet_bulb": [round(v, 2) for v in wet_bulb],
+            "dew_point":[round(v, 2) for v in dew_point],
+            "humidity": [round(v, 1) for v in humidity],
+            "global_horizontal": [round(v, 0) for v in global_horizontal],
+            "direct_normal":     [round(v, 0) for v in direct_normal],
+            "diffuse_horizontal":[round(v, 0) for v in diffuse_horizontal],
+            "wind_speed": [round(v, 1) for v in wind_speed],
+        },
+    }
+
+
+_INSPECT_CACHE: dict[str, dict] = {}
+
+
+@router.get("/api/weather/{filename}/inspect")
+async def inspect_weather(filename: str):
+    """
+    Return a comprehensive weather-data report for the Weather module:
+      - location metadata
+      - annual + monthly stats
+      - HDD / CDD at multiple bases
+      - hourly arrays for visualisation
+    Cached per resolved-path.
+    """
+    if filename == "default":
+        epws = sorted(DEFAULT_WEATHER_DIR.glob("*.epw"))
+        if not epws:
+            raise HTTPException(status_code=500, detail=f"No EPW files in {DEFAULT_WEATHER_DIR}")
+        filepath = epws[0]
+    else:
+        filepath = resolve_weather_file(filename)
+
+    cache_key = str(filepath.resolve())
+    if cache_key not in _INSPECT_CACHE:
+        try:
+            _INSPECT_CACHE[cache_key] = _parse_epw_full(filepath)
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to parse EPW: {exc}") from exc
+    return _INSPECT_CACHE[cache_key]
+
+
 @router.get("/api/weather/{filename}/hourly")
 async def get_weather_hourly(filename: str):
     """
