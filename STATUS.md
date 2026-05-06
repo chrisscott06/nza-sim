@@ -2,6 +2,24 @@
 
 ## Last completed
 
+**Brief 22** — Solar shading inputs + balance polish + facade label consistency (2026-05-06). 8 parts committed and pushed.
+
+**Brief 22 parts completed:**
+- Part 1: Hover tooltips on Stacked + Sankey layouts (`HeatBalance.jsx`, `BalanceSankey.jsx`) — floating white pill anchored 12 px below cursor showing element label + value in current unit.
+- Part 2: Facade-label consistency — new shared `frontend/src/utils/facadeLabel.js` with `solarLabel(face, orientationDeg)`. Heat Balance Rows / Stacked / Sankey / DrillDown now read `Solar — F3 (S)` style labels that rotate live with orientation.
+- Part 3: `building_config` schema additions — `shading_overhang { face: { depth_m, offset_m } }` and `shading_fin { face: { left_depth_m, right_depth_m } }` with deep-merge support in both `ProjectContext.updateParam` and `PUT /api/projects/{id}/building`.
+- Part 4: Building UI — new "Shading" `CollapsibleSection` between Glazing and Fabric, one row per facade (F1 (N) etc.) with overhang depth/offset and left/right fin inputs (0–3 m, step 0.05). Section header shows ` · active` when any value is non-zero.
+- Part 5: epJSON emits `Shading:Overhang` and `Shading:Fin` per fenestration (`nza_engine/generators/geometry.py`). EP 26 schema fields use `tilt_angle_from_window_door` (no `_or_`); wrong field names are silently dropped, hence the explicit fix.
+- Part 6: `instantCalc` `computeShadingFactors(building)` returns per-facade [0.4, 1.0] multiplier applied to incident solar in both hourly and degree-day paths. Live engine reflects shading immediately.
+- Part 7: `BuildingViewer3D.jsx` — new `ShadingSlabs` component renders horizontal overhang slabs and vertical fin slabs in neutral grey, positioned above window heads / at facade ends. Slabs follow the GlassFace axis/sign convention so they rotate with orientation.
+- Part 8: End-to-end verification at 1280×820 — solar labels rotate with orientation, tooltips show value + unit on Stacked + Sankey, 3D viewer shows the slabs.
+
+**Action required:** Restart the backend after pulling so the new `Output:Variable` schema and shading object emission paths are active.
+
+**Open issue:** EnergyPlus accepts the Shading:Overhang/Fin objects (visible in `eplusout.eio` as `ShadingProperty Reflectance` entries with mirror surfaces) but does not visibly reduce solar gain in test runs (e.g. 5 m south overhang on Bridgewater changes Solar South gain by <0.01%). Field names and structure match the EP 26 schema. Suspect causes: (a) EP 26 needs an explicit `ShadowCalculation` object for attached shading, (b) `Building.solar_distribution = FullInteriorAndExteriorWithReflections` interaction with attached vs detached shading, (c) something attached-overhang-specific in EP 26. To be debugged in a follow-up brief. The frontend shading factor (Part 6) gives the user immediate feedback regardless.
+
+---
+
 **Brief 21** — Heat Balance view: PHPP-style gains-vs-losses with engine toggle, drill-down, stacked layout (2026-05-06). 8 parts committed and pushed.
 
 **Brief 21 parts completed:**
