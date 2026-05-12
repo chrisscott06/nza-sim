@@ -45,6 +45,24 @@ function sysDefaults(systemKey) {
   return SYSTEM_DEFAULTS[systemKey] ?? { fuel: 'electricity', eff: 1.0 }
 }
 
+/**
+ * Lighting-control multiplier on LPD.
+ * Coarse approximation of EP Daylighting:Controls — kept in sync with
+ * nza_engine/generators/epjson_assembler.py:_lighting_control_factors so live
+ * calc and simulation see the same effective LPD. Direction is real:
+ *   manual            → 1.20  (people leave lights on)
+ *   occupancy_sensing → 0.80  (~20% PIR saving, CIBSE LG09)
+ *   daylight_dimming  → 0.60  (~40% photocell + dimming)
+ */
+function lightingControlFactor(control) {
+  switch (control) {
+    case 'manual':            return 1.20
+    case 'occupancy_sensing': return 0.80
+    case 'daylight_dimming':  return 0.60
+    default:                  return 1.0
+  }
+}
+
 // ── UK Climate defaults ────────────────────────────────────────────────────────
 
 const UK_HDD   = 2200   // Heating degree days (15.5°C base, UK average)
@@ -352,7 +370,8 @@ export function calculateInstantDegreeDay(building = {}, constructions = {}, sys
   const avg_occupants   = num_bedrooms * occupancy_rate * people_per_room
 
   // ── Internal gains ────────────────────────────────────────────────────────
-  const lpd = Number(systems.lighting_power_density ?? 8)   // W/m²
+  const lpd_raw = Number(systems.lighting_power_density ?? 8)   // W/m²
+  const lpd = lpd_raw * lightingControlFactor(systems.lighting_control)
   const epd = Number(systems.equipment_power_density ?? 10) // W/m² (CIBSE hotel bedroom)
   const OCC_WATTS = 60  // W/person (metabolic)
   // Lighting: area-based (corridors, public areas always lit regardless of occupancy)
@@ -953,7 +972,7 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
   const avg_occupants   = num_bedrooms * occupancy_rate * people_per_room
 
   // ── Internal gain watts (peak, before schedule fraction) ──────────────────
-  const lpd = Number(systems.lighting_power_density ?? 8)
+  const lpd = Number(systems.lighting_power_density ?? 8) * lightingControlFactor(systems.lighting_control)
   const epd = Number(systems.equipment_power_density ?? 10)
   const OCC_WATTS = 60
   const lpd_W = lpd * gia                           // W — lighting

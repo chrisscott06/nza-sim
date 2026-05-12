@@ -225,15 +225,20 @@ def _build_lights_objects(
     return lights
 
 
-def _build_equipment_objects(zones: dict, zone_type: str = "hotel_bedroom") -> dict:
+def _build_equipment_objects(
+    zones: dict,
+    zone_type: str = "hotel_bedroom",
+    epd_override: float | None = None,
+) -> dict:
     loads = get_zone_loads(zone_type)
+    epd = epd_override if epd_override is not None else loads["equipment_power_density_W_per_m2"]
     equip = {}
     for zone_name in zones:
         equip[f"{zone_name}_Equip"] = {
             "zone_or_zonelist_or_space_or_spacelist_name": zone_name,
             "schedule_name": loads["equipment_schedule"],
             "design_level_calculation_method": "Watts/Area",
-            "watts_per_floor_area": loads["equipment_power_density_W_per_m2"],
+            "watts_per_floor_area": epd,
             "fraction_radiant": 0.30,
             "fraction_latent": 0.00,
             "fraction_lost": 0.00,
@@ -642,6 +647,31 @@ def assemble_epjson(
     # Apply systems_config overrides where relevant
     sc = systems_config or {}
     lpd_override = sc.get("lighting_power_density")  # W/m², None = use library default
+    epd_override = sc.get("equipment_power_density")  # W/m², None = use library default
+
+    # Lighting-control multiplier — coarse approximation of EP Daylighting:Controls.
+    # We scale the LPD rather than emit Daylighting:Controls (which needs daylight
+    # reference points + glare calcs + per-zone illuminance setpoints — a much
+    # bigger lift). Direction is right: manual lights left on > sensors > dimming.
+    _lighting_control_factors = {
+        "manual":            1.20,  # people forget to switch off
+        "occupancy_sensing": 0.80,  # ~20% saving from PIR sensors (CIBSE Lighting Guide 9)
+        "daylight_dimming":  0.60,  # ~40% saving from photocell + dimming
+    }
+    _light_ctrl = sc.get("lighting_control", "occupancy_sensing")
+    _light_factor = _lighting_control_factors.get(_light_ctrl, 1.0)
+    if lpd_override is not None:
+        lpd_override = float(lpd_override) * _light_factor
+
+    # Ventilation-control schedule — pick the right Schedule:Compact name.
+    # All three exist in nza_engine/library/schedules.py.
+    _vent_control_schedules = {
+        "continuous": "hotel_ventilation_continuous",
+        "occupied":   "hotel_ventilation_occupied",
+        "timer":      "hotel_ventilation_timer",
+    }
+    _vent_ctrl = sc.get("ventilation_control", "continuous")
+    vent_schedule = _vent_control_schedules.get(_vent_ctrl, "hotel_ventilation_continuous")
 
     # Occupancy density — compute from building params when available
     _num_bedrooms    = int(building_params.get("num_bedrooms",    0) or 0)
@@ -658,7 +688,7 @@ def assemble_epjson(
 
     people_objects  = _build_people_objects(zones, density_override=_density_override)
     lights_objects  = _build_lights_objects(zones, lpd_override=lpd_override)
-    equip_objects   = _build_equipment_objects(zones)
+    equip_objects   = _build_equipment_objects(zones, epd_override=epd_override)
     infil_objects   = _build_infiltration_objects(
         zones,
         building_params["length"],
@@ -757,6 +787,7 @@ def assemble_epjson(
             ventilation_type=vent_type,
             zone_floor_area_m2=zone_floor_area,
             heat_recovery_efficiency=mvhr_eff,
+            ventilation_schedule=vent_schedule,
         )
         for obj_type, items in vent_objects.items():
             hvac_objects.setdefault(obj_type, {}).update(items)
