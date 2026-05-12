@@ -1,9 +1,9 @@
-# NZA-Sim State Contracts (v2)
+# NZA-Sim State Contracts (v2.1)
 
 **Status:** Canonical. Every brief that touches computation, UI, or data flow must conform to this document.
 **Owner:** Chris.
-**Version:** 2.0 (May 2026)
-**Changes from v1:** Added simulation persistence and baselines section. Added comfort band as project-level input. Refined engine agreement to three-tier informational system. Added State 2 unified card pattern. Refined State 2.5 control modes. Documented setpoint cross-state dependency.
+**Version:** 2.1 (May 2026)
+**Changes from v2.0:** Defined the full provenance schema (storage shape, default values, helper API contract). Enum values unchanged from v2.0. Added open contract question #6 (verification ranges for States 2–4) following the Brief 26 Part 2.5 diagnostic.
 
 ---
 
@@ -80,7 +80,9 @@ The comfort band is **not** a Systems setpoint. Systems setpoints (when configur
 
 ### Input provenance
 
-Every input in `building_config`, `gains_config`, `operation_config`, `systems_config` has a `provenance` field tracking where the value came from:
+Every input in `building_config`, `gains_config`, `operation_config`, `systems_config` has a `provenance` field tracking where the value came from.
+
+**Enum values (unchanged from v2.0):**
 
 - `user_entered` — directly typed/selected by user
 - `spec_sheet` — entered with reference to manufacturer or project documentation
@@ -89,7 +91,47 @@ Every input in `building_config`, `gains_config`, `operation_config`, `systems_c
 - `inferred` — derived from another input or measured data
 - `calibrated` — adjusted by State 4 reconciliation, with link to adjustment log entry
 
-State 4 requires this metadata to function. States 1–3 do not require it to compute, but should record it as it is collected. Briefs that add inputs to the data model must include provenance handling.
+**Storage shape (v2.1 addition).** Provenance lives in a sibling `_provenance` object next to the values it annotates, keyed by dot-notated input path relative to the config:
+
+```json
+{
+  "fabric": {
+    "external_wall": { "u_value": 0.28 },
+    "_provenance": {
+      "external_wall.u_value": {
+        "source": "spec_sheet",
+        "ref": "WGL800_datasheet.pdf",
+        "confidence": "high"
+      }
+    }
+  }
+}
+```
+
+Per-path record fields:
+
+| Field | Required? | Allowed values | Notes |
+|---|---|---|---|
+| `source` | yes | one of the six enum values above | the only mandatory field |
+| `ref` | optional | string | filename, URL, manufacturer code, library name, adjustment-log entry id |
+| `confidence` | optional | `'high'` \| `'medium'` \| `'low'` | the user's stated confidence in the value, NOT statistical |
+| `recorded_at` | optional | ISO 8601 timestamp | when this provenance was set |
+
+**Default for unspecified inputs:** `{ source: 'user_entered', confidence: 'medium' }`. The helpers (see below) return this when no record exists at the requested path. State 4 treats absence-of-provenance as `user_entered/medium`.
+
+**Helper API contract.** Implementations must expose four helpers, available identically on both frontend (`frontend/src/utils/provenance.js`) and backend (`nza_engine/utils/provenance.py`):
+
+- `getProvenance(config, path) → { source, ref?, confidence?, recorded_at? }` — read; falls back to the default record above when the path has no entry.
+- `setProvenance(config, path, record) → updated_config` — write or replace; immutable, returns a new config with the `_provenance` block updated. `record.source` is required; other fields optional.
+- `clearProvenance(config, path) → updated_config` — remove a single entry (so it falls back to default). Used when a previously-set provenance is no longer valid (e.g., user replaces a spec-sheet value with a fresh manual override).
+- `listProvenance(config) → [{ path, ...record }]` — enumerate every provenance entry currently set, with the resolved record. Used by State 4 reconciliation and by future UI surfaces (provenance audit table).
+
+**State 4 dependency.** State 4 reads the per-input provenance + confidence to weight the bottom-up estimate and to bound the proposed-adjustment ranges (`adjustment_log` entries reference the `calibrated` source). States 1–3 do not require provenance metadata to compute; they should record it when collected but should not branch on it.
+
+**Brief discipline.** Any brief that adds inputs to the data model must:
+1. Default the new field's provenance to `user_entered/medium` when written via the UI.
+2. Expose a way for the user to mark provenance as `spec_sheet`, `benchmark`, etc. (UI not required immediately — recording is sufficient).
+3. Not block on missing provenance — read should always return at least the default record.
 
 ### State independence
 
