@@ -1,5 +1,98 @@
 # NZA SIMULATE — Status
 
+## ✅ Brief 26 Part 6 — sql_parser State 1 output path
+
+EnergyPlus parser now produces the State 1 envelope-only output shape from
+the free-running simulation run produced by Part 5.
+
+**What changed:**
+
+1. **`sql_parser.get_envelope_heat_flow_detailed`** — glazing conduction
+   block added (Brief 21 fix). Previously windows were tagged `_WIN_*` in
+   the SQL key-value but the surface-type routing only matched `_WALL_*`,
+   so `losses.glazing` came back zero in the full-mode heat balance too.
+   Now reads `Surface Inside Face Conduction Heat Transfer Energy` filtered
+   by `_WIN_` and rolls into `glazing[face].annual_heat_loss_kWh`.
+
+2. **`sql_parser.get_heat_balance(..., mode="envelope-only")`** — new
+   short-circuit into `_get_heat_balance_state1()`, which:
+   - Reads hourly `Zone Mean Air Temperature` (air → conduction physics)
+     and `Zone Operative Temperature` (operative → comfort hours and
+     demand trigger) from the EP SQL output.
+   - Reads outdoor dry-bulb and wind speed from the EPW.
+   - Reads per-face window solar (`Surface Window Transmitted Solar
+     Radiation Energy` filtered by `_WIN_`) hourly.
+   - Computes UA_fabric, UA_leakage, UA_permanent matching the live
+     engine's lumped-capacitance formulation exactly (constants in
+     parser comments).
+   - Derives heating/cooling demand against the project comfort band
+     using the same formula as `_calculateEnvelopeOnly` in
+     `frontend/src/utils/instantCalc.js` (max(0, Q_loss_at_setpoint −
+     solar) for heating; Q_gain_at_setpoint + UA·max(0, T_out − upper)
+     for cooling).
+   - Returns the State 1 contract shape: `state`, `mode`, `inputs_used`,
+     `comfort_band_used`, `gains.solar`, `losses.conduction`,
+     `losses.ventilation`, `free_running`, `demand`, plus a nested
+     `heat_balance` dict so the HeatBalance component renders unchanged.
+
+3. **`epjson_assembler._output_variables`** — Zone Mean Air Temperature
+   and Zone Operative Temperature already added in the Part 6 prep.
+   Both now confirmed present in EP SQL output post-run.
+
+4. **`api/routers/projects.py:get_simulation_balance`** — threads `mode`,
+   `comfort_band` (from project columns) and `library_data` (constructions
+   library fetched from `library_items`) into `get_heat_balance`. State 1
+   path uses the library to resolve U-values exactly the way the live
+   engine's `getUValue` does.
+
+5. **Unit fix** — air heat capacity constant clarified: 0.33 is
+   **Wh/(m³·K)** not kWh, mirroring the live engine's value. Initial
+   implementation multiplied by 1000 and reported demand as 106 GWh.
+   Corrected.
+
+**Engine-agreement check on Bridgewater** (see
+`scripts/state1_engine_agreement.mjs`):
+
+| Output                    | live   | sim    | Δ        | Flag    |
+|---------------------------|--------|--------|----------|---------|
+| **heating_demand_mwh**    | 166.8  | 168.1  | +0.8%    | silent  |
+| underheating_hours        | 4145   | 3895   | -6.0%    | soft    |
+| annual_mean_c             | 21.1   | 19.9   | -5.7%    | soft    |
+| conduction (all elements) | varies | varies | -11.7%   | warn    |
+| solar by face             | varies | varies | -15-26%  | warn    |
+| overheating_hours         | 2550   | 2137   | -16.2%   | warn    |
+| summer_max_c              | 50.3°C | 38.2°C | -24.1%   | warn    |
+| cooling_demand_mwh        | 171.1  | 109.2  | -36.2%   | HARD    |
+| comfort_hours             | 2065   | 2728   | +32.1%   | HARD    |
+| winter_min_c              | 1.9°C  | 6.7°C  | +252%    | HARD    |
+
+**Headline:** heating demand agrees to <1% between engines. Conduction
+line items agree to -11.7% across the board (no per-element bug — the
+proportional offset confirms it's the T_zone trace, not the U-values).
+Temperature extremes (winter min, summer max) and downstream cooling/comfort
+hour counts diverge sharply because the live engine's lumped-capacitance
+model can't replicate EP's full transient thermal mass response. Documented
+as known divergence #2 in `docs/state_1_divergences.md`.
+
+**Note on Bridgewater + contract bounds v2.2:** the actual building has
+100% glazing on S/E/W with zero shading depth and no internal gains/venting
+in State 1 — both engines confirm it genuinely overheats (2137 hrs sim,
+2550 hrs live). The contract's 200–600 hrs overheating bound was calibrated
+for a more conservative WWR; this project sits at the extreme.
+
+**Files changed:**
+- `nza_engine/parsers/sql_parser.py` — `get_envelope_heat_flow_detailed`
+  glazing block; new `_get_heat_balance_state1` + helpers; `get_heat_balance`
+  signature now `mode/comfort_band/library_data`.
+- `api/routers/projects.py:get_simulation_balance` — comfort_band +
+  library_data + mode threading.
+- `docs/state_1_divergences.md` — divergence #2 updated with measured
+  Bridgewater numbers from the agreement check.
+- `scripts/state1_engine_agreement.mjs` — new — runs live engine via
+  Node, fetches sim output, prints side-by-side with tolerance flags.
+
+---
+
 ## ✅ Brief 26 Part 3 — Bridgewater verification passes
 
 **Resolution:** contract v2.1 ranges were Passivhaus-target aspirational, not

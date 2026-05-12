@@ -696,14 +696,44 @@ async def get_simulation_balance(project_id: str, run_id: str, mode: str = "full
             )
 
         cursor = await db.execute(
-            "SELECT building_config, weather_file FROM projects WHERE id = ?",
+            "SELECT building_config, construction_choices, weather_file, "
+            "comfort_band_lower_c, comfort_band_upper_c FROM projects WHERE id = ?",
             (project_id,),
         )
         proj_row = await cursor.fetchone()
         if not proj_row:
             raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
 
+        # For State 1, fetch the constructions library so the parser can
+        # resolve U-values exactly as the live engine does (matches getUValue
+        # in instantCalc.js). For full mode this is unused.
+        library_data = None
+        if mode == "envelope-only":
+            cursor = await db.execute(
+                "SELECT name, config_json FROM library_items WHERE library_type = 'construction'"
+            )
+            lib_rows = await cursor.fetchall()
+            library_data = {
+                "constructions": [
+                    {
+                        "name": r["name"],
+                        "u_value_W_per_m2K": (json.loads(r["config_json"]) or {}).get("u_value_W_per_m2K"),
+                        "y_factor":          (json.loads(r["config_json"]) or {}).get("y_factor", 1.0),
+                        "config_json":       json.loads(r["config_json"]) or {},
+                    }
+                    for r in lib_rows
+                ]
+            }
+
     building_config = json.loads(proj_row["building_config"])
+    # Bake construction_choices into building_config under the same key the
+    # parser's _u_value() helper looks for (mirrors the frontend's
+    # `building.constructions` plumbing).
+    construction_choices = (
+        json.loads(proj_row["construction_choices"]) if proj_row["construction_choices"] else {}
+    )
+    building_config["constructions"] = construction_choices
+
     sql_path = sim_row["results_hourly_path"]
     if not sql_path:
         raise HTTPException(
@@ -718,15 +748,21 @@ async def get_simulation_balance(project_id: str, run_id: str, mode: str = "full
     except Exception:
         pass
 
+    comfort_band = {
+        "lower_c": float(proj_row["comfort_band_lower_c"] or 20.0),
+        "upper_c": float(proj_row["comfort_band_upper_c"] or 26.0),
+    }
+
     balance = get_heat_balance(
         sql_path=sql_path,
         building_config=building_config,
         weather_file_path=weather_path,
+        mode=mode,
+        comfort_band=comfort_band,
+        library_data=library_data,
     )
     # Tag the response per the state contract's output shape so the frontend
-    # can route filtering through utils/stateMode.js. Per Brief 26 Part 0 the
-    # underlying numbers are still full-model regardless of mode — Part 4
-    # adds the true envelope-only path in the parser.
+    # can route filtering through utils/stateMode.js.
     state_num = {"envelope-only": 1, "envelope-gains": 2,
                  "envelope-gains-operation": 2.5, "full": 3}.get(mode, 3)
     balance["state"] = state_num

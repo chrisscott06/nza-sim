@@ -854,9 +854,28 @@ def get_heat_balance(
     sql_path: str | Path,
     building_config: dict | None = None,
     weather_file_path: str | Path | None = None,
+    mode: str = "full",
+    comfort_band: dict | None = None,
+    library_data: dict | None = None,
 ) -> dict:
     """
     Return a balanced view of all annual heat flows from a simulation run.
+
+    `mode` follows the state contract:
+      - "full"         → State 3 / detailed model (default; existing behaviour)
+      - "envelope-only"→ State 1 path. Reads hourly zone temperatures from the
+                         free-running EP run, derives heating/cooling demand
+                         against the comfort band using the same lumped-
+                         capacitance formula as the live engine
+                         (`_calculateEnvelopeOnly` in instantCalc.js), and
+                         returns the State 1 output shape per docs/state_contracts.md.
+
+    For State 1, EP is run with extreme setpoints (`-60` / `+100`) so the
+    Ideal Loads system never injects energy. The reported `Zone Mean Air
+    Temperature` is therefore the free-running response of the building
+    fabric to weather and (in State 1, suppressed) gains. Demand is computed
+    post-hoc — it must NOT be read from EP's heating/cooling output meters,
+    which correctly report zero with wide setpoints.
 
     Output shape (consumed by the frontend HeatBalance component):
 
@@ -883,6 +902,14 @@ def get_heat_balance(
 
     All values in kWh (annual) or kWh/m²·a.
     """
+    if mode == "envelope-only":
+        return _get_heat_balance_state1(
+            sql_path,
+            building_config=building_config,
+            weather_file_path=weather_file_path,
+            comfort_band=comfort_band,
+            library_data=library_data,
+        )
     conn = _connect(sql_path)
     try:
         # ── Reuse existing detailed envelope parser for fabric ────────────────
@@ -896,22 +923,9 @@ def get_heat_balance(
         wall_loss_total = sum(env["walls"][f]["annual_heat_loss_kWh"] for f in env["walls"])
         wall_loss_by_face = {f: round(env["walls"][f]["annual_heat_loss_kWh"], 1) for f in env["walls"]}
 
-        # Glazing transmission losses: filter Surface Inside Face Conduction by _WIN_*
-        # (separate from solar gains which come through windows)
-        win_cond_rows = _query(
-            conn,
-            "SELECT ReportDataDictionaryIndex, KeyValue FROM ReportDataDictionary "
-            "WHERE Name = 'Surface Inside Face Conduction Heat Transfer Energy' COLLATE NOCASE",
-        )
-        glazing_loss = 0.0
-        for row in win_cond_rows:
-            kv = (row["KeyValue"] or "").upper()
-            if "_WIN_" not in kv:
-                continue
-            v = _query(conn, "SELECT SUM(Value) FROM ReportData WHERE ReportDataDictionaryIndex = ?", (row["ReportDataDictionaryIndex"],))
-            kwh = (v[0][0] or 0.0) * J_TO_KWH
-            if kwh < 0:
-                glazing_loss += abs(kwh)
+        # Glazing transmission losses come from the detailed envelope parser
+        # (now reads window conduction per Brief 21 fix in get_envelope_heat_flow_detailed)
+        glazing_loss = sum(env["glazing"][f]["annual_heat_loss_kWh"] for f in env["glazing"])
 
         # ── Internal gains ────────────────────────────────────────────────────
         people_kwh    = _sum_annual(conn, "Zone People Total Heating Energy")
@@ -1056,6 +1070,525 @@ def get_heat_balance(
         conn.close()
 
 
+# ── Brief 26 Part 6 — State 1 envelope-only parser ──────────────────────────
+#
+# Constants below MUST match the live engine in `frontend/src/utils/instantCalc.js`.
+# If you change one, change the other in the same commit — engine agreement
+# is what makes the dual-engine discipline work.
+
+# Wh / (m³·K) — ρ_air × Cp_air; mirrors AIR_HEAT_CAPACITY in instantCalc.js.
+# Physics: ρ_air ≈ 1.2 kg/m³ × Cp_air ≈ 1006 J/(kg·K) = ~1200 J/(m³·K) = 0.33 Wh/(m³·K).
+# (The instantCalc.js comment "kWh/m³/K" is mislabelled — the value 0.33 is Wh/(m³·K).)
+_AIR_HEAT_CAPACITY_WH_PER_M3_K = 0.33
+
+# J / (K·m²·GIA) — CIBSE TM52 thermal-mass categories
+_THERMAL_MASS_J_PER_K_PER_M2 = {
+    "light":  80_000,
+    "medium": 160_000,
+    "heavy":  280_000,
+}
+
+# Centre-of-element U-values used when a construction is not assigned. Fall-back
+# only; State 1 strict-input mode logs a warning if the building config doesn't
+# carry a fabric set.
+_DEFAULT_U_VALUES = {
+    "external_wall": 0.28,
+    "roof":          0.18,
+    "ground_floor":  0.22,
+    "glazing":       1.4,
+}
+_DEFAULT_G_VALUE = 0.4
+_FRAME_FRACTION = 0.20
+_SHADING_FACTOR = 1.0
+
+
+def _u_value(constructions: dict | None, element: str, library_data: dict | None) -> tuple[float, float]:
+    """
+    Return (u_effective, u_centre) for a fabric element. u_effective has the
+    Y-factor uplift baked in; u_centre is the library item's bare U-value.
+    Falls back to _DEFAULT_U_VALUES if the construction can't be resolved.
+    """
+    name = (constructions or {}).get(element)
+    if name and library_data and library_data.get("constructions"):
+        for item in library_data["constructions"]:
+            if item.get("name") == name and item.get("u_value_W_per_m2K") is not None:
+                u_centre = float(item["u_value_W_per_m2K"])
+                y = item.get("y_factor", 1.0)
+                try:
+                    y = float(y)
+                    if y <= 0:
+                        y = 1.0
+                except (TypeError, ValueError):
+                    y = 1.0
+                return (u_centre * y, u_centre)
+    u_default = _DEFAULT_U_VALUES.get(element, 1.0)
+    return (u_default, u_default)
+
+
+def _g_value(constructions: dict | None, library_data: dict | None) -> float:
+    name = (constructions or {}).get("glazing")
+    if name and library_data and library_data.get("constructions"):
+        for item in library_data["constructions"]:
+            if item.get("name") == name:
+                cfg = item.get("config_json") or {}
+                if cfg.get("g_value") is not None:
+                    try:
+                        return float(cfg["g_value"])
+                    except (TypeError, ValueError):
+                        pass
+    return _DEFAULT_G_VALUE
+
+
+def _read_hourly_zone_temp(conn: sqlite3.Connection, var_name: str) -> list[float]:
+    """
+    Return an 8760-length list of GIA-area-weighted average zone temperatures
+    in °C for the given EP variable (`Zone Mean Air Temperature` or
+    `Zone Operative Temperature`). Empty list if the variable wasn't requested.
+    """
+    rows = _query(
+        conn,
+        "SELECT ReportDataDictionaryIndex, KeyValue FROM ReportDataDictionary "
+        "WHERE Name = ? COLLATE NOCASE",
+        (var_name,),
+    )
+    if not rows:
+        return []
+    # Get per-zone floor areas to weight the average correctly
+    zones = {z["name"].upper(): z["floor_area_m2"] for z in _get_zones_info(conn)}
+    if not zones:
+        return []
+    # Build TimeIndex → {zone: T} grid
+    timegrid: dict[int, list[tuple[float, float]]] = {}
+    for r in rows:
+        kv = (r["KeyValue"] or "").upper()
+        area = zones.get(kv, 0.0)
+        if area <= 0:
+            continue
+        idx = r["ReportDataDictionaryIndex"]
+        data_rows = _query(
+            conn,
+            "SELECT TimeIndex, Value FROM ReportData WHERE ReportDataDictionaryIndex = ? ORDER BY TimeIndex",
+            (idx,),
+        )
+        for dr in data_rows:
+            timegrid.setdefault(dr["TimeIndex"], []).append((float(dr["Value"]), area))
+    # Sort by TimeIndex and emit area-weighted means
+    out: list[float] = []
+    for ti in sorted(timegrid.keys()):
+        pairs = timegrid[ti]
+        total_area = sum(a for _, a in pairs)
+        if total_area <= 0:
+            out.append(0.0)
+        else:
+            out.append(sum(v * a for v, a in pairs) / total_area)
+    return out
+
+
+def _read_hourly_solar_by_face(conn: sqlite3.Connection) -> dict[str, list[float]]:
+    """
+    Return solar gains through windows per face per hour, in kWh.
+    Keys: north, south, east, west. Each value is an 8760-length list.
+    """
+    rows = _query(
+        conn,
+        "SELECT ReportDataDictionaryIndex, KeyValue FROM ReportDataDictionary "
+        "WHERE Name = 'Surface Window Transmitted Solar Radiation Energy' COLLATE NOCASE",
+    )
+    FACE_MAP = {"N": "north", "S": "south", "E": "east", "W": "west"}
+    by_face: dict[str, dict[int, float]] = {f: {} for f in FACE_MAP.values()}
+    for r in rows:
+        kv = (r["KeyValue"] or "").upper()
+        if "_WIN_" not in kv:
+            continue
+        face_letter = kv[-1] if len(kv) > 0 else ""
+        face = FACE_MAP.get(face_letter)
+        if not face:
+            continue
+        idx = r["ReportDataDictionaryIndex"]
+        data_rows = _query(
+            conn,
+            "SELECT TimeIndex, Value FROM ReportData WHERE ReportDataDictionaryIndex = ? ORDER BY TimeIndex",
+            (idx,),
+        )
+        for dr in data_rows:
+            by_face[face][dr["TimeIndex"]] = by_face[face].get(dr["TimeIndex"], 0.0) + float(dr["Value"]) * J_TO_KWH
+    # Convert TimeIndex dicts to ordered lists
+    all_ti = sorted({ti for f in by_face.values() for ti in f.keys()})
+    return {face: [by_face[face].get(ti, 0.0) for ti in all_ti] for face in by_face}
+
+
+def _get_heat_balance_state1(
+    sql_path: str | Path,
+    building_config: dict | None,
+    weather_file_path: str | Path | None,
+    comfort_band: dict | None,
+    library_data: dict | None,
+) -> dict:
+    """
+    State 1 envelope-only parser path.
+
+    EP has just been run with extreme setpoints (`-60` / `+100`), so the zone
+    is free-running. We read the resulting hourly zone temperatures, then
+    derive heating/cooling demand against the comfort band using the same
+    lumped-capacitance formula as `_calculateEnvelopeOnly` in instantCalc.js.
+
+    Output shape per docs/state_contracts.md § State 1:
+      {
+        state: 1, mode: "envelope-only", inputs_used: [...], comfort_band_used,
+        gains:  { solar: { f1..f4, roof, total } },
+        losses: { conduction: { external_wall, roof, ground_floor,
+                                glazing: {f1..f4}, thermal_bridging },
+                  ventilation: { fabric_leakage, permanent_vents } },
+        free_running: { annual_mean_c, winter_min_c, summer_max_c, hourly_temperature_c },
+        demand: { heating_demand_mwh, cooling_demand_mwh,
+                  underheating_hours, overheating_hours, comfort_hours },
+        heat_balance: { annual: { losses, gains, totals }, metadata, demand,
+                        free_running, comfort_band_used },
+      }
+    """
+    band = comfort_band or {"lower_c": 20.0, "upper_c": 26.0}
+    lower_c = float(band.get("lower_c", 20.0))
+    upper_c = float(band.get("upper_c", 26.0))
+
+    bc = building_config or {}
+    constructions = bc.get("constructions") or {}
+
+    # ── Areas + geometry (canonical building config) ──────────────────────────
+    areas = _building_areas(bc)
+    L = float(bc.get("length", 0) or 0)
+    W = float(bc.get("width", 0) or 0)
+    fh = float(bc.get("floor_height", 0) or 0)
+    nf = float(bc.get("num_floors", 0) or 0)
+    gia = max(areas["gia_m2"], 1.0)
+    volume = L * W * fh * nf if (L * W * fh * nf) > 0 else gia * 3.0
+    wall_face_m2 = areas["external_wall_by_face_m2"]
+    glazing_face_m2 = areas["glazing_by_face_m2"]
+    total_wall_opaque = areas["external_wall_m2"]
+    total_glazing = areas["glazing_total_m2"]
+    roof_area = areas["roof_m2"]
+    ground_area = areas["ground_floor_m2"]
+
+    # ── U-values & UAs (W/K) ──────────────────────────────────────────────────
+    u_wall_e,  u_wall_c  = _u_value(constructions, "external_wall", library_data)
+    u_roof_e,  u_roof_c  = _u_value(constructions, "roof",          library_data)
+    u_floor_e, u_floor_c = _u_value(constructions, "ground_floor",  library_data)
+    u_glaz_e,  u_glaz_c  = _u_value(constructions, "glazing",       library_data)
+    g_value = _g_value(constructions, library_data)
+
+    UA_wall  = u_wall_e  * total_wall_opaque
+    UA_roof  = u_roof_e  * roof_area
+    UA_floor = u_floor_e * ground_area
+    UA_glaz  = u_glaz_e  * total_glazing
+    UA_fabric = UA_wall + UA_roof + UA_floor + UA_glaz
+
+    # Thermal bridging — uplift portion of each U times area
+    UA_bridging = (
+        max(0.0, (u_wall_e  - u_wall_c)  * total_wall_opaque) +
+        max(0.0, (u_roof_e  - u_roof_c)  * roof_area)         +
+        max(0.0, (u_floor_e - u_floor_c) * ground_area)       +
+        max(0.0, (u_glaz_e  - u_glaz_c)  * total_glazing)
+    )
+
+    ach = float(bc.get("infiltration_ach", 0.5) or 0.5)
+    # UA_leakage = ρ_air·Cp · ach·volume = W/K = Wh/K per hour. Mirrors the
+    # live engine: `UA_leakage = AIR_HEAT_CAPACITY * ach * volume` in instantCalc.js.
+    UA_leakage = _AIR_HEAT_CAPACITY_WH_PER_M3_K * ach * volume  # Wh/K per hour
+
+    # ── Permanent openings (louvres only — operable windows forbidden) ────────
+    openings = bc.get("openings") or {}
+    Cd = 0.6
+    Cw_map = {"sheltered": 0.05, "normal": 0.10, "exposed": 0.20}
+    Cw = Cw_map.get(openings.get("site_exposure", "normal"), 0.10)
+    sqrt_Cw = Cw ** 0.5
+    faces = ("north", "south", "east", "west")
+    louvre_total_m2 = sum(
+        float((openings.get(f) or {}).get("louvre_area_m2", 0) or 0) for f in faces
+    )
+
+    # ── EPW hourly data ───────────────────────────────────────────────────────
+    epw_temps = _read_epw_temperatures(weather_file_path) if weather_file_path else []
+    wind, months = _read_epw_wind_temp(weather_file_path) if weather_file_path else ([], [])
+    n_epw = min(len(epw_temps), len(wind)) if (epw_temps and wind) else len(epw_temps) or len(wind)
+
+    # ── SQL hourly data ───────────────────────────────────────────────────────
+    conn = _connect(sql_path)
+    try:
+        T_air_hourly = _read_hourly_zone_temp(conn, "Zone Mean Air Temperature")
+        T_op_hourly  = _read_hourly_zone_temp(conn, "Zone Operative Temperature")
+        solar_face = _read_hourly_solar_by_face(conn)
+    finally:
+        conn.close()
+
+    # Air temp drives conduction physics; operative drives comfort hour counts.
+    # If only one available, use whichever is present (operative preferred per
+    # user spec — comfort is the more thermodynamically meaningful index).
+    if not T_air_hourly and not T_op_hourly:
+        raise ValueError(
+            "State 1 parser needs Zone Mean Air Temperature or Zone Operative "
+            "Temperature in the EP SQL output, but neither was found. The "
+            "epJSON assembler must request these variables for envelope-only mode."
+        )
+    if not T_air_hourly:
+        T_air_hourly = list(T_op_hourly)
+    if not T_op_hourly:
+        T_op_hourly = list(T_air_hourly)
+
+    n = min(
+        len(T_air_hourly), len(T_op_hourly),
+        len(epw_temps) if epw_temps else len(T_air_hourly),
+        len(solar_face["north"]) if solar_face["north"] else len(T_air_hourly),
+    )
+    if n == 0:
+        raise ValueError("State 1 parser: no overlapping hourly data between SQL and EPW.")
+
+    # Pad wind/months to n if they're shorter
+    if not wind:
+        wind = [4.0] * n
+    if len(wind) < n:
+        wind = wind + [wind[-1] if wind else 4.0] * (n - len(wind))
+    if not months:
+        # Reconstruct months from hour-of-year if we don't have EPW months
+        # (rough heuristic — only used for winter/summer min/max tagging)
+        months = []
+        for h in range(n):
+            day_of_year = h // 24
+            # Cumulative days at start of each month (non-leap)
+            m = 1
+            cum = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365]
+            for i in range(12):
+                if day_of_year < cum[i + 1]:
+                    m = i + 1
+                    break
+            months.append(m - 1)
+    if len(months) < n:
+        months = months + [months[-1] if months else 0] * (n - len(months))
+
+    # ── 8760-hour loop — mirror the live engine ───────────────────────────────
+    acc_solar = {f: 0.0 for f in faces}
+    acc_solar_roof = 0.0  # opaque-roof solar — parser leaves at 0 (EP handles it implicitly)
+    acc_cond_wall = 0.0
+    acc_cond_roof = 0.0
+    acc_cond_floor = 0.0
+    acc_cond_glaz = {f: 0.0 for f in faces}
+    acc_thermal_bridging = 0.0
+    acc_vent_leakage = 0.0
+    acc_vent_permanent = 0.0
+    acc_heating_demand_Wh = 0.0
+    acc_cooling_demand_Wh = 0.0
+    underheating_hours = 0
+    overheating_hours = 0
+    comfort_hours = 0
+    T_sum = 0.0
+    T_winter_min = float("inf")
+    T_summer_max = float("-inf")
+
+    # Per-face glazing UA fractions
+    glaz_face_UA = {
+        f: u_glaz_e * glazing_face_m2.get(f, 0.0) for f in faces
+    }
+
+    for h in range(n):
+        T_air = T_air_hourly[h]
+        T_op  = T_op_hourly[h]
+        T_out = epw_temps[h] if h < len(epw_temps) else T_air
+        v_wind = wind[h] if h < len(wind) else 4.0
+
+        # Solar gains by face (kWh this hour) — pulled straight from EP
+        sol_n = solar_face["north"][h] if h < len(solar_face["north"]) else 0.0
+        sol_s = solar_face["south"][h] if h < len(solar_face["south"]) else 0.0
+        sol_e = solar_face["east"][h]  if h < len(solar_face["east"])  else 0.0
+        sol_w = solar_face["west"][h]  if h < len(solar_face["west"])  else 0.0
+        acc_solar["north"] += sol_n; acc_solar["south"] += sol_s
+        acc_solar["east"]  += sol_e; acc_solar["west"]  += sol_w
+        Q_solar_in_Wh = (sol_n + sol_s + sol_e + sol_w) * 1000.0  # kWh → Wh
+
+        # Permanent-vent UA this hour (wind-driven)
+        Q_louvre_m3s = Cd * louvre_total_m2 * sqrt_Cw * v_wind
+        UA_permanent = _AIR_HEAT_CAPACITY_WH_PER_M3_K * (Q_louvre_m3s * 3600.0)  # Wh/K per hour
+        UA_total = UA_fabric + UA_leakage + UA_permanent
+
+        # Conduction physics — air temp drives ΔT
+        dT = T_air - T_out
+        Q_cond_walls_Wh   = u_wall_e  * total_wall_opaque * dT
+        Q_cond_roof_Wh    = u_roof_e  * roof_area         * dT
+        Q_cond_floor_Wh   = u_floor_e * ground_area       * dT
+        Q_cond_glaz_n_Wh  = glaz_face_UA["north"] * dT
+        Q_cond_glaz_s_Wh  = glaz_face_UA["south"] * dT
+        Q_cond_glaz_e_Wh  = glaz_face_UA["east"]  * dT
+        Q_cond_glaz_w_Wh  = glaz_face_UA["west"]  * dT
+        Q_bridging_Wh     = UA_bridging   * dT
+        Q_vent_leak_Wh    = UA_leakage    * dT
+        Q_vent_perm_Wh    = UA_permanent  * dT
+
+        # Loss accumulators — positive direction only (mirrors live calc)
+        if dT > 0:
+            acc_cond_wall    += Q_cond_walls_Wh
+            acc_cond_roof    += Q_cond_roof_Wh
+            acc_cond_floor   += Q_cond_floor_Wh
+            acc_cond_glaz["north"] += Q_cond_glaz_n_Wh
+            acc_cond_glaz["south"] += Q_cond_glaz_s_Wh
+            acc_cond_glaz["east"]  += Q_cond_glaz_e_Wh
+            acc_cond_glaz["west"]  += Q_cond_glaz_w_Wh
+            acc_thermal_bridging  += Q_bridging_Wh
+            acc_vent_leakage      += Q_vent_leak_Wh
+            acc_vent_permanent    += Q_vent_perm_Wh
+
+        # Comfort hour counts — operative temperature (what occupants feel)
+        if T_op < lower_c:
+            underheating_hours += 1
+        elif T_op > upper_c:
+            overheating_hours += 1
+        else:
+            comfort_hours += 1
+
+        # Free-running stats
+        T_sum += T_air
+        m = months[h] if h < len(months) else (h // 730) % 12
+        if m == 11 or m <= 1:  # Dec/Jan/Feb (0-indexed)
+            if T_air < T_winter_min:
+                T_winter_min = T_air
+        if 5 <= m <= 7:        # Jun/Jul/Aug
+            if T_air > T_summer_max:
+                T_summer_max = T_air
+
+        # Demand derivation — same formula as live engine, triggered by
+        # free-running operative temperature
+        if T_op < lower_c:
+            Q_loss_at_lower = UA_total * max(0.0, lower_c - T_out)
+            heating_Wh = max(0.0, Q_loss_at_lower - Q_solar_in_Wh)
+            acc_heating_demand_Wh += heating_Wh
+        elif T_op > upper_c:
+            Q_gain_at_upper = Q_solar_in_Wh + UA_total * max(0.0, T_out - upper_c)
+            acc_cooling_demand_Wh += Q_gain_at_upper
+
+    # ── Aggregates ────────────────────────────────────────────────────────────
+    def r1(wh: float) -> float:
+        return round(wh / 1000.0, 1)
+
+    def per_m2(wh: float) -> float:
+        return round(wh / 1000.0 / gia, 2)
+
+    total_solar_Wh = sum(acc_solar.values()) * 1000.0  # solar accumulators are in kWh
+    total_cond_glaz_Wh = sum(acc_cond_glaz.values())
+    total_cond_Wh = acc_cond_wall + acc_cond_roof + acc_cond_floor + total_cond_glaz_Wh + acc_thermal_bridging
+    total_vent_Wh = acc_vent_leakage + acc_vent_permanent
+    T_mean = T_sum / n if n > 0 else 0.0
+
+    heat_balance = {
+        "annual": {
+            "losses": {
+                "external_wall":    {"kwh": r1(acc_cond_wall),    "kwh_per_m2": per_m2(acc_cond_wall),    "area_m2": round(total_wall_opaque)},
+                "roof":             {"kwh": r1(acc_cond_roof),    "kwh_per_m2": per_m2(acc_cond_roof),    "area_m2": round(roof_area)},
+                "ground_floor":     {"kwh": r1(acc_cond_floor),   "kwh_per_m2": per_m2(acc_cond_floor),   "area_m2": round(ground_area)},
+                "glazing":          {"kwh": r1(total_cond_glaz_Wh), "kwh_per_m2": per_m2(total_cond_glaz_Wh), "area_m2": round(total_glazing)},
+                "thermal_bridging": {"kwh": r1(acc_thermal_bridging), "kwh_per_m2": per_m2(acc_thermal_bridging)},
+                "fabric_leakage":   {"kwh": r1(acc_vent_leakage), "kwh_per_m2": per_m2(acc_vent_leakage), "ach": ach},
+                "permanent_vents":  {"kwh": r1(acc_vent_permanent), "kwh_per_m2": per_m2(acc_vent_permanent)},
+                # No `cooling` here — State 1 has no mechanical cooling.
+            },
+            "gains": {
+                "solar": {
+                    "north": {"kwh": round(acc_solar["north"], 1), "kwh_per_m2": round(acc_solar["north"] / gia, 2), "area_m2": round(glazing_face_m2.get("north", 0))},
+                    "south": {"kwh": round(acc_solar["south"], 1), "kwh_per_m2": round(acc_solar["south"] / gia, 2), "area_m2": round(glazing_face_m2.get("south", 0))},
+                    "east":  {"kwh": round(acc_solar["east"], 1),  "kwh_per_m2": round(acc_solar["east"]  / gia, 2), "area_m2": round(glazing_face_m2.get("east",  0))},
+                    "west":  {"kwh": round(acc_solar["west"], 1),  "kwh_per_m2": round(acc_solar["west"]  / gia, 2), "area_m2": round(glazing_face_m2.get("west",  0))},
+                    "total_kwh":        round(sum(acc_solar.values()), 1),
+                    "total_kwh_per_m2": round(sum(acc_solar.values()) / gia, 2),
+                },
+                # No people / equipment / lighting / heating — State 1.
+            },
+            "totals": {
+                "losses_kwh":        r1(total_cond_Wh + total_vent_Wh),
+                "gains_kwh":         round(sum(acc_solar.values()), 1),
+                "losses_kwh_per_m2": per_m2(total_cond_Wh + total_vent_Wh),
+                "gains_kwh_per_m2":  round(sum(acc_solar.values()) / gia, 2),
+            },
+        },
+        "metadata": {
+            "gia_m2":       areas["gia_m2"],
+            "weather_file": str(weather_file_path) if weather_file_path else None,
+        },
+        # State 1 extras for the HeatBalance component
+        "demand": {
+            "heating_demand_mwh": round(acc_heating_demand_Wh / 1_000_000.0, 1),
+            "cooling_demand_mwh": round(acc_cooling_demand_Wh / 1_000_000.0, 1),
+            "underheating_hours": underheating_hours,
+            "overheating_hours":  overheating_hours,
+            "comfort_hours":      comfort_hours,
+        },
+        "free_running": {
+            "annual_mean_c": round(T_mean, 1),
+            "winter_min_c":  round(T_winter_min, 1) if T_winter_min != float("inf") else None,
+            "summer_max_c":  round(T_summer_max, 1) if T_summer_max != float("-inf") else None,
+        },
+        "comfort_band_used": {"lower_c": lower_c, "upper_c": upper_c},
+    }
+
+    return {
+        "state":  1,
+        "mode":   "envelope-only",
+        "inputs_used": [
+            "length", "width", "num_floors", "floor_height", "orientation",
+            "wwr", "window_count", "shading_overhang", "shading_fin",
+            "infiltration_ach", "thermal_mass_category",
+            "openings.site_exposure", "openings.{face}.louvre_area_m2",
+            "constructions.{external_wall, roof, ground_floor, glazing}",
+            "weather (EPW)",
+        ],
+        "comfort_band_used": {"lower_c": lower_c, "upper_c": upper_c},
+
+        "gains": {
+            "solar": {
+                "f1": round(acc_solar["north"], 1),  # north
+                "f2": round(acc_solar["east"], 1),   # east
+                "f3": round(acc_solar["south"], 1),  # south
+                "f4": round(acc_solar["west"], 1),   # west
+                "roof":  round(acc_solar_roof, 1),
+                "total": round(sum(acc_solar.values()), 1),
+            },
+        },
+        "losses": {
+            "conduction": {
+                "external_wall": r1(acc_cond_wall),
+                "roof":          r1(acc_cond_roof),
+                "ground_floor":  r1(acc_cond_floor),
+                "glazing": {
+                    "f1": r1(acc_cond_glaz["north"]),
+                    "f2": r1(acc_cond_glaz["east"]),
+                    "f3": r1(acc_cond_glaz["south"]),
+                    "f4": r1(acc_cond_glaz["west"]),
+                },
+                "thermal_bridging": r1(acc_thermal_bridging),
+            },
+            "ventilation": {
+                "fabric_leakage":  r1(acc_vent_leakage),
+                "permanent_vents": r1(acc_vent_permanent),
+            },
+        },
+        "free_running": {
+            "annual_mean_c":       round(T_mean, 1),
+            "winter_min_c":        round(T_winter_min, 1) if T_winter_min != float("inf") else None,
+            "summer_max_c":        round(T_summer_max, 1) if T_summer_max != float("-inf") else None,
+            "hourly_temperature_c": [round(t, 2) for t in T_air_hourly[:n]],
+        },
+        "demand": {
+            "heating_demand_mwh": round(acc_heating_demand_Wh / 1_000_000.0, 1),
+            "cooling_demand_mwh": round(acc_cooling_demand_Wh / 1_000_000.0, 1),
+            "underheating_hours": underheating_hours,
+            "overheating_hours":  overheating_hours,
+            "comfort_hours":      comfort_hours,
+        },
+        # Heat Balance component reads from this nested shape (matches the
+        # full-mode return signature so the existing UI renders state 1
+        # without changes)
+        "heat_balance": heat_balance,
+        # Also fold into the top-level so the existing API endpoint shape
+        # (which spreads `annual`/`metadata` at the root) keeps working.
+        "annual":   heat_balance["annual"],
+        "metadata": heat_balance["metadata"],
+    }
+
+
 def get_envelope_heat_flow_detailed(sql_path) -> dict:
     """
     Return per-facade annual heat flow data grouped by element type and facade.
@@ -1119,7 +1652,9 @@ def get_envelope_heat_flow_detailed(sql_path) -> dict:
                 walls[fname]["net_kWh"] += kwh
 
         # ── Glazing: solar gains + conduction through windows
-        glazing = {FACE_FULL[f]: {"solar_gain_kWh": 0.0, "conduction_kWh": 0.0, "net_kWh": 0.0} for f in FACES}
+        glazing = {FACE_FULL[f]: {"solar_gain_kWh": 0.0, "conduction_kWh": 0.0,
+                                  "annual_heat_loss_kWh": 0.0, "annual_heat_gain_kWh": 0.0,
+                                  "net_kWh": 0.0} for f in FACES}
 
         solar_by_win = _sum_by_keyvalue_prefix(
             "Surface Window Transmitted Solar Radiation Energy",
@@ -1130,6 +1665,26 @@ def get_envelope_heat_flow_detailed(sql_path) -> dict:
             fname = FACE_FULL.get(face)
             if fname:
                 glazing[fname]["solar_gain_kWh"]  += kwh
+                glazing[fname]["net_kWh"] += kwh
+
+        # Window conduction — split by face. EP tags windows as `..._WIN_N/S/E/W`
+        # (Brief 21 fix: previously only walls were read from this variable, so
+        # the contract's `losses.conduction.glazing` line item came back zero.)
+        win_cond = _sum_by_keyvalue_prefix(
+            "Surface Inside Face Conduction Heat Transfer Energy",
+            lambda kv: "_WIN_" in kv and any(kv.endswith("_" + f) for f in FACES),
+        )
+        for kv, kwh in win_cond.items():
+            face = kv[-1]
+            fname = FACE_FULL.get(face)
+            if fname:
+                # Positive Value = heat into zone (gain); negative = heat leaving (loss).
+                # Mirror the wall sign convention.
+                if kwh >= 0:
+                    glazing[fname]["annual_heat_gain_kWh"] += kwh
+                else:
+                    glazing[fname]["annual_heat_loss_kWh"] += abs(kwh)
+                glazing[fname]["conduction_kWh"] += kwh
                 glazing[fname]["net_kWh"] += kwh
 
         # ── Roof (top floor ceiling)
@@ -1164,11 +1719,13 @@ def get_envelope_heat_flow_detailed(sql_path) -> dict:
         total_solar = sum(v["solar_gain_kWh"] for v in glazing.values())
         total_fabric_loss = (
             sum(v["annual_heat_loss_kWh"] for v in walls.values())
+            + sum(v["annual_heat_loss_kWh"] for v in glazing.values())
             + roof["annual_heat_loss_kWh"]
             + ground_floor["annual_heat_loss_kWh"]
         )
         total_fabric_gain = (
             sum(v["annual_heat_gain_kWh"] for v in walls.values())
+            + sum(v["annual_heat_gain_kWh"] for v in glazing.values())
             + roof["annual_heat_gain_kWh"]
             + ground_floor["annual_heat_gain_kWh"]
         )

@@ -509,6 +509,12 @@ def _output_variables() -> dict:
     Timestep = Hourly to keep file sizes manageable.
     """
     vars_to_request = [
+        # Zone temperatures — both air and operative. Air drives conduction
+        # losses (UA × (T_air − T_out)); operative is what occupants feel
+        # and is the right index for comfort-band hour counts. Used by the
+        # State 1 parser to derive demand and underheat/comfort/overheat.
+        "Zone Mean Air Temperature",
+        "Zone Operative Temperature",
         "Zone Ideal Loads Supply Air Total Heating Energy",
         "Zone Ideal Loads Supply Air Total Cooling Energy",
         "Zone People Occupant Count",
