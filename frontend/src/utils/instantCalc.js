@@ -233,6 +233,373 @@ function getGValue(constructionChoices, libraryData) {
   return DEFAULT_G_VALUE
 }
 
+// ── State 1 envelope-only helpers (Brief 26 Part 3) ───────────────────────────
+
+/**
+ * Effective heat capacity per m² of GIA by CIBSE TM52 thermal-mass class.
+ * Used by the State 1 lumped-capacitance free-running temperature model.
+ * Values in J/(K·m²) GIA — quite coarse, deliberately so for fast feedback;
+ * EnergyPlus is canonical for the absolute temperature trace.
+ */
+const THERMAL_MASS_J_PER_K_PER_M2 = {
+  light:   80_000,   // steel-frame / partition-walled / lightweight
+  medium:  160_000,  // typical brick/block masonry
+  heavy:   280_000,  // exposed concrete / heavy masonry / earth
+}
+
+/**
+ * Strip a building config down to ONLY the inputs honoured by the requested
+ * State per `docs/state_contracts.md`. Any read from a forbidden input via
+ * the returned object is a contract violation — that's the whole point of
+ * routing through this helper. Sprinkle `if (mode === 'envelope-only')`
+ * around the codebase and isolation leaks. Channel one call site here.
+ *
+ * Per Brief 26 Part 3, returns:
+ *   - Geometry: length, width, num_floors, floor_height, orientation
+ *   - Glazing:  wwr, window_count
+ *   - Shading:  shading_overhang, shading_fin
+ *   - Fabric:   infiltration_ach, thermal_mass_category
+ *   - Permanent openings: openings.{face}.louvre_area_m2 + openings.site_exposure
+ *   - Location: for solar lat (also overridable from EPW)
+ *
+ * Explicitly omitted: num_bedrooms / occupancy_rate / people_per_room,
+ * openings.schedule, openings.{face}.openable_fraction, and anything in
+ * `systems.*`.
+ */
+function withMode(building, mode) {
+  if (mode !== 'envelope-only') return building
+  const ops = building?.openings ?? {}
+  // Keep only the louvre permanent-openings half of the openings dict; drop
+  // operable-window fraction + schedule entirely so the State 1 path can't
+  // see them even by accident.
+  const permanentOpenings = {
+    site_exposure: ops.site_exposure ?? 'normal',
+    north: { louvre_area_m2: ops?.north?.louvre_area_m2 ?? 0 },
+    south: { louvre_area_m2: ops?.south?.louvre_area_m2 ?? 0 },
+    east:  { louvre_area_m2: ops?.east?.louvre_area_m2  ?? 0 },
+    west:  { louvre_area_m2: ops?.west?.louvre_area_m2  ?? 0 },
+    // No `schedule`, no `openable_fraction` — state isolation.
+  }
+  return {
+    length:        building?.length,
+    width:         building?.width,
+    num_floors:    building?.num_floors,
+    floor_height:  building?.floor_height,
+    orientation:   building?.orientation,
+    wwr:           building?.wwr,
+    window_count:  building?.window_count,
+    shading_overhang: building?.shading_overhang,
+    shading_fin:      building?.shading_fin,
+    infiltration_ach:      building?.infiltration_ach,
+    thermal_mass_category: building?.thermal_mass_category ?? 'light',
+    openings:      permanentOpenings,
+    location:      building?.location,
+    // weather_file kept off — solar latitude comes from EPW location directly.
+  }
+}
+
+/**
+ * State 1 envelope-only computation per `docs/state_contracts.md` § State 1.
+ *
+ * Inputs: a building config (already filtered through withMode), constructions,
+ * library data, EPW hourly weather, pre-computed hourly solar per facade, and
+ * the project's comfort band { lower_c, upper_c }.
+ *
+ * Outputs the contract's State 1 shape:
+ *   {
+ *     state: 1, mode: 'envelope-only', inputs_used: [...],
+ *     comfort_band_used: { lower_c, upper_c },
+ *     gains:  { solar: { f1..f4, roof, total } },
+ *     losses: {
+ *       conduction: { external_wall, roof, ground_floor, glazing:{f1..f4}, thermal_bridging },
+ *       ventilation: { fabric_leakage, permanent_vents },
+ *     },
+ *     free_running: { annual_mean_c, winter_min_c, summer_max_c, hourly_temperature_c },
+ *     demand: { heating_demand_mwh, cooling_demand_mwh, underheating_hours, overheating_hours, comfort_hours },
+ *     heat_balance: { ...same gains/losses re-shaped for the Heat Balance view },
+ *   }
+ *
+ * Physics summary:
+ *   1. Solar gain per facade per hour (already in hourlySolar) × g × frame × shading.
+ *   2. Conduction loss/gain per element at the free-running zone temperature.
+ *      Thermal bridging surfaces as Y-factor × centre-of-element U × area × ΔT
+ *      (already baked into getUValue's return — kept as a separate accumulator).
+ *   3. Ventilation split: fabric_leakage from infiltration_ach × volume × ΔT,
+ *      permanent_vents from louvres only via CIBSE AM10 single-sided wind.
+ *      The two streams are NEVER combined.
+ *   4. Free-running zone temperature via lumped capacitance:
+ *      dT/dt × C_zone = Σ Q_solar - Σ Q_cond - Σ Q_vent
+ *      C_zone = thermal_mass × GIA (J/K). Discretised hour-by-hour, T_t-1 used
+ *      for the loss rates (small explicit-Euler step, stable at 1-hour Δt).
+ *   5. Demand against comfort band:
+ *      heating_demand[h] = max(0, UA·(lower_c - T_out) - Q_solar) if T_free < lower_c
+ *      cooling_demand[h] = max(0, Q_solar + UA·(T_out - upper_c)) if T_free > upper_c
+ */
+function _calculateEnvelopeOnly(building, constructions, libraryData, weatherData, hourlySolar, comfortBand) {
+  const geo = computeGeometry(building)
+  const { gia, volume, total_wall_opaque, total_glazing, glazing, wall_opaque, roof_area, ground_area } = geo
+  if (gia <= 0) return _empty()
+
+  // ── U-values (Y-factor baked in by getUValue) ─────────────────────────────
+  const u_wall  = getUValue(constructions, 'external_wall', libraryData)
+  const u_roof  = getUValue(constructions, 'roof',          libraryData)
+  const u_floor = getUValue(constructions, 'ground_floor',  libraryData)
+  const u_glaz  = getUValue(constructions, 'glazing',       libraryData)
+
+  const g_value = getGValue(constructions, libraryData)
+  const FRAME_FRACTION = 0.20  // visible glass = 80% of WWR; framed area = 20%
+  const SHADING_FACTOR = 1.0   // no shading-overhang reduction yet (carried over from State 3 path)
+
+  // ── UA products (W/K) — independent of zone temperature ───────────────────
+  const UA_wall  = u_wall  * total_wall_opaque
+  const UA_roof  = u_roof  * roof_area
+  const UA_floor = u_floor * ground_area
+  const UA_glaz  = u_glaz  * total_glazing
+  const UA_fabric = UA_wall + UA_roof + UA_floor + UA_glaz
+
+  // Thermal bridging — Y-factor uplift is already in the U-values returned
+  // by getUValue (multiplied through there). Track it separately so we can
+  // report `thermal_bridging` as its own line item per the contract.
+  // Sum of (effective U - centre U) × area across all four elements:
+  const getCentreU = (element) => {
+    const name = constructions?.[element]
+    if (name && libraryData?.constructions) {
+      const item = libraryData.constructions.find(c => c.name === name)
+      if (item?.u_value_W_per_m2K != null) return Number(item.u_value_W_per_m2K)
+    }
+    return DEFAULT_U_VALUES[element] ?? 1.0
+  }
+  const UA_bridging =
+    Math.max(0, (u_wall  - getCentreU('external_wall')) * total_wall_opaque) +
+    Math.max(0, (u_roof  - getCentreU('roof'))          * roof_area) +
+    Math.max(0, (u_floor - getCentreU('ground_floor'))  * ground_area) +
+    Math.max(0, (u_glaz  - getCentreU('glazing'))       * total_glazing)
+  // UA_fabric_centre = UA_fabric - UA_bridging (the "centre of element" portion
+  // for the State 1 conduction line items, with bridging surfaced separately)
+
+  // ── Ventilation (split) ───────────────────────────────────────────────────
+  const ach = Number(building.infiltration_ach ?? 0.5)
+  const UA_leakage = AIR_HEAT_CAPACITY * ach * volume   // W/K (Wh/K per hour)
+
+  // Permanent openings (louvres only — operable windows are State 2.5)
+  const openings = building.openings ?? {}
+  const Cd = 0.6
+  const Cw = ({ sheltered: 0.05, normal: 0.10, exposed: 0.20 })[openings.site_exposure] ?? 0.10
+  const sqrtCw = Math.sqrt(Cw)
+  const louvre_area_total = ['north','south','east','west']
+    .reduce((s, f) => s + Number(openings?.[f]?.louvre_area_m2 ?? 0), 0)
+
+  // ── Lumped-capacitance free-running temperature setup ─────────────────────
+  const thermal_mass = THERMAL_MASS_J_PER_K_PER_M2[building.thermal_mass_category ?? 'light']
+                       ?? THERMAL_MASS_J_PER_K_PER_M2.light
+  const C_zone_J = thermal_mass * gia              // J/K
+  const C_zone_Wh = C_zone_J / 3600                // Wh/K (so we can stay in Wh per hour)
+
+  // ── 8760-hour loop ────────────────────────────────────────────────────────
+  const n = weatherData.temperature.length
+  const T_hourly = new Float32Array(n)
+  let T_zone = comfortBand.lower_c        // initial condition — Jan 1 00:00 starts at lower comfort bound
+
+  // Annual accumulators (Wh — divide by 1000 at the end for kWh)
+  let acc_solar_n = 0, acc_solar_s = 0, acc_solar_e = 0, acc_solar_w = 0, acc_solar_roof = 0
+  let acc_cond_wall  = 0, acc_cond_roof = 0, acc_cond_floor = 0
+  let acc_cond_glaz_n = 0, acc_cond_glaz_s = 0, acc_cond_glaz_e = 0, acc_cond_glaz_w = 0
+  let acc_thermal_bridging = 0
+  let acc_vent_leakage = 0, acc_vent_permanent = 0
+  let acc_heating_demand_Wh = 0, acc_cooling_demand_Wh = 0
+  let underheating_hours = 0, overheating_hours = 0, comfort_hours = 0
+  let T_winter_min = Infinity, T_summer_max = -Infinity
+
+  // Per-facade UA fractions for the conduction-by-glazing-face split
+  // (proportional to glazing area on that face)
+  const glaz_face_UA = (f) => u_glaz * (glazing[f] ?? 0)
+
+  for (let h = 0; h < n; h++) {
+    const T_out = weatherData.temperature[h]
+    const v_wind = weatherData.wind_speed?.[h] ?? 0
+
+    // Solar gains through glazing per facade (Wh into the zone this hour)
+    const sol_n = hourlySolar.f1[h] * (glazing.north ?? 0) * g_value * (1 - FRAME_FRACTION) * SHADING_FACTOR
+    const sol_e = hourlySolar.f2[h] * (glazing.east  ?? 0) * g_value * (1 - FRAME_FRACTION) * SHADING_FACTOR
+    const sol_s = hourlySolar.f3[h] * (glazing.south ?? 0) * g_value * (1 - FRAME_FRACTION) * SHADING_FACTOR
+    const sol_w = hourlySolar.f4[h] * (glazing.west  ?? 0) * g_value * (1 - FRAME_FRACTION) * SHADING_FACTOR
+    const sol_roof = hourlySolar.roof[h] * roof_area * 0.05  // weak solar contribution through opaque roof
+    const Q_solar_in_Wh = sol_n + sol_e + sol_s + sol_w + sol_roof
+
+    acc_solar_n += sol_n; acc_solar_e += sol_e; acc_solar_s += sol_s; acc_solar_w += sol_w
+    acc_solar_roof += sol_roof
+
+    // Permanent-vent UA this hour (wind-driven; ach contribution to UA)
+    const Q_louvre_m3s = Cd * louvre_area_total * sqrtCw * v_wind
+    const UA_permanent = AIR_HEAT_CAPACITY * (Q_louvre_m3s * 3600)  // W/K-equivalent for this hour
+    const UA_total = UA_fabric + UA_leakage + UA_permanent
+
+    // Heat balance for the hour — losses driven by (T_zone − T_out)
+    const dT = T_zone - T_out
+    const Q_cond_walls_Wh   = (u_wall  * total_wall_opaque) * dT
+    const Q_cond_roof_Wh    = (u_roof  * roof_area)         * dT
+    const Q_cond_floor_Wh   = (u_floor * ground_area)       * dT
+    const Q_cond_glaz_n_Wh  = glaz_face_UA('north') * dT
+    const Q_cond_glaz_e_Wh  = glaz_face_UA('east')  * dT
+    const Q_cond_glaz_s_Wh  = glaz_face_UA('south') * dT
+    const Q_cond_glaz_w_Wh  = glaz_face_UA('west')  * dT
+    const Q_bridging_Wh     = UA_bridging   * dT
+    const Q_vent_leak_Wh    = UA_leakage    * dT
+    const Q_vent_perm_Wh    = UA_permanent  * dT
+
+    const Q_loss_total_Wh   = (UA_fabric + UA_leakage + UA_permanent) * dT
+
+    // Free-running temperature step (explicit Euler, hour-scale stable):
+    //   T_{t+1} = T_t + (Q_in - Q_out) / C_zone
+    // Using Wh / (Wh/K) = K.
+    T_zone = T_zone + (Q_solar_in_Wh - Q_loss_total_Wh) / C_zone_Wh
+    // Clamp to sane bounds to avoid runaway on edge cases
+    if (T_zone < -20) T_zone = -20
+    if (T_zone > 60)  T_zone = 60
+    T_hourly[h] = T_zone
+
+    // Loss accumulators — for the contract's annual losses output. Only
+    // accumulate the POSITIVE (heat-leaving-zone) direction; summer hours
+    // where the zone is cooler than outside contribute negative dT and
+    // would otherwise subtract.
+    if (dT > 0) {
+      acc_cond_wall  += Q_cond_walls_Wh
+      acc_cond_roof  += Q_cond_roof_Wh
+      acc_cond_floor += Q_cond_floor_Wh
+      acc_cond_glaz_n += Q_cond_glaz_n_Wh
+      acc_cond_glaz_e += Q_cond_glaz_e_Wh
+      acc_cond_glaz_s += Q_cond_glaz_s_Wh
+      acc_cond_glaz_w += Q_cond_glaz_w_Wh
+      acc_thermal_bridging += Q_bridging_Wh
+      acc_vent_leakage   += Q_vent_leak_Wh
+      acc_vent_permanent += Q_vent_perm_Wh
+    }
+
+    // Comfort hours + min/max temp tracking
+    const month = weatherData.month[h]
+    if (T_zone < comfortBand.lower_c)      underheating_hours++
+    else if (T_zone > comfortBand.upper_c) overheating_hours++
+    else                                   comfort_hours++
+    if (month >= 12 || month <= 2) T_winter_min = Math.min(T_winter_min, T_zone)
+    if (month >= 6  && month <= 8) T_summer_max = Math.max(T_summer_max, T_zone)
+
+    // Demand derivation: what a perfect system would need to provide to hold
+    // the zone at the comfort bound. Only counted when free-running T is
+    // outside the band (i.e., the envelope alone fails).
+    if (T_zone < comfortBand.lower_c) {
+      // Heating: UA × (lower_c - T_out) is the loss rate if held at lower_c.
+      // Solar gains offset part of it. Demand = max(0, deficit - solar).
+      const Q_loss_at_lower = UA_total * Math.max(0, comfortBand.lower_c - T_out)
+      const heating_Wh = Math.max(0, Q_loss_at_lower - Q_solar_in_Wh)
+      acc_heating_demand_Wh += heating_Wh
+    } else if (T_zone > comfortBand.upper_c) {
+      // Cooling: solar gains + heat coming IN from outside (if T_out > upper).
+      // Q_loss_at_upper sign is reversed when T_out > upper.
+      const Q_gain_at_upper = Q_solar_in_Wh + UA_total * Math.max(0, T_out - comfortBand.upper_c)
+      acc_cooling_demand_Wh += Q_gain_at_upper
+    }
+  }
+
+  // ── Aggregates ────────────────────────────────────────────────────────────
+  const r1 = (Wh) => Math.round(Wh / 1000 * 10) / 10
+  const perM2 = (Wh) => Math.round(Wh / 1000 / gia * 100) / 100
+  const T_mean = T_hourly.reduce((s, v) => s + v, 0) / n
+
+  const total_solar_Wh = acc_solar_n + acc_solar_e + acc_solar_s + acc_solar_w + acc_solar_roof
+  const total_cond_glaz_Wh = acc_cond_glaz_n + acc_cond_glaz_e + acc_cond_glaz_s + acc_cond_glaz_w
+  const total_cond_Wh = acc_cond_wall + acc_cond_roof + acc_cond_floor + total_cond_glaz_Wh + acc_thermal_bridging
+  const total_vent_Wh = acc_vent_leakage + acc_vent_permanent
+
+  // ── Heat Balance view shape (gains/losses/etc.) so the existing
+  //    HeatBalance component renders State 1 without further changes.
+  //    Heating/cooling appear in `demand` only, NOT in `gains` — per contract.
+  const heat_balance = {
+    annual: {
+      losses: {
+        external_wall:    { kwh: r1(acc_cond_wall),  kwh_per_m2: perM2(acc_cond_wall),  area_m2: Math.round(total_wall_opaque) },
+        roof:             { kwh: r1(acc_cond_roof),  kwh_per_m2: perM2(acc_cond_roof),  area_m2: Math.round(roof_area) },
+        ground_floor:     { kwh: r1(acc_cond_floor), kwh_per_m2: perM2(acc_cond_floor), area_m2: Math.round(ground_area) },
+        glazing:          { kwh: r1(total_cond_glaz_Wh), kwh_per_m2: perM2(total_cond_glaz_Wh), area_m2: Math.round(total_glazing) },
+        thermal_bridging: { kwh: r1(acc_thermal_bridging), kwh_per_m2: perM2(acc_thermal_bridging) },
+        fabric_leakage:   { kwh: r1(acc_vent_leakage), kwh_per_m2: perM2(acc_vent_leakage), ach },
+        permanent_vents:  { kwh: r1(acc_vent_permanent), kwh_per_m2: perM2(acc_vent_permanent) },
+        // No `cooling` here — State 1 has no mechanical cooling, full stop.
+      },
+      gains: {
+        solar: {
+          north: { kwh: r1(acc_solar_n), kwh_per_m2: perM2(acc_solar_n), area_m2: Math.round(glazing.north ?? 0) },
+          south: { kwh: r1(acc_solar_s), kwh_per_m2: perM2(acc_solar_s), area_m2: Math.round(glazing.south ?? 0) },
+          east:  { kwh: r1(acc_solar_e), kwh_per_m2: perM2(acc_solar_e), area_m2: Math.round(glazing.east  ?? 0) },
+          west:  { kwh: r1(acc_solar_w), kwh_per_m2: perM2(acc_solar_w), area_m2: Math.round(glazing.west  ?? 0) },
+          total_kwh: r1(total_solar_Wh),
+          total_kwh_per_m2: perM2(total_solar_Wh),
+        },
+        // No people / equipment / lighting / heating — State 1 has no gains
+        // beyond solar.
+      },
+      totals: {
+        losses_kwh: r1(total_cond_Wh + total_vent_Wh),
+        gains_kwh:  r1(total_solar_Wh),
+        losses_kwh_per_m2: perM2(total_cond_Wh + total_vent_Wh),
+        gains_kwh_per_m2:  perM2(total_solar_Wh),
+      },
+    },
+    metadata: { gia_m2: Math.round(gia) },
+  }
+
+  return {
+    state: 1,
+    mode: 'envelope-only',
+    inputs_used: [
+      'length', 'width', 'num_floors', 'floor_height', 'orientation',
+      'wwr', 'window_count', 'shading_overhang', 'shading_fin',
+      'infiltration_ach', 'thermal_mass_category',
+      'openings.site_exposure', 'openings.{face}.louvre_area_m2',
+      'constructions.{external_wall, roof, ground_floor, glazing}',
+      'weather (EPW)',
+    ],
+    comfort_band_used: { lower_c: comfortBand.lower_c, upper_c: comfortBand.upper_c },
+
+    gains: {
+      solar: {
+        f1: r1(acc_solar_n), f2: r1(acc_solar_e), f3: r1(acc_solar_s), f4: r1(acc_solar_w),
+        roof: r1(acc_solar_roof),
+        total: r1(total_solar_Wh),
+      },
+    },
+    losses: {
+      conduction: {
+        external_wall: r1(acc_cond_wall),
+        roof:          r1(acc_cond_roof),
+        ground_floor:  r1(acc_cond_floor),
+        glazing: {
+          f1: r1(acc_cond_glaz_n), f2: r1(acc_cond_glaz_e),
+          f3: r1(acc_cond_glaz_s), f4: r1(acc_cond_glaz_w),
+        },
+        thermal_bridging: r1(acc_thermal_bridging),
+      },
+      ventilation: {
+        fabric_leakage:  r1(acc_vent_leakage),
+        permanent_vents: r1(acc_vent_permanent),
+      },
+    },
+    free_running: {
+      annual_mean_c: Math.round(T_mean * 10) / 10,
+      winter_min_c:  isFinite(T_winter_min) ? Math.round(T_winter_min * 10) / 10 : null,
+      summer_max_c:  isFinite(T_summer_max) ? Math.round(T_summer_max * 10) / 10 : null,
+      hourly_temperature_c: T_hourly,
+    },
+    demand: {
+      heating_demand_mwh: Math.round(acc_heating_demand_Wh / 1_000_000 * 10) / 10,
+      cooling_demand_mwh: Math.round(acc_cooling_demand_Wh / 1_000_000 * 10) / 10,
+      underheating_hours,
+      overheating_hours,
+      comfort_hours,
+    },
+    heat_balance,
+  }
+}
+
 // ── U-value lookup ────────────────────────────────────────────────────────────
 
 const DEFAULT_U_VALUES = {
@@ -939,14 +1306,17 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
     return { ...result, state: stateNum, mode }
   }
 
-  // envelope-only stub — Brief 26 Part 3 will fill this in with the
-  // envelope-only path (no gains, no systems, no operable windows;
-  // free-running zone temp and derived demand against the project comfort
-  // band). For now, route to the existing full-model path with mode/state
-  // tags so the rest of the chain (Heat Balance, balance API) begins
-  // honouring the contract terminology without waiting for the physics.
-  // TODO(Brief 26 Part 3): implement true envelope-only path here.
-  // if (mode === 'envelope-only') return _calculateEnvelopeOnly(...)
+  // State 1 envelope-only path (Brief 26 Part 3) — strict input enforcement,
+  // free-running zone temperature, demand derived against the comfort band.
+  // Per the state contract, must produce identical output regardless of any
+  // value in gains/operation/systems. The withMode() helper enforces this.
+  if (mode === 'envelope-only') {
+    return _calculateEnvelopeOnly(
+      withMode(building, mode),
+      constructions, libraryData, weatherData, hourlySolar,
+      options.comfortBand ?? building.comfort_band ?? { lower_c: 20, upper_c: 26 },
+    )
+  }
 
   const geo = computeGeometry(building)
   const { gia, volume, total_wall_opaque, total_glazing, glazing, wall_opaque, roof_area, ground_area } = geo

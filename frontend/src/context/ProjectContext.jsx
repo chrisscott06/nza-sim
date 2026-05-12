@@ -39,6 +39,12 @@ const DEFAULT_PARAMS = {
   orientation:     0.0,
   wwr:             { north: 0.25, south: 0.25, east: 0.25, west: 0.25 },
   infiltration_ach: 0.5,
+  // Thermal mass class for the State 1 lumped-capacitance free-running
+  // temperature model (Brief 26 Part 3). One of 'light' | 'medium' | 'heavy'
+  // per CIBSE TM52 effective heat capacity bands (80/160/280 kJ/K/m²).
+  // Defaults to 'light' (steel-frame / partition-walled construction —
+  // matches HIX Bridgewater's typical massing).
+  thermal_mass_category: 'light',
   // Openings — wind-driven natural ventilation through windows and louvres.
   // Each facade can carry an always-open louvre (m²) and an operable window
   // fraction (% of glazing area). Both default off; user opts in per facade.
@@ -261,6 +267,7 @@ export function ProjectProvider({ children }) {
         west:  { left_depth_m: 0, right_depth_m: 0 },
       },
       openings: bc.openings ?? DEFAULT_PARAMS.openings,
+      thermal_mass_category: bc.thermal_mass_category ?? DEFAULT_PARAMS.thermal_mass_category,
     })
     setConstructions(project.construction_choices ?? DEFAULT_CONSTRUCTIONS)
     setSystems(migrateSystemsConfig(project.systems_config))

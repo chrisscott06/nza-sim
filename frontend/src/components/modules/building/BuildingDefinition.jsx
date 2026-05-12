@@ -638,7 +638,7 @@ function InputsColumn({ library, onInspectConstruction }) {
 // ── Main three-column layout ──────────────────────────────────────────────────
 
 export default function BuildingDefinition() {
-  const { params, constructions, systems, currentProjectId, saveStatus } = useContext(ProjectContext)
+  const { params, constructions, systems, currentProjectId, saveStatus, comfortBand } = useContext(ProjectContext)
   const simCtx = useContext(SimulationContext)
   const [library, setLibrary] = useState([])
   const [libraryData, setLibraryData] = useState({})
@@ -655,12 +655,14 @@ export default function BuildingDefinition() {
   // Building module is locked to envelope-only mode (State 1) per Brief 26
   // and the state contract. The envelope-only path in calculateInstant
   // ignores gains, systems, operable windows etc. — the Building view is
-  // purely envelope-vs-weather. Brief 26 Part 3 implements the real State 1
-  // physics; until then the mode flag tags the output so downstream views
-  // filter correctly via utils/stateMode.js.
+  // purely envelope-vs-weather. Comfort band drives the demand derivation
+  // (Part 1) at the lower/upper bound rather than against system setpoints.
   const instantResult = useMemo(
-    () => calculateInstant(params, constructions, systems, libraryData, weatherData, hourlySolar, null, { mode: 'envelope-only' }),
-    [params, constructions, systems, libraryData, weatherData, hourlySolar]
+    () => calculateInstant(params, constructions, systems, libraryData, weatherData, hourlySolar, null, {
+      mode: 'envelope-only',
+      comfortBand,
+    }),
+    [params, constructions, systems, libraryData, weatherData, hourlySolar, comfortBand]
   )
 
   // Simulation balance — fetched per (projectId, runId). Lets the Live |
