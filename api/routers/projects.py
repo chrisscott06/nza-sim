@@ -58,6 +58,10 @@ class UpdateProjectRequest(BaseModel):
     construction_choices: dict | None = None
     schedule_assignments: dict | None = None
     weather_file: str | None = None
+    # Brief 26 Part 1: comfort band — first-class project field per state contract.
+    # Validation enforced in update_project (8°C ≤ lower < upper ≤ 32°C).
+    comfort_band_lower_c: float | None = None
+    comfort_band_upper_c: float | None = None
 
 
 class UpdateBuildingRequest(BaseModel):
@@ -80,6 +84,13 @@ class UpdateSystemsRequest(BaseModel):
 
 def _row_to_project(row) -> dict:
     """Convert a database row to a project dict."""
+    # Safe column lookup — older rows may not have the comfort band columns
+    # until the ALTER TABLE migration runs on next init_db.
+    def _maybe(col, default=None):
+        try:
+            return row[col]
+        except (KeyError, IndexError):
+            return default
     return {
         "id":                   row["id"],
         "name":                 row["name"],
@@ -92,6 +103,8 @@ def _row_to_project(row) -> dict:
         "schedule_assignments": json.loads(row["schedule_assignments"]) if row["schedule_assignments"] else None,
         "weather_file":         row["weather_file"],
         "metadata":             json.loads(row["metadata"]) if row["metadata"] else None,
+        "comfort_band_lower_c": _maybe("comfort_band_lower_c", 20.0) or 20.0,
+        "comfort_band_upper_c": _maybe("comfort_band_upper_c", 26.0) or 26.0,
     }
 
 
@@ -257,11 +270,27 @@ async def update_project(project_id: str, request: UpdateProjectRequest):
         schedule_assignments = request.schedule_assignments if request.schedule_assignments is not None else current["schedule_assignments"]
         weather_file         = request.weather_file if request.weather_file is not None else current["weather_file"]
 
+        # Comfort band (Brief 26 Part 1). Validate together so we catch
+        # cross-field violations (lower >= upper) even when only one side is
+        # being updated.
+        comfort_lower = request.comfort_band_lower_c if request.comfort_band_lower_c is not None else current["comfort_band_lower_c"]
+        comfort_upper = request.comfort_band_upper_c if request.comfort_band_upper_c is not None else current["comfort_band_upper_c"]
+        # State contract: 8°C ≤ lower < upper ≤ 32°C
+        if not (8.0 <= comfort_lower < comfort_upper <= 32.0):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"comfort_band invalid: requires 8°C ≤ lower < upper ≤ 32°C "
+                    f"(got lower={comfort_lower}, upper={comfort_upper})"
+                ),
+            )
+
         await db.execute(
             """
             UPDATE projects SET
                 name = ?, description = ?, building_config = ?, systems_config = ?,
                 construction_choices = ?, schedule_assignments = ?, weather_file = ?,
+                comfort_band_lower_c = ?, comfort_band_upper_c = ?,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
             """,
@@ -273,6 +302,8 @@ async def update_project(project_id: str, request: UpdateProjectRequest):
                 json.dumps(construction_choices),
                 json.dumps(schedule_assignments) if schedule_assignments is not None else None,
                 weather_file,
+                comfort_lower,
+                comfort_upper,
                 project_id,
             ),
         )

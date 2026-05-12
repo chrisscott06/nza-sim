@@ -184,6 +184,10 @@ export function ProjectProvider({ children }) {
   const [params, setParams]           = useState(DEFAULT_PARAMS)
   const [constructions, setConstructions] = useState(DEFAULT_CONSTRUCTIONS)
   const [systems, setSystems]         = useState(DEFAULT_SYSTEMS)
+  // ── Comfort band (Brief 26 Part 1, state contract project.comfort_band)
+  //    Drives State 1/2/2.5 demand calculation in the absence of Systems
+  //    setpoints. Defaults per the contract: 20°C heating / 26°C cooling.
+  const [comfortBand, setComfortBandState] = useState({ lower_c: 20, upper_c: 26 })
 
   // ── Save status indicator
   const [saveStatus, setSaveStatus]   = useState('idle') // 'idle'|'saving'|'saved'|'error'
@@ -260,6 +264,12 @@ export function ProjectProvider({ children }) {
     })
     setConstructions(project.construction_choices ?? DEFAULT_CONSTRUCTIONS)
     setSystems(migrateSystemsConfig(project.systems_config))
+    // Comfort band — fall back to contract defaults (20 / 26) if the row
+    // pre-dates the Brief 26 Part 1 migration.
+    setComfortBandState({
+      lower_c: Number(project.comfort_band_lower_c ?? 20),
+      upper_c: Number(project.comfort_band_upper_c ?? 26),
+    })
   }
 
   // ── Startup: fetch project list, load most recent (or create default) ────
@@ -382,6 +392,30 @@ export function ProjectProvider({ children }) {
       const next = { ...c, [key]: value }
       _scheduleSave(null, { construction_choices: next })
       _broadcast({ constructions: next })
+      return next
+    })
+  }, [currentProjectId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── setComfortBand ───────────────────────────────────────────────────────
+  // Updates the project's comfort band (Brief 26 Part 1). Accepts a partial:
+  // `{ lower_c }` or `{ upper_c }` or both. Validates against the contract
+  // bounds (8°C ≤ lower < upper ≤ 32°C) on the client; backend re-validates.
+  const setComfortBand = useCallback((partial) => {
+    setComfortBandState(prev => {
+      const next = {
+        lower_c: Number(partial.lower_c ?? prev.lower_c),
+        upper_c: Number(partial.upper_c ?? prev.upper_c),
+      }
+      // Client-side bounds check — backend repeats this. Bad input is
+      // silently rejected here (return prev) so a half-typed slider value
+      // doesn't fire a PUT that bounces back as 400.
+      if (!(8.0 <= next.lower_c && next.lower_c < next.upper_c && next.upper_c <= 32.0)) {
+        return prev
+      }
+      _scheduleSave(null, {
+        comfort_band_lower_c: next.lower_c,
+        comfort_band_upper_c: next.upper_c,
+      })
       return next
     })
   }, [currentProjectId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -522,6 +556,10 @@ export function ProjectProvider({ children }) {
       params,
       constructions,
       systems,
+
+      // Comfort band (Brief 26 Part 1) — project-level State 1 demand bounds.
+      comfortBand,
+      setComfortBand,
 
       // Update actions
       updateParam,

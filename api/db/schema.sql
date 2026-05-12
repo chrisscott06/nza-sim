@@ -13,7 +13,12 @@ CREATE TABLE IF NOT EXISTS projects (
     construction_choices JSON NOT NULL, -- which library constructions are assigned
     schedule_assignments JSON,         -- which library schedules are assigned per zone type
     weather_file TEXT,                 -- filename of assigned weather file
-    metadata JSON                      -- any extra project-level metadata
+    metadata JSON,                     -- any extra project-level metadata
+    -- Comfort band (Brief 26 Part 1): heating / cooling thresholds for State 1
+    -- demand calculation in the absence of Systems setpoints. Per the state
+    -- contract, every project carries these as first-class fields.
+    comfort_band_lower_c REAL DEFAULT 20.0,
+    comfort_band_upper_c REAL DEFAULT 26.0
 );
 
 -- Library items (global, reusable across projects)

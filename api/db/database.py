@@ -122,6 +122,18 @@ async def init_db() -> None:
             # Column already exists — this is expected on subsequent startups
             pass
 
+        # Brief 26 Part 1: comfort_band columns on projects.
+        # State contract requires `project.comfort_band.{lower_c, upper_c}` as a
+        # first-class field. Existing projects backfill with 20/26 defaults.
+        for col, default in (("comfort_band_lower_c", 20.0), ("comfort_band_upper_c", 26.0)):
+            try:
+                await db.execute(
+                    f"ALTER TABLE projects ADD COLUMN {col} REAL DEFAULT {default}"
+                )
+                await db.commit()
+            except Exception:
+                pass  # already present
+
         # Seed constructions from nza_engine library
         await _seed_constructions(db)
 
