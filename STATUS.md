@@ -2,6 +2,24 @@
 
 ## Last completed
 
+### ⚠️ Reference numbers prior to 2026-05-13 are invalid
+
+Every simulation run and every live-calc result produced before commit `779a9df`
+used the broken EPW parser (columns shifted by one, DNI labelled as DHI) AND
+the inverted azimuth in `sunPosition`. Any numbers cited from before that date
+— annual EUI, fuel split, CRREM stranding year, scenario comparisons, baselines,
+docs, screenshots — should be treated as approximate and **re-run before being
+benchmarked against**. The errors mostly cancelled in some cases (north and
+south both over-predicted; east and west swapped but symmetric) so output
+*looked* plausible, but underlying physics was wrong.
+
+This applies to all simulation history, brief verification figures (Brief 07
+TM54 ranges, Brief 21 Heat Balance numbers, Brief 25 openings A/B), and any
+reference baselines in `docs/briefs/archive/`. Don't trust pre-2.5 outputs
+without re-running.
+
+---
+
 **Brief 26 Part 2.5 (geometry alignment + solar physics fixes)** — 2026-05-13.
 
 - **2.5a:** Swapped 3D viewer X/Z axes so building runs east-west (X=length,

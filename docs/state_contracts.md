@@ -735,4 +735,6 @@ These are unresolved and need decisions before the relevant brief is written:
 
 5. **Schedule preset library schema — what does the preset library look like and where does it live?** Referenced in State 2 UI rules. Needs a schema before State 2 brief.
 
+6. **Expected verification ranges for State 2, 2.5, 3, 4** — currently only State 1 has documented Bridgewater bounds (heating demand 30–60 MWh, cooling 5–15 MWh, etc.). Brief 26 Part 2.5 caught three compounding bugs only because the contract had State 1 ranges to compare against — engine-agreement alone wouldn't have flagged them since both engines share `geometry.py`. Before each subsequent state is implemented, document its expected ranges (heating/cooling demand, EUI bands, fuel split, key flow magnitudes) so the same discipline applies.
+
 These are tracked as TODOs in this document and resolved as briefs require them.
