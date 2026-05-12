@@ -8,9 +8,11 @@
 
 import { useState, useContext, useEffect, useMemo, useRef, useCallback } from 'react'
 import { NavLink } from 'react-router-dom'
-import { PanelRightClose, PanelRightOpen, Pencil, Lock, Unlock } from 'lucide-react'
+import { Pencil, Lock, Unlock } from 'lucide-react'
 import BuildingViewer3D from './BuildingViewer3D.jsx'
-import LiveResultsPanel from './LiveResultsPanel.jsx'
+// LiveResultsPanel removed — premature at the Building stage (no systems/gains
+// defined yet). EUI / fuel split / monthly bars now live in /results after
+// a simulation has actually been run. See docs/briefs/Brief_24_Building_Module.md.
 import ExpandedSankeyOverlay from './ExpandedSankeyOverlay.jsx'
 import HeatBalance from '../balance/HeatBalance.jsx'
 import ConstructionInspector from '../../library/ConstructionInspector.jsx'
@@ -351,19 +353,16 @@ function InputsColumn({ library, onInspectConstruction }) {
     }
   }
 
-  // ── Openings — per-facade Include memory ──────────────────────────────────
+  // ── Permanent openings (louvres) — per-facade Include memory ──────────────
+  // Operable windows + window-open schedule now live in /operation (the
+  // Ventilation & Operation module). They still write to params.openings
+  // but the UI for them is no longer here.
   const openings = params.openings ?? {}
   const [louvreMemory, setLouvreMemory] = useState(() => ({
     north: (openings?.north?.louvre_area_m2 ?? 0) > 0 ? openings.north.louvre_area_m2 : 0.5,
     south: (openings?.south?.louvre_area_m2 ?? 0) > 0 ? openings.south.louvre_area_m2 : 0.5,
     east:  (openings?.east?.louvre_area_m2  ?? 0) > 0 ? openings.east.louvre_area_m2  : 0.5,
     west:  (openings?.west?.louvre_area_m2  ?? 0) > 0 ? openings.west.louvre_area_m2  : 0.5,
-  }))
-  const [openableMemory, setOpenableMemory] = useState(() => ({
-    north: (openings?.north?.openable_fraction ?? 0) > 0 ? openings.north.openable_fraction : 0.30,
-    south: (openings?.south?.openable_fraction ?? 0) > 0 ? openings.south.openable_fraction : 0.30,
-    east:  (openings?.east?.openable_fraction  ?? 0) > 0 ? openings.east.openable_fraction  : 0.30,
-    west:  (openings?.west?.openable_fraction  ?? 0) > 0 ? openings.west.openable_fraction  : 0.30,
   }))
 
   const setLouvreFor = (face, v) => {
@@ -380,29 +379,8 @@ function InputsColumn({ library, onInspectConstruction }) {
     }
   }
 
-  const setOpenableFor = (face, v) => {
-    if (v > 0) setOpenableMemory(m => ({ ...m, [face]: v }))
-    updateParam('openings', { [face]: { openable_fraction: v } })
-  }
-  const toggleOpenableInclude = (face, include) => {
-    const current = Number(openings?.[face]?.openable_fraction ?? 0)
-    if (include) {
-      setOpenableFor(face, openableMemory[face] > 0 ? openableMemory[face] : 0.30)
-      // If schedule is still 'Never', windows would be configured but never
-      // actually open (Q_window stays 0, no heat loss). Auto-bump to a sensible
-      // default so the engine sees flow as soon as the user enables an opening.
-      if ((openings.schedule ?? 'never') === 'never') {
-        updateParam('openings', { schedule: 'occupied' })
-      }
-    } else {
-      if (current > 0) setOpenableMemory(m => ({ ...m, [face]: current }))
-      setOpenableFor(face, 0)
-    }
-  }
-
   const anyOpenings = ['north','south','east','west'].some(f =>
-    (openings?.[f]?.louvre_area_m2 ?? 0) > 0 ||
-    (openings?.[f]?.openable_fraction ?? 0) > 0
+    (openings?.[f]?.louvre_area_m2 ?? 0) > 0
   )
 
   // Derived metrics
@@ -565,39 +543,25 @@ function InputsColumn({ library, onInspectConstruction }) {
           })}
         </CollapsibleSection>
 
-        {/* ── Openings ── Wind-driven natural ventilation: louvres always-open,
-              operable window fraction on a schedule. Single-zone, no stack term —
-              flow ∝ Cd · A · √Cw · v_wind (CIBSE AM10 single-sided wind). */}
-        <CollapsibleSection title={`Openings${anyOpenings ? ' · active' : ''}`} defaultOpen={anyOpenings}>
-          <div className="grid grid-cols-2 gap-2 mb-2">
-            <div>
-              <label className="text-xxs text-mid-grey block mb-0.5">Site exposure</label>
-              <select
-                value={openings.site_exposure ?? 'normal'}
-                onChange={e => updateParam('openings', { site_exposure: e.target.value })}
-                className="w-full px-2 py-1 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-teal cursor-pointer"
-              >
-                <option value="sheltered">Sheltered</option>
-                <option value="normal">Normal</option>
-                <option value="exposed">Exposed</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xxs text-mid-grey block mb-0.5">Window-open schedule</label>
-              <select
-                value={openings.schedule ?? 'never'}
-                onChange={e => updateParam('openings', { schedule: e.target.value })}
-                className="w-full px-2 py-1 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-teal cursor-pointer"
-              >
-                <option value="never">Never</option>
-                <option value="occupied">Occupied hours</option>
-                <option value="summer_day">Summer day only</option>
-                <option value="always">Always open</option>
-              </select>
-            </div>
+        {/* ── Permanent openings ── Always-open envelope holes (louvres,
+              trickle vents, similar). Operable windows + schedule live in
+              /operation — they're an operational behaviour, not envelope geometry.
+              Single-zone wind-driven flow: Q = Cd · A · √Cw · v_wind. */}
+        <CollapsibleSection title={`Permanent openings${anyOpenings ? ' · active' : ''}`} defaultOpen={anyOpenings}>
+          <div className="mb-2">
+            <label className="text-xxs text-mid-grey block mb-0.5">Site exposure</label>
+            <select
+              value={openings.site_exposure ?? 'normal'}
+              onChange={e => updateParam('openings', { site_exposure: e.target.value })}
+              className="w-full px-2 py-1 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-teal cursor-pointer"
+            >
+              <option value="sheltered">Sheltered</option>
+              <option value="normal">Normal</option>
+              <option value="exposed">Exposed</option>
+            </select>
           </div>
 
-          <p className="text-xxs text-mid-grey mt-2 mb-1">Louvres (always open, m²)</p>
+          <p className="text-xxs text-mid-grey mt-2 mb-1">Louvres (always open, m² per facade)</p>
           {FACADES.map(fac => {
             const area = Number(openings?.[fac.key]?.louvre_area_m2 ?? 0)
             const included = area > 0
@@ -629,42 +593,6 @@ function InputsColumn({ library, onInspectConstruction }) {
                   title={`${facadeLabel(fac.num, orientation)} louvre area (m²)`}
                 />
                 <span className={`text-xxs w-4 ${included ? 'text-mid-grey' : 'text-light-grey'}`}>m²</span>
-              </div>
-            )
-          })}
-
-          <p className="text-xxs text-mid-grey mt-3 mb-1">Openable windows (% of glazing)</p>
-          {FACADES.map(fac => {
-            const frac = Number(openings?.[fac.key]?.openable_fraction ?? 0)
-            const glazingOn = (wwr[fac.key] ?? 0) > 0
-            // Openable windows need glass to open — gate the row on glazing.
-            const included = frac > 0 && glazingOn
-            const disabled = !glazingOn
-            return (
-              <div key={`openable-${fac.key}`} className="flex items-center gap-1 mb-1">
-                <input
-                  type="checkbox"
-                  checked={included}
-                  onChange={e => toggleOpenableInclude(fac.key, e.target.checked)}
-                  disabled={disabled}
-                  className="accent-navy w-3 h-3 flex-shrink-0 disabled:opacity-30"
-                  title={disabled
-                    ? `${facadeLabel(fac.num, orientation)} has no glazing — enable it in Glazing first`
-                    : `Include openable windows on ${facadeLabel(fac.num, orientation)}`}
-                />
-                <span className={`text-xxs w-14 flex-shrink-0 ${included ? 'text-navy' : 'text-light-grey'}`}>
-                  {facadeLabel(fac.num, orientation)}
-                </span>
-                <input
-                  type="range" min={0} max={100} step={1}
-                  value={Math.round(frac * 100)}
-                  onChange={e => setOpenableFor(fac.key, Number(e.target.value) / 100)}
-                  disabled={!included}
-                  className="flex-1 h-[3px] accent-navy disabled:opacity-30"
-                />
-                <span className={`text-xxs w-9 text-right tabular-nums ${included ? 'text-navy' : 'text-light-grey'}`}>
-                  {disabled ? '—' : `${Math.round(frac * 100)}%`}
-                </span>
               </div>
             )
           })}
@@ -757,8 +685,7 @@ export default function BuildingDefinition() {
   }, [layout])
 
   const setLeft       = (dx) => setLayout(l => ({ ...l, left:  clamp(l.left  + dx, LEFT_MIN,  LEFT_MAX) }))
-  const setRight      = (dx) => setLayout(l => ({ ...l, right: clamp(l.right - dx, RIGHT_MIN, RIGHT_MAX) }))
-  const toggleRight   = () => setLayout(l => ({ ...l, rightHidden: !l.rightHidden }))
+  // setRight + toggleRight removed with the Live Results Panel.
   const setCentreView = (v) => setLayout(l => ({ ...l, centre: v }))
 
   return (
@@ -791,18 +718,6 @@ export default function BuildingDefinition() {
           </button>
         </div>
 
-        {/* Right-pane hide/show — sits on top so it's always reachable */}
-        <button
-          onClick={toggleRight}
-          className="absolute top-2 right-2 z-10 flex items-center gap-1 px-2 py-1 rounded bg-white border border-light-grey shadow-sm text-xxs text-mid-grey hover:text-navy transition-colors"
-          title={layout.rightHidden ? 'Show live results' : 'Hide live results'}
-        >
-          {layout.rightHidden
-            ? <PanelRightOpen size={11} />
-            : <PanelRightClose size={11} />}
-          {layout.rightHidden ? 'Show results' : 'Hide results'}
-        </button>
-
         {layout.centre === '3d' ? (
           <BuildingViewer3D params={params} />
         ) : (
@@ -817,16 +732,6 @@ export default function BuildingDefinition() {
           </div>
         )}
       </div>
-
-      {/* Right: live results (hidable) */}
-      {!layout.rightHidden && (
-        <>
-          <ResizeHandle onResize={setRight} />
-          <div className="flex-shrink-0" style={{ width: layout.right }}>
-            <LiveResultsPanel libraryData={libraryData} />
-          </div>
-        </>
-      )}
 
       {/* Expanded Sankey overlay — covers centre + right columns */}
       {showSankey && sankeyResult && (

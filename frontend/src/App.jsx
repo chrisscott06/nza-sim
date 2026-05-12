@@ -9,6 +9,7 @@ import ProjectDashboard from './pages/ProjectDashboard.jsx'
 import PlaceholderPage from './pages/PlaceholderPage.jsx'
 import PopOutResults from './pages/PopOutResults.jsx'
 import BuildingDefinition from './components/modules/building/BuildingDefinition.jsx'
+import OperationModule    from './components/modules/OperationModule.jsx'
 import InformationModule  from './components/modules/InformationModule.jsx'
 import ResultsDashboard from './components/modules/results/ResultsDashboard.jsx'
 import SystemsZones from './components/modules/SystemsZones.jsx'
@@ -35,6 +36,7 @@ export default function App() {
                 <Route path="/project"      element={<ErrorBoundary moduleName="Project Dashboard"><ProjectDashboard /></ErrorBoundary>} />
                 <Route path="/information" element={<ErrorBoundary moduleName="Information"><InformationModule /></ErrorBoundary>} />
                 <Route path="/building"    element={<ErrorBoundary moduleName="Building Definition"><BuildingDefinition /></ErrorBoundary>} />
+                <Route path="/operation"   element={<ErrorBoundary moduleName="Operation"><OperationModule /></ErrorBoundary>} />
                 <Route path="/systems"   element={<ErrorBoundary moduleName="Systems & Zones"><SystemsZones /></ErrorBoundary>} />
                 <Route path="/profiles"  element={<ErrorBoundary moduleName="Profiles Editor"><ProfilesEditor /></ErrorBoundary>} />
                 <Route path="/consumption" element={<ErrorBoundary moduleName="Consumption"><ConsumptionManager /></ErrorBoundary>} />
