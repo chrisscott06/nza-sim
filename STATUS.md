@@ -2,6 +2,50 @@
 
 ## Last completed
 
+**Brief 26 Part 2.5 (geometry alignment + solar physics fixes)** — 2026-05-13.
+
+- **2.5a:** Swapped 3D viewer X/Z axes so building runs east-west (X=length,
+  Z=width). N/S faces are now LONG (matching EP geometry.py + instantCalc.js).
+  Was: X=width / Z=length, opposite of every other engine.
+- **2.5b:** F1-F4 camera buttons now rotate with `params.orientation` so each
+  preset always shows its own (rotated) face dead-on.
+- **2.5c:** Per-face billboard labels (drei `Billboard` + `Text`) showing
+  `F# — compass`, `dims · area`, `WWR % · azimuth°`. Track faces through
+  rotation, billboard to camera.
+- **2.5d:** Two real physics bugs found and fixed:
+  1. **`sunPosition` azimuth was inverted by 180°.** Formula labelled as
+     "from south" actually returned angle from north, and code added another π.
+     Net: solar noon sun rendered as pointing north → north facades got south
+     sun, vice versa. Fixed by relabelling and using `azimuth = afternoon ?
+     2π − azFromN : azFromN`.
+  2. **EPW parser columns off by one** — `parts[13]` is GHI per spec but
+     was labelled `direct_normal`; DHI (column 15) was never read; DNI (14)
+     was labelled `diffuse_horizontal`. Pre-fix DHI sum was 1165 kWh/m²/yr
+     (≈ 2× realistic). Now: DNI 1165, DHI 491. Both within UK norms.
+
+### Per-facade annual incident solar (Bridgewater, Yeovilton TMYx, post-fix)
+
+| Facade | UK norm | Computed |
+|---|---:|---:|
+| N (orient=0) | 250-350 | 379 |
+| E (orient=0) | 450-600 | 630 |
+| S (orient=0) | 700-900 | 889 |
+| W (orient=0) | 450-600 | 711 |
+| Roof | 900-1100 | 1075 |
+| F1 NE (orient=42) | 350-450 | 439 |
+| F2 SE (orient=42) | 650-800 | 797 |
+| F3 SW (orient=42) | 650-800 | 873 |
+| F4 NW (orient=42) | 350-450 | 516 |
+
+All within or slightly above the upper edge of UK ranges (consistent with
+Yeovilton TMYx including recent warmer years). North slightly over-predicted
+because of isotropic-sky diffuse model — known limitation, acceptable.
+
+Solar magnitude bug closed. For HIX (WWR 0/1/1/1 on N/E/S/W, orient=42°):
+F2 SE (long × 100% × SE sun) ≈ 612k kWh/yr — largest by far, as expected.
+
+---
+
 **Brief 23 (partial)** — Debug EnergyPlus shading not visibly applied (2026-05-06). All three hypotheses tested; none produced solar reduction. Open issue carried over.
 
 **Brief 23 findings:**

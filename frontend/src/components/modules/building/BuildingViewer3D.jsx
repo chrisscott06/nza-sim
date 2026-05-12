@@ -1,6 +1,6 @@
 import { useRef, useMemo, useState, Suspense, Component } from 'react'
 import { Canvas, useFrame, useLoader } from '@react-three/fiber'
-import { OrbitControls, Environment, Sky, useTexture, Edges, ContactShadows } from '@react-three/drei'
+import { OrbitControls, Environment, Sky, useTexture, Edges, ContactShadows, Billboard, Text } from '@react-three/drei'
 import * as THREE from 'three'
 import { getSolarRadiation, SOLAR_BY_COMPASS } from '../../../utils/instantCalc.js'
 
@@ -48,9 +48,18 @@ function Building({ params, solarOverlay, onFacadeHover }) {
 
   const totalHeight = num_floors * floor_height
 
-  // Derived
-  const hw = length / 2
-  const hd = width / 2
+  // Axis convention (Brief 26 Part 2.5 — matches EP geometry.py and
+  // instantCalc.js):
+  //   X axis = length (east-west) → building's LONG dimension
+  //   Z axis = width  (north-south) → building's SHORT dimension
+  //   +Z face = North (60m wide for HIX), +X face = East (15m wide for HIX)
+  //
+  // Prior to 2.5 this was flipped (X=width, Z=length), which made the 3D
+  // viewer disagree with the simulation and live calc — the north face was
+  // rendered short while the calc treated it as long, producing the F3>F2
+  // solar magnitude bug.
+  const halfL = length / 2   // half-extent along X
+  const halfW = width / 2    // half-extent along Z
 
   // Individual window panels per facade — with recessed reveal frames
   // Window height scales with WWR: at ≤80% use 60% height; above 80% scale up to 95% at 100%
@@ -82,7 +91,9 @@ function Building({ params, solarOverlay, onFacadeHover }) {
       const FD = 0.08  // reveal depth — frame protrudes 80mm outward from wall surface
 
       // Wall face distance from origin along the perpendicular axis
-      const wallFace  = axis === 'z' ? hw : hd
+      // axis='z' (N/S face perpendicular to Z): wall at z = ±halfW = ±width/2
+      // axis='x' (E/W face perpendicular to X): wall at x = ±halfL = ±length/2
+      const wallFace  = axis === 'z' ? halfW : halfL
       // Centre of the frame box (half FD out from wall surface, in the outward direction)
       const frameCtr  = sign * (wallFace + FD / 2)
       // Glass sits just 10mm in front of wall surface (inside the frame reveal)
@@ -152,19 +163,20 @@ function Building({ params, solarOverlay, onFacadeHover }) {
       }
       return <>{panels}</>
     }
-  }, [num_floors, floor_height, hd, hw])
+  }, [num_floors, floor_height, halfL, halfW])
 
-  // Floor-line edges for depth
+  // Floor-line edges for depth — vertices on the building footprint corners.
+  // X spans ±halfL (length axis), Z spans ±halfW (width axis).
   const floorLines = useMemo(() => {
     const lines = []
     for (let f = 1; f < num_floors; f++) {
       const y = f * floor_height
       const pts = [
-        new THREE.Vector3(-hd, y, -hw),
-        new THREE.Vector3( hd, y, -hw),
-        new THREE.Vector3( hd, y,  hw),
-        new THREE.Vector3(-hd, y,  hw),
-        new THREE.Vector3(-hd, y, -hw),
+        new THREE.Vector3(-halfL, y, -halfW),
+        new THREE.Vector3( halfL, y, -halfW),
+        new THREE.Vector3( halfL, y,  halfW),
+        new THREE.Vector3(-halfL, y,  halfW),
+        new THREE.Vector3(-halfL, y, -halfW),
       ]
       const geom = new THREE.BufferGeometry().setFromPoints(pts)
       lines.push(<line key={f} geometry={geom}>
@@ -172,18 +184,20 @@ function Building({ params, solarOverlay, onFacadeHover }) {
       </line>)
     }
     return lines
-  }, [num_floors, floor_height, hd, hw])
+  }, [num_floors, floor_height, halfL, halfW])
 
   // Facade metadata for hover tooltip (BoxGeometry materialIndex order: +X,-X,+Y,-Y,+Z,-Z)
-  // Face area: East/West = length × totalHeight; North/South = width × totalHeight
-  // F1=north, F2=east, F3=south, F4=west
+  // Brief 26 Part 2.5 axis convention: X=length, Z=width.
+  //   North/South faces (perpendicular to Z) span X = length → LONG (60m for HIX)
+  //   East/West faces  (perpendicular to X) span Z = width  → SHORT (15m for HIX)
+  // F1=north, F2=east, F3=south, F4=west (compass label rotates with orientation)
   const facadeMap = [
-    { label: facadeLabel(2, orientation), key: 'east',  faceW: length, area: length * totalHeight, wwrVal: wwr.east  },  // +X
-    { label: facadeLabel(4, orientation), key: 'west',  faceW: length, area: length * totalHeight, wwrVal: wwr.west  },  // -X
+    { label: facadeLabel(2, orientation), key: 'east',  faceW: width,  area: width  * totalHeight, wwrVal: wwr.east  },  // +X
+    { label: facadeLabel(4, orientation), key: 'west',  faceW: width,  area: width  * totalHeight, wwrVal: wwr.west  },  // -X
     null,  // +Y top — not a facade
     null,  // -Y bottom
-    { label: facadeLabel(1, orientation), key: 'north', faceW: width,  area: width  * totalHeight, wwrVal: wwr.north },  // +Z
-    { label: facadeLabel(3, orientation), key: 'south', faceW: width,  area: width  * totalHeight, wwrVal: wwr.south },  // -Z
+    { label: facadeLabel(1, orientation), key: 'north', faceW: length, area: length * totalHeight, wwrVal: wwr.north },  // +Z
+    { label: facadeLabel(3, orientation), key: 'south', faceW: length, area: length * totalHeight, wwrVal: wwr.south },  // -Z
   ]
 
   return (
@@ -204,7 +218,7 @@ function Building({ params, solarOverlay, onFacadeHover }) {
         }}
         onPointerLeave={() => onFacadeHover?.(null)}
       >
-        <boxGeometry args={[width, totalHeight, length]} />
+        <boxGeometry args={[length, totalHeight, width]} />
         {/* +X = East */}
         <meshStandardMaterial attach="material-0" color={solarFaceColor('east',  orientation, solarOverlay)} roughness={0.9} metalness={0} />
         {/* -X = West */}
@@ -222,14 +236,14 @@ function Building({ params, solarOverlay, onFacadeHover }) {
 
       {/* Roof cap — slightly wider for overhang effect */}
       <mesh position={[0, totalHeight + 0.05, 0]} castShadow receiveShadow>
-        <boxGeometry args={[width + 0.4, 0.2, length + 0.4]} />
+        <boxGeometry args={[length + 0.4, 0.2, width + 0.4]} />
         <meshStandardMaterial color={COLORS.roof} roughness={0.85} metalness={0} />
         <Edges color={COLORS.edges} threshold={15} />
       </mesh>
 
       {/* Base plate — raised platform extending 2m beyond footprint on all sides */}
       <mesh position={[0, -0.15, 0]} receiveShadow>
-        <boxGeometry args={[width + 4, 0.3, length + 4]} />
+        <boxGeometry args={[length + 4, 0.3, width + 4]} />
         <meshStandardMaterial color={COLORS.basePlate} roughness={0.95} metalness={0} />
         <Edges color={COLORS.edges} threshold={15} />
       </mesh>
@@ -237,37 +251,37 @@ function Building({ params, solarOverlay, onFacadeHover }) {
       {/* Floor lines */}
       {floorLines}
 
-      {/* Glazing — North face (positive Z) */}
-      <GlassFace axis="z" sign={1}  wwr={wwr.north} faceW={width}  count={window_count?.north ?? 4} />
+      {/* Glazing — North face (positive Z). N/S faces are LONG: span X = length. */}
+      <GlassFace axis="z" sign={1}  wwr={wwr.north} faceW={length} count={window_count?.north ?? 8} />
       {/* Glazing — South face (negative Z) */}
-      <GlassFace axis="z" sign={-1} wwr={wwr.south} faceW={width}  count={window_count?.south ?? 4} />
-      {/* Glazing — East face (positive X) */}
-      <GlassFace axis="x" sign={1}  wwr={wwr.east}  faceW={length} count={window_count?.east  ?? 8} />
+      <GlassFace axis="z" sign={-1} wwr={wwr.south} faceW={length} count={window_count?.south ?? 8} />
+      {/* Glazing — East face (positive X). E/W faces are SHORT: span Z = width. */}
+      <GlassFace axis="x" sign={1}  wwr={wwr.east}  faceW={width}  count={window_count?.east  ?? 3} />
       {/* Glazing — West face (negative X) */}
-      <GlassFace axis="x" sign={-1} wwr={wwr.west}  faceW={length} count={window_count?.west  ?? 8} />
+      <GlassFace axis="x" sign={-1} wwr={wwr.west}  faceW={width}  count={window_count?.west  ?? 3} />
 
       {/* Per-window shading reveals — 4-edge frames extruding outward by
           shading_overhang.depth_m for each facade. Mirrors GlassFace
           window-placement maths so frames line up exactly. */}
       <WindowShadingFrames
-        axis="z" sign={1}  wwr={wwr.north} faceW={width}  count={window_count?.north ?? 4}
+        axis="z" sign={1}  wwr={wwr.north} faceW={length} count={window_count?.north ?? 8}
         depth={Number((params?.shading_overhang?.north ?? {}).depth_m ?? 0)}
-        floor_height={floor_height} num_floors={num_floors} hw={hw} hd={hd}
+        floor_height={floor_height} num_floors={num_floors} halfL={halfL} halfW={halfW}
       />
       <WindowShadingFrames
-        axis="z" sign={-1} wwr={wwr.south} faceW={width}  count={window_count?.south ?? 4}
+        axis="z" sign={-1} wwr={wwr.south} faceW={length} count={window_count?.south ?? 8}
         depth={Number((params?.shading_overhang?.south ?? {}).depth_m ?? 0)}
-        floor_height={floor_height} num_floors={num_floors} hw={hw} hd={hd}
+        floor_height={floor_height} num_floors={num_floors} halfL={halfL} halfW={halfW}
       />
       <WindowShadingFrames
-        axis="x" sign={1}  wwr={wwr.east}  faceW={length} count={window_count?.east ?? 8}
+        axis="x" sign={1}  wwr={wwr.east}  faceW={width}  count={window_count?.east ?? 3}
         depth={Number((params?.shading_overhang?.east ?? {}).depth_m ?? 0)}
-        floor_height={floor_height} num_floors={num_floors} hw={hw} hd={hd}
+        floor_height={floor_height} num_floors={num_floors} halfL={halfL} halfW={halfW}
       />
       <WindowShadingFrames
-        axis="x" sign={-1} wwr={wwr.west}  faceW={length} count={window_count?.west ?? 8}
+        axis="x" sign={-1} wwr={wwr.west}  faceW={width}  count={window_count?.west ?? 3}
         depth={Number((params?.shading_overhang?.west ?? {}).depth_m ?? 0)}
-        floor_height={floor_height} num_floors={num_floors} hw={hw} hd={hd}
+        floor_height={floor_height} num_floors={num_floors} halfL={halfL} halfW={halfW}
       />
     </group>
   )
@@ -281,7 +295,7 @@ function Building({ params, solarOverlay, onFacadeHover }) {
 */
 function WindowShadingFrames({
   axis, sign, wwr, faceW, count, depth,
-  floor_height, num_floors, hw, hd,
+  floor_height, num_floors, halfL, halfW,
 }) {
   if (!depth || depth < 0.01) return null
   if (!wwr || wwr < 0.01) return null
@@ -306,10 +320,11 @@ function WindowShadingFrames({
   const gap  = (faceW - totalGlaz) / (n + 1)
 
   // Wall surface offset from origin along the perpendicular axis.
-  // Axis convention (matches GlassFace): length along Z, width along X.
-  //   axis='z' (N/S faces): wall at z = ±length/2 = ±hw
-  //   axis='x' (E/W faces): wall at x = ±width/2  = ±hd
-  const wallFace = axis === 'z' ? hw : hd
+  // Axis convention (Brief 26 Part 2.5 — matches EP + live calc):
+  //   X = length (east-west), Z = width (north-south)
+  //   axis='z' (N/S faces, perpendicular to Z): wall at z = ±width/2  = ±halfW
+  //   axis='x' (E/W faces, perpendicular to X): wall at x = ±length/2 = ±halfL
+  const wallFace = axis === 'z' ? halfW : halfL
 
   // Slab thickness — 4 cm reads as architectural detail
   const T = 0.04
@@ -388,6 +403,91 @@ function WindowShadingFrames({
 
 const SHADING_COLOUR = '#9CA3AF'
 
+/* ── Facade labels — billboard sprites at face centroids ─────────────────────
+   Position is in the building's LOCAL coordinate system (rendered inside the
+   rotated <group>), so each label tracks its face as the building turns.
+   Billboard wrapper keeps text upright and readable from any camera angle.
+
+   Label content per facade:
+     Line 1:  "F1 — NE"            (large, bold-feel via outline)
+     Line 2:  "60m × 12.8m · 768 m²"
+     Line 3:  "WWR 0% · az 42°"    (the facade's true azimuth, not building orient)
+*/
+function FacadeLabels({ length, width, num_floors, floor_height, wwr, orientation, halfL, halfW }) {
+  const totalHeight = num_floors * floor_height
+  const midH = totalHeight / 2
+  const labelOffset = 1.0  // metres from wall surface outward (keeps text off the face)
+
+  const baseAngles = { 1: 0, 2: 90, 3: 180, 4: 270 }
+  const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+
+  // Axis convention: X = length, Z = width.
+  //   N face (+Z) is at z = +halfW, perpendicular to Z, spans X = length → LONG
+  //   E face (+X) is at x = +halfL, perpendicular to X, spans Z = width  → SHORT
+  const facades = [
+    { num: 1, key: 'north', pos: [0, midH,  halfW + labelOffset], faceW: length, faceH: totalHeight, area: length * totalHeight },
+    { num: 2, key: 'east',  pos: [ halfL + labelOffset, midH, 0], faceW: width,  faceH: totalHeight, area: width  * totalHeight },
+    { num: 3, key: 'south', pos: [0, midH, -(halfW + labelOffset)], faceW: length, faceH: totalHeight, area: length * totalHeight },
+    { num: 4, key: 'west',  pos: [-(halfL + labelOffset), midH, 0], faceW: width,  faceH: totalHeight, area: width  * totalHeight },
+  ]
+
+  // Font size scales with the smaller of halfL/halfW so labels stay readable
+  // on small projects and don't dominate large ones.
+  const fontSize = Math.max(0.6, Math.min(halfL, halfW) * 0.18)
+  const lineGap  = fontSize * 1.1
+
+  return (
+    <group>
+      {facades.map(fac => {
+        const trueAngle = (baseAngles[fac.num] + (orientation ?? 0)) % 360
+        const compass = directions[Math.round(trueAngle / 45) % 8]
+        const wwrPct = Math.round((wwr[fac.key] ?? 0) * 100)
+        const azimuth = Math.round(trueAngle)
+        return (
+          <Billboard key={fac.num} position={fac.pos}>
+            {/* Line 1 — F# and compass, larger */}
+            <Text
+              fontSize={fontSize * 1.4}
+              color="#0b1640"
+              outlineColor="#ffffff"
+              outlineWidth={fontSize * 0.06}
+              anchorX="center"
+              anchorY="middle"
+              position={[0, lineGap, 0]}
+            >
+              {`F${fac.num} — ${compass}`}
+            </Text>
+            {/* Line 2 — dimensions and area */}
+            <Text
+              fontSize={fontSize * 0.85}
+              color="#2a3550"
+              outlineColor="#ffffff"
+              outlineWidth={fontSize * 0.04}
+              anchorX="center"
+              anchorY="middle"
+              position={[0, 0, 0]}
+            >
+              {`${fac.faceW.toFixed(0)}m × ${fac.faceH.toFixed(1)}m · ${Math.round(fac.area)} m²`}
+            </Text>
+            {/* Line 3 — WWR and azimuth */}
+            <Text
+              fontSize={fontSize * 0.75}
+              color="#4a5570"
+              outlineColor="#ffffff"
+              outlineWidth={fontSize * 0.04}
+              anchorX="center"
+              anchorY="middle"
+              position={[0, -lineGap * 0.9, 0]}
+            >
+              {`WWR ${wwrPct}% · az ${azimuth}°`}
+            </Text>
+          </Billboard>
+        )
+      })}
+    </group>
+  )
+}
+
 /* ── Orientation indicator — thin compass needle on ground ─────────────────── */
 function OrientationIndicator({ orientation }) {
   const rad = (orientation * Math.PI) / 180
@@ -414,7 +514,7 @@ function OrientationIndicator({ orientation }) {
 
 /* ── Camera rig — auto-fit, idle auto-rotate, preset views, polar limits ─────── */
 function CameraRig({ params, resetSignal, autoRotateEnabled, cameraPreset, onPresetDone }) {
-  const { length, width, num_floors, floor_height } = params
+  const { length, width, num_floors, floor_height, orientation } = params
   const maxDim    = Math.max(length, width, num_floors * floor_height)
   const dist      = maxDim * 2.2
   const midH      = (num_floors * floor_height) / 2
@@ -428,19 +528,28 @@ function CameraRig({ params, resetSignal, autoRotateEnabled, cameraPreset, onPre
   // ISO camera position (default 3/4 view)
   const isoPos = new THREE.Vector3(dist * 0.5, dist * 0.32, dist * 0.7)
 
-  // Preset camera positions per facade (in world space)
+  // Preset camera positions per facade.
+  //
+  // The building group is rotated by [0, -oriRad, 0] (see <group rotation={...}>
+  // in the scene). To keep the F1-F4 buttons showing each face dead-on,
+  // we apply the same rotation to the local face-normal positions so the
+  // camera lands at the world-space normal of the rotated face. Compass rose
+  // stays fixed.
   function presetPos(preset) {
-    const facePos = { x: 0, y: midH, z: 0 }
+    const oriRad = ((orientation ?? 0) * Math.PI) / 180
+    const c = Math.cos(-oriRad)
+    const s = Math.sin(-oriRad)
+    // 2-D rotation around Y matching the building-group rotation [0, -oriRad, 0].
+    const rot = (lx, lz) => new THREE.Vector3(lx * c + lz * s, midH, -lx * s + lz * c)
     switch (preset) {
-      case 'f1':   return new THREE.Vector3(0,          midH, dist)    // north face
-      case 'f2':   return new THREE.Vector3(dist,       midH, 0)       // east face
-      case 'f3':   return new THREE.Vector3(0,          midH, -dist)   // south face
-      case 'f4':   return new THREE.Vector3(-dist,      midH, 0)       // west face
-      case 'plan': return new THREE.Vector3(0.001,      dist * 1.4, 0) // top-down (tiny x to keep orbit controls happy)
+      case 'f1':   return rot(0,     dist)    // local +Z → rotated north face
+      case 'f2':   return rot(dist,  0)       // local +X → rotated east face
+      case 'f3':   return rot(0,    -dist)    // local -Z → rotated south face
+      case 'f4':   return rot(-dist, 0)       // local -X → rotated west face
+      case 'plan': return new THREE.Vector3(0.001, dist * 1.4, 0)
       case 'iso':  return isoPos.clone()
       default:     return isoPos.clone()
     }
-    void facePos
   }
 
   useFrame(({ camera }) => {
@@ -624,6 +733,18 @@ export default function BuildingViewer3D({ params }) {
         <group rotation={[0, (-orientation * Math.PI) / 180, 0]}>
           <Building params={params} solarOverlay={solarOverlay} onFacadeHover={setHoverInfo} />
           <OrientationIndicator orientation={0} />
+          {/* Facade labels — billboard sprites sit just outside each face,
+              rotate with the building, but stay readable (face camera). */}
+          <FacadeLabels
+            length={length}
+            width={width}
+            num_floors={num_floors}
+            floor_height={floor_height}
+            wwr={params.wwr ?? {}}
+            orientation={orientation}
+            halfL={length / 2}
+            halfW={width / 2}
+          />
         </group>
 
         {/* Soft contact shadow — positioned at y=0.02 to avoid z-fighting with ground plane at y=-0.01 */}

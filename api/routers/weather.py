@@ -138,15 +138,22 @@ def parse_epw(filepath: Path) -> dict:
     Parse an EPW weather file and return hourly arrays.
 
     EPW format: 8 header lines, then 8,760 hourly rows.
-    Column indices (0-based):
+    Column indices (0-based, per EnergyPlus EPW specification):
         0  Year
         1  Month (1-12)
         2  Day (1-31)
         3  Hour (1-24,  1 = midnight-to-1am)
         6  Dry Bulb Temperature (°C)
-        13 Direct Normal Irradiance (Wh/m²)
-        14 Diffuse Horizontal Irradiance (Wh/m²)
+        13 Global Horizontal Irradiance (Wh/m²)   — total horizontal solar
+        14 Direct Normal Irradiance (Wh/m²)       — beam component perpendicular to sun
+        15 Diffuse Horizontal Irradiance (Wh/m²)  — sky diffuse on horizontal
         21 Wind Speed (m/s)
+
+    BUG FIX (Brief 26 Part 2.5d): previous parser had columns 13/14 mislabelled
+    as direct_normal/diffuse_horizontal — actually GHI/DNI — and dropped the
+    real DHI at column 15 entirely. Caused the solar calc to use DNI as the
+    diffuse term and GHI as the beam, ~2× over-predicting vertical incident
+    irradiance across all facades.
 
     Header line 1 format:
         LOCATION, City, State, Country, DataSource, WMO, Latitude, Longitude,
@@ -186,8 +193,11 @@ def parse_epw(filepath: Path) -> dict:
             month_arr.append(int(parts[1]))
             hour_arr.append(int(parts[3]))
             temperature.append(float(parts[6]))
-            direct_normal.append(float(parts[13]))
-            diffuse_horizontal.append(float(parts[14]))
+            # Field 13 is GHI — we don't return it directly, but the solar
+            # calc derives global horizontal as DNI×sin(alt) + DHI which is
+            # equivalent and uses our pair below.
+            direct_normal.append(float(parts[14]))       # field 14 = DNI
+            diffuse_horizontal.append(float(parts[15]))  # field 15 = DHI
             wind_speed_arr.append(float(parts[21]))
         except (IndexError, ValueError):
             # Corrupt row — insert zeros to keep arrays aligned
@@ -230,12 +240,12 @@ def _parse_epw_full(filepath: Path) -> dict:
        8  Relative Humidity                              (%)
        9  Atmospheric Pressure                           (Pa)
       12  Horizontal Infrared Radiation Intensity        (Wh/m²)
-      13  Direct Normal Irradiance                       (Wh/m²)
-      14  Diffuse Horizontal Irradiance                  (Wh/m²)
-      15  Global Horizontal Irradiance                   (Wh/m²)
-      21  Wind Direction                                 (deg)
-      22  Wind Speed                                     (m/s)
-      23  Total Sky Cover                                (tenths)
+      13  Global Horizontal Irradiance                   (Wh/m²)
+      14  Direct Normal Irradiance                       (Wh/m²)
+      15  Diffuse Horizontal Irradiance                  (Wh/m²)
+      20  Wind Direction                                 (deg)
+      21  Wind Speed                                     (m/s)
+      22  Total Sky Cover                                (tenths)
 
     Wet-bulb is computed from dry-bulb + RH + pressure via the standard
     Stull (2011) approximation — close enough for visualisation use.
@@ -297,9 +307,12 @@ def _parse_epw_full(filepath: Path) -> dict:
         dew_point.append(_f(parts[7]))
         humidity.append(_f(parts[8]))
         pressure.append(_f(parts[9]))
-        direct_normal.append(_f(parts[13]))
-        diffuse_horizontal.append(_f(parts[14]))
-        global_horizontal.append(_f(parts[15]))
+        # Brief 26 Part 2.5d fix: previous code had the three solar columns
+        # all shifted by -1, double-counting in the live calc and inspect
+        # endpoint. Correct mapping per EPW spec: GHI=13, DNI=14, DHI=15.
+        global_horizontal.append(_f(parts[13]))
+        direct_normal.append(_f(parts[14]))
+        diffuse_horizontal.append(_f(parts[15]))
         wind_dir.append(_f(parts[20]))
         wind_speed.append(_f(parts[21]))
         try: sky_cover.append(_f(parts[22]))

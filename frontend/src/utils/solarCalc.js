@@ -55,15 +55,27 @@ function sunPosition(latitude_deg, doy, hour) {
   const altitude = Math.asin(sinAlt)
   const cosAlt = Math.cos(altitude)
 
-  // Solar azimuth from south (standard formula)
-  const cosAzFromS = (Math.sin(decl) - Math.sin(lat) * sinAlt) /
+  // Solar azimuth from NORTH, clockwise (the standard solar engineering convention).
+  //
+  // BUG FIX (Brief 26 Part 2.5d): the previous implementation labelled this
+  // formula "azimuth from south", added π again, and produced sun positions
+  // rotated by 180° from reality. Net effect: north facades got south sun and
+  // vice versa, with annual incident solar inverted across N-S and E-W pairs.
+  // Verification: at lat=51°, equinox, solar noon, sun must be due south
+  // (azimuth = π). The formula below gives exactly π at this case.
+  //
+  //   cos(γ_N) = (sin δ − sin φ · sin α) / (cos φ · cos α)
+  //
+  // Returns the angle from north measured clockwise. arccos range is [0, π],
+  // so it doesn't distinguish east-of-south from west-of-south — we use the
+  // hour angle sign to disambiguate.
+  const cosAzFromN = (Math.sin(decl) - Math.sin(lat) * sinAlt) /
                      (Math.cos(lat) * (cosAlt > 1e-6 ? cosAlt : 1e-6))
-  const azFromS = Math.acos(Math.max(-1, Math.min(1, cosAzFromS)))  // 0–π
+  const azFromN = Math.acos(Math.max(-1, Math.min(1, cosAzFromN)))  // 0–π
 
-  // Convert to from-north, clockwise (0=N, π=S)
-  // Morning (hourAngle < 0): sun is east of south → azimuth from N = π − azFromS
-  // Afternoon (hourAngle > 0): sun is west of south → azimuth from N = π + azFromS
-  const azimuth = hourAngle >= 0 ? Math.PI + azFromS : Math.PI - azFromS
+  // Morning (hourAngle < 0): sun is east of the north-south meridian → azimuth = azFromN ∈ (0, π)
+  // Afternoon (hourAngle > 0): sun is west → azimuth = 2π − azFromN ∈ (π, 2π)
+  const azimuth = hourAngle >= 0 ? 2 * Math.PI - azFromN : azFromN
 
   return { altitude, azimuth, aboveHorizon: true }
 }
