@@ -23,9 +23,10 @@ import { useMemo, useState, useEffect } from 'react'
 import { ArrowRight, Zap, Activity, AlertCircle } from 'lucide-react'
 import {
   SOLAR_COLOURS, INTERNAL_COLOURS, HEATING_COLOUR, COOLING_COLOUR,
-  FABRIC_COLOURS, LABELS, LOSS_ORDER, GAIN_ORDER, colourForElement,
+  FABRIC_COLOURS, LABELS, colourForElement,
 } from '../../../data/balanceColours.js'
 import { solarLabel } from '../../../utils/facadeLabel.js'
+import { MODES, DEFAULT_MODE, loadOrderFor, gainOrderFor } from '../../../utils/stateMode.js'
 import BalanceSankey from './BalanceSankey.jsx'
 
 const UNIT_KEY   = 'nza-balance-unit'
@@ -50,13 +51,19 @@ function readValue(node, unit) {
  * for each side (losses + gains). Elements with zero value are kept so
  * the user can still see them — they'll just render as a 1px sliver.
  */
-function flattenLosses(data, unit) {
+function flattenLosses(data, unit, mode = DEFAULT_MODE) {
   const losses = data?.annual?.losses ?? {}
-  return LOSS_ORDER
-    .filter(k => losses[k] != null)
+  const allowed = new Set(loadOrderFor(mode))
+  return loadOrderFor(mode)
+    .filter(k => losses[k] != null && allowed.has(k))
     // Hide opening-line items when there's no opening flow — keeps the chart
     // clean for projects that haven't opted in to wind-driven openings.
     .filter(k => !k.startsWith('openings_') || (losses[k].kwh ?? 0) > 0.01)
+    // Also hide State-1-specific keys (fabric_leakage, permanent_vents,
+    // thermal_bridging) when they're 0 — Part 0 keeps the column compact
+    // until Part 2 actually populates them.
+    .filter(k => !['fabric_leakage', 'permanent_vents', 'thermal_bridging'].includes(k)
+                 || (losses[k].kwh ?? 0) > 0.01)
     .map(k => ({
       key: k,
       label: LABELS[k],
@@ -69,13 +76,15 @@ function flattenLosses(data, unit) {
     }))
 }
 
-function flattenGains(data, unit, orientationDeg = 0) {
+function flattenGains(data, unit, orientationDeg = 0, mode = DEFAULT_MODE) {
   const gains = data?.annual?.gains ?? {}
+  const allowed = new Set(gainOrderFor(mode))
   const out = []
   // Solar — split by face. Label uses facade convention F# (compass) so it
   // matches the Glazing input panel and rotates with building orientation.
   const solar = gains.solar ?? {}
   for (const face of ['south', 'east', 'west', 'north']) {
+    if (!allowed.has(`solar_${face}`)) continue
     const node = solar[face]
     if (!node) continue
     out.push({
@@ -89,9 +98,10 @@ function flattenGains(data, unit, orientationDeg = 0) {
       meta:    node,
     })
   }
-  // Internal — split into people / equipment / lighting
+  // Internal gains — only at State 2+ (per state contract; State 1 is envelope-only)
   const internal = gains.internal ?? {}
   for (const k of ['people', 'equipment', 'lighting']) {
+    if (!allowed.has(k)) continue
     const node = internal[k]
     if (!node) continue
     out.push({
@@ -104,8 +114,8 @@ function flattenGains(data, unit, orientationDeg = 0) {
       meta:   node,
     })
   }
-  // Mechanical heating
-  if (gains.heating) {
+  // Mechanical heating — State 3 service, never a gain at State 1/2/2.5
+  if (gains.heating && allowed.has('heating')) {
     out.push({
       key: 'heating',
       label: LABELS.heating,
@@ -282,6 +292,7 @@ export default function HeatBalance({
   simulationInfo,
   orientationDeg = 0,
   onElementClick,
+  mode = DEFAULT_MODE,    // 'envelope-only' | 'full' (state contract `mode` field)
 }) {
   const [unit, setUnit] = useState(() => {
     try { return localStorage.getItem(UNIT_KEY) || 'kwh_per_m2' }
@@ -309,8 +320,8 @@ export default function HeatBalance({
   const data = engineMode === 'live' ? liveData : simulationData
 
   const { losses, gains, scale, totalLosses, totalGains, gia } = useMemo(() => {
-    const lossItems = flattenLosses(data, unit)
-    const gainItems = flattenGains(data, unit, orientationDeg)
+    const lossItems = flattenLosses(data, unit, mode)
+    const gainItems = flattenGains(data, unit, orientationDeg, mode)
     const allValues = [...lossItems.map(i => i.value), ...gainItems.map(i => i.value)]
     const scale = Math.max(...allValues, 0.1)
     const totalLosses = data?.annual?.totals?.[unit === 'kwh_per_m2' ? 'losses_kwh_per_m2' : 'losses_kwh'] ?? 0
@@ -394,6 +405,7 @@ export default function HeatBalance({
             unit={unit}
             orientationDeg={orientationDeg}
             onElementClick={onElementClick}
+            mode={mode}
           />
         )}
 

@@ -23,7 +23,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { sankey, sankeyLeft, sankeyLinkHorizontal } from 'd3-sankey'
-import { colourForElement, LABELS, LOSS_ORDER } from '../../../data/balanceColours.js'
+import { colourForElement, LABELS } from '../../../data/balanceColours.js'
+import { DEFAULT_MODE, loadOrderFor, gainOrderFor } from '../../../utils/stateMode.js'
 import { solarLabel } from '../../../utils/facadeLabel.js'
 import { TooltipPill } from './HeatBalance.jsx'
 
@@ -44,7 +45,7 @@ function readValue(node, unit) {
 
 // ── Build Sankey graph from heat_balance ─────────────────────────────────────
 
-function buildGraph(data, unit, orientationDeg = 0) {
+function buildGraph(data, unit, orientationDeg = 0, mode = DEFAULT_MODE) {
   if (!data?.annual) return null
   const { gains, losses } = data.annual
 
@@ -61,8 +62,10 @@ function buildGraph(data, unit, orientationDeg = 0) {
   }
 
   // ── Gains in (left) ──────────────────────────────────────────────────────
-  // Solar by orientation — facade label rotates with building orientation
+  // Filter by state-aware order so State 1 hides people/equipment/lighting/heating.
+  const gainAllowed = new Set(gainOrderFor(mode))
   for (const face of ['south', 'east', 'west', 'north']) {
+    if (!gainAllowed.has(`solar_${face}`)) continue
     const v = readValue(gains?.solar?.[face], unit)
     if (v > 0) {
       const id = `solar_${face}`
@@ -70,28 +73,30 @@ function buildGraph(data, unit, orientationDeg = 0) {
       addLink(id, BUILDING_NODE_ID, v, colourForElement(id))
     }
   }
-  // Internal — people, equipment, lighting
   for (const k of ['people', 'equipment', 'lighting']) {
+    if (!gainAllowed.has(k)) continue
     const v = readValue(gains?.internal?.[k], unit)
     if (v > 0) {
       addNode(k, LABELS[k], colourForElement(k))
       addLink(k, BUILDING_NODE_ID, v, colourForElement(k))
     }
   }
-  // Heating (mechanical input)
-  const heatV = readValue(gains?.heating, unit)
-  if (heatV > 0) {
-    addNode('heating', LABELS.heating, colourForElement('heating'))
-    addLink('heating', BUILDING_NODE_ID, heatV, colourForElement('heating'))
+  if (gainAllowed.has('heating')) {
+    const heatV = readValue(gains?.heating, unit)
+    if (heatV > 0) {
+      addNode('heating', LABELS.heating, colourForElement('heating'))
+      addLink('heating', BUILDING_NODE_ID, heatV, colourForElement('heating'))
+    }
   }
 
   // ── Centre node ──────────────────────────────────────────────────────────
   addNode(BUILDING_NODE_ID, 'Zone', BUILDING_NODE_COLOUR)
 
   // ── Losses out (right) ───────────────────────────────────────────────────
-  // Use the canonical LOSS_ORDER so new loss elements (e.g. openings_louvre,
-  // openings_window) appear automatically without needing to update this list.
-  for (const k of LOSS_ORDER) {
+  // State-aware loss order: State 1 excludes cooling + openings_window; future
+  // states extend the list. New loss elements appear automatically when added
+  // to LOSS_ORDERS in stateMode.js.
+  for (const k of loadOrderFor(mode)) {
     const v = readValue(losses?.[k], unit)
     if (v > 0) {
       addNode(k, LABELS[k], colourForElement(k))
@@ -105,7 +110,7 @@ function buildGraph(data, unit, orientationDeg = 0) {
 
 // ── Render ───────────────────────────────────────────────────────────────────
 
-export default function BalanceSankey({ data, unit, orientationDeg = 0, onElementClick }) {
+export default function BalanceSankey({ data, unit, orientationDeg = 0, onElementClick, mode = DEFAULT_MODE }) {
   const containerRef = useRef(null)
   const [dims, setDims] = useState({ width: 720, height: 420 })
   const [hover, setHover] = useState(null)
@@ -125,7 +130,7 @@ export default function BalanceSankey({ data, unit, orientationDeg = 0, onElemen
   }, [])
 
   const graph = useMemo(() => {
-    const raw = buildGraph(data, unit, orientationDeg)
+    const raw = buildGraph(data, unit, orientationDeg, mode)
     if (!raw) return null
     try {
       const layout = sankey()
@@ -143,7 +148,7 @@ export default function BalanceSankey({ data, unit, orientationDeg = 0, onElemen
     } catch (e) {
       return null
     }
-  }, [data, unit, orientationDeg, dims])
+  }, [data, unit, orientationDeg, dims, mode])
 
   if (!graph) {
     return (

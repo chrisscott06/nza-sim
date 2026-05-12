@@ -652,8 +652,14 @@ export default function BuildingDefinition() {
   const { weatherData } = useWeather()
   const orientationDeg = Number(params?.orientation ?? 0)
   const hourlySolar = useHourlySolar(weatherData, orientationDeg)
+  // Building module is locked to envelope-only mode (State 1) per Brief 26
+  // and the state contract. The envelope-only path in calculateInstant
+  // ignores gains, systems, operable windows etc. — the Building view is
+  // purely envelope-vs-weather. Brief 26 Part 3 implements the real State 1
+  // physics; until then the mode flag tags the output so downstream views
+  // filter correctly via utils/stateMode.js.
   const instantResult = useMemo(
-    () => calculateInstant(params, constructions, systems, libraryData, weatherData, hourlySolar),
+    () => calculateInstant(params, constructions, systems, libraryData, weatherData, hourlySolar, null, { mode: 'envelope-only' }),
     [params, constructions, systems, libraryData, weatherData, hourlySolar]
   )
 
@@ -728,6 +734,7 @@ export default function BuildingDefinition() {
               simulationInfo={simulationInfo}
               orientationDeg={orientationDeg}
               onElementClick={() => {}}
+              mode="envelope-only"
             />
           </div>
         )}

@@ -393,12 +393,22 @@ async def update_systems(project_id: str, body: dict):
 # ── Project simulation ─────────────────────────────────────────────────────────
 
 @router.post("/{project_id}/simulate")
-async def simulate_project(project_id: str, scenario_name: str = "Baseline"):
+async def simulate_project(project_id: str, scenario_name: str = "Baseline", mode: str = "full"):
     """
     Run a simulation for the given project.
 
     Reads the current project config from the database, runs EnergyPlus,
     stores the results in simulation_runs, and returns the full results dict.
+
+    Mode parameter follows the state contract's `mode` field exactly:
+      - "full" (default): State 3 — full model
+      - "envelope-only":  State 1 — gains zeroed, no thermostat, free-running
+                          zone temperature, demand derived against the comfort
+                          band. Implemented fully in Brief 26 Part 4.
+
+    For Brief 26 Part 0 the mode is accepted and tagged on the response but
+    the underlying epJSON assembly still runs the full model. Part 4 adds
+    the true envelope-only generation path.
     """
     # Load project from DB
     async with get_db() as db:
@@ -550,6 +560,12 @@ async def simulate_project(project_id: str, scenario_name: str = "Baseline"):
         )
         await db.commit()
 
+    # Tag the response with state/mode per the state contract's output shape.
+    if isinstance(results, dict):
+        state_num = {"envelope-only": 1, "envelope-gains": 2,
+                     "envelope-gains-operation": 2.5, "full": 3}.get(mode, 3)
+        results["state"] = state_num
+        results["mode"] = mode
     return results
 
 
@@ -611,11 +627,22 @@ async def get_simulation_result(project_id: str, run_id: str):
 
 
 @router.get("/{project_id}/simulations/{run_id}/balance")
-async def get_simulation_balance(project_id: str, run_id: str):
+async def get_simulation_balance(project_id: str, run_id: str, mode: str = "full"):
     """
     Return the heat-balance object for a specific simulation run.
     Computes per-element losses + per-orientation solar + internal gains,
     plus HDD/CDD from the project's weather file.
+
+    Mode parameter follows the state contract's `mode` field exactly:
+      - "full" (default): State 3 — gains, systems, operable windows
+      - "envelope-only":  State 1 — gains zeroed, operable windows excluded,
+                          free-running zone temperature, demand derived
+                          against the project comfort band. Implemented
+                          fully in Brief 26 Part 4.
+
+    For Brief 26 Part 0 the mode is accepted and tagged on the response but
+    the underlying parser still produces full-model output. Part 4 adds the
+    real envelope-only branch in `get_heat_balance(sql_path, ..., mode='envelope-only')`.
     """
     async with get_db() as db:
         # Need building_config (for areas) and weather_file (for HDD/CDD), both
@@ -655,8 +682,17 @@ async def get_simulation_balance(project_id: str, run_id: str):
     except Exception:
         pass
 
-    return get_heat_balance(
+    balance = get_heat_balance(
         sql_path=sql_path,
         building_config=building_config,
         weather_file_path=weather_path,
     )
+    # Tag the response per the state contract's output shape so the frontend
+    # can route filtering through utils/stateMode.js. Per Brief 26 Part 0 the
+    # underlying numbers are still full-model regardless of mode — Part 4
+    # adds the true envelope-only path in the parser.
+    state_num = {"envelope-only": 1, "envelope-gains": 2,
+                 "envelope-gains-operation": 2.5, "full": 3}.get(mode, 3)
+    balance["state"] = state_num
+    balance["mode"] = mode
+    return balance

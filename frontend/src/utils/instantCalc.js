@@ -918,12 +918,35 @@ function _buildHeatBalance({
  * @param {object} libraryData   — { constructions: [...] } from library API
  * @param {object|null} weatherData  — EPW hourly arrays from WeatherContext
  * @param {object|null} hourlySolar  — { f1,f2,f3,f4,roof } Float32Array from solarCalc
- * @returns {object} Same structure as calculateInstantDegreeDay + monthly breakdown
+ * @param {object|null} scheduleProfiles — per-hour schedule fractions
+ * @param {object} [options]       — { mode } — state-routing per `docs/state_contracts.md`.
+ *                                   `mode='state-3'` (default) preserves current full-model behaviour.
+ *                                   `mode='state-1'` enters the envelope-only path (Brief 26 Part 2).
+ *                                   Future: 'state-2', 'state-2.5'.
+ * @returns {object} Same structure as calculateInstantDegreeDay + monthly breakdown,
+ *                   plus `state` and `mode` metadata fields.
  */
-export function calculateInstant(building = {}, constructions = {}, systems = {}, libraryData = {}, weatherData = null, hourlySolar = null, scheduleProfiles = null) {
+export function calculateInstant(building = {}, constructions = {}, systems = {}, libraryData = {}, weatherData = null, hourlySolar = null, scheduleProfiles = null, options = {}) {
+  // Mode strings match the state contract's `mode` field exactly:
+  //   'envelope-only' (State 1) | 'envelope-gains' (State 2) |
+  //   'envelope-gains-operation' (State 2.5) | 'full' (State 3, default).
+  const mode = options.mode ?? 'full'
+  const stateNum = ({ 'envelope-only': 1, 'envelope-gains': 2,
+                      'envelope-gains-operation': 2.5, 'full': 3 })[mode] ?? 3
+
   if (!weatherData || !hourlySolar) {
-    return calculateInstantDegreeDay(building, constructions, systems, libraryData)
+    const result = calculateInstantDegreeDay(building, constructions, systems, libraryData)
+    return { ...result, state: stateNum, mode }
   }
+
+  // envelope-only stub — Brief 26 Part 3 will fill this in with the
+  // envelope-only path (no gains, no systems, no operable windows;
+  // free-running zone temp and derived demand against the project comfort
+  // band). For now, route to the existing full-model path with mode/state
+  // tags so the rest of the chain (Heat Balance, balance API) begins
+  // honouring the contract terminology without waiting for the physics.
+  // TODO(Brief 26 Part 3): implement true envelope-only path here.
+  // if (mode === 'envelope-only') return _calculateEnvelopeOnly(...)
 
   const geo = computeGeometry(building)
   const { gia, volume, total_wall_opaque, total_glazing, glazing, wall_opaque, roof_area, ground_area } = geo
@@ -1367,6 +1390,8 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
 
   // ── Return ────────────────────────────────────────────────────────────────
   return {
+    state:                 stateNum,   // numeric per state contract: 1 | 2 | 2.5 | 3
+    mode,                              // string per state contract: 'envelope-only' | 'full' | ...
     eui_kWh_m2:            Math.round(eui_kWh_m2 * 10) / 10,
     annual_heating_kWh:    Math.round(heating_thermal),
     annual_cooling_kWh:    Math.round(cooling_thermal),
