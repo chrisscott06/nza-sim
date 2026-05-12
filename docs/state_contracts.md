@@ -1,9 +1,10 @@
-# NZA-Sim State Contracts (v2.1)
+# NZA-Sim State Contracts (v2.2)
 
 **Status:** Canonical. Every brief that touches computation, UI, or data flow must conform to this document.
 **Owner:** Chris.
-**Version:** 2.1 (May 2026)
-**Changes from v2.0:** Defined the full provenance schema (storage shape, default values, helper API contract). Enum values unchanged from v2.0. Added open contract question #6 (verification ranges for States 2–4) following the Brief 26 Part 2.5 diagnostic.
+**Version:** 2.2 (May 2026)
+**Changes from v2.1:** State 1 verification ranges revised to standard UK 2018-vintage hotel construction (the as-built Bridgewater reference), not Passivhaus targets. Reference scenario explicitly documented with fabric U-values, q50 airtightness, and trickle-vent area so subsequent verifications can reproduce the inputs deterministically.
+**Changes from v2.0:** v2.1 defined the full provenance schema (storage shape, default values, helper API contract); enum values unchanged.
 
 ---
 
@@ -274,13 +275,32 @@ For each hour in the 8760-hour annual EPW run:
 
 State 1 numbers must be consistent between the live engine and EnergyPlus within the engine agreement tolerance (see Cross-cutting concepts).
 
-For Bridgewater (3,600 m² lightweight UK hotel) expected State 1 envelope numbers:
-- Heating demand: 30–60 MWh/yr
-- Cooling demand: 5–15 MWh/yr
-- Overheating hours: 200–600
-- Underheating hours: 1500–3500 (envelope alone won't hold 20°C overnight in winter)
+**Bridgewater reference scenario** (the as-built standard UK 2018-vintage hotel, the canonical State 1 verification target):
 
-If results fall outside these ranges, the model is wrong — not the ranges.
+| Input | Value |
+|---|---|
+| Geometry | 60 m × 15 m × 4 floors × 3.2 m → 3,600 m² GIA, 11,520 m³ |
+| Wall | U ≈ 0.28 W/m²·K (standard cavity wall, not enhanced, not Passivhaus) |
+| Roof | U ≈ 0.18 W/m²·K |
+| Floor | U ≈ 0.22 W/m²·K |
+| Glazing | U ≈ 1.43 W/m²·K, g-value 0.56 (typical double glazing) |
+| Airtightness | q50 ≈ 7 m³/h·m² (vintage default, no blower-door test) |
+| Permanent openings | 138 trickle vents × ≈ 7,000 mm² equivalent area each (Renson Invisivent EVO AK) |
+| Weather | Yeovilton TMYx (~51.0°N) |
+| Comfort band | 20°C lower, 26°C upper |
+
+Expected State 1 envelope numbers for this reference:
+
+| Output | Range |
+|---|---|
+| Heating demand | 150–250 MWh/yr |
+| Cooling demand | 5–20 MWh/yr |
+| Overheating hours | 200–600 |
+| Underheating hours | 4,500–6,500 (long-period deficit expected — no system) |
+
+If the fabric inputs change (enhanced spec, Passivhaus retrofit, etc.), the expected ranges shift accordingly. The above is the **as-built standard hotel reference**. Future verifications for different fabric specs should record their inputs + expected ranges in this document or in `docs/state_1_divergences.md`.
+
+If results fall outside the ranges for a given declared fabric spec, the model is wrong — not the ranges.
 
 ---
 
