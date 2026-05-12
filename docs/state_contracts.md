@@ -3,7 +3,10 @@
 **Status:** Canonical. Every brief that touches computation, UI, or data flow must conform to this document.
 **Owner:** Chris.
 **Version:** 2.2 (May 2026)
-**Changes from v2.1:** State 1 verification ranges revised to standard UK 2018-vintage hotel construction (the as-built Bridgewater reference), not Passivhaus targets. Reference scenario explicitly documented with fabric U-values, q50 airtightness, and trickle-vent area so subsequent verifications can reproduce the inputs deterministically.
+**Changes from v2.1:**
+- State 1 verification ranges revised to standard UK 2018-vintage hotel construction (the as-built Bridgewater reference), not Passivhaus targets. Reference scenario explicitly documented with fabric U-values, q50 airtightness, and trickle-vent area so subsequent verifications can reproduce the inputs deterministically.
+- Open contract question #6 (verification ranges for States 2–4) given a stronger answer: every expected range must be backed by an independent first-principles calculation with stated fabric / occupancy / systems spec. The State 1 v2.2 ranges are the worked example.
+
 **Changes from v2.0:** v2.1 defined the full provenance schema (storage shape, default values, helper API contract); enum values unchanged.
 
 ---
@@ -797,6 +800,20 @@ These are unresolved and need decisions before the relevant brief is written:
 
 5. **Schedule preset library schema — what does the preset library look like and where does it live?** Referenced in State 2 UI rules. Needs a schema before State 2 brief.
 
-6. **Expected verification ranges for State 2, 2.5, 3, 4** — currently only State 1 has documented Bridgewater bounds (heating demand 30–60 MWh, cooling 5–15 MWh, etc.). Brief 26 Part 2.5 caught three compounding bugs only because the contract had State 1 ranges to compare against — engine-agreement alone wouldn't have flagged them since both engines share `geometry.py`. Before each subsequent state is implemented, document its expected ranges (heating/cooling demand, EUI bands, fuel split, key flow magnitudes) so the same discipline applies.
+6. **Expected verification ranges for State 2, 2.5, 3, 4** — currently only State 1 has documented Bridgewater bounds. Brief 26 Part 2.5 caught three compounding bugs only because the contract had State 1 ranges to compare against — engine-agreement alone wouldn't have flagged them since both engines share `geometry.py`. Brief 26 Part 3 then revealed that the State 1 ranges themselves were gut-feel (Passivhaus targets, not standard-fabric reality) and had to be revised against a BREDEM-style sanity check. The discipline rule below is the v2.2 answer to this question.
+
+### Discipline rule: expected ranges must be backed by first-principles math
+
+Every expected range in this document — for every state, for every reference scenario — must be:
+
+1. **Tied to a stated fabric / occupancy / systems / operation spec.** "Bridgewater" alone is not enough; the scenario must include U-values, ACH, schedules, system efficiencies, and any other inputs the state's `inputs_used` list reads. Different specs of the same building give different ranges; that is correct, not a contract violation.
+
+2. **Backed by an independent first-principles calculation** (BREDEM, CIBSE TM37, ASHRAE Fundamentals, or equivalent) that uses no NZA Sim code. The range is bounded above and below by physically-defensible margins around that calculation (typically ±30–50% to allow for the divergences catalogued in `state_1_divergences.md`).
+
+3. **Documented in this contract** with the spec, the first-principles result, and the resulting range. So when a future brief reports "model says 175 MWh, range is 150-250", the trail back to "BREDEM says 270 MWh, our model is 35% lower because of thermal mass + solar credit" is followable without re-deriving from scratch.
+
+The State 1 Bridgewater reference (v2.2) is the worked example. Future state ranges follow the same pattern.
+
+When this discipline lapses — when a range is set by intuition or copy-pasted from another building — the verification gate becomes worse than useless: it either passes everything (range too wide), fails everything (range too narrow), or worst, fails real bugs because the gate didn't catch them. The contract caught itself in Brief 26 Part 3; that's the kind of self-correction this document is meant to enable.
 
 These are tracked as TODOs in this document and resolved as briefs require them.
