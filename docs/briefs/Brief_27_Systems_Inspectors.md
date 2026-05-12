@@ -1,13 +1,14 @@
-# Brief 26: Systems Inspectors — per-system editing pattern (State 3)
+# Brief 27: Systems Inspectors — per-system editing pattern (State 3)
 
 BEFORE DOING ANYTHING:
 1. Read `CLAUDE.md`
 2. Read `docs/state_contracts.md` — **the canonical state contract**. When this brief and the contract disagree, the contract wins.
 3. Read `STATUS.md`
 4. Read `docs/briefs/SYSTEMS_AUDIT.md` — end-to-end audit of how each system is wired today.
-5. Read this brief in full before writing code.
-6. Look at `frontend/src/components/library/ConstructionInspector.jsx` and `GlazingInspector.jsx` — the **reference pattern** every Inspector should follow.
-7. One part at a time. Verify in browser at 1440×900. Commit. Push.
+5. Read `docs/briefs/Brief_26_Building_State1.md` — establishes the state-isolation pattern. **Brief 26 must be merged before this brief starts** so the State 3 Inspectors can lean on the same mode-threading helpers (`getSystemField`, mode-aware Heat Balance, etc.).
+6. Read this brief in full before writing code.
+7. Look at `frontend/src/components/library/ConstructionInspector.jsx` and `GlazingInspector.jsx` — the **reference pattern** every Inspector should follow.
+8. One part at a time. Verify in browser at 1440×900. Commit. Push.
 
 ---
 
