@@ -19,14 +19,15 @@
  * between live and simulation animates the divergence.
  */
 
-import { useMemo, useState, useEffect } from 'react'
-import { ArrowRight, Zap, Activity, AlertCircle } from 'lucide-react'
+import { useMemo, useState, useEffect, useContext } from 'react'
+import { ArrowRight, Zap, Activity, AlertCircle, Info, ChevronDown } from 'lucide-react'
 import {
   SOLAR_COLOURS, INTERNAL_COLOURS, HEATING_COLOUR, COOLING_COLOUR,
   FABRIC_COLOURS, LABELS, colourForElement,
 } from '../../../data/balanceColours.js'
 import { solarLabel } from '../../../utils/facadeLabel.js'
-import { MODES, DEFAULT_MODE, loadOrderFor, gainOrderFor } from '../../../utils/stateMode.js'
+import { MODES, DEFAULT_MODE, isEnvelopeOnly, modeBadgeText, loadOrderFor, gainOrderFor } from '../../../utils/stateMode.js'
+import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import BalanceSankey from './BalanceSankey.jsx'
 
 const UNIT_KEY   = 'nza-balance-unit'
@@ -284,6 +285,186 @@ function StackedColumns({ gains, losses, unit, onClick }) {
   )
 }
 
+// ── State 1 envelope-only extras ─────────────────────────────────────────────
+// Badge, demand rows, free-running readout, comfort band editor, "what's not
+// included" disclosure. All rendered only when `mode === 'envelope-only'`.
+
+function EnvelopeOnlyBadge({ mode, onDisclosureToggle, showDisclosure }) {
+  if (!isEnvelopeOnly(mode)) return null
+  return (
+    <div className="flex-shrink-0 px-5 py-2 bg-navy/5 border-b border-light-grey">
+      <button
+        onClick={onDisclosureToggle}
+        className="w-full flex items-center justify-between gap-2 text-xxs text-navy font-medium hover:text-navy/70 transition-colors"
+      >
+        <span className="flex items-center gap-2">
+          <Info size={11} className="text-navy/60" />
+          {modeBadgeText(mode)}
+        </span>
+        <ChevronDown
+          size={11}
+          className="text-navy/60 transition-transform"
+          style={{ transform: showDisclosure ? 'rotate(180deg)' : 'none' }}
+        />
+      </button>
+      {showDisclosure && (
+        <div className="mt-2 pt-2 border-t border-navy/10 text-xxs text-mid-grey leading-relaxed">
+          State 1 is the envelope acting alone against the weather. Not yet included:
+          <ul className="mt-1 ml-4 list-disc space-y-0.5">
+            <li><span className="text-dark-grey">Occupancy</span> — people, equipment, lighting (State 2 in /gains)</li>
+            <li><span className="text-dark-grey">Operable windows</span> — user-controlled ventilation (State 2.5 in /operation)</li>
+            <li><span className="text-dark-grey">Mechanical systems</span> — heating, cooling, MVHR, DHW (State 3 in /systems)</li>
+          </ul>
+          Heating and cooling appear below the balance as <em>derived demand</em> —
+          the energy a system would need to provide to hold the zone in the comfort band.
+          The zone temperature is otherwise <em>free-running</em>.
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ComfortBandEditor({ comfortBand, onChange }) {
+  // Local mirror so typing doesn't fire a PUT on every keystroke;
+  // commits on blur or on Enter, validated client-side per contract bounds.
+  const [lower, setLower] = useState(comfortBand?.lower_c ?? 20)
+  const [upper, setUpper] = useState(comfortBand?.upper_c ?? 26)
+  useEffect(() => { setLower(comfortBand?.lower_c ?? 20); setUpper(comfortBand?.upper_c ?? 26) },
+    [comfortBand?.lower_c, comfortBand?.upper_c])
+
+  const commit = () => {
+    const lo = Number(lower), up = Number(upper)
+    if (Number.isFinite(lo) && Number.isFinite(up) && lo < up && lo >= 8 && up <= 32) {
+      onChange?.({ lower_c: lo, upper_c: up })
+    } else {
+      // reset to props if invalid
+      setLower(comfortBand?.lower_c ?? 20); setUpper(comfortBand?.upper_c ?? 26)
+    }
+  }
+  const onKeyDown = (e) => { if (e.key === 'Enter') e.currentTarget.blur() }
+  const inputCls = 'w-12 px-1 py-0.5 text-xxs text-navy border border-light-grey rounded text-center tabular-nums focus:outline-none focus:border-teal bg-white'
+  return (
+    <div className="flex items-center gap-2 text-xxs text-mid-grey">
+      <span>Comfort band:</span>
+      <input type="number" min={8} max={32} step={1}
+        value={lower} onChange={e => setLower(e.target.value)}
+        onBlur={commit} onKeyDown={onKeyDown}
+        className={inputCls} title="Heating threshold — lower comfort bound (°C)" />
+      <span>°C</span>
+      <span className="text-light-grey">⋯</span>
+      <input type="number" min={8} max={32} step={1}
+        value={upper} onChange={e => setUpper(e.target.value)}
+        onBlur={commit} onKeyDown={onKeyDown}
+        className={inputCls} title="Cooling threshold — upper comfort bound (°C)" />
+      <span>°C</span>
+    </div>
+  )
+}
+
+function StateOneDemandPanel({ data, comfortBand, onComfortBandChange, unit }) {
+  // Reads `demand`, `free_running`, `comfort_band_used` injected at the top
+  // of the heat_balance object by _calculateEnvelopeOnly (instantCalc.js).
+  const demand = data?.demand
+  const fr     = data?.free_running
+  if (!demand || !fr) return null
+
+  const gia = data?.metadata?.gia_m2 ?? 0
+  const heatKWh = demand.heating_demand_mwh * 1000
+  const coolKWh = demand.cooling_demand_mwh * 1000
+  const heatVal = unit === 'kwh_per_m2'
+    ? (gia > 0 ? heatKWh / gia : 0)
+    : heatKWh
+  const coolVal = unit === 'kwh_per_m2'
+    ? (gia > 0 ? coolKWh / gia : 0)
+    : coolKWh
+  const heatLabel = unit === 'kwh_per_m2'
+    ? `${heatVal.toFixed(1)} kWh/m²·a`
+    : `${Math.round(demand.heating_demand_mwh)} MWh`
+  const coolLabel = unit === 'kwh_per_m2'
+    ? `${coolVal.toFixed(1)} kWh/m²·a`
+    : `${Math.round(demand.cooling_demand_mwh)} MWh`
+
+  const totalHours = demand.underheating_hours + demand.overheating_hours + demand.comfort_hours
+  const pct = (h) => totalHours ? Math.round((h / totalHours) * 100) : 0
+
+  return (
+    <div className="flex-shrink-0 px-5 py-4 border-t border-light-grey bg-off-white/60">
+      {/* Comfort band editor — inline */}
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <ComfortBandEditor comfortBand={comfortBand} onChange={onComfortBandChange} />
+        <div className="text-xxs text-mid-grey">
+          The energy a system would need to provide to hold the zone in this band.
+        </div>
+      </div>
+
+      {/* Derived demand row — heating + cooling */}
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <div className="bg-white rounded border border-light-grey px-3 py-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xxs text-mid-grey">Heating demand</span>
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: HEATING_COLOUR }} />
+          </div>
+          <p className="text-caption font-semibold text-navy mt-0.5 tabular-nums">{heatLabel}</p>
+          <p className="text-xxs text-mid-grey mt-0.5">below {comfortBand?.lower_c ?? 20}°C — derived</p>
+        </div>
+        <div className="bg-white rounded border border-light-grey px-3 py-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xxs text-mid-grey">Cooling demand</span>
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: COOLING_COLOUR }} />
+          </div>
+          <p className="text-caption font-semibold text-navy mt-0.5 tabular-nums">{coolLabel}</p>
+          <p className="text-xxs text-mid-grey mt-0.5">above {comfortBand?.upper_c ?? 26}°C — derived</p>
+        </div>
+      </div>
+
+      {/* Comfort hours strip — under / in / over */}
+      <div className="mb-3">
+        <div className="flex items-center justify-between text-xxs text-mid-grey mb-1">
+          <span>Comfort hours (free-running, no system)</span>
+          <span className="tabular-nums">
+            {demand.comfort_hours.toLocaleString()} of {totalHours.toLocaleString()} hours in band ({pct(demand.comfort_hours)}%)
+          </span>
+        </div>
+        <div className="flex h-3 rounded overflow-hidden bg-light-grey/30">
+          {demand.underheating_hours > 0 && (
+            <div title={`Underheating: ${demand.underheating_hours.toLocaleString()} h (${pct(demand.underheating_hours)}%)`}
+              style={{ width: `${pct(demand.underheating_hours)}%`, backgroundColor: HEATING_COLOUR, opacity: 0.7 }} />
+          )}
+          {demand.comfort_hours > 0 && (
+            <div title={`Comfort: ${demand.comfort_hours.toLocaleString()} h (${pct(demand.comfort_hours)}%)`}
+              style={{ width: `${pct(demand.comfort_hours)}%`, backgroundColor: '#16A34A', opacity: 0.7 }} />
+          )}
+          {demand.overheating_hours > 0 && (
+            <div title={`Overheating: ${demand.overheating_hours.toLocaleString()} h (${pct(demand.overheating_hours)}%)`}
+              style={{ width: `${pct(demand.overheating_hours)}%`, backgroundColor: COOLING_COLOUR, opacity: 0.7 }} />
+          )}
+        </div>
+        <div className="grid grid-cols-3 gap-1 text-xxs text-mid-grey mt-1">
+          <span className="tabular-nums">Under: {demand.underheating_hours.toLocaleString()} h</span>
+          <span className="text-center text-green-700 tabular-nums">In: {demand.comfort_hours.toLocaleString()} h</span>
+          <span className="text-right tabular-nums">Over: {demand.overheating_hours.toLocaleString()} h</span>
+        </div>
+      </div>
+
+      {/* Free-running mini-stats */}
+      <div className="grid grid-cols-3 gap-3 text-xxs">
+        <div>
+          <p className="text-mid-grey">Annual mean</p>
+          <p className="text-caption font-medium text-navy tabular-nums">{fr.annual_mean_c?.toFixed(1) ?? '—'}°C</p>
+        </div>
+        <div>
+          <p className="text-mid-grey">Winter min</p>
+          <p className="text-caption font-medium text-navy tabular-nums">{fr.winter_min_c?.toFixed(1) ?? '—'}°C</p>
+        </div>
+        <div>
+          <p className="text-mid-grey">Summer max</p>
+          <p className="text-caption font-medium text-navy tabular-nums">{fr.summer_max_c?.toFixed(1) ?? '—'}°C</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 export default function HeatBalance({
@@ -294,6 +475,15 @@ export default function HeatBalance({
   onElementClick,
   mode = DEFAULT_MODE,    // 'envelope-only' | 'full' (state contract `mode` field)
 }) {
+  // State 1 envelope-only mode pulls comfortBand + the updater from project
+  // context so the inline editor on the Heat Balance commits straight back
+  // to project state (Brief 26 Part 1 wired comfortBand into context).
+  const projectCtx = useContext(ProjectContext)
+  const comfortBand    = projectCtx?.comfortBand
+  const setComfortBand = projectCtx?.setComfortBand
+
+  const [showStateOneDisclosure, setShowStateOneDisclosure] = useState(false)
+
   const [unit, setUnit] = useState(() => {
     try { return localStorage.getItem(UNIT_KEY) || 'kwh_per_m2' }
     catch { return 'kwh_per_m2' }
@@ -350,6 +540,13 @@ export default function HeatBalance({
 
   return (
     <div className="h-full flex flex-col bg-white overflow-hidden">
+
+      {/* Envelope-only badge (State 1) — sits above the header */}
+      <EnvelopeOnlyBadge
+        mode={mode}
+        showDisclosure={showStateOneDisclosure}
+        onDisclosureToggle={() => setShowStateOneDisclosure(v => !v)}
+      />
 
       {/* Header bar — title + engine + unit toggle */}
       <div className="flex-shrink-0 px-5 py-3 border-b border-light-grey flex items-center justify-between gap-3">
@@ -440,6 +637,18 @@ export default function HeatBalance({
           </span>
         </div>
       </div>
+
+      {/* State 1 derived-demand panel — heating/cooling MWh, comfort hours,
+          free-running temperature stats. Per state contract: heating and
+          cooling appear here, NOT as flows on the gains side above. */}
+      {isEnvelopeOnly(mode) && (
+        <StateOneDemandPanel
+          data={data}
+          comfortBand={comfortBand}
+          onComfortBandChange={setComfortBand}
+          unit={unit}
+        />
+      )}
     </div>
   )
 }

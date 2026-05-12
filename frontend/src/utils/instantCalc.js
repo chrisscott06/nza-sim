@@ -545,6 +545,22 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
       },
     },
     metadata: { gia_m2: Math.round(gia) },
+    // State 1 extras — surfaced inside heat_balance so the Heat Balance
+    // component can render the "demand below bars" + free-running stats
+    // + comfort band readout without a separate prop. Per state contract.
+    demand: {
+      heating_demand_mwh: Math.round(acc_heating_demand_Wh / 1_000_000 * 10) / 10,
+      cooling_demand_mwh: Math.round(acc_cooling_demand_Wh / 1_000_000 * 10) / 10,
+      underheating_hours,
+      overheating_hours,
+      comfort_hours,
+    },
+    free_running: {
+      annual_mean_c: Math.round(T_mean * 10) / 10,
+      winter_min_c:  isFinite(T_winter_min) ? Math.round(T_winter_min * 10) / 10 : null,
+      summer_max_c:  isFinite(T_summer_max) ? Math.round(T_summer_max * 10) / 10 : null,
+    },
+    comfort_band_used: { lower_c: comfortBand.lower_c, upper_c: comfortBand.upper_c },
   }
 
   return {
