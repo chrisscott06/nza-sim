@@ -476,7 +476,11 @@ async def simulate_project(project_id: str, scenario_name: str = "Baseline", mod
                 if row and row["config_json"]:
                     schedule_overrides[assign_key] = json.loads(row["config_json"])
 
-    # Assemble and run
+    # Assemble and run.  Mode is the state-contract `mode` field
+    # ("full" | "envelope-only"). When envelope-only, the assembler
+    # zeros internal gains, widens thermostat setpoints to 5°C / 50°C,
+    # and suppresses operable-window airflow — letting the zone run
+    # free against the envelope for State 1 verification.
     epjson_path = run_dir / "input.epJSON"
     assemble_epjson(
         building_params=building_params,
@@ -485,6 +489,7 @@ async def simulate_project(project_id: str, scenario_name: str = "Baseline", mod
         output_path=epjson_path,
         systems_config=systems_config,
         schedule_overrides=schedule_overrides if schedule_overrides else None,
+        mode=mode,
     )
 
     sim_result = run_simulation(

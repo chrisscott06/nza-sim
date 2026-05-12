@@ -265,7 +265,7 @@ def _build_infiltration_objects(
     return infiltration
 
 
-def _build_openings_objects(zones: dict, building_params: dict) -> dict:
+def _build_openings_objects(zones: dict, building_params: dict, state1: bool = False) -> dict:
     """
     Build ZoneVentilation:WindAndStackOpenArea objects from the per-facade
     openings schema (building_params['openings']).
@@ -278,6 +278,11 @@ def _build_openings_objects(zones: dict, building_params: dict) -> dict:
     evenly across the zones (one zone per floor) so each floor receives a
     proportional share. Stack term is suppressed (single-zone passive model —
     cross-flow is not modelled until rooms are split into separate zones).
+
+    State 1 mode (Brief 26 Part 5): forces the openable-window stream to
+    zero. Operable windows are a State 2.5 input — at State 1 they must not
+    contribute, regardless of params.openings.openable_fraction. Louvres
+    (permanent envelope geometry) are kept.
     """
     openings = building_params.get("openings") or {}
     if not openings:
@@ -285,7 +290,7 @@ def _build_openings_objects(zones: dict, building_params: dict) -> dict:
 
     faces = ("north", "south", "east", "west")
     louvre_total   = sum(float((openings.get(f) or {}).get("louvre_area_m2", 0) or 0)   for f in faces)
-    openable_total = sum(
+    openable_total = 0.0 if state1 else sum(
         float((openings.get(f) or {}).get("openable_fraction", 0) or 0)
         * float((building_params.get("wwr") or {}).get(f, 0))
         # Facade glazing area per face = wwr × facade_area
@@ -345,7 +350,7 @@ def _build_openings_objects(zones: dict, building_params: dict) -> dict:
     return out
 
 
-def _build_hvac_ideal_loads(zones: dict) -> tuple[dict, dict, dict, dict, dict]:
+def _build_hvac_ideal_loads(zones: dict, state1: bool = False) -> tuple[dict, dict, dict, dict, dict]:
     """
     Build native ZoneHVAC:IdealLoadsAirSystem HVAC objects for each zone.
 
@@ -407,9 +412,15 @@ def _build_hvac_ideal_loads(zones: dict) -> tuple[dict, dict, dict, dict, dict]:
         }
 
         # ThermostatSetpoint:DualSetpoint
+        # In State 1 envelope-only mode we point the thermostat at wide
+        # Schedule:Constant setpoints (5°C heating / 50°C cooling) so the
+        # Ideal Loads system never engages within realistic UK weather. The
+        # zone runs free against the envelope.
         thermostats[tstat_name] = {
-            "heating_setpoint_temperature_schedule_name": "hotel_heating_setpoint",
-            "cooling_setpoint_temperature_schedule_name": "hotel_cooling_setpoint",
+            "heating_setpoint_temperature_schedule_name":
+                "state1_heating_setpoint" if state1 else "hotel_heating_setpoint",
+            "cooling_setpoint_temperature_schedule_name":
+                "state1_cooling_setpoint" if state1 else "hotel_cooling_setpoint",
         }
 
         # ZoneControl:Thermostat
@@ -580,6 +591,7 @@ def assemble_epjson(
     output_path: str | Path | None = None,
     systems_config: dict | None = None,
     schedule_overrides: dict[str, dict] | None = None,
+    mode: str = "full",
 ) -> dict:
     """
     Assemble a complete epJSON dict for the given building.
@@ -604,6 +616,25 @@ def assemble_epjson(
         "bedroom_occupancy") or just the schedule_type string.
         The schedule_type field inside config_json determines which default
         schedule is replaced.
+    mode : str
+        State-contract mode per docs/state_contracts.md. Defaults to "full"
+        (State 3, current behaviour). When set to "envelope-only" (State 1):
+
+          - People / Lights / ElectricEquipment emit with zero density
+            (no occupancy, no internal gains).
+          - Ideal Loads thermostat setpoints widened to 5°C heating /
+            50°C cooling so the zone runs free — the system never engages
+            within realistic outdoor weather, letting EP report the true
+            free-running zone temperature trace.
+          - Operable-window ZoneVentilation:WindandStackOpenArea objects
+            are suppressed (only louvre permanent openings remain).
+          - ZoneInfiltration:DesignFlowRate stays as normal (fabric leakage).
+          - All HVAC plant beyond Ideal Loads (DHW, VRF, MVHR, gas boilers)
+            is still emitted but the Ideal-Loads-driven zone temperatures
+            mean it produces near-zero output during the run.
+
+        Other modes ("envelope-gains", "envelope-gains-operation") will be
+        wired in by future briefs; for now they fall through to "full".
 
     Returns
     -------
@@ -673,6 +704,15 @@ def assemble_epjson(
     _vent_ctrl = sc.get("ventilation_control", "continuous")
     vent_schedule = _vent_control_schedules.get(_vent_ctrl, "hotel_ventilation_continuous")
 
+    # ── State 1 envelope-only mode (Brief 26 Part 5) ──────────────────────
+    # Strip People/Lights/Equipment to zero density so internal gains can't
+    # contaminate the State 1 output. The Ideal Loads thermostat setpoints
+    # are widened to 5°C / 50°C further down — the system effectively never
+    # engages and the zone runs free against the weather. Operable windows
+    # are dropped from the ZoneVentilation set; only louvre permanent
+    # openings remain. Fabric leakage (ZoneInfiltration) stays as normal.
+    state1 = (mode == "envelope-only")
+
     # Occupancy density — compute from building params when available
     _num_bedrooms    = int(building_params.get("num_bedrooms",    0) or 0)
     _occupancy_rate  = float(building_params.get("occupancy_rate",  0.75) or 0.75)
@@ -680,7 +720,11 @@ def assemble_epjson(
     _gia = (float(building_params.get("length", 60)) *
             float(building_params.get("width",  15)) *
             float(building_params.get("num_floors", 4)))
-    if _num_bedrooms > 0 and _gia > 0:
+    if state1:
+        _density_override = 0.0   # State 1: no people
+        lpd_override = 0.0        # State 1: no lights
+        epd_override = 0.0        # State 1: no equipment
+    elif _num_bedrooms > 0 and _gia > 0:
         _avg_occupants = _num_bedrooms * _occupancy_rate * _people_per_room
         _density_override = _avg_occupants / _gia
     else:
@@ -701,7 +745,7 @@ def assemble_epjson(
     # Reads the per-facade openings dict from building_params (Building →
     # Openings). Louvres always-open, openable windows on a schedule. Single-zone,
     # no stack (single-side wind only).
-    natural_vent_objects = _build_openings_objects(zones, building_params)
+    natural_vent_objects = _build_openings_objects(zones, building_params, state1=state1)
 
     # Always-on schedule referenced by louvres + 'always' window mode.
     # Merged into the final hvac_objects below so it doesn't get overwritten by
@@ -713,12 +757,20 @@ def assemble_epjson(
         },
     } if natural_vent_objects else {}
 
-    # ── 7. HVAC — branch on mode ──────────────────────────────────────────────
+    # ── 7. HVAC — branch on hvac_mode ─────────────────────────────────────────
     # "ideal_loads" (default): ZoneHVAC:IdealLoadsAirSystem — perfect, no real system effects
     # "detailed": real VRF objects with performance curves, real COP, fan energy
-    mode = sc.get("mode", "ideal_loads")
+    #
+    # Brief 26 Part 5: State 1 envelope-only mode forces ideal loads regardless
+    # of the user's systems_config.mode. State 1 doesn't care about VRF curves
+    # or boiler efficiencies — we just need a quiet thermostat with extreme
+    # setpoints so the zone runs free against the envelope.
+    # Renamed from `mode` to `hvac_mode` to avoid shadowing the state-contract
+    # `mode` function parameter (previously caused State 1 to silently fall
+    # back to detailed-mode + occupancy thermostat schedules).
+    hvac_mode = "ideal_loads" if state1 else sc.get("mode", "ideal_loads")
 
-    if mode == "detailed":
+    if hvac_mode == "detailed":
         # ── Parse demand-based system assignments (with flat-key fallbacks) ──
         systems_cfg = sc.get("systems", {})
 
@@ -825,7 +877,7 @@ def assemble_epjson(
     else:
         # Ideal loads — ZoneHVAC:IdealLoadsAirSystem (not HVACTemplate which needs ExpandObjects)
         ideal_loads, equip_lists, equip_conns, dual_setpoints, zone_controls = (
-            _build_hvac_ideal_loads(zones)
+            _build_hvac_ideal_loads(zones, state1=state1)
         )
         hvac_objects = {
             "ZoneHVAC:IdealLoadsAirSystem": ideal_loads,
@@ -834,6 +886,24 @@ def assemble_epjson(
             "ThermostatSetpoint:DualSetpoint": dual_setpoints,
             "ZoneControl:Thermostat":        zone_controls,
         }
+        # State 1 setpoint constants — extreme bounds (-60°C heating /
+        # +100°C cooling) so the IdealLoads system never engages within any
+        # plausible weather. The zone truly runs free against the envelope;
+        # EP reports the free-running zone temperature hour by hour. Demand
+        # against the comfort band is derived post-hoc in the parser, not
+        # by EP. Bounds match the Temperature ScheduleTypeLimits range
+        # (lower -60, upper 200) defined in nza_engine/library/schedules.py.
+        if state1:
+            hvac_objects.setdefault("Schedule:Constant", {}).update({
+                "state1_heating_setpoint": {
+                    "schedule_type_limits_name": "Temperature",
+                    "hourly_value": -60.0,
+                },
+                "state1_cooling_setpoint": {
+                    "schedule_type_limits_name": "Temperature",
+                    "hourly_value": 100.0,
+                },
+            })
         if openings_const_schedules:
             hvac_objects["Schedule:Constant"] = dict(openings_const_schedules)
 
