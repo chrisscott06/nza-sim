@@ -141,7 +141,10 @@ const TABS = [
 const TAB_KEYS = TABS.map(t => t.key)
 
 // ── Tab content dispatcher ──────────────────────────────────────────────────
-function TabContent({ tab, activeSection, params, updateParam }) {
+function TabContent({
+  tab, activeSection, params, updateParam,
+  editingExceptionId, onEnterEditMode, onExitEditMode,
+}) {
   // Schedule tab — wires to the centre-canvas editor and the v2.4 contract's
   // section-of-interest data path.
   if (tab === 'schedule') {
@@ -151,33 +154,53 @@ function TabContent({ tab, activeSection, params, updateParam }) {
     // profile arrives in Parts 9/10; for now Lighting + Equipment edit the
     // (single) gains.lighting.schedule / gains.equipment.schedule which the
     // current data model still uses.
-    let schedule, onChange, label
+    let parentSchedule, parentOnChange, label
     if (activeSection === 'occupancy') {
-      schedule = params?.occupancy?.schedule
+      parentSchedule = params?.occupancy?.schedule
       label = GAIN_LABELS.occupancy
-      onChange = (next) => updateParam('occupancy', { ...(params?.occupancy ?? {}), schedule: next })
+      parentOnChange = (next) => updateParam('occupancy', { ...(params?.occupancy ?? {}), schedule: next })
     } else if (activeSection === 'lighting') {
-      schedule = params?.gains?.lighting?.schedule
+      parentSchedule = params?.gains?.lighting?.schedule
       label = GAIN_LABELS.lighting
-      onChange = (next) => updateParam('gains', {
+      parentOnChange = (next) => updateParam('gains', {
         ...(params?.gains ?? {}),
         lighting: { ...(params?.gains?.lighting ?? {}), schedule: next },
       })
     } else if (activeSection === 'equipment') {
-      schedule = params?.gains?.equipment?.schedule
+      parentSchedule = params?.gains?.equipment?.schedule
       label = GAIN_LABELS.equipment
-      onChange = (next) => updateParam('gains', {
+      parentOnChange = (next) => updateParam('gains', {
         ...(params?.gains ?? {}),
         equipment: { ...(params?.gains?.equipment ?? {}), schedule: next },
       })
+    }
+
+    // Resolve the currently-edited exception (if any). Stale ID falls
+    // through to default-mode rendering and the next render clears it.
+    const editingException = editingExceptionId
+      ? (parentSchedule?.exceptions ?? []).find(e => e.id === editingExceptionId) ?? null
+      : null
+
+    // Exception writer: replaces the matching exception in
+    // parentSchedule.exceptions[] with patched curve fields.
+    const exceptionOnChange = (curvePatch) => {
+      if (!editingException || !parentOnChange || !parentSchedule) return
+      const nextExceptions = (parentSchedule.exceptions ?? []).map(e =>
+        e.id === editingException.id ? { ...e, ...curvePatch } : e
+      )
+      parentOnChange({ ...parentSchedule, exceptions: nextExceptions })
     }
 
     return (
       <ScheduleEditorCanvas
         gainType={activeSection}
         gainLabel={label}
-        schedule={schedule}
-        onChange={onChange}
+        parentSchedule={parentSchedule}
+        parentOnChange={parentOnChange}
+        editingException={editingException}
+        exceptionOnChange={exceptionOnChange}
+        onEnterEditMode={onEnterEditMode}
+        onExitEditMode={onExitEditMode}
         accent={accent}
       />
     )
@@ -215,6 +238,11 @@ export default function InternalGainsModule() {
   const [prefs, setPrefs] = useState(loadLayoutPrefs)
   const { left, tab, activeSection } = prefs
 
+  // Brief 27 Revised Part 8: which exception (if any) is being edited
+  // in the centre canvas. Not persisted to localStorage — edit mode
+  // is a session-local activity, not a project setting.
+  const [editingExceptionId, setEditingExceptionId] = useState(null)
+
   const { params, updateParam } = useContext(ProjectContext)
   const annual = useAnnualGains()
 
@@ -226,11 +254,23 @@ export default function InternalGainsModule() {
     setPrefs(p => ({ ...p, left: clamp(p.left + dx, LEFT_MIN, LEFT_MAX) }))
   }, [])
 
-  const setTab = useCallback((next) => setPrefs(p => ({ ...p, tab: next })), [])
-  const setActiveSection = useCallback((next) => setPrefs(p => ({ ...p, activeSection: next })), [])
+  // Any tab change or section change exits exception edit mode — keeps the
+  // banner from persisting into a context where it no longer makes sense.
+  const setTab = useCallback((next) => {
+    setEditingExceptionId(null)
+    setPrefs(p => ({ ...p, tab: next }))
+  }, [])
+  const setActiveSection = useCallback((next) => {
+    setEditingExceptionId(null)
+    setPrefs(p => ({ ...p, activeSection: next }))
+  }, [])
   const onEditSchedule = useCallback((section) => {
+    setEditingExceptionId(null)
     setPrefs(p => ({ ...p, activeSection: section, tab: 'schedule' }))
   }, [])
+
+  const onEnterEditMode = useCallback((excId) => setEditingExceptionId(excId), [])
+  const onExitEditMode  = useCallback(() => setEditingExceptionId(null), [])
 
   const activeTab = TABS.find(t => t.key === tab) ?? TABS[0]
   const scheduleTabLabel = `Schedule: ${GAIN_LABELS[activeSection] ?? '—'}`
@@ -342,6 +382,9 @@ export default function InternalGainsModule() {
               activeSection={activeSection}
               params={params}
               updateParam={updateParam}
+              editingExceptionId={editingExceptionId}
+              onEnterEditMode={onEnterEditMode}
+              onExitEditMode={onExitEditMode}
             />
           </div>
         </div>

@@ -92,6 +92,87 @@ function copyWeekdayToWeekend(schedule) {
   }
 }
 
+// Inline number+button widget for value-parameterised quick-sets.
+function NumberThenApply({ label, defaultValue, step, min, max, suffix, onApply, disabled, title }) {
+  const [v, setV] = useState(defaultValue)
+  return (
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 border border-light-grey rounded bg-white">
+      <span className="text-xxs text-mid-grey/80">{label}</span>
+      <input
+        type="number"
+        value={v}
+        step={step}
+        min={min}
+        max={max}
+        disabled={disabled}
+        onChange={e => setV(e.target.value === '' ? '' : Number(e.target.value))}
+        onKeyDown={e => { if (e.key === 'Enter' && v !== '') onApply(clamp01(Number(v))) }}
+        className="w-10 text-xxs text-right tabular-nums border-0 focus:outline-none bg-transparent text-navy"
+      />
+      {suffix && <span className="text-xxs text-mid-grey/60">{suffix}</span>}
+      <button
+        onClick={() => v !== '' && onApply(Number(v))}
+        disabled={disabled || v === ''}
+        className="text-xxs px-1 rounded text-mid-grey hover:text-navy disabled:opacity-30 transition-colors"
+        title={title}
+      >
+        Apply
+      </button>
+    </span>
+  )
+}
+
+function BaselineInput({ onApply, disabled }) {
+  return (
+    <NumberThenApply
+      label="Baseload"
+      defaultValue={0.1}
+      step={0.05}
+      min={0}
+      max={1}
+      onApply={(n) => onApply(clamp01(n))}
+      disabled={disabled}
+      title="Set each hour to max(current, N) for the active day type. Useful for shutdowns with a security/baseload floor."
+    />
+  )
+}
+
+function MultiplyInput({ onApply, disabled }) {
+  return (
+    <NumberThenApply
+      label="×"
+      defaultValue={0.5}
+      step={0.1}
+      min={0}
+      max={5}
+      suffix=""
+      onApply={(f) => onApply(f)}
+      disabled={disabled}
+      title="Multiply each hour by N (clamped to [0, 1]) for the active day type. Preserves shape, scales magnitude."
+    />
+  )
+}
+
+/**
+ * Apply baseload N to a day: every hour becomes max(current, N). Useful
+ * for exception authoring patterns like "Christmas shutdown but keep 10%
+ * security lighting" — Flat 0 followed by Apply baseload 0.1 yields a
+ * uniform floor at 0.1 across the 24 hours.
+ */
+function applyBaselineToDay(schedule, dayType, value) {
+  const arr = schedule[dayType] ?? new Array(24).fill(0)
+  return { ...schedule, [dayType]: arr.map(v => Math.max(v, value)) }
+}
+
+/**
+ * Multiply day-type values by N (clamped to [0, 1]). Preserves shape while
+ * scaling magnitude — "reduced summer" exception patterns, etc.
+ */
+function multiplyDay(schedule, dayType, factor) {
+  const arr = schedule[dayType] ?? new Array(24).fill(0)
+  return { ...schedule, [dayType]: arr.map(v => clamp01(v * factor)) }
+}
+
 // ── 24-hour bar grid (the main editing surface) ──────────────────────────────
 function HourBarGrid({ values, onChange, accent, disabled, height = 64 }) {
   const wrapRef = useRef(null)
@@ -431,6 +512,11 @@ export default function ScheduleEditor({
   disabled = false,
   barGridHeight = 64,
   monthlyRowHeight = 40,
+  // Brief 27 Revised Part 8: exception management moved to the canvas-
+  // level ExceptionsPanel. The inline exception list inside this
+  // component is now hidden by default; set `showExceptionsInline` to
+  // bring it back for any future panel-mode use case.
+  showExceptionsInline = false,
 }) {
   const [activeDay, setActiveDay] = useState('weekday')
 
@@ -559,6 +645,20 @@ export default function ScheduleEditor({
           <ChevronsRight size={10} />
         </button>
 
+        {/* Apply baseload N — exception-authoring helper. Sets each hour to
+            max(current, N) for the active day type. Useful for shutdowns
+            with a security/baseload floor. */}
+        <BaselineInput
+          disabled={disabled}
+          onApply={(n) => onChange(applyBaselineToDay(safeSchedule, activeDay, n))}
+        />
+
+        {/* Multiply by factor — scales the active day-type by N (clamped). */}
+        <MultiplyInput
+          disabled={disabled}
+          onApply={(f) => onChange(multiplyDay(safeSchedule, activeDay, f))}
+        />
+
         {/* Cross-day operation — visually separated by margin */}
         <button
           disabled={disabled}
@@ -590,14 +690,18 @@ export default function ScheduleEditor({
         />
       </SubSection>
 
-      {/* Exception periods — collapsible, with count badge */}
-      <SubSection title="Exception periods" badge={exCount > 0 ? exCount : null}>
-        <ExceptionsList
-          exceptions={safeSchedule.exceptions}
-          onChange={setExceptions}
-          disabled={disabled}
-        />
-      </SubSection>
+      {/* Exception periods — kept inline only for legacy callers; the
+          canvas now hosts the full ExceptionsPanel (with heatmap,
+          presets, and edit-mode trigger). */}
+      {showExceptionsInline && (
+        <SubSection title="Exception periods" badge={exCount > 0 ? exCount : null}>
+          <ExceptionsList
+            exceptions={safeSchedule.exceptions}
+            onChange={setExceptions}
+            disabled={disabled}
+          />
+        </SubSection>
+      )}
     </div>
   )
 }

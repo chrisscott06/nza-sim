@@ -32,8 +32,11 @@
  * full diagnostic build-out).
  */
 
-import { useMemo, useCallback } from 'react'
+import { useMemo, useCallback, useState } from 'react'
+import { ArrowLeft } from 'lucide-react'
 import ScheduleEditor from '../ScheduleEditor.jsx'
+import AnnualHeatmap from './AnnualHeatmap.jsx'
+import ExceptionsPanel from './ExceptionsPanel.jsx'
 
 /**
  * Compute simple summary statistics for the active-day curve of a schedule.
@@ -119,21 +122,93 @@ function AreaCoverageSlot({ gainType, areaShareTotal }) {
 }
 
 // ── Main canvas ──────────────────────────────────────────────────────────────
+//
+// Brief 27 Revised Part 8 introduces edit-mode for individual exception
+// periods. The caller (InternalGainsModule) tracks `editingException` as
+// the exception currently being edited; when set:
+//   - The canvas renders an edit-mode banner at top (distinct colour,
+//     "Save & return to default" affordance).
+//   - The ScheduleEditor below operates on the exception's curves (the
+//     caller supplies a virtual schedule whose weekday/saturday/sunday
+//     ARE the exception's curves; ExceptionsPanel + AnnualHeatmap below
+//     keep working off the PARENT schedule).
+//
+// Props:
+//   - parentSchedule       — always the underlying schedule (for heatmap,
+//                            exceptions panel, and the on-change wiring
+//                            when editing the default).
+//   - parentOnChange       — write back to building_config for any change
+//                            to the default schedule (not an exception).
+//   - editingException     — null OR the exception object being edited.
+//   - exceptionOnChange    — write back to building_config when the
+//                            exception's curves change (only meaningful
+//                            when editingException is set).
+//   - onEnterEditMode(id)  — switch to editing exception `id`.
+//   - onExitEditMode()     — return to default-schedule editing.
 export default function ScheduleEditorCanvas({
   gainType,
   gainLabel,
-  schedule,
-  onChange,
+  parentSchedule,
+  parentOnChange,
+  editingException,
+  exceptionOnChange,
+  onEnterEditMode,
+  onExitEditMode,
   accent,
   // Part 10 hooks — passed through but unused until that part:
   activeProfileId,
   areaShareTotal,
 }) {
-  const stats = useScheduleStats(schedule)
+  // ── Build the effective schedule for the ScheduleEditor ───────────────
+  // Default mode: editor edits parentSchedule directly.
+  // Exception mode: editor edits a synthetic schedule whose weekday/
+  //   saturday/sunday ARE the exception's curves. monthly_multipliers
+  //   inherited from parent unless the exception ignores them (in which
+  //   case they're flat 1.0 so the editor's monthly row reads neutrally).
+  //   The synthetic schedule has empty exceptions[] — no nesting.
+  const isEditingException = !!editingException
+  const editorSchedule = isEditingException
+    ? {
+        weekday:             editingException.weekday  ?? new Array(24).fill(0),
+        saturday:            editingException.saturday ?? new Array(24).fill(0),
+        sunday:              editingException.sunday   ?? new Array(24).fill(0),
+        monthly_multipliers: editingException.ignore_monthly_multipliers
+          ? new Array(12).fill(1)
+          : (parentSchedule?.monthly_multipliers ?? new Array(12).fill(1)),
+        exceptions: [],
+      }
+    : parentSchedule
 
-  const handleChange = useCallback((next) => onChange(next), [onChange])
+  const editorOnChange = useCallback((next) => {
+    if (isEditingException) {
+      // Forward only the curve fields to the exception writer; the synthetic
+      // monthly_multipliers + exceptions[] are not part of the exception.
+      exceptionOnChange?.({
+        weekday:  next.weekday,
+        saturday: next.saturday,
+        sunday:   next.sunday,
+      })
+    } else {
+      parentOnChange?.(next)
+    }
+  }, [isEditingException, exceptionOnChange, parentOnChange])
 
-  if (!schedule) {
+  const stats = useScheduleStats(editorSchedule)
+
+  // Highlight-on-hover for the exception list ↔ heatmap pairing.
+  const [highlightExceptionId, setHighlightExceptionId] = useState(null)
+
+  // When in edit mode, force-highlight the exception being edited so the
+  // heatmap shows where it lands in the year.
+  const effectiveHighlight = editingException?.id ?? highlightExceptionId
+
+  // Header copy for the edit-mode banner — derive week numbers for the
+  // user (approx since exception ranges can wrap year-end).
+  const editBannerCopy = editingException
+    ? `weeks of ${editingException.start_date} → ${editingException.end_date}`
+    : null
+
+  if (!parentSchedule) {
     return (
       <div className="mx-auto px-6 py-8 max-w-[1100px]">
         <p className="text-caption text-mid-grey">
@@ -146,15 +221,13 @@ export default function ScheduleEditorCanvas({
 
   return (
     <div className="mx-auto px-6 py-5 max-w-[1100px]">
-      {/* Title bar */}
+      {/* Title bar — always reflects the default schedule label */}
       <div
         className="flex items-baseline gap-2 pb-2 mb-4 border-b-2"
         style={{ borderBottomColor: accent }}
       >
         <h2 className="text-base font-semibold text-navy">Schedule</h2>
-        <span className="text-caption text-mid-grey">
-          {gainLabel}
-        </span>
+        <span className="text-caption text-mid-grey">{gainLabel}</span>
         <span className="ml-auto text-xxs italic text-mid-grey/70">
           Drag bars to set fraction · drag horizontally to paint
         </span>
@@ -164,12 +237,50 @@ export default function ScheduleEditorCanvas({
       <ProfileSelectorSlot gainType={gainType} activeProfileId={activeProfileId} />
       <AreaCoverageSlot   gainType={gainType} areaShareTotal={areaShareTotal} />
 
-      {/* The editor itself — canvas-sized; day-type tabs + per-day
-          quick-set buttons live inside, so the scope is unambiguous. */}
+      {/* ── Edit-mode banner ─────────────────────────────────────────────
+          Shown when an exception's curves are being edited. Distinct
+          colour (orange/amber, deliberately different from the gain
+          accent + the structural module accent) signals "you are not
+          editing the default schedule right now". */}
+      {isEditingException && (
+        <div
+          className="mb-3 px-3 py-2.5 rounded border-l-4 flex items-center gap-3"
+          style={{
+            backgroundColor: 'rgba(234, 88, 12, 0.08)',
+            borderLeftColor: '#EA580C',
+          }}
+        >
+          <div className="text-base">
+            {editingException.icon || '✏️'}
+          </div>
+          <div className="flex-1">
+            <div className="text-caption font-semibold text-navy">
+              Editing: {editingException.name || '(unnamed exception)'}
+            </div>
+            <div className="text-xxs text-mid-grey">
+              {editBannerCopy}
+              {editingException.ignore_monthly_multipliers && (
+                <span className="ml-2">· monthly multipliers bypassed</span>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={onExitEditMode}
+            className="flex items-center gap-1 px-2.5 py-1 text-caption text-white rounded transition-opacity hover:opacity-90"
+            style={{ backgroundColor: '#EA580C' }}
+          >
+            <ArrowLeft size={11} /> Save &amp; return to default
+          </button>
+        </div>
+      )}
+
+      {/* ── Schedule editor ──────────────────────────────────────────────
+          Same component for default and exception modes; the caller-
+          supplied virtual schedule routes the edits to the right place. */}
       <div className="bg-white border border-light-grey rounded p-4">
         <ScheduleEditor
-          schedule={schedule}
-          onChange={handleChange}
+          schedule={editorSchedule}
+          onChange={editorOnChange}
           gainType={gainType}
           accent={accent}
           barGridHeight={140}
@@ -177,9 +288,13 @@ export default function ScheduleEditorCanvas({
         />
       </div>
 
-      {/* Statistics card — single multi-row card per UI principle #2 */}
+      {/* ── Statistics card ──────────────────────────────────────────────
+          Stats reflect whichever schedule the editor is currently editing
+          (default OR exception's curves). */}
       <div className="mt-4 bg-white border border-light-grey rounded p-4 max-w-md">
-        <h3 className="text-xxs uppercase tracking-wider text-mid-grey mb-2">Statistics</h3>
+        <h3 className="text-xxs uppercase tracking-wider text-mid-grey mb-2">
+          Statistics {isEditingException && <span className="ml-1 text-orange-600">(this exception)</span>}
+        </h3>
         <div className="space-y-1 text-caption tabular-nums">
           <div className="flex justify-between">
             <span className="text-mid-grey">Peak fraction</span>
@@ -194,11 +309,35 @@ export default function ScheduleEditorCanvas({
             <span className="text-navy font-medium">{Math.round(stats.operating_hours).toLocaleString()} h/yr</span>
           </div>
         </div>
-        <p className="text-xxs italic text-mid-grey/70 mt-2">
-          Operating hours = (Σ day fractions across 7-day week × 365 ÷ 7 ×
-          monthly average). Annual heatmap (8,760-hour view) lands in
-          Brief 27 Revised Part 11.
-        </p>
+      </div>
+
+      {/* ── Exception periods panel ──────────────────────────────────────
+          Always operates on the PARENT schedule's exceptions[]. Hidden
+          for the case where parentOnChange isn't supplied (defensive). */}
+      {parentOnChange && (
+        <div className="mt-5 bg-white border border-light-grey rounded p-4">
+          <ExceptionsPanel
+            exceptions={parentSchedule.exceptions ?? []}
+            parentSchedule={parentSchedule}
+            onChange={(nextExceptions) => parentOnChange({ ...parentSchedule, exceptions: nextExceptions })}
+            onEditException={onEnterEditMode}
+            highlightExceptionId={effectiveHighlight}
+            onHighlight={setHighlightExceptionId}
+            disabled={isEditingException}
+          />
+        </div>
+      )}
+
+      {/* ── Annual heatmap ───────────────────────────────────────────────
+          Always renders the PARENT schedule's assembled pattern — even
+          while editing an exception, the heatmap shows the full year
+          with the exception's curves baked in via fractionForHour. */}
+      <div className="mt-5 bg-white border border-light-grey rounded p-4">
+        <AnnualHeatmap
+          schedule={parentSchedule}
+          accent={accent}
+          highlightExceptionId={effectiveHighlight}
+        />
       </div>
     </div>
   )

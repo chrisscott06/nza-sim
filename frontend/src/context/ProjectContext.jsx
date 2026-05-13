@@ -161,18 +161,33 @@ const DEFAULT_PARAMS = {
 // any explicit user value) on load. Idempotent — running twice doesn't
 // double-apply; explicit v2.3 fields win over derived defaults.
 
+// v2.4 exception migration — assigns deterministic ids + copies parent
+// curves into legacy exceptions that lacked them. Idempotent. Imported
+// from the gains module's canvas helpers.
+import { migrateExceptionsV24 } from '../components/modules/gains/canvas/exceptions.js'
+
+function _migrateScheduleExceptions(sched) {
+  if (!sched) return sched
+  const migrated = migrateExceptionsV24(sched.exceptions, sched)
+  if (migrated === sched.exceptions) return sched
+  return { ...sched, exceptions: migrated }
+}
+
 function migrateOccupancyV23(bc) {
-  // Already migrated? Preserve verbatim.
+  // Already migrated? Preserve verbatim. Then run v2.4 exception migration
+  // on the schedule (idempotent — no-op if curves + ids already in place).
   if (bc?.occupancy?.density?.value != null) {
-    return {
+    const merged = {
       ...DEFAULT_OCCUPANCY,
       ...bc.occupancy,
       density: { ...DEFAULT_OCCUPANCY.density, ...bc.occupancy.density },
       schedule: { ...DEFAULT_OCCUPANCY.schedule, ...(bc.occupancy.schedule ?? {}) },
     }
+    merged.schedule = _migrateScheduleExceptions(merged.schedule)
+    return merged
   }
   // Build from legacy fields where present.
-  return {
+  const result = {
     ...DEFAULT_OCCUPANCY,
     occupancy_rate: bc?.occupancy_rate ?? DEFAULT_OCCUPANCY.occupancy_rate,
     density: {
@@ -181,32 +196,38 @@ function migrateOccupancyV23(bc) {
     },
     _provenance: { source: 'migrated_from_legacy', confidence: 'medium' },
   }
+  result.schedule = _migrateScheduleExceptions(result.schedule)
+  return result
 }
 
 function migrateGainsV23(bc) {
-  // Already migrated? Preserve verbatim.
+  // Already migrated? Preserve verbatim + run v2.4 exception migration on
+  // both schedules.
   if (bc?.gains?.lighting?.magnitude?.value != null) {
-    return {
-      lighting: {
-        ...DEFAULT_GAINS.lighting,
-        ...bc.gains.lighting,
-        magnitude: { ...DEFAULT_GAINS.lighting.magnitude, ...bc.gains.lighting.magnitude },
-        schedule:  { ...DEFAULT_GAINS.lighting.schedule, ...(bc.gains.lighting.schedule ?? {}) },
-      },
-      equipment: {
-        ...DEFAULT_GAINS.equipment,
-        ...(bc.gains.equipment ?? {}),
-        baseload: {
-          ...DEFAULT_GAINS.equipment.baseload,
-          ...(bc.gains.equipment?.baseload ?? {}),
-        },
-        active: {
-          ...DEFAULT_GAINS.equipment.active,
-          ...(bc.gains.equipment?.active ?? {}),
-        },
-        schedule: { ...DEFAULT_GAINS.equipment.schedule, ...(bc.gains.equipment?.schedule ?? {}) },
-      },
+    const lighting = {
+      ...DEFAULT_GAINS.lighting,
+      ...bc.gains.lighting,
+      magnitude: { ...DEFAULT_GAINS.lighting.magnitude, ...bc.gains.lighting.magnitude },
+      schedule:  { ...DEFAULT_GAINS.lighting.schedule, ...(bc.gains.lighting.schedule ?? {}) },
     }
+    lighting.schedule = _migrateScheduleExceptions(lighting.schedule)
+
+    const equipment = {
+      ...DEFAULT_GAINS.equipment,
+      ...(bc.gains.equipment ?? {}),
+      baseload: {
+        ...DEFAULT_GAINS.equipment.baseload,
+        ...(bc.gains.equipment?.baseload ?? {}),
+      },
+      active: {
+        ...DEFAULT_GAINS.equipment.active,
+        ...(bc.gains.equipment?.active ?? {}),
+      },
+      schedule: { ...DEFAULT_GAINS.equipment.schedule, ...(bc.gains.equipment?.schedule ?? {}) },
+    }
+    equipment.schedule = _migrateScheduleExceptions(equipment.schedule)
+
+    return { lighting, equipment }
   }
   // Build from defaults — pre-Brief-27 projects didn't have a `gains.*` block.
   return {
