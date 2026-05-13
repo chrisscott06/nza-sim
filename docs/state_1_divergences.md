@@ -161,6 +161,98 @@ is sufficient; a JSON export is the right long-term fix but not urgent.
 
 ---
 
+## 5. Process lesson — walkthrough discipline > automated regression
+
+Not a physics divergence, but a recurring failure mode worth catalogued
+here so future briefs don't repeat it.
+
+**What:** Brief 26 closed with all 10 parts complete, the engine
+agreement script reporting +0.8% silent on heating demand, the state
+isolation regression at 45/45 byte-identical, and STATUS.md updated.
+Every automated check passed. A manual UI walkthrough by Chris one day
+later surfaced four issues, three of them contract-violating:
+
+1. Sim view didn't render the State 1 contract output shape
+2. Glazing + ground floor read 0 in the Sim view
+3. Free-running summer max at 42.4°C (contract bound ≤36°C)
+4. Thermal mass as a redundant dropdown vs derived from constructions
+
+Brief 26.1 Part 0 then surfaced a fifth issue — a latent assembler
+regression in `epjson_assembler.py` line 914 that wiped the State 1
+setpoint schedules whenever a project carried non-zero louvre area.
+This had been in the codebase since the openings brief (pre-Brief 26)
+but never bit because every test project used default-zero louvres.
+The user setting louvres for the first time surfaced the bug.
+
+**Why the regressions missed it:**
+- The engine agreement script ran on a stock-Bridgewater config that
+  the user had no reason to touch — it carried Brief 26's test values,
+  not a production-shaped config.
+- The state isolation regression passed because baseline and absurd-input
+  runs had identical broken output. Identical, but identically wrong.
+- No automated test rendered the Heat Balance view in a browser.
+
+**Lesson:** brief close-out cannot be solely "automated tests pass" —
+contract conformance is verified in the UI by a human, on a config
+shaped like a real project (non-default values across at least the
+geometry, fabric, openings, and comfort band). Without that step,
+regressions wait for the user to find them.
+
+**Mitigation going forward:** every brief close-out includes a manual
+walkthrough at 1440×900 with screenshots, on a config that is NOT the
+default. The brief's "Verify" section explicitly demands this. Brief
+26.1's discipline ("VERIFICATION RULES" block at the top) makes this
+non-optional.
+
+**What would prevent recurrence beyond discipline:** a screenshot-based
+visual regression test that diffs the Heat Balance view against a
+golden image. Would catch (a) any shape regression that breaks the
+contract output, (b) any data path that silently downcasts to legacy
+shape. Out of scope for State 1, candidate for Brief 30 (CI for state
+contracts).
+
+---
+
+## 6. Construction library — ground-floor layer ordering
+
+**What:** `nza_engine/library/constructions.py` documents `_construction()`
+as "ordered outside to inside". Walls and roofs are authored consistently
+with this: `cavity_wall_standard.outside_layer = "CavWall_Std_BrickOuter"`
+(exterior face), interior finish (plasterboard) is the last layer.
+
+Ground floors are authored backwards: `ground_floor_slab.outside_layer =
+"GFloor_Std_Carpet"` (the *indoor* finish), with insulation/hardcore as
+the last layers (ground-side).
+
+**Why this might or might not bite:**
+- EnergyPlus computes the steady-state U-value symmetrically — the
+  reversed order produces the same U. Stated U=0.22 W/m²K matches the
+  real construction.
+- Transient response would technically be affected (heat enters and
+  exits in the wrong stratification order), but for a ground floor
+  the only meaningful boundary is the slow ground temperature, so the
+  practical impact is small.
+- Brief 26.1 Part 1's thermal mass audit had to special-case
+  `type=floor` to look at layers BEFORE the insulation rather than
+  after, otherwise ground floors compute to 0 kJ/m²K.
+
+**Magnitude:** zero impact on U-value; negligible on steady-state
+heating demand; potentially small impact on summer indoor temperature
+peaks (ground slab takes longer to release heat than EP simulates if
+the layer order is wrong).
+
+**Fix:** swap the layer order in the two ground floor constructions
+in `nza_engine/library/constructions.py`. Both projects in the DB
+will need their EP runs re-validated to confirm U-value stays at 0.22
+and free-running stats don't shift materially.
+
+**Decision:** **defer** to a library housekeeping brief. The Part 1
+audit's type-aware algorithm handles the immediate need for Part 5
+(thermal mass derivation). Documented here so the eventual fix has
+context.
+
+---
+
 ## How to add a divergence
 
 When implementing any State 1 part where you choose a simplification:
