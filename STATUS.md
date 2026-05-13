@@ -1,5 +1,63 @@
 # NZA SIMULATE — Status
 
+## ✅ Brief 26 Part 9 — state isolation regression test harness
+
+State 1 isolation is now verified by two scripts that enumerate the
+canonical forbidden-input list (read programmatically from
+`frontend/src/utils/stateMode.js:FORBIDDEN_ENVELOPE_ONLY_INPUTS` — no
+hand-maintained duplicate). Bar is byte-identical canonical JSON; float
+tolerance is zero.
+
+### `scripts/state1_isolation_live.mjs` — live engine
+
+22 scenarios, all pass:
+- 21 forbidden inputs set individually to unambiguously-distorting
+  values (LPD=100, equipment=100, setpoint_heating=35, people_per_room=5,
+  openable_fraction=0.99, etc.)
+- 1 COMBINED scenario with every forbidden input absurd at once
+
+Every output deep-equal to baseline. `withMode()` in `instantCalc.js`
+is doing its job at the entry to `_calculateEnvelopeOnly`.
+
+### `scripts/state1_isolation_epjson.py` — EP path
+
+23 scenarios, all pass:
+- 22 epJSON byte-identity checks (same forbidden-input enumeration as
+  the live engine, applied to `assemble_epjson(..., mode='envelope-only')`)
+- 1 end-to-end EP run for the COMBINED scenario: baseline + combined-absurd
+  configs both assembled, simulated, parsed, and the resulting State 1
+  outputs compared byte-for-byte. Identical.
+
+EP byte-identity transitively guarantees parser isolation (EP is
+deterministic on identical epJSON; the parser only reads State-1-allowed
+inputs). The end-to-end run closes the contract spec literally.
+
+### Absurd values used (live + EP, matched)
+
+| Path | Value |
+|---|---|
+| `params.num_bedrooms` | 9999 |
+| `params.occupancy_rate` | 9.99 |
+| `params.people_per_room` | 5.0 |
+| `systems.lighting_power_density` | 100 W/m² |
+| `systems.equipment_power_density` | 100 W/m² |
+| `systems.space_heating` | `{setpoint_heating_c: 35, cop: 99}` |
+| `systems.space_cooling` | `{setpoint_cooling_c: 5, cop: 99}` |
+| `systems.dhw` | `{setpoint_c: 99, cop: 99}` |
+| `openings.schedule` | `'always'` |
+| `openings.{face}.openable_fraction` | 0.99 |
+| (and 11 more — full list in script) | |
+
+### Suggestion — CI integration (future brief)
+
+State isolation is foundational to State 4 (reconciliation) working
+correctly. Regression failures should block merges. Worth scoping
+in a "CI for state contracts" brief (~Brief 30) — both scripts return
+exit code 0 on pass / 1 on leak, so they drop into CI without further
+wiring. Not implementing now per scope-stay rule.
+
+---
+
 ## ✅ Brief 26 Part 7 — thermal mass dropdown in Building Fabric
 
 `params.thermal_mass_category` is now editable through the Building →
