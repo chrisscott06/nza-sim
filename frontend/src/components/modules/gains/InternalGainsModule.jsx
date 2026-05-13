@@ -144,6 +144,8 @@ const TAB_KEYS = TABS.map(t => t.key)
 function TabContent({
   tab, activeSection, params, updateParam,
   editingExceptionId, onEnterEditMode, onExitEditMode,
+  activeLightingId, activeEquipmentId,
+  onActiveLightingChange, onActiveEquipmentChange,
 }) {
   // Schedule tab — wires to the centre-canvas editor and the v2.4 contract's
   // section-of-interest data path.
@@ -167,8 +169,22 @@ function TabContent({
       const category = activeSection
       label = GAIN_LABELS[category]
       const profiles = params?.gains?.[category]?.profiles ?? []
-      const activeIdx = 0  // Part 10 wires real selection
+      const activeProfileId = category === 'lighting' ? activeLightingId : activeEquipmentId
+      // Resolve the active profile by id; fall back to profiles[0] when no
+      // explicit selection (typical first-load case) or when the active id
+      // has been deleted (recovery).
+      const activeIdx = (() => {
+        if (activeProfileId) {
+          const idx = profiles.findIndex(p => p.id === activeProfileId)
+          if (idx >= 0) return idx
+        }
+        return 0
+      })()
       parentSchedule = profiles[activeIdx]?.schedule
+      // Tag the active profile in the canvas header so the user can see
+      // which profile they're authoring even when the canvas is the only
+      // visible surface.
+      label = `${GAIN_LABELS[category]}${profiles.length > 1 ? ` · ${profiles[activeIdx]?.label ?? ''}` : ''}`
       parentOnChange = (next) => {
         const nextProfiles = profiles.slice()
         if (nextProfiles[activeIdx]) {
@@ -197,6 +213,22 @@ function TabContent({
       parentOnChange({ ...parentSchedule, exceptions: nextExceptions })
     }
 
+    // Part 10 wiring: pass per-section profile selector + area coverage.
+    let profileSelector = null
+    let areaShareTotal  = null
+    if (activeSection === 'lighting' || activeSection === 'equipment') {
+      const category = activeSection
+      const profiles = params?.gains?.[category]?.profiles ?? []
+      const activeId = category === 'lighting' ? activeLightingId : activeEquipmentId
+      const onChange = category === 'lighting' ? onActiveLightingChange : onActiveEquipmentChange
+      profileSelector = {
+        profiles: profiles.map(p => ({ id: p.id, label: p.label })),
+        activeId,
+        onChange,
+      }
+      areaShareTotal = profiles.reduce((s, p) => s + Number(p.area_share ?? 0), 0)
+    }
+
     return (
       <ScheduleEditorCanvas
         gainType={activeSection}
@@ -208,6 +240,8 @@ function TabContent({
         onEnterEditMode={onEnterEditMode}
         onExitEditMode={onExitEditMode}
         accent={accent}
+        profileSelector={profileSelector}
+        areaShareTotal={areaShareTotal}
       />
     )
   }
@@ -249,12 +283,36 @@ export default function InternalGainsModule() {
   // is a session-local activity, not a project setting.
   const [editingExceptionId, setEditingExceptionId] = useState(null)
 
+  // Brief 27 Revised Part 10: active profile id per category. Session-
+  // local; defaults to first profile on first render via the section
+  // components. Drives the centre-canvas Schedule tab + the per-section
+  // active-profile highlight.
+  const [activeLightingId,  setActiveLightingId]  = useState(null)
+  const [activeEquipmentId, setActiveEquipmentId] = useState(null)
+
   const { params, updateParam } = useContext(ProjectContext)
   const annual = useAnnualGains()
 
   useEffect(() => {
     try { localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(prefs)) } catch {}
   }, [prefs])
+
+  // Auto-select the first profile per category on mount (or after the
+  // active one is deleted). Keeps the centre-canvas Schedule tab and the
+  // section's active highlight aligned with a real profile.
+  useEffect(() => {
+    const lightingProfiles = params?.gains?.lighting?.profiles ?? []
+    if (lightingProfiles.length > 0 && !lightingProfiles.find(p => p.id === activeLightingId)) {
+      setActiveLightingId(lightingProfiles[0].id)
+    }
+  }, [params?.gains?.lighting?.profiles, activeLightingId])
+
+  useEffect(() => {
+    const equipmentProfiles = params?.gains?.equipment?.profiles ?? []
+    if (equipmentProfiles.length > 0 && !equipmentProfiles.find(p => p.id === activeEquipmentId)) {
+      setActiveEquipmentId(equipmentProfiles[0].id)
+    }
+  }, [params?.gains?.equipment?.profiles, activeEquipmentId])
 
   const onResizeLeft = useCallback((dx) => {
     setPrefs(p => ({ ...p, left: clamp(p.left + dx, LEFT_MIN, LEFT_MAX) }))
@@ -325,6 +383,8 @@ export default function InternalGainsModule() {
               <LightingSection
                 annual={annual}
                 onEditSchedule={() => onEditSchedule('lighting')}
+                activeProfileId={activeLightingId}
+                onSelectProfile={setActiveLightingId}
               />
             </CollapsibleSection>
 
@@ -336,6 +396,8 @@ export default function InternalGainsModule() {
               <EquipmentSection
                 annual={annual}
                 onEditSchedule={() => onEditSchedule('equipment')}
+                activeProfileId={activeEquipmentId}
+                onSelectProfile={setActiveEquipmentId}
               />
             </CollapsibleSection>
           </div>
@@ -391,6 +453,10 @@ export default function InternalGainsModule() {
               editingExceptionId={editingExceptionId}
               onEnterEditMode={onEnterEditMode}
               onExitEditMode={onExitEditMode}
+              activeLightingId={activeLightingId}
+              activeEquipmentId={activeEquipmentId}
+              onActiveLightingChange={setActiveLightingId}
+              onActiveEquipmentChange={setActiveEquipmentId}
             />
           </div>
         </div>

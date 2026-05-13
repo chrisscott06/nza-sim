@@ -78,44 +78,68 @@ function useScheduleStats(schedule) {
 // the day-type state lives. Keeps "Flat 1.0 on Weekday only" possible
 // — earlier all-three-days behaviour was too coarse.
 
-// ── Profile + area-coverage slots (Part 10) ──────────────────────────────────
-function ProfileSelectorSlot({ gainType, activeProfileId }) {
-  // Part 10 wires the multi-profile data model + selector. Until then this
-  // surfaces an explicit placeholder ONLY for the gain types that will get
-  // profile arrays (lighting + equipment). Occupancy is single-object.
-  if (gainType === 'occupancy') return null
+// ── Profile selector (Brief 27 Revised Part 10) ─────────────────────────────
+//
+// Lives only for Lighting + Equipment. The selector controls which profile
+// the centre-canvas Schedule editor edits. The active profile is also
+// reflected in the canvas title bar so the user always knows which schedule
+// they are looking at.
+function ProfileSelector({ gainType, profileSelector }) {
+  if (gainType === 'occupancy' || !profileSelector) return null
+  const { profiles, activeId, onChange } = profileSelector
+  if (!profiles || profiles.length === 0) return null
+  if (profiles.length === 1) {
+    return (
+      <div className="flex items-center justify-between mb-3 px-3 py-1.5 bg-off-white/60 border border-light-grey rounded">
+        <span className="text-xxs uppercase tracking-wider text-mid-grey/80">Profile</span>
+        <span className="text-caption text-navy font-medium">{profiles[0].label}</span>
+      </div>
+    )
+  }
   return (
-    <div className="flex items-center justify-between mb-3 px-3 py-2 bg-off-white/60 border border-dashed border-light-grey rounded">
-      <div>
-        <p className="text-xxs uppercase tracking-wider text-mid-grey/80">Profile</p>
-        <p className="text-caption text-navy font-medium">
-          {activeProfileId ?? 'Default'}
-          <span className="ml-2 text-xxs italic text-mid-grey/70">
-            (selector wired in Brief 27 Revised Part 10)
-          </span>
-        </p>
-      </div>
-      <div className="text-xxs italic text-mid-grey/70">
-        + Add profile · ⋯
-      </div>
+    <div className="flex items-center gap-2 mb-3 px-3 py-1.5 bg-off-white/60 border border-light-grey rounded">
+      <span className="text-xxs uppercase tracking-wider text-mid-grey/80">Profile</span>
+      <select
+        value={activeId ?? ''}
+        onChange={e => onChange?.(e.target.value)}
+        className="flex-1 max-w-xs px-2 py-0.5 text-caption text-navy font-medium border border-light-grey rounded bg-white focus:outline-none focus:border-mid-grey"
+      >
+        {profiles.map(p => (
+          <option key={p.id} value={p.id}>{p.label}</option>
+        ))}
+      </select>
+      <span className="text-xxs text-mid-grey/70">
+        {profiles.length} profiles configured · edit in left panel
+      </span>
     </div>
   )
 }
 
-function AreaCoverageSlot({ gainType, areaShareTotal }) {
-  if (gainType === 'occupancy') return null
-  // Default value 1.0 until Part 9 introduces real profiles[] with area_share.
-  const total = areaShareTotal ?? 1.0
+// ── Area-coverage indicator (live Σ area_share check) ───────────────────────
+//
+// Lives only for Lighting + Equipment. Sum across profiles' area_share
+// SHOULD equal 1.0 (= 100% of GIA covered). Warn-amber if outside ±2% to
+// flag under/over-coverage without being noisy about small rounding.
+function AreaCoverage({ gainType, areaShareTotal }) {
+  if (gainType === 'occupancy' || areaShareTotal == null) return null
+  const total = Number(areaShareTotal) || 0
   const pct = Math.round(total * 100)
-  const ok = total >= 0.99 && total <= 1.01
+  const ok = total >= 0.98 && total <= 1.02
+  const verdict = total < 0.98 ? 'under-covered' :
+                  total > 1.02 ? 'over-covered'  :
+                  'fully covered'
   return (
-    <div className="flex items-center justify-between mb-3 px-3 py-1.5 bg-off-white/60 border border-dashed border-light-grey rounded">
-      <span className="text-xxs uppercase tracking-wider text-mid-grey/80">Area coverage</span>
-      <span className={`text-caption font-medium tabular-nums ${ok ? 'text-navy' : 'text-amber-600'}`}>
-        {pct}%
-        <span className="ml-2 text-xxs italic text-mid-grey/70">
-          (live check wired in Part 10)
-        </span>
+    <div
+      className={`flex items-center justify-between mb-3 px-3 py-1.5 rounded border ${
+        ok ? 'border-light-grey bg-off-white/60' : 'border-amber-300 bg-amber-50/70'
+      }`}
+    >
+      <span className="text-xxs uppercase tracking-wider text-mid-grey/80">
+        Area coverage
+      </span>
+      <span className={`text-caption font-medium tabular-nums flex items-center gap-2 ${ok ? 'text-navy' : 'text-amber-700'}`}>
+        <span>{pct}%</span>
+        <span className="text-xxs font-normal">· {verdict}</span>
       </span>
     </div>
   )
@@ -155,8 +179,12 @@ export default function ScheduleEditorCanvas({
   onEnterEditMode,
   onExitEditMode,
   accent,
-  // Part 10 hooks — passed through but unused until that part:
-  activeProfileId,
+  // Brief 27 Revised Part 10 — multi-profile selector + area coverage.
+  // For lighting/equipment, caller passes:
+  //   profileSelector: { profiles: [{id, label}], activeId, onChange(id) }
+  //   areaShareTotal:  Σ profiles[*].area_share
+  // For occupancy, both should be null (single-object, not multi-profile).
+  profileSelector,
   areaShareTotal,
 }) {
   // ── Build the effective schedule for the ScheduleEditor ───────────────
@@ -233,9 +261,9 @@ export default function ScheduleEditorCanvas({
         </span>
       </div>
 
-      {/* Profile + area coverage (Part 10 slots — visible structure now) */}
-      <ProfileSelectorSlot gainType={gainType} activeProfileId={activeProfileId} />
-      <AreaCoverageSlot   gainType={gainType} areaShareTotal={areaShareTotal} />
+      {/* Profile selector + area coverage indicator (Brief 27 Revised Part 10) */}
+      <ProfileSelector gainType={gainType} profileSelector={profileSelector} />
+      <AreaCoverage    gainType={gainType} areaShareTotal={areaShareTotal} />
 
       {/* ── Edit-mode banner ─────────────────────────────────────────────
           Shown when an exception's curves are being edited. Distinct

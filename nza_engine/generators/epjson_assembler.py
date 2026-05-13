@@ -806,6 +806,198 @@ def _v23_derived_occupancy_schedule(building_params: dict) -> dict:
     )
 
 
+# ── Brief 27 Revised Part 10 — per-profile schedule derivation ──────────────
+#
+# Each lighting / equipment profile carries its own relationship_to_occupancy
+# + magnitude + (optional) schedule + area_share. The engine emits one
+# `Lights` / `ElectricEquipment` object per profile per zone, each pointing
+# at a Schedule:Compact whose values mirror the live engine's
+# fractionForHour math for that profile's relationship.
+
+def _v24_lighting_profile_schedule(profile: dict, building_params: dict) -> dict:
+    """
+    Derive a Schedule:Compact for a single v2.4 lighting profile, applying
+    the same relationship_to_occupancy semantics as the live engine.
+
+    Returns the Schedule:Compact dict. Caller is responsible for giving it
+    a unique name and splicing into all_schedules.
+    """
+    rel = profile.get("relationship_to_occupancy", "proportional_with_spill")
+    occ = building_params.get("occupancy") or {}
+    occ_rate = float(occ.get("occupancy_rate", 0.75) or 0.75)
+    occ_sched = occ.get("schedule") or {}
+
+    if rel == "always_on":
+        return v23_schedule_to_compact(
+            weekday=[1.0] * 24, saturday=[1.0] * 24, sunday=[1.0] * 24,
+            schedule_type="lighting",
+        )
+
+    if rel == "independent":
+        psched = profile.get("schedule") or occ_sched
+        return v23_schedule_to_compact(
+            weekday=list(psched.get("weekday",  [0] * 24)),
+            saturday=list(psched.get("saturday", psched.get("weekday", [0] * 24))),
+            sunday=list(psched.get("sunday",     psched.get("weekday", [0] * 24))),
+            monthly_multipliers=list(psched.get("monthly_multipliers", [1.0] * 12)),
+            exceptions=list(psched.get("exceptions", []) or []),
+            schedule_type="lighting",
+        )
+
+    if rel == "proportional":
+        # Pure occupancy × occupancy_rate (no standby floor on lighting).
+        wk_o = list(occ_sched.get("weekday",  [0] * 24))
+        sa_o = list(occ_sched.get("saturday", wk_o))
+        su_o = list(occ_sched.get("sunday",   wk_o))
+        return v23_schedule_to_compact(
+            weekday=[min(1.0, v * occ_rate) for v in wk_o],
+            saturday=[min(1.0, v * occ_rate) for v in sa_o],
+            sunday=[min(1.0, v * occ_rate) for v in su_o],
+            monthly_multipliers=list(occ_sched.get("monthly_multipliers", [1.0] * 12)),
+            exceptions=list(occ_sched.get("exceptions", []) or []),
+            schedule_type="lighting",
+        )
+
+    # 'proportional_with_spill' (default) — lighting schedule × occupancy_rate
+    # × daylight dim during 09:00–16:00.
+    psched = profile.get("schedule") or occ_sched
+    daylight = float(profile.get("daylight_factor", 0.6) or 0.6)
+
+    def _apply(arr):
+        return [
+            min(1.0, float(v) * occ_rate * (daylight if (9 <= h <= 16 and daylight < 1) else 1))
+            for h, v in enumerate(arr)
+        ]
+
+    wk = list(psched.get("weekday",  [0] * 24))
+    sa = list(psched.get("saturday", wk))
+    su = list(psched.get("sunday",   wk))
+    return v23_schedule_to_compact(
+        weekday=_apply(wk), saturday=_apply(sa), sunday=_apply(su),
+        monthly_multipliers=list(psched.get("monthly_multipliers", [1.0] * 12)),
+        exceptions=list(psched.get("exceptions", []) or []),
+        schedule_type="lighting",
+    )
+
+
+def _v24_equipment_active_profile_schedule(profile: dict, building_params: dict) -> dict:
+    """
+    Active-equipment fraction schedule for a single v2.4 equipment profile.
+    Baseload is emitted with a constant always-on schedule by the caller.
+    """
+    rel = profile.get("relationship_to_occupancy", "proportional")
+    occ = building_params.get("occupancy") or {}
+    occ_rate = float(occ.get("occupancy_rate", 0.75) or 0.75)
+    occ_sched = occ.get("schedule") or {}
+    standby = float(profile.get("standby_factor", 0.10) or 0)
+
+    if rel == "always_on":
+        return v23_schedule_to_compact(
+            weekday=[1.0] * 24, saturday=[1.0] * 24, sunday=[1.0] * 24,
+            schedule_type="equipment",
+        )
+
+    if rel == "independent":
+        psched = profile.get("schedule") or occ_sched
+        return v23_schedule_to_compact(
+            weekday=list(psched.get("weekday",  [0] * 24)),
+            saturday=list(psched.get("saturday", psched.get("weekday", [0] * 24))),
+            sunday=list(psched.get("sunday",     psched.get("weekday", [0] * 24))),
+            monthly_multipliers=list(psched.get("monthly_multipliers", [1.0] * 12)),
+            exceptions=list(psched.get("exceptions", []) or []),
+            schedule_type="equipment",
+        )
+
+    # 'proportional' — equipment schedule × occupancy_rate, with standby floor.
+    psched = profile.get("schedule") or occ_sched
+    wk = list(psched.get("weekday",  [0] * 24))
+    sa = list(psched.get("saturday", wk))
+    su = list(psched.get("sunday",   wk))
+
+    def _apply(arr):
+        return [max(standby, min(1.0, float(v) * occ_rate)) for v in arr]
+
+    return v23_schedule_to_compact(
+        weekday=_apply(wk), saturday=_apply(sa), sunday=_apply(su),
+        monthly_multipliers=list(psched.get("monthly_multipliers", [1.0] * 12)),
+        exceptions=list(psched.get("exceptions", []) or []),
+        schedule_type="equipment",
+    )
+
+
+def _emit_state2_lighting_profiles(building_params, zones, all_schedules, gia):
+    """
+    Emit one Lights object per (zone × profile) plus the per-profile
+    Schedule:Compact. Returns the Lights dict to splice into the epJSON.
+    Profile LPD = magnitude × area_share (engine math).
+    """
+    lights = {}
+    profiles = (building_params.get("gains") or {}).get("lighting", {}).get("profiles") or []
+    for i, profile in enumerate(profiles):
+        lpd = _v23_magnitude_to_w_per_m2(profile.get("magnitude"), building_params, gia)
+        area_share = float(profile.get("area_share", 1.0) or 0)
+        effective_lpd = lpd * area_share
+        if effective_lpd <= 0:
+            continue
+        # Per-profile schedule, named uniquely.
+        sched_name = f"v24_lighting_{profile.get('id', i)}"
+        all_schedules[sched_name] = _v24_lighting_profile_schedule(profile, building_params)
+        for zone_name in zones:
+            lights[f"{zone_name}_Lights_{profile.get('id', i)}"] = {
+                "zone_or_zonelist_or_space_or_spacelist_name": zone_name,
+                "schedule_name": sched_name,
+                "design_level_calculation_method": "Watts/Area",
+                "watts_per_floor_area": round(effective_lpd, 4),
+                "return_air_fraction": 0.0,
+                "fraction_radiant": 0.32,
+                "fraction_visible": 0.25,
+            }
+    return lights
+
+
+def _emit_state2_equipment_profiles(building_params, zones, all_schedules, gia):
+    """
+    Emit ElectricEquipment objects per (zone × profile). Each profile
+    contributes up to two objects per zone:
+      - <zone>_Equip_<id>_baseload  — always-on at baseload × area_share
+      - <zone>_Equip_<id>_active    — scheduled at active × area_share
+    Skipped if the corresponding magnitude is zero.
+    """
+    equipment = {}
+    profiles = (building_params.get("gains") or {}).get("equipment", {}).get("profiles") or []
+    for i, profile in enumerate(profiles):
+        area_share = float(profile.get("area_share", 1.0) or 0)
+        baseload_w = _v23_magnitude_to_w_per_m2(profile.get("baseload"), building_params, gia) * area_share
+        active_w   = _v23_magnitude_to_w_per_m2(profile.get("active"),   building_params, gia) * area_share
+
+        if baseload_w > 0:
+            for zone_name in zones:
+                equipment[f"{zone_name}_Equip_{profile.get('id', i)}_baseload"] = {
+                    "zone_or_zonelist_or_space_or_spacelist_name": zone_name,
+                    "schedule_name": "openings_always_on",  # reused; constant 1.0
+                    "design_level_calculation_method": "Watts/Area",
+                    "watts_per_floor_area": round(baseload_w, 4),
+                    "fraction_radiant": 0.30,
+                    "fraction_latent": 0.00,
+                    "fraction_lost": 0.00,
+                }
+
+        if active_w > 0:
+            sched_name = f"v24_equipment_active_{profile.get('id', i)}"
+            all_schedules[sched_name] = _v24_equipment_active_profile_schedule(profile, building_params)
+            for zone_name in zones:
+                equipment[f"{zone_name}_Equip_{profile.get('id', i)}_active"] = {
+                    "zone_or_zonelist_or_space_or_spacelist_name": zone_name,
+                    "schedule_name": sched_name,
+                    "design_level_calculation_method": "Watts/Area",
+                    "watts_per_floor_area": round(active_w, 4),
+                    "fraction_radiant": 0.30,
+                    "fraction_latent": 0.00,
+                    "fraction_lost": 0.00,
+                }
+    return equipment
+
+
 def assemble_epjson(
     building_params: dict,
     construction_choices: dict[str, str],
@@ -950,19 +1142,11 @@ def assemble_epjson(
             float(building_params.get("width",  15)) *
             float(building_params.get("num_floors", 4)))
 
-    # State 2 v2.3-derived densities + schedules. Computed regardless of
-    # mode so we can reuse below, but only INSTALLED when state2 is true.
+    # State 2 (Brief 27 Revised Part 10) — v2.4 multi-profile emission.
+    # Occupancy density still single-object; lighting + equipment iterate
+    # profiles[] and emit one Lights / ElectricEquipment per profile per
+    # zone, each with its own Schedule:Compact.
     _state2_density = _v23_compute_occupancy_density(building_params, _gia) if state2 else 0.0
-    _gains = building_params.get("gains") or {}
-    _light_w_per_m2 = _v23_magnitude_to_w_per_m2(
-        (_gains.get("lighting") or {}).get("magnitude"), building_params, _gia
-    ) if state2 else 0.0
-    _equip_baseload_w_per_m2 = _v23_magnitude_to_w_per_m2(
-        (_gains.get("equipment") or {}).get("baseload"), building_params, _gia
-    ) if state2 else 0.0
-    _equip_active_w_per_m2 = _v23_magnitude_to_w_per_m2(
-        (_gains.get("equipment") or {}).get("active"), building_params, _gia
-    ) if state2 else 0.0
 
     if state1:
         _density_override = 0.0   # State 1: no people
@@ -970,52 +1154,46 @@ def assemble_epjson(
         epd_override = 0.0        # State 1: no equipment
     elif state2:
         _density_override = _state2_density
-        lpd_override = _light_w_per_m2
-        # Active equipment LPD only — baseload is emitted as a separate
-        # ElectricEquipment object further down.
-        epd_override = _equip_active_w_per_m2
+        # v2.4: the legacy single-object lights/equipment are emitted with
+        # zero density (placeholder rows); per-profile objects below carry
+        # the real emission.
+        lpd_override = 0.0
+        epd_override = 0.0
     elif _num_bedrooms > 0 and _gia > 0:
         _avg_occupants = _num_bedrooms * _occupancy_rate * _people_per_room
         _density_override = _avg_occupants / _gia
     else:
         _density_override = None  # use library default
 
-    # ── State 2 schedule emission ─────────────────────────────────────────
-    # Three derived Schedule:Compact objects are spliced into `all_schedules`,
-    # replacing the default hotel_bedroom_* references. Done by name so the
-    # _build_people/_build_lights/_build_equipment_objects calls below pick
-    # up the new shapes without further changes.
+    # ── State 2 schedule emission for occupancy ───────────────────────────
+    # Occupancy stays single-object — splice the derived schedule into
+    # all_schedules under the name the People objects already reference.
     if state2:
         all_schedules["hotel_bedroom_occupancy"] = _v23_derived_occupancy_schedule(building_params)
-        all_schedules["hotel_bedroom_lighting"]  = _v23_derived_lighting_schedule(building_params)
-        all_schedules["hotel_bedroom_equipment"] = _v23_derived_equipment_active_schedule(building_params)
-        # Activity-level schedule used by People objects is a constant W/person
-        # value (75 W default from v2.3 occupancy.sensible_w_per_person). The
-        # existing 'hotel_bedroom_occupancy' activity-level schedule is a
-        # constant Schedule:Compact already; people heat is set via People's
-        # `sensible_heat_fraction` and library activity level.
+        # Legacy schedule names left untouched — per-profile schedules below
+        # have unique names so they coexist without clobbering.
 
     people_objects  = _build_people_objects(zones, density_override=_density_override)
+    # In state2 the v2.3-shape Lights / ElectricEquipment objects emit at
+    # ZERO density (the per-profile objects below carry the real loads).
+    # In state1 both are zero. In 'full' / other modes they use library
+    # defaults.
     lights_objects  = _build_lights_objects(zones, lpd_override=lpd_override)
     equip_objects   = _build_equipment_objects(zones, epd_override=epd_override)
 
-    # ── State 2: emit baseload equipment as a separate always-on object ───
-    # Mirrors the live engine's split of `equipment_baseload` (24/7) from
-    # `equipment_active` (scheduled). Without this, EP would only see the
-    # active component and undercount equipment energy by ~50%.
-    if state2 and _equip_baseload_w_per_m2 > 0:
-        # Ensure the always-on schedule is present (added by openings; here
-        # we add it preemptively in case no operable openings exist).
-        for zone_name in zones:
-            equip_objects[f"{zone_name}_EquipBaseload"] = {
-                "zone_or_zonelist_or_space_or_spacelist_name": zone_name,
-                "schedule_name": "openings_always_on",
-                "design_level_calculation_method": "Watts/Area",
-                "watts_per_floor_area": _equip_baseload_w_per_m2,
-                "fraction_radiant": 0.30,
-                "fraction_latent": 0.00,
-                "fraction_lost": 0.00,
-            }
+    # ── State 2 per-profile multi-profile emission (Brief 27 Revised Part 10) ──
+    if state2:
+        # Lighting: one Lights object per profile per zone.
+        lighting_profile_objects = _emit_state2_lighting_profiles(
+            building_params, zones, all_schedules, _gia,
+        )
+        lights_objects.update(lighting_profile_objects)
+
+        # Equipment: baseload + active objects per profile per zone.
+        equipment_profile_objects = _emit_state2_equipment_profiles(
+            building_params, zones, all_schedules, _gia,
+        )
+        equip_objects.update(equipment_profile_objects)
     infil_objects   = _build_infiltration_objects(
         zones,
         building_params["length"],
