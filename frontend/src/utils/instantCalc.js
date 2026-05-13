@@ -389,16 +389,54 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   const louvre_area_total = ['north','south','east','west']
     .reduce((s, f) => s + Number(openings?.[f]?.louvre_area_m2 ?? 0), 0)
 
-  // ── Lumped-capacitance free-running temperature setup ─────────────────────
+  // ── Two-node lumped-capacitance setup (Brief 26.1 Part 3) ─────────────────
+  // The pre-26.1 model was single-node: every Q_solar landed directly on
+  // indoor air (T_zone), with no surface-absorption delay. Bridgewater's
+  // summer max came out at ~43°C vs EP's 34°C — solar gain dumping straight
+  // into a small air heat capacity with nowhere to buffer it.
+  //
+  // Option A two-node model:
+  //   - T_mass: thermal-mass surface temperature (structural mass node)
+  //   - T_air:  indoor air temperature
+  //   - Solar lands on T_mass first
+  //   - Heat exchanges between mass and air via convective+radiative coupling
+  //     h_am ≈ 6 W/m²K × A_internal_surface (CIBSE Guide A working value)
+  //   - Air loses to outside via UA_total
+  //
+  // The air node has tiny heat capacity (~3.7 kWh/K for Bridgewater) but
+  // strong coupling to mass (~22 kWh/K total). Air-node relaxation time is
+  // ~10 min — way below the 1-hour timestep, so the explicit-Euler step
+  // would be unstable on T_air. Instead T_air is solved at quasi-steady
+  // state each hour:
+  //     h_am × A × (T_mass − T_air)  =  UA_total × (T_air − T_out)
+  // which gives T_air = weighted mean of T_mass and T_out, weighted by
+  // their respective couplings. T_mass advances explicitly — its time
+  // constant is hours-to-days, so the explicit step is stable.
   const thermal_mass = THERMAL_MASS_J_PER_K_PER_M2[building.thermal_mass_category ?? 'light']
                        ?? THERMAL_MASS_J_PER_K_PER_M2.light
-  const C_zone_J = thermal_mass * gia              // J/K
-  const C_zone_Wh = C_zone_J / 3600                // Wh/K (so we can stay in Wh per hour)
+  const C_mass_J = thermal_mass * gia              // J/K — structural mass
+  const C_mass_Wh = C_mass_J / 3600                // Wh/K
+  // (T_air heat capacity is folded into the quasi-steady solve; not used directly.)
+
+  // Internal surface area for air-to-mass coupling. Approximate single-zone
+  // model: floor + ceiling on each floor (collapsed to top + bottom of the
+  // building since inter-floor surfaces are mass-internal) + interior gross
+  // wall surface. Glazing inside-face couples to air too but at a different
+  // h, so it's already partially captured in the conduction term — including
+  // it again here would double-count.
+  const A_internal_surface = roof_area + ground_area + total_wall_opaque  // m²
+  // CIBSE Guide A working value, 2.5-8 W/m²K range.
+  const H_AM_W_PER_M2K = 6.0
+  const h_am_total = H_AM_W_PER_M2K * A_internal_surface   // Wh/K per hour
 
   // ── 8760-hour loop ────────────────────────────────────────────────────────
   const n = weatherData.temperature.length
   const T_hourly = new Float32Array(n)
-  let T_zone = comfortBand.lower_c        // initial condition — Jan 1 00:00 starts at lower comfort bound
+  // Initial condition — both nodes start at lower comfort bound. Air will
+  // immediately re-equilibrate against T_out in the first hour; mass takes
+  // longer.
+  let T_mass = comfortBand.lower_c
+  let T_air  = comfortBand.lower_c
 
   // Annual accumulators (Wh — divide by 1000 at the end for kWh)
   let acc_solar_n = 0, acc_solar_s = 0, acc_solar_e = 0, acc_solar_w = 0, acc_solar_roof = 0
@@ -434,35 +472,48 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
     const UA_permanent = AIR_HEAT_CAPACITY * (Q_louvre_m3s * 3600)  // W/K-equivalent for this hour
     const UA_total = UA_fabric + UA_leakage + UA_permanent
 
-    // Heat balance for the hour — losses driven by (T_zone − T_out)
-    const dT = T_zone - T_out
-    const Q_cond_walls_Wh   = (u_wall  * total_wall_opaque) * dT
-    const Q_cond_roof_Wh    = (u_roof  * roof_area)         * dT
-    const Q_cond_floor_Wh   = (u_floor * ground_area)       * dT
-    const Q_cond_glaz_n_Wh  = glaz_face_UA('north') * dT
-    const Q_cond_glaz_e_Wh  = glaz_face_UA('east')  * dT
-    const Q_cond_glaz_s_Wh  = glaz_face_UA('south') * dT
-    const Q_cond_glaz_w_Wh  = glaz_face_UA('west')  * dT
-    const Q_bridging_Wh     = UA_bridging   * dT
-    const Q_vent_leak_Wh    = UA_leakage    * dT
-    const Q_vent_perm_Wh    = UA_permanent  * dT
+    // ── Two-node thermal step (Brief 26.1 Part 3) ─────────────────────────
+    // T_air is the air node; couples to T_mass (h_am × A_internal) and to
+    // T_out (UA_total). Air heat capacity is small enough vs these
+    // couplings that we solve it at quasi-steady state:
+    //     h_am_total × (T_mass − T_air)  =  UA_total × (T_air − T_out)
+    //   → T_air = (h_am_total × T_mass + UA_total × T_out) / (h_am_total + UA_total)
+    T_air = (h_am_total * T_mass + UA_total * T_out) / (h_am_total + UA_total)
 
-    const Q_loss_total_Wh   = (UA_fabric + UA_leakage + UA_permanent) * dT
+    // Mass node advances explicitly. Solar lands on mass first; mass exchanges
+    // with air per the just-solved T_air. Net energy on the mass node:
+    //     Q_mass_net = Q_solar  −  h_am × A × (T_mass − T_air)
+    const Q_mass_to_air = h_am_total * (T_mass - T_air)
+    const Q_mass_net = Q_solar_in_Wh - Q_mass_to_air
+    T_mass = T_mass + Q_mass_net / C_mass_Wh
+    // Bound mass too, in case of extreme inputs
+    if (T_mass < -20) T_mass = -20
+    if (T_mass > 60)  T_mass = 60
 
-    // Free-running temperature step (explicit Euler, hour-scale stable):
-    //   T_{t+1} = T_t + (Q_in - Q_out) / C_zone
-    // Using Wh / (Wh/K) = K.
-    T_zone = T_zone + (Q_solar_in_Wh - Q_loss_total_Wh) / C_zone_Wh
-    // Clamp to sane bounds to avoid runaway on edge cases
-    if (T_zone < -20) T_zone = -20
-    if (T_zone > 60)  T_zone = 60
-    T_hourly[h] = T_zone
+    // Operative temperature = mean of air and mass (per CIBSE Guide A;
+    // simplifies the radiant component to "mean surface temp" = T_mass).
+    // Used for comfort hours and demand triggers — what occupants feel.
+    const T_op = 0.5 * (T_air + T_mass)
+    T_hourly[h] = T_op
+
+    // Heat balance for the hour — conduction losses driven by (T_air − T_out)
+    const dT_air = T_air - T_out
+    const Q_cond_walls_Wh   = (u_wall  * total_wall_opaque) * dT_air
+    const Q_cond_roof_Wh    = (u_roof  * roof_area)         * dT_air
+    const Q_cond_floor_Wh   = (u_floor * ground_area)       * dT_air
+    const Q_cond_glaz_n_Wh  = glaz_face_UA('north') * dT_air
+    const Q_cond_glaz_e_Wh  = glaz_face_UA('east')  * dT_air
+    const Q_cond_glaz_s_Wh  = glaz_face_UA('south') * dT_air
+    const Q_cond_glaz_w_Wh  = glaz_face_UA('west')  * dT_air
+    const Q_bridging_Wh     = UA_bridging   * dT_air
+    const Q_vent_leak_Wh    = UA_leakage    * dT_air
+    const Q_vent_perm_Wh    = UA_permanent  * dT_air
 
     // Loss accumulators — for the contract's annual losses output. Only
     // accumulate the POSITIVE (heat-leaving-zone) direction; summer hours
     // where the zone is cooler than outside contribute negative dT and
     // would otherwise subtract.
-    if (dT > 0) {
+    if (dT_air > 0) {
       acc_cond_wall  += Q_cond_walls_Wh
       acc_cond_roof  += Q_cond_roof_Wh
       acc_cond_floor += Q_cond_floor_Wh
@@ -475,24 +526,24 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
       acc_vent_permanent += Q_vent_perm_Wh
     }
 
-    // Comfort hours + min/max temp tracking
+    // Comfort hours + min/max temp tracking — based on operative temp.
     const month = weatherData.month[h]
-    if (T_zone < comfortBand.lower_c)      underheating_hours++
-    else if (T_zone > comfortBand.upper_c) overheating_hours++
-    else                                   comfort_hours++
-    if (month >= 12 || month <= 2) T_winter_min = Math.min(T_winter_min, T_zone)
-    if (month >= 6  && month <= 8) T_summer_max = Math.max(T_summer_max, T_zone)
+    if (T_op < comfortBand.lower_c)      underheating_hours++
+    else if (T_op > comfortBand.upper_c) overheating_hours++
+    else                                  comfort_hours++
+    if (month >= 12 || month <= 2) T_winter_min = Math.min(T_winter_min, T_op)
+    if (month >= 6  && month <= 8) T_summer_max = Math.max(T_summer_max, T_op)
 
     // Demand derivation: what a perfect system would need to provide to hold
-    // the zone at the comfort bound. Only counted when free-running T is
-    // outside the band (i.e., the envelope alone fails).
-    if (T_zone < comfortBand.lower_c) {
+    // operative temperature at the comfort bound. Only counted when
+    // free-running T_op is outside the band (i.e., the envelope alone fails).
+    if (T_op < comfortBand.lower_c) {
       // Heating: UA × (lower_c - T_out) is the loss rate if held at lower_c.
       // Solar gains offset part of it. Demand = max(0, deficit - solar).
       const Q_loss_at_lower = UA_total * Math.max(0, comfortBand.lower_c - T_out)
       const heating_Wh = Math.max(0, Q_loss_at_lower - Q_solar_in_Wh)
       acc_heating_demand_Wh += heating_Wh
-    } else if (T_zone > comfortBand.upper_c) {
+    } else if (T_op > comfortBand.upper_c) {
       // Cooling: solar gains + heat coming IN from outside (if T_out > upper).
       // Q_loss_at_upper sign is reversed when T_out > upper.
       const Q_gain_at_upper = Q_solar_in_Wh + UA_total * Math.max(0, T_out - comfortBand.upper_c)
