@@ -39,6 +39,12 @@ import EquipmentSection from './EquipmentSection.jsx'
 import { GAIN_COLOURS, GAIN_LABELS } from './gainColours.js'
 import { useAnnualGains } from './useAnnualGains.js'
 import ScheduleEditorCanvas from './canvas/ScheduleEditorCanvas.jsx'
+import DeltaView           from './canvas/DeltaView.jsx'
+import AnnualBreakdownView from './canvas/AnnualBreakdownView.jsx'
+import FreeRunningView     from './canvas/FreeRunningView.jsx'
+import HourlyProfileView   from './canvas/HourlyProfileView.jsx'
+import HeatBalanceView     from './canvas/HeatBalanceView.jsx'
+import ThreeDView          from './canvas/ThreeDView.jsx'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { useContext } from 'react'
 
@@ -246,31 +252,16 @@ function TabContent({
     )
   }
 
-  // All other tabs — placeholder until Brief 27 Revised Part 11 builds them out.
-  const t = TABS.find(x => x.key === tab) ?? TABS[0]
-  return (
-    <div className={`mx-auto px-6 py-8 ${t.fullWidth ? 'w-full' : 'max-w-[1000px]'}`}>
-      <div className="border border-dashed border-light-grey rounded-lg px-6 py-12 text-center bg-off-white/30">
-        <Flame size={24} strokeWidth={1.5} className="mx-auto mb-3 text-orange-500/60" />
-        <div className="font-semibold text-navy mb-1">
-          {t.label} {t.headline && <span className="text-xxs text-orange-600 ml-1">· HEADLINE</span>}
-        </div>
-        <div className="text-xxs italic text-mid-grey/80">
-          Lands in Brief 27 Revised Part 11.
-        </div>
-      </div>
-      <div className="mt-4 px-2 text-xxs text-mid-grey/70 leading-relaxed">
-        {tab === 'delta' && (
-          <p><strong className="text-navy/80">Headline diagnostic.</strong> Bar-pair view: "Internal gains reduce heating by X MWh, increase cooling by Y MWh," plus per-profile attribution (which load type contributed most). Engine toggle inline.</p>
-        )}
-        {tab === 'balance' && <p>Gains in the full heat balance flow: where each gain category lands relative to fabric losses, solar gain, and the comfort band. Engine toggle inline.</p>}
-        {tab === 'freerunning' && <p>Annual zone temperature trace, State 2 overlaid on State 1 baseline so the gain impact is visually obvious. Full-width, engine toggle inline.</p>}
-        {tab === 'hourly' && <p>Typical-week stacked bars showing people / lighting / equipment gain kW for each of 7 × 24 hours, with day-type and month selectors.</p>}
-        {tab === 'breakdown' && <p>Annual MWh by category and by month. Stacked-bar chart with the three gain colours (purple / gold / orange).</p>}
-        {tab === '3d' && <p>3D zone model with gain heatmaps painted onto surfaces (where applicable). Useful at multi-zone but informational at single-zone.</p>}
-      </div>
-    </div>
-  )
+  // Brief 27 Revised Part 11: real canvas views.
+  switch (tab) {
+    case 'delta':       return <DeltaView />
+    case 'breakdown':   return <AnnualBreakdownView />
+    case 'freerunning': return <FreeRunningView />
+    case 'hourly':      return <HourlyProfileView />
+    case 'balance':     return <HeatBalanceView />
+    case '3d':          return <ThreeDView />
+    default:            return null
+  }
 }
 
 // ── Main module ──────────────────────────────────────────────────────────────
