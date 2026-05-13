@@ -56,7 +56,7 @@ Filled per the canonical `docs/module_completion_checklist.md`. Honest marks; de
 | Live and EP outputs compared via state's engine_agreement script | ⚠ | The state2_engine_agreement script that compares live vs EP across the v2.4 contract isn't separately shipped. Existing comparison happens via `get_heat_balance` per-mode dispatch but isn't programmatic in CI. Queued for Brief 28 alongside Brief 30 (CI pre-merge checks). |
 | Headline metrics within ±5% silent tolerance | ⚠ | Not measured systematically in CI yet. Manual comparison during walkthroughs has been within tolerance for the post-Part-9 Bridgewater single-profile case. |
 | Divergence > 10% documented in `state_N_divergences.md` | ✓ | `docs/state_2_part2_verification.md` documents the Brief 27 Part 2 divergences (lighting below BREDEM, heating phasing). Carried forward. |
-| Engine disagreement flag UI behaves per three-tier system | ✓ | Existing toggle from Brief 26.1 carries through. Tab strip in Internal Gains has engine-toggle slots wired for the Delta / Heat balance / Free-running tabs; the actual Live\|Simulation switch ships when EP results plumbing for State 2 is wired (Brief 28 candidate). |
+| Engine disagreement flag UI behaves per three-tier system | ✓ | Existing toggle from Brief 26.1 carries through. Tab strip in Internal Gains has engine-toggle SLOTS wired for the Delta / Heat balance / Free-running tabs. An `EngineBadge` chip labels the current source ("Live engine") on each engine-dependent canvas view (shipped 252b7e8). The actual Live\|Simulation segmented control ships in **Brief 28 Part 3** once Part 1 (solar model fix) + Part 2 (SQL parser per-profile breakdown) land. |
 | Disclosure visible when one engine is canonical | ✓ | Inherited from the existing HeatBalance disclosure shipped in Brief 26.2. |
 
 ---
@@ -110,7 +110,7 @@ Reference: `docs/ui_principles.md`
 |---|---|---|
 | Colour theming consistent | ✓ | Module accent `#EA580C` strictly on structural surfaces (sidebar / title bar / tab underline). Gain colours (People `#8B5CF6`, Lighting `#F59E0B`, Equipment `#FB923C`) thread through section headers, profile dots, canvas chart fills, mini-profile bars, Heat Balance flows, Delta attribution. |
 | No mystery numbers | ✓ | Every displayed value has a tooltip or definition. Effective LPD explained inline. Area coverage labelled as "fully covered / under-covered / over-covered". Stats card explains operating-hours derivation. |
-| Disclosure visible for known limitations | ✓ | Delta view footnote on the live-engine-only state of the engine toggle. Heat balance reuses /balance's existing disclosure. State 2 part2 verification documents divergences from BREDEM. |
+| Disclosure visible for known limitations | ✓ | `EngineBadge` on Delta / Heat balance / Free-running tabs labels live-engine output (252b7e8). Delta view footnote calls out the isotropic-sky residual and links to the divergence investigation. Heat balance reuses /balance's existing disclosure. `docs/state_1_engine_divergence_investigation.md` documents the State 1 Live vs Sim gap. `docs/state_2_part2_verification.md` documents the BREDEM range divergences. |
 | Loading states handle gracefully | ✓ | Delta + Free-running + Heat balance show "Loading constructions library…" while the canvas-level fetch is in flight. No flicker / no fake data. |
 | Empty states render sensibly | ✓ | MultiProfileList shows "+ Add profile" prominently when profiles array is empty. ExceptionsPanel shows "+ Add exception" with descriptive copy. Heatmap exception legend hidden when no exceptions. |
 
@@ -165,15 +165,23 @@ Test scenario: Bridgewater on `/gains`, walk through every panel and tab.
 
 | Item | Deferred to | Rationale |
 |---|---|---|
-| State 2 EP SQL parser per-profile breakdown | Brief 28 | EP parser returns aggregate gain totals; live engine returns per-profile. The aggregate is sufficient for the delta diagnostic; per-profile attribution at the EP side is a refinement, not a contract requirement. |
-| Engine agreement CI script for State 2 (live vs EP byte-bound) | Brief 28 + 30 | Existing infrastructure assumes State 1; programmatic v2.4 comparison is a new component. |
-| BREDEM ranges revised with building-type-aware phasing | Brief 28 | Documented in `state_2_expected_ranges.md`. Current BREDEM uniform-phasing under-states offset for hotel-type buildings; per Brief 27 Part 2 diagnostic. |
-| Cross-cutting constants cleanup (10+ duplicated values) | Brief 28 | Documented in `docs/hardcoded_constants_audit.md`. |
+| Live engine solar model — isotropic → HDKR/Perez | **Brief 28 Part 1** | Documented at `docs/state_1_engine_divergence_investigation.md`. Current 15°C summer-max gap on Bridgewater Live vs Sim is the isotropic-sky residual amplified by the user's current asymmetric WWR config. Biggest single-step accuracy improvement; prerequisite for the engine toggle being meaningful. |
+| State 2 EP SQL parser per-profile breakdown | **Brief 28 Part 2** | EP parser returns aggregate gain totals; live engine returns per-profile. Per-profile attribution at the EP side is a refinement, not a contract requirement, but needed to make the engine toggle's Delta view useful. |
+| **Engine toggle Live\|Simulation switch** (named Brief 27 holdback) | **Brief 28 Part 3** | Placeholder slot is wired but the segmented control awaits Part 1 (solar fix for engine accuracy) + Part 2 (per-profile EP output). This is the 1/10 gap in Brief 27's 9/10 confidence. |
+| Pablo chart component port (ChartContainer / ZoomNav / MonthJumpButtons / DataCard / chartTokens.js) | **Brief 28 Part 4** | Investigation report at `docs/pavlo_chart_components_investigation.md`. Five clean lifts; the canvas restructure in Brief 28 Part 5 consumes these. |
+| Canvas restructure — Heat Balance + time-series consolidation across modules | **Brief 28 Part 5** | The Delta-view layout is the right pattern for state-to-state comparison; consolidating Internal Gains' + Building's + Operation's diagnostic views onto shared components removes the module-flavoured drift. |
+| State 2 engine agreement script (Live vs Sim byte-tier) | **Brief 28 Part 2** (alongside SQL parser work) | Sibling to `state1_engine_agreement.mjs`. |
+| State 1 diagnostic canvas views inside Building module (Free-running Temp, Heat Loss Breakdown, Solar Gain) | **Brief 29 Part 1** | Building currently has 3D viewer + Heat Balance toggle; needs first-class canvas tabs once Brief 28's shared canvas primitives land. |
+| Building UI principles conformance audit | **Brief 29 Part 2** | Building pre-dates `ui_principles.md` v1.0; needs audit + minor fixes. |
+| Cross-cutting constants cleanup (~10 duplicated values) | **Brief 29 Part 3** | Documented in `docs/hardcoded_constants_audit.md`. State 1 physics constants — fits Building module completion. |
+| BREDEM building-type-aware phasing factors | **Brief 29 Part 4** | Hotel-specific phasing under-counts in current BREDEM ranges; per Brief 27 Part 2 verification doc. |
+| Engine agreement CI script in pre-merge | Brief 34+ | Future CI brief covers automation. |
 | 3D zone gain heatmap | Multi-zone brief (future) | Single-zone model has uniform gain distribution; 3D paint adds no signal. ThreeDView ships as placeholder + profile area-share summary. |
-| Engine toggle Live\|Simulation switch | Brief 28 | EP State 2 results plumbing needs a `runs` table flag + UI segmented control. |
-| Per-exception hourly profile lookup for `independent` profiles within exception | (deferred) | Current behaviour: profile's own exception calendar honoured for `independent` lighting/equipment. Live engine confirmed at Brief 27 Part 9 commit; UI for editing per-profile exceptions within exception edit mode is technically possible but not common workflow yet. |
+| Per-exception hourly profile lookup for `independent` profiles within exception | Future | Current behaviour: profile's own exception calendar honoured. UI for editing per-profile exceptions within exception edit mode is technically possible but not common workflow yet. |
 
-All items above queued in STATUS.md Brief 28 scope.
+All items above are queued in their respective briefs (28 / 29) per
+the close-out 28/29 split. STATUS.md "Next task" section points at
+the current brief.
 
 ---
 
@@ -224,10 +232,22 @@ Range checks all explained at module-completion level. None silently failing.
 5. 3D multi-zone gain heatmap (multi-zone brief)
 6. Engine toggle wiring (Brief 28)
 
-**Confidence that the module is genuinely complete (not just test-complete): 8/10.**
+**Confidence that the module is genuinely complete (not just test-complete): 9/10** (post-close-out).
 
-Holding back 2/10 for:
-- Hands-on Bridgewater walkthrough by the user (Section J) — code-side smoketests + commit walkthroughs are clean but the user's eye is the final gate
-- Engine toggle Live\|Simulation switch — slot is wired but the EP results plumbing carries through in Brief 28
+Held back 1/10 for the single named holdback:
+- **Engine toggle Live\|Simulation switch on the Internal Gains canvas
+  views** — placeholder slot is wired in the tab strip + `EngineBadge`
+  chip labels the current live-engine source (shipped 252b7e8), but
+  the actual segmented control awaits **Brief 28 Part 3** (after
+  Part 1 solar fix and Part 2 SQL parser per-profile breakdown land).
 
-The module is genuinely usable end-to-end as built. Brief 28's follow-ups are refinements, not blockers.
+Hands-on Bridgewater walkthrough (Section J) confirmed by the user
+post Brief 27 four-bug fix commits (4f4f3a5 + 252b7e8). Module is
+genuinely usable end-to-end as built. Brief 28's follow-ups are
+refinements; the 1/10 gap will close when the toggle lands.
+
+Brief 28 / Brief 29 split codified at close-out:
+- Brief 28: Cross-cutting polish (solar fix → engine toggle → Pablo
+  port → canvas restructure)
+- Brief 29: Building module completion (State 1 diagnostic canvas
+  views, UI conformance, constants cleanup, BREDEM phasing factors)
