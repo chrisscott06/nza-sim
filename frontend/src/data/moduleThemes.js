@@ -7,6 +7,7 @@ export const MODULE_THEMES = {
   operation:   { accent: '#0E7490', label: 'Operation'   },
   systems:     { accent: '#00AEEF', label: 'Systems'     },
   profiles:    { accent: '#8B5CF6', label: 'Profiles'    },
+  gains:       { accent: '#EA580C', label: 'Internal Gains' },
   consumption: { accent: '#2D6A7A', label: 'Consumption' },
   weather:     { accent: '#0EA5E9', label: 'Weather'     },
   results:     { accent: '#2B2A4C', label: 'Results'     },
@@ -23,6 +24,7 @@ export function accentForPath(pathname) {
   if (pathname.startsWith('/operation'))   return MODULE_THEMES.operation.accent
   if (pathname.startsWith('/systems'))     return MODULE_THEMES.systems.accent
   if (pathname.startsWith('/profiles'))    return MODULE_THEMES.profiles.accent
+  if (pathname.startsWith('/gains'))       return MODULE_THEMES.gains.accent
   if (pathname.startsWith('/consumption')) return MODULE_THEMES.consumption.accent
   if (pathname.startsWith('/weather'))     return MODULE_THEMES.weather.accent
   if (pathname.startsWith('/results'))     return MODULE_THEMES.results.accent

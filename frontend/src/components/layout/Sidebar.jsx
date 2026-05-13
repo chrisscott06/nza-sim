@@ -6,6 +6,7 @@ import {
   Wind,
   Thermometer,
   Clock,
+  Flame,
   FileSpreadsheet,
   BarChart3,
   TrendingDown,
@@ -22,6 +23,7 @@ const TOP_ITEMS = [
   { to: '/operation',   icon: Wind,            label: 'Operation' },
   { to: '/systems',     icon: Thermometer,     label: 'Systems' },
   { to: '/profiles',    icon: Clock,           label: 'Profiles' },
+  { to: '/gains',       icon: Flame,           label: 'Internal Gains' },
   { to: '/weather',     icon: Cloud,           label: 'Weather' },
   { to: '/consumption', icon: FileSpreadsheet, label: 'Consumption' },
 ]

@@ -15,6 +15,7 @@ import ResultsDashboard from './components/modules/results/ResultsDashboard.jsx'
 import SystemsZones from './components/modules/SystemsZones.jsx'
 import LibraryBrowser  from './components/modules/LibraryBrowser.jsx'
 import ProfilesEditor  from './components/modules/ProfilesEditor.jsx'
+import InternalGainsModule from './components/modules/gains/InternalGainsModule.jsx'
 import ScenarioManager from './components/modules/ScenarioManager.jsx'
 import ConsumptionManager from './components/modules/consumption/ConsumptionManager.jsx'
 import CRREMModule from './components/modules/CRREMModule.jsx'
@@ -39,6 +40,7 @@ export default function App() {
                 <Route path="/operation"   element={<ErrorBoundary moduleName="Operation"><OperationModule /></ErrorBoundary>} />
                 <Route path="/systems"   element={<ErrorBoundary moduleName="Systems & Zones"><SystemsZones /></ErrorBoundary>} />
                 <Route path="/profiles"  element={<ErrorBoundary moduleName="Profiles Editor"><ProfilesEditor /></ErrorBoundary>} />
+                <Route path="/gains"     element={<ErrorBoundary moduleName="Internal Gains"><InternalGainsModule /></ErrorBoundary>} />
                 <Route path="/consumption" element={<ErrorBoundary moduleName="Consumption"><ConsumptionManager /></ErrorBoundary>} />
                 <Route path="/results"   element={<ErrorBoundary moduleName="Results Dashboard"><ResultsDashboard /></ErrorBoundary>} />
                 <Route path="/crrem"     element={<ErrorBoundary moduleName="CRREM"><CRREMModule /></ErrorBoundary>} />
