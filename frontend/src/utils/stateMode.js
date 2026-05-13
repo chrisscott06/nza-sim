@@ -50,13 +50,33 @@ export const isFull                = (mode) => mode === MODES.FULL
  * Exported so a test harness (Brief 26 Part 9 regression) can enumerate them.
  */
 export const FORBIDDEN_ENVELOPE_ONLY_INPUTS = Object.freeze([
-  // Occupancy inputs — State 2 territory
+  // Legacy occupancy inputs — State 2 territory (kept while
+  // `nza_engine/generators/hvac_dhw.py` still reads them).
   'params.num_bedrooms',
   'params.occupancy_rate',
   'params.people_per_room',
   'systems.lighting_power_density',
   'systems.equipment_power_density',
   'systems.lighting_control',
+  // v2.3 occupancy as a first-class block — State 2 territory.
+  // (Brief 27 Part 0/1 introduced these; Part 2 enforces them.)
+  'occupancy.occupancy_rate',
+  'occupancy.density',
+  'occupancy.sensible_w_per_person',
+  'occupancy.latent_w_per_person',
+  'occupancy.schedule',
+  'occupancy.schedule.exceptions',
+  // v2.3 gains block — State 2 territory.
+  'gains.lighting.magnitude',
+  'gains.lighting.relationship_to_occupancy',
+  'gains.lighting.spill_minutes',
+  'gains.lighting.daylight_factor',
+  'gains.lighting.schedule',
+  'gains.equipment.baseload',
+  'gains.equipment.active',
+  'gains.equipment.relationship_to_occupancy',
+  'gains.equipment.standby_factor',
+  'gains.equipment.schedule',
   // Systems — State 3 territory
   'systems.space_heating',
   'systems.space_cooling',

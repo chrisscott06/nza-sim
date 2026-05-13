@@ -40,7 +40,7 @@ const REPO_ROOT = path.resolve(__dirname, '..')
 // Not "different from default" — actively distorting. If the contract
 // holds, setting these has zero effect on State 1 output.
 const ABSURD = {
-  // Occupancy
+  // Legacy occupancy
   'params.num_bedrooms':            9999,
   'params.occupancy_rate':           9.99,
   'params.people_per_room':           5.0,
@@ -48,6 +48,24 @@ const ABSURD = {
   'systems.lighting_power_density':  100,
   'systems.equipment_power_density': 100,
   'systems.lighting_control':       'always-on-9999',
+  // v2.3 occupancy (Brief 27)
+  'occupancy.occupancy_rate':            9.99,
+  'occupancy.density':                   { value: 999, basis: 'per_m2' },
+  'occupancy.sensible_w_per_person':     9999,
+  'occupancy.latent_w_per_person':       9999,
+  'occupancy.schedule':                  { weekday: Array(24).fill(99), saturday: Array(24).fill(99), sunday: Array(24).fill(99), monthly_multipliers: Array(12).fill(99), exceptions: [] },
+  'occupancy.schedule.exceptions':       [{ name: 'absurd', start_date: '01-01', end_date: '12-31', weekday: Array(24).fill(99), saturday: Array(24).fill(99), sunday: Array(24).fill(99) }],
+  // v2.3 gains (Brief 27)
+  'gains.lighting.magnitude':                  { value: 999, unit: 'w_per_m2' },
+  'gains.lighting.relationship_to_occupancy':  'always_on',
+  'gains.lighting.spill_minutes':              999,
+  'gains.lighting.daylight_factor':            0.01,
+  'gains.lighting.schedule':                   { weekday: Array(24).fill(99) },
+  'gains.equipment.baseload':                  { value: 999, unit: 'w_per_m2' },
+  'gains.equipment.active':                    { value: 999, unit: 'w_per_m2' },
+  'gains.equipment.relationship_to_occupancy': 'independent',
+  'gains.equipment.standby_factor':            0.99,
+  'gains.equipment.schedule':                  { weekday: Array(24).fill(99) },
   // Systems — extreme setpoints + impossible COPs
   'systems.space_heating':   { setpoint_heating_c: 35, cop: 99 },
   'systems.space_cooling':   { setpoint_cooling_c:  5, cop: 99 },
@@ -94,6 +112,24 @@ function applyAbsurd(building, systems, path, value) {
     return { building, systems }
   }
   const [root, ...rest] = path.split('.')
+  // occupancy.* and gains.* are v2.3 building_config nested blocks — same
+  // storage rule as `openings`: walk inside `building`, materialising the
+  // root object if absent.
+  if (root === 'occupancy' || root === 'gains') {
+    building[root] = building[root] ?? {}
+    let cursor = building[root]
+    if (rest.length === 0) {
+      // path was just 'occupancy' or 'gains' — clobber the whole block.
+      building[root] = value
+      return { building, systems }
+    }
+    for (let i = 0; i < rest.length - 1; i++) {
+      cursor[rest[i]] = cursor[rest[i]] ?? {}
+      cursor = cursor[rest[i]]
+    }
+    cursor[rest[rest.length - 1]] = value
+    return { building, systems }
+  }
   const target = root === 'params' ? building :
                  root === 'systems' ? systems :
                  root === 'openings' ? (building.openings = building.openings ?? {}) :

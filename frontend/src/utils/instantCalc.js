@@ -269,11 +269,11 @@ const THERMAL_MASS_J_PER_K_PER_M2 = {
  * `systems.*`.
  */
 function withMode(building, mode) {
-  if (mode !== 'envelope-only') return building
+  if (mode !== 'envelope-only' && mode !== 'envelope-gains') return building
   const ops = building?.openings ?? {}
   // Keep only the louvre permanent-openings half of the openings dict; drop
-  // operable-window fraction + schedule entirely so the State 1 path can't
-  // see them even by accident.
+  // operable-window fraction + schedule entirely so the State 1/2 paths can't
+  // see them even by accident (operable windows are State 2.5 territory).
   const permanentOpenings = {
     site_exposure: ops.site_exposure ?? 'normal',
     north: { louvre_area_m2: ops?.north?.louvre_area_m2 ?? 0 },
@@ -282,7 +282,7 @@ function withMode(building, mode) {
     west:  { louvre_area_m2: ops?.west?.louvre_area_m2  ?? 0 },
     // No `schedule`, no `openable_fraction` — state isolation.
   }
-  return {
+  const base = {
     length:        building?.length,
     width:         building?.width,
     num_floors:    building?.num_floors,
@@ -298,6 +298,15 @@ function withMode(building, mode) {
     openings:      permanentOpenings,
     location:      building?.location,
     // weather_file kept off — solar latitude comes from EPW location directly.
+  }
+  if (mode === 'envelope-only') return base
+  // mode === 'envelope-gains': add State 2 inputs (occupancy + gains), keep
+  // legacy num_bedrooms for `per_room` density basis. Systems stay stripped.
+  return {
+    ...base,
+    num_bedrooms: building?.num_bedrooms,
+    occupancy:    building?.occupancy,
+    gains:        building?.gains,
   }
 }
 
@@ -684,6 +693,487 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
       comfort_hours,
     },
     heat_balance,
+  }
+}
+
+// ── Brief 27 — State 2 (envelope + internal gains) helpers ─────────────────────
+
+const _CUM_DAYS_NON_LEAP = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
+
+/**
+ * Decompose an hour-of-year index (0..8759) into the fields the schedule
+ * lookup needs: dayType (weekday|saturday|sunday), hourOfDay (0..23),
+ * monthIdx (0..11), dateMMDD ("MM-DD"). Uses weatherData.month / day / hour
+ * where available; otherwise derives from `h` assuming non-leap year.
+ *
+ * Day-of-week assumption: Jan 1 = Monday (TMY synthetic year). Adequate
+ * for State 2 schedule lookup; a real-year EPW would carry a starting
+ * day-of-week in its header but that's not currently parsed.
+ */
+function decomposeHour(h, weatherData) {
+  let month, day, hourOfDay
+  if (weatherData?.month && weatherData?.month[h] != null) {
+    month = weatherData.month[h]                     // 1-12
+    day = weatherData.day?.[h] ?? 1                  // 1-31
+    hourOfDay = (weatherData.hour?.[h] ?? 1) - 1     // EPW 1-24 → 0-23
+  } else {
+    // Fallback: derive from h
+    const dayOfYear = Math.floor(h / 24) // 0..364
+    hourOfDay = h % 24
+    let m = 0
+    while (m < 11 && _CUM_DAYS_NON_LEAP[m + 1] <= dayOfYear) m++
+    month = m + 1
+    day = dayOfYear - _CUM_DAYS_NON_LEAP[m] + 1
+  }
+  const dayOfYear = _CUM_DAYS_NON_LEAP[month - 1] + (day - 1)
+  // Jan 1 = Monday → dayOfWeek 0=Mon..4=Fri, 5=Sat, 6=Sun
+  const dow = dayOfYear % 7
+  const dayType = dow === 5 ? 'saturday' : (dow === 6 ? 'sunday' : 'weekday')
+  const dateMMDD = String(month).padStart(2, '0') + '-' + String(day).padStart(2, '0')
+  return { monthIdx: month - 1, dayType, hourOfDay, dateMMDD }
+}
+
+/** Lexicographic MM-DD comparison with year-wrap support. */
+function isDateInRange(dateMMDD, startMMDD, endMMDD) {
+  if (!startMMDD || !endMMDD) return false
+  if (startMMDD <= endMMDD) return dateMMDD >= startMMDD && dateMMDD <= endMMDD
+  // Wraps year (e.g., 12-22 through 01-05)
+  return dateMMDD >= startMMDD || dateMMDD <= endMMDD
+}
+
+/** Return the first exception whose date range covers dateMMDD, or null. */
+function findActiveException(exceptions, dateMMDD) {
+  if (!exceptions || exceptions.length === 0) return null
+  for (const exc of exceptions) {
+    if (isDateInRange(dateMMDD, exc.start_date, exc.end_date)) return exc
+  }
+  return null
+}
+
+/**
+ * Total possible occupants at 100% — converts density.value × density.basis
+ * into an absolute headcount. Subsequent occupancy_rate × presence scaling
+ * happens per-hour.
+ */
+function computeTotalOccupants(occupancy, building, gia) {
+  const d = occupancy?.density ?? { value: 1.5, basis: 'per_room' }
+  const value = Number(d.value ?? 1.5)
+  switch (d.basis) {
+    case 'per_room':         return Math.max(0, Number(building.num_bedrooms ?? 0)) * value
+    case 'per_m2':           return gia * value
+    case 'total':            return value
+    case 'per_workstation':  return value   // schema may extend with a workstation count later
+    default:                 return Math.max(0, Number(building.num_bedrooms ?? 0)) * value
+  }
+}
+
+/**
+ * Convert magnitude {value, unit} to W/m² of GIA. Magnitudes can be
+ * w_per_m2 (the default), w_per_room (scale by bedrooms ÷ GIA), or
+ * total_w (divide by GIA).
+ */
+function magnitudeToWPerM2(magnitude, building, gia) {
+  if (!magnitude) return 0
+  const v = Number(magnitude.value ?? 0)
+  switch (magnitude.unit) {
+    case 'w_per_m2':   return v
+    case 'w_per_room': return v * Math.max(0, Number(building.num_bedrooms ?? 0)) / Math.max(1, gia)
+    case 'total_w':    return v / Math.max(1, gia)
+    default:           return v
+  }
+}
+
+/**
+ * Per-hour fractional contribution for a gain whose `relationship_to_occupancy`
+ * controls how its schedule derives.
+ *
+ * `presence` is the per-hour occupancy fraction (schedule × monthly multiplier,
+ * BEFORE the building-level occupancy_rate scaling — that's threaded through
+ * the explicit `occupancyRate` arg). Semantics by relationship:
+ *
+ *   independent           — Pure lighting schedule lookup. No occupancy
+ *                           dependence at all. Use for timer-driven exterior
+ *                           lighting or buildings where lights run regardless
+ *                           of occupancy.
+ *   always_on             — Constant 1.0.
+ *   proportional          — Tracks occupancy presence × occupancy_rate. Use
+ *                           for motion-sensor / detect-and-illuminate setups.
+ *   proportional_with_spill (DEFAULT) — Lighting follows its own schedule for
+ *                           time-of-day shape (so hotel-bedroom lights aren't
+ *                           on at 90% overnight just because guests are
+ *                           sleeping), scaled by occupancy_rate for building-
+ *                           level occupancy. Daylight dimming during 9-16.
+ *                           Matches BREDEM "lighting tracks design intent ×
+ *                           building occupancy rate" model.
+ */
+function lightingFractionForHour(lighting, presence, hourOfDay, monthIdx, dayType, occupancySchedule, occupancyRate) {
+  const rel = lighting?.relationship_to_occupancy ?? 'proportional_with_spill'
+  if (rel === 'always_on') return 1.0
+  if (rel === 'independent') {
+    const s = lighting?.schedule ?? occupancySchedule
+    const v = s?.[dayType]?.[hourOfDay] ?? 0
+    const mm = s?.monthly_multipliers?.[monthIdx] ?? 1
+    return v * mm
+  }
+  if (rel === 'proportional') {
+    return presence * occupancyRate
+  }
+  // 'proportional_with_spill' — follow the lighting schedule for time pattern,
+  // scaled by occupancy_rate for building-level occupancy. Daylight dimming
+  // during 09:00–16:00 (brief specifies "60% factor reduces LPD by 40% in
+  // daylight hours" — implemented as fraction × daylight_factor in window).
+  // spill_minutes is captured at EP-schedule generation (Part 3); for the
+  // hourly live engine, sub-hourly spill is implicit in the schedule shape.
+  const s = lighting?.schedule ?? occupancySchedule
+  const v = s?.[dayType]?.[hourOfDay] ?? 0
+  const mm = s?.monthly_multipliers?.[monthIdx] ?? 1
+  let frac = v * mm * occupancyRate
+  const daylightFactor = lighting?.daylight_factor ?? 0.6
+  if (hourOfDay >= 9 && hourOfDay <= 16 && daylightFactor < 1) {
+    frac *= daylightFactor
+  }
+  return frac
+}
+
+function equipmentFractionForHour(equipment, presence, hourOfDay, monthIdx, dayType, occupancySchedule, occupancyRate) {
+  const rel = equipment?.relationship_to_occupancy ?? 'proportional'
+  if (rel === 'independent') {
+    const s = equipment?.schedule ?? occupancySchedule
+    const v = s?.[dayType]?.[hourOfDay] ?? 0
+    const mm = s?.monthly_multipliers?.[monthIdx] ?? 1
+    return v * mm
+  }
+  // 'proportional' — active equipment follows the equipment schedule × the
+  // building-level occupancy_rate, with a standby floor. (Baseload is
+  // separate — added at the call site as occupancy-independent 24/7 load.)
+  const s = equipment?.schedule ?? occupancySchedule
+  const v = s?.[dayType]?.[hourOfDay] ?? 0
+  const mm = s?.monthly_multipliers?.[monthIdx] ?? 1
+  const scheduledFraction = v * mm * occupancyRate
+  const standby = equipment?.standby_factor ?? 0.10
+  return Math.max(standby, scheduledFraction)
+}
+
+/**
+ * Compute hourly internal gains for State 2. Returns Wh per hour
+ * (= W since dt = 1 hr).
+ *
+ * Returns { people, lighting, equipment_baseload, equipment_active,
+ *           equipment, total, presence, effective_occupants }.
+ */
+function computeHourlyGains(building, h, weatherData, gia) {
+  const occ = building?.occupancy
+  if (!occ) {
+    return {
+      people: 0, lighting: 0,
+      equipment_baseload: 0, equipment_active: 0, equipment: 0,
+      total: 0, presence: 0, effective_occupants: 0,
+    }
+  }
+
+  const { monthIdx, dayType, hourOfDay, dateMMDD } = decomposeHour(h, weatherData)
+  const sched = occ.schedule ?? {}
+  const exc = findActiveException(sched.exceptions, dateMMDD)
+
+  let presence
+  if (exc) {
+    presence = Number(exc[dayType]?.[hourOfDay] ?? 0)
+    if (!exc.ignore_monthly_multipliers) {
+      presence *= Number(sched.monthly_multipliers?.[monthIdx] ?? 1)
+    }
+  } else {
+    presence = Number(sched[dayType]?.[hourOfDay] ?? 0)
+              * Number(sched.monthly_multipliers?.[monthIdx] ?? 1)
+  }
+
+  const totalOccupantsAt100 = computeTotalOccupants(occ, building, gia)
+  const occupancy_rate = Number(occ.occupancy_rate ?? 0.75)
+  const effective_occupants = totalOccupantsAt100 * occupancy_rate * presence
+
+  // People sensible heat (W = Wh in a 1-hour step)
+  const sensible = Number(occ.sensible_w_per_person ?? 75)
+  const Q_people = effective_occupants * sensible
+
+  // Lighting
+  const lighting = building?.gains?.lighting ?? {}
+  const lpd = magnitudeToWPerM2(lighting.magnitude, building, gia)
+  const lFrac = lightingFractionForHour(lighting, presence, hourOfDay, monthIdx, dayType, sched, occupancy_rate)
+  const Q_lighting = gia * lpd * lFrac
+
+  // Equipment — baseload (always on, occupancy-independent) + active
+  // (follows equipment schedule × occupancy_rate, with standby floor)
+  const equipment = building?.gains?.equipment ?? {}
+  const baseload_W_per_m2 = magnitudeToWPerM2(equipment.baseload, building, gia)
+  const active_W_per_m2   = magnitudeToWPerM2(equipment.active,   building, gia)
+  const eFrac = equipmentFractionForHour(equipment, presence, hourOfDay, monthIdx, dayType, sched, occupancy_rate)
+  const Q_equipment_baseload = gia * baseload_W_per_m2
+  const Q_equipment_active   = gia * active_W_per_m2 * eFrac
+  const Q_equipment = Q_equipment_baseload + Q_equipment_active
+
+  return {
+    people:             Q_people,
+    lighting:           Q_lighting,
+    equipment_baseload: Q_equipment_baseload,
+    equipment_active:   Q_equipment_active,
+    equipment:          Q_equipment,
+    total:              Q_people + Q_lighting + Q_equipment,
+    presence,
+    effective_occupants,
+  }
+}
+
+// Export the gain helpers so test scripts and the State 2 UI can use them
+// without re-implementing the contract logic.
+export {
+  computeHourlyGains,
+  decomposeHour,
+  findActiveException,
+  computeTotalOccupants,
+}
+
+/**
+ * State 2 envelope + internal gains computation per `docs/state_contracts.md`
+ * § State 2 (v2.3).
+ *
+ * Brief 27 Part 2. Runs the same physics as State 1 (two-node lumped
+ * capacitance, shading-aware solar, etc.) with internal gains added to
+ * the energy balance on the T_mass node alongside solar. Returns the
+ * State 2 contract output shape including `state1_delta` and
+ * `occupancy_summary`.
+ *
+ * Implementation: calls `_calculateEnvelopeOnly` first to get the
+ * canonical State 1 baseline (with State 1 input filter via withMode so
+ * no gain inputs leak), then runs an INDEPENDENT 8760-hour loop with
+ * gains added. Two parallel runs intentionally — the only difference
+ * is Q_gains. state1_delta = state2_metrics − state1_metrics.
+ */
+function _calculateState2(building, constructions, libraryData, weatherData, hourlySolar, comfortBand) {
+  // ── State 1 baseline ─────────────────────────────────────────────────────
+  // The State 1 path uses withMode('envelope-only') internally to strip
+  // forbidden inputs; doing it here too means our state1Result is
+  // byte-identical to what `mode='envelope-only'` would return for this
+  // building.
+  const state1Result = _calculateEnvelopeOnly(
+    withMode(building, 'envelope-only'),
+    constructions, libraryData, weatherData, hourlySolar, comfortBand,
+  )
+  if (state1Result.state !== 1) return state1Result   // bailout: _empty() or similar
+
+  // ── State 2 inner loop (clone of State 1 with gains added) ───────────────
+  const geo = computeGeometry(building)
+  const { gia, volume, total_wall_opaque, total_glazing, glazing, roof_area, ground_area } = geo
+  if (gia <= 0) return state1Result
+
+  const u_wall  = getUValue(constructions, 'external_wall', libraryData)
+  const u_roof  = getUValue(constructions, 'roof',          libraryData)
+  const u_floor = getUValue(constructions, 'ground_floor',  libraryData)
+  const u_glaz  = getUValue(constructions, 'glazing',       libraryData)
+  const g_value = getGValue(constructions, libraryData)
+  const FRAME_FRACTION = 0.20
+  const shadingFactors = computeShadingFactors(building)
+  const UA_fabric = u_wall*total_wall_opaque + u_roof*roof_area + u_floor*ground_area + u_glaz*total_glazing
+  const ach = Number(building.infiltration_ach ?? 0.5)
+  const UA_leakage = AIR_HEAT_CAPACITY * ach * volume
+  const openings = building.openings ?? {}
+  const Cd = 0.6
+  const Cw = ({ sheltered: 0.05, normal: 0.10, exposed: 0.20 })[openings.site_exposure] ?? 0.10
+  const sqrtCw = Math.sqrt(Cw)
+  const louvre_area_total = ['north','south','east','west']
+    .reduce((s, f) => s + Number(openings?.[f]?.louvre_area_m2 ?? 0), 0)
+  const cmass = resolveCmass(building, constructions, libraryData)
+  const C_mass_Wh = cmass.C_mass_Wh
+  const A_internal_surface = roof_area + ground_area + total_wall_opaque
+  const h_am_total = 4.5 * A_internal_surface
+
+  const n = weatherData.temperature.length
+  const T_hourly = new Float32Array(n)
+  let T_mass = comfortBand.lower_c
+  let T_air  = comfortBand.lower_c
+
+  // State 2 accumulators (Wh per year)
+  let acc_people = 0, acc_lighting = 0
+  let acc_equip_baseload = 0, acc_equip_active = 0
+  let peak_people = 0, peak_lighting = 0, peak_equipment = 0
+  let hours_people = 0, hours_lighting = 0, hours_equipment_active = 0
+  let sum_effective_occupants = 0, peak_occupants = 0
+
+  // Plus a slim set of State 2 demand/comfort accumulators (same shape as
+  // State 1 but recomputed with gains in the energy balance — that's the
+  // whole point of running the loop again).
+  let acc_heating_demand_Wh = 0, acc_cooling_demand_Wh = 0
+  let underheating_hours = 0, overheating_hours = 0, comfort_hours = 0
+  let T_winter_min = Infinity, T_summer_max = -Infinity
+
+  for (let h = 0; h < n; h++) {
+    const T_out = weatherData.temperature[h]
+    const v_wind = weatherData.wind_speed?.[h] ?? 0
+
+    const sol_n = hourlySolar.f1[h] * (glazing.north ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.north
+    const sol_e = hourlySolar.f2[h] * (glazing.east  ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.east
+    const sol_s = hourlySolar.f3[h] * (glazing.south ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.south
+    const sol_w = hourlySolar.f4[h] * (glazing.west  ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.west
+    const sol_roof = hourlySolar.roof[h] * roof_area * 0.05
+    const Q_solar_in_Wh = sol_n + sol_e + sol_s + sol_w + sol_roof
+
+    // ── Internal gains for this hour (the State 2 addition) ─────────────────
+    const gains = computeHourlyGains(building, h, weatherData, gia)
+    acc_people    += gains.people
+    acc_lighting  += gains.lighting
+    acc_equip_baseload += gains.equipment_baseload
+    acc_equip_active   += gains.equipment_active
+    if (gains.people    > peak_people)    peak_people    = gains.people
+    if (gains.lighting  > peak_lighting)  peak_lighting  = gains.lighting
+    if (gains.equipment > peak_equipment) peak_equipment = gains.equipment
+    if (gains.people    > 0.01) hours_people++
+    if (gains.lighting  > 0.01) hours_lighting++
+    if (gains.equipment_active > 0.01) hours_equipment_active++
+    sum_effective_occupants += gains.effective_occupants
+    if (gains.effective_occupants > peak_occupants) peak_occupants = gains.effective_occupants
+
+    const Q_louvre_m3s = Cd * louvre_area_total * sqrtCw * v_wind
+    const UA_permanent = AIR_HEAT_CAPACITY * (Q_louvre_m3s * 3600)
+    const UA_total = UA_fabric + UA_leakage + UA_permanent
+
+    // Two-node step — gains land on T_mass alongside solar (radiant/long-wave
+    // absorption simplification matching the State 1 convention).
+    T_air = (h_am_total * T_mass + UA_total * T_out) / (h_am_total + UA_total)
+    const Q_mass_to_air = h_am_total * (T_mass - T_air)
+    const Q_to_mass = Q_solar_in_Wh + gains.total
+    const Q_mass_net = Q_to_mass - Q_mass_to_air
+    T_mass = T_mass + Q_mass_net / C_mass_Wh
+    if (T_mass < -20) T_mass = -20
+    if (T_mass > 60)  T_mass = 60
+    const T_op = 0.5 * (T_air + T_mass)
+    T_hourly[h] = T_op
+
+    const month = weatherData.month[h]
+    if (T_op < comfortBand.lower_c)      underheating_hours++
+    else if (T_op > comfortBand.upper_c) overheating_hours++
+    else                                  comfort_hours++
+    if (month >= 12 || month <= 2) T_winter_min = Math.min(T_winter_min, T_op)
+    if (month >= 6  && month <= 8) T_summer_max = Math.max(T_summer_max, T_op)
+
+    if (T_op < comfortBand.lower_c) {
+      // Heating demand: deficit at the lower bound, minus the gain energy
+      // already injected into the zone this hour (solar + internal gains
+      // both offset heating demand).
+      const Q_loss_at_lower = UA_total * Math.max(0, comfortBand.lower_c - T_out)
+      const heating_Wh = Math.max(0, Q_loss_at_lower - Q_to_mass)
+      acc_heating_demand_Wh += heating_Wh
+    } else if (T_op > comfortBand.upper_c) {
+      // Cooling: gain energy plus heat coming IN from outside (if T_out > upper)
+      const Q_gain_at_upper = Q_to_mass + UA_total * Math.max(0, T_out - comfortBand.upper_c)
+      acc_cooling_demand_Wh += Q_gain_at_upper
+    }
+  }
+
+  const r1 = (Wh) => Math.round(Wh / 1000 * 10) / 10
+  const T_mean = T_hourly.reduce((s, v) => s + v, 0) / n
+  const totalEquipmentWh = acc_equip_baseload + acc_equip_active
+  const effective_lpd = magnitudeToWPerM2(building.gains?.lighting?.magnitude, building, gia)
+
+  // ── State 1 → State 2 delta ──────────────────────────────────────────────
+  const s1d = state1Result.demand ?? {}
+  const s1fr = state1Result.free_running ?? {}
+  const heating_change_mwh = Math.round((acc_heating_demand_Wh / 1_000_000 - (s1d.heating_demand_mwh ?? 0)) * 10) / 10
+  const cooling_change_mwh = Math.round((acc_cooling_demand_Wh / 1_000_000 - (s1d.cooling_demand_mwh ?? 0)) * 10) / 10
+  const overheating_change = overheating_hours - (s1d.overheating_hours ?? 0)
+  const comfort_change     = comfort_hours    - (s1d.comfort_hours    ?? 0)
+  const T_mean_change      = Math.round((T_mean - (s1fr.annual_mean_c ?? 0)) * 10) / 10
+
+  return {
+    state: 2,
+    mode: 'envelope-gains',
+    inputs_used: [
+      ...(state1Result.inputs_used ?? []),
+      'occupancy.density', 'occupancy.occupancy_rate', 'occupancy.sensible_w_per_person',
+      'occupancy.schedule', 'occupancy.schedule.exceptions',
+      'gains.lighting.magnitude', 'gains.lighting.relationship_to_occupancy',
+      'gains.lighting.spill_minutes', 'gains.lighting.daylight_factor',
+      'gains.equipment.baseload', 'gains.equipment.active',
+      'gains.equipment.relationship_to_occupancy', 'gains.equipment.standby_factor',
+    ],
+    comfort_band_used: { lower_c: comfortBand.lower_c, upper_c: comfortBand.upper_c },
+
+    gains: {
+      ...state1Result.gains,
+      people: {
+        sensible_kwh:  r1(acc_people),
+        latent_kwh:    0,   // State 2 dry-bulb balance ignores latent for now
+        total_kwh:     r1(acc_people),
+        peak_kw:       Math.round(peak_people) / 1000,
+        hours_active:  hours_people,
+      },
+      lighting: {
+        kwh:                    r1(acc_lighting),
+        effective_lpd_w_per_m2: Math.round(effective_lpd * 100) / 100,
+        peak_kw:                Math.round(peak_lighting) / 1000,
+        hours_active:           hours_lighting,
+      },
+      equipment: {
+        kwh:           r1(totalEquipmentWh),
+        peak_kw:       Math.round(peak_equipment) / 1000,
+        hours_active:  hours_equipment_active,
+        baseload_kwh:  r1(acc_equip_baseload),
+        active_kwh:    r1(acc_equip_active),
+      },
+    },
+    // State 2 keeps the State 1 losses unchanged (gains don't change fabric
+    // UA × dT; the only change is the temperature trace which is captured in
+    // free_running below).
+    losses: state1Result.losses,
+    free_running: {
+      annual_mean_c: Math.round(T_mean * 10) / 10,
+      winter_min_c:  isFinite(T_winter_min) ? Math.round(T_winter_min * 10) / 10 : null,
+      summer_max_c:  isFinite(T_summer_max) ? Math.round(T_summer_max * 10) / 10 : null,
+      hourly_temperature_c: T_hourly,
+    },
+    demand: {
+      heating_demand_mwh: Math.round(acc_heating_demand_Wh / 1_000_000 * 10) / 10,
+      cooling_demand_mwh: Math.round(acc_cooling_demand_Wh / 1_000_000 * 10) / 10,
+      underheating_hours,
+      overheating_hours,
+      comfort_hours,
+    },
+    state1_delta: {
+      heating_demand_change_mwh:               heating_change_mwh,
+      cooling_demand_change_mwh:               cooling_change_mwh,
+      overheating_hours_change:                overheating_change,
+      comfort_hours_change:                    comfort_change,
+      free_running_temp_change_annual_mean_c:  T_mean_change,
+    },
+    occupancy_summary: {
+      average_occupants:       Math.round(sum_effective_occupants / n * 10) / 10,
+      peak_occupants:          Math.round(peak_occupants * 10) / 10,
+      annual_occupant_hours:   Math.round(sum_effective_occupants),
+    },
+    // Mirror the state1 heat_balance shape so the existing HeatBalance
+    // component renders State 2 without further changes. The losses block
+    // is identical to State 1; the gains block adds people/lighting/equipment.
+    heat_balance: {
+      ...state1Result.heat_balance,
+      annual: {
+        ...state1Result.heat_balance.annual,
+        gains: {
+          ...state1Result.heat_balance.annual.gains,
+          people:    { kwh: r1(acc_people),    kwh_per_m2: Math.round(acc_people / 1000 / gia * 100) / 100 },
+          lighting:  { kwh: r1(acc_lighting),  kwh_per_m2: Math.round(acc_lighting / 1000 / gia * 100) / 100 },
+          equipment: { kwh: r1(totalEquipmentWh), kwh_per_m2: Math.round(totalEquipmentWh / 1000 / gia * 100) / 100 },
+        },
+      },
+      demand: {
+        heating_demand_mwh: Math.round(acc_heating_demand_Wh / 1_000_000 * 10) / 10,
+        cooling_demand_mwh: Math.round(acc_cooling_demand_Wh / 1_000_000 * 10) / 10,
+        underheating_hours,
+        overheating_hours,
+        comfort_hours,
+      },
+      free_running: {
+        annual_mean_c: Math.round(T_mean * 10) / 10,
+        winter_min_c:  isFinite(T_winter_min) ? Math.round(T_winter_min * 10) / 10 : null,
+        summer_max_c:  isFinite(T_summer_max) ? Math.round(T_summer_max * 10) / 10 : null,
+      },
+    },
   }
 }
 
@@ -1399,6 +1889,18 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
   // value in gains/operation/systems. The withMode() helper enforces this.
   if (mode === 'envelope-only') {
     return _calculateEnvelopeOnly(
+      withMode(building, mode),
+      constructions, libraryData, weatherData, hourlySolar,
+      options.comfortBand ?? building.comfort_band ?? { lower_c: 20, upper_c: 26 },
+    )
+  }
+
+  // State 2 envelope + internal gains path (Brief 27 Part 2). Same physics
+  // as State 1 with people / lighting / equipment gains added to the energy
+  // balance. Returns the State 2 contract shape including `state1_delta`
+  // and `occupancy_summary`.
+  if (mode === 'envelope-gains') {
+    return _calculateState2(
       withMode(building, mode),
       constructions, libraryData, weatherData, hourlySolar,
       options.comfortBand ?? building.comfort_band ?? { lower_c: 20, upper_c: 26 },
