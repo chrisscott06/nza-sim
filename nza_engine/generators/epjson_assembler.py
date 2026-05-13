@@ -911,7 +911,15 @@ def assemble_epjson(
                 },
             })
         if openings_const_schedules:
-            hvac_objects["Schedule:Constant"] = dict(openings_const_schedules)
+            # MERGE, don't assign — the state1 block above just added the
+            # state1_heating_setpoint / state1_cooling_setpoint Schedule:Constant
+            # entries that the IdealLoads thermostat refers to. A naïve
+            # `hvac_objects["Schedule:Constant"] = dict(openings_const_schedules)`
+            # wipes them and produces "schedule item not found" severe errors
+            # that abort the EP run before any output is generated.
+            # Bug was latent until a project carried non-zero louvre area on
+            # any facade (which is what populates openings_const_schedules).
+            hvac_objects.setdefault("Schedule:Constant", {}).update(openings_const_schedules)
 
     # ThermostatControlType_DualSetpoint schedule is already in schedules.py
     # ThermostatControlType ScheduleTypeLimits is already in schedule_type_limits
