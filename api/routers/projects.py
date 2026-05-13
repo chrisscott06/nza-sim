@@ -436,10 +436,10 @@ async def simulate_project(project_id: str, scenario_name: str = "Baseline", mod
       - "envelope-only":  State 1 — gains zeroed, no thermostat, free-running
                           zone temperature, demand derived against the comfort
                           band. Implemented fully in Brief 26 Part 4.
-
-    For Brief 26 Part 0 the mode is accepted and tagged on the response but
-    the underlying epJSON assembly still runs the full model. Part 4 adds
-    the true envelope-only generation path.
+      - "envelope-gains": State 2 — envelope + internal gains, no real
+                          systems and no operable windows. Densities + derived
+                          schedules emitted from `building_config.occupancy.*`
+                          + `building_config.gains.*` (v2.3). Brief 27 Part 3.
     """
     # Load project from DB
     async with get_db() as db:
@@ -704,11 +704,11 @@ async def get_simulation_balance(project_id: str, run_id: str, mode: str = "full
         if not proj_row:
             raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
 
-        # For State 1, fetch the constructions library so the parser can
-        # resolve U-values exactly as the live engine does (matches getUValue
-        # in instantCalc.js). For full mode this is unused.
+        # For State 1 / State 2, fetch the constructions library so the
+        # parser can resolve U-values exactly as the live engine does
+        # (matches getUValue in instantCalc.js). For full mode this is unused.
         library_data = None
-        if mode == "envelope-only":
+        if mode in ("envelope-only", "envelope-gains"):
             cursor = await db.execute(
                 "SELECT name, config_json FROM library_items WHERE library_type = 'construction'"
             )

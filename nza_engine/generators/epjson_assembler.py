@@ -46,6 +46,7 @@ from nza_engine.library.schedules import (
     get_all_schedules,
     get_schedule_type_limits,
     library_schedule_to_compact,
+    v23_schedule_to_compact,
 )
 from nza_engine.library.loads import get_zone_loads
 from nza_engine.generators.hvac_vrf import generate_vrf_system
@@ -595,6 +596,216 @@ _SCHEDULE_TYPE_TO_DEFAULT_NAME: dict[str, str] = {
 }
 
 
+# ── Brief 27 Part 3 — State 2 (envelope + internal gains) helpers ───────────
+#
+# State 2 emits People/Lights/ElectricEquipment using:
+#   - Density values computed from `building_config.occupancy.*` and
+#     `building_config.gains.*` (v2.3 contract)
+#   - Custom Schedule:Compact objects derived from each gain's
+#     `relationship_to_occupancy` + the v2.3 schedule shape
+#
+# Schedule semantics mirror the live engine (frontend/src/utils/instantCalc.js
+# `_calculateState2` + `lightingFractionForHour` / `equipmentFractionForHour`):
+#
+#   independent           — pure lighting/equipment schedule lookup
+#   always_on             — constant 1.0
+#   proportional          — occupancy schedule × occupancy_rate, with floor
+#                           (standby_factor for equipment)
+#   proportional_with_spill — lighting's own schedule × occupancy_rate, with
+#                             daylight dimming during 09:00–16:00
+#
+# Equipment baseload is emitted as a SEPARATE ElectricEquipment object with
+# an always-on schedule, mirroring the live engine's "baseload is occupancy-
+# independent" semantics. Total equipment = baseload (24/7) + active (scheduled).
+
+
+def _v23_compute_occupancy_density(building_params: dict, gia_m2: float) -> float:
+    """
+    People density (people/m²) from v2.3 occupancy block.
+
+    Handles density.basis = per_room | per_m2 | total | per_workstation.
+    Multiplies by occupancy_rate so the EP density already encodes both the
+    headcount-at-100% and the average occupancy fraction. Schedule emits
+    the per-hour presence (no further occupancy_rate scaling).
+    """
+    occ = building_params.get("occupancy") or {}
+    d = occ.get("density") or {"value": 1.5, "basis": "per_room"}
+    value = float(d.get("value", 1.5) or 0)
+    basis = d.get("basis", "per_room")
+    rate = float(occ.get("occupancy_rate", 0.75) or 0.75)
+    nrooms = int(building_params.get("num_bedrooms", 0) or 0)
+
+    if basis == "per_room":
+        total = nrooms * value
+    elif basis == "per_m2":
+        total = gia_m2 * value
+    elif basis == "total":
+        total = value
+    elif basis == "per_workstation":
+        # Schema doesn't carry a workstation count yet — treat value as total.
+        total = value
+    else:
+        total = nrooms * value
+
+    if gia_m2 <= 0:
+        return 0.0
+    return (total * rate) / gia_m2
+
+
+def _v23_magnitude_to_w_per_m2(magnitude: dict, building_params: dict, gia_m2: float) -> float:
+    """Convert {value, unit} → W/m² of GIA. Mirrors live engine helper."""
+    if not magnitude:
+        return 0.0
+    v = float(magnitude.get("value", 0) or 0)
+    unit = magnitude.get("unit", "w_per_m2")
+    nrooms = int(building_params.get("num_bedrooms", 0) or 0)
+    if unit == "w_per_m2":
+        return v
+    if unit == "w_per_room":
+        return v * nrooms / max(1.0, gia_m2)
+    if unit == "total_w":
+        return v / max(1.0, gia_m2)
+    return v
+
+
+def _v23_derived_lighting_schedule(building_params: dict) -> dict:
+    """
+    Build a Schedule:Compact representing the lighting fraction for each
+    hour, accounting for relationship_to_occupancy. The fraction is
+    'fraction of installed LPD that's drawing power'.
+
+    `proportional_with_spill` (default) — lighting schedule × occupancy_rate,
+    with daylight dimming during 09:00–16:00 (hour indices 9..16 inclusive).
+
+    `proportional` — occupancy schedule × occupancy_rate (no daylight dim;
+    lights only on when somebody walks in).
+
+    `independent` — pure lighting schedule (no occupancy scaling).
+
+    `always_on` — constant 1.0 across all hours.
+    """
+    occ = building_params.get("occupancy") or {}
+    occ_rate = float(occ.get("occupancy_rate", 0.75) or 0.75)
+    occ_sched = occ.get("schedule") or {}
+
+    gains = building_params.get("gains") or {}
+    lighting = gains.get("lighting") or {}
+    rel = lighting.get("relationship_to_occupancy", "proportional_with_spill")
+    lsched = lighting.get("schedule") or occ_sched
+    daylight = float(lighting.get("daylight_factor", 0.6) or 0.6)
+
+    def _flat_24(value: float) -> list[float]:
+        return [value] * 24
+
+    if rel == "always_on":
+        wk = sa = su = _flat_24(1.0)
+        mm = [1.0] * 12
+        excs = []
+    elif rel == "independent":
+        wk = list(lsched.get("weekday", _flat_24(0.0)))
+        sa = list(lsched.get("saturday", wk))
+        su = list(lsched.get("sunday", wk))
+        mm = list(lsched.get("monthly_multipliers", [1.0] * 12))
+        excs = list(lsched.get("exceptions", []) or [])
+    elif rel == "proportional":
+        wk_o = occ_sched.get("weekday", _flat_24(0.0))
+        sa_o = occ_sched.get("saturday", wk_o)
+        su_o = occ_sched.get("sunday", wk_o)
+        wk = [min(1.0, v * occ_rate) for v in wk_o]
+        sa = [min(1.0, v * occ_rate) for v in sa_o]
+        su = [min(1.0, v * occ_rate) for v in su_o]
+        mm = list(occ_sched.get("monthly_multipliers", [1.0] * 12))
+        excs = list(occ_sched.get("exceptions", []) or [])
+    else:  # proportional_with_spill (default)
+        wk_l = list(lsched.get("weekday", _flat_24(0.0)))
+        sa_l = list(lsched.get("saturday", wk_l))
+        su_l = list(lsched.get("sunday", wk_l))
+        # Apply occupancy_rate scaling + daylight dimming (9..16 inclusive).
+        def _apply(arr):
+            out = []
+            for h, v in enumerate(arr):
+                f = float(v) * occ_rate
+                if 9 <= h <= 16 and daylight < 1:
+                    f *= daylight
+                out.append(min(1.0, f))
+            return out
+        wk = _apply(wk_l)
+        sa = _apply(sa_l)
+        su = _apply(su_l)
+        mm = list(lsched.get("monthly_multipliers", [1.0] * 12))
+        excs = list(lsched.get("exceptions", []) or [])
+
+    return v23_schedule_to_compact(
+        weekday=wk, saturday=sa, sunday=su,
+        monthly_multipliers=mm, exceptions=excs,
+        schedule_type="lighting",
+    )
+
+
+def _v23_derived_equipment_active_schedule(building_params: dict) -> dict:
+    """
+    Active-equipment fraction schedule. Baseload is emitted as a separate
+    ElectricEquipment object with a constant always-on schedule.
+
+    `proportional` (default) — max(standby_factor, equipment_schedule × occupancy_rate).
+    `independent` — pure equipment schedule.
+    """
+    occ = building_params.get("occupancy") or {}
+    occ_rate = float(occ.get("occupancy_rate", 0.75) or 0.75)
+    occ_sched = occ.get("schedule") or {}
+
+    gains = building_params.get("gains") or {}
+    equipment = gains.get("equipment") or {}
+    rel = equipment.get("relationship_to_occupancy", "proportional")
+    esched = equipment.get("schedule") or occ_sched
+    standby = float(equipment.get("standby_factor", 0.10) or 0)
+
+    def _flat_24(v):
+        return [v] * 24
+
+    if rel == "independent":
+        wk = list(esched.get("weekday", _flat_24(0.0)))
+        sa = list(esched.get("saturday", wk))
+        su = list(esched.get("sunday", wk))
+        mm = list(esched.get("monthly_multipliers", [1.0] * 12))
+        excs = list(esched.get("exceptions", []) or [])
+    else:  # proportional (default)
+        wk_e = list(esched.get("weekday", _flat_24(0.0)))
+        sa_e = list(esched.get("saturday", wk_e))
+        su_e = list(esched.get("sunday", wk_e))
+        wk = [max(standby, min(1.0, float(v) * occ_rate)) for v in wk_e]
+        sa = [max(standby, min(1.0, float(v) * occ_rate)) for v in sa_e]
+        su = [max(standby, min(1.0, float(v) * occ_rate)) for v in su_e]
+        mm = list(esched.get("monthly_multipliers", [1.0] * 12))
+        excs = list(esched.get("exceptions", []) or [])
+
+    return v23_schedule_to_compact(
+        weekday=wk, saturday=sa, sunday=su,
+        monthly_multipliers=mm, exceptions=excs,
+        schedule_type="equipment",
+    )
+
+
+def _v23_derived_occupancy_schedule(building_params: dict) -> dict:
+    """
+    People fraction schedule from `building_config.occupancy.schedule`.
+    The occupancy density already includes `occupancy_rate`, so this
+    schedule is the per-hour PRESENCE fraction only.
+    """
+    occ = building_params.get("occupancy") or {}
+    sched = occ.get("schedule") or {}
+    wk = list(sched.get("weekday", [0] * 24))
+    sa = list(sched.get("saturday", wk))
+    su = list(sched.get("sunday", wk))
+    mm = list(sched.get("monthly_multipliers", [1.0] * 12))
+    excs = list(sched.get("exceptions", []) or [])
+    return v23_schedule_to_compact(
+        weekday=wk, saturday=sa, sunday=su,
+        monthly_multipliers=mm, exceptions=excs,
+        schedule_type="occupancy",
+    )
+
+
 def assemble_epjson(
     building_params: dict,
     construction_choices: dict[str, str],
@@ -715,35 +926,96 @@ def assemble_epjson(
     _vent_ctrl = sc.get("ventilation_control", "continuous")
     vent_schedule = _vent_control_schedules.get(_vent_ctrl, "hotel_ventilation_continuous")
 
-    # ── State 1 envelope-only mode (Brief 26 Part 5) ──────────────────────
-    # Strip People/Lights/Equipment to zero density so internal gains can't
-    # contaminate the State 1 output. The Ideal Loads thermostat setpoints
-    # are widened to 5°C / 50°C further down — the system effectively never
-    # engages and the zone runs free against the weather. Operable windows
-    # are dropped from the ZoneVentilation set; only louvre permanent
-    # openings remain. Fabric leakage (ZoneInfiltration) stays as normal.
+    # ── State 1 envelope-only / State 2 envelope-gains modes ──────────────
+    # Both states use the wide-setpoint ideal-loads thermostat (no real HVAC
+    # service) and suppress operable windows (State 2.5 territory).
+    #
+    # State 1 (Brief 26 Part 5): Strip People/Lights/Equipment to zero
+    # density so internal gains can't contaminate the State 1 output.
+    #
+    # State 2 (Brief 27 Part 3): Emit People/Lights/Equipment using
+    # densities + derived schedules from v2.3 `occupancy.*` + `gains.*`.
+    # Equipment baseload is emitted as a SEPARATE always-on object so it
+    # mirrors the live engine's "baseload is 24/7, occupancy-independent"
+    # semantics.
     state1 = (mode == "envelope-only")
+    state2 = (mode == "envelope-gains")
 
-    # Occupancy density — compute from building params when available
+    # Occupancy density — legacy fallback path (used only when v2.3
+    # occupancy block isn't present and we're in 'full' mode).
     _num_bedrooms    = int(building_params.get("num_bedrooms",    0) or 0)
     _occupancy_rate  = float(building_params.get("occupancy_rate",  0.75) or 0.75)
     _people_per_room = float(building_params.get("people_per_room", 1.5)  or 1.5)
     _gia = (float(building_params.get("length", 60)) *
             float(building_params.get("width",  15)) *
             float(building_params.get("num_floors", 4)))
+
+    # State 2 v2.3-derived densities + schedules. Computed regardless of
+    # mode so we can reuse below, but only INSTALLED when state2 is true.
+    _state2_density = _v23_compute_occupancy_density(building_params, _gia) if state2 else 0.0
+    _gains = building_params.get("gains") or {}
+    _light_w_per_m2 = _v23_magnitude_to_w_per_m2(
+        (_gains.get("lighting") or {}).get("magnitude"), building_params, _gia
+    ) if state2 else 0.0
+    _equip_baseload_w_per_m2 = _v23_magnitude_to_w_per_m2(
+        (_gains.get("equipment") or {}).get("baseload"), building_params, _gia
+    ) if state2 else 0.0
+    _equip_active_w_per_m2 = _v23_magnitude_to_w_per_m2(
+        (_gains.get("equipment") or {}).get("active"), building_params, _gia
+    ) if state2 else 0.0
+
     if state1:
         _density_override = 0.0   # State 1: no people
         lpd_override = 0.0        # State 1: no lights
         epd_override = 0.0        # State 1: no equipment
+    elif state2:
+        _density_override = _state2_density
+        lpd_override = _light_w_per_m2
+        # Active equipment LPD only — baseload is emitted as a separate
+        # ElectricEquipment object further down.
+        epd_override = _equip_active_w_per_m2
     elif _num_bedrooms > 0 and _gia > 0:
         _avg_occupants = _num_bedrooms * _occupancy_rate * _people_per_room
         _density_override = _avg_occupants / _gia
     else:
         _density_override = None  # use library default
 
+    # ── State 2 schedule emission ─────────────────────────────────────────
+    # Three derived Schedule:Compact objects are spliced into `all_schedules`,
+    # replacing the default hotel_bedroom_* references. Done by name so the
+    # _build_people/_build_lights/_build_equipment_objects calls below pick
+    # up the new shapes without further changes.
+    if state2:
+        all_schedules["hotel_bedroom_occupancy"] = _v23_derived_occupancy_schedule(building_params)
+        all_schedules["hotel_bedroom_lighting"]  = _v23_derived_lighting_schedule(building_params)
+        all_schedules["hotel_bedroom_equipment"] = _v23_derived_equipment_active_schedule(building_params)
+        # Activity-level schedule used by People objects is a constant W/person
+        # value (75 W default from v2.3 occupancy.sensible_w_per_person). The
+        # existing 'hotel_bedroom_occupancy' activity-level schedule is a
+        # constant Schedule:Compact already; people heat is set via People's
+        # `sensible_heat_fraction` and library activity level.
+
     people_objects  = _build_people_objects(zones, density_override=_density_override)
     lights_objects  = _build_lights_objects(zones, lpd_override=lpd_override)
     equip_objects   = _build_equipment_objects(zones, epd_override=epd_override)
+
+    # ── State 2: emit baseload equipment as a separate always-on object ───
+    # Mirrors the live engine's split of `equipment_baseload` (24/7) from
+    # `equipment_active` (scheduled). Without this, EP would only see the
+    # active component and undercount equipment energy by ~50%.
+    if state2 and _equip_baseload_w_per_m2 > 0:
+        # Ensure the always-on schedule is present (added by openings; here
+        # we add it preemptively in case no operable openings exist).
+        for zone_name in zones:
+            equip_objects[f"{zone_name}_EquipBaseload"] = {
+                "zone_or_zonelist_or_space_or_spacelist_name": zone_name,
+                "schedule_name": "openings_always_on",
+                "design_level_calculation_method": "Watts/Area",
+                "watts_per_floor_area": _equip_baseload_w_per_m2,
+                "fraction_radiant": 0.30,
+                "fraction_latent": 0.00,
+                "fraction_lost": 0.00,
+            }
     infil_objects   = _build_infiltration_objects(
         zones,
         building_params["length"],
@@ -756,17 +1028,22 @@ def assemble_epjson(
     # Reads the per-facade openings dict from building_params (Building →
     # Openings). Louvres always-open, openable windows on a schedule. Single-zone,
     # no stack (single-side wind only).
-    natural_vent_objects = _build_openings_objects(zones, building_params, state1=state1)
+    # State 1 + State 2 both suppress operable windows (State 2.5 territory).
+    # The `state1` kwarg name is kept for backward compatibility; semantically
+    # it means "suppress operable-window stream".
+    natural_vent_objects = _build_openings_objects(zones, building_params, state1=(state1 or state2))
 
     # Always-on schedule referenced by louvres + 'always' window mode.
-    # Merged into the final hvac_objects below so it doesn't get overwritten by
-    # the DHW Schedule:Constant set.
+    # Also referenced by the State 2 baseload-equipment object, so we emit
+    # it whenever state2 is true even if there are no operable openings.
+    # Merged into the final hvac_objects below so it doesn't get overwritten
+    # by the DHW Schedule:Constant set.
     openings_const_schedules = {
         "openings_always_on": {
             "schedule_type_limits_name": "Fraction",
             "hourly_value": 1.0,
         },
-    } if natural_vent_objects else {}
+    } if (natural_vent_objects or state2) else {}
 
     # ── 7. HVAC — branch on hvac_mode ─────────────────────────────────────────
     # "ideal_loads" (default): ZoneHVAC:IdealLoadsAirSystem — perfect, no real system effects
@@ -779,7 +1056,10 @@ def assemble_epjson(
     # Renamed from `mode` to `hvac_mode` to avoid shadowing the state-contract
     # `mode` function parameter (previously caused State 1 to silently fall
     # back to detailed-mode + occupancy thermostat schedules).
-    hvac_mode = "ideal_loads" if state1 else sc.get("mode", "ideal_loads")
+    # State 1 + State 2 both force ideal loads with wide setpoints — neither
+    # state involves real HVAC; both need the free-running zone temperature
+    # trace, with State 2 adding internal gains on top.
+    hvac_mode = "ideal_loads" if (state1 or state2) else sc.get("mode", "ideal_loads")
 
     if hvac_mode == "detailed":
         # ── Parse demand-based system assignments (with flat-key fallbacks) ──
@@ -888,7 +1168,7 @@ def assemble_epjson(
     else:
         # Ideal loads — ZoneHVAC:IdealLoadsAirSystem (not HVACTemplate which needs ExpandObjects)
         ideal_loads, equip_lists, equip_conns, dual_setpoints, zone_controls = (
-            _build_hvac_ideal_loads(zones, state1=state1)
+            _build_hvac_ideal_loads(zones, state1=(state1 or state2))
         )
         hvac_objects = {
             "ZoneHVAC:IdealLoadsAirSystem": ideal_loads,

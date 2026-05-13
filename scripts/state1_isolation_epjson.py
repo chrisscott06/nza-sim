@@ -47,7 +47,7 @@ from nza_engine.runner import run_simulation
 
 
 # ── Read the canonical forbidden list from stateMode.js ──────────────────────
-_MIN_FORBIDDEN_PATHS = 15  # tripwire — see comment below
+_MIN_FORBIDDEN_PATHS = 30  # tripwire — see comment below
 
 
 def load_forbidden_paths() -> list[str]:
@@ -84,12 +84,32 @@ def load_forbidden_paths() -> list[str]:
 
 # ── Absurd values — match the live-engine test exactly ──────────────────────
 ABSURD: dict = {
+    # Legacy occupancy
     'params.num_bedrooms':              9999,
     'params.occupancy_rate':              9.99,
     'params.people_per_room':             5.0,
     'systems.lighting_power_density':   100,
     'systems.equipment_power_density':  100,
     'systems.lighting_control':         'always-on-9999',
+    # v2.3 occupancy (Brief 27)
+    'occupancy.occupancy_rate':            9.99,
+    'occupancy.density':                   {'value': 999, 'basis': 'per_m2'},
+    'occupancy.sensible_w_per_person':     9999,
+    'occupancy.latent_w_per_person':       9999,
+    'occupancy.schedule':                  {'weekday': [99]*24, 'saturday': [99]*24, 'sunday': [99]*24, 'monthly_multipliers': [99]*12, 'exceptions': []},
+    'occupancy.schedule.exceptions':       [{'name': 'absurd', 'start_date': '01-01', 'end_date': '12-31', 'weekday': [99]*24, 'saturday': [99]*24, 'sunday': [99]*24}],
+    # v2.3 gains (Brief 27)
+    'gains.lighting.magnitude':                  {'value': 999, 'unit': 'w_per_m2'},
+    'gains.lighting.relationship_to_occupancy':  'always_on',
+    'gains.lighting.spill_minutes':              999,
+    'gains.lighting.daylight_factor':            0.01,
+    'gains.lighting.schedule':                   {'weekday': [99]*24},
+    'gains.equipment.baseload':                  {'value': 999, 'unit': 'w_per_m2'},
+    'gains.equipment.active':                    {'value': 999, 'unit': 'w_per_m2'},
+    'gains.equipment.relationship_to_occupancy': 'independent',
+    'gains.equipment.standby_factor':            0.99,
+    'gains.equipment.schedule':                  {'weekday': [99]*24},
+    # Systems — extreme setpoints / impossible COPs
     'systems.space_heating':            {'setpoint_heating_c': 35, 'cop': 99},
     'systems.space_cooling':            {'setpoint_cooling_c':  5, 'cop': 99},
     'systems.dhw':                      {'setpoint_c': 99, 'cop': 99},
@@ -123,6 +143,18 @@ def apply_absurd(building: dict, systems: dict, path: str, value):
         return building, systems
 
     root, *rest = path.split('.')
+    # occupancy.* and gains.* are v2.3 building_config nested blocks.
+    if root in ('occupancy', 'gains'):
+        building.setdefault(root, {})
+        if not rest:
+            building[root] = value
+            return building, systems
+        cursor = building[root]
+        for k in rest[:-1]:
+            cursor.setdefault(k, {})
+            cursor = cursor[k]
+        cursor[rest[-1]] = value
+        return building, systems
     if root == 'params':
         cursor = building
     elif root == 'systems':

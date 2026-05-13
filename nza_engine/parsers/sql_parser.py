@@ -910,6 +910,14 @@ def get_heat_balance(
             comfort_band=comfort_band,
             library_data=library_data,
         )
+    if mode == "envelope-gains":
+        return _get_heat_balance_state2(
+            sql_path,
+            building_config=building_config,
+            weather_file_path=weather_file_path,
+            comfort_band=comfort_band,
+            library_data=library_data,
+        )
     conn = _connect(sql_path)
     try:
         # ── Reuse existing detailed envelope parser for fabric ────────────────
@@ -1659,6 +1667,100 @@ def _get_heat_balance_state1(
         # (which spreads `annual`/`metadata` at the root) keeps working.
         "annual":   heat_balance["annual"],
         "metadata": heat_balance["metadata"],
+    }
+
+
+def _get_heat_balance_state2(
+    sql_path: str | Path,
+    building_config: dict | None,
+    weather_file_path: str | Path | None,
+    comfort_band: dict | None,
+    library_data: dict | None,
+) -> dict:
+    """
+    State 2 envelope + internal gains parser path. Brief 27 Part 3.
+
+    EP has just been run with extreme setpoints (`-60` / `+100`) — same as
+    State 1 — and the People/Lights/ElectricEquipment objects have been
+    emitted from `building_config.occupancy.*` + `building_config.gains.*`
+    (v2.3 contract). The zone's free-running temperature trace therefore
+    reflects gains, and EP's gain meters report actual gain energies.
+
+    Approach (light reuse of state1 logic):
+      1. Run the State 1 demand calc on the (gains-influenced) hourly zone
+         temperatures to derive heating/cooling demand against the
+         comfort band. Same lumped-capacitance formula; the only difference
+         from State 1 is that T_hourly already encodes the gain effect.
+      2. Read People/Lights/Equipment annual energies from EP output meters.
+         These were near-zero in State 1; now non-zero per Part 3.
+      3. Return the State 2 contract shape with gain energies attached.
+
+    NOTE: `state1_delta` cannot be computed here without re-running the
+    State 1 simulation. The runner/API layer is responsible for that
+    diff if needed. For now `state1_delta` is omitted from the return
+    shape; consumers should compute it from a separate State 1 run.
+    """
+    # Run the existing state1 envelope physics on this (gains-influenced) run.
+    # The returned shape includes free_running, demand (computed against the
+    # comfort band from the EP-reported T_op trace), and the loss accounting.
+    base = _get_heat_balance_state1(
+        sql_path,
+        building_config=building_config,
+        weather_file_path=weather_file_path,
+        comfort_band=comfort_band,
+        library_data=library_data,
+    )
+
+    # ── Read gain energies from EP output meters ─────────────────────────────
+    conn = _connect(sql_path)
+    try:
+        people_kwh = _sum_annual(conn, "Zone People Total Heating Energy")
+        light_heat = _sum_annual(conn, "Zone Lights Total Heating Energy")
+        if light_heat == 0.0:
+            light_heat = _sum_annual(conn, "Zone Lights Electricity Energy")
+        equip_heat = _sum_annual(conn, "Zone Electric Equipment Total Heating Energy")
+        if equip_heat == 0.0:
+            equip_heat = _sum_annual(conn, "Zone Electric Equipment Electricity Energy")
+    finally:
+        conn.close()
+
+    bc = building_config or {}
+    areas = _building_areas(bc)
+    gia = max(areas["gia_m2"], 1.0)
+
+    # ── State 2-shaped output (mode + state + gains attached) ────────────────
+    return {
+        **base,  # carries losses, free_running, demand, heat_balance, annual, metadata
+        "state": 2,
+        "mode":  "envelope-gains",
+        "inputs_used": (base.get("inputs_used") or []) + [
+            "occupancy.density", "occupancy.occupancy_rate",
+            "occupancy.sensible_w_per_person", "occupancy.schedule",
+            "occupancy.schedule.exceptions",
+            "gains.lighting.magnitude", "gains.lighting.relationship_to_occupancy",
+            "gains.lighting.daylight_factor", "gains.lighting.schedule",
+            "gains.equipment.baseload", "gains.equipment.active",
+            "gains.equipment.relationship_to_occupancy", "gains.equipment.standby_factor",
+            "gains.equipment.schedule",
+        ],
+        "gains": {
+            **(base.get("gains") or {}),
+            "people": {
+                "sensible_kwh": round(people_kwh, 1),
+                "latent_kwh":   0.0,
+                "total_kwh":    round(people_kwh, 1),
+            },
+            "lighting": {
+                "kwh": round(light_heat, 1),
+            },
+            "equipment": {
+                "kwh": round(equip_heat, 1),
+            },
+        },
+        # state1_delta is omitted — requires running State 1 in parallel.
+        # The runner / API computes the delta by calling get_heat_balance
+        # twice (once with mode='envelope-only', once with 'envelope-gains'
+        # against an EP run assembled in each mode) and diffing.
     }
 
 
