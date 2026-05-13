@@ -24,6 +24,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
+import { deriveConstructionMass } from '../../utils/thermalMass.js'
 import {
   X as XIcon, Save, Copy, Lock, AlertCircle, ChevronDown, Plus, Trash2,
 } from 'lucide-react'
@@ -174,6 +175,26 @@ export default function ConstructionInspector({
   }, [open, constructionName])
 
   const calc = useMemo(() => computeUValue(layers, yFactor), [layers, yFactor])
+
+  // Brief 26.1 Part 5: derive thermal mass from the live layer build-up
+  // so it tracks in-flight edits in this inspector, not just the stored
+  // construction. Glazing returns 0 by convention.
+  const massDerived = useMemo(() => {
+    const ctype = data?.summary?.type ?? data?.type
+    return deriveConstructionMass({
+      name: constructionName,
+      type: ctype,
+      layers: layers.map(l => ({
+        name: l.name,
+        kind: l.kind ?? 'Material',
+        thickness: l.thickness,
+        conductivity: l.conductivity,
+        density: l.density,
+        specific_heat: l.specific_heat,
+        thermal_resistance: l.thermal_resistance,
+      })),
+    })
+  }, [layers, data?.summary?.type, data?.type, constructionName])
 
   // ── Layer editing helpers ───────────────────────────────────────────────────
   function updateLayer(idx, field, value) {
@@ -338,6 +359,29 @@ export default function ConstructionInspector({
                   </p>
                 </div>
               </div>
+
+              {/* Derived thermal mass — sum of (thickness × density × specific
+                  heat) for layers on the indoor side of the principal
+                  insulation. Drives the live engine's State 1 free-running
+                  temperature model when thermal_mass_mode = 'auto'. */}
+              {!massDerived.isGlazing && (
+                <div className="mt-3 pt-3 border-t border-light-grey flex items-baseline justify-between">
+                  <p className="text-xxs uppercase tracking-wider text-mid-grey">Effective indoor thermal mass</p>
+                  <div className="text-right">
+                    <p className="text-caption font-semibold text-navy tabular-nums">
+                      {massDerived.mass_kJ_per_m2K} <span className="text-xxs font-normal text-mid-grey">kJ/(K·m²)</span>
+                      <span className={`ml-2 text-xxs font-medium px-1.5 py-0.5 rounded ${
+                        massDerived.category === 'heavy' ? 'bg-orange-50 text-orange-700' :
+                        massDerived.category === 'medium' ? 'bg-amber-50 text-amber-700' :
+                                                            'bg-sky-50 text-sky-700'
+                      }`}>{massDerived.category}</span>
+                    </p>
+                    <p className="text-xxs text-mid-grey">
+                      {massDerived.inside_layers.length} layer{massDerived.inside_layers.length === 1 ? '' : 's'} inside the insulation
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Thermal bridging selector */}

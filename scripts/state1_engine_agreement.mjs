@@ -50,9 +50,12 @@ const constructionsArr = Array.isArray(constructionsLib)
 const libraryData = {
   constructions: constructionsArr.map(c => ({
     name: c.name,
+    type: c.type ?? c.config_json?.type,
     u_value_W_per_m2K: c.config_json?.u_value_W_per_m2K ?? c.u_value_W_per_m2K,
     y_factor: c.config_json?.y_factor ?? c.y_factor ?? 1.0,
     config_json: c.config_json ?? c,
+    // Part 5: layer data for thermal mass derivation
+    layers: c.layers,
   })),
 }
 

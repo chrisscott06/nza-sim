@@ -19,9 +19,11 @@ const lib = await fetchJson(`http://127.0.0.1:8002/api/library/constructions`)
 const libraryData = {
   constructions: (lib.constructions ?? []).map(c => ({
     name: c.name,
-    u_value_W_per_m2K: c.config_json?.u_value_W_per_m2K,
-    y_factor: c.config_json?.y_factor ?? 1.0,
+    type: c.type ?? c.config_json?.type,
+    u_value_W_per_m2K: c.config_json?.u_value_W_per_m2K ?? c.u_value_W_per_m2K,
+    y_factor: c.config_json?.y_factor ?? c.y_factor ?? 1.0,
     config_json: c.config_json ?? c,
+    layers: c.layers,
   })),
 }
 const building = project.building_config

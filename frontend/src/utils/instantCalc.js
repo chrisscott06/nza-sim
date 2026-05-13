@@ -11,6 +11,8 @@
  * Method: degree-day steady-state heat balance (CIBSE Guide A simplified)
  */
 
+import { resolveCmass } from './thermalMass.js'
+
 // ── System efficiency defaults (by library key) ───────────────────────────────
 // Used for instant calc lookups without needing the full library API response.
 // efficiency for gas systems = fraction (0–1); for heat pumps = COP/SCOP/SEER.
@@ -291,6 +293,7 @@ function withMode(building, mode) {
     shading_overhang: building?.shading_overhang,
     shading_fin:      building?.shading_fin,
     infiltration_ach:      building?.infiltration_ach,
+    thermal_mass_mode:     building?.thermal_mass_mode ?? 'auto',
     thermal_mass_category: building?.thermal_mass_category ?? 'light',
     openings:      permanentOpenings,
     location:      building?.location,
@@ -412,10 +415,17 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   // which gives T_air = weighted mean of T_mass and T_out, weighted by
   // their respective couplings. T_mass advances explicitly — its time
   // constant is hours-to-days, so the explicit step is stable.
-  const thermal_mass = THERMAL_MASS_J_PER_K_PER_M2[building.thermal_mass_category ?? 'light']
-                       ?? THERMAL_MASS_J_PER_K_PER_M2.light
-  const C_mass_J = thermal_mass * gia              // J/K — structural mass
-  const C_mass_Wh = C_mass_J / 3600                // Wh/K
+  // Brief 26.1 Part 5 — thermal mass resolved from construction stack
+  // when `params.thermal_mass_mode === 'auto'` (default). Falls back to
+  // the legacy thermal_mass_category × GIA path if library isn't loaded
+  // or constructions aren't assigned yet.
+  //
+  // For Bridgewater: auto-derived ≈ 138 kWh/K vs legacy 'light' = 77 kWh/K
+  // (1.8× more). This is the magnitude lever the Part 3 topology was
+  // waiting on — slows the integration enough for diurnal damping to bite.
+  const cmass = resolveCmass(building, constructions, libraryData)
+  const C_mass_J = cmass.C_mass_J
+  const C_mass_Wh = cmass.C_mass_Wh
   // (T_air heat capacity is folded into the quasi-steady solve; not used directly.)
 
   // Internal surface area for air-to-mass coupling. Approximate single-zone
@@ -425,8 +435,14 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   // h, so it's already partially captured in the conduction term — including
   // it again here would double-count.
   const A_internal_surface = roof_area + ground_area + total_wall_opaque  // m²
-  // CIBSE Guide A working value, 2.5-8 W/m²K range.
-  const H_AM_W_PER_M2K = 6.0
+  // CIBSE Guide A range 2.5–8 W/m²K. Picking 3.0 (lower-mid of range) on
+  // purpose now that Part 5's derived mass is larger: with the bigger
+  // C_mass, slightly weaker coupling lets T_air swing closer to T_out at
+  // night without sacrificing the diurnal damping that bigger mass provides
+  // during the day. (At h_am=6 with light mass, mass and air locked
+  // together; at h_am=2.5 with light mass, mass over-charged. The sweet
+  // spot moves with C_mass.)
+  const H_AM_W_PER_M2K = 4.5
   const h_am_total = H_AM_W_PER_M2K * A_internal_surface   // Wh/K per hour
 
   // ── 8760-hour loop ────────────────────────────────────────────────────────

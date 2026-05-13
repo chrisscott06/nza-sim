@@ -154,6 +154,44 @@ async def get_constructions():
     constructions = []
     for row in rows:
         cfg = json.loads(row["config_json"])
+
+        # Brief 26.1 Part 5 — include ordered layer data so the frontend can
+        # derive thermal mass from each construction's stack without a
+        # round-trip per construction. Layers are returned in the order
+        # specified by the Construction object (outside_layer → layer_2 →
+        # ...). For glazing (WindowMaterial:SimpleGlazingSystem), layers
+        # come back empty — by convention, glazing has no opaque mass
+        # term in the live engine.
+        layers = []
+        epjson = cfg.get("epjson") or {}
+        construction_obj = (epjson.get("Construction") or {}).get(row["name"], {})
+        materials = epjson.get("Material") or {}
+        nomass = epjson.get("Material:NoMass") or {}
+        ordered_names = []
+        if construction_obj.get("outside_layer"):
+            ordered_names.append(construction_obj["outside_layer"])
+        for i in range(2, 11):
+            n = construction_obj.get(f"layer_{i}")
+            if n:
+                ordered_names.append(n)
+        for ln in ordered_names:
+            if ln in materials:
+                m = materials[ln]
+                layers.append({
+                    "name":          ln,
+                    "kind":          "Material",
+                    "thickness":     m.get("thickness"),
+                    "conductivity":  m.get("conductivity"),
+                    "density":       m.get("density"),
+                    "specific_heat": m.get("specific_heat"),
+                })
+            elif ln in nomass:
+                layers.append({
+                    "name":               ln,
+                    "kind":               "Material:NoMass",
+                    "thermal_resistance": (nomass[ln] or {}).get("thermal_resistance"),
+                })
+
         constructions.append({
             "name":              row["name"],
             "display_name":      row["display_name"] or row["name"],
@@ -164,6 +202,7 @@ async def get_constructions():
             "thermal_mass":      cfg.get("thermal_mass"),
             "y_factor":          cfg.get("y_factor"),
             "u_value_effective_W_per_m2K": cfg.get("u_value_effective_W_per_m2K"),
+            "layers":            layers,
         })
 
     return {"constructions": constructions}

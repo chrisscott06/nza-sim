@@ -45,9 +45,11 @@ const constructionsArr = Array.isArray(constructionsLib)
 const libraryData = {
   constructions: constructionsArr.map(c => ({
     name: c.name,
+    type: c.type ?? c.config_json?.type,
     u_value_W_per_m2K: c.config_json?.u_value_W_per_m2K ?? c.u_value_W_per_m2K,
     y_factor: c.config_json?.y_factor ?? c.y_factor ?? 1.0,
     config_json: c.config_json ?? c,
+    layers: c.layers,
   })),
 }
 
@@ -79,11 +81,15 @@ for (let i = 0; i < N; i++) {
 const weatherData = { temperature, direct_normal, diffuse_horizontal, wind_speed, month, hour }
 const hourlySolar = computeHourlySolarByFacade(weatherData, latitude, buildingConfig.orientation || 0)
 
-// ── Run live engine for each thermal_mass_category ────────────────────────────
+// Brief 26.1 Part 5: this smoke test is now in OVERRIDE mode. The Auto
+// derivation path is exercised separately below by varying the chosen
+// constructions (not the category) so both wiring paths are confirmed.
+
+// ── Override-mode test: vary thermal_mass_category at fixed constructions ────
 const results = {}
 for (const mass of ['light', 'medium', 'heavy']) {
   const live = calculateInstant(
-    { ...buildingConfig, thermal_mass_category: mass, comfort_band: comfortBand },
+    { ...buildingConfig, thermal_mass_mode: 'override', thermal_mass_category: mass, comfort_band: comfortBand },
     constructionChoices, {}, libraryData,
     weatherData, hourlySolar, null,
     { mode: 'envelope-only', comfortBand },
@@ -135,12 +141,41 @@ console.log(`  Sensitivity:  ${sensitivity_c.toFixed(1)}°C (light − heavy)`)
 console.log()
 
 if (monotonic && sensitivity_c > 1) {
-  console.log('  ✓ WIRING OK — swing monotonically decreases with mass,')
-  console.log('    sensitivity > 1°C. Live engine respects the dropdown.')
+  console.log('  ✓ OVERRIDE WIRING OK — swing monotonically decreases with mass,')
+  console.log('    sensitivity > 1°C. Live engine respects the manual category.')
 } else if (sensitivity_c < 0.1) {
-  console.log('  ✗ WIRING BROKEN — temperature trace barely changes with mass.')
+  console.log('  ✗ OVERRIDE WIRING BROKEN — temperature trace barely changes with mass.')
   console.log('    UI value is likely not reaching `_calculateEnvelopeOnly`.')
 } else {
   console.log('  ~ Suspicious — swing changes but not monotonically.')
 }
+console.log()
+
+// ── Auto-mode test: vary construction choices, expect derived mass to follow ─
+//
+// Swap roof: pitched_roof_standard (10 kJ/m²K, light) → flat_roof_standard
+// (304 kJ/m²K, heavy). The derived total mass should jump correspondingly
+// and the live engine should respond. If the auto path is broken, the two
+// would produce identical numbers.
+import { deriveBuildingMass } from '../frontend/src/utils/thermalMass.js'
+console.log('  AUTO-MODE TEST — vary construction choices, observe derived C_mass:')
+console.log()
+console.log('  scenario              derived (kJ/m²K-GIA)   summer_max   heating MWh')
+console.log('  ' + '-'.repeat(70))
+for (const [label, overrideConstructions] of [
+  ['default (pitched roof)', constructionChoices],
+  ['heavy roof swap',        { ...constructionChoices, roof: 'flat_roof_standard' }],
+  ['heavy walls swap',       { ...constructionChoices, external_wall: 'cavity_wall_standard' /* still medium 150 */ }],
+]) {
+  const derived = deriveBuildingMass(buildingConfig, overrideConstructions, libraryData)
+  const live = calculateInstant(
+    { ...buildingConfig, thermal_mass_mode: 'auto', comfort_band: comfortBand },
+    overrideConstructions, {}, libraryData,
+    weatherData, hourlySolar, null,
+    { mode: 'envelope-only', comfortBand },
+  )
+  console.log(`  ${label.padEnd(22)}${(derived.total_kJ_per_m2K_GIA ?? 0).toFixed(0).padStart(8)}        ${(live.free_running?.summer_max_c ?? 0).toFixed(1).padStart(7)}       ${(live.demand?.heating_demand_mwh ?? 0).toFixed(1).padStart(6)}`)
+}
+console.log()
+console.log('  Auto wiring OK if derived mass and summer_max differ across rows.')
 console.log('═════════════════════════════════════════════════════════════════════')

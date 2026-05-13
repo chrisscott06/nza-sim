@@ -213,6 +213,73 @@ contracts).
 
 ---
 
+## 7. Summer max peak — residual gap after Brief 26.1 Parts 3 + 5
+
+**What:** After landing the two-node lumped-capacitance topology (Part 3)
+and replacing the dropdown with construction-derived mass (Part 5),
+Bridgewater's live-engine summer_max_c is 42.3°C vs EP's 34.2°C — still
+6°C above the contract bound of ≤36°C.
+
+**Distribution metrics all converged to EP at silent tolerance:**
+  annual_mean_c   18.3 (sim 18.4, +0.5%) ✓
+  underheating    5244 (sim 5256, +0.2%) ✓
+  overheating     1728 (sim 1788, +3.5%) ✓
+  comfort_hours   1788 (sim 1716, -4.0%) ✓
+  heating_demand  202.8 MWh (sim 214.5, +5.8% soft)
+
+So Parts 3+5 successfully closed the integrated/distribution divergence.
+The remaining gap is purely on the extreme peak.
+
+**Root cause:** the live engine integrates ~200 MWh/yr of solar gain
+into the zone, vs EP's ~135 MWh/yr — a 32% over-prediction. Tracing
+back, this is **divergence #1 (isotropic vs Perez sky)** acting at scale.
+Lumped models with constant U_eff can't escape the bound T_out_avg +
+Q_solar_avg/U_eff, and that bound is what's setting the seasonal
+baseline 38°C around which the diurnal swing oscillates. Better mass
+(Part 5) damps the swing magnitude (4°C → 4°C, essentially unchanged
+because solar input is the bigger lever), better topology (Part 3)
+moves the energy through the right nodes but doesn't change the
+integral.
+
+**Fallbacks considered, not actioned:**
+
+1. **Retune h_am downward (per Chris's note).** Tried 3.0 with derived
+   mass — landed h_am=4.5 as sweet spot for distribution-metric silence.
+   Lower h_am decouples air from mass at night (helps), but mass
+   over-charges during the day (hurts). Net peak change: <1°C.
+
+2. **Add radiative loss term from mass to sky for night cooling.**
+   Clear-sky longwave radiation off an exposed mass surface can be
+   60–100 W/m² on still summer nights. For the roof alone at 864 m²
+   that's an extra ~70 W/K-equivalent at sky-temperature deficits of
+   typical UK summer (~15K below ambient). Plausibly knocks 1–2°C off
+   peak. Not currently modelled in either engine.
+
+3. **Split floor vs wall mass with different solar fractions.**
+   Direct solar lands on the floor (high mass, slow response); indirect
+   diffuses to walls/ceiling. The 100%-to-mass lumping treats both
+   equivalently. Splitting could improve diurnal timing but the
+   integral is unchanged.
+
+4. **Implement Perez anisotropic sky.** Would fix divergence #1 at the
+   source. Largest single lever (~32% reduction in zone solar gain).
+   Substantial implementation cost in solarCalc.js. Right answer for
+   State 2 / Brief 28 territory, not a quick patch.
+
+**Decision:** **accept the residual gap for State 1.** Distribution
+metrics are silent, heating demand silent, the contract's verification
+intent (engine agreement on the integrated headline) is met. Peak
+extremes remain a known limitation of the live engine vs EP at
+high-WWR configurations.
+
+The Bridgewater project sits at the extreme end (100% WWR on 3 facades,
+no shading depth) — both engines confirm it overheats heavily without
+mechanical cooling. The contract bound (200-600 overheating hours,
+peak ≤36°C) was calibrated for more conservative WWR; the actual spec
+genuinely fails comfort criteria at State 1.
+
+---
+
 ## 6. Construction library — ground-floor layer ordering
 
 **What:** `nza_engine/library/constructions.py` documents `_construction()`

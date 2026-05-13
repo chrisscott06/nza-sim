@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from 'react'
+import { useContext, useEffect, useMemo, useState } from 'react'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 
 const ELEMENTS = [
@@ -144,55 +144,118 @@ function AirtightnessGuidance({ ach }) {
   return <p className="text-xxs text-red-600 mt-1">Leaky (poor airtightness)</p>
 }
 
-// ── Thermal mass dropdown ───────────────────────────────────────────────────
-// Drives the State 1 lumped-capacitance free-running temperature model
-// (`instantCalc.js:_calculateEnvelopeOnly`). CIBSE TM52 effective heat
-// capacities per m² of GIA:
-//   light   80 kJ/(K·m²)  — steel-frame, partition-walled, lightweight
-//   medium 160 kJ/(K·m²)  — typical brick / block masonry
-//   heavy  280 kJ/(K·m²)  — exposed concrete, heavy masonry, earth
+// ── Thermal mass picker — Auto (derived) / Override (TM52 category) ─────────
+// Brief 26.1 Part 5: replaces the standalone Light/Medium/Heavy dropdown
+// with a derivation-from-constructions default + manual override for
+// sensitivity studies. Total mass = Σ(per-construction mass × area), where
+// each construction's mass is the sum of (thickness × density × specific
+// heat) of layers on the INDOOR side of its insulation. See
+// `frontend/src/utils/thermalMass.js`.
 //
-// Note: this affects the *live engine only* — EP integrates true layered
-// thermal mass from the construction definitions themselves. The dropdown
-// is what makes the lumped-capacitance approximation tuneable, and is the
-// smoke test for State 1 (changing it MUST change the live free-running
-// temperature trace; if it doesn't, the wiring is broken).
+// In Auto mode the displayed value updates live as the user changes
+// construction selections — and the live engine's free-running temperature
+// trace updates with it.
+import { deriveBuildingMass } from '../../../utils/thermalMass.js'
+
 const THERMAL_MASS_OPTIONS = [
   { value: 'light',  label: 'Light',  capacity_kJ: 80,  hint: 'Steel-frame, partition-walled, lightweight' },
   { value: 'medium', label: 'Medium', capacity_kJ: 160, hint: 'Typical brick / block masonry' },
   { value: 'heavy',  label: 'Heavy',  capacity_kJ: 280, hint: 'Exposed concrete, heavy masonry, earth' },
 ]
 
-function ThermalMassPicker({ value, onChange }) {
-  const selected = THERMAL_MASS_OPTIONS.find(o => o.value === value) ?? THERMAL_MASS_OPTIONS[0]
+function CategoryBadge({ category }) {
+  const cls = ({
+    heavy:  'bg-orange-50 text-orange-700',
+    medium: 'bg-amber-50 text-amber-700',
+    light:  'bg-sky-50 text-sky-700',
+  })[category] ?? 'bg-gray-50 text-gray-500'
+  return <span className={`text-xxs font-medium px-1.5 py-0.5 rounded ${cls}`}>{category}</span>
+}
+
+function ThermalMassPicker({ params, libraryData, constructions, onChangeParam }) {
+  const mode = params?.thermal_mass_mode ?? 'auto'
+  const derived = useMemo(
+    () => deriveBuildingMass(params, constructions, libraryData),
+    [params, constructions, libraryData],
+  )
+
   return (
-    <div className="bg-white rounded-lg border border-light-grey p-3 space-y-1.5">
-      <p className="text-xxs uppercase tracking-wider text-mid-grey">Thermal Mass</p>
+    <div className="bg-white rounded-lg border border-light-grey p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xxs uppercase tracking-wider text-mid-grey">Thermal Mass</p>
+        <div className="flex text-xxs rounded border border-light-grey overflow-hidden">
+          <button
+            type="button"
+            onClick={() => onChangeParam('thermal_mass_mode', 'auto')}
+            className={`px-2 py-0.5 ${mode === 'auto' ? 'bg-teal text-white' : 'bg-white text-mid-grey hover:bg-off-white'}`}
+          >Auto</button>
+          <button
+            type="button"
+            onClick={() => onChangeParam('thermal_mass_mode', 'override')}
+            className={`px-2 py-0.5 border-l border-light-grey ${mode === 'override' ? 'bg-teal text-white' : 'bg-white text-mid-grey hover:bg-off-white'}`}
+          >Override</button>
+        </div>
+      </div>
 
-      <select
-        value={value ?? 'light'}
-        onChange={e => onChange('thermal_mass_category', e.target.value)}
-        className="
-          w-full px-2 py-1.5 text-caption text-navy
-          border border-light-grey rounded bg-white
-          focus:outline-none focus:border-teal transition-colors
-          appearance-none cursor-pointer
-        "
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2395A5A6' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
-          backgroundRepeat: 'no-repeat',
-          backgroundPosition: 'right 8px center',
-          paddingRight: '28px',
-        }}
-      >
-        {THERMAL_MASS_OPTIONS.map(o => (
-          <option key={o.value} value={o.value}>
-            {o.label} — {o.capacity_kJ} kJ/(K·m²)
-          </option>
-        ))}
-      </select>
+      {mode === 'auto' && (
+        <>
+          {derived.ok ? (
+            <>
+              <div className="flex items-baseline justify-between">
+                <span className="text-caption font-semibold text-navy">
+                  {derived.total_kJ_per_m2K_GIA} <span className="text-xxs font-normal text-mid-grey">kJ/(K·m²) GIA</span>
+                </span>
+                <CategoryBadge category={derived.effective_category} />
+              </div>
+              <div className="text-xxs text-mid-grey space-y-0.5">
+                {['external_wall', 'roof', 'ground_floor'].map(k => {
+                  const e = derived.by_element[k]
+                  if (!e || !e.construction_name) return null
+                  return (
+                    <div key={k} className="flex justify-between">
+                      <span>{k.replace('_', ' ')} · {e.area_m2} m²</span>
+                      <span className="tabular-nums">{e.mass_kJ_per_m2K} kJ/(K·m²) <span className="text-light-grey">({e.category})</span></span>
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="text-xxs text-mid-grey leading-tight">
+                Derived from the layer build-up of each assigned construction (Σ thickness × density × specific heat for layers inside the principal insulation, weighted by surface area).
+              </p>
+            </>
+          ) : (
+            <p className="text-xxs text-mid-grey">
+              Auto-derivation needs all envelope constructions assigned. Assign external wall, roof, and ground floor first.
+            </p>
+          )}
+        </>
+      )}
 
-      <p className="text-xxs text-mid-grey">{selected.hint}</p>
+      {mode === 'override' && (
+        <>
+          <select
+            value={params?.thermal_mass_category ?? 'light'}
+            onChange={e => onChangeParam('thermal_mass_category', e.target.value)}
+            className="w-full px-2 py-1.5 text-caption text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-teal transition-colors appearance-none cursor-pointer"
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2395A5A6' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
+              backgroundRepeat: 'no-repeat',
+              backgroundPosition: 'right 8px center',
+              paddingRight: '28px',
+            }}
+          >
+            {THERMAL_MASS_OPTIONS.map(o => (
+              <option key={o.value} value={o.value}>
+                {o.label} — {o.capacity_kJ} kJ/(K·m²) GIA
+              </option>
+            ))}
+          </select>
+          <p className="text-xxs text-mid-grey leading-tight">
+            {THERMAL_MASS_OPTIONS.find(o => o.value === (params?.thermal_mass_category ?? 'light'))?.hint}
+            {' '}For sensitivity studies — the auto value is usually closer to reality.
+          </p>
+        </>
+      )}
     </div>
   )
 }
@@ -299,10 +362,13 @@ export default function FabricTab({ onDetailChange }) {
         <AirtightnessGuidance ach={params?.infiltration_ach ?? 0.5} />
       </div>
 
-      {/* Thermal mass — drives State 1 lumped-capacitance free-running model */}
+      {/* Thermal mass — auto-derived from constructions, or user override.
+          Drives the State 1 lumped-capacitance free-running model. */}
       <ThermalMassPicker
-        value={params?.thermal_mass_category ?? 'light'}
-        onChange={updateParam}
+        params={params}
+        libraryData={{ constructions: library }}
+        constructions={selected}
+        onChangeParam={updateParam}
       />
 
       {/* Fabric summary — U-values + infiltration at a glance */}
