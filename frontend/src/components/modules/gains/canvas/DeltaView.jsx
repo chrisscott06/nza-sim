@@ -22,6 +22,7 @@
 import { ArrowDown, ArrowUp, Minus } from 'lucide-react'
 import { useStateComparison } from './useStateComparison.js'
 import { GAIN_COLOURS } from '../gainColours.js'
+import EngineBadge from './EngineBadge.jsx'
 
 function fmtMWh(v) {
   if (v == null) return '—'
@@ -163,7 +164,10 @@ export default function DeltaView() {
     <div className="mx-auto px-6 py-6 max-w-[1000px] space-y-5">
       {/* Title */}
       <div className="pb-3 border-b border-light-grey">
-        <h2 className="text-base font-semibold text-navy">Internal gains shift the envelope's energy balance</h2>
+        <div className="flex items-center gap-2 flex-wrap">
+          <h2 className="text-base font-semibold text-navy">Internal gains shift the envelope's energy balance</h2>
+          <EngineBadge />
+        </div>
         <p className="text-xxs text-mid-grey mt-0.5">
           State 1 = envelope alone (no gains). State 2 = envelope + your configured internal gains.
           Deltas show what gains alone contribute.
@@ -243,10 +247,14 @@ export default function DeltaView() {
 
       {/* Footnote */}
       <p className="text-xxs italic text-mid-grey/70">
-        Engine: live (in-browser lumped-capacitance + multi-profile gain summing).
-        Simulation values from EnergyPlus appear when the engine toggle wires
-        through. Per-profile deltas are bracketed by the load-type architecture
-        landed in Brief 27 Revised Part 9.
+        Numbers from the <strong>live engine</strong> — in-browser lumped-
+        capacitance two-node model + multi-profile gain summing. The EnergyPlus
+        simulation toggle lands when State 2 EP results plumbing wires through
+        (Brief 28). Live vs Sim State 1 divergences for high-WWR-on-side-facades
+        configs are documented in <code>docs/state_2_part2_verification.md</code>
+        and <code>docs/state_2_expected_ranges.md</code>; the live engine's
+        isotropic sky model over-counts diffuse solar on N/E/W facades, so
+        State 1 → State 2 deltas are most reliable when WWR is roughly balanced.
       </p>
     </div>
   )

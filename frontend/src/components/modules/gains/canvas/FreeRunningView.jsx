@@ -16,6 +16,7 @@ import { useRef, useEffect, useMemo, useState } from 'react'
 import { useStateComparison } from './useStateComparison.js'
 import { useContext } from 'react'
 import { ProjectContext } from '../../../../context/ProjectContext.jsx'
+import EngineBadge from './EngineBadge.jsx'
 
 const CANVAS_H = 240
 const PADDING = { top: 14, right: 24, bottom: 24, left: 36 }
@@ -198,11 +199,16 @@ export default function FreeRunningView() {
     <div className="w-full px-6 py-5 space-y-4">
       {/* Title */}
       <div>
-        <h2 className="text-base font-semibold text-navy">Free-running zone temperature</h2>
+        <div className="flex items-center gap-2 flex-wrap">
+          <h2 className="text-base font-semibold text-navy">Free-running zone temperature</h2>
+          <EngineBadge />
+        </div>
         <p className="text-xxs text-mid-grey mt-0.5">
           Annual hourly trace. <span className="text-mid-grey/80">Grey</span> = State 1
           (envelope only); <span style={{ color: '#EA580C' }} className="font-medium">orange</span> =
-          State 2 (with gains). Comfort band shaded blue.
+          State 2 (with gains). Comfort band shaded blue. Live-engine summer
+          max can sit above EnergyPlus for high-WWR-on-side-facades configs —
+          isotropic sky residual, see <code>docs/state_2_part2_verification.md</code>.
         </p>
       </div>
 

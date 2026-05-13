@@ -9,6 +9,7 @@
 
 import { useStateComparison } from './useStateComparison.js'
 import HeatBalance from '../../balance/HeatBalance.jsx'
+import EngineBadge from './EngineBadge.jsx'
 
 export default function HeatBalanceView() {
   const { state2, ready, libraryLoading } = useStateComparison()
@@ -30,7 +31,10 @@ export default function HeatBalanceView() {
   return (
     <div className="mx-auto px-6 py-5 max-w-[1100px]">
       <div className="pb-3 border-b border-light-grey mb-4">
-        <h2 className="text-base font-semibold text-navy">Heat balance</h2>
+        <div className="flex items-center gap-2 flex-wrap">
+          <h2 className="text-base font-semibold text-navy">Heat balance</h2>
+          <EngineBadge />
+        </div>
         <p className="text-xxs text-mid-grey mt-0.5">
           Annual gains and losses through the State 2 (envelope + internal gains)
           balance. Multi-profile lighting + equipment surface as their per-

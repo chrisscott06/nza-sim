@@ -797,6 +797,19 @@ All checklist items:
 
 Brief 28 lands the post-27 cleanup pass. Items queued during Brief 27:
 
+- **Live engine solar model — switch from isotropic to Perez (or HDKR)**.
+  Documented at `docs/state_1_engine_divergence_investigation.md`. The
+  live engine's `solarCalc.js` over-counts diffuse on N/E/W facades,
+  amplifying for high-WWR-on-non-south configurations. Bridgewater's
+  current 0.55 N WWR + 42° orientation exposes a 15°C summer-max gap vs
+  EnergyPlus. The fix has the largest single-step impact on State 1
+  Live/Sim agreement.
+- **Re-baseline `docs/state_2_expected_ranges.md`** after the solar
+  model fix lands, including measured Live/Sim gap for both balanced-
+  WWR and asymmetric (Bridgewater current) configurations.
+- **State 2 EP results plumbing → Live | Simulation toggle wiring**.
+  The placeholder slot is already present in the canvas tab strip;
+  Brief 28 makes it functional.
 - **Constants cleanup**: ~10 numeric constants are duplicated across
   `frontend/src/utils/instantCalc.js`, `nza_engine/parsers/sql_parser.py`,
   and `nza_engine/generators/epjson_assembler.py` with identical values
