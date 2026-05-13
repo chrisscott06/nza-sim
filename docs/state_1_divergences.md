@@ -320,7 +320,101 @@ context.
 
 ---
 
-## 8. EnergyPlus shading geometry not applied to fenestration
+## 8. EnergyPlus shading geometry not applied to fenestration — RESOLVED (Brief 26.2)
+
+**Resolution summary (Brief 26.2, 2026-05-13):** the bug was a real EP
+limitation rather than a configuration error. Two specific things were
+discovered and one was worked around:
+
+1. **The slab Shading:Building:Detailed had a vertex-winding bug.** The
+   four corners were emitted in CLOCKWISE order when viewed from above,
+   which produced an outward normal pointing DOWN (into the ground) by
+   EP's right-hand-rule. The slab was rendered in the geometry but its
+   shade-casting face pointed the wrong way, so sun rays from above hit
+   its back. Fixed in `geometry.py:_shading_building_overhang_slab`.
+   This alone didn't fix the bigger bug — Shading:Overhang attached
+   objects exist in parallel and weren't winding-buggy.
+
+2. **EP's shadow calc doesn't propagate to FenestrationSurface objects.**
+   The deep diagnostic (`scripts/ep_shading_diagnostic.py`) confirmed
+   that on a south wall with a 2m overhang + 1m fins:
+
+   ```
+   Surface              Sunlit Fraction   Incident Solar (W/m²)
+   south WALL_S         0.36 → 0.13       111 → 54      ✓ shading applied
+   south WIN_S          0.36 → 0.36       111 → 111     ✗ shading skipped
+   ```
+
+   EP's shadow calculation runs against base surfaces (walls, roofs,
+   floors) but bypasses fenestration sub-surfaces. The window's
+   `Surface Outside Face Sunlit Fraction`, `Surface Outside Face
+   Incident Solar Radiation Rate per Area`, and `Surface Window
+   Transmitted Solar Radiation Energy` are all reported as if no shading
+   exists. The wall surrounding the same window correctly reduces solar.
+
+   This is a deeper EP limitation that none of Brief 23's three
+   hypotheses or Brief 26.2's five hypotheses could resolve on the EP
+   side — the shadow calc itself appears to skip fenestration. Hypothesis
+   1 (output variable mismatch) was the closest match: every window
+   variable returns pre-shading values, while the parent-wall variables
+   work correctly.
+
+3. **Workaround (Brief 26.2 fix):** the parser now reads the parent
+   WALL's Incident Solar (which IS shading-aware) and multiplies by the
+   window's glazing area × SHGC × (1 − frame fraction) to compute
+   transmitted solar. This matches the live engine's formula
+   structurally — both engines now compute solar as
+   `incident_rate × area × g × (1 − frame)`, with EP supplying the
+   shading-corrected `incident_rate` directly from the wall, and the
+   live engine supplying its own per-facade shading-corrected solar.
+
+**Verification (`scripts/state1_shading_diagnostic.mjs --ep` on
+Bridgewater):**
+
+| Scenario | LIVE south solar | EP south solar | Δ |
+|---|---:|---:|---:|
+| No shading | 83,881 kWh | 93,536 kWh | -10% |
+| Current 0.5m | 71,401 kWh | 77,594 kWh | -8% |
+| Extreme 2m + 1m fins | 46,574 kWh | 45,581 kWh | **+2%** |
+
+EP south solar drops from 93,536 → 45,581 (51%) under extreme shading,
+exactly the magnitude live engine predicts (44%). Both engines now
+respond to shading inputs consistently.
+
+**Engine agreement on Bridgewater after Brief 26.2:**
+
+| Metric | live | sim | delta | flag |
+|---|---:|---:|---:|---|
+| annual_mean_c | 18.8 | 18.9 | +0.5% | silent ✓ |
+| underheating_hours | 5031 | 5038 | +0.1% | silent ✓ |
+| overheating_hours | 2064 | 2043 | -1.0% | silent ✓ (was warn) |
+| comfort_hours | 1665 | 1679 | +0.8% | silent ✓ |
+| heating_demand_mwh | 155.1 | 164.2 | +5.9% | soft |
+| cooling_demand_mwh | 67.9 | 45.0 | -33.7% | HARD |
+| summer_max_c | 41.7 | 34.5 | -17% | warn |
+
+5/6 distribution + integrated metrics now silent (previously 4/6).
+Peak temperature + cooling demand residuals trace to divergence #1
+(isotropic sky), not shading.
+
+**Remaining caveat:** the EP-side fix is a workaround, not a real
+EP-engine fix. The underlying EP limitation (shadow calc skips
+fenestration) remains. If a future user reads any of
+`Surface Window Transmitted Solar Radiation Energy`,
+`Surface Outside Face Sunlit Fraction` on a window, or
+`Surface Outside Face Incident Solar Radiation Rate per Area` on a
+window directly for any purpose (e.g., a window-specific report or
+visualisation), those values are wrong under shading. Only the parser's
+re-derivation from wall-incident-solar gives correct numbers.
+
+**Reusable diagnostic:** `scripts/ep_shading_diagnostic.py` runs the
+three-scenario sweep (no/current/extreme) on Bridgewater and prints
+window-vs-wall variables to detect this exact failure mode if it
+recurs after a future EP version upgrade or configuration change.
+
+---
+
+## 8a. (Archived — pre-resolution diagnosis)
 
 **What:** EP's shading objects (`Shading:Overhang`, `Shading:Fin`,
 `Shading:Building:Detailed`) are correctly emitted in the epJSON by

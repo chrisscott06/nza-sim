@@ -530,10 +530,15 @@ def _output_variables() -> dict:
         "Zone Ventilation Sensible Heat Gain Energy",    # mechanical vent heat gain
         "Fan Electricity Energy",                        # fan energy (if fan objects present)
         "Surface Inside Face Conduction Heat Transfer Energy",
-        # Diagnostic — should drop below 1.0 when external shading reaches the surface
+        # Diagnostics for shading investigation (Brief 26.2):
+        # Sunlit Fraction is the textbook indicator — drops below 1.0 when
+        # any external shading geometry obstructs the surface. Incident Solar
+        # is the next step downstream — drops proportionally to Sunlit Fraction
+        # when shading is being applied to the radiation calculation.
         "Surface Outside Face Sunlit Fraction",
-        # Solar gains — use Energy (J) which works with SimpleGlazingSystem
-        # Rate (W) is not generated with simplified glazing in EP 25.2
+        "Surface Outside Face Incident Solar Radiation Rate per Area",
+        # Solar gains — use Energy (J) which works with SimpleGlazingSystem.
+        # Rate (W) is not generated with simplified glazing in EP 25.2.
         "Zone Windows Total Transmitted Solar Radiation Energy",
         "Surface Window Transmitted Solar Radiation Energy",
         "Zone Ideal Loads Heat Recovery Total Heating Energy",

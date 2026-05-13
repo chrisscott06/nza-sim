@@ -1184,37 +1184,101 @@ def _read_hourly_zone_temp(conn: sqlite3.Connection, var_name: str) -> list[floa
     return out
 
 
-def _read_hourly_solar_by_face(conn: sqlite3.Connection) -> dict[str, list[float]]:
+def _read_hourly_solar_by_face(
+    conn: sqlite3.Connection,
+    glazing_face_m2: dict,
+    g_value: float,
+    frame_fraction: float = 0.20,
+) -> dict[str, list[float]]:
     """
     Return solar gains through windows per face per hour, in kWh.
     Keys: north, south, east, west. Each value is an 8760-length list.
+
+    Brief 26.2 (EP shading fix). Previously read `Surface Window
+    Transmitted Solar Radiation Energy` directly. That variable, and
+    the per-window `Surface Outside Face Incident Solar Radiation Rate
+    per Area`, are both broken for FenestrationSurface objects with
+    external shading. The diagnostic
+    (scripts/ep_shading_diagnostic.py) confirmed:
+
+      ┌──────────────────┬──────────┬────────┬─────────┐
+      │ Run              │ Window SF│ Wall SF│ Win Inc │
+      │                  │  south   │  south │  W/m²   │
+      ├──────────────────┼──────────┼────────┼─────────┤
+      │ no shading       │  0.3642  │  0.3642│  111.1  │
+      │ 0.5m overhang    │  0.3642  │  0.2685│  111.1  │
+      │ 2m + 1m fins     │  0.3642  │  0.1341│  111.1  │
+      └──────────────────┴──────────┴────────┴─────────┘
+
+    The PARENT WALL's Sunlit Fraction and Incident Solar respond to
+    shading objects correctly. The WINDOW's don't — EP's shadow calc
+    skips the fenestration sub-surfaces.
+
+    Workaround: read incident solar from the parent WALL surface, which
+    IS shading-aware. The wall around the window experiences the same
+    overhang/fin shadow as the window would, so wall-incident-rate is a
+    good proxy. Multiply by the window's GLAZING area (not wall area)
+    to get the energy on the glazing aperture, then by SHGC × (1 − frame)
+    for transmitted solar.
+
+    This matches the live engine's formula
+        Q_solar_face = hourly_solar_per_facade × area × g × (1 − frame) × shading
+    where the hourly_solar_per_facade × shading product is what EP's
+    wall-Incident-Solar variable provides directly.
     """
     rows = _query(
         conn,
         "SELECT ReportDataDictionaryIndex, KeyValue FROM ReportDataDictionary "
-        "WHERE Name = 'Surface Window Transmitted Solar Radiation Energy' COLLATE NOCASE",
+        "WHERE Name = 'Surface Outside Face Incident Solar Radiation Rate per Area' COLLATE NOCASE",
     )
     FACE_MAP = {"N": "north", "S": "south", "E": "east", "W": "west"}
-    by_face: dict[str, dict[int, float]] = {f: {} for f in FACE_MAP.values()}
+
+    # Group rows by face for averaging. Read from the parent WALL (not the
+    # window) because the wall's incident-solar variable correctly accounts
+    # for attached shading; the window's variable doesn't.
+    per_face_rows: dict[str, list[int]] = {f: [] for f in FACE_MAP.values()}
     for r in rows:
         kv = (r["KeyValue"] or "").upper()
-        if "_WIN_" not in kv:
+        # Match the four exterior walls by name suffix _WALL_N/S/E/W.
+        # Skip everything else (windows, slabs, mirror surfaces, floor/roof).
+        if "_WALL_" not in kv:
             continue
         face_letter = kv[-1] if len(kv) > 0 else ""
         face = FACE_MAP.get(face_letter)
-        if not face:
-            continue
-        idx = r["ReportDataDictionaryIndex"]
-        data_rows = _query(
-            conn,
-            "SELECT TimeIndex, Value FROM ReportData WHERE ReportDataDictionaryIndex = ? ORDER BY TimeIndex",
-            (idx,),
-        )
-        for dr in data_rows:
-            by_face[face][dr["TimeIndex"]] = by_face[face].get(dr["TimeIndex"], 0.0) + float(dr["Value"]) * J_TO_KWH
-    # Convert TimeIndex dicts to ordered lists
+        if face:
+            per_face_rows[face].append(r["ReportDataDictionaryIndex"])
+
+    # Per face: read hourly rate (W/m²) from any/all windows on that face,
+    # average across windows (they share orientation so should be equal anyway).
+    by_face: dict[str, dict[int, list[float]]] = {f: {} for f in FACE_MAP.values()}
+    for face, indices in per_face_rows.items():
+        for idx in indices:
+            data_rows = _query(
+                conn,
+                "SELECT TimeIndex, Value FROM ReportData WHERE ReportDataDictionaryIndex = ? ORDER BY TimeIndex",
+                (idx,),
+            )
+            for dr in data_rows:
+                by_face[face].setdefault(dr["TimeIndex"], []).append(float(dr["Value"]))
+
+    # Convert to kWh per hour per facade:
+    #   avg_W_per_m2 × 1 hr × area_m² × g_value × (1 - frame_fraction) / 1000
     all_ti = sorted({ti for f in by_face.values() for ti in f.keys()})
-    return {face: [by_face[face].get(ti, 0.0) for ti in all_ti] for face in by_face}
+    transmittance = g_value * (1.0 - frame_fraction)
+    out: dict[str, list[float]] = {}
+    for face, ti_map in by_face.items():
+        area = glazing_face_m2.get(face, 0.0)
+        if area <= 0:
+            out[face] = [0.0] * len(all_ti)
+            continue
+        series = []
+        for ti in all_ti:
+            vals = ti_map.get(ti, [])
+            avg_W_per_m2 = (sum(vals) / len(vals)) if vals else 0.0
+            kwh_this_hr = avg_W_per_m2 * area * transmittance / 1000.0
+            series.append(kwh_this_hr)
+        out[face] = series
+    return out
 
 
 def _get_heat_balance_state1(
@@ -1315,7 +1379,16 @@ def _get_heat_balance_state1(
     try:
         T_air_hourly = _read_hourly_zone_temp(conn, "Zone Mean Air Temperature")
         T_op_hourly  = _read_hourly_zone_temp(conn, "Zone Operative Temperature")
-        solar_face = _read_hourly_solar_by_face(conn)
+        # Brief 26.2: pass glazing geometry + SHGC into the solar reader so it
+        # can convert EP's shading-aware Incident Solar (W/m²) into transmitted
+        # solar (kWh) per face. EP's Transmitted variable is broken for
+        # SimpleGlazingSystem; see _read_hourly_solar_by_face docstring.
+        solar_face = _read_hourly_solar_by_face(
+            conn,
+            glazing_face_m2=glazing_face_m2,
+            g_value=g_value,
+            frame_fraction=0.20,
+        )
     finally:
         conn.close()
 

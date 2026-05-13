@@ -277,23 +277,35 @@ def _shading_building_overhang_slab(
     outer_b = (inner_b[0] + n[0] * depth_m, inner_b[1] + n[1] * depth_m, inner_z)
     outer_a = (inner_a[0] + n[0] * depth_m, inner_a[1] + n[1] * depth_m, inner_z)
 
-    # GlobalGeometryRules: starting_vertex_position=UpperLeftCorner +
-    # vertex_entry_direction=Counterclockwise. For a horizontal slab the
-    # "upper left" is the NW corner when viewed from above. CCW from above
-    # means the outward (upward) normal is +Z so the slab blocks sun
-    # coming from above. Going inner_b → outer_b → outer_a → inner_a
-    # (NE wall → NE outer → SW outer → SW wall, looking from above) is
-    # CCW for a south-facing facade. For a north-facing one the outward
-    # normal direction reverses, so the same vertex order naturally flips.
-    # Empirically: this order gives EP a slab that actually shades.
+    # Brief 26.2 (EP shading fix): the previous vertex order
+    #     inner_b → outer_b → outer_a → inner_a
+    # walks CLOCKWISE when viewed from above. By EP's right-hand-rule
+    # convention that produces an outward normal pointing in -Z (down,
+    # into the ground). The slab is rendered in the geometry but its
+    # shade-casting face points the wrong way, so sun coming from above
+    # hits the slab's BACK and casts no shadow on the window. This was
+    # the silent failure Brief 23 hit and couldn't trace.
+    #
+    # Reversing the order so the slab is traversed
+    #     inner_a → outer_a → outer_b → inner_b
+    # walks CCW from above → outward normal +Z → slab face UP toward the
+    # sun → casts the intended shadow. Verified by both right-hand-rule
+    # cross product (k component flips +2 vs -2 on a unit example) and
+    # by the EP shading diagnostic landing the expected ~40% solar drop
+    # under extreme overhang.
+    #
+    # The error logic survives independent of facade orientation: the
+    # outward normal for both N and S walls flips the SAME way relative
+    # to the slab plane, so the CCW-from-above convention applies to
+    # all four facades.
     return {
         "transmittance_schedule_name": "",
         "number_of_vertices": 4,
         "vertices": [
-            {"vertex_x_coordinate": inner_b[0], "vertex_y_coordinate": inner_b[1], "vertex_z_coordinate": inner_b[2]},
-            {"vertex_x_coordinate": outer_b[0], "vertex_y_coordinate": outer_b[1], "vertex_z_coordinate": outer_b[2]},
-            {"vertex_x_coordinate": outer_a[0], "vertex_y_coordinate": outer_a[1], "vertex_z_coordinate": outer_a[2]},
             {"vertex_x_coordinate": inner_a[0], "vertex_y_coordinate": inner_a[1], "vertex_z_coordinate": inner_a[2]},
+            {"vertex_x_coordinate": outer_a[0], "vertex_y_coordinate": outer_a[1], "vertex_z_coordinate": outer_a[2]},
+            {"vertex_x_coordinate": outer_b[0], "vertex_y_coordinate": outer_b[1], "vertex_z_coordinate": outer_b[2]},
+            {"vertex_x_coordinate": inner_b[0], "vertex_y_coordinate": inner_b[1], "vertex_z_coordinate": inner_b[2]},
         ],
     }
 
