@@ -25,6 +25,10 @@ import { computeHourlySolarByFacade } from '../frontend/src/utils/solarCalc.js'
 
 const PROJECT_ID = process.argv[2] || '14b4a5b1-8c73-4acb-8b65-1d22f05ec969'  // HIX Bridgewater
 const RUN_ID = process.argv[3]
+// Optional --mass={light,medium,heavy} to override thermal_mass_category in the
+// live engine call. Useful for visualising convergence after Part 7 (the EP
+// sim doesn't change with this — EP uses real layered fabric).
+const MASS_OVERRIDE = (process.argv.find(a => a.startsWith('--mass=')) || '').split('=')[1] || null
 const API = 'http://127.0.0.1:8002'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -107,11 +111,14 @@ const comfortBand = {
 console.log('Comfort band:', comfortBand)
 
 const live = calculateInstant(
-  { ...buildingConfig, comfort_band: comfortBand },
+  { ...buildingConfig,
+    comfort_band: comfortBand,
+    ...(MASS_OVERRIDE ? { thermal_mass_category: MASS_OVERRIDE } : {}) },
   constructionChoices, {}, libraryData,
   weatherData, hourlySolar, null,
   { mode: 'envelope-only', comfortBand },
 )
+if (MASS_OVERRIDE) console.log(`Live engine thermal_mass_category override: ${MASS_OVERRIDE}`)
 
 // ── 5. Fetch simulation State 1 output ────────────────────────────────────────
 

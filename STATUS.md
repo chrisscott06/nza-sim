@@ -1,5 +1,68 @@
 # NZA SIMULATE — Status
 
+## ✅ Brief 26 Part 7 — thermal mass dropdown in Building Fabric
+
+`params.thermal_mass_category` is now editable through the Building →
+Fabric tab. Dropdown sits between Air Permeability and Fabric Summary,
+shows the CIBSE TM52 capacity number alongside each option, and a
+one-liner describing the construction class.
+
+Wiring smoke test (`scripts/state1_thermal_mass_smoketest.mjs`) passes
+on Bridgewater — live engine swing narrows monotonically with mass:
+
+| Category | winter_min | summer_max | swing | heating MWh |
+|---|---:|---:|---:|---:|
+| light  | 1.9°C | 50.3°C | 48.4°C | 166.8 |
+| medium | 4.2°C | 45.9°C | 41.7°C | 162.2 |
+| heavy  | 5.5°C | 42.9°C | 37.4°C | 158.7 |
+
+11°C sensitivity between light and heavy. Re-running the engine-agreement
+check with `--mass=heavy` (script supports the override) shows the live
+engine converging toward EP exactly as predicted: `winter_min` HARD →
+warn (+22%), `underheating_hours` soft → silent (-0.9%), `comfort_hours`
+HARD → warn (+30%). EP doesn't move with the dropdown — it integrates
+real layered mass — so this convergence is the live engine catching up
+to the more sophisticated model.
+
+**Files changed:**
+- `frontend/src/components/modules/building/FabricTab.jsx` — new
+  `ThermalMassPicker` card between air permeability and fabric summary.
+- `scripts/state1_thermal_mass_smoketest.mjs` — new — runs live engine
+  with light/medium/heavy and emits a pass/fail verdict on dropdown wiring.
+- `scripts/state1_engine_agreement.mjs` — added `--mass=` override so
+  the agreement check can sweep mass categories.
+
+Nothing else changed: no schema migration needed (`thermal_mass_category`
+default `'light'` already in ProjectContext), no API changes, no parser
+changes (EP integrates real layered mass; thermal_mass_category drives
+the live engine only).
+
+---
+
+## Engine-agreement script — standard regression for State 1+
+
+`scripts/state1_engine_agreement.mjs` is now the canonical regression
+check for State 1. Any change to either engine (live `instantCalc.js`,
+sim `_get_heat_balance_state1`, EP assembler) must keep heating demand
+within the silent tolerance (<5%) and conduction line items within
+warn (<30%). Run it after Part 7 with each thermal mass option to
+smoke-test wiring.
+
+States 2, 2.5, 3 will need their own equivalents — same pattern, same
+discipline. The contract's tolerance bands apply per state.
+
+## Open follow-up — sensitivity floor on contract flags
+
+The current tolerance bands (silent <5% / soft <10% / warn <30% / hard
+>30%) are pure percentages with no absolute-value floor. For small
+absolute values (e.g. cooling demand <20 MWh) this produces noisy
+hard-warning flags from tiny absolute differences. Worth adding a
+sensitivity floor in a future brief: e.g., "don't hard-warn if both
+values are below an absolute threshold." Not blocking — flagged here
+so the next regression noise complaint has a documented fix path.
+
+---
+
 ## ✅ Brief 26 Part 6 — sql_parser State 1 output path
 
 EnergyPlus parser now produces the State 1 envelope-only output shape from

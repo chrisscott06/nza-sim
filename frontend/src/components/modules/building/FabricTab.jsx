@@ -144,6 +144,59 @@ function AirtightnessGuidance({ ach }) {
   return <p className="text-xxs text-red-600 mt-1">Leaky (poor airtightness)</p>
 }
 
+// ── Thermal mass dropdown ───────────────────────────────────────────────────
+// Drives the State 1 lumped-capacitance free-running temperature model
+// (`instantCalc.js:_calculateEnvelopeOnly`). CIBSE TM52 effective heat
+// capacities per m² of GIA:
+//   light   80 kJ/(K·m²)  — steel-frame, partition-walled, lightweight
+//   medium 160 kJ/(K·m²)  — typical brick / block masonry
+//   heavy  280 kJ/(K·m²)  — exposed concrete, heavy masonry, earth
+//
+// Note: this affects the *live engine only* — EP integrates true layered
+// thermal mass from the construction definitions themselves. The dropdown
+// is what makes the lumped-capacitance approximation tuneable, and is the
+// smoke test for State 1 (changing it MUST change the live free-running
+// temperature trace; if it doesn't, the wiring is broken).
+const THERMAL_MASS_OPTIONS = [
+  { value: 'light',  label: 'Light',  capacity_kJ: 80,  hint: 'Steel-frame, partition-walled, lightweight' },
+  { value: 'medium', label: 'Medium', capacity_kJ: 160, hint: 'Typical brick / block masonry' },
+  { value: 'heavy',  label: 'Heavy',  capacity_kJ: 280, hint: 'Exposed concrete, heavy masonry, earth' },
+]
+
+function ThermalMassPicker({ value, onChange }) {
+  const selected = THERMAL_MASS_OPTIONS.find(o => o.value === value) ?? THERMAL_MASS_OPTIONS[0]
+  return (
+    <div className="bg-white rounded-lg border border-light-grey p-3 space-y-1.5">
+      <p className="text-xxs uppercase tracking-wider text-mid-grey">Thermal Mass</p>
+
+      <select
+        value={value ?? 'light'}
+        onChange={e => onChange('thermal_mass_category', e.target.value)}
+        className="
+          w-full px-2 py-1.5 text-caption text-navy
+          border border-light-grey rounded bg-white
+          focus:outline-none focus:border-teal transition-colors
+          appearance-none cursor-pointer
+        "
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2395A5A6' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'right 8px center',
+          paddingRight: '28px',
+        }}
+      >
+        {THERMAL_MASS_OPTIONS.map(o => (
+          <option key={o.value} value={o.value}>
+            {o.label} — {o.capacity_kJ} kJ/(K·m²)
+          </option>
+        ))}
+      </select>
+
+      <p className="text-xxs text-mid-grey">{selected.hint}</p>
+    </div>
+  )
+}
+
 function achLabel(ach) {
   if (ach < 0.3)  return { text: 'Very airtight', color: 'text-green-600' }
   if (ach <= 0.6) return { text: 'Good',          color: 'text-green-600' }
@@ -245,6 +298,12 @@ export default function FabricTab({ onDetailChange }) {
         </div>
         <AirtightnessGuidance ach={params?.infiltration_ach ?? 0.5} />
       </div>
+
+      {/* Thermal mass — drives State 1 lumped-capacitance free-running model */}
+      <ThermalMassPicker
+        value={params?.thermal_mass_category ?? 'light'}
+        onChange={updateParam}
+      />
 
       {/* Fabric summary — U-values + infiltration at a glance */}
       <div className="bg-off-white rounded-lg border border-light-grey p-3">
