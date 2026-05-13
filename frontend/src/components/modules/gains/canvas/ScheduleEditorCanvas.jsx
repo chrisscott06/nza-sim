@@ -33,10 +33,7 @@
  */
 
 import { useMemo, useCallback } from 'react'
-import { Copy, FlipVertical2, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import ScheduleEditor from '../ScheduleEditor.jsx'
-
-function clamp01(n) { return Math.max(0, Math.min(1, n)) }
 
 /**
  * Compute simple summary statistics for the active-day curve of a schedule.
@@ -73,81 +70,10 @@ function useScheduleStats(schedule) {
   }, [schedule])
 }
 
-// ── Quick-set actions ────────────────────────────────────────────────────────
-//
-// Each operates on the full schedule and returns a new schedule. The active-
-// day-type is intentionally NOT part of the API — quick-sets are deliberate
-// bulk operations that affect the whole pattern.
-
-function flatAll(schedule, value) {
-  return {
-    ...schedule,
-    weekday:  new Array(24).fill(value),
-    saturday: new Array(24).fill(value),
-    sunday:   new Array(24).fill(value),
-  }
-}
-
-function copyWeekdayToWeekend(schedule) {
-  return {
-    ...schedule,
-    saturday: schedule.weekday.slice(),
-    sunday:   schedule.weekday.slice(),
-  }
-}
-
-function invertAllDays(schedule) {
-  const inv = arr => arr.map(v => clamp01(1 - v))
-  return {
-    ...schedule,
-    weekday:  inv(schedule.weekday),
-    saturday: inv(schedule.saturday),
-    sunday:   inv(schedule.sunday),
-  }
-}
-
-function shiftAllDays(schedule, delta) {
-  const shift = arr => {
-    const n = arr.length
-    const k = ((delta % n) + n) % n
-    return arr.slice(n - k).concat(arr.slice(0, n - k))
-  }
-  return {
-    ...schedule,
-    weekday:  shift(schedule.weekday),
-    saturday: shift(schedule.saturday),
-    sunday:   shift(schedule.sunday),
-  }
-}
-
-// ── Quick-set buttons strip ──────────────────────────────────────────────────
-function QuickSetStrip({ schedule, onChange, disabled }) {
-  const btn =
-    'flex items-center gap-1 px-2 py-1 text-xxs border border-light-grey rounded ' +
-    'text-mid-grey hover:text-navy hover:border-mid-grey transition-colors ' +
-    'disabled:opacity-50 disabled:cursor-not-allowed bg-white'
-
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-xxs uppercase tracking-wider text-mid-grey/80 mr-1">Quick set</span>
-      <button disabled={disabled} onClick={() => onChange(flatAll(schedule, 0.0))} className={btn}>Flat 0.0</button>
-      <button disabled={disabled} onClick={() => onChange(flatAll(schedule, 0.5))} className={btn}>Flat 0.5</button>
-      <button disabled={disabled} onClick={() => onChange(flatAll(schedule, 1.0))} className={btn}>Flat 1.0</button>
-      <button disabled={disabled} onClick={() => onChange(copyWeekdayToWeekend(schedule))} className={btn} title="Copy the weekday curve onto Saturday and Sunday">
-        <Copy size={11} /> Wk→Wkd
-      </button>
-      <button disabled={disabled} onClick={() => onChange(invertAllDays(schedule))} className={btn} title="Replace each value with (1 − value) across all day types">
-        <FlipVertical2 size={11} /> Invert
-      </button>
-      <button disabled={disabled} onClick={() => onChange(shiftAllDays(schedule, -1))} className={btn} title="Shift the whole pattern one hour earlier">
-        <ChevronsLeft size={11} />
-      </button>
-      <button disabled={disabled} onClick={() => onChange(shiftAllDays(schedule, +1))} className={btn} title="Shift the whole pattern one hour later">
-        <ChevronsRight size={11} />
-      </button>
-    </div>
-  )
-}
+// Quick-set actions moved into ScheduleEditor (Brief 27 Revised Part 7
+// follow-up): the day-type tabs ARE the scope, so quick-sets live where
+// the day-type state lives. Keeps "Flat 1.0 on Weekday only" possible
+// — earlier all-three-days behaviour was too coarse.
 
 // ── Profile + area-coverage slots (Part 10) ──────────────────────────────────
 function ProfileSelectorSlot({ gainType, activeProfileId }) {
@@ -238,12 +164,8 @@ export default function ScheduleEditorCanvas({
       <ProfileSelectorSlot gainType={gainType} activeProfileId={activeProfileId} />
       <AreaCoverageSlot   gainType={gainType} areaShareTotal={areaShareTotal} />
 
-      {/* Quick-set toolbar */}
-      <div className="mb-3">
-        <QuickSetStrip schedule={schedule} onChange={handleChange} />
-      </div>
-
-      {/* The editor itself — canvas-sized */}
+      {/* The editor itself — canvas-sized; day-type tabs + per-day
+          quick-set buttons live inside, so the scope is unambiguous. */}
       <div className="bg-white border border-light-grey rounded p-4">
         <ScheduleEditor
           schedule={schedule}

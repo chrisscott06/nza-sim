@@ -41,7 +41,7 @@
  */
 
 import { useState, useRef, useCallback, useMemo } from 'react'
-import { ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, Plus, Trash2, FlipVertical2, ChevronsLeft, ChevronsRight, Copy } from 'lucide-react'
 import { SCHEDULE_PRESETS, applyPreset, emptySchedule } from '../../../data/schedulePresets.js'
 
 const DAY_TYPES = [
@@ -50,15 +50,64 @@ const DAY_TYPES = [
   { key: 'sunday',   label: 'Sun'     },
 ]
 
+const DAY_LABEL = { weekday: 'Weekday', saturday: 'Saturday', sunday: 'Sunday' }
+
 const MONTHS = ['J','F','M','A','M','J','J','A','S','O','N','D']
 
 function clamp01(n) { return Math.max(0, Math.min(1, n)) }
+
+// ── Quick-set actions ────────────────────────────────────────────────────────
+//
+// Per-day-type by default — the day-type selector IS the scope. Clicking
+// "Flat 1.0" while viewing Weekday only flats Weekday; Saturday + Sunday
+// keep their existing curves. This lets users build genuinely different
+// patterns per day type (Weekday peak occupied, Saturday low, Sunday off)
+// without each quick-set being a destructive bulk operation across all
+// three.
+//
+// Copy-weekday-to-weekend is explicitly cross-day — kept as a separate
+// affordance because it's a common deliberate operation.
+
+function flatDay(schedule, dayType, value) {
+  return { ...schedule, [dayType]: new Array(24).fill(value) }
+}
+
+function invertDay(schedule, dayType) {
+  const arr = schedule[dayType] ?? new Array(24).fill(0)
+  return { ...schedule, [dayType]: arr.map(v => clamp01(1 - v)) }
+}
+
+function shiftDay(schedule, dayType, delta) {
+  const arr = schedule[dayType] ?? new Array(24).fill(0)
+  const n = arr.length
+  const k = ((delta % n) + n) % n
+  return { ...schedule, [dayType]: arr.slice(n - k).concat(arr.slice(0, n - k)) }
+}
+
+function copyWeekdayToWeekend(schedule) {
+  return {
+    ...schedule,
+    saturday: (schedule.weekday ?? new Array(24).fill(0)).slice(),
+    sunday:   (schedule.weekday ?? new Array(24).fill(0)).slice(),
+  }
+}
 
 // ── 24-hour bar grid (the main editing surface) ──────────────────────────────
 function HourBarGrid({ values, onChange, accent, disabled, height = 64 }) {
   const wrapRef = useRef(null)
   const [hoverIdx, setHoverIdx] = useState(null)
   const [editing, setEditing] = useState(false)
+
+  // Latest-values ref. The drag uses window-level mousemove (so the cursor
+  // can briefly leave the grid bounds without breaking the drag), but a
+  // window listener captures its closure at mousedown time — without this
+  // ref each onMove would read the STALE `values` array and overwrite all
+  // earlier paint updates with each onChange. MonthlyRow uses React's
+  // onMouseMove and gets fresh values via re-render closure, but switching
+  // HourBarGrid to React events would mean drag stops the moment the
+  // cursor exits the grid, which is the wrong UX for paint-style editing.
+  const valuesRef = useRef(values)
+  valuesRef.current = values
 
   // Compute the fraction value for a given clientY relative to the grid wrapper.
   const fractionFromClientY = useCallback((clientY) => {
@@ -86,7 +135,7 @@ function HourBarGrid({ values, onChange, accent, disabled, height = 64 }) {
     const idx = indexFromClientX(e.clientX)
     const v = fractionFromClientY(e.clientY)
     if (idx == null || v == null) return
-    const next = values.slice()
+    const next = valuesRef.current.slice()
     next[idx] = Math.round(v * 100) / 100
     onChange(next)
 
@@ -95,9 +144,9 @@ function HourBarGrid({ values, onChange, accent, disabled, height = 64 }) {
       const f = fractionFromClientY(ev.clientY)
       if (i == null || f == null) return
       setHoverIdx(i)
-      // Paint as user drags — both the bar under the cursor AND fill any
-      // adjacent bars passed over since the last move event get the value.
-      const arr = values.slice()
+      // Read the LATEST values via ref so earlier bars painted during this
+      // drag survive (closure-from-mousedown would see the stale snapshot).
+      const arr = valuesRef.current.slice()
       arr[i] = Math.round(f * 100) / 100
       onChange(arr)
     }
@@ -108,7 +157,7 @@ function HourBarGrid({ values, onChange, accent, disabled, height = 64 }) {
     }
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
-  }, [values, onChange, disabled, fractionFromClientY, indexFromClientX])
+  }, [onChange, disabled, fractionFromClientY, indexFromClientX])
 
   const handleMouseMove = useCallback((e) => {
     if (editing) return  // drag handler owns it
@@ -446,21 +495,79 @@ export default function ScheduleEditor({
         </button>
       </div>
 
-      {/* Day-type pills */}
-      <div className="flex gap-1">
-        {DAY_TYPES.map(d => (
+      {/* Day-type pills + per-day quick-set buttons.
+          The day-type tabs ARE the scope: quick-sets apply to the
+          currently-selected day type. Copy-weekday-to-weekend is the
+          one explicit cross-day operation. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex gap-1">
+          {DAY_TYPES.map(d => (
+            <button
+              key={d.key}
+              onClick={() => setActiveDay(d.key)}
+              className={`px-2 py-0.5 text-xxs rounded border transition-colors ${
+                activeDay === d.key
+                  ? 'border-mid-grey bg-navy text-white'
+                  : 'border-light-grey text-mid-grey hover:border-mid-grey'
+              }`}
+            >
+              {d.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Scope indicator + per-day quick-sets */}
+        <span className="text-xxs uppercase tracking-wider text-mid-grey/70 ml-2">
+          {DAY_LABEL[activeDay]} quick set →
+        </span>
+        {[
+          { label: 'Flat 0',   v: 0    },
+          { label: 'Flat 0.5', v: 0.5  },
+          { label: 'Flat 1',   v: 1    },
+        ].map(b => (
           <button
-            key={d.key}
-            onClick={() => setActiveDay(d.key)}
-            className={`flex-1 px-1.5 py-0.5 text-xxs rounded border transition-colors ${
-              activeDay === d.key
-                ? 'border-mid-grey bg-navy text-white'
-                : 'border-light-grey text-mid-grey hover:border-mid-grey'
-            }`}
+            key={b.label}
+            disabled={disabled}
+            onClick={() => onChange(flatDay(safeSchedule, activeDay, b.v))}
+            className="px-1.5 py-0.5 text-xxs border border-light-grey rounded text-mid-grey hover:text-navy hover:border-mid-grey bg-white disabled:opacity-50 transition-colors"
           >
-            {d.label}
+            {b.label}
           </button>
         ))}
+        <button
+          disabled={disabled}
+          onClick={() => onChange(invertDay(safeSchedule, activeDay))}
+          className="flex items-center gap-0.5 px-1.5 py-0.5 text-xxs border border-light-grey rounded text-mid-grey hover:text-navy hover:border-mid-grey bg-white disabled:opacity-50 transition-colors"
+          title={`Invert ${DAY_LABEL[activeDay]} (each value becomes 1 − value)`}
+        >
+          <FlipVertical2 size={10} /> Invert
+        </button>
+        <button
+          disabled={disabled}
+          onClick={() => onChange(shiftDay(safeSchedule, activeDay, -1))}
+          className="px-1.5 py-0.5 text-xxs border border-light-grey rounded text-mid-grey hover:text-navy hover:border-mid-grey bg-white disabled:opacity-50 transition-colors"
+          title={`Shift ${DAY_LABEL[activeDay]} one hour earlier`}
+        >
+          <ChevronsLeft size={10} />
+        </button>
+        <button
+          disabled={disabled}
+          onClick={() => onChange(shiftDay(safeSchedule, activeDay, +1))}
+          className="px-1.5 py-0.5 text-xxs border border-light-grey rounded text-mid-grey hover:text-navy hover:border-mid-grey bg-white disabled:opacity-50 transition-colors"
+          title={`Shift ${DAY_LABEL[activeDay]} one hour later`}
+        >
+          <ChevronsRight size={10} />
+        </button>
+
+        {/* Cross-day operation — visually separated by margin */}
+        <button
+          disabled={disabled}
+          onClick={() => onChange(copyWeekdayToWeekend(safeSchedule))}
+          className="ml-2 flex items-center gap-0.5 px-1.5 py-0.5 text-xxs border border-light-grey rounded text-mid-grey hover:text-navy hover:border-mid-grey bg-white disabled:opacity-50 transition-colors"
+          title="Copy the current weekday curve onto Saturday and Sunday"
+        >
+          <Copy size={10} /> Copy Wk → Sat + Sun
+        </button>
       </div>
 
       {/* 24-hour bar grid for the active day type */}
