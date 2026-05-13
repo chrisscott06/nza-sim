@@ -16,26 +16,33 @@ import {
 } from 'lucide-react'
 import { accentForPath } from '../../data/moduleThemes.js'
 
-// Sidebar order follows state progression:
-//   Building (State 1) → Internal Gains (State 2) → Operation (State 2.5) → Systems (State 3)
-// Profiles sits below the progression block as a legacy module slated for
-// deletion in Brief 27 Part 9 once /gains absorbs its functionality.
+// Sidebar order (Brief 27 Revised Part 7): input-to-output workflow
+//   Overview → Weather → Building → Internal Gains → Operation → Systems → Results
+//
+// "Overview" is a label rename of the existing /information route — the URL
+// stays /information for backward compatibility. A future Brief 30 (Weather
+// module redesign) may rename the route to /overview at the same time as
+// other URL-shape changes.
+//
+// Profiles + Consumption + CRREM + Scenarios live below the divider as
+// secondary / sub-views. Profiles is legacy and slated for deletion in
+// Brief 27 Revised Part 11 once /gains fully absorbs its functionality.
 const TOP_ITEMS = [
   { to: '/',            icon: Home,            label: 'Home' },
-  { to: '/information', icon: ClipboardList,   label: 'Information' },
+  { to: '/information', icon: ClipboardList,   label: 'Overview' },
+  { to: '/weather',     icon: Cloud,           label: 'Weather' },
   { to: '/building',    icon: Building2,       label: 'Building' },
   { to: '/gains',       icon: Flame,           label: 'Internal Gains' },
   { to: '/operation',   icon: Wind,            label: 'Operation' },
   { to: '/systems',     icon: Thermometer,     label: 'Systems' },
-  { to: '/profiles',    icon: Clock,           label: 'Profiles' },
-  { to: '/weather',     icon: Cloud,           label: 'Weather' },
-  { to: '/consumption', icon: FileSpreadsheet, label: 'Consumption' },
+  { to: '/results',     icon: BarChart3,       label: 'Results' },
 ]
 
 const BOTTOM_ITEMS = [
-  { to: '/results',   icon: BarChart3,    label: 'Results'   },
-  { to: '/crrem',     icon: TrendingDown, label: 'CRREM'     },
-  { to: '/scenarios', icon: GitCompare,   label: 'Scenarios' },
+  { to: '/consumption', icon: FileSpreadsheet, label: 'Consumption' },
+  { to: '/crrem',       icon: TrendingDown,    label: 'CRREM'       },
+  { to: '/scenarios',   icon: GitCompare,      label: 'Scenarios'   },
+  { to: '/profiles',    icon: Clock,           label: 'Profiles (legacy)' },
 ]
 
 function NavItem({ to, icon: Icon, label }) {

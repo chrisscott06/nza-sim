@@ -1,27 +1,28 @@
 /**
  * OccupancySection.jsx — Internal Gains module, OCCUPANCY block.
  *
- * Reads / writes `params.occupancy.*` per the v2.3 state contract:
- *   - density.{value, basis}      (per_room | per_m2 | total | per_workstation)
- *   - occupancy_rate              (fraction 0-1)
- *   - sensible_w_per_person       (W/person, BREDEM default 75)
- *   - latent_w_per_person         (W/person, informational only at State 2 dry-bulb)
+ * Brief 27 Revised Part 7. Schedule editor moved OUT of this left-panel
+ * section and into the centre canvas (`canvas/ScheduleEditorCanvas.jsx`)
+ * per the v2.4 contract's UI rule. Left panel keeps magnitude /
+ * structural inputs + a read-only mini-profile + an "Edit schedule →"
+ * affordance that activates the centre-canvas Schedule tab on Occupancy.
+ *
+ * Reads / writes `params.occupancy.*` per v2.4 (unchanged from v2.3 for
+ * occupancy specifically — only lighting + equipment become multi-profile):
+ *   - density.{value, basis}
+ *   - occupancy_rate
+ *   - sensible_w_per_person
+ *   - latent_w_per_person
  *   - schedule.{weekday, saturday, sunday, monthly_multipliers, exceptions}
- *
- * Brief 27 Part 5 — editable inputs + inline 24-hour ScheduleEditor.
- *
- * Per the live engine semantics, num_bedrooms is INTENTIONALLY kept on
- * the building level (it's a geometry/count input that belongs with
- * Building, not a State 2 input). When `density.basis === 'per_room'`
- * the readout shows total occupants computed via num_bedrooms.
+ *     (edited via the centre canvas now)
  */
 
 import { useContext, useCallback } from 'react'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
-import ScheduleEditor from './ScheduleEditor.jsx'
+import MiniProfile from './MiniProfile.jsx'
 import { GAIN_COLOURS } from './gainColours.js'
 
-// ── Small editable field components ─────────────────────────────────────────
+// ── Small editable field components (unchanged from Part 5) ─────────────────
 function NumField({ label, suffix, value, onChange, min = 0, max, step = 1, disabled }) {
   return (
     <div className="flex items-center justify-between gap-2">
@@ -88,13 +89,11 @@ const DENSITY_BASIS_OPTIONS = [
 ]
 
 // ── Main section ─────────────────────────────────────────────────────────────
-export default function OccupancySection({ annual }) {
+export default function OccupancySection({ annual, onEditSchedule }) {
   const { params, updateParam } = useContext(ProjectContext)
   const occ = params?.occupancy ?? {}
   const p = annual?.people
 
-  // All edits go through this helper to keep the spread/merge pattern in one
-  // place and ensure we never accidentally drop the schedule / provenance.
   const patchOccupancy = useCallback((patch) => {
     updateParam('occupancy', { ...occ, ...patch })
   }, [occ, updateParam])
@@ -105,12 +104,7 @@ export default function OccupancySection({ annual }) {
   const setDensityBasis = (b) => {
     patchOccupancy({ density: { ...(occ.density ?? {}), basis: b } })
   }
-  const setSchedule = useCallback((nextSchedule) => {
-    patchOccupancy({ schedule: nextSchedule })
-  }, [patchOccupancy])
 
-  // Total occupants at 100% × occupancy_rate, derived from density basis.
-  // Mirrors live engine `computeTotalOccupants` × occupancy_rate.
   const totalOccupants100 = (() => {
     const v = Number(occ.density?.value ?? 0)
     switch (occ.density?.basis) {
@@ -198,21 +192,21 @@ export default function OccupancySection({ annual }) {
           min={0}
           max={500}
         />
-        <p className="text-xxs italic text-mid-grey/70 pl-1">
-          Latent heat is informational at State 2 (dry-bulb balance ignores
-          it); it's carried for State 3+ humidity-aware modelling.
-        </p>
       </div>
 
-      {/* ── Inline 24-hour ScheduleEditor ──────────────────────────────── */}
+      {/* ── Read-only mini-profile + Edit-schedule link ────────────────── */}
       <div className="border-t border-light-grey/60 pt-2">
-        <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1.5">Schedule</p>
-        <ScheduleEditor
+        <MiniProfile
           schedule={occ.schedule}
-          onChange={setSchedule}
-          gainType="occupancy"
           accent={GAIN_COLOURS.occupancy}
+          onEdit={onEditSchedule}
+          label="Weekday schedule"
         />
+        <p className="text-xxs italic text-mid-grey/70 mt-1.5">
+          Click the mini-profile, or use the Schedule tab in the centre
+          canvas, to author the full 24-hour schedule with day-type
+          variations, monthly multipliers, and exception periods.
+        </p>
       </div>
     </div>
   )

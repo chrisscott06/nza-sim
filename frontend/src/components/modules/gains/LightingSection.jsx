@@ -1,17 +1,27 @@
 /**
- * LightingSection.jsx — left-panel input section for the Internal Gains
- * module's LIGHTING block.
+ * LightingSection.jsx — Internal Gains module, LIGHTING block.
  *
- * Brief 27 Part 4 — SCAFFOLD with live input-side readout (annual / peak)
- * driven by `useAnnualGains`. Part 6 fills in the editable inputs +
- * relationship-to-occupancy selector + lighting schedule editor.
+ * Brief 27 Revised Part 7 — schedule editor moved to centre canvas.
+ * This section keeps:
+ *   - Live readout (annual MWh / peak kW / effective LPD)
+ *   - Magnitude + relationship + daylight inputs (placeholder until
+ *     Brief 27 Revised Part 10 introduces the profile list)
+ *   - Read-only MiniProfile of the lighting schedule
+ *   - "Edit schedule →" link that activates the centre-canvas Schedule
+ *     tab on this section
+ *
+ * v2.4 multi-profile data model arrives in Part 9 + UI in Part 10. For now
+ * this section still operates on the v2.3 single-quantity shape; reads
+ * `params.gains.lighting.schedule` for the MiniProfile (preset migration
+ * filled this in for every project).
  */
 
 import { useContext } from 'react'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
+import MiniProfile from './MiniProfile.jsx'
 import { GAIN_COLOURS } from './gainColours.js'
 
-export default function LightingSection({ annual }) {
+export default function LightingSection({ annual, onEditSchedule }) {
   const { params } = useContext(ProjectContext)
   const lighting = params?.gains?.lighting
   const l = annual?.lighting
@@ -55,9 +65,18 @@ export default function LightingSection({ annual }) {
         </div>
       </div>
 
+      {/* Read-only mini-profile + Edit-schedule link */}
+      <MiniProfile
+        schedule={lighting?.schedule}
+        accent={GAIN_COLOURS.lighting}
+        onEdit={onEditSchedule}
+        label="Weekday schedule"
+      />
+
       <p className="text-xxs italic text-mid-grey/70 px-1">
-        Editable LPD, relationship-to-occupancy selector, daylight factor,
-        and lighting schedule editor land in Part 6.
+        Editable LPD + relationship-to-occupancy selector + daylight
+        factor land in Brief 27 Revised Part 10 alongside the
+        multi-profile data model (bedroom / corridor / exterior / etc.).
       </p>
     </div>
   )

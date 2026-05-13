@@ -55,7 +55,7 @@ const MONTHS = ['J','F','M','A','M','J','J','A','S','O','N','D']
 function clamp01(n) { return Math.max(0, Math.min(1, n)) }
 
 // ── 24-hour bar grid (the main editing surface) ──────────────────────────────
-function HourBarGrid({ values, onChange, accent, disabled }) {
+function HourBarGrid({ values, onChange, accent, disabled, height = 64 }) {
   const wrapRef = useRef(null)
   const [hoverIdx, setHoverIdx] = useState(null)
   const [editing, setEditing] = useState(false)
@@ -131,7 +131,8 @@ function HourBarGrid({ values, onChange, accent, disabled }) {
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseLeave={() => setHoverIdx(null)}
-        className={`relative h-16 bg-off-white border border-light-grey rounded ${
+        style={{ height: `${height}px` }}
+        className={`relative bg-off-white border border-light-grey rounded ${
           disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-crosshair'
         }`}
         title="Drag to set fraction (top = 1.0, bottom = 0)"
@@ -176,7 +177,7 @@ function HourBarGrid({ values, onChange, accent, disabled }) {
 }
 
 // ── Monthly multipliers row ──────────────────────────────────────────────────
-function MonthlyRow({ values, onChange, accent, disabled }) {
+function MonthlyRow({ values, onChange, accent, disabled, height = 40 }) {
   const wrapRef = useRef(null)
   const [hoverIdx, setHoverIdx] = useState(null)
 
@@ -210,7 +211,8 @@ function MonthlyRow({ values, onChange, accent, disabled }) {
         onMouseDown={(e) => handle(e, false)}
         onMouseMove={(e) => handle(e, true)}
         onMouseLeave={() => setHoverIdx(null)}
-        className={`relative h-10 bg-off-white border border-light-grey rounded ${
+        style={{ height: `${height}px` }}
+        className={`relative bg-off-white border border-light-grey rounded ${
           disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-crosshair'
         }`}
       >
@@ -362,12 +364,24 @@ function SubSection({ title, defaultOpen = false, badge, children }) {
 }
 
 // ── Main ScheduleEditor ──────────────────────────────────────────────────────
+//
+// Two-size component:
+//   - PANEL mode (default): fits the 288 px left-panel section. Bar grid
+//     64 px tall, monthly row 40 px. Used in Brief 27 Part 5.
+//   - CANVAS mode: pass barGridHeight={140}+ and monthlyRowHeight={56}+
+//     to get the breathing room appropriate for the centre canvas. Used
+//     by ScheduleEditorCanvas (Brief 27 Revised Part 7).
+//
+// Drag-paint UX scales naturally from getBoundingClientRect — no other
+// changes needed.
 export default function ScheduleEditor({
   schedule,
   onChange,
   gainType = 'occupancy',
   accent = '#8B5CF6',
   disabled = false,
+  barGridHeight = 64,
+  monthlyRowHeight = 40,
 }) {
   const [activeDay, setActiveDay] = useState('weekday')
 
@@ -455,15 +469,17 @@ export default function ScheduleEditor({
         onChange={setDayValues}
         accent={accent}
         disabled={disabled}
+        height={barGridHeight}
       />
 
       {/* Monthly variation — collapsible */}
-      <SubSection title="Monthly variation">
+      <SubSection title="Monthly variation" defaultOpen={barGridHeight >= 100}>
         <MonthlyRow
           values={safeSchedule.monthly_multipliers}
           onChange={setMonthly}
           accent={accent}
           disabled={disabled}
+          height={monthlyRowHeight}
         />
       </SubSection>
 

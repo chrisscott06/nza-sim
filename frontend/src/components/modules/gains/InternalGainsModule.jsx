@@ -1,32 +1,33 @@
 /**
  * InternalGainsModule.jsx — /gains route
  *
- * The State 2 input + visualisation module. Per the v2.3 state contract
- * (docs/state_contracts.md), this module owns:
- *   - building_config.occupancy.*  — first-class occupancy block
- *   - building_config.gains.*      — lighting + equipment gain definitions
+ * Brief 27 Revised Part 7: centre-canvas schedule editor + context-
+ * sensitive tab strip. Per the v2.4 contract's UI rule, the schedule
+ * editor lives in the centre canvas; the left panel holds magnitude /
+ * structural inputs + a read-only mini-profile + an "Edit schedule →"
+ * affordance.
  *
- * Brief 27 Part 4 — UI SCAFFOLD with live input-side feedback. Establishes
- * the layout shell that Parts 5–7 fill in. Follows docs/ui_principles.md (v1.0).
+ * Active-section model:
+ *   The first canvas tab is "Schedule" and renders the editor for the
+ *   currently-active section in the left panel. Clicking a left-panel
+ *   section header activates that section. Clicking a section's
+ *   MiniProfile or "Edit schedule" link activates the section AND
+ *   switches the centre canvas to the Schedule tab.
  *
- * Colour discipline (per Brief 27 Part 4 feedback):
- *   - Module accent (#EA580C vermillion) lives ONLY in structural surfaces:
+ * Tab strip (7 tabs per the revised brief):
+ *   1. Schedule: <active gain>  — context-sensitive workspace
+ *   2. State 1 → State 2        — headline diagnostic, engine toggle
+ *   3. Heat balance             — engine toggle
+ *   4. Free-running             — full-width, engine toggle
+ *   5. Hourly profile           — full-width
+ *   6. Annual breakdown
+ *   7. 3D Model                 — full-width
+ *
+ * Colour discipline (carried from Part 4 refinement):
+ *   - Module accent #EA580C lives in structural surfaces only:
  *     sidebar active indicator, module title bar, tab strip underline.
- *   - Section header colours are GAIN-SPECIFIC (purple / gold / orange),
- *     so the section header colour identifies which gain you're
- *     configuring without reading the title.
- *   - Brief 28 cross-cutting design pass will decide whether to harmonise
- *     INTERNAL_COLOURS in `data/balanceColours.js` (currently all violet
- *     shades — fine for Heat Balance stacks; suboptimal here).
- *
- * Live input-side readout: each section card shows annual MWh + peak kW
- * for its category, recomputing on every input change via the
- * `useAnnualGains` hook. This is INPUT-SIDE feedback — not pre-simulation
- * results — equivalent to a U-value badge updating as you swap
- * construction layers. Different concept from the dropped right results
- * panel.
- *
- * Brief 27 Part 9 deletes /profiles in favour of this module.
+ *   - Section header colours are gain-specific so each section identifies
+ *     its gain at a glance.
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react'
@@ -35,10 +36,13 @@ import { Flame } from 'lucide-react'
 import OccupancySection from './OccupancySection.jsx'
 import LightingSection  from './LightingSection.jsx'
 import EquipmentSection from './EquipmentSection.jsx'
-import { GAIN_COLOURS } from './gainColours.js'
+import { GAIN_COLOURS, GAIN_LABELS } from './gainColours.js'
 import { useAnnualGains } from './useAnnualGains.js'
+import ScheduleEditorCanvas from './canvas/ScheduleEditorCanvas.jsx'
+import { ProjectContext } from '../../../context/ProjectContext.jsx'
+import { useContext } from 'react'
 
-const GAINS_ACCENT = '#EA580C'  // structural module identity — vermillion
+const GAINS_ACCENT = '#EA580C'
 
 // ── Layout: resizable left column ────────────────────────────────────────────
 const LAYOUT_STORAGE_KEY = 'nza-gains-layout'
@@ -53,12 +57,14 @@ function loadLayoutPrefs() {
     const saved = JSON.parse(localStorage.getItem(LAYOUT_STORAGE_KEY))
     if (saved && typeof saved === 'object') {
       return {
-        left: clamp(Number(saved.left) || LEFT_DEFAULT, LEFT_MIN, LEFT_MAX),
-        tab:  TAB_KEYS.includes(saved.tab) ? saved.tab : 'delta',
+        left:          clamp(Number(saved.left) || LEFT_DEFAULT, LEFT_MIN, LEFT_MAX),
+        tab:           TAB_KEYS.includes(saved.tab) ? saved.tab : 'schedule',
+        activeSection: ['occupancy','lighting','equipment'].includes(saved.activeSection)
+                         ? saved.activeSection : 'occupancy',
       }
     }
   } catch {}
-  return { left: LEFT_DEFAULT, tab: 'delta' }
+  return { left: LEFT_DEFAULT, tab: 'schedule', activeSection: 'occupancy' }
 }
 
 function ResizeHandle({ onResize }) {
@@ -96,13 +102,17 @@ function ResizeHandle({ onResize }) {
   )
 }
 
-// ── Section bounding box (gain-coloured header, mirrors Building pattern) ───
-function CollapsibleSection({ title, accent, children, defaultOpen = true }) {
+// ── Section bounding box ────────────────────────────────────────────────────
+function CollapsibleSection({ title, accent, onActivate, children, defaultOpen = true }) {
   const [open, setOpen] = useState(defaultOpen)
+  const handleClick = () => {
+    if (onActivate) onActivate()
+    setOpen(o => !o)
+  }
   return (
     <div className="mb-2">
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={handleClick}
         className="w-full flex items-center justify-between px-2.5 py-1.5 rounded text-left transition-opacity"
         style={{ backgroundColor: accent }}
       >
@@ -118,102 +128,83 @@ function CollapsibleSection({ title, accent, children, defaultOpen = true }) {
   )
 }
 
-// ── Tab definitions ──────────────────────────────────────────────────────────
-//
-// `fullWidth: true` → tab content earns full centre canvas width (horizontal
-// data: time-series, hourly grids). Per ui_principles.md #3 exception.
-// `fullWidth: false` → tab content constrained to ~1000px max.
-//
-// Order: Delta first because it's the headline State 2 diagnostic that
-// answers "what does adding gains do to the building?". Summary second
-// is the input-configuration overview that pairs naturally with the
-// left-panel inputs. The remaining four tabs are progressively more
-// detailed views.
+// ── Tab definitions (v2.4 — 7 tabs, Schedule first + context-sensitive) ─────
 const TABS = [
-  { key: 'delta',       label: 'State 1 → State 2', fullWidth: false, hasEngineToggle: true,  headline: true  },
-  { key: 'summary',     label: 'Summary',           fullWidth: false, hasEngineToggle: false, headline: false },
-  { key: 'hourly',      label: 'Hourly profile',    fullWidth: true,  hasEngineToggle: false, headline: false },
-  { key: 'breakdown',   label: 'Annual breakdown',  fullWidth: false, hasEngineToggle: false, headline: false },
-  { key: 'balance',     label: 'Heat balance',      fullWidth: false, hasEngineToggle: true,  headline: false },
-  { key: 'freerunning', label: 'Free-running',      fullWidth: true,  hasEngineToggle: true,  headline: false },
+  { key: 'schedule',    label: 'Schedule',          fullWidth: true,  hasEngineToggle: false, isSchedule: true   },
+  { key: 'delta',       label: 'State 1 → State 2', fullWidth: false, hasEngineToggle: true,  headline: true     },
+  { key: 'balance',     label: 'Heat balance',      fullWidth: false, hasEngineToggle: true                       },
+  { key: 'freerunning', label: 'Free-running',      fullWidth: true,  hasEngineToggle: true                       },
+  { key: 'hourly',      label: 'Hourly profile',    fullWidth: true,  hasEngineToggle: false                     },
+  { key: 'breakdown',   label: 'Annual breakdown',  fullWidth: false, hasEngineToggle: false                     },
+  { key: '3d',          label: '3D Model',          fullWidth: true,  hasEngineToggle: false                     },
 ]
 const TAB_KEYS = TABS.map(t => t.key)
 
-// ── Placeholder canvas content (Part 7 fills these in) ──────────────────────
-function PlaceholderTab({ tab }) {
+// ── Tab content dispatcher ──────────────────────────────────────────────────
+function TabContent({ tab, activeSection, params, updateParam }) {
+  // Schedule tab — wires to the centre-canvas editor and the v2.4 contract's
+  // section-of-interest data path.
+  if (tab === 'schedule') {
+    const accent = GAIN_COLOURS[activeSection]
+
+    // Read schedule + onChange wiring per the active section. v2.4 multi-
+    // profile arrives in Parts 9/10; for now Lighting + Equipment edit the
+    // (single) gains.lighting.schedule / gains.equipment.schedule which the
+    // current data model still uses.
+    let schedule, onChange, label
+    if (activeSection === 'occupancy') {
+      schedule = params?.occupancy?.schedule
+      label = GAIN_LABELS.occupancy
+      onChange = (next) => updateParam('occupancy', { ...(params?.occupancy ?? {}), schedule: next })
+    } else if (activeSection === 'lighting') {
+      schedule = params?.gains?.lighting?.schedule
+      label = GAIN_LABELS.lighting
+      onChange = (next) => updateParam('gains', {
+        ...(params?.gains ?? {}),
+        lighting: { ...(params?.gains?.lighting ?? {}), schedule: next },
+      })
+    } else if (activeSection === 'equipment') {
+      schedule = params?.gains?.equipment?.schedule
+      label = GAIN_LABELS.equipment
+      onChange = (next) => updateParam('gains', {
+        ...(params?.gains ?? {}),
+        equipment: { ...(params?.gains?.equipment ?? {}), schedule: next },
+      })
+    }
+
+    return (
+      <ScheduleEditorCanvas
+        gainType={activeSection}
+        gainLabel={label}
+        schedule={schedule}
+        onChange={onChange}
+        accent={accent}
+      />
+    )
+  }
+
+  // All other tabs — placeholder until Brief 27 Revised Part 11 builds them out.
   const t = TABS.find(x => x.key === tab) ?? TABS[0]
   return (
     <div className={`mx-auto px-6 py-8 ${t.fullWidth ? 'w-full' : 'max-w-[1000px]'}`}>
       <div className="border border-dashed border-light-grey rounded-lg px-6 py-12 text-center bg-off-white/30">
-        <div className="text-mid-grey text-caption">
-          <Flame size={24} strokeWidth={1.5} className="mx-auto mb-3 text-orange-500/60" />
-          <div className="font-semibold text-navy mb-1">
-            {t.label} {t.headline && <span className="text-xxs text-orange-600 ml-1">· HEADLINE</span>}
-          </div>
-          <div className="text-xxs italic text-mid-grey/80">
-            Content lands in Brief 27 Part 7.
-          </div>
+        <Flame size={24} strokeWidth={1.5} className="mx-auto mb-3 text-orange-500/60" />
+        <div className="font-semibold text-navy mb-1">
+          {t.label} {t.headline && <span className="text-xxs text-orange-600 ml-1">· HEADLINE</span>}
+        </div>
+        <div className="text-xxs italic text-mid-grey/80">
+          Lands in Brief 27 Revised Part 11.
         </div>
       </div>
-
-      {/* Brief preview of what this tab will hold — sets expectations for Part 7 */}
       <div className="mt-4 px-2 text-xxs text-mid-grey/70 leading-relaxed">
         {tab === 'delta' && (
-          <>
-            <p className="font-medium text-navy/80 mb-1">Headline diagnostic for State 2.</p>
-            <p>
-              A bar-pair showing how internal gains change demand vs the
-              State 1 envelope-only baseline: "Internal gains reduce
-              heating by X MWh, increase cooling by Y MWh." Plus overheating-
-              hours change, comfort-hours change, and annual-mean
-              free-running temperature shift. State 1 ↔ State 2 numbers
-              side-by-side so the contribution is unambiguous. Engine
-              toggle inline (live vs simulation deltas should agree to
-              within ~10%).
-            </p>
-          </>
+          <p><strong className="text-navy/80">Headline diagnostic.</strong> Bar-pair view: "Internal gains reduce heating by X MWh, increase cooling by Y MWh," plus per-profile attribution (which load type contributed most). Engine toggle inline.</p>
         )}
-        {tab === 'summary' && (
-          <p>
-            Input-configuration overview as a single multi-row card per UI
-            principle #2 — total annual gain MWh, peak instantaneous kW,
-            avg vs peak occupant count, effective LPD. Pairs with the
-            left-panel sections without duplicating their card-internal
-            readouts.
-          </p>
-        )}
-        {tab === 'hourly' && (
-          <p>
-            Typical-week stacked bars showing people / lighting / equipment
-            gain kW for each of 7 × 24 hours, with a day-type toggle
-            (Mon / Sat / Sun) and month selector. Full-width — horizontal
-            axis carries time, principle #3 exception.
-          </p>
-        )}
-        {tab === 'breakdown' && (
-          <p>
-            Annual MWh by category and by month. Stacked-bar chart with
-            the three gain colours (purple / gold / orange) threaded
-            through inputs, charts, and balance flows (UI checklist
-            Section H).
-          </p>
-        )}
-        {tab === 'balance' && (
-          <p>
-            Gains in the full heat balance flow: where each gain category
-            lands (heating offset / cooling add / comfort-hour neutral)
-            relative to fabric losses, solar gain, and the comfort band.
-            Engine toggle inline.
-          </p>
-        )}
-        {tab === 'freerunning' && (
-          <p>
-            Annual zone temperature trace, State 2 overlaid on State 1
-            baseline so the gain impact on T_op is visually obvious. Full-
-            width — annual time series justifies the horizontal space.
-            Engine toggle inline.
-          </p>
-        )}
+        {tab === 'balance' && <p>Gains in the full heat balance flow: where each gain category lands relative to fabric losses, solar gain, and the comfort band. Engine toggle inline.</p>}
+        {tab === 'freerunning' && <p>Annual zone temperature trace, State 2 overlaid on State 1 baseline so the gain impact is visually obvious. Full-width, engine toggle inline.</p>}
+        {tab === 'hourly' && <p>Typical-week stacked bars showing people / lighting / equipment gain kW for each of 7 × 24 hours, with day-type and month selectors.</p>}
+        {tab === 'breakdown' && <p>Annual MWh by category and by month. Stacked-bar chart with the three gain colours (purple / gold / orange).</p>}
+        {tab === '3d' && <p>3D zone model with gain heatmaps painted onto surfaces (where applicable). Useful at multi-zone but informational at single-zone.</p>}
       </div>
     </div>
   )
@@ -222,10 +213,9 @@ function PlaceholderTab({ tab }) {
 // ── Main module ──────────────────────────────────────────────────────────────
 export default function InternalGainsModule() {
   const [prefs, setPrefs] = useState(loadLayoutPrefs)
-  const { left, tab } = prefs
+  const { left, tab, activeSection } = prefs
 
-  // Live input-side readout — single hook call, results passed down to
-  // each section card via prop (avoids 3× duplicate 8760-hour loops).
+  const { params, updateParam } = useContext(ProjectContext)
   const annual = useAnnualGains()
 
   useEffect(() => {
@@ -237,16 +227,18 @@ export default function InternalGainsModule() {
   }, [])
 
   const setTab = useCallback((next) => setPrefs(p => ({ ...p, tab: next })), [])
+  const setActiveSection = useCallback((next) => setPrefs(p => ({ ...p, activeSection: next })), [])
+  const onEditSchedule = useCallback((section) => {
+    setPrefs(p => ({ ...p, activeSection: section, tab: 'schedule' }))
+  }, [])
 
   const activeTab = TABS.find(t => t.key === tab) ?? TABS[0]
+  const scheduleTabLabel = `Schedule: ${GAIN_LABELS[activeSection] ?? '—'}`
 
   return (
     <div className="h-full flex flex-col">
-      {/* ── Module header (vermillion structural accent + title) ────────── */}
-      <div
-        className="h-1 flex-shrink-0"
-        style={{ backgroundColor: GAINS_ACCENT }}
-      />
+      {/* Module header */}
+      <div className="h-1 flex-shrink-0" style={{ backgroundColor: GAINS_ACCENT }} />
       <div className="px-4 py-2 border-b border-light-grey bg-white flex-shrink-0 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Flame size={16} style={{ color: GAINS_ACCENT }} />
@@ -260,39 +252,60 @@ export default function InternalGainsModule() {
         </div>
       </div>
 
-      {/* ── Body: left input panel + centre canvas ──────────────────────── */}
+      {/* Body: left panel + centre canvas */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left panel — each section gets a gain-specific colour header */}
+        {/* Left panel */}
         <div
           className="bg-white border-r border-light-grey overflow-y-auto overflow-x-hidden flex-shrink-0"
           style={{ width: `${left}px` }}
         >
           <div className="px-3 py-2.5">
-            <CollapsibleSection title="Occupancy" accent={GAIN_COLOURS.occupancy}>
-              <OccupancySection annual={annual} />
+            <CollapsibleSection
+              title="Occupancy"
+              accent={GAIN_COLOURS.occupancy}
+              onActivate={() => setActiveSection('occupancy')}
+            >
+              <OccupancySection
+                annual={annual}
+                onEditSchedule={() => onEditSchedule('occupancy')}
+              />
             </CollapsibleSection>
 
-            <CollapsibleSection title="Lighting" accent={GAIN_COLOURS.lighting}>
-              <LightingSection annual={annual} />
+            <CollapsibleSection
+              title="Lighting"
+              accent={GAIN_COLOURS.lighting}
+              onActivate={() => setActiveSection('lighting')}
+            >
+              <LightingSection
+                annual={annual}
+                onEditSchedule={() => onEditSchedule('lighting')}
+              />
             </CollapsibleSection>
 
-            <CollapsibleSection title="Equipment" accent={GAIN_COLOURS.equipment}>
-              <EquipmentSection annual={annual} />
+            <CollapsibleSection
+              title="Equipment"
+              accent={GAIN_COLOURS.equipment}
+              onActivate={() => setActiveSection('equipment')}
+            >
+              <EquipmentSection
+                annual={annual}
+                onEditSchedule={() => onEditSchedule('equipment')}
+              />
             </CollapsibleSection>
           </div>
         </div>
 
-        {/* Resize handle */}
         <ResizeHandle onResize={onResizeLeft} />
 
         {/* Centre canvas */}
         <div className="flex-1 flex flex-col overflow-hidden bg-off-white/40">
-          {/* Tab strip — centred, with structural vermillion underline */}
+          {/* Tab strip — context-sensitive Schedule label */}
           <div className="flex-shrink-0 border-b border-light-grey bg-white relative">
             <div className="flex justify-center">
               <div className="inline-flex">
                 {TABS.map(t => {
                   const isActive = t.key === tab
+                  const label = t.isSchedule ? scheduleTabLabel : t.label
                   return (
                     <button
                       key={t.key}
@@ -302,7 +315,7 @@ export default function InternalGainsModule() {
                         ${isActive ? 'text-navy font-semibold' : 'text-mid-grey hover:text-navy'}
                       `}
                     >
-                      {t.label}
+                      {label}
                       {isActive && (
                         <span
                           className="absolute left-3 right-3 bottom-0 h-[2px] rounded-t-sm"
@@ -315,18 +328,21 @@ export default function InternalGainsModule() {
               </div>
             </div>
 
-            {/* Engine toggle slot — appears only for engine-dependent tabs.
-                Part 7 wires the actual segmented control. */}
             {activeTab.hasEngineToggle && (
               <div className="absolute right-4 top-2 text-xxs text-mid-grey italic">
-                Engine toggle inline (Part 7)
+                Engine toggle inline (Part 11)
               </div>
             )}
           </div>
 
           {/* Tab content */}
           <div className="flex-1 overflow-y-auto">
-            <PlaceholderTab tab={tab} />
+            <TabContent
+              tab={tab}
+              activeSection={activeSection}
+              params={params}
+              updateParam={updateParam}
+            />
           </div>
         </div>
       </div>

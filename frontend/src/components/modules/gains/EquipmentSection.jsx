@@ -1,18 +1,16 @@
 /**
- * EquipmentSection.jsx — left-panel input section for the Internal Gains
- * module's EQUIPMENT block.
+ * EquipmentSection.jsx — Internal Gains module, EQUIPMENT block.
  *
- * Brief 27 Part 4 — SCAFFOLD with live input-side readout. Splits
- * baseload + active in the readout because the live engine treats them
- * as two distinct gain streams (baseload 24/7, active occupancy-driven).
- * Part 6 fills in the editable inputs.
+ * Brief 27 Revised Part 7 — schedule editor moved to centre canvas.
+ * Multi-profile data model + UI lands in Parts 9/10.
  */
 
 import { useContext } from 'react'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
+import MiniProfile from './MiniProfile.jsx'
 import { GAIN_COLOURS } from './gainColours.js'
 
-export default function EquipmentSection({ annual }) {
+export default function EquipmentSection({ annual, onEditSchedule }) {
   const { params } = useContext(ProjectContext)
   const equipment = params?.gains?.equipment
   const e = annual?.equipment
@@ -60,10 +58,17 @@ export default function EquipmentSection({ annual }) {
         </div>
       </div>
 
+      <MiniProfile
+        schedule={equipment?.schedule}
+        accent={GAIN_COLOURS.equipment}
+        onEdit={onEditSchedule}
+        label="Weekday schedule"
+      />
+
       <p className="text-xxs italic text-mid-grey/70 px-1">
-        Editable baseload + active power, relationship-to-occupancy
-        selector, standby factor, and equipment schedule editor land in
-        Part 6.
+        Editable baseload + active power + relationship-to-occupancy +
+        standby factor land in Brief 27 Revised Part 10 alongside the
+        multi-profile data model.
       </p>
     </div>
   )
