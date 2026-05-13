@@ -784,7 +784,14 @@ export default function BuildingDefinition() {
   // Simulation balance — fetched per (projectId, runId). Lets the Live |
   // Simulation toggle in the centre panel actually flip between sources
   // instead of being permanently disabled on the Simulation pill.
-  const { data: simBalance } = useSimulationBalance(currentProjectId, simCtx?.runId)
+  //
+  // Mode is `envelope-only` here: the Building module is locked to State 1
+  // per the state contract (Building == envelope view, gains/operation/systems
+  // live in their own modules). The backend's State 1 path returns the contract
+  // output shape — demand row, free-running stats, comfort band echo, ventilation
+  // split into fabric_leakage + permanent_vents — that the HeatBalance component
+  // renders unconditionally if the keys are present.
+  const { data: simBalance } = useSimulationBalance(currentProjectId, simCtx?.runId, 'envelope-only')
   const simulationInfo = simCtx?.runId ? {
     runId: simCtx.runId,
     ranAt: simCtx.results?.created_at ?? null,

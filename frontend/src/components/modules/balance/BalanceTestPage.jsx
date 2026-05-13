@@ -36,7 +36,9 @@ export default function BalanceTestPage() {
     return calculateInstantDegreeDay(params || {}, constructions || {}, systems || {}, {})
   }, [params, constructions, systems, weatherCtx?.weatherData, weatherCtx?.hourlySolar])
 
-  const { data: simBalance } = useSimulationBalance(currentProjectId, simCtx?.runId)
+  // Test harness defaults to full-model shape; flip to 'envelope-only' to
+  // exercise the State 1 contract output path manually.
+  const { data: simBalance } = useSimulationBalance(currentProjectId, simCtx?.runId, 'full')
 
   const simulationInfo = simCtx?.runId ? {
     runId: simCtx.runId,

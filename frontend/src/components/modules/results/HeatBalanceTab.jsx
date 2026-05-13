@@ -35,7 +35,9 @@ export default function HeatBalanceTab() {
     return calculateInstantDegreeDay(params || {}, constructions || {}, systems || {}, {})
   }, [params, constructions, systems, weatherCtx?.weatherData, weatherCtx?.hourlySolar])
 
-  const { data: simBalance } = useSimulationBalance(currentProjectId, simCtx?.runId)
+  // Results module is the State 3 (full model) view — explicit mode so a future
+  // contract change to the default doesn't silently re-shape this view.
+  const { data: simBalance } = useSimulationBalance(currentProjectId, simCtx?.runId, 'full')
 
   const simulationInfo = simCtx?.runId ? {
     runId: simCtx.runId,
