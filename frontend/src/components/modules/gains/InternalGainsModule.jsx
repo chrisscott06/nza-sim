@@ -6,27 +6,25 @@
  *   - building_config.occupancy.*  — first-class occupancy block
  *   - building_config.gains.*      — lighting + equipment gain definitions
  *
- * Brief 27 Part 4 — UI SCAFFOLD ONLY. Establishes the layout shell that
- * Parts 5–7 fill in. Follows docs/ui_principles.md (v1.0):
+ * Brief 27 Part 4 — UI SCAFFOLD with live input-side feedback. Establishes
+ * the layout shell that Parts 5–7 fill in. Follows docs/ui_principles.md (v1.0).
  *
- *   - Two columns: left input panel (resizable, 288px default), centre
- *     canvas (flex-1). No right column — pre-simulation results are
- *     not meaningful at the gain-definition stage; live engine output
- *     is reachable via the Heat balance / Free-running tabs instead.
- *   - Left panel uses CollapsibleSection bounding boxes (principle #4),
- *     mirroring the Building module's GEOMETRY / FABRIC / etc. pattern.
- *     Three sections: OCCUPANCY, LIGHTING, EQUIPMENT — each a separate
- *     component file so Parts 5/6 can expand them independently.
- *   - Centre canvas uses a tab strip (principle: multi-tab pattern).
- *     Five tabs: Summary | Hourly profile | Annual breakdown |
- *     Heat balance | Free-running. Tab content is placeholder until
- *     Part 7. Tabs that earn full-width data (hourly profile, free-
- *     running annual trace) use full width; tabular summaries cap at
- *     ~1000px per principle #3.
- *   - Engine toggle (Live | Simulation) lives inline with the tab title
- *     for tabs whose output depends on engine choice (Heat balance,
- *     Free-running). Pre-engine tabs (Summary inputs, Hourly profile
- *     from live-engine helpers, Annual breakdown) don't surface it.
+ * Colour discipline (per Brief 27 Part 4 feedback):
+ *   - Module accent (#EA580C vermillion) lives ONLY in structural surfaces:
+ *     sidebar active indicator, module title bar, tab strip underline.
+ *   - Section header colours are GAIN-SPECIFIC (purple / gold / orange),
+ *     so the section header colour identifies which gain you're
+ *     configuring without reading the title.
+ *   - Brief 28 cross-cutting design pass will decide whether to harmonise
+ *     INTERNAL_COLOURS in `data/balanceColours.js` (currently all violet
+ *     shades — fine for Heat Balance stacks; suboptimal here).
+ *
+ * Live input-side readout: each section card shows annual MWh + peak kW
+ * for its category, recomputing on every input change via the
+ * `useAnnualGains` hook. This is INPUT-SIDE feedback — not pre-simulation
+ * results — equivalent to a U-value badge updating as you swap
+ * construction layers. Different concept from the dropped right results
+ * panel.
  *
  * Brief 27 Part 9 deletes /profiles in favour of this module.
  */
@@ -37,10 +35,12 @@ import { Flame } from 'lucide-react'
 import OccupancySection from './OccupancySection.jsx'
 import LightingSection  from './LightingSection.jsx'
 import EquipmentSection from './EquipmentSection.jsx'
+import { GAIN_COLOURS } from './gainColours.js'
+import { useAnnualGains } from './useAnnualGains.js'
 
-const GAINS_ACCENT = '#EA580C'  // warm vermillion — internal gains
+const GAINS_ACCENT = '#EA580C'  // structural module identity — vermillion
 
-// ── Layout: resizable left column (matches Building module's contract) ──────
+// ── Layout: resizable left column ────────────────────────────────────────────
 const LAYOUT_STORAGE_KEY = 'nza-gains-layout'
 const LEFT_DEFAULT = 288
 const LEFT_MIN = 220
@@ -54,11 +54,11 @@ function loadLayoutPrefs() {
     if (saved && typeof saved === 'object') {
       return {
         left: clamp(Number(saved.left) || LEFT_DEFAULT, LEFT_MIN, LEFT_MAX),
-        tab:  TAB_KEYS.includes(saved.tab) ? saved.tab : 'summary',
+        tab:  TAB_KEYS.includes(saved.tab) ? saved.tab : 'delta',
       }
     }
   } catch {}
-  return { left: LEFT_DEFAULT, tab: 'summary' }
+  return { left: LEFT_DEFAULT, tab: 'delta' }
 }
 
 function ResizeHandle({ onResize }) {
@@ -96,15 +96,15 @@ function ResizeHandle({ onResize }) {
   )
 }
 
-// ── Left-panel section header (mirrors Building's CollapsibleSection) ───────
-function CollapsibleSection({ title, children, defaultOpen = true }) {
+// ── Section bounding box (gain-coloured header, mirrors Building pattern) ───
+function CollapsibleSection({ title, accent, children, defaultOpen = true }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
     <div className="mb-2">
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between px-2.5 py-1.5 rounded text-left transition-opacity"
-        style={{ backgroundColor: GAINS_ACCENT }}
+        style={{ backgroundColor: accent }}
       >
         <span className="text-white text-xxs font-semibold uppercase tracking-wider">{title}</span>
         <span className="text-white/70 text-xs leading-none">{open ? '▾' : '▸'}</span>
@@ -119,15 +119,23 @@ function CollapsibleSection({ title, children, defaultOpen = true }) {
 }
 
 // ── Tab definitions ──────────────────────────────────────────────────────────
-// Each tab's `fullWidth: true` means it earns the full centre canvas width
-// (chart spans a year, hourly grid, etc.). `fullWidth: false` constrains to
-// ~1000px per ui_principles.md #3.
+//
+// `fullWidth: true` → tab content earns full centre canvas width (horizontal
+// data: time-series, hourly grids). Per ui_principles.md #3 exception.
+// `fullWidth: false` → tab content constrained to ~1000px max.
+//
+// Order: Delta first because it's the headline State 2 diagnostic that
+// answers "what does adding gains do to the building?". Summary second
+// is the input-configuration overview that pairs naturally with the
+// left-panel inputs. The remaining four tabs are progressively more
+// detailed views.
 const TABS = [
-  { key: 'summary',     label: 'Summary',           fullWidth: false, hasEngineToggle: false },
-  { key: 'hourly',      label: 'Hourly profile',    fullWidth: true,  hasEngineToggle: false },
-  { key: 'breakdown',   label: 'Annual breakdown',  fullWidth: false, hasEngineToggle: false },
-  { key: 'balance',     label: 'Heat balance',      fullWidth: false, hasEngineToggle: true  },
-  { key: 'freerunning', label: 'Free-running',      fullWidth: true,  hasEngineToggle: true  },
+  { key: 'delta',       label: 'State 1 → State 2', fullWidth: false, hasEngineToggle: true,  headline: true  },
+  { key: 'summary',     label: 'Summary',           fullWidth: false, hasEngineToggle: false, headline: false },
+  { key: 'hourly',      label: 'Hourly profile',    fullWidth: true,  hasEngineToggle: false, headline: false },
+  { key: 'breakdown',   label: 'Annual breakdown',  fullWidth: false, hasEngineToggle: false, headline: false },
+  { key: 'balance',     label: 'Heat balance',      fullWidth: false, hasEngineToggle: true,  headline: false },
+  { key: 'freerunning', label: 'Free-running',      fullWidth: true,  hasEngineToggle: true,  headline: false },
 ]
 const TAB_KEYS = TABS.map(t => t.key)
 
@@ -139,7 +147,9 @@ function PlaceholderTab({ tab }) {
       <div className="border border-dashed border-light-grey rounded-lg px-6 py-12 text-center bg-off-white/30">
         <div className="text-mid-grey text-caption">
           <Flame size={24} strokeWidth={1.5} className="mx-auto mb-3 text-orange-500/60" />
-          <div className="font-semibold text-navy mb-1">{t.label}</div>
+          <div className="font-semibold text-navy mb-1">
+            {t.label} {t.headline && <span className="text-xxs text-orange-600 ml-1">· HEADLINE</span>}
+          </div>
           <div className="text-xxs italic text-mid-grey/80">
             Content lands in Brief 27 Part 7.
           </div>
@@ -148,39 +158,60 @@ function PlaceholderTab({ tab }) {
 
       {/* Brief preview of what this tab will hold — sets expectations for Part 7 */}
       <div className="mt-4 px-2 text-xxs text-mid-grey/70 leading-relaxed">
+        {tab === 'delta' && (
+          <>
+            <p className="font-medium text-navy/80 mb-1">Headline diagnostic for State 2.</p>
+            <p>
+              A bar-pair showing how internal gains change demand vs the
+              State 1 envelope-only baseline: "Internal gains reduce
+              heating by X MWh, increase cooling by Y MWh." Plus overheating-
+              hours change, comfort-hours change, and annual-mean
+              free-running temperature shift. State 1 ↔ State 2 numbers
+              side-by-side so the contribution is unambiguous. Engine
+              toggle inline (live vs simulation deltas should agree to
+              within ~10%).
+            </p>
+          </>
+        )}
         {tab === 'summary' && (
           <p>
-            Three stacked stat cards: total annual gain MWh (people + lighting +
-            equipment), peak instantaneous gain kW, and average vs peak occupant
-            count. Single-card grouping per UI principle #2; no full-width content.
+            Input-configuration overview as a single multi-row card per UI
+            principle #2 — total annual gain MWh, peak instantaneous kW,
+            avg vs peak occupant count, effective LPD. Pairs with the
+            left-panel sections without duplicating their card-internal
+            readouts.
           </p>
         )}
         {tab === 'hourly' && (
           <p>
-            Typical-week stacked bars showing people / lighting / equipment gain
-            kW for each of 7 × 24 hours, with a day-type toggle (Mon / Sat / Sun).
-            Full-width — horizontal axis carries time, principle #3 exception.
+            Typical-week stacked bars showing people / lighting / equipment
+            gain kW for each of 7 × 24 hours, with a day-type toggle
+            (Mon / Sat / Sun) and month selector. Full-width — horizontal
+            axis carries time, principle #3 exception.
           </p>
         )}
         {tab === 'breakdown' && (
           <p>
-            Annual MWh by category and by month. Stacked-bar chart with the
-            three gain colours threaded through inputs, charts, and balance
-            flows (UI checklist Section H).
+            Annual MWh by category and by month. Stacked-bar chart with
+            the three gain colours (purple / gold / orange) threaded
+            through inputs, charts, and balance flows (UI checklist
+            Section H).
           </p>
         )}
         {tab === 'balance' && (
           <p>
-            Heat-balance contribution from gains: heating offset (winter, gains
-            into deficit hours), cooling add (summer, gains during surplus),
-            and neutral (gains during comfort hours). Engine toggle inline.
+            Gains in the full heat balance flow: where each gain category
+            lands (heating offset / cooling add / comfort-hour neutral)
+            relative to fabric losses, solar gain, and the comfort band.
+            Engine toggle inline.
           </p>
         )}
         {tab === 'freerunning' && (
           <p>
-            Annual zone temperature trace, State 2 overlaid on State 1 baseline
-            so the gain impact on T is visually obvious. Full-width — annual
-            time series justifies the horizontal space. Engine toggle inline.
+            Annual zone temperature trace, State 2 overlaid on State 1
+            baseline so the gain impact on T_op is visually obvious. Full-
+            width — annual time series justifies the horizontal space.
+            Engine toggle inline.
           </p>
         )}
       </div>
@@ -193,7 +224,10 @@ export default function InternalGainsModule() {
   const [prefs, setPrefs] = useState(loadLayoutPrefs)
   const { left, tab } = prefs
 
-  // Persist layout on change
+  // Live input-side readout — single hook call, results passed down to
+  // each section card via prop (avoids 3× duplicate 8760-hour loops).
+  const annual = useAnnualGains()
+
   useEffect(() => {
     try { localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(prefs)) } catch {}
   }, [prefs])
@@ -208,42 +242,42 @@ export default function InternalGainsModule() {
 
   return (
     <div className="h-full flex flex-col">
-      {/* ── Module header (accent bar + title + breadcrumb) ─────────────── */}
+      {/* ── Module header (vermillion structural accent + title) ────────── */}
       <div
         className="h-1 flex-shrink-0"
         style={{ backgroundColor: GAINS_ACCENT }}
       />
       <div className="px-4 py-2 border-b border-light-grey bg-white flex-shrink-0 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Flame size={16} className="text-orange-600" />
+          <Flame size={16} style={{ color: GAINS_ACCENT }} />
           <span className="text-caption font-semibold text-navy">Internal Gains</span>
           <span className="text-xxs text-mid-grey">— State 2 contract</span>
         </div>
         <div className="text-xxs text-mid-grey">
           <NavLink to="/building" className="hover:text-navy transition-colors">← Building</NavLink>
           <span className="mx-2">·</span>
-          <NavLink to="/results" className="hover:text-navy transition-colors">Results →</NavLink>
+          <NavLink to="/operation" className="hover:text-navy transition-colors">Operation →</NavLink>
         </div>
       </div>
 
       {/* ── Body: left input panel + centre canvas ──────────────────────── */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left panel */}
+        {/* Left panel — each section gets a gain-specific colour header */}
         <div
           className="bg-white border-r border-light-grey overflow-y-auto overflow-x-hidden flex-shrink-0"
           style={{ width: `${left}px` }}
         >
           <div className="px-3 py-2.5">
-            <CollapsibleSection title="Occupancy">
-              <OccupancySection />
+            <CollapsibleSection title="Occupancy" accent={GAIN_COLOURS.occupancy}>
+              <OccupancySection annual={annual} />
             </CollapsibleSection>
 
-            <CollapsibleSection title="Lighting">
-              <LightingSection />
+            <CollapsibleSection title="Lighting" accent={GAIN_COLOURS.lighting}>
+              <LightingSection annual={annual} />
             </CollapsibleSection>
 
-            <CollapsibleSection title="Equipment">
-              <EquipmentSection />
+            <CollapsibleSection title="Equipment" accent={GAIN_COLOURS.equipment}>
+              <EquipmentSection annual={annual} />
             </CollapsibleSection>
           </div>
         </div>
@@ -253,8 +287,8 @@ export default function InternalGainsModule() {
 
         {/* Centre canvas */}
         <div className="flex-1 flex flex-col overflow-hidden bg-off-white/40">
-          {/* Tab strip — centred per UI principles common-pattern */}
-          <div className="flex-shrink-0 border-b border-light-grey bg-white">
+          {/* Tab strip — centred, with structural vermillion underline */}
+          <div className="flex-shrink-0 border-b border-light-grey bg-white relative">
             <div className="flex justify-center">
               <div className="inline-flex">
                 {TABS.map(t => {
@@ -281,11 +315,10 @@ export default function InternalGainsModule() {
               </div>
             </div>
 
-            {/* Engine toggle — placed inline with the tab strip for tabs whose
-                output depends on engine choice. Empty placeholder slot until
-                Part 7 wires the actual control. */}
+            {/* Engine toggle slot — appears only for engine-dependent tabs.
+                Part 7 wires the actual segmented control. */}
             {activeTab.hasEngineToggle && (
-              <div className="absolute right-4 top-3 text-xxs text-mid-grey italic">
+              <div className="absolute right-4 top-2 text-xxs text-mid-grey italic">
                 Engine toggle inline (Part 7)
               </div>
             )}

@@ -16,14 +16,18 @@ import {
 } from 'lucide-react'
 import { accentForPath } from '../../data/moduleThemes.js'
 
+// Sidebar order follows state progression:
+//   Building (State 1) → Internal Gains (State 2) → Operation (State 2.5) → Systems (State 3)
+// Profiles sits below the progression block as a legacy module slated for
+// deletion in Brief 27 Part 9 once /gains absorbs its functionality.
 const TOP_ITEMS = [
   { to: '/',            icon: Home,            label: 'Home' },
   { to: '/information', icon: ClipboardList,   label: 'Information' },
   { to: '/building',    icon: Building2,       label: 'Building' },
+  { to: '/gains',       icon: Flame,           label: 'Internal Gains' },
   { to: '/operation',   icon: Wind,            label: 'Operation' },
   { to: '/systems',     icon: Thermometer,     label: 'Systems' },
   { to: '/profiles',    icon: Clock,           label: 'Profiles' },
-  { to: '/gains',       icon: Flame,           label: 'Internal Gains' },
   { to: '/weather',     icon: Cloud,           label: 'Weather' },
   { to: '/consumption', icon: FileSpreadsheet, label: 'Consumption' },
 ]
