@@ -1,5 +1,119 @@
 # NZA SIMULATE — Status
 
+## ✅ Brief 27 + 27 Revised closed — Internal Gains module (State 2)
+
+**Date closed:** 2026-05-13
+**Confidence:** 9/10 (engine toggle wiring queued for Brief 28; the
+single 1/10 gap is the Live | Simulation segmented control on the
+canvas views — the placeholder slot is wired but the actual toggle
+needs State 2 EP results plumbing first)
+
+### What shipped
+
+**Data model + contract (v2.4):**
+- `building_config.occupancy.*` as a first-class block (density basis,
+  rate, sensible/latent heat per person, hourly schedule with full
+  v2.4 exceptions)
+- `building_config.gains.{lighting,equipment}.profiles[]` arrays —
+  multi-profile load-type architecture; each profile carries its own
+  magnitude, area_share, relationship_to_occupancy, spill_minutes /
+  daylight_factor / standby_factor, schedule. Σ area_share is
+  informational, never auto-balanced.
+- Full editable curves per exception period (`exceptions[]`) with
+  optional `ignore_monthly_multipliers` and stable ids
+- Idempotent migrations v2.3 → v2.4 on load + persistent backend script
+  `scripts/migrate_gains_v24.py` (ran cleanly on Bridgewater + New
+  Project, 4 changes total)
+
+**Live engine (`frontend/src/utils/instantCalc.js`):**
+- `_calculateState2` iterates profiles with `area_share` weighting,
+  emits the v2.4 output shape (profiles arrays + totals)
+- `state1_delta` mandatory in State 2 output
+- Multi-profile additivity verified at 0.01% drift
+  (`scripts/state2_multiprofile_smoketest.mjs`)
+
+**EnergyPlus engine (`nza_engine/generators/epjson_assembler.py`):**
+- One `Lights` / `ElectricEquipment` per profile per zone
+- Baseload + active split into separate always-on / scheduled
+  ElectricEquipment objects
+- Per-profile `Schedule:Compact` honouring relationship_to_occupancy
+- SQL parser dispatches mode='envelope-gains' to
+  `_get_heat_balance_state2` (aggregate only — per-profile breakdown
+  in SQL is Brief 28 territory)
+
+**UI:**
+- `/gains` route with two-column shell, three input sections
+  (Occupancy / Lighting / Equipment), centre-canvas with seven tabs
+  (Schedule, State 1 → State 2, Heat balance, Free-running, Hourly
+  profile, Annual breakdown, 3D model)
+- Centre-canvas schedule editor with drag-paint, day-type tabs,
+  per-day-type quick-sets (Flat 0/0.5/1, Invert, Shift, Apply baseload,
+  Multiply × N), monthly multiplier row, exception authoring with
+  full editable curves + Christmas / Summer / UK bank holidays / Custom
+  presets, 8,760-cell annual heatmap with exception highlighting
+- Multi-profile UI (Lighting + Equipment): profile list with inline
+  edit panel for the active profile, [⋯] menu (Duplicate / Delete),
+  + Add profile with building-type-aware load templates (hotel /
+  office / school / retail / Custom), profile selector + area-coverage
+  indicator on the canvas
+- Six diagnostic canvas views (Delta as headline, Annual breakdown,
+  Free-running, Hourly profile, Heat balance, 3D placeholder)
+- `EngineBadge` chip labelling Live engine output on State 1 → State 2,
+  Heat balance, Free-running views
+- Sidebar reordered to state progression (Overview → Weather →
+  Building → Internal Gains → Operation → Systems → Results)
+- `/profiles` route deleted
+
+**Regressions:**
+- State 1 live: 40/40 byte-identical
+- State 1 EP: 40/40 byte-identical
+- State 2 live: 21/21 byte-identical
+- State 2 EP: 21/21 byte-identical
+
+**Module completion checklist:**
+- Filled at `docs/module_checklists/internal_gains_brief_27.md`
+- 9/10 confidence; the 1/10 gap is the engine toggle (Brief 28 Part 2)
+
+**Briefs archived:**
+- `Brief_27_Internal_Gains.md` → `archive/27_Internal_Gains_COMPLETED.md`
+- `Brief_27_Revised.md` → `archive/27_Revised_Internal_Gains_COMPLETED.md`
+
+**Parked briefs renamed for clarity** (orphan numbering claims removed):
+- `Brief_27_Systems_Inspectors.md` → `Brief_PARKED_Systems_Inspectors.md`
+- `Brief_28_Solar_Diagnostics.md`  → `Brief_PARKED_Solar_Diagnostics.md`
+
+### Investigation: State 1 Live vs Sim divergence
+
+The Brief 27 close-out walkthrough surfaced a 15°C summer-max gap
+between Live and Sim on Bridgewater State 1. Full investigation at
+`docs/state_1_engine_divergence_investigation.md`. Headline:
+- The numbers are correct engine outputs; not a regression.
+- `building_config` drifted since Brief 26.2 close
+  (`infiltration_ach: 0.2` was 0.5, `orientation: 42°` was 0°,
+  `wwr` shifted to N 0.55 from balanced 0.25) — these expose the
+  documented isotropic-sky residual in the live engine more sharply.
+- Fix is queued as Brief 28 Part 1 (live engine solar model:
+  isotropic → HDKR / Perez), top priority for the cleanup pass.
+
+### Next task
+
+**Brief 28 — Post-Brief-27 cleanup pass.** Six parts in priority order:
+
+1. Live engine solar model: isotropic → HDKR or Perez
+2. Engine toggle wiring on Internal Gains canvas (Live | Simulation
+   segmented control) — closes the Brief 27 close-out 1/10 holdback
+3. Building-type-aware BREDEM phasing factors in
+   `state_2_expected_ranges.md`
+4. Cross-cutting constants cleanup (~10 duplicated constants across
+   instantCalc.js + sql_parser.py + epjson_assembler.py)
+5. New `scripts/state2_engine_agreement.mjs`
+6. Re-baseline + module completion checklist 10/10
+
+Brief installed as `current.md`. Full spec at
+`docs/briefs/Brief_28_Post_27_Cleanup.md`.
+
+---
+
 ## ✅ Brief 26.1 closed — State 1 finalisation
 
 Five months after Brief 26 closed with all automated tests green, a manual
