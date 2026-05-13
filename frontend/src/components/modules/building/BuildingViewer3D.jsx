@@ -67,7 +67,10 @@ function Building({ params, solarOverlay, onFacadeHover }) {
     return function GlassFaceInner({ axis, sign, wwr: wwrFace, faceW, count }) {
       if (!wwrFace || wwrFace < 0.01) return null
 
-      const n = Math.max(1, Math.round(count ?? 4))
+      // Defensive cap — at 5 meshes/window × num_floors a stray count of
+      // 100+ overwhelms Three.js. The input UI caps at MAX_WINDOWS_PER_FACADE,
+      // but old projects may have persisted higher values.
+      const n = Math.min(40, Math.max(1, Math.round(count ?? 4)))
 
       // Scale window height with WWR above 80%
       let winHeightFraction, sillFrac

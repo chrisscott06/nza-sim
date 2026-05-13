@@ -277,6 +277,70 @@ function PreviewToggle({ label, checked, onChange }) {
   )
 }
 
+// ── Window-count input ────────────────────────────────────────────────────
+// Caps per-facade window count at MAX_WINDOWS_PER_FACADE. The 3D viewer
+// renders 5 meshes per window (glass + 4 frame strips) × num_floors —
+// at 4 floors that's 20 meshes per window. The original input had a HTML
+// `max` attribute but it isn't enforced for direct typing, so a stray
+// "118" produced ~10k meshes and crashed the tab.
+//
+// Two failure modes fixed at once:
+//   1. Free typing — uses local string state, so deleting the field mid-edit
+//      doesn't snap to "1" while the user is typing the new number.
+//   2. Out-of-range — clamped to [MIN, MAX] on commit (blur / Enter).
+const MIN_WINDOWS_PER_FACADE = 1
+const MAX_WINDOWS_PER_FACADE = 40   // ~1.5m wide windows on a 60m facade — well above realistic
+
+function WindowCountInput({ value, defaultValue, onCommit, disabled, title }) {
+  // Local string state lets the user clear and retype without flicker.
+  // `value` from props is the canonical persisted number; we only sync down
+  // when it changes externally (e.g. project load).
+  const [draft, setDraft] = useState(String(value ?? defaultValue))
+  useEffect(() => { setDraft(String(value ?? defaultValue)) }, [value, defaultValue])
+
+  // Self-heal: if the persisted value is out of range (legacy data from
+  // before the cap was added — e.g. someone accidentally typed 118 and
+  // crashed the tab before MAX_WINDOWS_PER_FACADE was enforced), clamp it
+  // on mount so the field doesn't surface a number that can't be saved.
+  useEffect(() => {
+    if (value != null && value > MAX_WINDOWS_PER_FACADE) {
+      onCommit(MAX_WINDOWS_PER_FACADE)
+    }
+  // run once on mount per facade; subsequent edits go through commit
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const commit = () => {
+    const parsed = parseInt(draft, 10)
+    const clamped = Number.isFinite(parsed)
+      ? Math.min(MAX_WINDOWS_PER_FACADE, Math.max(MIN_WINDOWS_PER_FACADE, parsed))
+      : (value ?? defaultValue)
+    setDraft(String(clamped))
+    if (clamped !== value) onCommit(clamped)
+  }
+
+  const atMax = parseInt(draft, 10) >= MAX_WINDOWS_PER_FACADE
+  return (
+    <input
+      type="number"
+      min={MIN_WINDOWS_PER_FACADE}
+      max={MAX_WINDOWS_PER_FACADE}
+      step={1}
+      value={draft}
+      disabled={disabled}
+      onChange={e => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+      className={`w-8 px-1 py-0.5 text-xxs text-navy border rounded text-center
+        focus:outline-none focus:border-teal disabled:opacity-30 disabled:bg-off-white
+        ${atMax ? 'border-amber-500 bg-amber-50' : 'border-light-grey'}`}
+      title={atMax
+        ? `${title} — at max (${MAX_WINDOWS_PER_FACADE}). Higher values would overload the 3D viewer.`
+        : title}
+    />
+  )
+}
+
 function InputsColumn({ library, onInspectConstruction }) {
   const { params, updateParam, constructions, updateConstruction } = useContext(ProjectContext)
   const { length, width, num_floors, floor_height, orientation, wwr, name, infiltration_ach, window_count } = params
@@ -490,12 +554,11 @@ function InputsColumn({ library, onInspectConstruction }) {
                 <span className={`text-xxs w-7 text-right ${included ? 'text-navy' : 'text-light-grey'}`}>
                   {Math.round((wwr[fac.key] ?? 0) * 100)}%
                 </span>
-                <input
-                  type="number" min={1} max={30} step={1}
-                  value={window_count?.[fac.key] ?? fac.defaultCount}
-                  onChange={e => updateParam('window_count', { [fac.key]: Math.max(1, Number(e.target.value)) })}
+                <WindowCountInput
+                  value={window_count?.[fac.key]}
+                  defaultValue={fac.defaultCount}
                   disabled={!included}
-                  className="w-8 px-1 py-0.5 text-xxs text-navy border border-light-grey rounded text-center focus:outline-none focus:border-teal disabled:opacity-30 disabled:bg-off-white"
+                  onCommit={n => updateParam('window_count', { [fac.key]: n })}
                   title={`${facadeLabel(fac.num, orientation)} window count`}
                 />
                 <span className={`text-xxs w-5 ${included ? 'text-mid-grey' : 'text-light-grey'}`}>win</span>
