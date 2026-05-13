@@ -341,6 +341,61 @@ function WindowCountInput({ value, defaultValue, onCommit, disabled, title }) {
   )
 }
 
+// ── Louvre-area input (per-facade m²) ──────────────────────────────────────
+// Same pattern as WindowCountInput: local string draft, commit on blur or
+// Enter. Why: the louvre area field was previously committing on every
+// keystroke via `setLouvreFor(face, Number(e.target.value))`. Typing "0.5"
+// passed through 0 as the user typed the leading "0" — which, because the
+// "include this facade" checkbox is derived from `area > 0`, instantly
+// disabled the very input the user was typing into. Same root cause as the
+// window count crash earlier in the file. Local draft means the area only
+// commits once on blur, so the input stays enabled throughout the edit.
+const MIN_LOUVRE_AREA = 0
+const MAX_LOUVRE_AREA = 20  // m² per facade — way above realistic for a UK hotel
+
+function LouvreAreaInput({ value, onCommit, disabled, title }) {
+  const fmt = (v) => (Number.isFinite(v) ? Number(v).toFixed(2) : '')
+  const [draft, setDraft] = useState(fmt(value ?? 0))
+  // Sync from props when external changes happen (project load, slider drag,
+  // checkbox toggle). Skip if the user is mid-edit (input has focus) so
+  // their typing doesn't get clobbered.
+  const inputRef = useRef(null)
+  useEffect(() => {
+    if (document.activeElement !== inputRef.current) {
+      setDraft(fmt(value ?? 0))
+    }
+  }, [value])
+
+  const commit = () => {
+    const parsed = parseFloat(draft)
+    if (!Number.isFinite(parsed)) {
+      // Empty / unparseable → revert to last committed value
+      setDraft(fmt(value ?? 0))
+      return
+    }
+    const clamped = Math.min(MAX_LOUVRE_AREA, Math.max(MIN_LOUVRE_AREA, parsed))
+    setDraft(fmt(clamped))
+    if (clamped !== value) onCommit(clamped)
+  }
+
+  return (
+    <input
+      ref={inputRef}
+      type="number"
+      min={MIN_LOUVRE_AREA}
+      max={MAX_LOUVRE_AREA}
+      step={0.05}
+      value={draft}
+      disabled={disabled}
+      onChange={e => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+      className="w-14 px-1 py-0.5 text-xxs text-navy border border-light-grey rounded text-right tabular-nums focus:outline-none focus:border-teal disabled:opacity-30 disabled:bg-off-white"
+      title={title}
+    />
+  )
+}
+
 function InputsColumn({ library, onInspectConstruction }) {
   const { params, updateParam, constructions, updateConstruction } = useContext(ProjectContext)
   const { length, width, num_floors, floor_height, orientation, wwr, name, infiltration_ach, window_count } = params
@@ -647,12 +702,10 @@ function InputsColumn({ library, onInspectConstruction }) {
                   disabled={!included}
                   className="flex-1 h-[3px] accent-navy disabled:opacity-30"
                 />
-                <input
-                  type="number" min={0} max={20} step={0.05}
-                  value={area.toFixed(2)}
-                  onChange={e => setLouvreFor(fac.key, Math.max(0, Number(e.target.value)))}
+                <LouvreAreaInput
+                  value={area}
                   disabled={!included}
-                  className="w-14 px-1 py-0.5 text-xxs text-navy border border-light-grey rounded text-right tabular-nums focus:outline-none focus:border-teal disabled:opacity-30 disabled:bg-off-white"
+                  onCommit={v => setLouvreFor(fac.key, v)}
                   title={`${facadeLabel(fac.num, orientation)} louvre area (m²)`}
                 />
                 <span className={`text-xxs w-4 ${included ? 'text-mid-grey' : 'text-light-grey'}`}>m²</span>
