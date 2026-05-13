@@ -1,31 +1,131 @@
 /**
- * OccupancySection.jsx — left-panel input section for the Internal Gains
- * module's OCCUPANCY block.
+ * OccupancySection.jsx — Internal Gains module, OCCUPANCY block.
  *
  * Reads / writes `params.occupancy.*` per the v2.3 state contract:
- *   - occupancy_rate              (fraction)
  *   - density.{value, basis}      (per_room | per_m2 | total | per_workstation)
- *   - sensible_w_per_person       (heat W/person, default 75)
- *   - latent_w_per_person         (heat W/person, default 55)
+ *   - occupancy_rate              (fraction 0-1)
+ *   - sensible_w_per_person       (W/person, BREDEM default 75)
+ *   - latent_w_per_person         (W/person, informational only at State 2 dry-bulb)
  *   - schedule.{weekday, saturday, sunday, monthly_multipliers, exceptions}
  *
- * Brief 27 Part 4 — SCAFFOLD with live input-side readout (annual / peak)
- * driven by `useAnnualGains`. Part 5 fills in the inputs + inline
- * ScheduleEditor. UI principles reference: docs/ui_principles.md.
+ * Brief 27 Part 5 — editable inputs + inline 24-hour ScheduleEditor.
+ *
+ * Per the live engine semantics, num_bedrooms is INTENTIONALLY kept on
+ * the building level (it's a geometry/count input that belongs with
+ * Building, not a State 2 input). When `density.basis === 'per_room'`
+ * the readout shows total occupants computed via num_bedrooms.
  */
 
-import { useContext } from 'react'
+import { useContext, useCallback } from 'react'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
+import ScheduleEditor from './ScheduleEditor.jsx'
 import { GAIN_COLOURS } from './gainColours.js'
 
+// ── Small editable field components ─────────────────────────────────────────
+function NumField({ label, suffix, value, onChange, min = 0, max, step = 1, disabled }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <label className="text-xxs text-mid-grey">{label}</label>
+      <div className="flex items-center gap-1">
+        <input
+          type="number"
+          value={value ?? ''}
+          min={min}
+          max={max}
+          step={step}
+          disabled={disabled}
+          onChange={e => onChange(e.target.value === '' ? null : Number(e.target.value))}
+          className="w-16 px-1.5 py-0.5 text-xxs text-navy text-right tabular-nums border border-light-grey rounded focus:outline-none focus:border-mid-grey disabled:opacity-50"
+        />
+        {suffix && <span className="text-xxs text-mid-grey w-12">{suffix}</span>}
+      </div>
+    </div>
+  )
+}
+
+function PercentSlider({ label, value, onChange, disabled }) {
+  const pct = Math.round(((value ?? 0)) * 100)
+  return (
+    <div className="space-y-0.5">
+      <div className="flex items-center justify-between text-xxs">
+        <label className="text-mid-grey">{label}</label>
+        <span className="text-navy font-medium tabular-nums">{pct}%</span>
+      </div>
+      <input
+        type="range" min={0} max={100} step={1}
+        value={pct}
+        disabled={disabled}
+        onChange={e => onChange(Number(e.target.value) / 100)}
+        className="w-full h-[3px] accent-navy disabled:opacity-50"
+      />
+    </div>
+  )
+}
+
+function SelectField({ label, value, onChange, options, disabled }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <label className="text-xxs text-mid-grey">{label}</label>
+      <select
+        value={value ?? ''}
+        disabled={disabled}
+        onChange={e => onChange(e.target.value)}
+        className="flex-1 max-w-[7rem] px-1.5 py-0.5 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-mid-grey disabled:opacity-50"
+      >
+        {options.map(o => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
+const DENSITY_BASIS_OPTIONS = [
+  { value: 'per_room',         label: 'people/room' },
+  { value: 'per_m2',           label: 'people/m²'   },
+  { value: 'total',            label: 'total'       },
+  { value: 'per_workstation',  label: 'per workstation' },
+]
+
+// ── Main section ─────────────────────────────────────────────────────────────
 export default function OccupancySection({ annual }) {
-  const { params } = useContext(ProjectContext)
-  const occ = params?.occupancy
+  const { params, updateParam } = useContext(ProjectContext)
+  const occ = params?.occupancy ?? {}
   const p = annual?.people
 
+  // All edits go through this helper to keep the spread/merge pattern in one
+  // place and ensure we never accidentally drop the schedule / provenance.
+  const patchOccupancy = useCallback((patch) => {
+    updateParam('occupancy', { ...occ, ...patch })
+  }, [occ, updateParam])
+
+  const setDensityValue = (v) => {
+    patchOccupancy({ density: { ...(occ.density ?? {}), value: v ?? 0 } })
+  }
+  const setDensityBasis = (b) => {
+    patchOccupancy({ density: { ...(occ.density ?? {}), basis: b } })
+  }
+  const setSchedule = useCallback((nextSchedule) => {
+    patchOccupancy({ schedule: nextSchedule })
+  }, [patchOccupancy])
+
+  // Total occupants at 100% × occupancy_rate, derived from density basis.
+  // Mirrors live engine `computeTotalOccupants` × occupancy_rate.
+  const totalOccupants100 = (() => {
+    const v = Number(occ.density?.value ?? 0)
+    switch (occ.density?.basis) {
+      case 'per_room':         return Number(params?.num_bedrooms ?? 0) * v
+      case 'per_m2':           return (annual?.gia_m2 ?? 0) * v
+      case 'total':            return v
+      case 'per_workstation':  return v
+      default:                 return Number(params?.num_bedrooms ?? 0) * v
+    }
+  })()
+  const effectiveOccupants = totalOccupants100 * Number(occ.occupancy_rate ?? 0)
+
   return (
-    <div className="space-y-2 text-caption text-mid-grey">
-      {/* Live readout — annual + peak, updates as inputs change */}
+    <div className="space-y-3 text-caption">
+      {/* ── Live readout ──────────────────────────────────────────────── */}
       <div className="px-2 py-1.5 bg-off-white border-l-2 rounded-r text-xxs tabular-nums"
            style={{ borderLeftColor: GAIN_COLOURS.occupancy }}>
         <div className="flex justify-between">
@@ -41,33 +141,79 @@ export default function OccupancySection({ annual }) {
           </span>
         </div>
         <div className="flex justify-between">
-          <span className="text-mid-grey">Avg occupants</span>
+          <span className="text-mid-grey">At 100% × rate</span>
           <span className="text-navy font-medium">
-            {p?.hours_active && annual?.ready
-              ? `${(p.kwh * 1000 / 75 / 8760).toFixed(0)}`
-              : '—'}
+            {totalOccupants100 > 0 ? `${effectiveOccupants.toFixed(0)} / ${totalOccupants100.toFixed(0)} people` : '—'}
           </span>
         </div>
       </div>
 
-      {/* Current configuration — read-only summary, Part 5 swaps in inputs */}
-      <div className="px-2 py-1.5 bg-white border border-light-grey/60 rounded text-xxs">
-        <div className="font-mono text-mid-grey">
-          {occ?.density
-            ? `${occ.density.value} ${occ.density.basis === 'per_room' ? 'people/room' : occ.density.basis}`
-            : '— (not configured)'}
-        </div>
-        <div className="text-mid-grey/80 mt-0.5">
-          {occ?.occupancy_rate != null
-            ? `Occupancy rate: ${(occ.occupancy_rate * 100).toFixed(0)}%`
-            : '— Occupancy rate not set'}
-        </div>
+      {/* ── Density value + basis ──────────────────────────────────────── */}
+      <div className="space-y-1.5">
+        <NumField
+          label="Density"
+          value={occ.density?.value}
+          onChange={setDensityValue}
+          step={0.1}
+          min={0}
+        />
+        <SelectField
+          label="Basis"
+          value={occ.density?.basis ?? 'per_room'}
+          onChange={setDensityBasis}
+          options={DENSITY_BASIS_OPTIONS}
+        />
+        {occ.density?.basis === 'per_room' && (
+          <p className="text-xxs italic text-mid-grey/70 pl-1">
+            Uses Building → num_bedrooms (= {params?.num_bedrooms ?? 0}) as
+            the room count.
+          </p>
+        )}
       </div>
 
-      <p className="text-xxs italic text-mid-grey/70 px-1">
-        Editable density, occupancy rate, heat per person, and inline
-        24-hour schedule editor land in Part 5.
-      </p>
+      {/* ── Occupancy rate ─────────────────────────────────────────────── */}
+      <PercentSlider
+        label="Occupancy rate"
+        value={occ.occupancy_rate}
+        onChange={v => patchOccupancy({ occupancy_rate: v })}
+      />
+
+      {/* ── Heat per person ───────────────────────────────────────────── */}
+      <div className="space-y-1.5">
+        <NumField
+          label="Sensible heat"
+          suffix="W/person"
+          value={occ.sensible_w_per_person ?? 75}
+          onChange={v => patchOccupancy({ sensible_w_per_person: v ?? 75 })}
+          step={5}
+          min={0}
+          max={500}
+        />
+        <NumField
+          label="Latent heat"
+          suffix="W/person"
+          value={occ.latent_w_per_person ?? 55}
+          onChange={v => patchOccupancy({ latent_w_per_person: v ?? 55 })}
+          step={5}
+          min={0}
+          max={500}
+        />
+        <p className="text-xxs italic text-mid-grey/70 pl-1">
+          Latent heat is informational at State 2 (dry-bulb balance ignores
+          it); it's carried for State 3+ humidity-aware modelling.
+        </p>
+      </div>
+
+      {/* ── Inline 24-hour ScheduleEditor ──────────────────────────────── */}
+      <div className="border-t border-light-grey/60 pt-2">
+        <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1.5">Schedule</p>
+        <ScheduleEditor
+          schedule={occ.schedule}
+          onChange={setSchedule}
+          gainType="occupancy"
+          accent={GAIN_COLOURS.occupancy}
+        />
+      </div>
     </div>
   )
 }
