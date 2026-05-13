@@ -56,16 +56,29 @@ function Building({ params, solarOverlay, onFacadeHover }) {
 
   const totalHeight = num_floors * floor_height
 
-  // Axis convention (Brief 26 Part 2.5 — matches EP geometry.py and
-  // instantCalc.js):
+  // Axis convention:
   //   X axis = length (east-west) → building's LONG dimension
   //   Z axis = width  (north-south) → building's SHORT dimension
-  //   +Z face = North (60m wide for HIX), +X face = East (15m wide for HIX)
+  //   -Z face = North (60m wide for HIX), +X face = East (15m wide for HIX)
   //
-  // Prior to 2.5 this was flipped (X=width, Z=length), which made the 3D
-  // viewer disagree with the simulation and live calc — the north face was
-  // rendered short while the calc treated it as long, producing the F3>F2
-  // solar magnitude bug.
+  // Why -Z (and not +Z) is north: Three.js is Y-up. Looking straight down
+  // at the ground, you want north at the top of the screen and east on the
+  // right. With Y-up and a right-handed coordinate system, that pairing
+  // forces north to be along -Z (the "into the screen" direction in the
+  // default camera). Choosing +Z = north (as the file previously did) made
+  // the top-down plan view chirality-flipped — east ended up on the left,
+  // or north ended up not at the top, depending on how the camera was
+  // oriented.
+  //
+  // The simulation side (geometry.py) uses Z-up with +Y = north — that's
+  // unchanged. The viewer-to-sim mapping is via facade NAME ("north",
+  // "south", "east", "west"), not axis sign, so the viewer is free to
+  // pick whichever Three.js convention renders cleanly.
+  //
+  // Brief 26 Part 2.5 fixed the dimension assignment (X=length, Z=width
+  // — was X=width / Z=length before, which made the north face render
+  // short and produced the F3>F2 solar magnitude bug). The sign flip
+  // here is a separate refinement on top of that.
   const halfL = length / 2   // half-extent along X
   const halfW = width / 2    // half-extent along Z
 
@@ -200,7 +213,7 @@ function Building({ params, solarOverlay, onFacadeHover }) {
   }, [num_floors, floor_height, halfL, halfW])
 
   // Facade metadata for hover tooltip (BoxGeometry materialIndex order: +X,-X,+Y,-Y,+Z,-Z)
-  // Brief 26 Part 2.5 axis convention: X=length, Z=width.
+  // Axis convention: X=length, Z=width, -Z = north (see top-of-file comment).
   //   North/South faces (perpendicular to Z) span X = length → LONG (60m for HIX)
   //   East/West faces  (perpendicular to X) span Z = width  → SHORT (15m for HIX)
   // F1=north, F2=east, F3=south, F4=west (compass label rotates with orientation)
@@ -209,8 +222,8 @@ function Building({ params, solarOverlay, onFacadeHover }) {
     { label: facadeLabel(4, orientation), key: 'west',  faceW: width,  area: width  * totalHeight, wwrVal: wwr.west  },  // -X
     null,  // +Y top — not a facade
     null,  // -Y bottom
-    { label: facadeLabel(1, orientation), key: 'north', faceW: length, area: length * totalHeight, wwrVal: wwr.north },  // +Z
-    { label: facadeLabel(3, orientation), key: 'south', faceW: length, area: length * totalHeight, wwrVal: wwr.south },  // -Z
+    { label: facadeLabel(3, orientation), key: 'south', faceW: length, area: length * totalHeight, wwrVal: wwr.south },  // +Z
+    { label: facadeLabel(1, orientation), key: 'north', faceW: length, area: length * totalHeight, wwrVal: wwr.north },  // -Z
   ]
 
   return (
@@ -240,10 +253,10 @@ function Building({ params, solarOverlay, onFacadeHover }) {
         <meshStandardMaterial attach="material-2" color={COLORS.roof} roughness={0.85} metalness={0} />
         {/* -Y = Bottom */}
         <meshStandardMaterial attach="material-3" color={COLORS.wall} roughness={0.9} metalness={0} />
-        {/* +Z = North */}
-        <meshStandardMaterial attach="material-4" color={solarFaceColor('north', orientation, solarOverlay)} roughness={0.9} metalness={0} />
-        {/* -Z = South */}
-        <meshStandardMaterial attach="material-5" color={solarFaceColor('south', orientation, solarOverlay)} roughness={0.9} metalness={0} />
+        {/* +Z = South */}
+        <meshStandardMaterial attach="material-4" color={solarFaceColor('south', orientation, solarOverlay)} roughness={0.9} metalness={0} />
+        {/* -Z = North */}
+        <meshStandardMaterial attach="material-5" color={solarFaceColor('north', orientation, solarOverlay)} roughness={0.9} metalness={0} />
         <Edges color={COLORS.edges} threshold={15} />
       </mesh>
 
@@ -264,10 +277,10 @@ function Building({ params, solarOverlay, onFacadeHover }) {
       {/* Floor lines */}
       {floorLines}
 
-      {/* Glazing — North face (positive Z). N/S faces are LONG: span X = length. */}
-      <GlassFace axis="z" sign={1}  wwr={wwr.north} faceW={length} count={window_count?.north ?? 8} />
-      {/* Glazing — South face (negative Z) */}
-      <GlassFace axis="z" sign={-1} wwr={wwr.south} faceW={length} count={window_count?.south ?? 8} />
+      {/* Glazing — North face (negative Z, per axis convention). N/S faces are LONG: span X = length. */}
+      <GlassFace axis="z" sign={-1} wwr={wwr.north} faceW={length} count={window_count?.north ?? 8} />
+      {/* Glazing — South face (positive Z) */}
+      <GlassFace axis="z" sign={1}  wwr={wwr.south} faceW={length} count={window_count?.south ?? 8} />
       {/* Glazing — East face (positive X). E/W faces are SHORT: span Z = width. */}
       <GlassFace axis="x" sign={1}  wwr={wwr.east}  faceW={width}  count={window_count?.east  ?? 3} />
       {/* Glazing — West face (negative X) */}
@@ -277,12 +290,12 @@ function Building({ params, solarOverlay, onFacadeHover }) {
           shading_overhang.depth_m for each facade. Mirrors GlassFace
           window-placement maths so frames line up exactly. */}
       <WindowShadingFrames
-        axis="z" sign={1}  wwr={wwr.north} faceW={length} count={window_count?.north ?? 8}
+        axis="z" sign={-1} wwr={wwr.north} faceW={length} count={window_count?.north ?? 8}
         depth={Number((params?.shading_overhang?.north ?? {}).depth_m ?? 0)}
         floor_height={floor_height} num_floors={num_floors} halfL={halfL} halfW={halfW}
       />
       <WindowShadingFrames
-        axis="z" sign={-1} wwr={wwr.south} faceW={length} count={window_count?.south ?? 8}
+        axis="z" sign={1}  wwr={wwr.south} faceW={length} count={window_count?.south ?? 8}
         depth={Number((params?.shading_overhang?.south ?? {}).depth_m ?? 0)}
         floor_height={floor_height} num_floors={num_floors} halfL={halfL} halfW={halfW}
       />
@@ -438,13 +451,14 @@ function FacadeLabels({ length, width, num_floors, floor_height, wwr, orientatio
   const baseAngles = { 1: 0, 2: 90, 3: 180, 4: 270 }
   const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
 
-  // Axis convention: X = length, Z = width.
-  //   N face (+Z) is at z = +halfW, perpendicular to Z, spans X = length → LONG
+  // Axis convention: X = length, Z = width, -Z = north (see Building's
+  // top-of-component comment for why).
+  //   N face (-Z) is at z = -halfW, perpendicular to Z, spans X = length → LONG
   //   E face (+X) is at x = +halfL, perpendicular to X, spans Z = width  → SHORT
   const facades = [
-    { num: 1, key: 'north', pos: [0, midH,  halfW + labelOffset], faceW: length, faceH: totalHeight, area: length * totalHeight },
-    { num: 2, key: 'east',  pos: [ halfL + labelOffset, midH, 0], faceW: width,  faceH: totalHeight, area: width  * totalHeight },
-    { num: 3, key: 'south', pos: [0, midH, -(halfW + labelOffset)], faceW: length, faceH: totalHeight, area: length * totalHeight },
+    { num: 1, key: 'north', pos: [0, midH, -(halfW + labelOffset)], faceW: length, faceH: totalHeight, area: length * totalHeight },
+    { num: 2, key: 'east',  pos: [ halfL + labelOffset, midH, 0],   faceW: width,  faceH: totalHeight, area: width  * totalHeight },
+    { num: 3, key: 'south', pos: [0, midH,  halfW + labelOffset],   faceW: length, faceH: totalHeight, area: length * totalHeight },
     { num: 4, key: 'west',  pos: [-(halfL + labelOffset), midH, 0], faceW: width,  faceH: totalHeight, area: width  * totalHeight },
   ]
 
@@ -559,11 +573,14 @@ function CameraRig({ params, resetSignal, autoRotateEnabled, cameraPreset, onPre
     // 2-D rotation around Y matching the building-group rotation [0, -oriRad, 0].
     const rot = (lx, lz) => new THREE.Vector3(lx * c + lz * s, midH, -lx * s + lz * c)
     switch (preset) {
-      case 'f1':   return rot(0,     dist)    // local +Z → rotated north face
+      case 'f1':   return rot(0,    -dist)    // local -Z → rotated north face
       case 'f2':   return rot(dist,  0)       // local +X → rotated east face
-      case 'f3':   return rot(0,    -dist)    // local -Z → rotated south face
+      case 'f3':   return rot(0,     dist)    // local +Z → rotated south face
       case 'f4':   return rot(-dist, 0)       // local -X → rotated west face
-      case 'plan': return new THREE.Vector3(0.001, dist * 1.4, 0)
+      // Plan view: camera slightly south of straight-down so screen-up
+      // becomes world -Z (north). With -Z = north, this gives the
+      // conventional N-up + E-right map orientation naturally.
+      case 'plan': return new THREE.Vector3(0, dist * 1.4, 0.001)
       case 'iso':  return isoPos.clone()
       default:     return isoPos.clone()
     }
@@ -721,13 +738,15 @@ export default function BuildingViewer3D({ params }) {
         }}
         gl={{ antialias: true }}
       >
-        {/* Sky — subtle blue-white gradient */}
-        <Sky sunPosition={[-1, 0.5, -1]} inclination={0.6} azimuth={0.25} turbidity={4} rayleigh={0.5} />
+        {/* Sky — subtle blue-white gradient. Under the new -Z=north convention,
+            +Z is south, so sun position [-1, 0.5, +1] = SW (west + south). */}
+        <Sky sunPosition={[-1, 0.5, 1]} inclination={0.6} azimuth={0.25} turbidity={4} rayleigh={0.5} />
 
-        {/* Lighting — soft ambient fill + directional sun from SW at ~45° */}
+        {/* Lighting — soft ambient fill + directional sun from SW at ~45°.
+            Sun at -X (west) + +Z (south, under new convention) = SW quadrant. */}
         <ambientLight intensity={0.45} color="#EEF2FF" />
         <directionalLight
-          position={[-40, 55, -40]}
+          position={[-40, 55, 40]}
           intensity={1.4}
           color="#FFF8F0"
           castShadow
@@ -740,8 +759,8 @@ export default function BuildingViewer3D({ params }) {
           shadow-camera-bottom={-80}
           shadow-bias={-0.0005}
         />
-        {/* Bounce light from NE to fill shadow side */}
-        <directionalLight position={[30, 20, 30]} intensity={0.25} color="#D6E8F7" />
+        {/* Bounce light from NE to fill shadow side — +X (east) + -Z (north). */}
+        <directionalLight position={[30, 20, -30]} intensity={0.25} color="#D6E8F7" />
 
         {/* Environment — subtle city preset for glazing reflections */}
         <Environment preset="city" />
@@ -764,15 +783,17 @@ export default function BuildingViewer3D({ params }) {
           />
         </group>
 
-        {/* Soft contact shadow — positioned at y=0.02 to avoid z-fighting with ground plane at y=-0.01 */}
+        {/* Soft contact shadow — positioned at y=0.02 to avoid z-fighting with ground plane at y=-0.01.
+            Opacity 0.55 (was 0.30) + tighter blur (1.5 was 2.5) so the shadow reads
+            as a clear contact shadow rather than a faint halo. */}
         <ContactShadows
           position={[0, 0.02, 0]}
-          opacity={0.30}
+          opacity={0.55}
           scale={Math.max(length, width) * 3}
-          blur={2.5}
+          blur={1.5}
           far={Math.max(length, width) * 1.5}
-          resolution={256}
-          color="#000000"
+          resolution={512}
+          color="#1A1A1A"
         />
 
         {/* Ground plane — map tile if visible and location set, else solid grey */}

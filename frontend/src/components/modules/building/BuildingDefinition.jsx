@@ -331,7 +331,7 @@ function WindowCountInput({ value, defaultValue, onCommit, disabled, title }) {
       onChange={e => setDraft(e.target.value)}
       onBlur={commit}
       onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
-      className={`w-8 px-1 py-0.5 text-xxs text-navy border rounded text-center
+      className={`w-12 px-1 py-0.5 text-xxs text-navy border rounded text-center
         focus:outline-none focus:border-teal disabled:opacity-30 disabled:bg-off-white
         ${atMax ? 'border-amber-500 bg-amber-50' : 'border-light-grey'}`}
       title={atMax
@@ -561,7 +561,7 @@ function InputsColumn({ library, onInspectConstruction }) {
                   onCommit={n => updateParam('window_count', { [fac.key]: n })}
                   title={`${facadeLabel(fac.num, orientation)} window count`}
                 />
-                <span className={`text-xxs w-5 ${included ? 'text-mid-grey' : 'text-light-grey'}`}>win</span>
+                <span className={`text-xxs w-4 ${included ? 'text-mid-grey' : 'text-light-grey'}`}>win</span>
               </div>
             )
           })}
