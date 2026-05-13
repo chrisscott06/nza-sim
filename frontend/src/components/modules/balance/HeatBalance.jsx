@@ -361,7 +361,7 @@ function ComfortBandEditor({ comfortBand, onChange }) {
   )
 }
 
-function StateOneDemandPanel({ data, comfortBand, onComfortBandChange, unit }) {
+function StateOneDemandPanel({ data, comfortBand, onComfortBandChange, unit, engineMode }) {
   // Reads `demand`, `free_running`, `comfort_band_used` injected at the top
   // of the heat_balance object by _calculateEnvelopeOnly (instantCalc.js).
   const demand = data?.demand
@@ -461,6 +461,24 @@ function StateOneDemandPanel({ data, comfortBand, onComfortBandChange, unit }) {
           <p className="text-caption font-medium text-navy tabular-nums">{fr.summer_max_c?.toFixed(1) ?? '—'}°C</p>
         </div>
       </div>
+
+      {/* Engine-disclosure note. The live engine's State 1 path uses an
+          isotropic sky-diffuse model (solarCalc.facadeRadiation) which
+          over-predicts annual solar gain into the zone by ~30% vs EP's
+          Perez anisotropic. This shifts the seasonal baseline up, so the
+          live engine's `summer_max_c` runs ~8°C above the simulation
+          value for high-WWR buildings. Annual integrated metrics (heating
+          demand, comfort hours, distribution) are silent-agreement
+          between engines; only peak temperatures diverge.
+          See docs/state_1_divergences.md §1 + §7. */}
+      {engineMode === 'live' && (fr.summer_max_c ?? 0) > 36 && (
+        <p className="text-xxs text-mid-grey mt-2 italic leading-tight">
+          Live engine uses a simplified isotropic sky model — peak summer
+          temperatures may read ~5–10°C high vs EnergyPlus. <strong>For
+          peak comfort assessment, the Simulation view is canonical.</strong> Annual
+          mean and comfort-hour distribution agree silently between engines.
+        </p>
+      )}
     </div>
   )
 }
@@ -647,6 +665,7 @@ export default function HeatBalance({
           comfortBand={comfortBand}
           onComfortBandChange={setComfortBand}
           unit={unit}
+          engineMode={engineMode}
         />
       )}
     </div>

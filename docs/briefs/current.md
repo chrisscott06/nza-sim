@@ -1,389 +1,368 @@
-# Brief 26.1: State 1 finalisation — UI parity, parser end-to-end, free-running physics, thermal mass derivation
+# Brief 27: Systems Inspectors — per-system editing pattern (State 3)
 
 BEFORE DOING ANYTHING:
-1. Read CLAUDE.md
-2. Read STATUS.md
-3. Read `docs/state_contracts.md` v2.2 — this brief implements contract conformance
-4. Read `docs/briefs/archive/26_State_1_envelope_only_COMPLETED.md` for context
-5. Read `docs/state_1_divergences.md` for the known limitations baseline
-6. Read this ENTIRE brief before writing a single line of code
-7. One part at a time. Verify in browser at 1440×900. Commit. Push.
+1. Read `CLAUDE.md`
+2. Read `docs/state_contracts.md` — **the canonical state contract**. When this brief and the contract disagree, the contract wins.
+3. Read `STATUS.md`
+4. Read `docs/briefs/SYSTEMS_AUDIT.md` — end-to-end audit of how each system is wired today.
+5. Read `docs/briefs/Brief_26_Building_State1.md` — establishes the state-isolation pattern. **Brief 26 must be merged before this brief starts** so the State 3 Inspectors can lean on the same mode-threading helpers (`getSystemField`, mode-aware Heat Balance, etc.).
+6. Read this brief in full before writing code.
+7. Look at `frontend/src/components/library/ConstructionInspector.jsx` and `GlazingInspector.jsx` — the **reference pattern** every Inspector should follow.
+8. One part at a time. Verify in browser at 1440×900. Commit. Push.
+
+---
+
+## State Contract Compliance
+
+**This brief implements State 3 per `docs/state_contracts.md` § State 3 — Full.**
+
+### Inputs honoured (per the State 3 contract)
+Inspectors edit the following paths. Note current code uses a slightly different shape — see § "Path migration" below for the mapping.
+
+| Contract path | Inspector |
+|---|---|
+| `systems.heating.{type, cop, efficiency, fuel}` | Heating |
+| `systems.heating.setpoint_c` | Heating (+ surfaces setpoint cross-state dependency) |
+| `systems.cooling.{type, eer, fuel}` | Cooling |
+| `systems.cooling.setpoint_c` | Cooling (+ surfaces setpoint cross-state dependency) |
+| `systems.ventilation.{type, sfp, heat_recovery, control}` | Mechanical Ventilation |
+| `systems.dhw.{type, primary, preheat, efficiencies}` | DHW |
+| `systems.*.control_schedule` | All (per-system) |
+| `systems.*.performance_curves` | All (read-only, library-template-swap to change) |
+
+### Outputs (per the State 3 contract)
+After any Inspector save, the State 3 output shape (`consumption`, `end_use`, `eui_kwh_per_m2`, `system_performance`, etc.) must remain valid. No Inspector field may drop a contract output.
+
+### Cross-cutting contract requirements (apply to every Inspector)
+
+1. **Setpoint cross-state dependency.** Heating and Cooling setpoints override the comfort band for State 2 / 2.5 demand calculation (contract § Setpoint cross-state dependency). The Inspector must surface this explicitly: *"Heating setpoint 21°C — used as lower bound for State 2.5 demand calculation. Drives demand to X MWh, served by this system at COP Y to give Z MWh fuel."*
+
+2. **Inferred vs specified vs defaulted vs what reaches EnergyPlus.** Per the contract's State 3 UI rules, every Inspector must show, for each field, where its value came from: user-entered, spec-sheet, vintage-default, benchmark, or inferred. A small badge next to each field. The Inspector also surfaces the **effective value that reaches EnergyPlus** (e.g., LPD × control multiplier = effective LPD emitted), so the user knows what the engine actually saw.
+
+3. **Provenance metadata** (contract § Input provenance). Each input the Inspector writes must record a `provenance` field: `user_entered` (default when user types/picks), `spec_sheet` (if user marked it as documented), `vintage_default`, `benchmark`, or `inferred`. State 4 reconciliation depends on this metadata. Inspectors record it; they do not yet need to consume it.
+
+4. **Honest model simplifications.** Per the contract's State 3 UI rules: *"Inspectors must surface model simplifications honestly."* If a field is a coarse approximation (e.g. daylight dimming applied as a 0.6× LPD scalar instead of `Daylighting:Controls`), say so inline.
+
+5. **Engine agreement.** Per the contract's Engine agreement section, when an Inspector field changes and live vs. simulation diverge by more than 5%, surface a soft flag (clickable → per-line-item breakdown). Don't block. Inspectors don't render the breakdown themselves — they trigger the Heat Balance view's flag.
 
 ---
 
 ## VERIFICATION RULES
 
-**Browser verification is mandatory and the bar is higher this time.** Brief 26's automated tests all passed but visual inspection caught four issues that the tests missed. The discipline for this brief: every part must be verified by **opening the Building Heat Balance in a browser, toggling Live ↔ Simulation, and confirming the user sees what the contract specifies**. Screenshots are required. "Test passes" is necessary but not sufficient.
+**Browser verification is mandatory.** After each part, open the app at `http://localhost:5176`, hit the Systems page, open the Inspector you just built, and exercise every field. Take a screenshot. Check DevTools console for red errors. If a field doesn't propagate to the live calc or the EP emit, fix it before committing.
 
-**Contract conformance is the bar.** The State 1 contract specifies output shape, UI rules, and engine agreement. If something works in a script but doesn't appear in the UI, it's not done. If something appears in Live but not Simulation, it's not done.
+**Number-checks for each system (HIX Bridgewater baseline):** run a real EnergyPlus simulation before and after a change, confirm the delta is in the expected direction with the expected magnitude (`docs/briefs/SYSTEMS_AUDIT.md` has the baseline). Smooth curves, perfectly round numbers, or no change when there should be one = bug.
 
-**Quick fix preferred over thorough debug.** Per Chris's direction: find the simplest fix that satisfies the contract. If the simplest fix doesn't work, escalate before doing a deep investigation. Don't spend hours building diagnostic harnesses when a 30-line patch would solve it.
+**Three strikes then escalate.** If an Inspector field can't be wired through to both engines after 3 attempts, document what you tried and what blocked you. Do not commit a field that the user can edit but EnergyPlus ignores — that's exactly the bug class Brief 25 fixed.
+
+**Setpoint regression test.** Each commit on Heating + Cooling Inspectors must verify the setpoint cross-state dependency: change `systems.heating.setpoint_c` from 21°C to 22°C, confirm State 2/2.5 demand increases, confirm State 3 fuel consumption follows.
 
 ---
 
 ## Context
 
-Brief 26 closed with all 10 parts complete, regression passing, engine agreement script reporting +0.8% silent on heating demand. Visual inspection (12 May, Chris) caught four issues that the automated tests missed:
+The Construction Inspector is the gold-standard interactivity pattern in NZA Sim: clickable U-value badge → side-panel slides in from the right → editable layer build-up + Y-factor preset → "Save as copy" creates a custom library item; "Save changes" updates a custom item in place; built-in items lock with a hint. The Glazing Inspector follows the same pattern for `WindowMaterial:SimpleGlazingSystem`. Both are at `frontend/src/components/library/`.
 
-1. **Simulation view doesn't honour the State 1 contract output shape.** It still shows the old Heat Balance Sankey rows — no comfort band echo, no heating/cooling demand derivation, no free-running temperature stats, no fabric_leakage/permanent_vents split. The Live view shows it correctly; the Simulation view shows something else.
+Systems have nothing equivalent. The Systems page (`SystemsZones.jsx`) is a left-accordion / centre-Sankey / right-Live-Results layout where each system collapses to: a `<select>` of library templates, an efficiency-override slider, a single-line schedule sparkline, and a Detail/Ideal mode toggle. There is **no way to inspect or edit the internals** (curves, defrost, fan SFP breakdown, frost protection, recirculation losses, etc.). The library-browser modal (`SystemEditor.jsx`) lets you see the raw `config_json` and duplicate a template, but it's a flat form, not an Inspector.
 
-2. **Glazing and Ground floor losses read 0 MWh in the Simulation view** despite Brief 26 Part 6 claiming the parser was fixed. The parser fix may exist in `get_envelope_heat_flow_detailed` but the UI's data path isn't using it, or it's conditional on a mode flag the view isn't passing.
+**This brief introduces an Inspector per State 3 system family**: Heating, Cooling, Mechanical Ventilation, DHW. (Lighting and Equipment are State 2 inputs per the contract and move to the future Internal Gains brief — see § Out of scope.) The pattern is reusable: one shared `SystemInspector.jsx` shell, four per-system content panels.
 
-3. **Free-running summer max of 42.4°C is physically implausible.** UK record outdoor temperatures are around 40°C. For an envelope-only model with no internal gains, indoor max should be ~30–34°C on hot days. Cooling demand of 52 MWh (vs contract 5–20 MWh) is downstream of this. Likely cause: sol-air absorption on opaque surfaces isn't dissipating, or thermal mass not coupling to indoor air properly.
+### Scope limits
+- **Holiday Inn Express systems first.** HIX uses gas boiler heating, VRF cooling, gas boiler + ASHP preheat DHW, MVHR ventilation. Inspectors for these are non-negotiable.
+- **Other system types** (ASHP heating, electric heating, MEV, electric immersion DHW, solar thermal) get minimum-viable Inspectors in the same shells — fewer fields but the same UX shape. Avoid forking the shells.
 
-4. **Thermal mass is a separate dropdown rather than derived from construction layers.** The Construction Inspector already has layer data (thickness, lambda, density). A standard PIR-cavity wall has computable thermal mass — the dropdown is redundant and can disagree with the physical construction.
+### Path migration (current code → contract)
 
-The byte-identical regression in Brief 26 Part 9 passed because baseline and absurd-input runs both had the same bug, so they were identical to each other while both being wrong. The regression confirmed isolation but not correctness.
+The current code uses a demand-based shape (`systems.space_heating.primary.{system, share, efficiency_override}`). The State 3 contract uses simpler keys (`systems.heating.{type, cop, efficiency, fuel}`). The contract is the target; getting there is a separate schema migration brief. Inspectors written here:
 
-This brief finalises State 1: aligns the UI Simulation view with the contract, confirms the parser fix reaches the UI end-to-end, fixes the free-running physics bug, and replaces the thermal mass dropdown with derivation from construction layers.
+- **Read from both shapes** — prefer demand-based, fall back to the contract shape, fall back to flat aliases.
+- **Write to the demand-based shape** (current code's source of truth), so the existing `updateSystem` path stays valid. The flat aliases stay in sync automatically.
+- **Surface the contract shape in any output / API response** that's contract-bound.
 
-After this brief: State 1 is genuinely done — physically correct, contract-compliant, and visually consistent between engines.
+When the schema-migration brief lands, Inspectors stop reading the demand-based shape. Keeping the read order in one helper (e.g. `getSystemField('heating', 'cop')`) makes that swap cheap.
 
-6 parts. Do them in order.
-
----
-
-## PART 0: Diagnostic baseline before changing anything
-
-**File(s):** Read-only investigation.
-
-Before changing any code, document the current state precisely. This gives us a before/after comparison and prevents "we fixed something but introduced something else" surprises.
-
-For Bridgewater on the live development environment, capture:
-
-1. **Screenshots:**
-   - Building Heat Balance, Live, Rows view
-   - Building Heat Balance, Simulation, Rows view
-   - Building Heat Balance, Live, Stacked view
-   - Building Heat Balance, Simulation, Stacked view
-
-2. **Numerical baseline** — print the full State 1 output shape for both engines via the existing `state1_engine_agreement.mjs` script. Save as `docs/state_1_baseline_pre_26_1.md`.
-
-3. **UI inspection notes:**
-   - What does the Live view show that's part of the State 1 contract?
-   - What does the Simulation view fail to show?
-   - Where is the comfort band editor in each?
-   - Where are the heating/cooling demand rows in each?
-   - Where are the free-running temperature stats in each?
-
-4. **Run the parser script in isolation** for envelope-only mode on Bridgewater. Print every key in the returned heat_balance object. Confirm whether `losses.conduction.glazing` and `losses.conduction.ground_floor` are non-zero. If they are non-zero in the script but zero in the UI, the bug is between the parser and the UI — not in the parser itself.
-
-5. **Print the hourly free-running zone temperature for one peak summer hour** (e.g., 2026-07-21 14:00). Document the energy balance components: solar incident per façade, conduction in/out per element, ventilation flows. This baseline will help diagnose Part 3 (summer max bug).
-
-**Commit message:** "Part 0: Baseline diagnostic for State 1 UI walkthrough findings"
-
-**Verify:**
-1. Baseline document committed to `docs/state_1_baseline_pre_26_1.md`
-2. Four screenshots captured
-3. Parser script output captured
-4. Peak summer hour energy balance captured
-5. Report: "Baseline captured. Live view shows [N] State 1 contract elements; Simulation view shows [M] of [N]. Parser direct output for glazing: [X] MWh; UI Simulation view shows: [Y] MWh. Gap identified between parser and UI: [yes/no]. Peak summer hour 2026-07-21 14:00: indoor T [Z]°C, outdoor T [W]°C, solar [components], conduction [components], ventilation [components]. Suspected cause of 42.4°C summer max: [hypothesis]."
+### What stays hidden (don't expose)
+Some EnergyPlus inputs are too low-level for the consultant audience. Keep them behind the library template (swap template to change them):
+- Refrigerant type (always R-410A or library default)
+- Crankcase heater power (15 W default fine)
+- Sizing factors (1.25 heating, 1.15 cooling)
+- Performance curve coefficients themselves (biquadratic / cubic). Show the curve **shape** as a small read-only sparkline if useful, but coefficients live in the library file only.
+- Min/max condenser inlet temps (defaults are EP-realistic)
 
 ---
 
-## PART 1: Construction library audit for thermal mass derivation
+## Part 0: Inspector pattern foundation
 
-**File(s):** Read-only investigation of `frontend/src/data/constructions.js` (or wherever the construction library lives) and any backend equivalent.
+Build the shared shell first so each per-system Inspector is a thin content component.
 
-Before deciding whether thermal mass can be derived from construction layers, audit the library to confirm every construction has the data needed for the calculation.
+**Files:**
+- `frontend/src/components/library/SystemInspector.jsx` (new) — generic side-panel: header (display name, lock icon if built-in, ✕ close, provenance badge), sticky save bar (Save changes / Save as copy / Cancel), body slot.
+- `frontend/src/components/library/inspectors/` (new directory)
+- `frontend/src/components/library/inspectors/_helpers.js` (new) — `getSystemField`, `setSystemField`, `recordProvenance`, `effectiveValueLabel`. These wrap the path migration so individual Inspectors don't repeat read-order logic.
+- `frontend/src/components/modules/SystemsZones.jsx` — replace the inline efficiency slider + system `<select>` row with a clickable summary that opens the Inspector. The slider stays for quick-tweak but moves into the Inspector body.
 
-For thermal mass derivation we need, per layer:
-- Thickness (mm or m) — almost certainly present
-- Density (kg/m³)
-- Specific heat capacity (J/kg·K or kJ/kg·K)
+**Pattern requirements:**
+1. Side-panel slides in from the right, `fixed inset-0` overlay with `pointer-events-auto` panel, click-outside or `Esc` to close.
+2. Header: system display name + small library badge ("built-in" / "custom"); lock icon next to display name for built-ins; provenance badge per field (small text, `text-mid-grey`).
+3. Sticky bottom bar:
+   - **Built-in:** "Save as new copy" (primary, navy) + "Cancel". No "Save changes" button — built-ins are read-only.
+   - **Custom:** "Save changes" (primary) + "Save as new copy" + "Delete" + "Cancel".
+4. Body: rendered from a per-system content component (`HeatingInspectorBody`, `CoolingInspectorBody`, `DHWInspectorBody`, `VentilationInspectorBody`) passed in as a child or prop.
+5. API: PUT to `/api/library/systems/{name}` for in-place updates of custom items; POST to `/api/library/systems` for save-as-copy. The library router (`api/routers/library.py`) already supports these — check it before adding new endpoints.
+6. **Provenance default:** when the user edits a field via the Inspector, provenance is auto-set to `user_entered`. A small "Mark as spec-sheet" or "Mark as benchmark" tag-editor on each field lets the user upgrade provenance (out of scope for this part — for now, default to `user_entered`).
 
-If density and specific heat capacity are present for every layer in every construction, derivation is feasible. If they're missing for some constructions, the brief needs to either:
-- Populate the missing data first
-- Fall back to the dropdown for those constructions
+**Commit message:** `Systems Inspectors: shared SystemInspector shell + Systems page entry points`
 
-**For each construction in the library:**
-1. List the construction name
-2. List every layer
-3. Confirm presence of density and specific heat capacity per layer
-4. Flag any missing data
-
-**Decision point at end of Part 1:**
-
-If the library is complete enough (≥80% of constructions have full data), proceed to Part 5 (thermal mass derivation) as planned.
-
-If the library has substantial gaps, defer Part 5 to a separate brief that first populates the library, and replace Part 5 in this brief with: "Thermal mass dropdown placed in Building module Fabric section per Brief 26 Part 7's original scope, until library is populated."
-
-**Commit message:** "Part 1: Construction library audit — thermal mass derivation feasibility"
-
-**Verify:**
-1. Library audit document committed to `docs/state_1_construction_library_audit.md`
-2. Per-construction layer data inventory
-3. Decision documented: "Library complete enough for derivation: [yes/no]. Constructions missing data: [count]. Decision: [proceed with Part 5 as planned / replace Part 5 with dropdown placement]."
-4. Report: "Library audit complete. [N] constructions, [M] have full density+specific heat data. Derivation feasible: [yes/no]. Part 5 plan: [proceed / fall back to dropdown]."
+**Verification:** Open `/systems`, click any system row, confirm the Inspector slides in, has the right header, save-bar shows the right buttons for built-in vs custom. No content yet — the body slot is empty. Console clean.
 
 ---
 
-## PART 2: Heat Balance Simulation view honours State 1 contract
+## Part 1: Mechanical Ventilation Inspector
 
-**File(s):** `frontend/src/components/modules/balance/HeatBalance.jsx`, related sub-components
+The simplest of the four State 3 systems — gets the pattern in.
 
-The Live view in the screenshot shows the full State 1 contract output: badge, comfort band editor, demand rows, comfort hours bar, annual mean, summer max, fabric_leakage/permanent_vents split, solar by orientation.
+**Fields exposed:**
+- System type — radio: MEV / MVHR. Maps to contract `systems.ventilation.type`.
+- Specific fan power (W/L/s) — slider 0.5–3.0, step 0.1. Default: library template's `specific_fan_power`. Show CIBSE Part L benchmark (1.5 W/L/s) as a reference line. Maps to `systems.ventilation.sfp`.
+- Heat recovery efficiency (%) — slider 60–95, step 1. **Greyed out and locked at 0% for MEV.** Maps to `systems.ventilation.heat_recovery`.
+- Control schedule — three-way segmented (Continuous / Occupied / Timer). Show small sparkline of the schedule shape. Maps to `systems.ventilation.control`.
+- **Stretch:** frost protection threshold (°C, MVHR only) — when outdoor air drops below this, MVHR routes around the heat exchanger or applies pre-heat. Default -5°C. Emit as `HeatExchanger:AirToAir:SensibleAndLatent` `threshold_temperature` field.
+- **Stretch:** summer bypass schedule — schedule reference, MVHR only.
 
-The Simulation view shows the old Heat Balance shape: just gain/loss rows without the State 1 specific elements.
+**Inferred vs specified vs defaulted (contract requirement):**
+- For each field, a small badge next to the value: `user-entered` / `spec-sheet` / `vintage-default` / `benchmark` / `inferred`. Default `user-entered` when the user changes it.
+- Effective-value label at the bottom: *"What EnergyPlus sees: SFP 1.5 W/L/s, HRE 85%, schedule `hotel_ventilation_continuous`."*
 
-**Both views must render identically when `mode='envelope-only'`.** The only difference between Live and Simulation should be the underlying data source. The component, layout, demand rows, badges, and labels are the same.
+**What stays hidden:** node names (autocalculated), fan motor inputs (Fan:SystemModel `motor_efficiency` etc.), NodeList plumbing.
 
-Implementation approach:
+**Wiring check:**
+- Brief 25 wired the control schedule. Verify vent=timer still drops EUI ~1 kWh/m² vs continuous.
+- HRE override goes through `mvhr_eff` in the assembler — already wired.
+- SFP override is in `sfp_override` — verify it reaches `Fan:SystemModel.design_pressure_rise` in EnergyPlus.
 
-The HeatBalance component should:
-1. Accept the same shape from either engine (`heat_balance` object matching the contract State 1 output)
-2. Render based on the shape, not based on which engine produced it
-3. Show all State 1 elements regardless of source
+**Files:**
+- `frontend/src/components/library/inspectors/VentilationInspectorBody.jsx`
+- (stretch) `nza_engine/generators/hvac_ventilation.py` — frost protection threshold field, summer bypass schedule.
 
-Likely root cause: the Simulation data path is returning the older heat_balance shape (without `demand`, `free_running`, `losses.ventilation.fabric_leakage`, `losses.ventilation.permanent_vents` etc.) and the component falls back to old rendering when those keys are missing.
+**Commit:** `Ventilation Inspector with SFP, HRE, control schedule + provenance`
 
-Two ways to fix:
-- **Option A:** Make the Simulation parser emit the State 1 contract shape (preferred — fixes the root cause)
-- **Option B:** Make the HeatBalance component compute the missing fields client-side from raw EP outputs
-
-Prefer Option A. The parser already exists (`_get_heat_balance_state1` per Part 6) — if it's emitting the contract shape, the Simulation view should get it too. Trace the data path from `/balance?mode=envelope-only` endpoint through to the component and find where the State 1 shape is being lost or downcast.
-
-**Acceptance criteria:**
-- Toggle to Simulation view in Building Heat Balance
-- Confirm: Envelope-only badge visible
-- Confirm: Comfort band editor visible and matches Live
-- Confirm: Heating demand row with "below 21°C — derived" annotation visible
-- Confirm: Cooling demand row with "above 25°C — derived" annotation visible
-- Confirm: Comfort hours bar visible with Under/In/Over split
-- Confirm: Annual mean and summer max temperatures visible
-- Confirm: Loss rows show fabric_leakage and permanent_vents as distinct items (not "Infiltration" and "Openings — louvres")
-- Confirm: Glazing loss is non-zero (will be confirmed in Part 4 if not already working)
-
-**Commit message:** "Part 2: Heat Balance Simulation view renders State 1 contract output"
-
-**Verify:**
-1. Screenshot of Simulation view in Rows mode
-2. Screenshot of Simulation view in Stacked mode
-3. Visual diff vs Live view — both should show the same UI structure
-4. Engine agreement script still passes (regression)
-5. Report: "Simulation view now renders State 1 contract output. Comfort band: [shown ✓ / not shown ✗]. Demand rows: [shown ✓ / not shown ✗]. Comfort hours: [shown ✓ / not shown ✗]. Annual mean: [shown ✓ / not shown ✗]. Summer max: [shown ✓ / not shown ✗]. Ventilation split: [shown ✓ / not shown ✗]. Visual parity with Live view: [achieved ✓ / N differences ✗]."
+**Verification:** Toggle MEV→MVHR, HRE 85→0, SFP 1.5→2.5 — each should change `annual_heating_kWh` or `annual_ventilation_kWh` measurably. Provenance badge shows `user-entered` after each edit.
 
 ---
 
-## PART 3: Free-running summer max physics fix
+## Part 2: DHW Inspector
 
-**File(s):** Likely `frontend/src/utils/instantCalc.js` (`_calculateEnvelopeOnly`), possibly `nza_engine/parsers/sql_parser.py` if the bug is in post-processing.
+DHW has two-stream complexity (primary + secondary preheat). This Inspector is the most elaborate of the four.
 
-Summer max of 42.4°C for an envelope-only model is physically wrong. Quick fix approach:
+**Fields exposed:**
 
-**Hypotheses, in order of likelihood:**
+*Primary system:*
+- System type — dropdown filtered to `serves === 'dhw'`. Maps to `systems.dhw.primary`.
+- Efficiency / COP — slider, label switches between "Seasonal efficiency" (gas/oil, 0.7–0.99) and "COP" (electric, 1.5–4.0). Maps to `systems.dhw.efficiencies.primary`.
+- Fuel — read-only badge (gas / electricity / oil) from the library template.
 
-**H1: Sol-air absorption on opaque surfaces is being added to indoor temperature without a release path.**
-If walls and roof receive solar absorption (sol-air temperature elevated above outdoor), and conduction inward is computed from sol-air to indoor, but conduction outward at night isn't symmetric, heat accumulates. Quick check: in the peak summer hour energy balance from Part 0, is solar absorption on opaque surfaces showing as gain without corresponding loss elsewhere?
+*Secondary preheat:*
+- "Add preheat" toggle. When on:
+  - System type dropdown — ASHP / solar thermal / none. Maps to `systems.dhw.preheat`.
+  - COP slider (ASHP) — 1.5–4.5, default 2.8.
+  - Max heating temperature (°C) — slider 35–60, default 45. ASHP shuts off above this, primary takes over.
+  - Share — read-only display (`100% × ASHP_capacity_share`) calculated from the temperature crossover.
 
-**H2: Thermal mass is not coupling to indoor air at all.**
-If the lumped-capacitance model has thermal mass but the heat exchange between indoor air and mass uses a coefficient that's too low (or zero), the mass doesn't damp the swings — indoor air responds instantly to solar gains. Quick check: what's the air-to-mass coupling coefficient in the live engine? CIBSE Guide A suggests 6 W/m²K. If it's effectively zero or missing, mass isn't doing anything.
+*Building-wide:*
+- DHW setpoint (°C) — slider 50–65, default 60.
+- Preheat setpoint (°C) — slider 35–50, default 45.
+- **Stretch:** Recirculation losses (% of DHW demand) — slider 0–30, default 15 (CIBSE TM13 for hotel). Emits as additional `WaterHeater:Mixed.off_cycle_loss_coefficient_to_ambient_temperature` adjustment.
+- **Stretch:** Tank volume (L) — slider 200–5000. Default 1000 for 134-bedroom hotel.
 
-**H3: Ventilation is being under-applied.**
-If permanent vents and fabric leakage are computed but not applied to the energy balance in summer (e.g., conditional on heating-season), the building can't dump heat. Quick check: is ventilation flow being applied year-round?
+**Inferred vs specified vs defaulted:**
+- Per-field provenance badge as in Part 1.
+- Effective-value summary: *"What EnergyPlus sees: gas boiler 92% efficient, 60°C delivery; ASHP preheat COP 2.8 to 45°C; 15% recirculation loss."*
 
-**H4: Solar gain through glazing is being applied to indoor air directly without thermal mass absorption.**
-If solar through glazing instantly heats indoor air (rather than being absorbed by floor/walls and re-radiated with delay), peak temperatures will be unrealistically high. Quick check: where does Q_solar go in the energy balance — directly to T_air or to T_mass?
+**What stays hidden:** plant loop topology (we use the two-tank cascade trick), pump power (0 W), node names.
 
-**Approach: test each hypothesis with a minimal code probe, fix the most likely.**
+**Wiring check:**
+- Verify changing ASHP COP from 2.8 → 3.5 reduces electricity consumption.
+- Verify max heating temperature 45 → 50 increases ASHP share of total DHW.
+- Recirculation losses should appear as a new DHW-side loss line item in the heat balance (similar to how openings now break out).
 
-For each hypothesis, print the relevant intermediate quantities for the peak summer hour identified in Part 0. The fix should bring summer max into 30–34°C range for Bridgewater envelope-only.
+**Files:**
+- `frontend/src/components/library/inspectors/DHWInspectorBody.jsx`
+- `nza_engine/generators/hvac_dhw.py` — recirculation loss field, tank volume override.
 
-**Acceptance criteria:**
-- Free-running summer max ≤ 36°C for Bridgewater (envelope-only, no occupancy, no systems)
-- Cooling demand within contract range (5–20 MWh)
-- Free-running winter min unchanged (1–4°C range — building genuinely does drop near freezing without heating)
-- Live and Simulation agreement on summer max within ±2°C
+**Commit:** `DHW Inspector with primary + ASHP preheat + recirculation + provenance`
 
-If quick fix doesn't bring summer max under 36°C within 30 lines of patches, **stop and document findings**. Don't escalate to thorough debug in this brief — flag as needing its own brief.
-
-**Commit message:** "Part 3: Free-running summer max physics fix"
-
-**Verify:**
-1. Print the energy balance for the same peak summer hour as Part 0 — show the before/after of the relevant intermediate quantities
-2. Free-running summer max: [X]°C (target ≤36°C)
-3. Cooling demand: [Y] MWh (target 5–20 MWh)
-4. Live vs Simulation agreement on summer max: [Z]°C delta
-5. Document the root cause and the fix
-6. Report: "Free-running physics fix landed. Root cause: [H1/H2/H3/H4/other]. Fix: [description]. Bridgewater summer max: 42.4°C → [X]°C. Cooling demand: 52 MWh → [Y] MWh. Live/Sim agreement: [Z]°C delta. Contract bounds: [met ✓ / escalation needed ✗]."
-
----
-
-## PART 4: Parser fix end-to-end through the UI
-
-**File(s):** `nza_engine/parsers/sql_parser.py`, API endpoint, and the UI data fetch path.
-
-Part 0's diagnostic establishes whether the parser is correctly returning non-zero glazing and ground floor losses. Three possibilities:
-
-**Case A: Parser returns 0 for glazing/floor.** The Brief 26 Part 6 fix didn't actually work or has a regression. Fix the parser to read these surface types correctly. The likely issue: window conduction surfaces in `eplusout.sql` are tagged differently than opaque walls, and the parser is filtering them out. Look at `Surface Window Heat Loss Energy` or equivalent variables.
-
-**Case B: Parser returns non-zero but UI shows 0.** There's a missing wire between parser and view — the data is fetched but not displayed, or it's displayed in a field the UI doesn't read. Trace from `/balance?mode=envelope-only` endpoint response through to the HeatBalance component and find where glazing/floor are dropped.
-
-**Case C: Parser returns non-zero AND UI shows non-zero after Part 2 fix.** Already resolved by Part 2. Confirm and skip to verification.
-
-The Part 0 diagnostic determines which case applies.
-
-**Acceptance criteria:**
-- Bridgewater Simulation view shows non-zero glazing loss (expected order: 30–80 MWh for ~250 m² of U=1.43 W/m²K glazing in UK climate)
-- Bridgewater Simulation view shows non-zero ground floor loss (expected order: 5–15 MWh)
-- Engine agreement script shows Live and Simulation within 15% on glazing (allow some divergence due to EP using sol-air vs live using air temperature)
-- Engine agreement script shows Live and Simulation within 15% on ground floor
-
-**Commit message:** "Part 4: Parser fix verified end-to-end through UI for glazing and ground floor"
-
-**Verify:**
-1. Screenshot of Simulation view showing non-zero glazing and ground floor losses
-2. Engine agreement script output showing per-line-item comparison
-3. Report: "Parser fix verified end-to-end. Case identified: [A/B/C]. Bridgewater Simulation: glazing [X] MWh, ground floor [Y] MWh. Engine agreement on glazing: [Z]%, ground floor: [W]%. Contract conformance: [yes / no with explanation]."
+**Verification:** HIX baseline DHW demand ~12 kWh/m². Add 15% recirculation → demand goes to ~14 kWh/m². ASHP cuts gas use roughly proportionally to its share.
 
 ---
 
-## PART 5: Thermal mass derivation from construction layers
+## Part 3: Cooling Inspector (+ setpoint cross-state surface)
 
-**File(s):** `frontend/src/utils/instantCalc.js`, `frontend/src/data/constructions.js` (or library location), `frontend/src/components/modules/building/Fabric.jsx`
+VRF is the main concern for HIX. Heating + cooling sometimes share the same VRF unit (combined heat pump), so Cooling and Heating Inspectors must be aware of each other.
 
-**This part is conditional on Part 1's library audit.** Two paths:
+**Fields exposed:**
+- System type — dropdown: VRF / split system / none. Filtered to `serves === 'cooling' || 'heating_and_cooling'`. Maps to `systems.cooling.type`.
+- Nominal EER — slider 2.0–5.0, default 3.2. Maps to `systems.cooling.eer`.
+- "Combined with heating" — read-only badge when same template serves both demands. Cooling Inspector then shares the SCOP slider with Heating.
+- Condenser type — radio: Air-cooled / Water-cooled / Evaporative. Default Air-cooled.
+- Defrost strategy — radio: Resistive / Timed / Reverse-cycle. Default Resistive (matches the library).
+- Defrost time fraction — slider 0–0.20, default 0.058. Only visible when defrost is on.
+- **Cooling setpoint** — slider 22–28°C, default 24. Maps to `systems.cooling.setpoint_c`. **Surfaces setpoint cross-state dependency** (see below).
+- **Stretch:** Capacity-vs-temperature curve — read-only sparkline showing rated cooling capacity at 5°C / 25°C / 35°C outdoor. Pulled from `hvac_vrf.py` curves.
 
-**Path A (library complete enough):** Implement derivation.
+### Setpoint cross-state surface (contract requirement)
 
-The effective indoor-facing thermal mass of a construction is the sum of (thickness × density × specific heat) for every layer **inside the insulation**. Layers outside the principal insulation layer don't contribute meaningfully to indoor thermal response.
+The cooling setpoint affects State 2.5 demand calculation. The Inspector must show this. Pattern:
 
-Algorithm:
-1. For each construction, identify the insulation layer (highest R-value layer in the stack, or layer with λ < 0.05 W/mK)
-2. Sum the thermal mass of layers inside that insulation (closer to indoor face)
-3. Express as kJ/m²·K
+```
+Cooling setpoint: [slider 22–28°C — 24°C]
+└─ Drives State 2.5 cooling demand of X.X MWh
+   Served by this system at EER 3.2 = Y.Y MWh electricity
+```
 
-For Bridgewater's cavity wall (Brick / PIR / Block / Plasterboard):
-- Brick is outside the insulation → doesn't count
-- PIR is the insulation → doesn't count
-- Block (100mm × 1400 kg/m³ × 1 kJ/kg·K = 140 kJ/m²·K) → counts
-- Plasterboard (13mm × 900 kg/m³ × 1 kJ/kg·K = 12 kJ/m²·K) → counts
-- Total: 152 kJ/m²·K → Medium mass per CIBSE TM52
+The State 2.5 demand value updates live as the slider moves (using `instantCalc.js`'s state-2.5 path). The "served by" line surfaces the State 3 conversion. If neither value is available (model not run, demand not computed), show `—` with a small "Run simulation to see" link.
 
-**UI changes:**
-- The standalone "Thermal mass" dropdown is removed from the Building module Fabric section
-- Each construction in the Construction Inspector now displays its derived thermal mass: "Effective indoor mass: 152 kJ/m²·K (Medium)"
-- A building-level "Thermal mass mode" control offers: "Auto (derived from constructions)" / "Override: Light / Medium / Heavy / Custom"
-- Auto is default. Shows the area-weighted average of construction masses
-- Override allows the user to ignore derivation (for sensitivity studies or mixed-construction approximations)
+**Inferred vs specified vs defaulted:**
+- Per-field provenance badge.
+- Effective-value summary: *"What EnergyPlus sees: VRF EER 3.2, cooling setpoint 24°C, defrost Resistive at 5.8% time fraction."*
+- Honest disclaimer: *"Performance curves loaded from library template `vrf_standard`. Defrost time fraction is a fixed approximation — true frost-coil dynamics not modelled."*
 
-**Live engine integration:**
-- `_calculateEnvelopeOnly` reads the derived mass from `building_config` (already populated)
-- The mass value is one number (kJ/m²·K) regardless of source — derivation vs override doesn't change the calc, only the display
+**What stays hidden:** Performance curve coefficients, master thermostat zone (autocalculated), refrigerant type, crankcase heater power.
 
-**Path B (library has gaps):** Keep dropdown, place properly in UI.
+**Wiring check:**
+- EER 3.2 → 4.5: confirm `annual_cooling_kWh` drops (~1/1.4 ≈ 70% of baseline electricity for the same thermal output).
+- Cooling setpoint 24 → 22: confirm cooling demand increases (State 2.5 → State 3 chain re-runs).
+- Verify setpoint cross-state surface updates live as the slider moves.
 
-If Part 1 found the library is incomplete, place the thermal mass dropdown in the Building module Fabric section between Construction selectors and Airtightness, per Brief 26 Part 7's original scope. Document the library gaps for a future brief to populate.
+**Files:**
+- `frontend/src/components/library/inspectors/CoolingInspectorBody.jsx`
+- `nza_engine/generators/hvac_vrf.py` — wire defrost strategy + time fraction as overrides.
 
-**Acceptance criteria (Path A):**
-- Construction Inspector shows derived thermal mass per construction
-- Building-level Auto/Override control visible in Fabric section
-- Auto mode by default, derived value shown
-- Override mode lets user pick Light/Medium/Heavy/Custom
-- Live engine produces same numerical result for the same effective mass regardless of source
-- Smoke test: changing constructions from Light (e.g., metal-frame) to Heavy (e.g., solid masonry) shifts the live engine free-running temperature appropriately
+**Commit:** `Cooling Inspector with EER, defrost, setpoint + cross-state surface + provenance`
 
-**Acceptance criteria (Path B):**
-- Thermal mass dropdown placed in Fabric section between constructions and airtightness
-- Selection persists, reaches live engine, affects free-running temperature
-- Library gaps documented in a follow-up brief stub
-
-**Commit message:** "Part 5: Thermal mass derivation from constructions (Path A)" or "Part 5: Thermal mass dropdown UI placement (Path B)"
-
-**Verify:**
-1. Screenshot of Construction Inspector showing derived mass
-2. Screenshot of Building module Fabric section showing Auto/Override control
-3. Bridgewater's derived thermal mass: [X] kJ/m²·K
-4. Smoke test: change a construction, confirm derived mass updates, confirm live engine free-running temperature responds
-5. Report: "Thermal mass derivation working (Path A) or dropdown placed (Path B). Bridgewater derived mass: [X] kJ/m²·K. Construction Inspector shows per-construction mass. Building-level Auto/Override control in place. Smoke test passed: [yes/no]."
+**Verification:** EER 3.2 → 4.5, setpoint 24 → 22: combined sim, EUI delta both positive and negative as expected. Setpoint surface shows live State 2.5 demand and State 3 electricity.
 
 ---
 
-## PART 6: End-to-end verification on Bridgewater
+## Part 4: Heating Inspector (+ setpoint cross-state surface)
 
-Final integration test.
+The biggest. Handles three families: boiler / ASHP / VRF (combined heat-pump).
 
-Walk through Bridgewater in the browser:
+**Fields exposed:**
 
-1. Open Building module
-2. Confirm: 3D Model tab shows façades correctly labelled, building rotates at 42° orientation
-3. Confirm: Heat Balance tab shows "Envelope only — no occupancy, no systems, no operable windows" badge
-4. Confirm: Comfort band editor visible at 21°C / 25°C, editable inline
-5. **Switch to Live view, Rows layout:**
-   - Solar gains by orientation, F3 (SW) dominant ✓
-   - Conduction losses by element (wall, roof, floor, glazing) all non-zero ✓
-   - Ventilation split: Fabric leakage + Permanent vents as distinct items ✓
-   - Heating demand row "below 21°C — derived" ✓
-   - Cooling demand row "above 25°C — derived" ✓
-   - Comfort hours bar with Under/In/Over split ✓
-   - Annual mean and Summer max stats visible ✓
-   - Summer max ≤ 36°C ✓
-6. **Switch to Simulation view, Rows layout:**
-   - Identical UI structure to Live ✓
-   - Comfort band echo visible ✓
-   - Demand rows visible ✓
-   - Glazing and ground floor losses non-zero ✓
-   - Ventilation split visible ✓
-   - Free-running stats visible ✓
-7. **Switch to Stacked layout:** both Live and Simulation render correctly
-8. **Switch to Sankey layout:** both Live and Simulation render correctly
-9. **Engine agreement:** Live and Simulation values within tolerance, no hard warnings on contract-significant outputs
-10. **Adjust comfort band to 19/27:** confirm Live demand updates instantly, Simulation needs re-run, both behave correctly
-11. **Open Fabric section in left panel:**
-    - Constructions visible
-    - Derived thermal mass shown per construction (Path A) or dropdown present (Path B)
-12. **Critical regression:** open `/operation` in a separate tab, tick aggressive operable window schedule, save. Return to Building Heat Balance. State 1 numbers must be unchanged in both Live and Simulation.
+*Common:*
+- System type — dropdown filtered to `serves === 'heating' || 'heating_and_cooling'`. Maps to `systems.heating.type`.
+- Efficiency / SCOP — label switches between "Seasonal efficiency" (boiler) and "SCOP" (heat pump). Slider range adapts. Maps to `systems.heating.{efficiency, cop}`.
+- **Heating setpoint** (°C) — slider 18–24, default 21. Maps to `systems.heating.setpoint_c`. **Surfaces setpoint cross-state dependency.**
+- Setback (°C) — slider 12–20, default 18. Overnight/unoccupied setback temperature.
+- **Stretch:** weather compensation toggle. When on, surface a flow temperature schedule that drops as outdoor air rises (boiler) or as outdoor air drops (heat pump).
 
-**Expected Bridgewater State 1 numbers after fixes:**
-- Heating demand: 150–250 MWh ✓ (contract v2.2)
-- Cooling demand: 5–20 MWh ✓
-- Overheating hours: 200–600
-- Underheating hours: 4500–6500
-- Summer max temperature: ≤ 36°C ✓
-- Winter min temperature: 1–4°C
-- Engine agreement: Live and Simulation within tolerance per contract
+*Boiler-specific:*
+- Condensing threshold (°C return temp) — slider 40–55, default 50. Stretch.
+- Modulation range (%) — slider 10–100, default 20. Stretch.
 
-**Commit message:** "Part 6: State 1 finalisation verified end-to-end on Bridgewater"
+*Heat-pump-specific (ASHP or VRF heating):*
+- Defrost strategy + time fraction — same controls as Cooling Inspector. Stretch.
+- Minimum outdoor temperature (°C) — slider -25 to 0, default -15. Stretch.
+- Backup heat — None / Electric resistance / Gas boiler. Stretch.
 
-**Verify — final report:**
+### Setpoint cross-state surface (contract requirement)
 
-| Item | Status |
-|------|--------|
-| Simulation view honours State 1 contract | ✓/✗ |
-| Comfort band editor visible in both Live and Simulation | ✓/✗ |
-| Demand rows in both Live and Simulation | ✓/✗ |
-| Glazing loss non-zero in Simulation | ✓/✗ |
-| Ground floor loss non-zero in Simulation | ✓/✗ |
-| Ventilation split (fabric_leakage + permanent_vents) in Simulation | ✓/✗ |
-| Free-running summer max ≤ 36°C | ✓/✗ |
-| Cooling demand 5–20 MWh | ✓/✗ |
-| Thermal mass derivation from constructions (or dropdown placement) | ✓/✗ |
-| Engine agreement maintained — no new hard warnings | ✓/✗ |
-| State isolation regression still passes (45/45 scenarios) | ✓/✗ |
+Same pattern as Cooling Inspector:
 
-If any item is ✗, document what was attempted and what blocked. Don't claim completion if anything is outstanding.
+```
+Heating setpoint: [slider 18–24°C — 21°C]
+└─ Drives State 2.5 heating demand of X.X MWh
+   Served by this system at SCOP 0.92 = Y.Y MWh gas
+```
+
+State 2.5 demand updates live with the slider.
+
+**Inferred vs specified vs defaulted:**
+- Per-field provenance badge.
+- Effective-value summary: *"What EnergyPlus sees: gas boiler 92% efficient, heating setpoint 21°C, no weather compensation."*
+- Honest disclaimer if relevant: *"Weather compensation curve not modelled — flow temperature constant. Real system likely modulates with outdoor temp."*
+
+**What stays hidden:** Performance curve coefficients, fraction radiant for gas baseboard (0.30), sizing factors.
+
+**Wiring check:**
+- Boiler efficiency 0.92 → 0.85: heating gas use rises ~8%.
+- SCOP 3.5 → 4.5: heating electricity drops ~22%.
+- Heating setpoint 21 → 19: heating demand drops sharply; setpoint surface reflects.
+- **Setpoint regression** (mandatory per Verification Rules): setpoint 21 → 22, confirm State 2/2.5 demand increases, confirm State 3 fuel follows.
+
+**Files:**
+- `frontend/src/components/library/inspectors/HeatingInspectorBody.jsx`
+- `nza_engine/generators/hvac_heating_boiler.py` — weather compensation, condensing threshold (if built).
+- `nza_engine/generators/hvac_vrf.py` — defrost overrides (if built — shared with Part 3).
+
+**Commit:** `Heating Inspector with type-specific fields + setpoint cross-state surface + provenance`
+
+**Verification:** Boiler efficiency 92→85% gives ~8% gas-use bump; setpoint 21→19 gives clearer EUI drop. Setpoint cross-state surface reflects live State 2.5 demand.
 
 ---
 
-## After all parts complete
+## Part 5: Cross-system sanity + commit final
 
-Update STATUS.md:
+After all four Inspectors are in, do an end-to-end pass:
 
-- Brief 26.1 closed with the four issues resolved (or documented as needing future briefs)
-- Free-running physics root cause documented in `state_1_divergences.md`
-- Thermal mass derivation methodology documented (if Path A)
-- Bridgewater State 1 numbers updated to post-fix values
+1. Open each Inspector on its own row in `/systems`. Confirm:
+   - Header is right
+   - Built-in lock icon present
+   - "Save as new copy" works (creates a custom library item, refreshes the dropdown, switches selection to the new item)
+   - "Save changes" works on custom items
+   - Esc + click-outside close cleanly
+   - No layout collision with the Sankey on the centre pane
 
-Update the state contract document if needed:
-- v2.3 if any contract details changed (comfort band UI placement, etc.)
-- Otherwise v2.2 stands
+2. **Contract compliance check:**
+   - Heating + Cooling Inspectors surface setpoint cross-state dependency live.
+   - Every Inspector field shows a provenance badge.
+   - Every Inspector shows the "what EnergyPlus sees" effective-value summary.
+   - Every Inspector calls out model simplifications honestly where applicable.
 
-Archive this brief to `docs/briefs/archive/26_1_State_1_finalisation_COMPLETED.md`.
+3. Confirm the parity table from `SYSTEMS_AUDIT.md` is now closed for the four systems we built — every "missing" row has either landed or been explicitly de-scoped here.
 
-Point `current.md` at Brief 27 (Systems Inspectors).
+4. Run one full HIX Bridgewater simulation with everything at defaults. Compare the result to `SYSTEMS_AUDIT.md`'s baseline EUI. If they disagree by more than 2%, investigate.
 
-Tell Chris:
+**Commit:** `Systems Inspectors complete: 4 State 3 system families, parity with Construction Inspector pattern`
 
-> Brief 26.1 complete. State 1 now end-to-end through the UI, both engines render the contract output shape. Free-running summer max bug fixed (root cause: [X]) — Bridgewater now shows summer max [Y]°C, cooling demand [Z] MWh, both within contract bounds. Glazing and ground floor losses verified non-zero in Simulation view ([A] MWh and [B] MWh respectively). Thermal mass derivation from constructions implemented (Path A) / dropdown placed (Path B) — Bridgewater derived mass [C] kJ/m²·K. State isolation regression unchanged at 45/45. Engine agreement on heating demand: [D]% (vs +0.8% pre-fix). Ready for Brief 27.
+**Push.** Update `STATUS.md` with what landed.
 
-Push to GitHub. Confirm push succeeded.
+---
+
+## What this brief does NOT do
+
+For clarity, here's what's deliberately out of scope:
+
+- **Lighting and Equipment Inspectors** — these are **State 2 (gains)** per the contract, not State 3 (systems). They move to the Internal Gains brief (Brief 27 or later). The existing LPD/EPD/control sliders in `SystemsZones.jsx` stay where they are until that brief lands; they just don't get an Inspector here.
+- **System on/off toggles** (heating off / cooling off / ventilation off): future brief.
+- **Monthly stacked bar of end-use** + **annual donut** + **with/without bar pair**: future brief.
+- **Profiles → Internal Gains migration** (deprecating `/profiles` per State 2 UI rules): future brief.
+- **Path migration** (current `systems.space_heating.primary.*` → contract `systems.heating.*`): own schema brief.
+- **AirflowNetwork** (multi-zone crossflow / stack ventilation): future brief.
+- **Real `Daylighting:Controls`** with reference points and glare calcs: future, owned by the Internal Gains brief.
+- **Per-zone overrides** (different schedule per zone): future. All zones treated as `hotel_bedroom` for HIX.
+
+---
+
+## Notes for the implementer
+
+- Each Inspector body should read via the `getSystemField` helper (Part 0) which knows the demand-based shape AND the contract shape AND the flat aliases. Writes go through `setSystemField` to the demand-based shape (the current source of truth). When the schema-migration brief lands, the helper is the only place that changes.
+- Every Inspector field that lands in the saved library item should also reach the live calc (`instantCalc.js`) — otherwise we recreate the Brief 25 cosmetic-bug class. After wiring an Inspector field, do an A/B live-vs-simulation comparison.
+- Provenance defaults to `user_entered` when an Inspector field is edited. A future brief adds the UI to upgrade provenance to `spec_sheet` / `benchmark` etc. For now, just record `user_entered` so State 4 has the metadata when it lands.
+- The Construction Inspector saves builtins-as-copy via POST to `/api/library`, in-place updates via PUT to `/api/library/{name}`. The systems router supports the same — verify before touching it.
+- The setpoint cross-state surface (Heating + Cooling) requires the live engine to expose a State 2.5 demand number. `instantCalc.js` already produces an annual heating/cooling demand — read from there. If it doesn't separate setpoint-driven demand from comfort-band demand, add the path: when `systems.{heating, cooling}.setpoint_c` is set, use it as the lower/upper bound for the State 2.5 demand calculation.
+
+---
+
+## Estimated effort
+
+| Part | Effort | Why |
+|---|---|---|
+| 0 — shell + helpers | M | Side-panel mechanics, save-as-copy plumbing, click-handlers in SystemsZones, getSystemField/setSystemField helpers, provenance recording |
+| 1 — Ventilation | S | Few fields, most already wired |
+| 2 — DHW | L | Two-stream UI; recirculation + tank-volume are net-new |
+| 3 — Cooling | M | Most fields exist; defrost wiring new; setpoint cross-state surface new |
+| 4 — Heating | L | Three families; weather compensation + setpoint surface new |
+| 5 — final pass | S | Sanity check, doc updates |
+
+Total: ~4–6 sessions if no surprises. Smaller than the previous v1 of this brief (which had 6 Inspectors) because Lighting + Equipment moved to the Internal Gains brief.

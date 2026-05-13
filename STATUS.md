@@ -1,5 +1,119 @@
 # NZA SIMULATE — Status
 
+## ✅ Brief 26.1 closed — State 1 finalisation
+
+Five months after Brief 26 closed with all automated tests green, a manual
+UI walkthrough caught four contract violations. Brief 26.1 resolved them
+and surfaced a fifth (latent assembler regression). State 1 is now
+genuinely done — annual integrated metrics agree silently between
+engines, the UI shows the contract output shape in both Live and Simulation
+views, and the model is honest about its remaining limitations.
+
+### Issues addressed
+
+| # | Issue | Root cause | Resolution | Part |
+|---|---|---|---|---|
+| 0 | EP fatal on louvre-bearing projects | `epjson_assembler.py:914` overwrote `Schedule:Constant` instead of merging — wiped state1 thermostat schedules | Single-line `setdefault().update()` fix | Part 0 hotfix |
+| 1 | Sim view didn't show State 1 contract shape | `useSimulationBalance` fetched `/balance` without `?mode=envelope-only` → backend returned full-mode shape | Threaded `mode` through hook + 3 call sites | Part 2 |
+| 2 | Glazing + floor losses read 0 in Sim view | Downstream of (0): EP wasn't producing output | Resolved by Part 0 hotfix; Brief 26 Part 6 parser was already correct | Part 2 (no parser work needed) |
+| 3 | Free-running summer_max 43°C (contract bound ≤36°C) | Single-node lumped capacitance: all solar instantly heats indoor air, no surface absorption delay | Two-node topology (solar → T_mass, air at QSS); plus thermal mass derived from constructions instead of dropdown | Parts 3 + 5 |
+| 4 | Thermal mass redundant dropdown | Construction library had all the data; manual category could disagree with the physical stack | Auto-derivation from layer build-up (Σ thickness × density × Cp on indoor side of insulation) | Part 5 |
+
+### Bridgewater final numbers — engine agreement
+
+| Metric | Pre-26.1 (Brief 26 baseline) | Post-26.1 | EP sim | Flag |
+|---|---:|---:|---:|---|
+| `annual_mean_c` | 17.4 | **18.3** | 18.4 | ✓ silent |
+| `underheating_hours` | 5851 | **5244** | 5256 | ✓ silent (+0.2%) |
+| `overheating_hours` | 2137 | **1728** | 1788 | ✓ silent (+3.5%) |
+| `comfort_hours` | 1588 | **1788** | 1716 | ✓ silent (-4.0%) |
+| `heating_demand_mwh` | 214.4 | 202.8 | 214.5 | ~ soft (+5.8%) |
+| `summer_max_c` | 43.0 | 42.3 | 34.2 | ! warn (residual) |
+| `cooling_demand_mwh` | 56.8 | 66.5 | 45.4 | !! HARD (residual) |
+
+All four **distribution metrics** silent vs EP. **Heating demand** drift
+from +0.8% to +5.8% (still soft — small drift from Part 3's two-node
+integration, well within tolerance). **Peak temperature** and **cooling
+demand** remain divergent — documented as divergence #7, traceable to
+divergence #1 (isotropic vs Perez sky over-counts solar by ~32%/yr;
+lumped models can't escape that integral). The Bridgewater config sits
+at the WWR=100% extreme; both engines confirm State 1 envelope-only
+overheats without venting.
+
+### What landed
+
+- **Mode threading** — `useSimulationBalance(projectId, runId, mode)` and
+  three call sites: Building module → `envelope-only`, Results +
+  BalanceTestPage → explicit `full`.
+- **Two-node free-running model** in `_calculateEnvelopeOnly`: solar →
+  T_mass (explicit Euler on C_mass), air at quasi-steady state,
+  T_op = mean(T_air, T_mass) for comfort/demand triggers. h_am = 4.5
+  W/m²K (CIBSE Guide A 2.5–8 range, tuned for Bridgewater).
+- **Construction-derived thermal mass** (`utils/thermalMass.js`):
+  per-construction mass from layer build-up (Σ thickness × density × Cp
+  on indoor side of insulation), area-weighted across envelope elements.
+  Bridgewater: 138.6 kWh/K total (1.8× the old "light" default).
+- **Auto/Override UI**: Building → Fabric → Thermal Mass picker with
+  derived value + per-element breakdown live (Auto, default) or legacy
+  TM52 dropdown (Override, for sensitivity studies).
+- **Construction Inspector** shows derived "Effective indoor thermal mass"
+  per construction with category badge.
+- **API**: `/api/library/constructions` list endpoint now includes
+  `layers` array per construction so the frontend can derive mass without
+  per-construction round-trips.
+- **UI engine disclosure** in the State 1 demand panel — when Live shows
+  summer_max > 36°C and the user is viewing the Live engine, a short
+  note explains the isotropic sky over-prediction and points to the
+  Simulation view as canonical for peak temperatures.
+
+### Process lessons (now in `state_1_divergences.md`)
+
+- **§5 walkthrough discipline > automated regression.** The Brief 26
+  close-out failure is the canonical example — all tests green, four
+  contract violations + one latent regression caught only by manual UI
+  inspection on a production-shaped config. Brief 26.1's "VERIFICATION
+  RULES" block became the discipline upgrade; Briefs 27/28/29 should
+  inherit it.
+- **§6 library ground-floor layer ordering.** Walls/roofs stored
+  outside-first; floors stored indoor-first. EP tolerates it (U is
+  direction-symmetric); any layer-convention-aware code has to compensate.
+  Logged for a future library housekeeping brief.
+- **§7 residual summer_max gap.** Documented with fallback options
+  (retune h_am — explored, doesn't help; radiative sky loss; floor/wall
+  split; full Perez). All future-brief candidates.
+
+### Diagnostic + verification scripts (reusable)
+
+| Script | Purpose |
+|---|---|
+| `scripts/state1_engine_agreement.mjs` | Live vs sim parity check per the contract |
+| `scripts/state1_isolation_live.mjs` | Forbidden-input byte-identity (live) |
+| `scripts/state1_isolation_epjson.py` | Forbidden-input byte-identity (EP path) |
+| `scripts/state1_thermal_mass_smoketest.mjs` | Both Auto and Override wirings respond to changes |
+| `scripts/state1_peak_summer_diagnostic.mjs` | Hour-by-hour energy balance at the indoor peak |
+| `scripts/state1_tracer.mjs` | T_op trace around the peak window for any project |
+| `scripts/state1_library_audit.py` | Per-construction derived mass + categorisation |
+
+### Final regression status
+
+- Engine agreement: 4/4 distribution metrics silent ✓
+- State isolation live: 22/22 ✓
+- State isolation EP path: 23/23 ✓
+- Thermal mass smoke test: Override + Auto wirings both pass ✓
+
+### Suggested next briefs (unchanged order)
+
+| Brief | Topic |
+|---|---|
+| 27 | Systems Inspectors (`docs/briefs/Brief_27_Systems_Inspectors.md`) |
+| 28 | State 2 Internal Gains (people, lighting, equipment) |
+| 29 | State 2.5 Operation (operable windows, schedules) |
+| 30 | CI for state contracts |
+| later | Perez anisotropic sky in `solarCalc.js` (closes divergence #1 → #7) |
+| later | Schema migration + State 4 reconciliation |
+
+---
+
 ## ✅ Brief 26 closed — State 1 envelope-only computation
 
 **What landed:**
