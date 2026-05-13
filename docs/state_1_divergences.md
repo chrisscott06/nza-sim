@@ -320,6 +320,75 @@ context.
 
 ---
 
+## 8. EnergyPlus shading geometry not applied to fenestration
+
+**What:** EP's shading objects (`Shading:Overhang`, `Shading:Fin`,
+`Shading:Building:Detailed`) are correctly emitted in the epJSON by
+`assemble_epjson` — the generator handles per-facade depths from
+`building.shading_overhang` and `building.shading_fin` and `eplusout.eio`
+confirms 8 detached + 24 attached shading surfaces are created per run.
+But `Surface Window Transmitted Solar Radiation Energy` does NOT respond
+to changes in shading depth.
+
+Confirmed by `scripts/state1_shading_diagnostic.mjs`:
+- Bridgewater **no shading** (all depths = 0): south facade solar gain
+  79,063 kWh/yr.
+- Bridgewater **current** (0.5 m south overhang, 0.5 m fins): south
+  solar 79,063 kWh/yr.
+- Bridgewater **extreme** (2 m overhang + 1 m fins on south): south
+  solar 79,063 kWh/yr.
+
+Identical to within rounding. EP is rendering the shading geometry in
+its visualisation outputs but not consuming it in the window solar
+calculation.
+
+**Why this diverges from the live engine:** the live engine uses
+`computeShadingFactors(building)` to reduce per-facade solar by a
+projection-factor-derived multiplier in [0.4, 1.0]. After the Brief
+26.1 follow-up fix (live engine had its own shading stub since Brief
+26 Part 3), the LIVE engine now correctly responds to shading depths:
+2 m overhang + 1 m fins drops south solar by 44% (83,881 → 46,574 kWh).
+**The discrepancy now traces entirely to EP.**
+
+**Magnitude:** for Bridgewater with current modest 0.5 m shading, ~12%
+of the south solar gain is unaccounted for. For projects with serious
+brise-soleil (1-2 m), the gap is 30-50%.
+
+**Status:** longstanding issue — first identified in Brief 23 (2026-05-06)
+where three hypotheses were tested and none produced solar reduction:
+- H1: explicit `ShadowCalculation` with `DetailedSkyDiffuseModeling` +
+  Timestep updates → no effect
+- H2: `solar_distribution: FullExterior` → no effect
+- H3: `Shading:Building:Detailed` with explicit vertices, both vertex
+  orderings → no effect
+
+Even a 30 m south overhang produces zero solar-gain change. The shading
+surfaces themselves have computed Sunlit Fraction values (overhang
+det = 0.0, mirror = 0.38), so EP IS including them in the geometry
+pool — just not as obstructions for windows.
+
+**What would fix it:** unknown — Brief 23's recommended next steps were
+to build a minimal isolated EP test case directly via .idf and run
+EnergyPlus from CLI; if shading works there, compare epJSON structures
+to find what differs. Possible candidates:
+- `Building.solar_distribution` interaction with a construction layer
+  or schedule silently degrading shading
+- Wrong window-shading attachment ("attached" vs "detached" in
+  Shading:Overhang vs Shading:Zone:Detailed)
+- `Output:Variable: Surface Window Heat Gain Energy` instead of
+  `Surface Window Transmitted Solar Radiation Energy` might capture
+  shading-aware values (different EP internal pathway)
+
+**Decision:** **defer to a dedicated EP shading brief.** Out of scope
+for Brief 26.1's State 1 finalisation. The live engine now respects
+shading correctly, which is the primary user-facing channel for
+"does this overhang reduce my cooling demand" feedback. EP simulations
+still over-predict solar on shaded facades, so cooling demand from EP
+will be conservative (higher than reality) — flagged in the UI engine
+disclosure.
+
+---
+
 ## How to add a divergence
 
 When implementing any State 1 part where you choose a simplification:

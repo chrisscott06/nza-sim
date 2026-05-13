@@ -351,7 +351,11 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
 
   const g_value = getGValue(constructions, libraryData)
   const FRAME_FRACTION = 0.20  // visible glass = 80% of WWR; framed area = 20%
-  const SHADING_FACTOR = 1.0   // no shading-overhang reduction yet (carried over from State 3 path)
+  // Brief 26.1 follow-up: per-facade shading factors from overhang + fin geometry.
+  // The State 1 path previously used a hardcoded `SHADING_FACTOR = 1.0` —
+  // shading inputs were stripped silently. State 3 (full mode) was always
+  // wired through computeShadingFactors; bringing State 1 to parity.
+  const shadingFactors = computeShadingFactors(building)
 
   // ── UA products (W/K) — independent of zone temperature ───────────────────
   const UA_wall  = u_wall  * total_wall_opaque
@@ -473,10 +477,10 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
     const v_wind = weatherData.wind_speed?.[h] ?? 0
 
     // Solar gains through glazing per facade (Wh into the zone this hour)
-    const sol_n = hourlySolar.f1[h] * (glazing.north ?? 0) * g_value * (1 - FRAME_FRACTION) * SHADING_FACTOR
-    const sol_e = hourlySolar.f2[h] * (glazing.east  ?? 0) * g_value * (1 - FRAME_FRACTION) * SHADING_FACTOR
-    const sol_s = hourlySolar.f3[h] * (glazing.south ?? 0) * g_value * (1 - FRAME_FRACTION) * SHADING_FACTOR
-    const sol_w = hourlySolar.f4[h] * (glazing.west  ?? 0) * g_value * (1 - FRAME_FRACTION) * SHADING_FACTOR
+    const sol_n = hourlySolar.f1[h] * (glazing.north ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.north
+    const sol_e = hourlySolar.f2[h] * (glazing.east  ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.east
+    const sol_s = hourlySolar.f3[h] * (glazing.south ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.south
+    const sol_w = hourlySolar.f4[h] * (glazing.west  ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.west
     const sol_roof = hourlySolar.roof[h] * roof_area * 0.05  // weak solar contribution through opaque roof
     const Q_solar_in_Wh = sol_n + sol_e + sol_s + sol_w + sol_roof
 
