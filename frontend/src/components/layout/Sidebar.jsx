@@ -5,7 +5,6 @@ import {
   Building2,
   Wind,
   Thermometer,
-  Clock,
   Flame,
   FileSpreadsheet,
   BarChart3,
@@ -42,7 +41,9 @@ const BOTTOM_ITEMS = [
   { to: '/consumption', icon: FileSpreadsheet, label: 'Consumption' },
   { to: '/crrem',       icon: TrendingDown,    label: 'CRREM'       },
   { to: '/scenarios',   icon: GitCompare,      label: 'Scenarios'   },
-  { to: '/profiles',    icon: Clock,           label: 'Profiles (legacy)' },
+  // /profiles deleted in Brief 27 Revised Part 11 — superseded by the
+  // multi-profile Internal Gains module. Schedule presets remain available
+  // as "Apply preset…" inside each gain's ScheduleEditor.
 ]
 
 function NavItem({ to, icon: Icon, label }) {

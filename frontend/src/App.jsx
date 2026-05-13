@@ -14,7 +14,10 @@ import InformationModule  from './components/modules/InformationModule.jsx'
 import ResultsDashboard from './components/modules/results/ResultsDashboard.jsx'
 import SystemsZones from './components/modules/SystemsZones.jsx'
 import LibraryBrowser  from './components/modules/LibraryBrowser.jsx'
-import ProfilesEditor  from './components/modules/ProfilesEditor.jsx'
+// ProfilesEditor / /profiles deleted in Brief 27 Revised Part 11 — superseded
+// by the multi-profile Internal Gains module. Schedule presets remain in
+// data/schedulePresets.js and are surfaced as "Apply preset…" inside each
+// gain's ScheduleEditor.
 import InternalGainsModule from './components/modules/gains/InternalGainsModule.jsx'
 import ScenarioManager from './components/modules/ScenarioManager.jsx'
 import ConsumptionManager from './components/modules/consumption/ConsumptionManager.jsx'
@@ -39,7 +42,6 @@ export default function App() {
                 <Route path="/building"    element={<ErrorBoundary moduleName="Building Definition"><BuildingDefinition /></ErrorBoundary>} />
                 <Route path="/operation"   element={<ErrorBoundary moduleName="Operation"><OperationModule /></ErrorBoundary>} />
                 <Route path="/systems"   element={<ErrorBoundary moduleName="Systems & Zones"><SystemsZones /></ErrorBoundary>} />
-                <Route path="/profiles"  element={<ErrorBoundary moduleName="Profiles Editor"><ProfilesEditor /></ErrorBoundary>} />
                 <Route path="/gains"     element={<ErrorBoundary moduleName="Internal Gains"><InternalGainsModule /></ErrorBoundary>} />
                 <Route path="/consumption" element={<ErrorBoundary moduleName="Consumption"><ConsumptionManager /></ErrorBoundary>} />
                 <Route path="/results"   element={<ErrorBoundary moduleName="Results Dashboard"><ResultsDashboard /></ErrorBoundary>} />

@@ -93,14 +93,16 @@ export default function SchedulePreview({
         )}
       </div>
 
-      {/* Footer */}
+      {/* Footer — /profiles was deleted in Brief 27 Revised Part 11. The
+          Internal Gains module owns scheduling now; for systems schedules
+          users go through the gains module's Schedule canvas tab. */}
       <div className="flex-shrink-0 border-t border-light-grey p-3">
         <button
-          onClick={() => navigate('/profiles')}
+          onClick={() => navigate('/gains')}
           className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xxs text-teal border border-teal/30 rounded-lg hover:bg-teal/5 transition-colors"
         >
           <ExternalLink size={10} />
-          Edit Schedules →
+          Edit in Internal Gains →
         </button>
       </div>
     </div>
