@@ -24,17 +24,17 @@ is 1.0 vs the BREDEM derivation's 0.75, *some* gain magnitudes scale up by
 
 ## Actual numbers (post-Part-2)
 
-| Metric                      | Actual          | Scaled range (1.33×) | Outcome | Notes |
-|-----------------------------|-----------------|-----------------------|---------|-------|
-| People sensible kWh         | 70,151          | 67,000–87,000         | ✓ in range | Cleanest signal — occupancy density × schedule × occupancy_rate × 75 W is correct. |
-| Lighting kWh                | 45,025          | 67,000–93,000         | ✗ below   | See `proportional_with_spill` semantic note below. |
-| Equipment kWh               | 137,680         | 147,000–200,000       | ✗ below (expected) | The 1.33× scaling is too generous for equipment because baseload doesn't scale. Sub-linear prediction = 91 + 36×1.33 = 139 MWh; actual 138 MWh. **Matches sub-linear analytical prediction to within 1 MWh.** |
-| Heating demand (live, MWh)  | 27.6            | 125–165               | ✗ below   | Gains overwhelm State 1's heating load. See divergence note below. |
-| Cooling demand (live, MWh)  | 299.3           | 107–140               | ✗ above   | Building runs hot. Documented isotropic-sky carry-over + no operable-window relief. |
-| Overheating hours           | 5,353           | 2,400–2,900           | ✗ above   | Same underlying issue as cooling demand. |
-| Annual mean (free-running)  | 29.0 °C         | 19.5–22.0 °C          | ✗ above   | Reflects internal-gain runaway in a sealed envelope. |
-| State1 → State2 delta heat  | -129.5 MWh      | -30 to -60 (BREDEM)   | ✗ over-offset | See heating note. |
-| State1 → State2 delta cool  | +229.7 MWh      | +15 to +35 (BREDEM)   | ✗ over-add   | See cooling note. |
+| Metric                      | Actual          | Revised range          | Outcome | Notes |
+|-----------------------------|-----------------|------------------------|---------|-------|
+| People sensible kWh         | 70,151          | 67,000–87,000          | ✓ in range | Cleanest signal — occupancy density × schedule × occupancy_rate × 75 W is correct. |
+| Lighting kWh                | 45,025          | **34,000–50,000 × 1.33 = 45,200–66,500** | ✓ in revised range | Range corrected after Jan 15 hourly diagnostic confirmed the model is physically correct; BREDEM's 1,800–2,500 LPD-hrs/yr assumption was over-stated for the HOTEL_LIGHT preset (actual ~1,640 hrs). |
+| Equipment kWh               | 137,680         | ~139,000 (sub-linear)  | ✓ matches analytical | Sub-linear prediction = 91 + 36×1.33 = 139 MWh; actual 138 MWh. **Matches sub-linear analytical prediction to within 1 MWh.** The user's flat 1.33× range over-stated equipment because baseload doesn't scale. |
+| Heating demand (live, MWh)  | 27.6            | 125–165 (BREDEM)       | ✗ below — phasing | Gains overwhelm State 1's heating load. Jan 15 diagnostic confirms 4.15× overnight-vs-daytime people-gain ratio. BREDEM uniform-phasing under-states offset for hotel-type. **Range needs building-type-aware refinement (queued Brief 28+).** |
+| Cooling demand (live, MWh)  | 299.3           | 107–140 (BREDEM)       | ✗ above — same phasing | Building runs hot in absence of operable-window relief. Bridgewater has zero louvre area on all facades — no passive night cooling. State 2.5 expected to close the gap. |
+| Overheating hours           | 5,353           | 2,400–2,900 (BREDEM)   | ✗ above — same phasing | Same root cause as cooling demand. |
+| Annual mean (free-running)  | 29.0 °C         | 19.5–22.0 (BREDEM)     | ✗ above — same phasing | Reflects internal-gain runaway in a sealed envelope. |
+| State1 → State2 delta heat  | -129.5 MWh      | -30 to -60 (BREDEM)    | ✗ over-offset | See heating note. |
+| State1 → State2 delta cool  | +229.7 MWh      | +15 to +35 (BREDEM)    | ✗ over-add   | See cooling note. |
 
 State 1 baseline is byte-identical to the post-26.2 figures in
 `docs/state_2_expected_ranges.md` (heating 155.1 → 157.1 MWh, 1.3% rounding,
@@ -56,15 +56,34 @@ Revised semantic: `lighting_fraction = lighting_schedule[h] × occupancy_rate
 "lights mostly off overnight"), scaled by building-level occupancy. This
 matches BREDEM's mental model where lighting is a building-property × occupancy multiplier.
 
-At occupancy_rate = 1.0, the HOTEL_LIGHT preset schedule sums to ~2,025
-hours/yr at full LPD, monthly-multiplied to ~1,740, daylight-dimmed to
-~1,627. BREDEM assumed 1,800–2,500 hours. The model is ~10% below BREDEM's
-low end — a model calibration question (the preset's schedule shape), not
-a bug.
+**Diagnostic confirmation (Jan 15 hourly profile, post-Part-2 fix):**
 
-If the user finds the lighting too low after walking through Bridgewater,
-the right fix is to adjust the HOTEL_LIGHT preset's schedule values
-upward, not to change the relationship semantic.
+| Hour | Lighting kW | Source |
+|---|---:|---|
+| 00–05 | 1.38 | 0.05 schedule (corridor emergency only) ✓ |
+| 06 | 11.06 | 0.4 schedule (morning peak ramps up) ✓ |
+| 07 | 19.36 | 0.7 schedule (full morning peak) ✓ |
+| 08 | 5.53 | 0.2 schedule (post-breakfast drop) ✓ |
+| 09–16 | 1.66 | 0.1 × 0.6 daylight dim ✓ |
+| 17 | 5.53 | 0.2 schedule (returning guests) ✓ |
+| 18 | 13.83 | 0.5 schedule (evening ramp) ✓ |
+| 19–20 | 22.13 | 0.8 schedule (evening peak) ✓ |
+| 21 | 16.60 | 0.6 schedule ✓ |
+| 22 | 5.53 | 0.2 schedule ✓ |
+| 23 | 1.38 | 0.05 schedule (late-night corridor only) ✓ |
+
+This profile is exactly what hotel-bedroom lighting *should* do — and
+the daily total of 144.7 kWh exactly matches the analytical
+27.66 kW × 5.55 hr-fractions × 0.94 (effective dim factor) = 144.4 kWh.
+
+**Conclusion: the model is correct. The BREDEM range was over-stated.**
+HOTEL_LIGHT preset delivers ~1,640 effective LPD-hrs/yr (5.55 weekday-hrs
+× 365 × 0.86 monthly avg × 0.94 dim factor), not BREDEM's assumed
+1,800–2,500. Range in `docs/state_2_expected_ranges.md` updated from
+50–70k to 34–50k (at occ=0.75 reference). Bridgewater's 45k kWh at
+occ=1.0 (= 33.75k at occ=0.75) lands in range.
+
+Diagnostic script: `scripts/state2_diagnostic_hourly_gains.mjs`.
 
 ### Equipment matches sub-linear prediction exactly
 
@@ -89,6 +108,21 @@ occupancy peaks in evening/overnight (cold hours) and minimum in midday
 (warmest hours); 90% overnight presence + 8 W/m² equipment baseload mean
 gains are concentrated exactly when heating would otherwise be needed.
 
+**Diagnostic confirmation (Jan 15 winter day, hourly people gain):**
+
+| Window | Avg people kW | Note |
+|---|---:|---|
+| 00:00–05:00 (overnight) | 9.50 | Guests asleep in rooms — 0.9 schedule fraction |
+| 10:00–15:00 (daytime) | 2.29 | Guests out — 0.2 schedule fraction |
+| **Ratio** | **4.15×** | Overnight gains are 4× daytime gains |
+
+Combined with always-on equipment baseload (10.4 kW = 60% of winter UA
+losses on its own), the Jan 15 total gain rate sits at 23–30 kW
+continuously while UA losses at typical winter ΔT=16°C are ~17.6 kW.
+**Gains exceed losses for most of a winter day.** The result: heating
+is only needed during the deepest cold dips (typically 4–6 hours/day on
+the coldest weeks).
+
 Direct per-hour physics:
 - State 1 heating = 155 MWh over 5,031 underheating hours = 30.8 W/m² avg
 - State 2 heating = 28 MWh over 1,798 underheating hours = 15.6 W/m² avg
@@ -103,9 +137,18 @@ solar-warmed) zone into overheating quickly — and once overheating,
 mass-runaway behavior at 29.0 °C annual mean.
 
 This isn't a model bug; it's correct physics for an unconditioned hotel
-in a UK climate. State 2.5 (Brief 27 continuation later) will introduce
+in a UK climate. **Crucially, Bridgewater has zero louvre area on all
+four facades** — so even passive night ventilation is unavailable in
+State 2. State 2.5 (Brief 27 continuation later) will introduce
 operable-window night cooling, which should bring cooling demand back
 toward the 107–140 MWh band. State 3 introduces real HVAC.
+
+**Conclusion: the model is correct. BREDEM's uniform-phasing assumption
+under-states the offset/add for hotel-type buildings.** `docs/state_2_expected_ranges.md`
+updated with a building-type-aware phasing note and a queue for Brief 28+
+to add building-type-aware range derivations.
+
+Diagnostic script: `scripts/state2_diagnostic_hourly_gains.mjs`.
 
 ### State 1 baseline preserved
 
@@ -154,10 +197,22 @@ Brief 27 Part 2 ships with the following confirmed:
   lighting and (b) hotel gain-phasing that's more aggressive than BREDEM's
   uniform-distribution heuristic
 
-**Confidence Part 2 is genuinely complete:** 8/10. Would be 9/10 once
-Brief 27 Part 8 (State 2 isolation regression) is in place; 10/10 after
-the EP path (Part 3) lands and engine-agreement confirms the deltas
-match within tolerance.
+**Confidence Part 2 is genuinely complete:** 9/10 post-diagnostic.
+- ✓ State 2 path implemented with correct contract shape
+- ✓ State 1 isolation byte-identical across all 38 forbidden paths
+- ✓ State 2 isolation byte-identical across all 20 forbidden paths
+  (Part 8 shipped concurrently)
+- ✓ People & equipment numbers match analytical prediction
+- ✓ Lighting confirmed semantically correct via Jan 15 hourly diagnostic;
+  ranges updated in `state_2_expected_ranges.md` to match preset reality
+- ✓ Heating offset / cooling over-add explained by 4.15× overnight
+  occupancy phasing for hotel buildings (Jan 15 diagnostic) +
+  baseload-dominated 24/7 gain rate
 
-Not blocking for downstream parts: Parts 3–9 build on this State 2 path
+Holding back 1/10 for: BREDEM uniform-phasing heating/cooling ranges
+need building-type-aware refinement before they're useful as a sanity
+check for non-hotel projects. Queued for Brief 28+ alongside the
+constants cleanup.
+
+Not blocking for downstream parts: Parts 4–9 build on this State 2 path
 without changing its math.

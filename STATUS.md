@@ -793,6 +793,37 @@ All checklist items:
 
 ---
 
+## Brief 28 scope (queued, NOT in 27)
+
+Brief 28 lands the post-27 cleanup pass. Items queued during Brief 27:
+
+- **Constants cleanup**: ~10 numeric constants are duplicated across
+  `frontend/src/utils/instantCalc.js`, `nza_engine/parsers/sql_parser.py`,
+  and `nza_engine/generators/epjson_assembler.py` with identical values
+  (Cd, Cw site-exposure dict, frame fraction, default U-values, air heat
+  capacity, default g-value, ventilation per person, etc.). Single
+  biggest magic-number risk. Promote to shared modules
+  (`nza_engine/constants.py` + `frontend/src/utils/physicsConstants.js`)
+  with module-load assertion that JS and Python agree. Full audit at
+  `docs/hardcoded_constants_audit.md`.
+- **Legacy occupancy fallback retirement**: `params.occupancy_rate` /
+  `params.people_per_room` / `params.num_bedrooms` fallbacks in the
+  degree-day calc path are superseded by v2.3 `occupancy.*` block. Pull
+  the fallbacks from the v2.3 block so legacy + v2.3 paths agree.
+- **Configurable defaults promotion**: `GRID_INTENSITY_2026` (year/region
+  selectable), `GAS_CARBON_KG_KWH` (fuel/year table), `DHW_LITRES_PER_M2_DAY`
+  (building-type table), `DHW_SETPOINT` / `DHW_COLD_TEMP` (read from
+  systems config consistently), lighting control factor table (promote
+  to systems-library entry).
+- **One bug-adjacent**: `T_cool_setpoint = 24` hard-coded in degree-day
+  fallback path instead of reading `comfortBand.upper_c`.
+- **Building-type-aware expected ranges**: BREDEM uniform-phasing
+  heating/cooling derivations under-state offset/add for hotel buildings
+  (4.15× overnight occupancy ratio). Future state range derivations
+  must split baseload from active and apply building-type-specific
+  phasing factors. See `docs/state_2_part2_verification.md` for the
+  diagnostic and `docs/state_2_expected_ranges.md` for the queued note.
+
 ## Suggestions
 
 - Report export to PowerPoint/PDF using NZA template

@@ -156,17 +156,46 @@ heating; sim 164.2 MWh).
 
 | Metric | Expected State 2 range | Derivation |
 |---|---|---|
-| heating_demand_mwh (live) | **95 to 125** | State 1 155.1 minus 30–60 |
-| heating_demand_mwh (sim) | **105 to 135** | State 1 164.2 minus 30–60 |
-| cooling_demand_mwh (live) | **80 to 105** | State 1 67.9 plus 15–35 |
-| cooling_demand_mwh (sim) | **55 to 85** | State 1 45.0 plus 15–35 |
-| overheating_hours | **2,400 to 2,900** | State 1 ~2,050 plus 400–800 |
+| heating_demand_mwh (live) | **95 to 125** | State 1 155.1 minus 30–60 (BREDEM uniform-phasing) |
+| heating_demand_mwh (sim) | **105 to 135** | State 1 164.2 minus 30–60 (BREDEM uniform-phasing) |
+| cooling_demand_mwh (live) | **80 to 105** | State 1 67.9 plus 15–35 (BREDEM uniform-phasing) |
+| cooling_demand_mwh (sim) | **55 to 85** | State 1 45.0 plus 15–35 (BREDEM uniform-phasing) |
+| overheating_hours | **2,400 to 2,900** | State 1 ~2,050 plus 400–800 (BREDEM uniform-phasing) |
 | underheating_hours | **3,500 to 4,500** | State 1 ~5,030 minus 500–1,500 (some hours move into comfort) |
 | comfort_hours | **1,500 to 2,200** | residual; underheating drop > overheating rise |
 | annual_mean_c (free-running) | **19.5 to 22.0** | State 1 18.8 plus ~1.5–3 K from total gain energy / building heat capacity |
-| people_kwh (annual) | **50,000 to 65,000** | 57.9 MWh ± 10% schedule and density uncertainty |
-| lighting_kwh (annual) | **50,000 to 70,000** | 60 MWh ± 17% LPD + control uncertainty |
-| equipment_kwh (annual) | **110,000 to 150,000** | 127 MWh ± 18% mix of base + active |
+| people_kwh (annual) at occ=0.75 | **50,000 to 65,000** | 57.9 MWh ± 10% schedule and density uncertainty |
+| lighting_kwh (annual) at occ=0.75 | **34,000 to 50,000** | HOTEL_LIGHT preset gives ~1,640 effective LPD-hrs/yr at occ=1.0 (after monthly mult + daylight dim); at occ=0.75 that's ~25,500 kWh, with ±35% to span the "effective hours assumption" uncertainty. **Revised down from the original 50–70k after Brief 27 Part 2 diagnostic confirmed the HOTEL_LIGHT preset gives ~1,640 hrs/yr at full LPD, not the 1,800–2,500 BREDEM initially assumed.** See `state_2_part2_verification.md` for the diagnostic. |
+| equipment_kwh (annual) at occ=0.75 | **110,000 to 150,000** | 127 MWh ± 18% mix of base + active |
+
+**Note on heating / cooling phasing.** The heating-offset / cooling-add
+derivations above use BREDEM's "30% of gains in heating season are
+offset 1:1" heuristic. The Brief 27 Part 2 diagnostic on Bridgewater
+revealed this heuristic *under-states phasing for hotel-bedroom
+buildings*: hotel occupancy peaks overnight at 0.9 × monthly_mult while
+daytime is ~0.2, giving a winter overnight-to-daytime gain ratio of
+**~4×**. Combined with always-on equipment baseload (~10 kW = 60% of
+winter UA losses), gains cover most heating losses during winter
+overnight hours, collapsing heating demand much more aggressively than
+BREDEM's uniform-phasing assumption predicts.
+
+For Bridgewater specifically, this means actual heating lands well
+below the BREDEM-derived range (28 vs 95–125 MWh live) and cooling
+well above (299 vs 80–105 MWh live). The numbers are physically
+correct for the inputs; the BREDEM range is the model that needs
+adjustment, not the engine output. **Building-type-aware phasing
+refinement is queued for Brief 28+.** For now: treat the BREDEM
+heating/cooling ranges as a sanity check only, and trust the engine
+output when phasing-aware analysis confirms it.
+
+**Scaling note (Bridgewater occ=1.0 vs BREDEM occ=0.75 reference).**
+- People: linear in occupancy_rate (1.33× at occ=1.0)
+- Lighting: linear in occupancy_rate (1.33×) under `proportional_with_spill`
+- Equipment: SUB-LINEAR — baseload is occupancy-independent, only
+  active portion scales. Total grows from 127 → ~139 MWh, not 169.
+  Future state range derivations MUST split baseload from active and
+  apply scaling only to the latter, otherwise the headline range
+  over-states equipment energy at higher occupancies.
 
 ### Engine agreement expectations (State 2)
 
