@@ -103,6 +103,52 @@ export function isForbiddenAtEnvelopeOnly(path) {
 }
 
 /**
+ * Inputs an envelope-gains (State 2) computation is *forbidden* from reading.
+ * State 2 admits occupancy.* + gains.* (v2.3) but forbids real systems
+ * (State 3 territory) and operable windows (State 2.5 territory). Legacy
+ * occupancy fields are also forbidden where superseded by v2.3 inputs;
+ * `params.num_bedrooms` is NOT forbidden because it remains the count input
+ * for `occupancy.density.basis === 'per_room'`.
+ *
+ * Brief 27 Part 8 isolation regression iterates this list against
+ * _calculateState2 / assemble_epjson(mode='envelope-gains').
+ */
+export const FORBIDDEN_ENVELOPE_GAINS_INPUTS = Object.freeze([
+  // Legacy occupancy fields superseded by v2.3 occupancy block.
+  // params.num_bedrooms is INTENTIONALLY ABSENT — still used as the room
+  // count for per_room density basis.
+  'params.occupancy_rate',
+  'params.people_per_room',
+  // Legacy load fields superseded by v2.3 gains block.
+  'systems.lighting_power_density',
+  'systems.equipment_power_density',
+  'systems.lighting_control',
+  // Systems — State 3 territory
+  'systems.space_heating',
+  'systems.space_cooling',
+  'systems.dhw',
+  'systems.ventilation',
+  'systems.hvac_type',
+  'systems.dhw_primary',
+  'systems.dhw_preheat',
+  'systems.dhw_setpoint',
+  'systems.ventilation_type',
+  'systems.ventilation_control',
+  'systems.sfp_override',
+  'systems.cop_heating',
+  'systems.mvhr_efficiency',
+  // Operable windows — State 2.5 territory
+  'openings.schedule',
+  'openings.{face}.openable_fraction',
+])
+
+export function isForbiddenAtEnvelopeGains(path) {
+  if (!path) return false
+  const normalised = path.replace(/openings\.[ns ew]+/i, 'openings.{face}')
+  return FORBIDDEN_ENVELOPE_GAINS_INPUTS.includes(normalised)
+}
+
+/**
  * Loss-element rendering order per mode. Imported by HeatBalance views to
  * filter and order loss items. Each mode defines what *belongs on the losses
  * side* — items not in the list are hidden, even if data is present.
