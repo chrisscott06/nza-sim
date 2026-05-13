@@ -23,10 +23,77 @@ import {
   useState,
 } from 'react'
 import { publishState, onInitialStateRequest } from '../utils/broadcastChannel.js'
+import { SCHEDULE_PRESETS, findPreset } from '../data/schedulePresets.js'
 
 export const ProjectContext = createContext(null)
 
 // ── Defaults (mirror api/db/database.py) ─────────────────────────────────────
+
+// Default occupancy schedule: hotel-bedroom-overnight preset (matches the
+// seeded Bridgewater building_type). Migration may overwrite this from
+// a different preset if building_type indicates Office / Retail / etc.
+const _hotelOccPreset = findPreset('occupancy', 'hotel_bedroom_overnight')
+const _hotelLightPreset = findPreset('lighting', 'hotel_bedroom_lighting')
+const _hotelEquipPreset = findPreset('equipment', 'hotel_bedroom_equipment')
+
+const DEFAULT_OCCUPANCY = {
+  // Annual modulation: fraction of rooms / units typically occupied
+  occupancy_rate: 0.75,
+  // Density — value + basis. basis ∈ {per_room, per_m2, total, per_workstation}
+  density: { value: 1.5, basis: 'per_room' },
+  // Metabolic. Typical hotel-bedroom-rest values (CIBSE Guide A).
+  sensible_w_per_person: 75,
+  latent_w_per_person:   55,
+  // Schedule — when a room IS occupied, when is the occupant present
+  schedule: {
+    weekday:             [..._hotelOccPreset.schedule.weekday],
+    saturday:            [..._hotelOccPreset.schedule.saturday],
+    sunday:              [..._hotelOccPreset.schedule.sunday],
+    monthly_multipliers: [..._hotelOccPreset.schedule.monthly_multipliers],
+    exceptions:          [],
+  },
+  _provenance: { source: 'seeded_default', confidence: 'medium' },
+}
+
+const DEFAULT_GAINS = {
+  lighting: {
+    // Magnitude. unit ∈ {w_per_m2, w_per_room, total_w}
+    magnitude: { value: 8, unit: 'w_per_m2' },
+    // relationship_to_occupancy:
+    //   'proportional_with_spill' — schedule follows occupancy, shifted right by `spill_minutes`
+    //   'proportional'            — schedule equals occupancy
+    //   'independent'             — schedule comes from `schedule` field below
+    //   'always_on'               — schedule is 1.0 everywhere
+    relationship_to_occupancy: 'proportional_with_spill',
+    spill_minutes:   15,
+    daylight_factor: 0.6,
+    // Only consulted when relationship_to_occupancy === 'independent'
+    schedule: {
+      weekday:             [..._hotelLightPreset.schedule.weekday],
+      saturday:            [..._hotelLightPreset.schedule.saturday],
+      sunday:              [..._hotelLightPreset.schedule.sunday],
+      monthly_multipliers: [..._hotelLightPreset.schedule.monthly_multipliers],
+      exceptions:          [],
+    },
+    _provenance: { source: 'seeded_default', confidence: 'medium' },
+  },
+  equipment: {
+    baseload: { value: 3, unit: 'w_per_m2' },  // 24/7 component (TVs standby, fridges, network)
+    active:   { value: 7, unit: 'w_per_m2' },  // occupancy-driven component (TVs on, kettle, hairdryer)
+    // 'proportional' or 'independent'
+    relationship_to_occupancy: 'proportional',
+    // Fraction of `active` that runs when the zone is unoccupied
+    standby_factor: 0.10,
+    schedule: {
+      weekday:             [..._hotelEquipPreset.schedule.weekday],
+      saturday:            [..._hotelEquipPreset.schedule.saturday],
+      sunday:              [..._hotelEquipPreset.schedule.sunday],
+      monthly_multipliers: [..._hotelEquipPreset.schedule.monthly_multipliers],
+      exceptions:          [],
+    },
+    _provenance: { source: 'seeded_default', confidence: 'medium' },
+  },
+}
 
 const DEFAULT_PARAMS = {
   name:            'Bridgewater Hotel',
@@ -63,15 +130,95 @@ const DEFAULT_PARAMS = {
     west:  { louvre_area_m2: 0, openable_fraction: 0 },
   },
   window_count:    { north: 8, south: 8, east: 3, west: 3 },
-  // Occupancy — confirmed from water consumption data (was 138)
+  // Legacy occupancy fields — kept for backward compat with hvac_dhw.py
+  // and existing State 1 code that reads them. Brief 27 introduces
+  // `occupancy.*` as the v2.3 contract source of truth; these fields
+  // mirror the same numbers and stay in sync via the migration on load.
   num_bedrooms:    134,
   occupancy_rate:  0.75,
   people_per_room: 1.5,
+  // Brief 27 v2.3 — occupancy is a first-class building property.
+  // Sensible/latent heat per person, presence schedule, exception
+  // periods all live here. Density.basis controls how `density.value`
+  // converts to total occupants.
+  occupancy: DEFAULT_OCCUPANCY,
+  // Brief 27 v2.3 — gains restructured. People are no longer in
+  // gains (they're under occupancy); lighting and equipment carry
+  // a relationship_to_occupancy field that controls whether their
+  // schedule derives from occupancy or runs independently.
+  gains: DEFAULT_GAINS,
   location: {
     latitude:  51.087,   // North Petherton / Bridgwater
     longitude: -2.985,
     name:      'Bridgwater, Somerset',
   },
+}
+
+// ── Brief 27 Part 1 — v2.3 migration helpers ─────────────────────────────────
+//
+// Persisted building_configs pre-Brief 27 don't have `occupancy.*` or
+// `gains.*` blocks. These helpers build them from legacy fields (preserving
+// any explicit user value) on load. Idempotent — running twice doesn't
+// double-apply; explicit v2.3 fields win over derived defaults.
+
+function migrateOccupancyV23(bc) {
+  // Already migrated? Preserve verbatim.
+  if (bc?.occupancy?.density?.value != null) {
+    return {
+      ...DEFAULT_OCCUPANCY,
+      ...bc.occupancy,
+      density: { ...DEFAULT_OCCUPANCY.density, ...bc.occupancy.density },
+      schedule: { ...DEFAULT_OCCUPANCY.schedule, ...(bc.occupancy.schedule ?? {}) },
+    }
+  }
+  // Build from legacy fields where present.
+  return {
+    ...DEFAULT_OCCUPANCY,
+    occupancy_rate: bc?.occupancy_rate ?? DEFAULT_OCCUPANCY.occupancy_rate,
+    density: {
+      value: bc?.people_per_room ?? DEFAULT_OCCUPANCY.density.value,
+      basis: bc?.people_per_room != null ? 'per_room' : DEFAULT_OCCUPANCY.density.basis,
+    },
+    _provenance: { source: 'migrated_from_legacy', confidence: 'medium' },
+  }
+}
+
+function migrateGainsV23(bc) {
+  // Already migrated? Preserve verbatim.
+  if (bc?.gains?.lighting?.magnitude?.value != null) {
+    return {
+      lighting: {
+        ...DEFAULT_GAINS.lighting,
+        ...bc.gains.lighting,
+        magnitude: { ...DEFAULT_GAINS.lighting.magnitude, ...bc.gains.lighting.magnitude },
+        schedule:  { ...DEFAULT_GAINS.lighting.schedule, ...(bc.gains.lighting.schedule ?? {}) },
+      },
+      equipment: {
+        ...DEFAULT_GAINS.equipment,
+        ...(bc.gains.equipment ?? {}),
+        baseload: {
+          ...DEFAULT_GAINS.equipment.baseload,
+          ...(bc.gains.equipment?.baseload ?? {}),
+        },
+        active: {
+          ...DEFAULT_GAINS.equipment.active,
+          ...(bc.gains.equipment?.active ?? {}),
+        },
+        schedule: { ...DEFAULT_GAINS.equipment.schedule, ...(bc.gains.equipment?.schedule ?? {}) },
+      },
+    }
+  }
+  // Build from defaults — pre-Brief-27 projects didn't have a `gains.*` block.
+  return {
+    lighting: {
+      ...DEFAULT_GAINS.lighting,
+      _provenance: { source: 'migrated_from_legacy', confidence: 'low' },
+    },
+    equipment: {
+      ...DEFAULT_GAINS.equipment,
+      _provenance: { source: 'migrated_from_legacy', confidence: 'low' },
+    },
+  }
 }
 
 const DEFAULT_CONSTRUCTIONS = {
@@ -275,6 +422,13 @@ export function ProjectProvider({ children }) {
       openings: bc.openings ?? DEFAULT_PARAMS.openings,
       thermal_mass_mode:     bc.thermal_mass_mode     ?? DEFAULT_PARAMS.thermal_mass_mode,
       thermal_mass_category: bc.thermal_mass_category ?? DEFAULT_PARAMS.thermal_mass_category,
+      // Brief 27 Part 1 — occupancy + gains migration. Persisted projects
+      // pre-26.2 don't have these fields; build from legacy num_bedrooms /
+      // occupancy_rate / people_per_room and the seeded hotel-bedroom
+      // schedule presets. Idempotent: if the v2.3 fields already exist on
+      // the persisted bc, preserve them verbatim.
+      occupancy: migrateOccupancyV23(bc),
+      gains:     migrateGainsV23(bc),
     })
     setConstructions(project.construction_choices ?? DEFAULT_CONSTRUCTIONS)
     setSystems(migrateSystemsConfig(project.systems_config))
