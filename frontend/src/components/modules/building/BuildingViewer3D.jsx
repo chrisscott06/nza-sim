@@ -18,10 +18,18 @@ function facadeLabel(facadeNumber, orientationDeg) {
 const COLORS = {
   wall:        '#EBEBEB',  // clean light grey wall (brief Part 1 fix)
   roof:        '#D8D8D8',  // slightly darker than walls
-  glazing:     '#A8C8E0',  // blue-tinted glass — consistent blue from all angles
+  // Glass tuned for legibility against the white walls. Previously '#A8C8E0'
+  // (pale blue-grey) with opacity 0.35 — the wall colour bled through and
+  // washed it out, leaving the window hard to read at high WWR. Now a more
+  // saturated architectural blue at higher opacity so the glazing reads as
+  // a clear feature on the facade.
+  glazing:     '#5E94C2',
   floorLine:   '#BBBBBB',  // floor band line
   groundPlane: '#E0E0E0',  // off-white ground
-  frame:       '#B0B0B0',  // medium grey window reveal frame
+  // Frame lightened from '#B0B0B0' so it doesn't outweigh the glass —
+  // sits between wall and roof tone, reads as a thin reveal rather than
+  // a feature in its own right.
+  frame:       '#D8D8D8',
   basePlate:   '#E4E4E4',  // base platform — slightly darker than wall
   edges:       '#888888',  // soft edge lines
 }
@@ -121,7 +129,9 @@ function Building({ params, solarOverlay, onFacadeHover }) {
 
           panels.push(
             <group key={`${f}-${w}`}>
-              {/* Glass panel — sits at wall surface level, inside the reveal frame */}
+              {/* Glass panel — sits at wall surface level, inside the reveal frame.
+                  Opacity 0.55 (was 0.35) + lower reflectivity so the blue tint
+                  dominates rather than the white wall bleeding through. */}
               <mesh
                 castShadow receiveShadow
                 position={p(along, cy, glassFace)}
@@ -130,11 +140,11 @@ function Building({ params, solarOverlay, onFacadeHover }) {
                 <planeGeometry args={[gw, winH]} />
                 <meshPhysicalMaterial
                   color={COLORS.glazing}
-                  roughness={0.10}
-                  metalness={0.10}
+                  roughness={0.12}
+                  metalness={0.05}
                   transparent
-                  opacity={0.35}
-                  reflectivity={0.6}
+                  opacity={0.55}
+                  reflectivity={0.35}
                   side={THREE.DoubleSide}
                 />
               </mesh>
@@ -404,7 +414,11 @@ function WindowShadingFrames({
   return <>{frames}</>
 }
 
-const SHADING_COLOUR = '#9CA3AF'
+// Shading slabs deepened from '#9CA3AF' (very pale steel) to a slightly
+// darker mid-grey so reveals and overhangs read clearly even at small
+// depths. Still architectural-neutral; not so dark that 1m brise soleil
+// looks like a concrete canopy.
+const SHADING_COLOUR = '#7C8694'
 
 /* ── Facade labels — billboard sprites at face centroids ─────────────────────
    Position is in the building's LOCAL coordinate system (rendered inside the
