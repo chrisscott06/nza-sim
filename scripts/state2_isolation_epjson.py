@@ -44,6 +44,8 @@ def load_forbidden_paths() -> list[str]:
     if not m:
         raise RuntimeError("Could not parse FORBIDDEN_ENVELOPE_GAINS_INPUTS from stateMode.js")
     body = m.group(1)
+    # Strip // line comments before extracting quoted paths.
+    body = re.sub(r"//[^\n]*", "", body)
     paths = re.findall(r"'([^']+)'", body)
     if len(paths) < _MIN_FORBIDDEN_PATHS:
         raise RuntimeError(

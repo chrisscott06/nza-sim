@@ -52,6 +52,10 @@ export function useAnnualGains() {
     let baseload_wh = 0, active_wh = 0
     let hours_p = 0, hours_l = 0, hours_e_active = 0
 
+    // v2.4 per-profile accumulators. Maps profile id → { kwh, peak_kw, hours }.
+    const lightingProfileAccum  = new Map()
+    const equipmentProfileAccum = new Map()
+
     const n = weatherData.temperature.length
     for (let h = 0; h < n; h++) {
       const g = computeHourlyGains(params, h, weatherData, gia)
@@ -66,10 +70,49 @@ export function useAnnualGains() {
       if (g.people    > 0.01) hours_p++
       if (g.lighting  > 0.01) hours_l++
       if (g.equipment_active > 0.01) hours_e_active++
+
+      if (g.lighting_per_profile) {
+        for (const p of g.lighting_per_profile) {
+          let a = lightingProfileAccum.get(p.id)
+          if (!a) { a = { wh: 0, peak_w: 0, hours: 0 }; lightingProfileAccum.set(p.id, a) }
+          a.wh += p.value
+          if (p.value > a.peak_w) a.peak_w = p.value
+          if (p.value > 0.01) a.hours++
+        }
+      }
+      if (g.equipment_per_profile) {
+        for (const p of g.equipment_per_profile) {
+          let a = equipmentProfileAccum.get(p.id)
+          if (!a) { a = { wh: 0, peak_w: 0, hours: 0, base_wh: 0, active_wh: 0 }; equipmentProfileAccum.set(p.id, a) }
+          a.wh        += p.value
+          a.base_wh   += p.baseload
+          a.active_wh += p.active
+          if (p.value > a.peak_w) a.peak_w = p.value
+          if (p.active > 0.01) a.hours++
+        }
+      }
     }
 
     // Effective LPD = lighting kWh / GIA / 8760, useful for cross-check.
     const effective_lpd = (light_wh / Math.max(1, n)) / Math.max(1, gia)
+
+    // v2.4 per-profile output arrays, ordered by input profiles[] index.
+    const lighting_profiles = (params?.gains?.lighting?.profiles ?? []).map(p => {
+      const a = lightingProfileAccum.get(p.id) ?? { wh: 0, peak_w: 0, hours: 0 }
+      return {
+        id: p.id, label: p.label ?? p.id,
+        kwh: a.wh / 1000, peak_kw: a.peak_w / 1000, hours_active: a.hours,
+      }
+    })
+    const equipment_profiles = (params?.gains?.equipment?.profiles ?? []).map(p => {
+      const a = equipmentProfileAccum.get(p.id) ?? { wh: 0, peak_w: 0, hours: 0, base_wh: 0, active_wh: 0 }
+      return {
+        id: p.id, label: p.label ?? p.id,
+        kwh: a.wh / 1000, peak_kw: a.peak_w / 1000,
+        baseload_kwh: a.base_wh / 1000, active_kwh: a.active_wh / 1000,
+        hours_active: a.hours,
+      }
+    })
 
     return {
       people: {
@@ -82,6 +125,7 @@ export function useAnnualGains() {
         peak_kw: peak_l / 1000,
         effective_lpd_w_per_m2: effective_lpd,
         hours_active: hours_l,
+        profiles: lighting_profiles,
       },
       equipment: {
         kwh: equip_wh / 1000,
@@ -89,6 +133,7 @@ export function useAnnualGains() {
         baseload_kwh: baseload_wh / 1000,
         active_kwh: active_wh / 1000,
         hours_active: hours_e_active,
+        profiles: equipment_profiles,
       },
       gia_m2: gia,
       ready: true,

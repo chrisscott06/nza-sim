@@ -47,7 +47,7 @@ from nza_engine.runner import run_simulation
 
 
 # ── Read the canonical forbidden list from stateMode.js ──────────────────────
-_MIN_FORBIDDEN_PATHS = 30  # tripwire — see comment below
+_MIN_FORBIDDEN_PATHS = 32  # tripwire — see comment below
 
 
 def load_forbidden_paths() -> list[str]:
@@ -71,6 +71,10 @@ def load_forbidden_paths() -> list[str]:
     if not m:
         raise RuntimeError("Could not parse FORBIDDEN_ENVELOPE_ONLY_INPUTS from stateMode.js")
     body = m.group(1)
+    # Strip // line comments before extracting quoted paths — comments
+    # may contain apostrophes (e.g. "haven't") that would otherwise
+    # produce phantom matches in the simple single-quote regex.
+    body = re.sub(r"//[^\n]*", "", body)
     paths = re.findall(r"'([^']+)'", body)
     if len(paths) < _MIN_FORBIDDEN_PATHS:
         raise RuntimeError(
@@ -98,7 +102,7 @@ ABSURD: dict = {
     'occupancy.latent_w_per_person':       9999,
     'occupancy.schedule':                  {'weekday': [99]*24, 'saturday': [99]*24, 'sunday': [99]*24, 'monthly_multipliers': [99]*12, 'exceptions': []},
     'occupancy.schedule.exceptions':       [{'name': 'absurd', 'start_date': '01-01', 'end_date': '12-31', 'weekday': [99]*24, 'saturday': [99]*24, 'sunday': [99]*24}],
-    # v2.3 gains (Brief 27)
+    # v2.3 gains (Brief 27) — legacy paths
     'gains.lighting.magnitude':                  {'value': 999, 'unit': 'w_per_m2'},
     'gains.lighting.relationship_to_occupancy':  'always_on',
     'gains.lighting.spill_minutes':              999,
@@ -109,6 +113,19 @@ ABSURD: dict = {
     'gains.equipment.relationship_to_occupancy': 'independent',
     'gains.equipment.standby_factor':            0.99,
     'gains.equipment.schedule':                  {'weekday': [99]*24},
+    # v2.4 multi-profile gains (Brief 27 Revised Part 9)
+    'gains.lighting.profiles': [{
+        'id': 'absurd', 'label': 'Absurd', 'magnitude': {'value': 9999, 'unit': 'w_per_m2'},
+        'relationship_to_occupancy': 'always_on', 'area_share': 99,
+        'schedule': {'weekday': [99]*24},
+    }],
+    'gains.equipment.profiles': [{
+        'id': 'absurd', 'label': 'Absurd',
+        'baseload': {'value': 9999, 'unit': 'w_per_m2'},
+        'active':   {'value': 9999, 'unit': 'w_per_m2'},
+        'relationship_to_occupancy': 'independent', 'area_share': 99, 'standby_factor': 9,
+        'schedule': {'weekday': [99]*24},
+    }],
     # Systems — extreme setpoints / impossible COPs
     'systems.space_heating':            {'setpoint_heating_c': 35, 'cop': 99},
     'systems.space_cooling':            {'setpoint_cooling_c':  5, 'cop': 99},

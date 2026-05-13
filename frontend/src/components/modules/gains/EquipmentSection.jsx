@@ -13,6 +13,11 @@ import { GAIN_COLOURS } from './gainColours.js'
 export default function EquipmentSection({ annual, onEditSchedule }) {
   const { params } = useContext(ProjectContext)
   const equipment = params?.gains?.equipment
+  // v2.4: read profiles[0] as the "active" one until Part 10 wires
+  // multi-profile selection. The canvas Schedule tab also edits
+  // profiles[0]'s schedule.
+  const activeProfile = equipment?.profiles?.[0] ?? null
+  const profileCount = equipment?.profiles?.length ?? 0
   const e = annual?.equipment
 
   return (
@@ -46,29 +51,39 @@ export default function EquipmentSection({ annual, onEditSchedule }) {
       </div>
 
       <div className="px-2 py-1.5 bg-white border border-light-grey/60 rounded text-xxs">
-        <div className="font-mono text-mid-grey">
-          {equipment?.baseload && equipment?.active
-            ? `${equipment.baseload.value} base + ${equipment.active.value} active ${equipment.baseload.unit.replace('w_per_m2', 'W/m²').replace('w_per_room', 'W/room').replace('total_w', 'W total')}`
-            : '— (not configured)'}
-        </div>
-        <div className="text-mid-grey/80 mt-0.5">
-          {equipment?.relationship_to_occupancy
-            ? `Active: ${equipment.relationship_to_occupancy.replace(/_/g, ' ')}, standby floor ${((equipment.standby_factor ?? 0.1) * 100).toFixed(0)}%`
-            : '— relationship not set'}
-        </div>
+        {activeProfile ? (
+          <>
+            <div className="font-mono text-mid-grey">
+              {activeProfile.label ?? 'Profile 1'} —{' '}
+              {activeProfile.baseload && activeProfile.active
+                ? `${activeProfile.baseload.value} base + ${activeProfile.active.value} active ${activeProfile.baseload.unit.replace('w_per_m2', 'W/m²').replace('w_per_room', 'W/room').replace('total_w', 'W total')}`
+                : 'no magnitudes'}
+              {profileCount > 1 && (
+                <span className="ml-1 text-mid-grey/70">(+{profileCount - 1} more)</span>
+              )}
+            </div>
+            <div className="text-mid-grey/80 mt-0.5">
+              {activeProfile.relationship_to_occupancy
+                ? `Active: ${activeProfile.relationship_to_occupancy.replace(/_/g, ' ')} · standby ${((activeProfile.standby_factor ?? 0.1) * 100).toFixed(0)}% · ${Math.round((activeProfile.area_share ?? 1) * 100)}% of GIA`
+                : '— relationship not set'}
+            </div>
+          </>
+        ) : (
+          <div className="font-mono text-mid-grey">— (no profiles configured)</div>
+        )}
       </div>
 
       <MiniProfile
-        schedule={equipment?.schedule}
+        schedule={activeProfile?.schedule}
         accent={GAIN_COLOURS.equipment}
         onEdit={onEditSchedule}
-        label="Weekday schedule"
+        label={profileCount > 1 ? 'Profile 1 weekday' : 'Weekday schedule'}
       />
 
       <p className="text-xxs italic text-mid-grey/70 px-1">
-        Editable baseload + active power + relationship-to-occupancy +
-        standby factor land in Brief 27 Revised Part 10 alongside the
-        multi-profile data model.
+        Multi-profile selector + editable baseload / active / area share
+        / standby + per-profile schedules land in Brief 27 Revised Part 10.
+        For now the canvas Schedule tab edits Profile 1's schedule.
       </p>
     </div>
   )

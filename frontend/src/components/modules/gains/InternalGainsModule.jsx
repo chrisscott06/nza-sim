@@ -154,25 +154,31 @@ function TabContent({
     // profile arrives in Parts 9/10; for now Lighting + Equipment edit the
     // (single) gains.lighting.schedule / gains.equipment.schedule which the
     // current data model still uses.
+    // v2.4 multi-profile (Part 9): Lighting + Equipment now live under
+    // `gains.{category}.profiles[]`. Until Part 10 wires the multi-profile
+    // selector, the Schedule tab routes to profiles[0] — the "active"
+    // profile. Occupancy stays single-object (not multi-profile).
     let parentSchedule, parentOnChange, label
     if (activeSection === 'occupancy') {
       parentSchedule = params?.occupancy?.schedule
       label = GAIN_LABELS.occupancy
       parentOnChange = (next) => updateParam('occupancy', { ...(params?.occupancy ?? {}), schedule: next })
-    } else if (activeSection === 'lighting') {
-      parentSchedule = params?.gains?.lighting?.schedule
-      label = GAIN_LABELS.lighting
-      parentOnChange = (next) => updateParam('gains', {
-        ...(params?.gains ?? {}),
-        lighting: { ...(params?.gains?.lighting ?? {}), schedule: next },
-      })
-    } else if (activeSection === 'equipment') {
-      parentSchedule = params?.gains?.equipment?.schedule
-      label = GAIN_LABELS.equipment
-      parentOnChange = (next) => updateParam('gains', {
-        ...(params?.gains ?? {}),
-        equipment: { ...(params?.gains?.equipment ?? {}), schedule: next },
-      })
+    } else if (activeSection === 'lighting' || activeSection === 'equipment') {
+      const category = activeSection
+      label = GAIN_LABELS[category]
+      const profiles = params?.gains?.[category]?.profiles ?? []
+      const activeIdx = 0  // Part 10 wires real selection
+      parentSchedule = profiles[activeIdx]?.schedule
+      parentOnChange = (next) => {
+        const nextProfiles = profiles.slice()
+        if (nextProfiles[activeIdx]) {
+          nextProfiles[activeIdx] = { ...nextProfiles[activeIdx], schedule: next }
+        }
+        updateParam('gains', {
+          ...(params?.gains ?? {}),
+          [category]: { ...(params?.gains?.[category] ?? {}), profiles: nextProfiles },
+        })
+      }
     }
 
     // Resolve the currently-edited exception (if any). Stale ID falls

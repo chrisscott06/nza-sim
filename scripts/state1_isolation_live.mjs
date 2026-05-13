@@ -55,7 +55,7 @@ const ABSURD = {
   'occupancy.latent_w_per_person':       9999,
   'occupancy.schedule':                  { weekday: Array(24).fill(99), saturday: Array(24).fill(99), sunday: Array(24).fill(99), monthly_multipliers: Array(12).fill(99), exceptions: [] },
   'occupancy.schedule.exceptions':       [{ name: 'absurd', start_date: '01-01', end_date: '12-31', weekday: Array(24).fill(99), saturday: Array(24).fill(99), sunday: Array(24).fill(99) }],
-  // v2.3 gains (Brief 27)
+  // v2.3 gains (Brief 27) — legacy paths, no longer read by the engine
   'gains.lighting.magnitude':                  { value: 999, unit: 'w_per_m2' },
   'gains.lighting.relationship_to_occupancy':  'always_on',
   'gains.lighting.spill_minutes':              999,
@@ -66,6 +66,19 @@ const ABSURD = {
   'gains.equipment.relationship_to_occupancy': 'independent',
   'gains.equipment.standby_factor':            0.99,
   'gains.equipment.schedule':                  { weekday: Array(24).fill(99) },
+  // v2.4 multi-profile gains (Brief 27 Revised Part 9)
+  'gains.lighting.profiles': [{
+    id: 'absurd', label: 'Absurd', magnitude: { value: 9999, unit: 'w_per_m2' },
+    relationship_to_occupancy: 'always_on', area_share: 99,
+    schedule: { weekday: Array(24).fill(99) },
+  }],
+  'gains.equipment.profiles': [{
+    id: 'absurd', label: 'Absurd',
+    baseload: { value: 9999, unit: 'w_per_m2' },
+    active:   { value: 9999, unit: 'w_per_m2' },
+    relationship_to_occupancy: 'independent', area_share: 99, standby_factor: 9,
+    schedule: { weekday: Array(24).fill(99) },
+  }],
   // Systems — extreme setpoints + impossible COPs
   'systems.space_heating':   { setpoint_heating_c: 35, cop: 99 },
   'systems.space_cooling':   { setpoint_cooling_c:  5, cop: 99 },

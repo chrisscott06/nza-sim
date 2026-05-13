@@ -24,6 +24,12 @@ import { GAIN_COLOURS } from './gainColours.js'
 export default function LightingSection({ annual, onEditSchedule }) {
   const { params } = useContext(ProjectContext)
   const lighting = params?.gains?.lighting
+  // v2.4: read the first profile as the "active" one until Part 10 wires
+  // a real profile selector. profiles[0] is what the canvas Schedule tab
+  // edits in this same arrangement, so the MiniProfile + readout stay
+  // consistent with what gets authored.
+  const activeProfile = lighting?.profiles?.[0] ?? null
+  const profileCount = lighting?.profiles?.length ?? 0
   const l = annual?.lighting
 
   return (
@@ -53,30 +59,40 @@ export default function LightingSection({ annual, onEditSchedule }) {
       </div>
 
       <div className="px-2 py-1.5 bg-white border border-light-grey/60 rounded text-xxs">
-        <div className="font-mono text-mid-grey">
-          {lighting?.magnitude
-            ? `${lighting.magnitude.value} ${lighting.magnitude.unit.replace('w_per_m2', 'W/m²').replace('w_per_room', 'W/room').replace('total_w', 'W total')}`
-            : '— (not configured)'}
-        </div>
-        <div className="text-mid-grey/80 mt-0.5">
-          {lighting?.relationship_to_occupancy
-            ? `Relationship: ${lighting.relationship_to_occupancy.replace(/_/g, ' ')}`
-            : '— relationship not set'}
-        </div>
+        {activeProfile ? (
+          <>
+            <div className="font-mono text-mid-grey">
+              {activeProfile.label ?? 'Profile 1'} —{' '}
+              {activeProfile.magnitude
+                ? `${activeProfile.magnitude.value} ${activeProfile.magnitude.unit.replace('w_per_m2', 'W/m²').replace('w_per_room', 'W/room').replace('total_w', 'W total')}`
+                : 'no magnitude'}
+              {profileCount > 1 && (
+                <span className="ml-1 text-mid-grey/70">(+{profileCount - 1} more)</span>
+              )}
+            </div>
+            <div className="text-mid-grey/80 mt-0.5">
+              {activeProfile.relationship_to_occupancy
+                ? `${activeProfile.relationship_to_occupancy.replace(/_/g, ' ')} · ${Math.round((activeProfile.area_share ?? 1) * 100)}% of GIA`
+                : '— relationship not set'}
+            </div>
+          </>
+        ) : (
+          <div className="font-mono text-mid-grey">— (no profiles configured)</div>
+        )}
       </div>
 
-      {/* Read-only mini-profile + Edit-schedule link */}
+      {/* Read-only mini-profile (profile 0's schedule) + Edit-schedule link */}
       <MiniProfile
-        schedule={lighting?.schedule}
+        schedule={activeProfile?.schedule}
         accent={GAIN_COLOURS.lighting}
         onEdit={onEditSchedule}
-        label="Weekday schedule"
+        label={profileCount > 1 ? 'Profile 1 weekday' : 'Weekday schedule'}
       />
 
       <p className="text-xxs italic text-mid-grey/70 px-1">
-        Editable LPD + relationship-to-occupancy selector + daylight
-        factor land in Brief 27 Revised Part 10 alongside the
-        multi-profile data model (bedroom / corridor / exterior / etc.).
+        Multi-profile selector + editable LPD / relationship / area share
+        + per-profile preview land in Brief 27 Revised Part 10. For now
+        the canvas Schedule tab edits Profile 1's schedule.
       </p>
     </div>
   )

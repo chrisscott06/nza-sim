@@ -55,43 +55,65 @@ const DEFAULT_OCCUPANCY = {
   _provenance: { source: 'seeded_default', confidence: 'medium' },
 }
 
+// v2.4 (Brief 27 Revised) — lighting and equipment are arrays of load-type
+// profiles. Each profile contributes profile.area_share fraction of GIA at
+// its own LPD/EPD with its own relationship_to_occupancy + schedule.
+// Single-profile (this default) reproduces v2.3 behaviour exactly.
 const DEFAULT_GAINS = {
   lighting: {
-    // Magnitude. unit ∈ {w_per_m2, w_per_room, total_w}
-    magnitude: { value: 8, unit: 'w_per_m2' },
-    // relationship_to_occupancy:
-    //   'proportional_with_spill' — schedule follows occupancy, shifted right by `spill_minutes`
-    //   'proportional'            — schedule equals occupancy
-    //   'independent'             — schedule comes from `schedule` field below
-    //   'always_on'               — schedule is 1.0 everywhere
-    relationship_to_occupancy: 'proportional_with_spill',
-    spill_minutes:   15,
-    daylight_factor: 0.6,
-    // Only consulted when relationship_to_occupancy === 'independent'
-    schedule: {
-      weekday:             [..._hotelLightPreset.schedule.weekday],
-      saturday:            [..._hotelLightPreset.schedule.saturday],
-      sunday:              [..._hotelLightPreset.schedule.sunday],
-      monthly_multipliers: [..._hotelLightPreset.schedule.monthly_multipliers],
-      exceptions:          [],
-    },
-    _provenance: { source: 'seeded_default', confidence: 'medium' },
+    profiles: [
+      {
+        id: 'default_lighting',
+        label: 'Lighting',
+        magnitude: { value: 8, unit: 'w_per_m2' },
+        // relationship_to_occupancy:
+        //   'proportional_with_spill' — schedule follows occupancy, shifted by `spill_minutes`
+        //   'proportional'            — schedule equals occupancy
+        //   'independent'             — schedule comes from this profile's `schedule` field
+        //   'always_on'               — fraction is 1.0 every hour
+        relationship_to_occupancy: 'proportional_with_spill',
+        spill_minutes:   15,
+        daylight_factor: 0.6,
+        // Fraction of GIA this profile applies to. Sum across profiles
+        // SHOULD equal 1.0 (warning surfaced in UI if not); engine
+        // weights each profile's contribution by area_share.
+        area_share: 1.0,
+        // Only consulted when relationship_to_occupancy === 'independent';
+        // kept on every profile so users can switch relationship without
+        // losing the curve they may have authored.
+        schedule: {
+          weekday:             [..._hotelLightPreset.schedule.weekday],
+          saturday:            [..._hotelLightPreset.schedule.saturday],
+          sunday:              [..._hotelLightPreset.schedule.sunday],
+          monthly_multipliers: [..._hotelLightPreset.schedule.monthly_multipliers],
+          exceptions:          [],
+        },
+        _provenance: { source: 'seeded_default', confidence: 'medium' },
+      },
+    ],
   },
   equipment: {
-    baseload: { value: 3, unit: 'w_per_m2' },  // 24/7 component (TVs standby, fridges, network)
-    active:   { value: 7, unit: 'w_per_m2' },  // occupancy-driven component (TVs on, kettle, hairdryer)
-    // 'proportional' or 'independent'
-    relationship_to_occupancy: 'proportional',
-    // Fraction of `active` that runs when the zone is unoccupied
-    standby_factor: 0.10,
-    schedule: {
-      weekday:             [..._hotelEquipPreset.schedule.weekday],
-      saturday:            [..._hotelEquipPreset.schedule.saturday],
-      sunday:              [..._hotelEquipPreset.schedule.sunday],
-      monthly_multipliers: [..._hotelEquipPreset.schedule.monthly_multipliers],
-      exceptions:          [],
-    },
-    _provenance: { source: 'seeded_default', confidence: 'medium' },
+    profiles: [
+      {
+        id: 'default_equipment',
+        label: 'Equipment',
+        baseload: { value: 3, unit: 'w_per_m2' },  // 24/7 component
+        active:   { value: 7, unit: 'w_per_m2' },  // occupancy-driven component
+        // 'proportional' or 'independent'
+        relationship_to_occupancy: 'proportional',
+        // Fraction of `active` that runs when unoccupied (active floor)
+        standby_factor: 0.10,
+        area_share: 1.0,
+        schedule: {
+          weekday:             [..._hotelEquipPreset.schedule.weekday],
+          saturday:            [..._hotelEquipPreset.schedule.saturday],
+          sunday:              [..._hotelEquipPreset.schedule.sunday],
+          monthly_multipliers: [..._hotelEquipPreset.schedule.monthly_multipliers],
+          exceptions:          [],
+        },
+        _provenance: { source: 'seeded_default', confidence: 'medium' },
+      },
+    ],
   },
 }
 
@@ -200,46 +222,126 @@ function migrateOccupancyV23(bc) {
   return result
 }
 
-function migrateGainsV23(bc) {
-  // Already migrated? Preserve verbatim + run v2.4 exception migration on
-  // both schedules.
-  if (bc?.gains?.lighting?.magnitude?.value != null) {
-    const lighting = {
-      ...DEFAULT_GAINS.lighting,
-      ...bc.gains.lighting,
-      magnitude: { ...DEFAULT_GAINS.lighting.magnitude, ...bc.gains.lighting.magnitude },
-      schedule:  { ...DEFAULT_GAINS.lighting.schedule, ...(bc.gains.lighting.schedule ?? {}) },
-    }
-    lighting.schedule = _migrateScheduleExceptions(lighting.schedule)
-
-    const equipment = {
-      ...DEFAULT_GAINS.equipment,
-      ...(bc.gains.equipment ?? {}),
-      baseload: {
-        ...DEFAULT_GAINS.equipment.baseload,
-        ...(bc.gains.equipment?.baseload ?? {}),
-      },
-      active: {
-        ...DEFAULT_GAINS.equipment.active,
-        ...(bc.gains.equipment?.active ?? {}),
-      },
-      schedule: { ...DEFAULT_GAINS.equipment.schedule, ...(bc.gains.equipment?.schedule ?? {}) },
-    }
-    equipment.schedule = _migrateScheduleExceptions(equipment.schedule)
-
-    return { lighting, equipment }
-  }
-  // Build from defaults — pre-Brief-27 projects didn't have a `gains.*` block.
+// v2.3 → v2.4 lighting migration: single-quantity → profiles[0]. Wraps
+// the v2.3 fields into a single default profile with area_share = 1.0
+// so the engine output is byte-identical to v2.3 behaviour for migrated
+// projects. Idempotent: profiles[] already present → preserve verbatim
+// (just migrate exceptions on each profile's schedule).
+function _lightingProfileFromV23(v23Lighting) {
+  const sched = _migrateScheduleExceptions({
+    ...DEFAULT_GAINS.lighting.profiles[0].schedule,
+    ...(v23Lighting.schedule ?? {}),
+  })
   return {
-    lighting: {
-      ...DEFAULT_GAINS.lighting,
-      _provenance: { source: 'migrated_from_legacy', confidence: 'low' },
-    },
-    equipment: {
-      ...DEFAULT_GAINS.equipment,
-      _provenance: { source: 'migrated_from_legacy', confidence: 'low' },
-    },
+    id: 'default_lighting',
+    label: 'Lighting',
+    magnitude: { ...DEFAULT_GAINS.lighting.profiles[0].magnitude, ...(v23Lighting.magnitude ?? {}) },
+    relationship_to_occupancy: v23Lighting.relationship_to_occupancy ?? DEFAULT_GAINS.lighting.profiles[0].relationship_to_occupancy,
+    spill_minutes:   v23Lighting.spill_minutes   ?? DEFAULT_GAINS.lighting.profiles[0].spill_minutes,
+    daylight_factor: v23Lighting.daylight_factor ?? DEFAULT_GAINS.lighting.profiles[0].daylight_factor,
+    area_share: 1.0,
+    schedule: sched,
+    _provenance: v23Lighting._provenance ?? { source: 'migrated_v23_to_v24', confidence: 'medium' },
   }
+}
+
+function _equipmentProfileFromV23(v23Equipment) {
+  const sched = _migrateScheduleExceptions({
+    ...DEFAULT_GAINS.equipment.profiles[0].schedule,
+    ...(v23Equipment.schedule ?? {}),
+  })
+  return {
+    id: 'default_equipment',
+    label: 'Equipment',
+    baseload: { ...DEFAULT_GAINS.equipment.profiles[0].baseload, ...(v23Equipment.baseload ?? {}) },
+    active:   { ...DEFAULT_GAINS.equipment.profiles[0].active,   ...(v23Equipment.active   ?? {}) },
+    relationship_to_occupancy: v23Equipment.relationship_to_occupancy ?? DEFAULT_GAINS.equipment.profiles[0].relationship_to_occupancy,
+    standby_factor: v23Equipment.standby_factor ?? DEFAULT_GAINS.equipment.profiles[0].standby_factor,
+    area_share: 1.0,
+    schedule: sched,
+    _provenance: v23Equipment._provenance ?? { source: 'migrated_v23_to_v24', confidence: 'medium' },
+  }
+}
+
+// Idempotently ensure each profile in an array has v2.4-required fields
+// (area_share, schedule with v2.4 exceptions). Profiles already in the
+// array keep their values; missing fields fall back to defaults.
+function _ensureProfileFields(profiles, defaultProfile) {
+  if (!Array.isArray(profiles) || profiles.length === 0) return profiles ?? []
+  return profiles.map((p, i) => {
+    const out = {
+      ...defaultProfile,
+      ...p,
+      id: p.id ?? `${defaultProfile.id}_${i}`,
+      magnitude: p.magnitude
+        ? { ...defaultProfile.magnitude, ...p.magnitude }
+        : defaultProfile.magnitude,
+      area_share: p.area_share ?? 1.0 / profiles.length,
+      schedule: _migrateScheduleExceptions({
+        ...defaultProfile.schedule,
+        ...(p.schedule ?? {}),
+      }),
+    }
+    // Preserve equipment-specific fields if present.
+    if (defaultProfile.baseload) {
+      out.baseload = p.baseload ? { ...defaultProfile.baseload, ...p.baseload } : defaultProfile.baseload
+    }
+    if (defaultProfile.active) {
+      out.active   = p.active   ? { ...defaultProfile.active,   ...p.active   } : defaultProfile.active
+    }
+    return out
+  })
+}
+
+function migrateGainsV23(bc) {
+  const haveV24Lighting  = Array.isArray(bc?.gains?.lighting?.profiles)
+  const haveV24Equipment = Array.isArray(bc?.gains?.equipment?.profiles)
+  const haveV23Lighting  = bc?.gains?.lighting?.magnitude?.value != null
+  const haveV23Equipment = bc?.gains?.equipment?.baseload?.value != null
+                        || bc?.gains?.equipment?.active?.value   != null
+
+  // ── Lighting ─────────────────────────────────────────────────────────────
+  let lighting
+  if (haveV24Lighting) {
+    // Already v2.4 — preserve profiles, just normalise per-profile shape.
+    lighting = {
+      profiles: _ensureProfileFields(bc.gains.lighting.profiles, DEFAULT_GAINS.lighting.profiles[0]),
+    }
+  } else if (haveV23Lighting) {
+    // v2.3 single-quantity → wrap as single profile with area_share 1.0
+    lighting = {
+      profiles: [_lightingProfileFromV23(bc.gains.lighting)],
+    }
+  } else {
+    // No gains block at all (pre-Brief-27 projects).
+    lighting = {
+      profiles: [{
+        ...DEFAULT_GAINS.lighting.profiles[0],
+        _provenance: { source: 'migrated_from_legacy', confidence: 'low' },
+      }],
+    }
+  }
+
+  // ── Equipment ────────────────────────────────────────────────────────────
+  let equipment
+  if (haveV24Equipment) {
+    equipment = {
+      profiles: _ensureProfileFields(bc.gains.equipment.profiles, DEFAULT_GAINS.equipment.profiles[0]),
+    }
+  } else if (haveV23Equipment) {
+    equipment = {
+      profiles: [_equipmentProfileFromV23(bc.gains.equipment)],
+    }
+  } else {
+    equipment = {
+      profiles: [{
+        ...DEFAULT_GAINS.equipment.profiles[0],
+        _provenance: { source: 'migrated_from_legacy', confidence: 'low' },
+      }],
+    }
+  }
+
+  return { lighting, equipment }
 }
 
 const DEFAULT_CONSTRUCTIONS = {

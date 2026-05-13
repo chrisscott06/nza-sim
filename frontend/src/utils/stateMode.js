@@ -66,7 +66,9 @@ export const FORBIDDEN_ENVELOPE_ONLY_INPUTS = Object.freeze([
   'occupancy.latent_w_per_person',
   'occupancy.schedule',
   'occupancy.schedule.exceptions',
-  // v2.3 gains block — State 2 territory.
+  // v2.3 gains block — State 2 territory. Kept on the forbidden list
+  // for legacy projects that have not been migrated yet (the engine no
+  // longer reads them, but the test asserts byte-identity regardless).
   'gains.lighting.magnitude',
   'gains.lighting.relationship_to_occupancy',
   'gains.lighting.spill_minutes',
@@ -77,6 +79,9 @@ export const FORBIDDEN_ENVELOPE_ONLY_INPUTS = Object.freeze([
   'gains.equipment.relationship_to_occupancy',
   'gains.equipment.standby_factor',
   'gains.equipment.schedule',
+  // v2.4 multi-profile gains — Brief 27 Revised Part 9.
+  'gains.lighting.profiles',
+  'gains.equipment.profiles',
   // Systems — State 3 territory
   'systems.space_heating',
   'systems.space_cooling',

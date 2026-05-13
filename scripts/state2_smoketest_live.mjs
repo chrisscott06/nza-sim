@@ -118,14 +118,20 @@ console.log('── Internal gains ───────────────
 console.log(`  People sensible:     ${result.gains.people.sensible_kwh.toLocaleString()} kWh`)
 console.log(`     peak:             ${result.gains.people.peak_kw.toFixed(2)} kW`)
 console.log(`     hours active:     ${result.gains.people.hours_active}`)
-console.log(`  Lighting:            ${result.gains.lighting.kwh.toLocaleString()} kWh`)
+// v2.4 multi-profile output shape (Brief 27 Revised Part 9)
+console.log(`  Lighting (total):    ${result.gains.lighting.total_kwh.toLocaleString()} kWh  (${result.gains.lighting.profiles.length} profile(s))`)
+for (const p of result.gains.lighting.profiles) {
+  console.log(`     · ${p.label.padEnd(20)} ${String(p.kwh.toLocaleString()).padStart(10)} kWh  peak ${p.peak_kw.toFixed(2)} kW`)
+}
 console.log(`     effective LPD:    ${result.gains.lighting.effective_lpd_w_per_m2.toFixed(2)} W/m²`)
-console.log(`     peak:             ${result.gains.lighting.peak_kw.toFixed(2)} kW`)
-console.log(`     hours active:     ${result.gains.lighting.hours_active}`)
-console.log(`  Equipment (total):   ${result.gains.equipment.kwh.toLocaleString()} kWh`)
-console.log(`     baseload:         ${result.gains.equipment.baseload_kwh.toLocaleString()} kWh`)
-console.log(`     active:           ${result.gains.equipment.active_kwh.toLocaleString()} kWh`)
-console.log(`     peak:             ${result.gains.equipment.peak_kw.toFixed(2)} kW`)
+console.log(`     total peak:       ${result.gains.lighting.total_peak_kw.toFixed(2)} kW`)
+console.log(`  Equipment (total):   ${result.gains.equipment.total_kwh.toLocaleString()} kWh  (${result.gains.equipment.profiles.length} profile(s))`)
+for (const p of result.gains.equipment.profiles) {
+  console.log(`     · ${p.label.padEnd(20)} ${String(p.kwh.toLocaleString()).padStart(10)} kWh  (base ${p.baseload_kwh.toLocaleString()} + active ${p.active_kwh.toLocaleString()})`)
+}
+console.log(`     baseload (total): ${result.gains.equipment.total_baseload_kwh.toLocaleString()} kWh`)
+console.log(`     active (total):   ${result.gains.equipment.total_active_kwh.toLocaleString()} kWh`)
+console.log(`     total peak:       ${result.gains.equipment.total_peak_kw.toFixed(2)} kW`)
 console.log()
 console.log('── State 1 → State 2 delta ─────────────────────────────────────────')
 console.log(`  Heating change: ${result.state1_delta.heating_demand_change_mwh >= 0 ? '+' : ''}${result.state1_delta.heating_demand_change_mwh} MWh`)
@@ -152,8 +158,8 @@ const RANGES = {
   'Heating demand (MWh)':   [result.demand.heating_demand_mwh, 125, 165],
   'Cooling demand (MWh)':   [result.demand.cooling_demand_mwh, 107, 140],
   'People kWh':             [result.gains.people.sensible_kwh,  67_000,  87_000],
-  'Lighting kWh':           [result.gains.lighting.kwh,         67_000,  93_000],
-  'Equipment kWh':          [result.gains.equipment.kwh,       147_000, 200_000],
+  'Lighting kWh':           [result.gains.lighting.total_kwh,   67_000,  93_000],
+  'Equipment kWh':          [result.gains.equipment.total_kwh, 147_000, 200_000],
 }
 
 console.log('── 1.33×-scaled expected range check (Bridgewater) ─────────────────')

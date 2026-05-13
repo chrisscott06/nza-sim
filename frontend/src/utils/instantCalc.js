@@ -894,20 +894,86 @@ function computeHourlyGains(building, h, weatherData, gia) {
   const sensible = Number(occ.sensible_w_per_person ?? 75)
   const Q_people = effective_occupants * sensible
 
-  // Lighting
-  const lighting = building?.gains?.lighting ?? {}
-  const lpd = magnitudeToWPerM2(lighting.magnitude, building, gia)
-  const lFrac = lightingFractionForHour(lighting, presence, hourOfDay, monthIdx, dayType, sched, occupancy_rate)
-  const Q_lighting = gia * lpd * lFrac
+  // ── Lighting — sum across profiles (v2.4 multi-profile) ─────────────────
+  //
+  // Each profile contributes (LPD × area_share × fraction) to the building-
+  // averaged lighting load. fraction depends on the profile's
+  // relationship_to_occupancy. profile.schedule carries its own exceptions
+  // (independent mode) — proportional / proportional_with_spill cascade
+  // from the OCCUPANCY schedule + presence value computed above.
+  const lightingProfiles = building?.gains?.lighting?.profiles
+  let Q_lighting = 0
+  const lighting_per_profile = []
+  if (Array.isArray(lightingProfiles)) {
+    for (const profile of lightingProfiles) {
+      const lpd = magnitudeToWPerM2(profile.magnitude, building, gia)
+      const area_share = Number(profile.area_share ?? 1.0)
+      // For 'independent' lighting profiles, the profile's own exception
+      // calendar may differ from occupancy's — re-resolve here.
+      let pFrac
+      if (profile.relationship_to_occupancy === 'independent') {
+        const pSched = profile.schedule ?? sched
+        const pExc = findActiveException(pSched.exceptions, dateMMDD)
+        if (pExc) {
+          const v = Number(pExc[dayType]?.[hourOfDay] ?? 0)
+          const mm = pExc.ignore_monthly_multipliers
+            ? 1
+            : Number(pSched.monthly_multipliers?.[monthIdx] ?? 1)
+          pFrac = v * mm
+        } else {
+          pFrac = lightingFractionForHour(profile, presence, hourOfDay, monthIdx, dayType, sched, occupancy_rate)
+        }
+      } else {
+        pFrac = lightingFractionForHour(profile, presence, hourOfDay, monthIdx, dayType, sched, occupancy_rate)
+      }
+      const Q = gia * lpd * area_share * pFrac
+      Q_lighting += Q
+      lighting_per_profile.push({ id: profile.id, value: Q, fraction: pFrac })
+    }
+  }
 
-  // Equipment — baseload (always on, occupancy-independent) + active
-  // (follows equipment schedule × occupancy_rate, with standby floor)
-  const equipment = building?.gains?.equipment ?? {}
-  const baseload_W_per_m2 = magnitudeToWPerM2(equipment.baseload, building, gia)
-  const active_W_per_m2   = magnitudeToWPerM2(equipment.active,   building, gia)
-  const eFrac = equipmentFractionForHour(equipment, presence, hourOfDay, monthIdx, dayType, sched, occupancy_rate)
-  const Q_equipment_baseload = gia * baseload_W_per_m2
-  const Q_equipment_active   = gia * active_W_per_m2 * eFrac
+  // ── Equipment — sum across profiles, split baseload vs active ───────────
+  //
+  // baseload is occupancy-independent 24/7; active follows the relationship.
+  // Each profile contributes baseload AND active scaled by its area_share.
+  const equipmentProfiles = building?.gains?.equipment?.profiles
+  let Q_equipment_baseload = 0
+  let Q_equipment_active   = 0
+  const equipment_per_profile = []
+  if (Array.isArray(equipmentProfiles)) {
+    for (const profile of equipmentProfiles) {
+      const baseload_W = magnitudeToWPerM2(profile.baseload, building, gia)
+      const active_W   = magnitudeToWPerM2(profile.active,   building, gia)
+      const area_share = Number(profile.area_share ?? 1.0)
+      let pFrac
+      if (profile.relationship_to_occupancy === 'independent') {
+        const pSched = profile.schedule ?? sched
+        const pExc = findActiveException(pSched.exceptions, dateMMDD)
+        if (pExc) {
+          const v = Number(pExc[dayType]?.[hourOfDay] ?? 0)
+          const mm = pExc.ignore_monthly_multipliers
+            ? 1
+            : Number(pSched.monthly_multipliers?.[monthIdx] ?? 1)
+          pFrac = v * mm
+        } else {
+          pFrac = equipmentFractionForHour(profile, presence, hourOfDay, monthIdx, dayType, sched, occupancy_rate)
+        }
+      } else {
+        pFrac = equipmentFractionForHour(profile, presence, hourOfDay, monthIdx, dayType, sched, occupancy_rate)
+      }
+      const Q_base = gia * baseload_W * area_share
+      const Q_act  = gia * active_W   * area_share * pFrac
+      Q_equipment_baseload += Q_base
+      Q_equipment_active   += Q_act
+      equipment_per_profile.push({
+        id: profile.id,
+        value:    Q_base + Q_act,
+        baseload: Q_base,
+        active:   Q_act,
+        fraction: pFrac,
+      })
+    }
+  }
   const Q_equipment = Q_equipment_baseload + Q_equipment_active
 
   return {
@@ -919,6 +985,11 @@ function computeHourlyGains(building, h, weatherData, gia) {
     total:              Q_people + Q_lighting + Q_equipment,
     presence,
     effective_occupants,
+    // v2.4 multi-profile breakdown — same numbers as the aggregates above,
+    // sliced by profile id. Callers that need per-profile annual totals
+    // accumulate from these arrays.
+    lighting_per_profile,
+    equipment_per_profile,
   }
 }
 
@@ -997,6 +1068,30 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   let hours_people = 0, hours_lighting = 0, hours_equipment_active = 0
   let sum_effective_occupants = 0, peak_occupants = 0
 
+  // v2.4 per-profile accumulators — keyed by profile.id. Each entry tracks
+  // { kwh, peak_kw, hours_active, baseload_kwh, active_kwh (equipment only) }.
+  // Built up incrementally during the 8,760-hour loop from the per-profile
+  // breakdown computeHourlyGains now returns.
+  const lightingProfileAccum = new Map()  // id → { acc_wh, peak_w, hours }
+  const equipmentProfileAccum = new Map()  // id → { acc_wh, peak_w, hours, base_wh, active_wh }
+
+  function accumLighting(id, value_w) {
+    let a = lightingProfileAccum.get(id)
+    if (!a) { a = { acc_wh: 0, peak_w: 0, hours: 0 }; lightingProfileAccum.set(id, a) }
+    a.acc_wh += value_w
+    if (value_w > a.peak_w) a.peak_w = value_w
+    if (value_w > 0.01) a.hours++
+  }
+  function accumEquipment(id, total_w, base_w, active_w) {
+    let a = equipmentProfileAccum.get(id)
+    if (!a) { a = { acc_wh: 0, peak_w: 0, hours: 0, base_wh: 0, active_wh: 0 }; equipmentProfileAccum.set(id, a) }
+    a.acc_wh    += total_w
+    a.base_wh   += base_w
+    a.active_wh += active_w
+    if (total_w > a.peak_w) a.peak_w = total_w
+    if (active_w > 0.01) a.hours++
+  }
+
   // Plus a slim set of State 2 demand/comfort accumulators (same shape as
   // State 1 but recomputed with gains in the energy balance — that's the
   // whole point of running the loop again).
@@ -1029,6 +1124,13 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     if (gains.equipment_active > 0.01) hours_equipment_active++
     sum_effective_occupants += gains.effective_occupants
     if (gains.effective_occupants > peak_occupants) peak_occupants = gains.effective_occupants
+    // v2.4 per-profile accumulators
+    if (gains.lighting_per_profile) {
+      for (const p of gains.lighting_per_profile) accumLighting(p.id, p.value)
+    }
+    if (gains.equipment_per_profile) {
+      for (const p of gains.equipment_per_profile) accumEquipment(p.id, p.value, p.baseload, p.active)
+    }
 
     const Q_louvre_m3s = Cd * louvre_area_total * sqrtCw * v_wind
     const UA_permanent = AIR_HEAT_CAPACITY * (Q_louvre_m3s * 3600)
@@ -1070,7 +1172,41 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   const r1 = (Wh) => Math.round(Wh / 1000 * 10) / 10
   const T_mean = T_hourly.reduce((s, v) => s + v, 0) / n
   const totalEquipmentWh = acc_equip_baseload + acc_equip_active
-  const effective_lpd = magnitudeToWPerM2(building.gains?.lighting?.magnitude, building, gia)
+
+  // v2.4 effective LPD = sum across lighting profiles of (LPD × area_share).
+  // Built from the LIVE building config (not the accumulator) so it's the
+  // user-stated effective LPD, not a back-derived value.
+  const lightingProfiles = building?.gains?.lighting?.profiles ?? []
+  const effective_lpd = lightingProfiles.reduce((s, p) => {
+    const lpd = magnitudeToWPerM2(p.magnitude, building, gia)
+    return s + lpd * Number(p.area_share ?? 1.0)
+  }, 0)
+
+  // v2.4 per-profile output arrays, ordered by the input profiles[] index so
+  // the UI can render rows in the same order the user authored them.
+  const lighting_profiles_out = lightingProfiles.map(p => {
+    const a = lightingProfileAccum.get(p.id) ?? { acc_wh: 0, peak_w: 0, hours: 0 }
+    return {
+      id:           p.id,
+      label:        p.label ?? p.id,
+      kwh:          r1(a.acc_wh),
+      peak_kw:      Math.round(a.peak_w) / 1000,
+      hours_active: a.hours,
+    }
+  })
+  const equipmentProfiles = building?.gains?.equipment?.profiles ?? []
+  const equipment_profiles_out = equipmentProfiles.map(p => {
+    const a = equipmentProfileAccum.get(p.id) ?? { acc_wh: 0, peak_w: 0, hours: 0, base_wh: 0, active_wh: 0 }
+    return {
+      id:           p.id,
+      label:        p.label ?? p.id,
+      kwh:          r1(a.acc_wh),
+      peak_kw:      Math.round(a.peak_w) / 1000,
+      baseload_kwh: r1(a.base_wh),
+      active_kwh:   r1(a.active_wh),
+      hours_active: a.hours,
+    }
+  })
 
   // ── State 1 → State 2 delta ──────────────────────────────────────────────
   const s1d = state1Result.demand ?? {}
@@ -1088,10 +1224,19 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       ...(state1Result.inputs_used ?? []),
       'occupancy.density', 'occupancy.occupancy_rate', 'occupancy.sensible_w_per_person',
       'occupancy.schedule', 'occupancy.schedule.exceptions',
-      'gains.lighting.magnitude', 'gains.lighting.relationship_to_occupancy',
-      'gains.lighting.spill_minutes', 'gains.lighting.daylight_factor',
-      'gains.equipment.baseload', 'gains.equipment.active',
-      'gains.equipment.relationship_to_occupancy', 'gains.equipment.standby_factor',
+      // v2.4 multi-profile paths
+      'gains.lighting.profiles[*].magnitude',
+      'gains.lighting.profiles[*].relationship_to_occupancy',
+      'gains.lighting.profiles[*].spill_minutes',
+      'gains.lighting.profiles[*].daylight_factor',
+      'gains.lighting.profiles[*].area_share',
+      'gains.lighting.profiles[*].schedule',
+      'gains.equipment.profiles[*].baseload',
+      'gains.equipment.profiles[*].active',
+      'gains.equipment.profiles[*].relationship_to_occupancy',
+      'gains.equipment.profiles[*].standby_factor',
+      'gains.equipment.profiles[*].area_share',
+      'gains.equipment.profiles[*].schedule',
     ],
     comfort_band_used: { lower_c: comfortBand.lower_c, upper_c: comfortBand.upper_c },
 
@@ -1104,18 +1249,22 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
         peak_kw:       Math.round(peak_people) / 1000,
         hours_active:  hours_people,
       },
+      // v2.4 lighting output shape: profiles[] + aggregates.
       lighting: {
-        kwh:                    r1(acc_lighting),
+        profiles:               lighting_profiles_out,
+        total_kwh:              r1(acc_lighting),
+        total_peak_kw:          Math.round(peak_lighting) / 1000,
         effective_lpd_w_per_m2: Math.round(effective_lpd * 100) / 100,
-        peak_kw:                Math.round(peak_lighting) / 1000,
-        hours_active:           hours_lighting,
+        total_hours_active:     hours_lighting,
       },
+      // v2.4 equipment output shape: profiles[] + aggregates with split.
       equipment: {
-        kwh:           r1(totalEquipmentWh),
-        peak_kw:       Math.round(peak_equipment) / 1000,
-        hours_active:  hours_equipment_active,
-        baseload_kwh:  r1(acc_equip_baseload),
-        active_kwh:    r1(acc_equip_active),
+        profiles:            equipment_profiles_out,
+        total_kwh:           r1(totalEquipmentWh),
+        total_peak_kw:       Math.round(peak_equipment) / 1000,
+        total_baseload_kwh:  r1(acc_equip_baseload),
+        total_active_kwh:    r1(acc_equip_active),
+        total_hours_active:  hours_equipment_active,
       },
     },
     // State 2 keeps the State 1 losses unchanged (gains don't change fabric
