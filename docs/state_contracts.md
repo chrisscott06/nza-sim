@@ -1,6 +1,66 @@
-# NZA-Sim State Contracts (v2.3)
+# NZA-Sim State Contracts (v2.4)
 
 **Status:** Canonical. Every brief that touches computation, UI, or data flow must conform to this document.
+
+**Changes from v2.3 (Brief 27 Revised Part 6 — Internal Gains walkthrough):**
+
+The Part 5 walkthrough on Bridgewater surfaced three architectural decisions
+that grew Brief 27 from 9 parts to 11 parts. v2.4 codifies them in the
+contract so the remaining Internal Gains work, future Operation v2 work,
+and any other module with primary schedule-editing activity all conform
+to the same shape.
+
+1. **Lighting and Equipment are arrays of profiles, not single quantities.**
+   Real-world buildings have load-type-aware splits — a hotel has bedroom
+   lighting + corridor lighting + exterior lighting, each with its own
+   LPD, relationship-to-occupancy, and schedule. v2.3's single-quantity
+   `gains.lighting` and `gains.equipment` collapsed this to a building
+   average and made it impossible to distinguish (for example) corridor
+   24/7 baseload from bedroom proportional. v2.4 introduces a
+   `profiles[]` array with `area_share` weighting per profile; sum across
+   profiles equals 1.0 of GIA. Occupancy stays a single object (it has
+   no analogous load-type split).
+
+2. **Exception periods are full editable schedules, not date ranges
+   inheriting the default curves.** v2.3's exceptions captured name +
+   date range only, with hourly profile inherited from the parent
+   schedule — making "Christmas shutdown" only useful if Christmas
+   happened to follow the same hourly pattern as the rest of the year.
+   v2.4 lifts each exception to a full `{weekday, saturday, sunday}`
+   schedule editable independently of the parent, with an
+   `ignore_monthly_multipliers` toggle for exceptions that should also
+   bypass seasonal modulation. Exceptions get an `id` for stable
+   referencing and an optional `icon` for visual identity.
+
+3. **Schedule editor placement: centre canvas, not left panel.** For any
+   module where schedule editing is a primary activity (Internal Gains,
+   future Operation v2), the schedule editor is a canvas-level workspace
+   rather than a left-panel input. The 288 px left panel constrains
+   schedule editing to the point of frustration; the centre canvas has
+   the room to host a proper editing surface with quick-set tools, an
+   annual heatmap, and inline exception-period authoring. Left panel
+   holds magnitude / structural inputs + a read-only mini-profile of
+   the current schedule; centre canvas hosts the editor itself. UI
+   principle #3 (centre canvas max ~1000px) is overridden for the
+   schedule editor — the annual heatmap and 8760-hour visualisations
+   earn full width.
+
+4. **Load-type library.** A small canonical set of building-type-aware
+   default load splits (hotel / office / school / retail). Used by the
+   "Add profile" affordance to offer sensible starting profiles. Defined
+   in `frontend/src/data/loadTypeLibrary.js`. Users can rename, add
+   custom profiles, or use "Custom" for non-standard splits.
+
+The State 2 expected ranges revised in v2.3 (BREDEM-derived,
+docs/state_2_expected_ranges.md, updated again post-Part 2 diagnostic)
+carry forward unchanged at the headline / aggregate level. Per-profile
+ranges aren't BREDEM-derivable a priori — the headline aggregate is what
+verifies.
+
+**Owner:** Chris.
+**Version:** 2.4 (May 2026)
+
+---
 
 **Changes from v2.2 (Brief 27 Part 0):**
 - State 2 reframed around occupancy as a first-class building property
@@ -23,8 +83,8 @@
 - Schedules live inline in the gain card / occupancy section; the
   standalone `/profiles` route is deprecated and slated for deletion in
   Brief 27 Part 9.
-**Owner:** Chris.
-**Version:** 2.3 (May 2026)
+**Owner (v2.3):** Chris.
+**Version (superseded by v2.4 above):** 2.3 (May 2026)
 **Changes from v2.2 (Brief 27 Part 0) — summarised above.**
 
 **Version:** 2.2 (May 2026)
@@ -429,23 +489,67 @@ Everything in State 1, plus the new occupancy and gain inputs introduced in v2.3
 | Occupancy schedule | User | `building_config.occupancy.schedule.{weekday, saturday, sunday, monthly_multipliers, exceptions}` |
 | Exception periods (0–5) | User | `building_config.occupancy.schedule.exceptions[]` — see Exception period mechanism |
 
-**Gains (derive from occupancy by default, with relationship override):**
+**Gains (multi-profile, v2.4) — Lighting and Equipment as arrays of load-type profiles:**
 
 | Input | Source | Path |
 |---|---|---|
-| Lighting LPD | User | `building_config.gains.lighting.magnitude.{value, unit}` |
-| Lighting relationship to occupancy | User | `building_config.gains.lighting.relationship_to_occupancy` ∈ {`proportional_with_spill`, `proportional`, `independent`, `always_on`} |
-| Lighting spill / daylight control | User | `building_config.gains.lighting.{spill_minutes, daylight_factor}` |
-| Lighting schedule (only if `relationship_to_occupancy === 'independent'`) | User | `building_config.gains.lighting.schedule.*` |
-| Equipment baseload + active loads | User | `building_config.gains.equipment.{baseload, active}.{value, unit}` |
-| Equipment relationship to occupancy | User | `building_config.gains.equipment.relationship_to_occupancy` ∈ {`proportional`, `independent`} |
-| Equipment standby factor | User | `building_config.gains.equipment.standby_factor` (0–1, fraction of active that runs when unoccupied) |
-| Equipment schedule (only if `relationship_to_occupancy === 'independent'`) | User | `building_config.gains.equipment.schedule.*` |
+| Lighting profiles | User | `building_config.gains.lighting.profiles[]` — array of `{ id, label, magnitude, relationship_to_occupancy, spill_minutes, daylight_factor, schedule?, area_share, _provenance }` |
+| Equipment profiles | User | `building_config.gains.equipment.profiles[]` — array of `{ id, label, magnitude, baseload?, active?, relationship_to_occupancy, standby_factor, schedule?, area_share, _provenance }` |
 | Radiant/convective splits | Default | (typical values, hidden unless advanced) |
 
-**Why occupancy is first-class** (rationale): in real buildings, lighting on/off and equipment active/standby are *caused* by people being present. Treating occupancy as one of three independent gain inputs (the v2.2 schema) made it possible to inadvertently configure people present + lighting off, which is meaningless. The v2.3 schema makes occupancy the foundation; lighting and equipment cascade from it via `relationship_to_occupancy`. Override to `independent` is retained for cases where the user has reason to break the relationship (e.g. corridor lighting that runs 24/7 regardless of guest presence).
+**Per-profile fields** (Lighting):
 
-Schedules are properties of the input they describe — defined on the same screen as the occupancy or gain itself. There is no global `/profiles` editor in the State 2 contract; if one exists in the UI, it is deprecated and slated for deletion (Brief 27 Part 9).
+| Field | Required | Notes |
+|---|---|---|
+| `id` | yes | Stable string (e.g. `bedroom_lighting`, `corridor_lighting`, `custom_<uuid>`). Used for keying UI state and engine output. |
+| `label` | yes | User-visible name. Defaults to load-type-library label; user can rename. |
+| `magnitude.{value, unit}` | yes | Profile's LPD. Unit ∈ {`w_per_m2`, `w_per_room`, `total_w`}. |
+| `relationship_to_occupancy` | yes | ∈ {`proportional_with_spill`, `proportional`, `independent`, `always_on`} |
+| `spill_minutes` | optional | Used at EP-schedule generation when relationship is `proportional_with_spill`. |
+| `daylight_factor` | optional | Fraction during daylight hours (~09:00–16:00 inclusive). |
+| `schedule` | only if `independent` | v2.4 schedule shape (see below). |
+| `area_share` | yes | Fraction of GIA this profile applies to. Sum across profiles in the same category ≤ 1.0. Used as a weighting factor in single-zone mode; future multi-zone work could repurpose to "applies to zones". |
+| `_provenance` | optional | v2.1+ provenance block. |
+
+**Per-profile fields** (Equipment) — same shape as Lighting, except `magnitude` is split into `baseload.{value, unit}` (24/7 occupancy-independent) and `active.{value, unit}` (occupancy-driven). Both optional individually but at least one required.
+
+**Aggregate fields under `gains.lighting` and `gains.equipment`** (not stored — computed):
+
+These are exposed in the engine OUTPUT (see Outputs below); they are not user inputs. The contract specifies they sum from `profiles[]` so the live engine and EP path produce identical aggregates regardless of profile count.
+
+**Why multi-profile** (rationale): real buildings have load-type-aware splits. A hotel has bedroom lighting (proportional to guest presence, with spill), corridor lighting (always-on at low level), exterior lighting (night-only). v2.3's single-quantity `gains.lighting` collapsed these to a building average and made it impossible to distinguish them — even though they have radically different schedules and relationships. v2.4 lets each load type have its own profile with its own relationship semantics. The single-zone weighting via `area_share` keeps the math tractable (sum of per-profile contributions); multi-zone modelling later can repurpose `area_share` to "applies to zones N, M".
+
+**Why occupancy is NOT multi-profile** (rationale carried from v2.3): occupancy is a single building-property concept; people are people regardless of where they sit in the building. Lighting and Equipment are PHYSICALLY varied (different rooms have different luminaires running at different times); occupancy isn't.
+
+**Migration v2.3 → v2.4 (idempotent):** projects with a single-quantity `gains.lighting` are migrated to a single-profile array with `area_share: 1.0`, preserving all other fields. Same for `gains.equipment`. Migration must be idempotent — re-running on an already-migrated project produces the same result. Engine output for migrated projects is byte-identical to v2.3 behaviour (single profile at full area share = the v2.3 single-quantity case).
+
+Schedules are properties of the profile they describe — defined on the same screen as the profile itself, in the centre canvas (see UI rules below). There is no global `/profiles` editor in the State 2 contract; if one exists in the UI, it is deprecated and slated for deletion (Brief 27 Part 11).
+
+**Exception period mechanism (v2.4 — upgraded from v2.3).** Each schedule's `exceptions[]` now carries FULL editable curves per exception, not just date ranges with parent inheritance:
+
+```js
+schedule: {
+  weekday:             [...24 values],   // 0..1 fraction by hour
+  saturday:            [...24 values],
+  sunday:              [...24 values],
+  monthly_multipliers: [...12 values],   // 0..2, default 1.0
+  exceptions: [
+    {
+      id:         'exc_christmas',
+      name:       'Christmas shutdown',
+      icon:       '🎄',                  // optional emoji or preset icon
+      start_date: '12-22',
+      end_date:   '01-05',               // year-wrap supported (end < start)
+      weekday:    [...24 values],        // INDEPENDENT — not inherited
+      saturday:   [...24 values],
+      sunday:     [...24 values],
+      ignore_monthly_multipliers: true,  // default true for short shutdowns
+    },
+  ],
+}
+```
+
+The v2.3 "inherit from parent" semantic is retracted. v2.4 exceptions are full schedules so a Christmas shutdown can have a genuinely different hourly pattern (close at 12:00 on Dec 24, reopen at 09:00 on Jan 5, etc.) — not just the regular pattern attenuated. Engine processes exceptions in array order: the first whose date range covers the active date wins. Year-wrap (end < start) is supported and treated as two intervals (`start` to `12-31` and `01-01` to `end`).
 
 ### Inputs ignored
 
@@ -469,7 +573,7 @@ State 1 computation runs unchanged. Then for each hour:
 
 3. **Re-solve demand against comfort band** (or Systems setpoints if State 3 is configured — see Setpoint cross-state dependency) with the new free-running temperature.
 
-### Outputs
+### Outputs (v2.4 multi-profile)
 
 State 1 output shape, plus:
 
@@ -479,10 +583,51 @@ State 1 output shape, plus:
   mode: 'envelope-gains',          // matches stateMode.js MODES.ENVELOPE_GAINS
 
   gains: {
-    // State 1 solar gains, plus:
-    people:    { sensible_kwh, latent_kwh, total_kwh, peak_kw, hours_active },
-    lighting:  { kwh, effective_lpd_w_per_m2, peak_kw, hours_active },
-    equipment: { kwh, peak_kw, hours_active, baseload_kwh, active_kwh },
+    // State 1 solar gains carry through unchanged, plus:
+
+    people: {                       // single-object (occupancy is not multi-profile)
+      sensible_kwh: number,
+      latent_kwh:   number,
+      total_kwh:    number,
+      peak_kw:      number,
+      hours_active: number,
+    },
+
+    lighting: {
+      profiles: [
+        {
+          id:           string,    // e.g. 'bedroom_lighting'
+          label:        string,
+          kwh:          number,
+          peak_kw:      number,
+          hours_active: number,
+        },
+        // ...one entry per profile in `building_config.gains.lighting.profiles[]`
+      ],
+      total_kwh:              number,   // Σ profiles[].kwh
+      total_peak_kw:          number,   // max of (Σ-at-each-hour)
+      effective_lpd_w_per_m2: number,   // Σ (profile.LPD × profile.area_share)
+      total_hours_active:     number,   // hours with ANY profile contributing > threshold
+    },
+
+    equipment: {
+      profiles: [
+        {
+          id:            string,
+          label:         string,
+          kwh:           number,
+          peak_kw:       number,
+          baseload_kwh:  number,        // sum of profile's baseload component
+          active_kwh:    number,        // sum of profile's active component
+          hours_active:  number,
+        },
+      ],
+      total_kwh:           number,
+      total_peak_kw:       number,
+      total_baseload_kwh:  number,
+      total_active_kwh:    number,
+      total_hours_active:  number,
+    },
   },
 
   state1_delta: {
@@ -501,41 +646,137 @@ State 1 output shape, plus:
 }
 ```
 
-The `state1_delta` is mandatory. State 2 is meaningless without showing *what gains did to State 1*.
+The `state1_delta` is mandatory. State 2 is meaningless without showing
+*what gains did to State 1*. Per-profile `kwh` / `peak_kw` are mandatory
+in v2.4 — they are the diagnostic users need to answer "which load type
+contributes most to cooling demand?" The single-profile case (typical for
+migrated v2.3 projects) yields the same aggregate numbers as v2.3 with a
+one-element profiles array.
 
-### UI rules — the unified gain card pattern
+### UI rules (v2.4) — left-panel inputs + centre-canvas schedule workspace
 
-State 2 introduces a **unified card pattern** for gain inputs. Each gain (People, Lighting, Equipment) is a single card combining:
+The v2.3 "unified gain card" (inputs + schedule + outputs stacked in a
+single column) is retracted. The Brief 27 Part 5 walkthrough showed that
+schedule editing in a 288 px left panel is hostile to the work — the
+24-bar grid is cramped, monthly multipliers feel like an afterthought,
+and exception authoring is impossible at that width. v2.4 separates
+input definition from schedule workspace:
 
-1. **Quantity inputs** at the top (density, LPD, EPD, plus sensible/latent for people)
-2. **Schedule editor** in the middle (weekday canvas, weekend canvas, monthly multipliers)
-3. **Annual output** at the bottom (kWh/yr, kWh/m²/yr, peak kW)
+**Left panel** holds magnitude / structural inputs + a read-only mini-
+profile of the current schedule + an "Edit schedule" affordance that
+focuses the centre canvas:
 
-Each card is colour-themed throughout — the accent colour appears on the card border, schedule canvas strokes, monthly multiplier bars, and the corresponding flows in the Heat Balance view.
+- People / Occupancy section: density (value + basis), occupancy_rate,
+  sensible/latent heat per person, read-only mini-profile of the
+  occupancy weekday curve, "Edit schedule →" link.
+- Lighting section: profile list (each profile shows label, LPD,
+  area share, relationship icon, mini-profile thumbnail, [⋯] menu),
+  "+ Add profile" affordance with building-type-aware options.
+- Equipment section: same shape as Lighting.
 
-**Card colour palette:**
-- People / Occupancy: purple (`#A78BFA` or your existing People colour from `balanceColours.js`)
-- Lighting: gold (`#F0C544`)
-- Equipment: orange (`#E97451`)
-- Heating: red (`#D63E2A`)
-- Cooling: blue (`#3FA7D6`)
-- Solar: amber (`#F4A14A`)
+Live readouts (annual MWh, peak kW per category) live inside each
+section so the magnitude inputs have immediate numeric anchors. These
+are input-side feedback, not pre-simulation results — equivalent to a
+U-value badge updating as construction layers change.
 
-**Schedule UX:**
-- Weekday canvas: 24-hour bar profile, drag-to-edit, 0.0–1.0 fraction
-- Weekend canvas: same shape, separately editable
-- Monthly multipliers: 12-bar canvas, 0.0–2.0 scaling factor per month, defaults to 1.0
-- Schedule preset library: dropdown to load common patterns ("UK hotel bedroom", "Office Mon-Fri 8-6", etc.) — loads into the canvas as a starting point, then user-editable in place
-- No standalone `/profiles` route. Schedules live inside the gain card.
+**Centre canvas** hosts the schedule workspace and diagnostic views via
+a context-sensitive tab strip. The first tab is always "Schedule" for
+the currently-active gain section, followed by always-available
+diagnostic views:
 
-**Live output:**
-- Annual energy (kWh/yr and kWh/m²/yr)
-- Peak gain (kW and W/m²)
-- Hours active (out of 8,760)
-- All update in real time as inputs and schedule are adjusted
+  `[Schedule: <gain>] [State 1 → State 2] [Heat balance] [Free-running] [Hourly profile] [Annual breakdown] [3D Model]`
 
-**Re-running State 1 ↔ State 2 toggle:**
-- The Heat Balance view at the bottom of the gain card (or in the centre canvas if mounted there) can toggle between "envelope only" and "with gains" to show the State 1 → State 2 delta directly. This makes the contribution of gains immediately visible.
+The "active gain" is the most-recently-expanded or clicked left-panel
+section. Default on landing: Schedule: Occupancy (occupancy is the
+foundation that lighting + equipment cascade from).
+
+**Schedule editor (centre canvas):**
+
+- Full readable width (~900–1000 px or wider — UI principle #3 exception
+  because annual heatmap and 8760-hour visualisations earn the space).
+- Preset dropdown ("Apply preset…") with reset.
+- Day-type tabs (Weekday / Saturday / Sunday) above the 24-bar grid.
+- Drag-paint UX on the bar grid (vertical drag sets fraction, horizontal
+  drag paints adjacent bars). Hover readout shows hour + value above.
+- Quick-set tools: Flat 0.5, Copy weekday → weekend, Invert, Shift ←/→,
+  Apply shape preset.
+- Modifier toggles: weekend factor, daylight dimming, always-on
+  baseload, holiday weeks. Each modifier composes onto the base curve.
+- Monthly variation (12-bar mini-row) below the main grid.
+- Exception periods listed below — clicking an exception enters edit
+  mode (see Exception period authoring below).
+- Statistics panel: peak fraction, average fraction, annual operating
+  hours.
+- Annual heatmap (year × hour) showing the assembled 8760-hour pattern
+  including monthly multipliers and exceptions.
+
+**Exception period authoring (v2.4):**
+
+Each exception is a full-fledged schedule with its own editable curves.
+The schedule editor renders an exceptions panel listing the current
+exceptions (with date range + icon + duplicate/delete actions). Clicking
+an exception enters **edit mode**:
+
+- Schedule editor canvas switches to display the exception's curves.
+- A distinct-coloured banner at the top: "✏ Editing: <name> · weeks <n>–<m> · [Save & return to default →]"
+- All editing tools (drag-paint, presets, quick-set, modifiers) operate
+  on the exception's curves, not the default schedule's.
+- Annual heatmap highlights the exception's weeks while in edit mode.
+
+A small set of exception presets ("Christmas shutdown", "Summer holidays",
+"Bank holidays", "Custom") let users one-click a common pattern. Year-
+wrap (Dec → Jan) is supported.
+
+**Card colour palette (carried from v2.3 with refinement):**
+
+The accent colour appears on the left-panel section header, on the
+section's read-only mini-profile, on the centre-canvas schedule bars
+when that section is active, and on the corresponding flows in the
+Heat Balance view.
+
+- People / Occupancy: violet `#8B5CF6`
+- Lighting:           gold   `#F59E0B`
+- Equipment:          orange `#FB923C`
+- Heating:            red    `#DC2626`
+- Cooling:            blue   `#00AEEF`
+- Solar:              amber  `#F59E0B` (shared family with Lighting; distinguished by face direction in stacks)
+
+Module identity colour (vermillion `#EA580C` for Internal Gains) lives
+purely in structural surfaces: sidebar active indicator, page title bar,
+tab strip underline. Gain colours occupy section headers + content;
+module accent occupies the shell around them. UI principle #2
+(related items in one card) still applies within each gain category.
+
+**State 1 ↔ State 2 toggle:** the State 1 → State 2 delta tab (the
+headline diagnostic) directly shows what gains did to State 1 — heating
+demand reduction, cooling demand add, overheating hours change, with a
+per-profile breakdown so users can attribute the contribution to specific
+load types. See the v2.4 output shape for `state1_delta`.
+
+**Load-type library (v2.4):**
+
+Building-type-aware default load splits, used by the "Add profile"
+affordance. Defined in `frontend/src/data/loadTypeLibrary.js`:
+
+```js
+LIGHTING_LOAD_TYPES = {
+  hotel:  ['bedroom_lighting', 'corridor_lighting', 'exterior_lighting', 'back_of_house'],
+  office: ['workstation_lighting', 'general_lighting', 'corridor_lighting', 'server_room'],
+  school: ['classroom_lighting', 'corridor_lighting', 'sports_hall', 'catering'],
+  retail: ['sales_floor', 'display_lighting', 'back_of_house', 'exterior_lighting'],
+}
+
+EQUIPMENT_LOAD_TYPES = {
+  hotel:  ['guest_equipment', 'refrigeration', 'back_of_house', 'lifts_pumps'],
+  office: ['workstation_equipment', 'refrigeration_kitchen', 'server_room', 'lifts_pumps'],
+  // ... etc
+}
+```
+
+Each entry maps to a default profile spec: label, magnitude, default
+relationship, default schedule preset, default area_share. The library
+is starting-points, not a first-class library item — users edit in
+place once a profile is added.
 
 ### Verification
 
