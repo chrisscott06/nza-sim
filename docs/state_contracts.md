@@ -1,7 +1,32 @@
-# NZA-Sim State Contracts (v2.2)
+# NZA-Sim State Contracts (v2.3)
 
 **Status:** Canonical. Every brief that touches computation, UI, or data flow must conform to this document.
+
+**Changes from v2.2 (Brief 27 Part 0):**
+- State 2 reframed around occupancy as a first-class building property
+  (not nested under gains). Lighting and equipment derive from occupancy
+  by default via a `relationship_to_occupancy` field, with override to
+  independent schedules.
+- State 2 expected ranges for Bridgewater rewritten to be BREDEM-derived
+  and anchored to the post-Brief 26.2 State 1 baseline. The v2.2 ranges
+  (15–40 MWh heating, 20–50 MWh cooling) were gut-feel from before the
+  discipline rule landed and have been retracted. Full derivation in
+  `docs/state_2_expected_ranges.md`.
+- Discipline rule extended: expected ranges must be derived analytically
+  **before** the relevant brief begins, not during it. (Brief 26 was
+  caught mid-flight by retroactive BREDEM; we don't repeat the mistake.)
+- Open contract question #5 (schedule preset library schema) resolved
+  inline — see Schedule preset library section.
+- Exception period mechanism added — schedules carry 0–5 named
+  date-ranged exception periods that override the default pattern (e.g.
+  Christmas shutdown, summer holiday, exam week).
+- Schedules live inline in the gain card / occupancy section; the
+  standalone `/profiles` route is deprecated and slated for deletion in
+  Brief 27 Part 9.
 **Owner:** Chris.
+**Version:** 2.3 (May 2026)
+**Changes from v2.2 (Brief 27 Part 0) — summarised above.**
+
 **Version:** 2.2 (May 2026)
 **Changes from v2.1:**
 - State 1 verification ranges revised to standard UK 2018-vintage hotel construction (the as-built Bridgewater reference), not Passivhaus targets. Reference scenario explicitly documented with fabric U-values, q50 airtightness, and trickle-vent area so subsequent verifications can reproduce the inputs deterministically.
@@ -154,6 +179,83 @@ UI implication: when the user changes a Systems setpoint, State 2/2.5 outputs sh
 ### Mode threading
 
 Every computation, API endpoint, and component that produces or displays state output **must** accept and honour a `mode` or `state` parameter. Calling a State 1 computation must produce State 1 output regardless of what else is in `building_config`.
+
+### Occupancy as a first-class building property (v2.3)
+
+`building_config.occupancy` is a top-level property of the building, NOT a child of `gains`. The rationale:
+
+- People presence is a property of how the building is **used**, not of one of its gain sources. Lighting on/off and equipment active/standby are caused by people being present.
+- Many downstream state computations (State 2 gains, future State 3 DHW demand, future ventilation demand) all reference the same occupancy schedule and density. Co-locating them under one input prevents drift.
+- It makes the v2.2 anti-pattern (configure people present + lighting off → meaningless combination) syntactically harder.
+
+`gains.lighting` and `gains.equipment` carry a `relationship_to_occupancy` field that controls whether they derive from `occupancy.schedule` or use an independent schedule of their own. The default in seeded projects is `proportional_with_spill` (lighting) and `proportional` (equipment) — the occupancy-derived pattern. Override to `independent` for cases where the user has reason to break the relationship.
+
+### Schedule preset library (v2.3 — Open contract question #5 resolved)
+
+Schedules carry significant shape information (when people are present, when lighting runs, when equipment is active). Re-creating a hotel-bedroom occupancy pattern from scratch every project is friction. Resolution: a preset library that the UI exposes as a starting-point dropdown per input.
+
+Schema (`frontend/src/data/schedulePresets.js` or equivalent):
+
+```js
+export const SCHEDULE_PRESETS = {
+  occupancy: [
+    {
+      id: 'hotel_bedroom_overnight',
+      name: 'Hotel bedroom (overnight)',
+      description: 'Guest present overnight + evening, away during day',
+      icon: '🏨',  // optional
+      schedule: {
+        weekday: [...24 values 0..1],
+        saturday: [...24 values],
+        sunday:  [...24 values],
+        monthly_multipliers: [...12 values],
+      },
+    },
+    // ...6-8 typical patterns: hotel bedroom, office Mon-Fri, school term,
+    //   retail open hours, residential, 24/7, etc.
+  ],
+  lighting: [ /* same shape — patterns for lighting controls */ ],
+  equipment: [ /* same shape — patterns for equipment use */ ],
+}
+```
+
+**Properties:**
+- Presets are starting points, NOT first-class library items. Applying a preset populates the schedule fields; from there the user edits in place. Edits do not modify the preset.
+- Presets do NOT carry `exceptions` (those are project-specific). Applying a preset preserves any existing exceptions in the target schedule.
+- Presets have a stable `id` so re-applying after edits gives a predictable reset.
+- The UI may also surface a "Save current as preset…" affordance that adds a project-level custom preset; project presets live alongside the seeded ones in the same dropdown.
+
+### Exception period mechanism (v2.3)
+
+A schedule's default `weekday/saturday/sunday/monthly_multipliers` pattern repeats for every week of the year by default. Real buildings have periods when this pattern breaks down — Christmas shutdown, summer holiday, exam week, conference season. The exception period mechanism captures these without inflating the default schedule to 8,760 explicit values.
+
+Each schedule carries 0–5 named `exceptions[]`:
+
+```js
+exceptions: [
+  {
+    id: 'exc_1',
+    name: 'Christmas shutdown',
+    icon: '🎄',                  // optional emoji or icon for the heatmap legend
+    start_date: '12-22',         // MM-DD
+    end_date: '01-05',           // MM-DD; wraps year if end < start
+    weekday: [...24 values],     // overrides the default pattern within this range
+    saturday: [...24 values],
+    sunday:  [...24 values],
+    ignore_monthly_multipliers: true,  // if true, skip the monthly multiplier during exception period
+  },
+  // ...up to 5
+]
+```
+
+**Behaviour:**
+- For any hour, the algorithm checks whether the date falls within any exception's `start_date`–`end_date` window (wrapping year-end correctly). If yes, the exception's day-type curve replaces the default. If no, the default applies.
+- If two exceptions overlap, the one defined first in the array wins (deterministic precedence). UI should warn on overlap.
+- `ignore_monthly_multipliers` lets a Christmas shutdown read as zero regardless of "December busy season" multiplier.
+- The annual heatmap visualisation surfaces exceptions as distinctly-coloured bands so the user can see at a glance that the period exists.
+- EnergyPlus emission: each exception period is rendered as a `Schedule:Year` date-ranged override on top of the default `Schedule:Compact`. The live engine's `computeHourlyGains` honours the same lookup logic.
+
+The cap of 5 is a UI affordance, not a contract limit. Briefs introducing more nuanced operational schedules (e.g. State 3 multi-zone HVAC) may need higher limits; revisit then.
 
 ---
 
@@ -315,24 +417,35 @@ If results fall outside the ranges for a given declared fabric spec, the model i
 
 ### Inputs honoured
 
-Everything in State 1, plus:
+Everything in State 1, plus the new occupancy and gain inputs introduced in v2.3:
+
+**Occupancy (first-class building property):**
 
 | Input | Source | Path |
 |---|---|---|
-| People density | User | `gains.people.density_per_m2` |
-| Sensible heat per person | User or default | `gains.people.sensible_w_per_person` |
-| Latent heat per person | User or default | `gains.people.latent_w_per_person` |
-| People weekday schedule | User | `gains.people.schedule.weekday` |
-| People weekend schedule | User | `gains.people.schedule.weekend` |
-| People monthly multipliers | User | `gains.people.schedule.monthly` |
-| Lighting power density | User | `gains.lighting.lpd_w_per_m2` |
-| Lighting control scalar | User | `gains.lighting.control_scalar` (1.0 occ-sensing, 1.2 manual, 0.6 daylight dimming) |
-| Lighting schedule (same shape as people) | User | `gains.lighting.schedule.*` |
-| Equipment power density | User | `gains.equipment.epd_w_per_m2` |
-| Equipment schedule (same shape as people) | User | `gains.equipment.schedule.*` |
+| Density value + basis | User | `building_config.occupancy.density.{value, basis}` — basis ∈ {`per_room`, `per_m2`, `total`, `per_workstation`} |
+| Occupancy rate | User | `building_config.occupancy.occupancy_rate` (0–1, fraction of rooms typically occupied) |
+| Sensible / latent heat per person | User or default | `building_config.occupancy.{sensible_w_per_person, latent_w_per_person}` |
+| Occupancy schedule | User | `building_config.occupancy.schedule.{weekday, saturday, sunday, monthly_multipliers, exceptions}` |
+| Exception periods (0–5) | User | `building_config.occupancy.schedule.exceptions[]` — see Exception period mechanism |
+
+**Gains (derive from occupancy by default, with relationship override):**
+
+| Input | Source | Path |
+|---|---|---|
+| Lighting LPD | User | `building_config.gains.lighting.magnitude.{value, unit}` |
+| Lighting relationship to occupancy | User | `building_config.gains.lighting.relationship_to_occupancy` ∈ {`proportional_with_spill`, `proportional`, `independent`, `always_on`} |
+| Lighting spill / daylight control | User | `building_config.gains.lighting.{spill_minutes, daylight_factor}` |
+| Lighting schedule (only if `relationship_to_occupancy === 'independent'`) | User | `building_config.gains.lighting.schedule.*` |
+| Equipment baseload + active loads | User | `building_config.gains.equipment.{baseload, active}.{value, unit}` |
+| Equipment relationship to occupancy | User | `building_config.gains.equipment.relationship_to_occupancy` ∈ {`proportional`, `independent`} |
+| Equipment standby factor | User | `building_config.gains.equipment.standby_factor` (0–1, fraction of active that runs when unoccupied) |
+| Equipment schedule (only if `relationship_to_occupancy === 'independent'`) | User | `building_config.gains.equipment.schedule.*` |
 | Radiant/convective splits | Default | (typical values, hidden unless advanced) |
 
-Schedules are properties of the gain they describe — defined on the same screen as the gain itself. There is no global `/profiles` editor in the State 2 contract; if one exists in the UI, it is deprecated.
+**Why occupancy is first-class** (rationale): in real buildings, lighting on/off and equipment active/standby are *caused* by people being present. Treating occupancy as one of three independent gain inputs (the v2.2 schema) made it possible to inadvertently configure people present + lighting off, which is meaningless. The v2.3 schema makes occupancy the foundation; lighting and equipment cascade from it via `relationship_to_occupancy`. Override to `independent` is retained for cases where the user has reason to break the relationship (e.g. corridor lighting that runs 24/7 regardless of guest presence).
+
+Schedules are properties of the input they describe — defined on the same screen as the occupancy or gain itself. There is no global `/profiles` editor in the State 2 contract; if one exists in the UI, it is deprecated and slated for deletion (Brief 27 Part 9).
 
 ### Inputs ignored
 
@@ -363,21 +476,28 @@ State 1 output shape, plus:
 ```js
 {
   state: 2,
-  mode: 'envelope-plus-gains',
+  mode: 'envelope-gains',          // matches stateMode.js MODES.ENVELOPE_GAINS
 
   gains: {
-    // State 1 gains, plus:
-    people: { sensible_kwh, latent_kwh, total_kwh, peak_kw },
-    lighting: { kwh, effective_lpd_w_per_m2, peak_kw },
-    equipment: { kwh, peak_kw },
+    // State 1 solar gains, plus:
+    people:    { sensible_kwh, latent_kwh, total_kwh, peak_kw, hours_active },
+    lighting:  { kwh, effective_lpd_w_per_m2, peak_kw, hours_active },
+    equipment: { kwh, peak_kw, hours_active, baseload_kwh, active_kwh },
   },
 
   state1_delta: {
-    heating_demand_change_mwh: number,  // typically negative — gains offset heating
-    cooling_demand_change_mwh: number,  // typically positive — gains add to cooling
+    heating_demand_change_mwh: number,   // typically negative — gains offset heating
+    cooling_demand_change_mwh: number,   // typically positive — gains add to cooling
     overheating_hours_change: number,
     comfort_hours_change: number,
-  }
+    free_running_temp_change_annual_mean_c: number,
+  },
+
+  occupancy_summary: {
+    average_occupants: number,           // time-weighted across the year
+    peak_occupants: number,
+    annual_occupant_hours: number,
+  },
 }
 ```
 
@@ -421,10 +541,33 @@ Each card is colour-themed throughout — the accent colour appears on the card 
 
 State 2 must equal State 1 when all gain inputs are set to zero (sanity check).
 
-Bridgewater expected State 2 numbers (full hotel occupancy and benchmark equipment):
-- Heating demand: 15–40 MWh/yr (down from State 1)
-- Cooling demand: 20–50 MWh/yr (up from State 1)
-- Overheating hours: 500–1500 (up from State 1)
+**Bridgewater expected State 2 ranges (v2.3 — BREDEM-derived, anchored to post-Brief 26.2 State 1):**
+
+The full derivation lives in `docs/state_2_expected_ranges.md`. Summary:
+
+| Metric | Expected State 2 range | Source |
+|---|---|---|
+| heating_demand_mwh (live) | 95–125 | State 1 155.1 minus 30–60 gain offset |
+| heating_demand_mwh (sim)  | 105–135 | State 1 164.2 minus 30–60 gain offset |
+| cooling_demand_mwh (live) | 80–105 | State 1 67.9 plus 15–35 gain add |
+| cooling_demand_mwh (sim)  | 55–85  | State 1 45.0 plus 15–35 gain add |
+| overheating_hours | 2,400–2,900 | State 1 ~2,050 plus 400–800 |
+| underheating_hours | 3,500–4,500 | State 1 ~5,030 minus 500–1,500 (hours migrate to comfort) |
+| comfort_hours | 1,500–2,200 | residual |
+| annual_mean_c | 19.5–22.0 | State 1 18.8 plus ~1.5–3 K from total gain |
+| people_kwh | 50,000–65,000 | 151 effective occupants × 75 W × 14 h × 365 |
+| lighting_kwh | 50,000–70,000 | 8 W/m² × 3,457 m² × 1,800–2,500 hrs |
+| equipment_kwh | 110,000–150,000 | 3 W/m² baseload + 7 W/m² active × ~1,500 hrs |
+
+**Stated assumptions** (the spec these ranges are tied to):
+- Occupancy density 1.5 ppl/room, rate 0.75 (typical UK hotel)
+- Hotel-bedroom presence pattern (~14 hrs/day overnight + evening)
+- Sensible heat 75 W/person, latent 55 W/person (rest)
+- Lighting 8 W/m² LED, proportional to occupancy with 15-min spill, 60% daylight dimming 09:00–17:00
+- Equipment 3 W/m² baseload (24/7) + 7 W/m² active (proportional to occupancy with 10% standby)
+- All other inputs as per State 1 Bridgewater reference scenario
+
+If the model's Bridgewater output lands outside these ranges, treat it as a model bug unless the user has changed one of the stated assumptions.
 
 ---
 
@@ -798,7 +941,7 @@ These are unresolved and need decisions before the relevant brief is written:
 
 4. **Sub-metering schema — how is partial sub-metering represented?** E.g., "we have a meter on the HVAC plant but not on individual systems."
 
-5. **Schedule preset library schema — what does the preset library look like and where does it live?** Referenced in State 2 UI rules. Needs a schema before State 2 brief.
+5. ~~**Schedule preset library schema — what does the preset library look like and where does it live?** Referenced in State 2 UI rules. Needs a schema before State 2 brief.~~ **RESOLVED in v2.3.** Schema defined in Cross-cutting concepts § Schedule preset library. Presets are starting-points (not first-class library items); they live in `frontend/src/data/schedulePresets.js` keyed by gain type (`occupancy`, `lighting`, `equipment`). UI exposes a dropdown per input; applying a preset populates the fields, and from there the user edits in place. A "Save current as preset…" affordance adds project-level custom presets to the same dropdown.
 
 6. **Expected verification ranges for State 2, 2.5, 3, 4** — currently only State 1 has documented Bridgewater bounds. Brief 26 Part 2.5 caught three compounding bugs only because the contract had State 1 ranges to compare against — engine-agreement alone wouldn't have flagged them since both engines share `geometry.py`. Brief 26 Part 3 then revealed that the State 1 ranges themselves were gut-feel (Passivhaus targets, not standard-fabric reality) and had to be revised against a BREDEM-style sanity check. The discipline rule below is the v2.2 answer to this question.
 
@@ -812,7 +955,9 @@ Every expected range in this document — for every state, for every reference s
 
 3. **Documented in this contract** with the spec, the first-principles result, and the resulting range. So when a future brief reports "model says 175 MWh, range is 150-250", the trail back to "BREDEM says 270 MWh, our model is 35% lower because of thermal mass + solar credit" is followable without re-deriving from scratch.
 
-The State 1 Bridgewater reference (v2.2) is the worked example. Future state ranges follow the same pattern.
+4. **Derived before the implementation brief begins, not during it** (v2.3). The Brief 26 close-out caught itself mid-flight when retroactive BREDEM revealed the State 1 ranges were Passivhaus targets, not standard-fabric reality. The cost: a contract revision while the implementation was already done. Future briefs that introduce a new state's expected ranges (e.g. Brief 27 for State 2, future Brief X for State 3) must include the BREDEM-style derivation as Part 0 of the brief itself, before any code. Process lesson #5 in `state_1_divergences.md` applies.
+
+The State 1 Bridgewater reference (v2.2) is the worked example. State 2 follows the same pattern with derivation in `docs/state_2_expected_ranges.md` (Brief 27 Part 0). Future state ranges follow the same pattern.
 
 When this discipline lapses — when a range is set by intuition or copy-pasted from another building — the verification gate becomes worse than useless: it either passes everything (range too wide), fails everything (range too narrow), or worst, fails real bugs because the gate didn't catch them. The contract caught itself in Brief 26 Part 3; that's the kind of self-correction this document is meant to enable.
 
