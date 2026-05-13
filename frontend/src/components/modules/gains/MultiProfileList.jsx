@@ -21,7 +21,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { ChevronDown, MoreHorizontal, Plus, Trash2, Copy, Edit3 } from 'lucide-react'
+import { ChevronDown, MoreHorizontal, Plus, Trash2, Copy } from 'lucide-react'
 import { profileFromTemplate } from '../../../data/loadTypeLibrary.js'
 import { SCHEDULE_PRESETS } from '../../../data/schedulePresets.js'
 import MiniProfile from './MiniProfile.jsx'
@@ -77,8 +77,14 @@ function AddProfileDropdown({ templates, onAdd, accent, disabled }) {
   )
 }
 
-// ── Per-profile [⋯] action menu ─────────────────────────────────────────────
-function ProfileActionsMenu({ onEdit, onDuplicate, onDelete, disabled }) {
+// ── Per-profile [⋯] action menu (Duplicate / Delete only) ──────────────────
+//
+// Brief 27 close-out: the "Edit" entry was removed. The active profile's
+// edit fields are now visible inline by default (see ProfileEditPanel),
+// matching how "schedule preset → starting point → edit in place" works
+// elsewhere in the module. Library profiles + Custom profiles are
+// editable the same way; provenance doesn't gate the controls.
+function ProfileActionsMenu({ onDuplicate, onDelete, disabled }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
   useClickOutside(wrapRef, () => setOpen(false))
@@ -95,14 +101,6 @@ function ProfileActionsMenu({ onEdit, onDuplicate, onDelete, disabled }) {
       </button>
       {open && (
         <div className="absolute z-20 right-0 mt-1 w-32 bg-white border border-light-grey rounded shadow-md py-1">
-          {onEdit && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onEdit(); setOpen(false) }}
-              className="w-full flex items-center gap-1.5 px-2 py-1 text-xxs text-mid-grey hover:bg-off-white hover:text-navy transition-colors text-left"
-            >
-              <Edit3 size={10} /> Edit
-            </button>
-          )}
           <button
             onClick={(e) => { e.stopPropagation(); onDuplicate(); setOpen(false) }}
             className="w-full flex items-center gap-1.5 px-2 py-1 text-xxs text-mid-grey hover:bg-off-white hover:text-navy transition-colors text-left"
@@ -121,26 +119,27 @@ function ProfileActionsMenu({ onEdit, onDuplicate, onDelete, disabled }) {
   )
 }
 
-// ── Inline edit panel (expand-on-click within the profile row) ──────────────
-function ProfileEditPanel({ profile, category, onChange, onClose }) {
-  const isLighting = category === 'lighting'
+// ── Inline edit panel — visible by default for the active profile ───────────
+//
+// Brief 27 close-out Bug 1 fix: the panel was previously gated behind a
+// [⋯] → Edit click. Library profiles + Custom both arrive needing
+// inspection, and the gate made library profiles read as "uneditable".
+// Now the active profile renders its full editable field set inline.
+// The [⋯] menu retains Duplicate / Delete only.
+//
+// All field rendering is unconditional on profile provenance — built-in
+// templates and Custom profiles share the same controls. Relationship-
+// dependent fields (spill_minutes, daylight_factor) appear when the
+// chosen relationship reads them, hidden otherwise.
+function ProfileEditPanel({ profile, category, onChange, accent }) {
+  const isLighting  = category === 'lighting'
   const isEquipment = category === 'equipment'
+  const rel         = profile.relationship_to_occupancy
 
   return (
-    <div className="mt-1.5 p-2 bg-off-white/60 border border-light-grey rounded space-y-1.5 text-xxs">
-      <div className="flex items-center justify-between mb-0.5">
-        <span className="uppercase tracking-wider text-mid-grey">Edit profile</span>
-        <button onClick={onClose} className="text-mid-grey hover:text-navy text-xxs">Done</button>
-      </div>
-      <Field label="Label">
-        <input
-          type="text"
-          value={profile.label ?? ''}
-          onChange={e => onChange({ ...profile, label: e.target.value })}
-          className="w-full px-1.5 py-0.5 border border-light-grey rounded focus:outline-none focus:border-mid-grey text-caption text-navy"
-        />
-      </Field>
-
+    <div className="mt-2 p-2 bg-white border border-light-grey rounded space-y-1.5 text-xxs"
+         style={{ borderLeftWidth: '2px', borderLeftColor: accent + '60' }}>
+      {/* Magnitude — first because it's the headline parameter */}
       {isLighting && (
         <Field label="LPD">
           <NumberWithUnit
@@ -167,25 +166,24 @@ function ProfileEditPanel({ profile, category, onChange, onClose }) {
               onChange={(v, u) => onChange({ ...profile, active: { value: v, unit: u } })}
             />
           </Field>
-          <Field label="Standby">
-            <PercentInput
-              value={profile.standby_factor ?? 0.10}
-              onChange={v => onChange({ ...profile, standby_factor: v })}
-            />
-          </Field>
         </>
       )}
 
+      {/* Area share — independently editable per profile. Sum across
+          profiles is INFORMATIONAL only; never auto-balanced. Per the
+          v2.4 contract the canvas Area-coverage indicator surfaces over/
+          under-coverage as a hint. */}
       <Field label="Area share">
         <PercentInput
           value={profile.area_share ?? 0}
           onChange={v => onChange({ ...profile, area_share: v })}
+          allowOverflow
         />
       </Field>
 
       <Field label="Relationship">
         <select
-          value={profile.relationship_to_occupancy ?? ''}
+          value={rel ?? ''}
           onChange={e => onChange({ ...profile, relationship_to_occupancy: e.target.value })}
           className="w-full px-1.5 py-0.5 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-mid-grey"
         >
@@ -196,11 +194,32 @@ function ProfileEditPanel({ profile, category, onChange, onClose }) {
         </select>
       </Field>
 
-      {isLighting && profile.relationship_to_occupancy === 'proportional_with_spill' && (
-        <Field label="Daylight factor">
+      {/* Lighting relationship-dependent fields */}
+      {isLighting && rel === 'proportional_with_spill' && (
+        <>
+          <Field label="Spill (min)">
+            <input
+              type="number" min={0} max={120} step={5}
+              value={profile.spill_minutes ?? 15}
+              onChange={e => onChange({ ...profile, spill_minutes: Number(e.target.value) })}
+              className="w-16 px-1.5 py-0.5 text-xxs text-navy text-right tabular-nums border border-light-grey rounded focus:outline-none focus:border-mid-grey"
+            />
+          </Field>
+          <Field label="Daylight factor">
+            <PercentInput
+              value={profile.daylight_factor ?? 0.6}
+              onChange={v => onChange({ ...profile, daylight_factor: v })}
+            />
+          </Field>
+        </>
+      )}
+
+      {/* Equipment-specific: standby floor */}
+      {isEquipment && rel === 'proportional' && (
+        <Field label="Standby">
           <PercentInput
-            value={profile.daylight_factor ?? 0.6}
-            onChange={v => onChange({ ...profile, daylight_factor: v })}
+            value={profile.standby_factor ?? 0.10}
+            onChange={v => onChange({ ...profile, standby_factor: v })}
           />
         </Field>
       )}
@@ -241,17 +260,32 @@ function NumberWithUnit({ value, unit, onChange }) {
   )
 }
 
-function PercentInput({ value, onChange }) {
+// Percent input. `allowOverflow` lets the user push past 100% — used for
+// area_share where over-coverage is permitted (the canvas Area-coverage
+// indicator flags it). Slider max is 100; the typed input box accepts any
+// integer 0..200 so the user can deliberately over-allocate.
+function PercentInput({ value, onChange, allowOverflow = false }) {
   const pct = Math.round(((value ?? 0)) * 100)
+  const sliderMax = allowOverflow ? 100 : 100
+  const inputMax  = allowOverflow ? 200 : 100
   return (
     <div className="flex items-center gap-1">
       <input
-        type="range" min={0} max={100} step={1}
-        value={pct}
+        type="range" min={0} max={sliderMax} step={1}
+        value={Math.min(pct, sliderMax)}
         onChange={e => onChange(Number(e.target.value) / 100)}
         className="flex-1 h-[3px] accent-navy"
       />
-      <span className="w-9 text-xxs text-navy text-right tabular-nums">{pct}%</span>
+      <input
+        type="number" min={0} max={inputMax} step={1}
+        value={pct}
+        onChange={e => {
+          const n = Number(e.target.value)
+          if (Number.isFinite(n)) onChange(Math.max(0, Math.min(inputMax, n)) / 100)
+        }}
+        className="w-12 px-1 py-0.5 text-xxs text-navy text-right tabular-nums border border-light-grey rounded focus:outline-none focus:border-mid-grey"
+      />
+      <span className="text-xxs text-mid-grey">%</span>
     </div>
   )
 }
@@ -269,8 +303,6 @@ export default function MultiProfileList({
   renderDetail,         // (profile) => ReactNode for the per-profile detail line
   annualPerProfile = [],  // annual[].kwh per profile id (from useAnnualGains)
 }) {
-  const [editingProfileId, setEditingProfileId] = useState(null)
-
   const profilesList = profiles ?? []
 
   const handleAdd = useCallback((template) => {
@@ -279,6 +311,10 @@ export default function MultiProfileList({
     onSelectProfile?.(newProfile.id)
   }, [profilesList, category, onProfilesChange, onSelectProfile])
 
+  // Per-profile update — surgical. Only mutates the targeted profile;
+  // other profiles' fields (including area_share) are NEVER touched.
+  // The v2.4 contract treats Σ area_share as informational, never
+  // auto-balanced — see the Area-coverage indicator on the canvas.
   const updateProfile = useCallback((id, patch) => {
     onProfilesChange(profilesList.map(p => p.id === id ? { ...p, ...patch } : p))
   }, [profilesList, onProfilesChange])
@@ -298,12 +334,10 @@ export default function MultiProfileList({
   const handleDelete = useCallback((id) => {
     onProfilesChange(profilesList.filter(p => p.id !== id))
     if (activeProfileId === id) {
-      // Reselect first remaining profile
       const remaining = profilesList.filter(p => p.id !== id)
       onSelectProfile?.(remaining[0]?.id ?? null)
     }
-    if (editingProfileId === id) setEditingProfileId(null)
-  }, [profilesList, activeProfileId, editingProfileId, onProfilesChange, onSelectProfile])
+  }, [profilesList, activeProfileId, onProfilesChange, onSelectProfile])
 
   return (
     <div className="space-y-2">
@@ -314,7 +348,6 @@ export default function MultiProfileList({
       <div className="space-y-1.5">
         {profilesList.map((profile) => {
           const isActive = profile.id === activeProfileId
-          const isEditing = profile.id === editingProfileId
           const ann = annualPerProfile.find(a => a.id === profile.id)
           return (
             <div
@@ -331,7 +364,10 @@ export default function MultiProfileList({
                 paddingLeft: isActive ? '7px' : '9px',
               }}
             >
-              {/* Header row */}
+              {/* Header row — label is inline-editable; [⋯] menu offers
+                  Duplicate + Delete. Editing of magnitude / area share /
+                  relationship etc. happens in the inline panel below
+                  when this is the active profile. */}
               <div className="flex items-center gap-1">
                 <span
                   className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
@@ -347,16 +383,19 @@ export default function MultiProfileList({
                   }`}
                 />
                 <ProfileActionsMenu
-                  onEdit={() => setEditingProfileId(isEditing ? null : profile.id)}
                   onDuplicate={() => handleDuplicate(profile)}
                   onDelete={() => handleDelete(profile.id)}
                 />
               </div>
 
-              {/* Detail line — magnitude × area × relationship */}
-              <div className="text-xxs text-mid-grey/80 ml-2.5 mt-0.5 tabular-nums">
-                {renderDetail(profile)}
-              </div>
+              {/* Detail line — only shown for inactive profiles so the
+                  active one's edit panel doesn't carry a redundant
+                  summary above it. */}
+              {!isActive && (
+                <div className="text-xxs text-mid-grey/80 ml-2.5 mt-0.5 tabular-nums">
+                  {renderDetail(profile)}
+                </div>
+              )}
 
               {/* Annual readout per profile */}
               {ann && (
@@ -365,26 +404,26 @@ export default function MultiProfileList({
                 </div>
               )}
 
-              {/* Mini-profile thumbnail (only for active or editing — keeps the list compact) */}
-              {(isActive || isEditing) && (
-                <div className="ml-2.5 mt-1">
-                  <MiniProfile
-                    schedule={profile.schedule}
-                    accent={accent}
-                    onEdit={(e) => { e?.stopPropagation?.(); onEditSchedule?.() }}
-                    label="Weekday"
-                  />
-                </div>
-              )}
-
-              {/* Inline edit panel */}
-              {isEditing && (
+              {/* Inline edit panel + mini-profile — visible for the ACTIVE
+                  profile only (one panel open at a time keeps the left
+                  panel from getting hostile when many profiles exist).
+                  This is the Brief 27 close-out Bug 1 fix: previously the
+                  panel was hidden behind [⋯] → Edit. */}
+              {isActive && (
                 <div onClick={e => e.stopPropagation()}>
+                  <div className="ml-2.5 mt-1">
+                    <MiniProfile
+                      schedule={profile.schedule}
+                      accent={accent}
+                      onEdit={(e) => { e?.stopPropagation?.(); onEditSchedule?.() }}
+                      label="Weekday"
+                    />
+                  </div>
                   <ProfileEditPanel
                     profile={profile}
                     category={category}
+                    accent={accent}
                     onChange={(next) => updateProfile(profile.id, next)}
-                    onClose={() => setEditingProfileId(null)}
                   />
                 </div>
               )}

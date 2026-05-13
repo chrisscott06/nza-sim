@@ -28,15 +28,25 @@ export default function FreeRunningView() {
   const [hover, setHover] = useState(null)
   const [width, setWidth] = useState(0)
 
-  // Measure container width
+  // Measure container width. The wrapper only enters the DOM once
+  // `ready` is true (the early-return loading placeholder doesn't render
+  // the canvas wrapper), so the ResizeObserver setup is gated on `ready`
+  // — without that gate, this effect fires at first render with
+  // wrapRef.current === null, observer never starts, and the chart
+  // doesn't render until the user refreshes the page. Brief 27
+  // close-out Bug 4 fix.
   useEffect(() => {
-    if (!wrapRef.current) return
+    if (!ready) return
+    const el = wrapRef.current
+    if (!el) return
+    // Immediate initial measurement in case ResizeObserver lags
+    setWidth(el.getBoundingClientRect().width)
     const ro = new ResizeObserver(entries => {
       for (const e of entries) setWidth(e.contentRect.width)
     })
-    ro.observe(wrapRef.current)
+    ro.observe(el)
     return () => ro.disconnect()
-  }, [])
+  }, [ready])
 
   const s1Trace = state1?.free_running?.hourly_temperature_c
   const s2Trace = state2?.free_running?.hourly_temperature_c
