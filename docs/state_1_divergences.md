@@ -129,6 +129,38 @@ in Brief 25.
 
 ---
 
+## 4. State isolation regression — regex parse of forbidden list (Python side)
+
+**What:** `scripts/state1_isolation_epjson.py` reads the canonical
+`FORBIDDEN_ENVELOPE_ONLY_INPUTS` list from `frontend/src/utils/stateMode.js`
+via a regex on the JS source. The Node counterpart
+(`scripts/state1_isolation_live.mjs`) uses a real ES module import, which
+is robust.
+
+**Why fragile:** if the JS file gets reformatted in a way that breaks the
+regex (e.g. prettier/biome wrapping arrays differently, switching to
+double-quoted strings, or splitting `Object.freeze([...])` across an
+unexpected newline pattern), the regex returns zero matches and the
+regression silently reports "ALL PASS" while testing nothing.
+
+**Current mitigation:** the loader asserts at least 15 entries parsed.
+If the count drops below that the script raises rather than reporting a
+false-positive pass.
+
+**Magnitude:** N/A — this is a tooling concern, not a physics divergence.
+Logged here so future maintenance has the context.
+
+**What would fix it:** expose `FORBIDDEN_ENVELOPE_ONLY_INPUTS` as a JSON
+file (`stateMode.json`) imported by both `stateMode.js` and the Python
+regression. Or generate a `forbidden_inputs.json` artifact during the
+frontend build that the Python side consumes. Either removes the parse
+step entirely.
+
+**Decision:** **defer** until next contract change. The current tripwire
+is sufficient; a JSON export is the right long-term fix but not urgent.
+
+---
+
 ## How to add a divergence
 
 When implementing any State 1 part where you choose a simplification:

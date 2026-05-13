@@ -47,11 +47,21 @@ from nza_engine.runner import run_simulation
 
 
 # ── Read the canonical forbidden list from stateMode.js ──────────────────────
+_MIN_FORBIDDEN_PATHS = 15  # tripwire — see comment below
+
+
 def load_forbidden_paths() -> list[str]:
     """
     Parse FORBIDDEN_ENVELOPE_ONLY_INPUTS out of stateMode.js. Single source of
     truth — when a new forbidden input is added to the JS list, this picks it
     up automatically.
+
+    Defensive: the regex is pragmatic but fragile to JS reformatting. If a
+    future prettier/biome pass rewrites the file in a way that breaks the
+    parse, we'd silently start checking zero items and report "ALL PASS".
+    Belt-and-braces: assert we got at least `_MIN_FORBIDDEN_PATHS` entries.
+    Track via docs/state_1_divergences.md (known limitation #4) until we
+    expose the list as a JSON export.
     """
     sm = (REPO_ROOT / "frontend/src/utils/stateMode.js").read_text(encoding="utf-8")
     m = re.search(
@@ -61,7 +71,15 @@ def load_forbidden_paths() -> list[str]:
     if not m:
         raise RuntimeError("Could not parse FORBIDDEN_ENVELOPE_ONLY_INPUTS from stateMode.js")
     body = m.group(1)
-    return re.findall(r"'([^']+)'", body)
+    paths = re.findall(r"'([^']+)'", body)
+    if len(paths) < _MIN_FORBIDDEN_PATHS:
+        raise RuntimeError(
+            f"Parsed only {len(paths)} forbidden paths from stateMode.js — "
+            f"expected ≥ {_MIN_FORBIDDEN_PATHS}. The regex may have broken "
+            f"against a reformatted source file. Inspect the parse output "
+            f"before trusting this test."
+        )
+    return paths
 
 
 # ── Absurd values — match the live-engine test exactly ──────────────────────

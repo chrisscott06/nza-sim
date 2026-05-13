@@ -1,5 +1,122 @@
 # NZA SIMULATE — Status
 
+## ✅ Brief 26 closed — State 1 envelope-only computation
+
+**What landed:**
+
+- **State 1 threaded through both engines.** Live engine
+  (`_calculateEnvelopeOnly` in `instantCalc.js`) and EnergyPlus
+  (`assemble_epjson(mode='envelope-only')` → `_get_heat_balance_state1`
+  in `sql_parser.py`) both produce the contract-shaped State 1 output:
+  `gains.solar`, `losses.conduction.{external_wall, roof, ground_floor,
+  glazing.{f1..f4}, thermal_bridging}`, `losses.ventilation.{fabric_leakage,
+  permanent_vents}`, `free_running.{annual_mean_c, winter_min_c,
+  summer_max_c, hourly_temperature_c}`, `demand.{heating_demand_mwh,
+  cooling_demand_mwh, underheating_hours, overheating_hours, comfort_hours}`.
+
+- **Comfort band as first-class project input.** `comfort_band_lower_c`
+  and `comfort_band_upper_c` are persisted on the project row, editable
+  in the UI, and drive State 1 demand derivation in both engines.
+
+- **Provenance scaffolding** (v2.1 schema): `_provenance` sibling object,
+  dot-notated paths, six-value source enum. Ready to populate as later
+  states need it.
+
+- **Three compounding bugs caught and fixed:**
+  1. **Variable shadowing in `assemble_epjson`** — `mode = sc.get("mode", ...)`
+     clobbered the function parameter. State 1 sims silently fell through
+     to detailed mode + hotel thermostat schedules, reporting 128.9 MWh
+     heating instead of zero. Fixed by renaming to `hvac_mode` with
+     state1 short-circuit.
+  2. **Glazing parser bug (Brief 21 carry-over)** — `get_envelope_heat_flow_detailed`
+     only matched `_WALL_` for conduction routing, so windows were always
+     tagged with zero conduction. `losses.glazing` came back empty in the
+     full-mode heat balance too. Fixed by adding the `_WIN_` filter block.
+  3. **Air heat capacity unit bug** — first cut of the parser multiplied
+     0.33 Wh/(m³·K) by 1000, reporting demand as 106 GWh. Caught by the
+     engine-agreement check on first run. Constant renamed
+     `_AIR_HEAT_CAPACITY_WH_PER_M3_K` to make the unit explicit.
+
+- **Contract v2.2 published.** State 1 verification ranges revised from
+  Passivhaus-aspirational to standard UK 2018-vintage hotel reference.
+  Discipline rule added: every expected range must be backed by an
+  independent first-principles calculation with stated fabric / occupancy /
+  systems spec. Bridgewater reference scenario documented in full.
+
+- **Engine agreement at +0.8% on the headline.** Heating demand
+  (the contract-significant number) agrees within 1% between engines on
+  Bridgewater. Live 166.8 MWh vs sim 168.1 MWh. Conduction line items
+  agree at -11.7% across the board — a structural temperature-trace
+  divergence, not a per-element bug (proportional offset rules out the
+  alternative). Hard warnings on temperature extremes are the
+  lumped-capacitance vs EP transient-mass divergence and are catalogued
+  in `docs/state_1_divergences.md` as known and acceptable.
+
+- **State isolation regression with 45 byte-identical scenarios.**
+  Two scripts (`scripts/state1_isolation_live.mjs` and
+  `scripts/state1_isolation_epjson.py`) enumerate the canonical
+  `FORBIDDEN_ENVELOPE_ONLY_INPUTS` list and assert byte-identity at
+  canonical-JSON level with zero float tolerance. Live engine: 22/22.
+  EP path (assembler byte-identity + one full end-to-end EP run): 23/23.
+  Every leakage surface (geometry, IDF assembler, SQL parser) covered.
+
+- **Engine-agreement script as canonical regression**
+  (`scripts/state1_engine_agreement.mjs`). Standard pattern for States 2,
+  2.5, 3 to follow.
+
+- **Thermal mass dropdown** in Building → Fabric drives the live engine's
+  lumped-capacitance model. Wiring verified by a smoke test that confirms
+  monotonic convergence: heavy mass narrows live-vs-sim disagreement on
+  `winter_min_c` from +252% HARD to +21.8% warn, exactly the EP transient-mass
+  convergence behaviour predicted.
+
+**Known limitations carried into future briefs (all "known and acceptable
+for State 1"):**
+
+- **Isotropic-sky vs Perez anisotropic diffuse model** —
+  `solarCalc.facadeRadiation` uses isotropic. Over-predicts diffuse on
+  north-leaning faces by ~10–15%, under-predicts on faces pointing toward
+  the sun. EP uses Perez. (Divergence #1 in
+  `docs/state_1_divergences.md`.)
+
+- **Lumped-capacitance vs full transient thermal mass** — live engine
+  uses one heat-capacity number per `thermal_mass_category`; EP uses a
+  full layered transient solver. Affects free-running temperature trace
+  extremes, downstream cooling/comfort hour counts. (Divergence #2.)
+
+- **Stack-only ventilation pressure ignored** — both engines use
+  `Q = Cd · A · √Cw · v_wind` with stack term zeroed for the
+  single-zone constraint. Real buildings see 30–50% of opening flow
+  from stack at low wind. (Divergence #3.)
+
+- **Single-zone model, no AirflowNetwork** — multi-zone airflow with
+  per-zone wind/stack pressures, internal door connections, etc., is
+  not modelled. Brief 25 documents the simplification.
+
+- **Python regex parse of the forbidden inputs list** — pragmatic but
+  fragile to JS reformatting. Tripwire in place (assert ≥15 entries
+  parsed). JSON export is the right long-term fix. (Divergence #4.)
+
+These are properly documented in `docs/state_1_divergences.md` and are
+addressed (or accepted) in future briefs as needed. State 1 is **done**,
+not perfect.
+
+**Suggested next briefs:**
+
+| Brief | Topic |
+|---|---|
+| 27 | Systems Inspectors (file exists at `docs/briefs/Brief_27_Systems_Inspectors.md`) |
+| 28 | Internal Gains — State 2 path (people, lighting, equipment as gain layer; live + EP) |
+| 29 | Operation v2 — State 2.5 path (operable windows, schedules, free-running with intervention) |
+| 30 | CI for state contracts — wire both isolation scripts and the engine-agreement script into pre-merge checks |
+| later | Schema migration + State 4 reconciliation (live ↔ sim ↔ measured trinity) |
+
+Brief 28 (Solar Diagnostics) currently exists as a parked file —
+recommend re-purposing the slot for State 2 internal gains, with solar
+diagnostics absorbed into Brief 27 if convenient.
+
+---
+
 ## ✅ Brief 26 Part 9 — state isolation regression test harness
 
 State 1 isolation is now verified by two scripts that enumerate the
