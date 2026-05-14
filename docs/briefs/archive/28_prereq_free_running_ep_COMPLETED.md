@@ -1,5 +1,23 @@
 # Brief 28 Prerequisite — Free-Running EnergyPlus Simulation
 
+> **⚠ STATIC ENGINE NUMBERS PREDATE `5f890c2` — RE-BASELINING QUEUED IN BRIEF 29 PART 5 (2026-05-14)**
+>
+> The "corrected comparison" State 2 demand figures cited in this brief
+> (Static 103.4 MWh heating, 108.6 MWh cooling, 4,430 underheating hours,
+> 21.2 °C annual mean T) were captured **before** the `decomposeHour
+> day=1` fix (commit `5f890c2`, 2026-05-14). That bug zeroed gains across
+> 5 of 12 months, so the Static numbers under-counted heating offset and
+> cooling drive substantially.
+>
+> The structural conclusions in this brief — envelope-only mode is the
+> honest baseline; both engines now compare like-for-like at the
+> free-running level; parser hooks; persisted-run pipeline — stand.
+> Numeric divergence between Static and Dynamic at envelope-only level
+> is unaffected by the bug (gains are off for both states). But any
+> State 2 numbers in the "corrected comparison" section need re-running
+> against post-fix Static. Queued as Brief 29 Part 5.
+
+
 **Scope:** Add a true free-running EP simulation pathway so Static and Dynamic engines can be compared apples-to-apples.
 
 **Estimated time:** 3 days.

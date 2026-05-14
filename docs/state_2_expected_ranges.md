@@ -1,5 +1,25 @@
 # State 2 — BREDEM-derived expected ranges (Bridgewater reference)
 
+> **⚠ STALE — RE-BASELINING QUEUED IN BRIEF 29 PART 5 (2026-05-14)**
+>
+> The numbers in this document were calibrated against the Static engine
+> **before** commit `5f890c2` (decomposeHour `day=1` default zeroed
+> People/Lighting/Equipment across 5 of 12 months on every project). All
+> ranges below — People 67–87k kWh, Lighting 67–93k, Equipment 147–200k,
+> Heating 125–165 MWh, Cooling 107–140 MWh — assumed those zeroed months.
+>
+> Post-fix Bridgewater values: People 40k, Lighting 41k, Equipment 56k,
+> Heating ~40 MWh, Cooling ~229 MWh — substantially outside.
+>
+> **Engine numbers post `5f890c2` supersede every figure in this doc.**
+> Full re-baselining (re-run smoketest, redrive ranges from hand calcs,
+> re-publish contract) is queued as **Brief 29 Part 5**. Do not use these
+> ranges for new acceptance gates until that brief lands.
+>
+> See `docs/state2_january_people_bug_2026_05.md` for root cause + fix.
+
+---
+
 Per the discipline rule in `docs/state_contracts.md` (introduced in v2.2,
 extended in v2.3): every expected range in this contract is backed by an
 independent first-principles calculation with stated assumptions. This

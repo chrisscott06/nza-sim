@@ -1,6 +1,14 @@
 /**
  * DataCard — KPI metric tile with coloured left border.
  * Matches Pablo's DataCard pattern exactly.
+ *
+ * Brief 28a Part 5 walkthrough Finding 2 (2026-05-14): added optional
+ * `onClick` + `dimmed` props so a DataCard can act as a toggle. When
+ * `onClick` is provided the card becomes keyboard-focusable and shows
+ * a pointer cursor + hover shadow. When `dimmed` is true the card
+ * renders at ~45% opacity with a neutral grey left border, signalling
+ * "off". Existing non-interactive call sites are unaffected (both props
+ * are optional and default to non-interactive).
  */
 
 const ACCENT_COLORS = {
@@ -18,6 +26,8 @@ const ACCENT_COLORS = {
   slate:          '#64748B',
 }
 
+const DIMMED_BORDER = '#D1D5DB'  // light-grey, neutral
+
 export default function DataCard({
   label,
   value,
@@ -26,13 +36,37 @@ export default function DataCard({
   icon: Icon,
   large = false,
   className = '',
+  onClick,
+  dimmed = false,
 }) {
-  const borderColor = ACCENT_COLORS[accent] ?? ACCENT_COLORS.teal
+  const interactive = typeof onClick === 'function'
+  const borderColor = dimmed
+    ? DIMMED_BORDER
+    : (ACCENT_COLORS[accent] ?? ACCENT_COLORS.teal)
+
+  const handleKeyDown = interactive
+    ? (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClick(e)
+        }
+      }
+    : undefined
 
   return (
     <div
-      className={`bg-white rounded-lg shadow-sm relative overflow-hidden ${className}`}
+      className={[
+        'bg-white rounded-lg shadow-sm relative overflow-hidden transition-all duration-150',
+        interactive ? 'cursor-pointer hover:shadow-md select-none' : '',
+        dimmed ? 'opacity-45' : 'opacity-100',
+        className,
+      ].filter(Boolean).join(' ')}
       style={{ borderLeft: `3px solid ${borderColor}` }}
+      onClick={onClick}
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      aria-pressed={interactive ? !dimmed : undefined}
+      onKeyDown={handleKeyDown}
     >
       <div className="px-3 py-2.5">
         {Icon && (

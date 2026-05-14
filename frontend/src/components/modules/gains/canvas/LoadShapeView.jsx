@@ -13,6 +13,17 @@
  *                                from /chart-test per ui_principles.md
  *                                §6 (density) + chart-paired-with-stat-
  *                                panel pattern.
+ * Brief 28a Part 5 walkthrough Finding 2 (2026-05-14): share rows in the
+ *                                Gain profile lens are clickable toggles.
+ *                                Click People / Lighting / Equipment to
+ *                                isolate or hide that gain. Peak + Mean
+ *                                update with the visible subset; shares
+ *                                hold full-window so % readings stay
+ *                                interpretable. Persisted to localStorage
+ *                                so toggle state survives reloads. Guard
+ *                                refuses to disable the last enabled gain
+ *                                (empty chart is more confusing than
+ *                                helpful).
  *
  * Lens decision (Chris's UX question):
  *   Option (a) chosen — lens selector toggle inside the Conditions card,
@@ -59,6 +70,7 @@ const TOTAL_DAYS = 365
 const START_DATE = new Date(2026, 0, 1)
 const LENS_STORAGE_KEY = 'nza-conditions-lens'
 const ZOOM_STORAGE_KEY = 'nza-conditions-zoom'
+const ENABLED_GAINS_KEY = 'nza-conditions-enabled-gains'
 
 const ZOOM_OPTIONS = [
   { label: '1d',  days: 1 },
@@ -113,12 +125,44 @@ export default function LoadShapeView() {
   const [startDay, setStartDay] = useState(0)
   const [selectedMonth, setSelectedMonth] = useState(null)
 
+  // Per-gain visibility toggles for the Gain profile lens (Brief 28a Part 5
+  // walkthrough Finding 2). Clicking a People / Lighting / Equipment share
+  // DataCard toggles that gain off the stacked area chart so users can
+  // isolate one gain at a time. At least one gain must remain enabled —
+  // see toggleGain() guard below.
+  const [enabledGains, setEnabledGains] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(ENABLED_GAINS_KEY))
+      if (saved && typeof saved === 'object') {
+        return {
+          people:    saved.people    !== false,
+          lighting:  saved.lighting  !== false,
+          equipment: saved.equipment !== false,
+        }
+      }
+    } catch {}
+    return { people: true, lighting: true, equipment: true }
+  })
+
   useEffect(() => {
     try { localStorage.setItem(LENS_STORAGE_KEY, lens) } catch {}
   }, [lens])
   useEffect(() => {
     try { localStorage.setItem(ZOOM_STORAGE_KEY, JSON.stringify({ zoomDays })) } catch {}
   }, [zoomDays])
+  useEffect(() => {
+    try { localStorage.setItem(ENABLED_GAINS_KEY, JSON.stringify(enabledGains)) } catch {}
+  }, [enabledGains])
+
+  const toggleGain = (key) => {
+    setEnabledGains(prev => {
+      const next = { ...prev, [key]: !prev[key] }
+      // Guard: refuse to disable the last enabled gain — leaving the chart
+      // empty would be more confusing than helpful.
+      if (!next.people && !next.lighting && !next.equipment) return prev
+      return next
+    })
+  }
 
   // ── Annual hourly arrays — memoised on params + weather ───────────────
   const annualTemperature = useMemo(() => {
@@ -197,24 +241,35 @@ export default function LoadShapeView() {
 
   const gainStats = useMemo(() => {
     if (!gainsWindow?.length) return null
-    let peakTotal = 0, sumPeople = 0, sumLighting = 0, sumEquip = 0
+    // Peak/Mean reflect the currently-PLOTTED subset so users see the
+    // numbers move as they toggle gains on/off. Shares stay full-window
+    // (constant denominator) so they read as "fraction of total gain"
+    // regardless of toggle state — a People share of 26% means People is
+    // 26% of the whole pie, not 26% of whatever's enabled right now.
+    let peakVisible = 0
+    let sumPeople = 0, sumLighting = 0, sumEquip = 0
+    let sumVisible = 0
     for (const row of gainsWindow) {
-      const total = row.people + row.lighting + row.equipment
-      if (total > peakTotal) peakTotal = total
+      const visPeople    = enabledGains.people    ? row.people    : 0
+      const visLighting  = enabledGains.lighting  ? row.lighting  : 0
+      const visEquip     = enabledGains.equipment ? row.equipment : 0
+      const visTotal     = visPeople + visLighting + visEquip
+      if (visTotal > peakVisible) peakVisible = visTotal
+      sumVisible   += visTotal
       sumPeople    += row.people
       sumLighting  += row.lighting
       sumEquip     += row.equipment
     }
     const totalKWh = sumPeople + sumLighting + sumEquip
     return {
-      peakKW:        peakTotal.toFixed(1),
-      meanKW:        (totalKWh / gainsWindow.length).toFixed(2),
+      peakKW:        peakVisible.toFixed(1),
+      meanKW:        (sumVisible / gainsWindow.length).toFixed(2),
       windowTotalKWh: totalKWh.toFixed(0),
       sharePeople:   totalKWh > 0 ? Math.round((sumPeople    / totalKWh) * 100) : 0,
       shareLighting: totalKWh > 0 ? Math.round((sumLighting  / totalKWh) * 100) : 0,
       shareEquip:    totalKWh > 0 ? Math.round((sumEquip     / totalKWh) * 100) : 0,
     }
-  }, [gainsWindow])
+  }, [gainsWindow, enabledGains])
 
   // ── Month jump handler ────────────────────────────────────────────────
   const onSelectMonth = (m) => {
@@ -339,9 +394,15 @@ export default function LoadShapeView() {
                     labelFormatter={h => hourToLabel(h, zoomDays === 1 ? 1 : 2)}
                     formatter={(v, name) => [`${Number(v).toFixed(2)} kW`, name]}
                   />
-                  <Area type="monotone" dataKey="people"    stackId="g" stroke={GAIN_COLOURS.occupancy} fill={GAIN_COLOURS.occupancy} fillOpacity={0.55} name="People" />
-                  <Area type="monotone" dataKey="lighting"  stackId="g" stroke={GAIN_COLOURS.lighting}  fill={GAIN_COLOURS.lighting}  fillOpacity={0.55} name="Lighting" />
-                  <Area type="monotone" dataKey="equipment" stackId="g" stroke={GAIN_COLOURS.equipment} fill={GAIN_COLOURS.equipment} fillOpacity={0.55} name="Equipment" />
+                  {enabledGains.people && (
+                    <Area type="monotone" dataKey="people"    stackId="g" stroke={GAIN_COLOURS.occupancy} fill={GAIN_COLOURS.occupancy} fillOpacity={0.55} name="People" />
+                  )}
+                  {enabledGains.lighting && (
+                    <Area type="monotone" dataKey="lighting"  stackId="g" stroke={GAIN_COLOURS.lighting}  fill={GAIN_COLOURS.lighting}  fillOpacity={0.55} name="Lighting" />
+                  )}
+                  {enabledGains.equipment && (
+                    <Area type="monotone" dataKey="equipment" stackId="g" stroke={GAIN_COLOURS.equipment} fill={GAIN_COLOURS.equipment} fillOpacity={0.55} name="Equipment" />
+                  )}
                 </AreaChart>
               )}
             </ChartContainer>
@@ -359,11 +420,37 @@ export default function LoadShapeView() {
             )}
             {!isTemperature && gainStats && (
               <>
-                <DataCard label="Peak"     value={gainStats.peakKW}        unit="kW"    accent="navy"                                 />
-                <DataCard label="Mean"     value={gainStats.meanKW}        unit="kW"    accent="slate"                                 />
-                <DataCard label="People"   value={`${gainStats.sharePeople}%`}            accent="purple" icon={Activity}              />
-                <DataCard label="Lighting" value={`${gainStats.shareLighting}%`}          accent="gold"                                 />
-                <DataCard label="Equipment" value={`${gainStats.shareEquip}%`}            accent="amber"                                 />
+                <DataCard label="Peak"     value={gainStats.peakKW}        unit="kW"    accent="navy"  />
+                <DataCard label="Mean"     value={gainStats.meanKW}        unit="kW"    accent="slate" />
+                {/* Share rows act as visibility toggles — click to isolate
+                    a single gain or any combination. Brief 28a Part 5
+                    walkthrough Finding 2. */}
+                <DataCard
+                  label="People"
+                  value={`${gainStats.sharePeople}%`}
+                  accent="purple"
+                  icon={Activity}
+                  onClick={() => toggleGain('people')}
+                  dimmed={!enabledGains.people}
+                />
+                <DataCard
+                  label="Lighting"
+                  value={`${gainStats.shareLighting}%`}
+                  accent="gold"
+                  onClick={() => toggleGain('lighting')}
+                  dimmed={!enabledGains.lighting}
+                />
+                <DataCard
+                  label="Equipment"
+                  value={`${gainStats.shareEquip}%`}
+                  accent="amber"
+                  onClick={() => toggleGain('equipment')}
+                  dimmed={!enabledGains.equipment}
+                />
+                <p className="text-xxs text-mid-grey/70 leading-tight pt-1">
+                  Click a share row to toggle that gain off the chart.
+                  Peak and Mean update; share % stays full-window.
+                </p>
               </>
             )}
           </div>

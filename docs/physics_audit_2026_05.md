@@ -342,6 +342,20 @@ recommendation) before this can be re-evaluated.
 
 ## Audit 6 — State 2 internal gains additivity
 
+> **⚠ STALE NUMBERS — RE-BASELINING QUEUED IN BRIEF 29 PART 5 (2026-05-14)**
+>
+> The smoketest figures below were captured **before** commit `5f890c2`
+> (`decomposeHour day=1` default zeroed gains across 5 of 12 months). The
+> additivity conclusion holds at the integration layer — Static engine
+> sums per-profile contributions exactly by construction — but every
+> absolute magnitude in the table (138 MWh total, −57.4 MWh heating,
+> +125.2 MWh cooling, +1,910 overheating hours, +7.4 °C mean T) reflects
+> a year with 5 months of zeroed People/Lighting/Equipment.
+>
+> Engine numbers post `5f890c2` supersede the magnitudes here. Audit
+> conclusion (additivity proven by construction) stands; numeric
+> envelope-vs-gains delta needs re-running.
+
 **Smoketest result (`scripts/state2_smoketest_live.mjs`, Bridgewater).**
 
 | Gain type / profile                | Magnitude            | State 1→2 incremental output |

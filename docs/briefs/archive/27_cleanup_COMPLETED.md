@@ -96,6 +96,20 @@ If anything in this brief takes more than 2 hours or surfaces unexpected complex
 
 ## Part 3 — Corrected close-out (added 2026-05-14 after walkthrough)
 
+> **⚠ NUMBERS BELOW PREDATE `5f890c2` — RE-BASELINING QUEUED IN BRIEF 29 PART 5**
+>
+> The annual totals quoted in this part — `losses_kwh = 184,729.4`,
+> `gains_kwh = 307,594.3`, and any per-gain figures — were produced by
+> the Static engine **before** the `decomposeHour day=1` fix (commit
+> `5f890c2`, 2026-05-14). That bug zeroed People/Lighting/Equipment
+> across Jan/Apr/Jul/Sep/Dec on every project, so the 307,594 kWh gains
+> total under-counted internal gains substantially.
+>
+> The structural conclusion (shape contract was wrong, fix re-routed
+> internal gains under `gains.internal.*`, all 15 shape checks pass)
+> stands. Engine numbers post `5f890c2` supersede the magnitudes here.
+> Full re-baselining queued in Brief 29 Part 5.
+
 **Reason for reopening:** Brief 27 cleanup Part 1 closed at 10/10 confidence based on a static-code verification that the prop rename had landed (`balance=` → `liveData=` on `HeatBalanceView.jsx:45`). The rename was correct but NOT sufficient. Chris's walkthrough confirmed the Heat balance tab still showed the empty state on a loaded Bridgewater. Honest root cause: I missed the brief's explicit Step 4 — "Verify the data shape matches what the consumer expects — if not, transform the data appropriately." I verified the prop name but not the shape contract.
 
 ### What was actually wrong
