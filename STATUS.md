@@ -1,5 +1,35 @@
 # NZA SIMULATE — Status
 
+## ✅ Brief 27 cleanup closed — Heat Balance prop bug + divergence doc correction
+
+**Date closed:** 2026-05-14
+**Confidence:** 10/10 (two narrowly-scoped fixes; no design decisions)
+
+Two close-out items flagged by the May 2026 audits:
+
+- **Part 1 — Heat Balance prop bug** (`d281a16`). One-line rename
+  `balance=` → `liveData=` on `HeatBalanceView.jsx:45`. The Internal
+  Gains → Heat balance tab was showing the empty state on a loaded
+  Bridgewater because the wrapper passed the wrong prop name to the
+  shared `HeatBalance` component. Distinct from the `4f4f3a5`
+  `useStateComparison` race fix — sequential bugs (the race fix
+  unblocked `ready`, which then exposed the prop-name mismatch).
+- **Part 2 — Divergence doc correction** (`8dc1909`). Annotated
+  `docs/state_1_engine_divergence_investigation.md` per the physics
+  audit's three findings: the "38% solar over-count / 50 GWh phantom
+  solar" was a pre-shading-vs-post-shading methodology error
+  (apples-to-apples aggregate is +1%); the "23.5% uniform conduction
+  divergence" was a Static-free-running vs Dynamic-HVAC-clamped
+  comparison artefact; the HDKR/Perez fix is still warranted but
+  smaller-impact than the doc originally claimed. Audit trail
+  preserved with inline `[CORRECTED 2026-05-14]` blocks.
+
+All four state-isolation regressions remain byte-identical post-cleanup
+(40/40 State 1 Live, 41/41 State 1 EP incl. end-to-end, 21/21 State 2
+Live, 21/21 State 2 EP). Frontend build clean.
+
+---
+
 ## ✅ Brief 27 + 27 Revised closed — Internal Gains module (State 2)
 
 **Date closed:** 2026-05-13
@@ -97,20 +127,32 @@ between Live and Sim on Bridgewater State 1. Full investigation at
 
 ### Next task
 
-**Brief 28 — Post-Brief-27 cleanup pass.** Six parts in priority order:
+**Brief 27-29 batch (May 2026) in flight.** The original Brief 28 +
+Brief 29 plan was rescoped after the physics + UX audits into a
+5-brief batch executed end-to-end without per-brief walkthroughs (one
+walkthrough at the end). See:
 
-1. Live engine solar model: isotropic → HDKR or Perez
-2. Engine toggle wiring on Internal Gains canvas (Live | Simulation
-   segmented control) — closes the Brief 27 close-out 1/10 holdback
-3. Building-type-aware BREDEM phasing factors in
-   `state_2_expected_ranges.md`
-4. Cross-cutting constants cleanup (~10 duplicated constants across
-   instantCalc.js + sql_parser.py + epjson_assembler.py)
-5. New `scripts/state2_engine_agreement.mjs`
-6. Re-baseline + module completion checklist 10/10
+- `docs/briefs/current.md` — pointer to active brief
+- `docs/briefs/batch_orchestration.md` — full 5-brief plan, halt protocol, sequencing rationale
+- `docs/batch_progress_2026_05.md` — per-part execution state + decisions log
 
-Brief installed as `current.md`. Full spec at
-`docs/briefs/Brief_28_Post_27_Cleanup.md`.
+Batch sequence:
+1. ~~Brief 27 cleanup~~ — **closed 2026-05-14**
+2. Brief 28 prereq (free-running EP simulation) — **next**
+3. Brief 28a (visible polish: rename, kWh/m²·yr readouts, canvas restructure, Pavlo port, engine toggle)
+4. Brief 28b (physics overhaul: HDKR/Perez solar + multi-layer CTF mass model)
+5. Brief 29 (Building module completion: State 1 diagnostic views, UI conformance, constants cleanup, BREDEM phasing)
+
+The original `Brief_28_Cross_Cutting_Polish.md` and
+`Brief_29_Building_Module_Completion.md` have been archived with
+`_SUPERSEDED` suffix; the May 2026 batch supersedes them.
+
+**Sequencing beyond Brief 29:**
+- Brief 30: Operation v2 (State 2.5)
+- Brief 31: Weather module redesign
+- Briefs 32–33: Systems Inspectors (State 3 — PARKED brief carries forward)
+- Brief 34: CI for state contracts
+- Brief 35+: State 4 reconciliation
 
 ---
 
@@ -907,9 +949,13 @@ All checklist items:
 
 ---
 
-## Brief 28 scope (queued, NOT in 27)
+## Brief 28 / 29 scope (queued, NOT in 27)
 
-Brief 28 lands the post-27 cleanup pass. Items queued during Brief 27:
+Split codified at Brief 27 close-out. See top of STATUS.md "Next task"
+section + the brief files themselves for the full part-by-part spec.
+This is the older verbose queue kept for historical context.
+
+**Brief 28 — Cross-cutting polish:**
 
 - **Live engine solar model — switch from isotropic to Perez (or HDKR)**.
   Documented at `docs/state_1_engine_divergence_investigation.md`. The
@@ -924,6 +970,14 @@ Brief 28 lands the post-27 cleanup pass. Items queued during Brief 27:
 - **State 2 EP results plumbing → Live | Simulation toggle wiring**.
   The placeholder slot is already present in the canvas tab strip;
   Brief 28 makes it functional.
+- **Pablo chart component port** (ChartContainer / ZoomNav /
+  MonthJumpButtons / DataCard / chartTokens.js). Report at
+  `docs/pavlo_chart_components_investigation.md`.
+- **Canvas restructure** — shared DiagnosticCanvas + TimeSeriesCanvas
+  used by Internal Gains / Building / Operation.
+
+**Brief 29 — Building module completion:**
+
 - **Constants cleanup**: ~10 numeric constants are duplicated across
   `frontend/src/utils/instantCalc.js`, `nza_engine/parsers/sql_parser.py`,
   and `nza_engine/generators/epjson_assembler.py` with identical values
