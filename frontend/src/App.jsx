@@ -24,6 +24,7 @@ import ConsumptionManager from './components/modules/consumption/ConsumptionMana
 import CRREMModule from './components/modules/CRREMModule.jsx'
 import WeatherModule from './components/modules/WeatherModule.jsx'
 import BalanceTestPage from './components/modules/balance/BalanceTestPage.jsx'
+import ChartComponentsTestPage from './pages/ChartComponentsTestPage.jsx'
 
 export default function App() {
   return (
@@ -48,6 +49,7 @@ export default function App() {
                 <Route path="/crrem"     element={<ErrorBoundary moduleName="CRREM"><CRREMModule /></ErrorBoundary>} />
                 <Route path="/weather"   element={<ErrorBoundary moduleName="Weather"><WeatherModule /></ErrorBoundary>} />
                 <Route path="/balance-test" element={<ErrorBoundary moduleName="Heat Balance Test"><BalanceTestPage /></ErrorBoundary>} />
+                <Route path="/chart-test"   element={<ErrorBoundary moduleName="Chart Components Test"><ChartComponentsTestPage /></ErrorBoundary>} />
                 <Route path="/scenarios" element={<ErrorBoundary moduleName="Scenario Manager"><ScenarioManager /></ErrorBoundary>} />
                 <Route path="/library"   element={<ErrorBoundary moduleName="Library Browser"><LibraryBrowser /></ErrorBoundary>} />
               </Route>
