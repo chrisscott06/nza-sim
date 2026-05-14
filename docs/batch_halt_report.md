@@ -193,7 +193,43 @@ Chris's explicit "go Option C+" to unhalt and proceed. The four sub-steps above 
 
 ---
 
-# Halt 3 — 2026-05-14 (Walkthrough Finding 2: auto-simulate vs Static engine)
+# Halt 3 — 2026-05-14 (Walkthrough Finding 2: auto-simulate vs Static engine) — RESOLVED 2026-05-14
+
+## Resolution
+
+Chris chose **fix-path (b): gate auto-simulate on user-initiated saves only.**
+
+Shipped:
+- `frontend/src/context/ProjectContext.jsx`:
+  - Added `saveSource: 'user' | 'system' | null` state.
+  - `_scheduleSave(endpoint, body, source = 'system')` now accepts a third arg. Default is `'system'` so a future save call site that forgets to tag itself fails safely (does NOT auto-simulate) rather than triggering a surprise EP run.
+  - 5 existing user-edit call sites updated to explicitly pass `'user'`:
+    - `updateParam` name branch (line 670)
+    - `updateParam` building branch (line 672)
+    - `updateConstruction` (line 684)
+    - `setComfortBand` (line 706-709)
+    - `updateSystem` (line 767)
+  - `saveSource` exposed in context value.
+- `frontend/src/context/SimulationContext.jsx`:
+  - Reads `saveSource` from ProjectContext.
+  - Auto-simulate `useEffect` gated on `saveStatus === 'saved' && saveSource === 'user'`.
+  - Dep array updated to include `saveSource`.
+
+Verification:
+- Build clean (17.50s).
+- State 2 Live isolation: 21/21 byte-identical.
+- Browser verification pending Chris's walkthrough — when confirmed, batch state flips to `running` and Brief 28a Part 3 unblocks.
+
+Acceptance criteria (from Chris):
+- Load project: Static numbers visible immediately, **no Dynamic run firing**.
+- Edit a value (e.g., occupancy density): Static updates instant, **Dynamic fires after 2s debounce**.
+- No surprise EP runs on project load.
+
+Additionally — per Chris's direction — Brief 28a Part 7 close-out gets a new acceptance gate: a rendering smoketest that asserts canvas views render Bridgewater state2 data without falling into the empty-state branch AND that `gains.internal.*` resolves through `flattenGains`. This is the discipline gap the Brief 27 cleanup miss exposed; documented in `docs/briefs/active/28a_visible_polish.md` Part 7 "Acceptance gate" subsection.
+
+---
+
+# Halt 3 (original) — 2026-05-14 (Walkthrough Finding 2: auto-simulate vs Static engine)
 
 **Halt condition triggered:** SH3-adjacent (perceived performance regression in a "fresh-on-fresh" walkthrough surface; the Static engine itself is healthy, but the user-visible behaviour suggests it isn't, which makes the symptom load-bearing for batch confidence)
 **Brief:** 28a (in flight; Part 3 blocked)

@@ -473,6 +473,14 @@ export function ProjectProvider({ children }) {
 
   // ── Save status indicator
   const [saveStatus, setSaveStatus]   = useState('idle') // 'idle'|'saving'|'saved'|'error'
+  // ── Save source — 'user' for explicit edits, 'system' for project-load
+  //    normalisations/migrations/internal updates. Brief 27 cleanup
+  //    walkthrough Finding 2 (2026-05-14): SimulationContext gates auto-
+  //    simulate on saveSource === 'user' so system-saves don't trigger a
+  //    surprise 30-45s Dynamic EP run on project load. Defaults to 'system'
+  //    so a new save call site that forgets to tag itself fails safely
+  //    (doesn't auto-simulate) rather than triggering a surprise EP run.
+  const [saveSource, setSaveSource]   = useState(null) // null | 'user' | 'system'
   const saveTimerRef    = useRef(null)   // debounce timeout
   const savedTimerRef   = useRef(null)   // auto-dismiss 'saved' message
   const broadcastTimer  = useRef(null)   // debounced broadcast to pop-out
@@ -596,7 +604,12 @@ export function ProjectProvider({ children }) {
 
   // endpoint: sub-path like 'building' → PUT /api/projects/{id}/building
   // endpoint: null → PUT /api/projects/{id} (for general updates like construction_choices)
-  function _scheduleSave(endpoint, body) {
+  // source: 'user' for explicit user edits (form changes, slider drags),
+  //         'system' for project-load normalisations, migrations, or other
+  //         internal updates that shouldn't trigger auto-simulate.
+  //         Default 'system' so forgetting to tag fails safely (Brief 27
+  //         cleanup walkthrough Finding 2 fix, 2026-05-14).
+  function _scheduleSave(endpoint, body, source = 'system') {
     if (!currentProjectId) return
 
     // Clear any pending save
@@ -604,6 +617,7 @@ export function ProjectProvider({ children }) {
     if (savedTimerRef.current) clearTimeout(savedTimerRef.current)
 
     setSaveStatus('saving')
+    setSaveSource(source)
 
     saveTimerRef.current = setTimeout(async () => {
       try {
@@ -615,14 +629,19 @@ export function ProjectProvider({ children }) {
           body: JSON.stringify(body),
         })
         setSaveStatus('saved')
-        // Auto-dismiss after 2 s
-        savedTimerRef.current = setTimeout(() => setSaveStatus('idle'), 2000)
+        // Source stays set while status='saved' so SimulationContext can
+        // decide whether to auto-simulate. Both reset to idle/null after 2s.
+        savedTimerRef.current = setTimeout(() => {
+          setSaveStatus('idle')
+          setSaveSource(null)
+        }, 2000)
         // Refresh project list (updated_at timestamp)
         const list = await _apiFetch('/api/projects')
         setProjects(list)
       } catch (err) {
         console.error('[ProjectContext] Save failed:', err)
         setSaveStatus('error')
+        // saveSource intentionally retained on error for debugging.
       }
     }, 1000)
   }
@@ -667,9 +686,9 @@ export function ProjectProvider({ children }) {
         // Name lives on the top-level project row (used by /api/projects list
         // for the Home page). Also persist building_config in the same PUT so
         // we don't lose other in-flight edits.
-        _scheduleSave(null, { name: value, building_config: next })
+        _scheduleSave(null, { name: value, building_config: next }, 'user')
       } else {
-        _scheduleSave('building', next)
+        _scheduleSave('building', next, 'user')
       }
       _broadcast({ building: next })
       return next
@@ -681,7 +700,7 @@ export function ProjectProvider({ children }) {
   const updateConstruction = useCallback((key, value) => {
     setConstructions(c => {
       const next = { ...c, [key]: value }
-      _scheduleSave(null, { construction_choices: next })
+      _scheduleSave(null, { construction_choices: next }, 'user')
       _broadcast({ constructions: next })
       return next
     })
@@ -706,7 +725,7 @@ export function ProjectProvider({ children }) {
       _scheduleSave(null, {
         comfort_band_lower_c: next.lower_c,
         comfort_band_upper_c: next.upper_c,
-      })
+      }, 'user')
       return next
     })
   }, [currentProjectId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -764,7 +783,7 @@ export function ProjectProvider({ children }) {
         }
       }
 
-      _scheduleSave('systems', next)
+      _scheduleSave('systems', next, 'user')
       _broadcast({ systems: next })
       return next
     })
@@ -842,6 +861,7 @@ export function ProjectProvider({ children }) {
       projects,
       isLoading,
       saveStatus,
+      saveSource,
 
       // Building state (mirrors old BuildingContext interface)
       params,

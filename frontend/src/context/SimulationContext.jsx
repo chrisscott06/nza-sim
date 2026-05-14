@@ -58,7 +58,7 @@ export function SimulationProvider({ children }) {
   const [resultsLoading, setResultsLoading] = useState(false)   // true while fetching from DB
   const [autoSimulate,   setAutoSimulate]   = useState(true)    // auto-trigger after 3s inactivity
 
-  const { currentProjectId, saveStatus } = useContext(ProjectContext)
+  const { currentProjectId, saveStatus, saveSource } = useContext(ProjectContext)
   const autoTimerRef = useRef(null)
 
   // When the project changes, restore the latest complete simulation from the DB
@@ -89,7 +89,13 @@ export function SimulationProvider({ children }) {
       .finally(() => setResultsLoading(false))
   }, [currentProjectId])
 
-  // ── Auto-simulate: fire 2 seconds after save completes ───────────────────
+  // ── Auto-simulate: fire 2 seconds after a USER save completes ────────────
+  // Brief 27 cleanup walkthrough Finding 2 fix (2026-05-14): gate on
+  // saveSource === 'user' so system-saves (project-load normalisations,
+  // migrations, internal updates) don't trigger a surprise 30-45s Dynamic
+  // EP run. The Static engine renders state immediately; Dynamic stays
+  // explicit (user clicks "Run Dynamic") or fires only after deliberate
+  // user edits.
   useEffect(() => {
     if (!autoSimulate || !currentProjectId) return
 
@@ -101,8 +107,9 @@ export function SimulationProvider({ children }) {
       }
     }
 
-    if (saveStatus === 'saved') {
-      // Save just completed — start 2s delay before triggering simulation
+    if (saveStatus === 'saved' && saveSource === 'user') {
+      // User edit just completed — start 2s delay before triggering Dynamic.
+      // System-saves (saveSource === 'system' or null) do NOT auto-simulate.
       autoTimerRef.current = setTimeout(() => {
         autoTimerRef.current = null
         runSimulation()
@@ -112,7 +119,7 @@ export function SimulationProvider({ children }) {
     return () => {
       if (autoTimerRef.current) clearTimeout(autoTimerRef.current)
     }
-  }, [saveStatus, autoSimulate, currentProjectId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [saveStatus, saveSource, autoSimulate, currentProjectId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Run simulation ─────────────────────────────────────────────────────────
 

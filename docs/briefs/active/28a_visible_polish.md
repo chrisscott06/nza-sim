@@ -270,7 +270,24 @@ This part closes Brief 27's 9/10 holdback (engine toggle wiring).
 - Archive done
 - Pre-flight checks pass for Brief 28b
 
-**Commit message:** "Brief 28a Part 7: Close-out + completion checklist"
+### Acceptance gate — canvas rendering smoketest (added 2026-05-14)
+
+Brief 27 cleanup walkthrough exposed a discipline gap: the Heat balance prop-fix passed isolation regressions + static code inspection but the canvas still rendered the empty state because the consumer's data-shape contract was a layer deeper than the prop name. A rendering smoketest would have caught it. Add as a Part 7 acceptance gate:
+
+- Write `scripts/state2_canvas_rendering_smoketest.mjs` that:
+  1. Loads Bridgewater state2 via `calculateInstant(..., mode: 'envelope-gains')` (same path the canvas views consume via `useStateComparison`).
+  2. Imports `HeatBalance` from `frontend/src/components/modules/balance/HeatBalance.jsx`.
+  3. Renders it with `liveData={state2.heat_balance}` using `react-dom/server` (no browser needed — pure SSR).
+  4. Asserts on visible output:
+     - The rendered HTML does NOT contain "No heat balance data available" (empty-state branch did not fire)
+     - The rendered HTML DOES contain at least one of the loss labels ("External walls" / "Roof" / "Glazing") with a non-zero numeric value
+     - The rendered HTML DOES contain at least one of the internal gain labels ("People" / "Lighting" / "Equipment") with a non-zero numeric value (proving `gains.internal.*` resolves through `flattenGains`)
+- Add the smoketest to the Brief 28a Part 7 close-out verification checklist alongside the byte-identity regressions.
+- Repeat the pattern for `DeltaView`, `FreeRunningView`, `AnnualBreakdownView` if scope allows; minimum bar is HeatBalance.
+
+This gate exists because the Brief 27 cleanup Part 1 fix passed every other gate (build, byte-identity, static inspection) but failed at the user-visible layer. A rendering smoketest is the cheap discipline that catches the gap between "the prop is renamed" and "the component renders data."
+
+**Commit message:** "Brief 28a Part 7: Close-out + completion checklist + canvas rendering smoketest"
 
 ---
 

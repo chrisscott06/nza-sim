@@ -17,7 +17,7 @@ Fixes shipped:
 
 Verified via new `scripts/verify_state2_heat_balance_shape.mjs` (15/15 shape checks pass). State 1 + State 2 Live regressions byte-identical.
 
-### Finding 2 (slow State 1 → State 2 transition) — ROOT CAUSE IDENTIFIED, fix-path needs Chris's call
+### Finding 2 (slow State 1 → State 2 transition) — FIXED via fix-path (b), pending browser verification
 
 The Static engine itself is **sub-30ms cold, sub-10ms warm** on Bridgewater. Profiled via new `scripts/profile_static_engine.mjs`:
 
@@ -35,14 +35,20 @@ So the engine is not the bottleneck. The "~1 minute" delay is **auto-simulate fi
 
 If the UI is blocking on Dynamic completion anywhere, that's a separate UI bug (Static engine numbers should appear immediately regardless). Worth verifying with Chris's browser dev tools (Network tab will show the POST to `/api/projects/{id}/simulate`).
 
-Three plausible fix-paths for Chris's call:
-- **(a)** Disable auto-simulate by default (`useState(false)` at line 59). User explicitly clicks "Run Dynamic" when they want EP.
-- **(b)** Gate auto-simulate on first user edit only (skip when `saveStatus='saved'` is triggered by project-load normalisations / migrations). Preserves the convenience but eliminates the surprise EP run on initial load.
-- **(c)** Surface a clearer "Dynamic running in background…" indicator separate from Static-engine state, so the user knows it's not the Static engine being slow.
+Chris chose **fix-path (b)**: gate auto-simulate on `saveSource === 'user'`. Shipped this session:
+- `ProjectContext.jsx` adds `saveSource: 'user' | 'system' | null` state.
+- `_scheduleSave(endpoint, body, source = 'system')` accepts a source argument. Default `'system'` is the fail-safe — a future save call site that forgets to tag itself doesn't accidentally trigger an EP run.
+- All 5 existing user-edit call sites (`updateParam` name / building, `updateConstruction`, `setComfortBand`, `updateSystem`) explicitly tag `'user'`.
+- `SimulationContext.jsx` reads `saveSource` and gates the auto-simulate `useEffect` on `saveStatus === 'saved' && saveSource === 'user'`.
 
-My weak lean: (b). Auto-simulate is a useful affordance for iterative editing; gating on user-initiated saves preserves that while killing the surprise on load.
+Acceptance criteria (Chris):
+- Load project: Static numbers visible immediately, **no Dynamic run firing**.
+- Edit a value (e.g., occupancy density): Static updates instant, **Dynamic fires after 2s debounce**.
+- No surprise EP runs on project load.
 
-This is a behaviour change crossing into "Chris should weigh in" territory per the orchestration doc. Filed as **Halt 3** in `docs/batch_halt_report.md`.
+Browser verification pending. When confirmed, **Halt 3 closes**, batch state flips `paused_for_walkthrough → running`, Brief 28a Part 3 unblocks.
+
+Also shipped per Chris's direction: a Brief 28a Part 7 acceptance gate (rendering smoketest) documented in `docs/briefs/active/28a_visible_polish.md`. This is the discipline gap the Brief 27 cleanup Part 1 miss exposed — closing it prevents future "static check passed but runtime renders empty" misses.
 
 ---
 
