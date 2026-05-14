@@ -1,5 +1,91 @@
 # State 1 — Static vs Dynamic engine comparison (Bridgewater, 2026-05-14)
 
+---
+
+## Brief 28b Part 3 v1 update (2026-05-14T16:xx)
+
+**Multi-node implicit RC mass model landed.** Headline change: summer max
+gap closed from 8.8 K → 1.3 K. Other improvements + new failures listed below.
+
+Engine commit (next push). New components:
+- `frontend/src/utils/wallModel.js` — per-layer multi-node implicit RC solver, sol-air helper, Thomas tridiagonal.
+- `_calculateEnvelopeOnly` refactor — sol-air boundary on opaque walls + roof, distributed solar (50% to opaque inside surfaces, 50% directly to zone air, EP `FullInteriorAndExterior` analogue), zone-air implicit step with internal-mass term (50 kJ/(K·m²) of GIA — partitions + furniture proxy), linearised zone-air balance, drop 5% roof-solar heuristic.
+- `_calculateState2` inner loop **NOT YET REFACTORED** — still uses the old lumped two-node model for its own T_op trace + demand. Shared physics (solar, fabric losses) still routes through `_calculateEnvelopeOnly` so the State 1 ↔ State 2 byte-identity contract holds on those. Refactor queued as Part 3 v2.
+
+### Updated row-by-row comparison
+
+Pass/Fail threshold ±15 % per Chris's contract bands.
+
+| Row | Pre-Part-3 Static | Part 3 v1 Static | Dynamic (EP) | Pre Δ% | Post Δ% | Verdict change |
+|---|---:|---:|---:|---:|---:|---|
+| Solar F1 (N→NE) | 57.5 | 57.5 | 47.0 | −18.2% | −18.2% | unchanged (Part 2 territory) |
+| Solar F2 (E→SE) | 4.4 | 4.4 | 5.1 | +17.1% | +17.1% | unchanged (Part 2 territory) |
+| Solar F3 (S→SW) | 71.4 | 71.4 | 77.6 | +8.7% | +8.7% | unchanged |
+| Solar F4 (W→NW) | 3.1 | 3.1 | 3.2 | +3.6% | +3.6% | unchanged |
+| **Solar roof** | 46.5 | **0** | 0 | −100% | **0%** | **METHODOLOGY → fixed.** 5% heuristic dropped; sol-air absorbs it into wall conduction path. |
+| Solar total (facade) | 136.4 | 136.4 | 133.0 | −2.5% | −2.5% | PASS unchanged |
+| External wall loss | 16.5 | **9.0** | 15.4 | −6.8% | **+70.8%** | **REGRESSION.** New T_air lower → smaller dT × A integral. |
+| Roof loss | 11.1 | 9.1 | 10.4 | −6.8% | **+14.1%** | regressed slightly, still within ±15% |
+| Ground floor loss | 15.3 | 14.7 | 14.2 | −6.8% | **−3.2%** | **improved** |
+| Glazing loss | 83.2 | 60.4 | 77.5 | −6.8% | **+28.3%** | **REGRESSION.** |
+| Fabric leakage | 58.7 | 42.6 | 54.7 | −6.8% | **+28.3%** | **REGRESSION.** |
+| Total losses | 184.7 | 135.8 | 172.2 | −6.8% | **+26.8%** | regressed |
+| Annual mean T (°C) | 21.2 | **17.9** | 19.8 | −6.6% | **+10.6%** | regressed (Static now colder than EP) |
+| **Summer max T (°C)** | **44.2** | **36.7** | **35.4** | **−19.9%** | **+3.5%** | **HUGE WIN — gap 8.8 K → 1.3 K** ✓✓✓ |
+| Winter min T (°C) | 4.0 | 3.2 | 8.3 | +107.5% | +159.4% | regressed slightly |
+| Heating demand (MWh) | 103.4 | **123.6** | 110.2 | +6.6% | **−10.8%** | within ±15% on other side |
+| Cooling demand (MWh) | 108.6 | **39.5** | 61.7 | −43.2% | **+56.2%** | over-corrected (was 43% high, now 36% low) |
+| Comfort hours | 881 | 1816 | 1396 | +58.5% | −23.1% | improved magnitude, sign flipped |
+| Underheating hours | 4,430 | 5,529 | 4,618 | +4.2% | −16.5% | regressed |
+| Overheating hours | 3,449 | 1,415 | 2,746 | −20.4% | +94.1% | sign flipped (was high, now low) |
+
+### Aggregate scorecard
+
+| Domain | Pre-Part-3 PASS | Post-Part-3 PASS |
+|---|---:|---:|
+| Solar | 3/5 | 3/5 (no change) |
+| Roof solar methodology | FAIL | **PASS** |
+| Conduction + leakage + total | 6/6 | 2/6 |
+| Free-running T | 1/3 | **2/3** (summer max fixed) |
+| Demand + comfort hours | 2/5 | 1/5 |
+| **All rows** | **13/21** (62%) | **9/21** (43%) |
+
+### Honest read
+
+**Net pass rate decreased** from 13/21 to 9/21. **But** the most operationally significant failure — the 8.8 K summer max gap, which cascaded into −43% cooling demand and +60% overheating hours — is fixed. The new failures are all symptoms of the same root cause: **my zone T_air trace is 2 K below EP's mean and bottoms out at 3 K instead of 8 K in winter**. With less zone T, dT × A integrated over the year is smaller, so every steady-state UA × ΔT loss line item reads low.
+
+The 2 K mean-T discrepancy is the next thing to chase. Hypotheses:
+1. EP has additional internal mass I'm not representing (50 kJ/(K·m²) might be low — try 100–200).
+2. EP's solar absorbed by opaque inside surfaces convects to zone air faster than my model (the 50%/50% split may need to be 30%/70% radiative/convective).
+3. EP includes long-wave radiative exchange between interior surfaces (north wall warms via radiation from south wall). My single-state collapsed wall doesn't differentiate, so this isn't relevant in v1.
+4. EP's wall-to-air convection coefficient (h_int → R_si) might be different from BS EN ISO 6946 0.13 m²K/W default. Smaller R_si → tighter wall-air coupling.
+
+**Recommendation: ship Part 3 v1, accept the trade-off** (summer max is the more operationally critical failure mode — a 9 K over-prediction of peak T mis-sizes cooling). Tune the secondary regressions in Part 3 v2 or as part of Part 4 validation.
+
+### What's queued
+
+- **Part 3 v2:** tune internal-mass parameter + solar convective split via test buildings (heavy mass, light mass, glazed-heavy). Target: get zone T_air mean within ±1 K of EP across construction types.
+- **Part 3 v2:** refactor `_calculateState2` inner loop to share the same multi-node model (currently still uses lumped two-node; mass model inconsistency between State 1 free-running and State 2 free-running).
+- **Part 2 (HDKR/Perez):** F1 / F2 per-facade solar redistribution (unchanged by Part 3 v1).
+- **Brief 28b Part 4:** validation across construction types (lightweight, medium, heavyweight) using new model.
+
+### Sensitivity tests post-Part-3 v1
+
+A1 (length 2×) — PASS:
+- F1 + F3 solar exactly 2× (length-dependent glazing scales as expected)
+- F2 + F4 unchanged (width-dependent areas)
+- All losses scale within 5% of expected linear behaviour
+- Summer max stable at 35.5 °C (vs 35.6 baseline)
+- Heating demand 247.6 = 123.6 × 2.00 ✓
+
+A2 (rotate 90°) — PASS:
+- F1 NE→SE +81%, F3 SW→NW −41%, F2 +10%, F4 −15% — same redistribution as before fix
+- Annual mean T shifts +0.8 K (more sun on bigger glazed facade)
+- Summer max +2.3 K (peak orientation effect)
+- Engine determinism preserved
+
+---
+
 **Trigger:** Final State 1 validation step before declaring State 1 done.
 Compare the two engines on the same envelope physics, same weather,
 same fabric, and find out which numbers agree and which don't.

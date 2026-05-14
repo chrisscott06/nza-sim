@@ -12,6 +12,17 @@
  */
 
 import { resolveCmass } from './thermalMass.js'
+import {
+  buildWallModel,
+  stepWallLinearized,
+  combineLinearizedStep,
+  solAirT,
+  extractLayers,
+  R_SI_WALL,
+  R_SI_ROOF,
+  R_SI_FLOOR,
+  SOLAR_ABS_DEFAULT,
+} from './wallModel.js'
 
 // ── System efficiency defaults (by library key) ───────────────────────────────
 // Used for instant calc lookups without needing the full library API response.
@@ -329,7 +340,24 @@ function withMode(building, mode) {
 }
 
 /**
+ * Find a library item for a construction-choice element by name.
+ * Returns the item object (with layers) or null if not found.
+ */
+function getConstructionItem(constructions, libraryData, element) {
+  const name = constructions?.[element]
+  if (!name) return null
+  return libraryData?.constructions?.find(c => c.name === name) ?? null
+}
+
+/**
  * State 1 envelope-only computation per `docs/state_contracts.md` § State 1.
+ *
+ * Brief 28b Part 3 (2026-05-14): refactored to use a multi-node implicit
+ * RC wall thermal model per construction (`frontend/src/utils/wallModel.js`)
+ * instead of the previous lumped two-node lumped-capacitance approach.
+ * Outside boundary on opaque surfaces uses sol-air (T_out + α G / h_out),
+ * which absorbs the prior "5% opaque roof solar gain" heuristic into the
+ * conduction pathway naturally.
  *
  * Inputs: a building config (already filtered through withMode), constructions,
  * library data, EPW hourly weather, pre-computed hourly solar per facade, and
@@ -349,69 +377,95 @@ function withMode(building, mode) {
  *     heat_balance: { ...same gains/losses re-shaped for the Heat Balance view },
  *   }
  *
- * Physics summary:
- *   1. Solar gain per facade per hour (already in hourlySolar) × g × frame × shading.
- *   2. Conduction loss/gain per element at the free-running zone temperature.
- *      Thermal bridging surfaces as Y-factor × centre-of-element U × area × ΔT
- *      (already baked into getUValue's return — kept as a separate accumulator).
- *   3. Ventilation split: fabric_leakage from infiltration_ach × volume × ΔT,
- *      permanent_vents from louvres only via CIBSE AM10 single-sided wind.
- *      The two streams are NEVER combined.
- *   4. Free-running zone temperature via lumped capacitance:
- *      dT/dt × C_zone = Σ Q_solar - Σ Q_cond - Σ Q_vent
- *      C_zone = thermal_mass × GIA (J/K). Discretised hour-by-hour, T_t-1 used
- *      for the loss rates (small explicit-Euler step, stable at 1-hour Δt).
- *   5. Demand against comfort band:
- *      heating_demand[h] = max(0, UA·(lower_c - T_out) - Q_solar) if T_free < lower_c
- *      cooling_demand[h] = max(0, Q_solar + UA·(T_out - upper_c)) if T_free > upper_c
+ * Physics summary (post Brief 28b Part 3):
+ *   1. Solar gain through glazing per facade per hour (transmitted to zone air
+ *      via g × (1−frame) × shading × WWR_area). Opaque solar absorption goes
+ *      via sol-air on outside surface → conduction → inside surface flux,
+ *      NOT as a separate gain term.
+ *   2. Each opaque construction (external wall, roof, ground floor) is a
+ *      multi-node thermal model. Implicit Euler step each hour. Inside
+ *      surface flux derived from the last layer node temperature relative
+ *      to zone air through R_si. Per-facade external walls collapsed to one
+ *      element with area-weighted sol-air (v1; per-facade thermal state is
+ *      a v2 improvement).
+ *   3. Ventilation: fabric_leakage from infiltration_ach × volume × dT_air
+ *      (steady-state UA × ΔT, gated on dT_air > 0). permanent_vents from
+ *      louvres only via CIBSE AM10 single-sided wind. NEVER combined.
+ *   4. Glazing: steady-state per-facade UA × ΔT (no thermal mass).
+ *   5. Zone air balance solved each hour as a single linear equation using
+ *      the wall steps' linearisation in T_air.
+ *      Σ (wall_k.U_eff × (T_node_n_k − T_air) × A_k) + glaz_solar_in_zone
+ *      − UA_glaz × (T_air − T_out) − UA_vent × (T_air − T_out) = 0
+ *   6. Operative T = ½ × (T_air + T_radiant), where T_radiant is the
+ *      area-weighted mean of inside-surface temperatures across all
+ *      opaque elements (glazing inside surface ≈ T_air since no mass).
+ *   7. Demand against comfort band (derived against T_op):
+ *      heating_demand[h] = max(0, UA·(lower_c − T_out) − Q_solar) if T_op < lower_c
+ *      cooling_demand[h] = max(0, Q_solar + UA·(T_out − upper_c)) if T_op > upper_c
  */
 function _calculateEnvelopeOnly(building, constructions, libraryData, weatherData, hourlySolar, comfortBand) {
   const geo = computeGeometry(building)
   const { gia, volume, total_wall_opaque, total_glazing, glazing, wall_opaque, roof_area, ground_area } = geo
   if (gia <= 0) return _empty()
 
-  // ── U-values (Y-factor baked in by getUValue) ─────────────────────────────
-  const u_wall  = getUValue(constructions, 'external_wall', libraryData)
-  const u_roof  = getUValue(constructions, 'roof',          libraryData)
-  const u_floor = getUValue(constructions, 'ground_floor',  libraryData)
-  const u_glaz  = getUValue(constructions, 'glazing',       libraryData)
-
+  // ── Library U / g values (used for glazing only post Brief 28b Part 3) ────
+  const u_glaz  = getUValue(constructions, 'glazing', libraryData)
   const g_value = getGValue(constructions, libraryData)
   const FRAME_FRACTION = 0.20  // visible glass = 80% of WWR; framed area = 20%
   // Brief 26.1 follow-up: per-facade shading factors from overhang + fin geometry.
-  // The State 1 path previously used a hardcoded `SHADING_FACTOR = 1.0` —
-  // shading inputs were stripped silently. State 3 (full mode) was always
-  // wired through computeShadingFactors; bringing State 1 to parity.
   const shadingFactors = computeShadingFactors(building)
 
-  // ── UA products (W/K) — independent of zone temperature ───────────────────
-  const UA_wall  = u_wall  * total_wall_opaque
-  const UA_roof  = u_roof  * roof_area
-  const UA_floor = u_floor * ground_area
-  const UA_glaz  = u_glaz  * total_glazing
-  const UA_fabric = UA_wall + UA_roof + UA_floor + UA_glaz
+  // ── Multi-node wall models (Brief 28b Part 3) ────────────────────────────
+  // Opaque elements (external wall, roof, ground floor) get a full
+  // multi-node implicit RC model per construction stack. Glazing stays
+  // steady-state UA × ΔT since it has effectively zero thermal capacity
+  // in the library.
+  const extWallItem = getConstructionItem(constructions, libraryData, 'external_wall')
+  const roofItem    = getConstructionItem(constructions, libraryData, 'roof')
+  const floorItem   = getConstructionItem(constructions, libraryData, 'ground_floor')
+  const extWallModel = buildWallModel(extractLayers(extWallItem), {
+    R_si: R_SI_WALL,
+    solar_abs: 0.6,    // brick / render typical
+    h_out: 25,
+  })
+  const roofModel = buildWallModel(extractLayers(roofItem), {
+    R_si: R_SI_ROOF,
+    solar_abs: 0.7,    // tiles / dark roofing typical
+    h_out: 25,
+  })
+  const floorModel = buildWallModel(extractLayers(floorItem), {
+    R_so: 0.0,         // ground in direct contact, no external film
+    R_si: R_SI_FLOOR,
+    solar_abs: 0,      // no solar on slab outer face
+    h_out: 1e9,        // effectively bypasses sol-air (no convection lost to sky)
+  })
 
-  // Thermal bridging — Y-factor uplift is already in the U-values returned
-  // by getUValue (multiplied through there). Track it separately so we can
-  // report `thermal_bridging` as its own line item per the contract.
-  // Sum of (effective U - centre U) × area across all four elements:
-  const getCentreU = (element) => {
-    const name = constructions?.[element]
-    if (name && libraryData?.constructions) {
-      const item = libraryData.constructions.find(c => c.name === name)
-      if (item?.u_value_W_per_m2K != null) return Number(item.u_value_W_per_m2K)
-    }
-    return DEFAULT_U_VALUES[element] ?? 1.0
-  }
-  const UA_bridging =
-    Math.max(0, (u_wall  - getCentreU('external_wall')) * total_wall_opaque) +
-    Math.max(0, (u_roof  - getCentreU('roof'))          * roof_area) +
-    Math.max(0, (u_floor - getCentreU('ground_floor'))  * ground_area) +
-    Math.max(0, (u_glaz  - getCentreU('glazing'))       * total_glazing)
-  // UA_fabric_centre = UA_fabric - UA_bridging (the "centre of element" portion
-  // for the State 1 conduction line items, with bridging surfaced separately)
+  // ── Whole-wall U-values from the layer stack (for demand UA calc) ────────
+  // Note: model.U_eff used in the zone-balance linearisation is the
+  // node-to-air conductance (1/R_n), NOT the whole-wall U. For demand
+  // calculations we need 1/R_total = whole-wall steady-state U.
+  const wholeWallU_ext   = extWallModel.type === 'mass' ? 1 / extWallModel.R_total : (extWallModel.U ?? 0)
+  const wholeWallU_roof  = roofModel.type    === 'mass' ? 1 / roofModel.R_total    : (roofModel.U ?? 0)
+  const wholeWallU_floor = floorModel.type   === 'mass' ? 1 / floorModel.R_total   : (floorModel.U ?? 0)
+  const UA_wall_whole  = wholeWallU_ext   * total_wall_opaque
+  const UA_roof_whole  = wholeWallU_roof  * roof_area
+  const UA_floor_whole = wholeWallU_floor * ground_area
 
-  // ── Ventilation (split) ───────────────────────────────────────────────────
+  // ── UA products for non-mass elements (W/K) ──────────────────────────────
+  const UA_glaz = u_glaz * total_glazing
+  // Per-facade glazing conductances (W/K) — for the conduction-by-glazing-face split
+  const glaz_face_UA = (f) => u_glaz * (glazing[f] ?? 0)
+
+  // ── Ground temperature for ground-floor outside boundary ─────────────────
+  // EnergyPlus defaults to ~12.6 °C deep ground when no Site:GroundTemperature
+  // object is provided (which is the case in our envelope-only epJSON). Use
+  // the Yeovilton annual mean as a reasonable simplified ground T constant.
+  // (A monthly-mean lagged-air-T model is a future refinement.)
+  let _T_out_sum = 0
+  for (let h = 0; h < weatherData.temperature.length; h++) _T_out_sum += weatherData.temperature[h]
+  const T_ground = _T_out_sum / weatherData.temperature.length
+
+  // ── Ventilation (split) ──────────────────────────────────────────────────
   const ach = Number(building.infiltration_ach ?? 0.5)
   const UA_leakage = AIR_HEAT_CAPACITY * ach * volume   // W/K (Wh/K per hour)
 
@@ -423,157 +477,199 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   const louvre_area_total = ['north','south','east','west']
     .reduce((s, f) => s + Number(openings?.[f]?.louvre_area_m2 ?? 0), 0)
 
-  // ── Two-node lumped-capacitance setup (Brief 26.1 Part 3) ─────────────────
-  // The pre-26.1 model was single-node: every Q_solar landed directly on
-  // indoor air (T_zone), with no surface-absorption delay. Bridgewater's
-  // summer max came out at ~43°C vs EP's 34°C — solar gain dumping straight
-  // into a small air heat capacity with nowhere to buffer it.
-  //
-  // Option A two-node model:
-  //   - T_mass: thermal-mass surface temperature (structural mass node)
-  //   - T_air:  indoor air temperature
-  //   - Solar lands on T_mass first
-  //   - Heat exchanges between mass and air via convective+radiative coupling
-  //     h_am ≈ 6 W/m²K × A_internal_surface (CIBSE Guide A working value)
-  //   - Air loses to outside via UA_total
-  //
-  // The air node has tiny heat capacity (~3.7 kWh/K for Bridgewater) but
-  // strong coupling to mass (~22 kWh/K total). Air-node relaxation time is
-  // ~10 min — way below the 1-hour timestep, so the explicit-Euler step
-  // would be unstable on T_air. Instead T_air is solved at quasi-steady
-  // state each hour:
-  //     h_am × A × (T_mass − T_air)  =  UA_total × (T_air − T_out)
-  // which gives T_air = weighted mean of T_mass and T_out, weighted by
-  // their respective couplings. T_mass advances explicitly — its time
-  // constant is hours-to-days, so the explicit step is stable.
-  // Brief 26.1 Part 5 — thermal mass resolved from construction stack
-  // when `params.thermal_mass_mode === 'auto'` (default). Falls back to
-  // the legacy thermal_mass_category × GIA path if library isn't loaded
-  // or constructions aren't assigned yet.
-  //
-  // For Bridgewater: auto-derived ≈ 138 kWh/K vs legacy 'light' = 77 kWh/K
-  // (1.8× more). This is the magnitude lever the Part 3 topology was
-  // waiting on — slows the integration enough for diurnal damping to bite.
-  const cmass = resolveCmass(building, constructions, libraryData)
-  const C_mass_J = cmass.C_mass_J
-  const C_mass_Wh = cmass.C_mass_Wh
-  // (T_air heat capacity is folded into the quasi-steady solve; not used directly.)
+  // ── Zone-air effective thermal capacitance (Brief 28b Part 3) ────────────
+  // Represents zone air + internal mass (furniture, partitions, content)
+  // well-coupled to T_air. Without this term the zone air balance is
+  // purely quasi-steady, so T_air tracks the outside-air signal too
+  // tightly in winter night periods (no buffering). Typical "InternalMass"
+  // contributions in EnergyPlus simulations sit in the 30–80 kJ/(K·m²
+  // floor area) range; 50 kJ/(K·m²) is a midline value.
+  const INTERNAL_MASS_J_PER_K_PER_M2_GIA = 50_000  // J/(K·m²) — partitions + furniture estimate
+  const C_air_air_J = (volume * 1.2 * 1005)   // pure zone-air heat capacity (J/K) — ≈ 13 MJ/K for Bridgewater
+  const C_air_internal_J = INTERNAL_MASS_J_PER_K_PER_M2_GIA * gia
+  const C_air_total_J = C_air_air_J + C_air_internal_J   // J/K coupled to T_air
 
-  // Internal surface area for air-to-mass coupling. Approximate single-zone
-  // model: floor + ceiling on each floor (collapsed to top + bottom of the
-  // building since inter-floor surfaces are mass-internal) + interior gross
-  // wall surface. Glazing inside-face couples to air too but at a different
-  // h, so it's already partially captured in the conduction term — including
-  // it again here would double-count.
-  const A_internal_surface = roof_area + ground_area + total_wall_opaque  // m²
-  // CIBSE Guide A range 2.5–8 W/m²K. Picking 3.0 (lower-mid of range) on
-  // purpose now that Part 5's derived mass is larger: with the bigger
-  // C_mass, slightly weaker coupling lets T_air swing closer to T_out at
-  // night without sacrificing the diurnal damping that bigger mass provides
-  // during the day. (At h_am=6 with light mass, mass and air locked
-  // together; at h_am=2.5 with light mass, mass over-charged. The sweet
-  // spot moves with C_mass.)
-  const H_AM_W_PER_M2K = 4.5
-  const h_am_total = H_AM_W_PER_M2K * A_internal_surface   // Wh/K per hour
-
-  // ── 8760-hour loop ────────────────────────────────────────────────────────
+  // ── 8760-hour loop ───────────────────────────────────────────────────────
   const n = weatherData.temperature.length
   const T_hourly = new Float32Array(n)
-  // Initial condition — both nodes start at lower comfort bound. Air will
-  // immediately re-equilibrate against T_out in the first hour; mass takes
-  // longer.
-  let T_mass = comfortBand.lower_c
-  let T_air  = comfortBand.lower_c
+  const dt = 3600  // seconds per timestep
+
+  // Initial state for each wall: uniform at comfortBand.lower_c. With masses
+  // on the order of days, expect ~1-2 days of spin-up before transient
+  // initial conditions are forgotten.
+  let TS_wall  = new Float64Array(extWallModel.type === 'mass' ? extWallModel.n : 0).fill(comfortBand.lower_c)
+  let TS_roof  = new Float64Array(roofModel.type    === 'mass' ? roofModel.n    : 0).fill(comfortBand.lower_c)
+  let TS_floor = new Float64Array(floorModel.type   === 'mass' ? floorModel.n   : 0).fill(comfortBand.lower_c)
+  let T_air = comfortBand.lower_c
+
+  // Per-facade opaque-wall areas (used to area-weight sol-air G for the
+  // collapsed single-state external-wall model; v1 fidelity)
+  const wallOpaqueByFace = wall_opaque
+  const _safe_wall_opaque_total = Math.max(total_wall_opaque, 1e-9)
 
   // Annual accumulators (Wh — divide by 1000 at the end for kWh)
-  let acc_solar_n = 0, acc_solar_s = 0, acc_solar_e = 0, acc_solar_w = 0, acc_solar_roof = 0
+  let acc_solar_n = 0, acc_solar_s = 0, acc_solar_e = 0, acc_solar_w = 0
+  // No acc_solar_roof — the 5 % opaque-roof heuristic is dropped; solar on
+  // opaque roof is now in sol-air → conduction → inside flux.
   let acc_cond_wall  = 0, acc_cond_roof = 0, acc_cond_floor = 0
   let acc_cond_glaz_n = 0, acc_cond_glaz_s = 0, acc_cond_glaz_e = 0, acc_cond_glaz_w = 0
-  let acc_thermal_bridging = 0
+  let acc_thermal_bridging = 0   // remains for the breakdown shape; populated only if Y-factor > 1 (not used yet)
   let acc_vent_leakage = 0, acc_vent_permanent = 0
   let acc_heating_demand_Wh = 0, acc_cooling_demand_Wh = 0
   let underheating_hours = 0, overheating_hours = 0, comfort_hours = 0
   let T_winter_min = Infinity, T_summer_max = -Infinity
 
-  // Per-facade UA fractions for the conduction-by-glazing-face split
-  // (proportional to glazing area on that face)
-  const glaz_face_UA = (f) => u_glaz * (glazing[f] ?? 0)
-
   for (let h = 0; h < n; h++) {
     const T_out = weatherData.temperature[h]
     const v_wind = weatherData.wind_speed?.[h] ?? 0
 
-    // Solar gains through glazing per facade (Wh into the zone this hour)
+    // Solar gains transmitted through glazing per facade (Wh into the zone)
     const sol_n = hourlySolar.f1[h] * (glazing.north ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.north
     const sol_e = hourlySolar.f2[h] * (glazing.east  ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.east
     const sol_s = hourlySolar.f3[h] * (glazing.south ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.south
     const sol_w = hourlySolar.f4[h] * (glazing.west  ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.west
-    const sol_roof = hourlySolar.roof[h] * roof_area * 0.05  // weak solar contribution through opaque roof
-    const Q_solar_in_Wh = sol_n + sol_e + sol_s + sol_w + sol_roof
-
+    const Q_solar_glaz_zone = sol_n + sol_e + sol_s + sol_w
     acc_solar_n += sol_n; acc_solar_e += sol_e; acc_solar_s += sol_s; acc_solar_w += sol_w
-    acc_solar_roof += sol_roof
 
-    // Permanent-vent UA this hour (wind-driven; ach contribution to UA)
+    // Sol-air boundary T for opaque external wall.
+    // Area-weighted average incident solar across the four opaque facade
+    // segments. (Single shared wall state — per-facade thermal mass is a v2.)
+    const G_wall_avg = (
+      hourlySolar.f1[h] * wallOpaqueByFace.north +
+      hourlySolar.f2[h] * wallOpaqueByFace.east  +
+      hourlySolar.f3[h] * wallOpaqueByFace.south +
+      hourlySolar.f4[h] * wallOpaqueByFace.west
+    ) / _safe_wall_opaque_total
+    const T_sa_wall = solAirT(T_out, G_wall_avg, extWallModel.solar_abs ?? 0.6, extWallModel.h_out ?? 25)
+    const T_sa_roof = solAirT(T_out, hourlySolar.roof[h], roofModel.solar_abs ?? 0.7, roofModel.h_out ?? 25)
+    // Floor outside BC = T_ground (constant simplification — EP default
+    // deep-ground temperature ~12.6 °C; we use Yeovilton annual mean).
+
+    // Permanent-vent UA this hour (wind-driven)
     const Q_louvre_m3s = Cd * louvre_area_total * sqrtCw * v_wind
-    const UA_permanent = AIR_HEAT_CAPACITY * (Q_louvre_m3s * 3600)  // W/K-equivalent for this hour
-    const UA_total = UA_fabric + UA_leakage + UA_permanent
+    const UA_permanent = AIR_HEAT_CAPACITY * (Q_louvre_m3s * 3600)
 
-    // ── Two-node thermal step (Brief 26.1 Part 3) ─────────────────────────
-    // T_air is the air node; couples to T_mass (h_am × A_internal) and to
-    // T_out (UA_total). Air heat capacity is small enough vs these
-    // couplings that we solve it at quasi-steady state:
-    //     h_am_total × (T_mass − T_air)  =  UA_total × (T_air − T_out)
-    //   → T_air = (h_am_total × T_mass + UA_total × T_out) / (h_am_total + UA_total)
-    T_air = (h_am_total * T_mass + UA_total * T_out) / (h_am_total + UA_total)
+    // ── Glazing-transmitted solar split: radiative + convective ──────────
+    // Per EnergyPlus convention with default "FullInteriorAndExterior"
+    // solar distribution: short-wave radiation transmitted through
+    // glazing is absorbed at interior surfaces. Of that absorbed energy,
+    // the fraction that reaches zone air on the same timestep depends
+    // on the surface convective coupling (h_int × surf_area × dT). For
+    // simulation hourly timesteps we use a fixed convective-fraction
+    // split: a portion lands directly on zone air (representing
+    // short-wave absorbed by furniture/floor that quickly re-radiates,
+    // plus immediate convective gain from heated interior surfaces),
+    // remainder absorbed at opaque interior surfaces where it enters
+    // wall thermal mass.
+    const SOLAR_RADIATIVE_FRACTION = 0.50  // fraction absorbed slowly at opaque interior surfaces
+    const SOLAR_CONVECTIVE_FRACTION = 1.0 - SOLAR_RADIATIVE_FRACTION
+    const A_internal_opaque = total_wall_opaque + roof_area + ground_area
+    const q_solar_to_inside_surf = (A_internal_opaque > 0)
+      ? (SOLAR_RADIATIVE_FRACTION * Q_solar_glaz_zone) / A_internal_opaque
+      : 0  // W/m² of inside surface
+    const Q_solar_to_zone_air = SOLAR_CONVECTIVE_FRACTION * Q_solar_glaz_zone
 
-    // Mass node advances explicitly. Solar lands on mass first; mass exchanges
-    // with air per the just-solved T_air. Net energy on the mass node:
-    //     Q_mass_net = Q_solar  −  h_am × A × (T_mass − T_air)
-    const Q_mass_to_air = h_am_total * (T_mass - T_air)
-    const Q_mass_net = Q_solar_in_Wh - Q_mass_to_air
-    T_mass = T_mass + Q_mass_net / C_mass_Wh
-    // Bound mass too, in case of extreme inputs
-    if (T_mass < -20) T_mass = -20
-    if (T_mass > 60)  T_mass = 60
+    // ── Linearised implicit-Euler step for each opaque wall ───────────────
+    // Each returns:
+    //   T_state^{n+1} = T_part + T_homo × T_air
+    //   T_inside_node = a + b × T_air
+    //   Q_in_to_air   = (T_inside_node − T_air) × U_eff
+    // We collect the linear coefficients across walls + glazing + vent and
+    // solve the zone-air balance in one shot.
+    const stepWall  = stepWallLinearized(extWallModel,  TS_wall,  T_sa_wall,  dt, q_solar_to_inside_surf)
+    const stepRoof  = stepWallLinearized(roofModel,     TS_roof,  T_sa_roof,  dt, q_solar_to_inside_surf)
+    const stepFloor = stepWallLinearized(floorModel,    TS_floor, T_ground,   dt, q_solar_to_inside_surf)
 
-    // Operative temperature = mean of air and mass (per CIBSE Guide A;
-    // simplifies the radiant component to "mean surface temp" = T_mass).
-    // Used for comfort hours and demand triggers — what occupants feel.
-    const T_op = 0.5 * (T_air + T_mass)
+    // For each wall: Q_in_to_air (W) = U_eff × A × (T_inside_node − T_air)
+    //   = U_eff × A × ((a + b × T_air) − T_air)
+    //   = U_eff × A × a   +   U_eff × A × (b − 1) × T_air
+    const UA_wall_eff  = stepWall.U_eff  * total_wall_opaque
+    const UA_roof_eff  = stepRoof.U_eff  * roof_area
+    const UA_floor_eff = stepFloor.U_eff * ground_area
+
+    // ── Zone air energy balance (W; implicit Euler in T_air) ──────────────
+    //   C_air/dt × (T_air^{n+1} − T_air^n) = Σ Q_in_to_air_k^{n+1}
+    //                                       − UA_glaz × (T_air^{n+1} − T_out)
+    //                                       − UA_vent × (T_air^{n+1} − T_out)
+    //
+    // Solar transmitted through glazing is NOT a direct zone-air gain at
+    // State 1 — it's absorbed at opaque inside surfaces above and enters
+    // T_air indirectly via wall step's q_in_to_air response.
+    //
+    //   C × T_air^{n+1} + D = 0  →  T_air = −D / C
+    const C_air_per_dt = C_air_total_J / dt   // W/K
+    const C_coef =
+      UA_wall_eff  * (stepWall.b_inside_node  - 1) +
+      UA_roof_eff  * (stepRoof.b_inside_node  - 1) +
+      UA_floor_eff * (stepFloor.b_inside_node - 1) -
+      UA_glaz - UA_leakage - UA_permanent -
+      C_air_per_dt
+    const D_coef =
+      UA_wall_eff  * stepWall.a_inside_node  +
+      UA_roof_eff  * stepRoof.a_inside_node  +
+      UA_floor_eff * stepFloor.a_inside_node +
+      (UA_glaz + UA_leakage + UA_permanent) * T_out +
+      C_air_per_dt * T_air +   // T_air on RHS is the previous-hour value
+      Q_solar_to_zone_air      // convective fraction of glazing-transmitted solar
+    // Avoid division by ≈ 0 in degenerate cases (no walls, no vent)
+    T_air = (Math.abs(C_coef) > 1e-9) ? (-D_coef / C_coef) : T_out
+
+    // Reconstruct wall states with the solved T_air
+    TS_wall  = combineLinearizedStep(stepWall,  T_air)
+    TS_roof  = combineLinearizedStep(stepRoof,  T_air)
+    TS_floor = combineLinearizedStep(stepFloor, T_air)
+
+    // Inside surface T per wall (just inside R_si) — used for T_radiant.
+    // T_in_surf = T_air + (T_inside_node − T_air) × R_si / R_n
+    // (where R_n includes R_si). For air balance + losses we use T_inside_node
+    // directly; for T_radiant we want the surface T users see.
+    const t_node_wall  = stepWall.massless  ? T_sa_wall  : TS_wall[TS_wall.length   - 1]
+    const t_node_roof  = stepRoof.massless  ? T_sa_roof  : TS_roof[TS_roof.length   - 1]
+    const t_node_floor = stepFloor.massless ? T_ground   : TS_floor[TS_floor.length - 1]
+    const T_in_surf_wall  = T_air + (t_node_wall  - T_air) * (stepWall.R_si  / Math.max(1 / Math.max(stepWall.U_eff,  1e-9), 1e-9))
+    const T_in_surf_roof  = T_air + (t_node_roof  - T_air) * (stepRoof.R_si  / Math.max(1 / Math.max(stepRoof.U_eff,  1e-9), 1e-9))
+    const T_in_surf_floor = T_air + (t_node_floor - T_air) * (stepFloor.R_si / Math.max(1 / Math.max(stepFloor.U_eff, 1e-9), 1e-9))
+
+    // T_radiant: area-weighted mean inside-surface T. Glazing inside surface
+    // ≈ T_air (no mass), so it doesn't shift T_radiant much; include it for
+    // completeness.
+    const _A_total_surf = total_wall_opaque + roof_area + ground_area + total_glazing
+    const T_radiant = (
+      T_in_surf_wall  * total_wall_opaque +
+      T_in_surf_roof  * roof_area +
+      T_in_surf_floor * ground_area +
+      T_air           * total_glazing
+    ) / Math.max(_A_total_surf, 1e-9)
+
+    const T_op = 0.5 * (T_air + T_radiant)
     T_hourly[h] = T_op
 
-    // Heat balance for the hour — conduction losses driven by (T_air − T_out)
-    const dT_air = T_air - T_out
-    const Q_cond_walls_Wh   = (u_wall  * total_wall_opaque) * dT_air
-    const Q_cond_roof_Wh    = (u_roof  * roof_area)         * dT_air
-    const Q_cond_floor_Wh   = (u_floor * ground_area)       * dT_air
-    const Q_cond_glaz_n_Wh  = glaz_face_UA('north') * dT_air
-    const Q_cond_glaz_e_Wh  = glaz_face_UA('east')  * dT_air
-    const Q_cond_glaz_s_Wh  = glaz_face_UA('south') * dT_air
-    const Q_cond_glaz_w_Wh  = glaz_face_UA('west')  * dT_air
-    const Q_bridging_Wh     = UA_bridging   * dT_air
-    const Q_vent_leak_Wh    = UA_leakage    * dT_air
-    const Q_vent_perm_Wh    = UA_permanent  * dT_air
-
-    // Loss accumulators — for the contract's annual losses output. Only
-    // accumulate the POSITIVE (heat-leaving-zone) direction; summer hours
-    // where the zone is cooler than outside contribute negative dT and
-    // would otherwise subtract.
-    if (dT_air > 0) {
-      acc_cond_wall  += Q_cond_walls_Wh
-      acc_cond_roof  += Q_cond_roof_Wh
-      acc_cond_floor += Q_cond_floor_Wh
-      acc_cond_glaz_n += Q_cond_glaz_n_Wh
-      acc_cond_glaz_e += Q_cond_glaz_e_Wh
-      acc_cond_glaz_s += Q_cond_glaz_s_Wh
-      acc_cond_glaz_w += Q_cond_glaz_w_Wh
-      acc_thermal_bridging += Q_bridging_Wh
-      acc_vent_leakage   += Q_vent_leak_Wh
-      acc_vent_permanent += Q_vent_perm_Wh
+    // ── Loss accumulators ────────────────────────────────────────────────
+    // Convention: report integrated annual loss via whole-wall U × area ×
+    // dT_air_to_out for hours when zone is warmer than outside. This is the
+    // "steady-state" conductive loss attributable to each fabric element.
+    // The wall's dynamic mass response affects the T_air trace (and thus
+    // the integrated dT), but the per-element loss accounting uses whole-
+    // wall U so that the breakdown sums to the total fabric loss without
+    // including transient storage swings. Same convention as glazing +
+    // ventilation, and matches what EP reports for per-construction loss.
+    const dT_air_for_loss = T_air - T_out
+    const dT_air_to_ground = T_air - T_ground
+    if (dT_air_for_loss > 0) {
+      acc_cond_wall      += wholeWallU_ext   * total_wall_opaque * dT_air_for_loss
+      acc_cond_roof      += wholeWallU_roof  * roof_area         * dT_air_for_loss
+      acc_cond_glaz_n    += glaz_face_UA('north') * dT_air_for_loss
+      acc_cond_glaz_e    += glaz_face_UA('east')  * dT_air_for_loss
+      acc_cond_glaz_s    += glaz_face_UA('south') * dT_air_for_loss
+      acc_cond_glaz_w    += glaz_face_UA('west')  * dT_air_for_loss
+      acc_vent_leakage   += UA_leakage    * dT_air_for_loss
+      acc_vent_permanent += UA_permanent  * dT_air_for_loss
+    }
+    if (dT_air_to_ground > 0) {
+      acc_cond_floor     += wholeWallU_floor * ground_area * dT_air_to_ground
     }
 
-    // Comfort hours + min/max temp tracking — based on operative temp.
+    // Comfort hours + T extremes
     const month = weatherData.month[h]
     if (T_op < comfortBand.lower_c)      underheating_hours++
     else if (T_op > comfortBand.upper_c) overheating_hours++
@@ -581,22 +677,27 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
     if (month >= 12 || month <= 2) T_winter_min = Math.min(T_winter_min, T_op)
     if (month >= 6  && month <= 8) T_summer_max = Math.max(T_summer_max, T_op)
 
-    // Demand derivation: what a perfect system would need to provide to hold
-    // operative temperature at the comfort bound. Only counted when
-    // free-running T_op is outside the band (i.e., the envelope alone fails).
+    // ── Demand derivation ───────────────────────────────────────────────
+    // Count Wh a perfect system would have delivered to hold T_op at the
+    // comfort band edge. UA totals use WHOLE-WALL U-values (1/Σ R from
+    // the layer stack), not node-to-air conductance — the latter would
+    // double-count the wall internals on the demand side.
+    const UA_total_now =
+      UA_wall_whole + UA_roof_whole + UA_floor_whole +
+      UA_glaz + UA_leakage + UA_permanent
+    const Q_solar_in_Wh_for_demand = Q_solar_glaz_zone   // glazing transmitted only
     if (T_op < comfortBand.lower_c) {
-      // Heating: UA × (lower_c - T_out) is the loss rate if held at lower_c.
-      // Solar gains offset part of it. Demand = max(0, deficit - solar).
-      const Q_loss_at_lower = UA_total * Math.max(0, comfortBand.lower_c - T_out)
-      const heating_Wh = Math.max(0, Q_loss_at_lower - Q_solar_in_Wh)
+      const Q_loss_at_lower = UA_total_now * Math.max(0, comfortBand.lower_c - T_out)
+      const heating_Wh = Math.max(0, Q_loss_at_lower - Q_solar_in_Wh_for_demand)
       acc_heating_demand_Wh += heating_Wh
     } else if (T_op > comfortBand.upper_c) {
-      // Cooling: solar gains + heat coming IN from outside (if T_out > upper).
-      // Q_loss_at_upper sign is reversed when T_out > upper.
-      const Q_gain_at_upper = Q_solar_in_Wh + UA_total * Math.max(0, T_out - comfortBand.upper_c)
+      const Q_gain_at_upper = Q_solar_in_Wh_for_demand + UA_total_now * Math.max(0, T_out - comfortBand.upper_c)
       acc_cooling_demand_Wh += Q_gain_at_upper
     }
   }
+  // No more roof solar heuristic — kept the variable name acc_solar_roof = 0
+  // for output-shape compatibility with the previous engine.
+  const acc_solar_roof = 0
 
   // ── Aggregates ────────────────────────────────────────────────────────────
   const r1 = (Wh) => Math.round(Wh / 1000 * 10) / 10
