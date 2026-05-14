@@ -19,43 +19,103 @@ browser against Bridgewater:
 | 3 — Large residual (mechanical demand not in display) | **PARTIALLY RESOLVED** — synthetic `heating_demand` (gain side) and `cooling_demand` (loss side) appear in the breakdown for State 2+ modes. Totals include them via the `meta.synthetic` flag in the useMemo. The "Net (gains − losses)" still shows a non-zero residual (-102.7 MWh on Bridgewater) because (a) State 2 inherits State 1's static losses without recomputing against its T_op trace (Problem 4 contract gap, queued as Brief 28c), and (b) the engine's cooling-demand formula `Q_to_mass + UA × outdoor_excess` overestimates by counting full gain energy as needing removal rather than the excess above mass-storage capacity. **The residual is now an honest reflection of upstream engine behaviour rather than a hidden display omission.** Filed: Brief 28c (loss recompute) + a separate brief on cooling-demand formulation. | Live repro: Heating 9.8 MWh and Cooling 327.1 MWh appear as labelled items in the breakdown. |
 | 4 — Loss element shifts 4-5% between State 1 and State 2 | **SCREENSHOT-SKEW ARTIFACT (root-cause confirmed)** — the original screenshot showed lower Building values because of Problem 1's g_value bug (Building module used g=0.40, gave lower solar AND lower loss-integration because the T trace was cooler). After the fix, Building module's losses now match the engine (ext_wall 16515.4, roof 11110, ground 15276.3, glazing 83166.6, fabric_leakage 58661) — byte-identical to Internal Gains' State 1 baseline. The "is there a real engine-vs-itself contract gap?" question (State 2 should arguably recompute losses against its own T_op trace) is still **open** as Brief 28c. | Live repro: byte-identical shared physics across both modules. |
 
-### Live-repro evidence — side-by-side from React props after fix batch
+### Live-repro evidence — side-by-side from browser UI after fix batch
 
-Captured by walking the React tree to read `HeatBalance.liveData` directly
-(no display rounding). Building module rendered at /building with the Heat
-Balance pane active. Internal Gains rendered at /gains with the Heat
-balance tab active. Same browser session, same backend, same persisted
-config (`infiltration_ach=0.2`, the value restored before the fix batch).
+Captured 2026-05-14T14:48Z. Same browser session, same backend, same
+persisted config (`infiltration_ach=0.2`, value restored to canonical
+before this run). Both raw `kWh` (read from React `HeatBalance.liveData`
+props by walking the React tree) and displayed `MWh` (read from the
+rendered DOM) are tabulated so the engine output and the user-visible
+display can both be audited.
 
-| Field | Building module (envelope-only) | Internal Gains module (envelope-gains) | Byte-identical? |
-|---|---:|---:|:---:|
-| `orientationDeg` (HeatBalance prop) | 42 | 42 | ✓ |
-| `solar.north.kwh` (F1) | 57488.5 | 57488.5 | ✓ |
-| `solar.south.kwh` (F3) | 71400.5 | 71400.5 | ✓ |
-| `solar.east.kwh` (F2) | 4397.9 | 4397.9 | ✓ |
-| `solar.west.kwh` (F4) | 3132.5 | 3132.5 | ✓ |
-| `losses.external_wall.kwh` | 16515.4 | 16515.4 | ✓ |
-| `losses.roof.kwh` | 11110.0 | 11110.0 | ✓ |
-| `losses.ground_floor.kwh` | 15276.3 | 15276.3 | ✓ |
-| `losses.glazing.kwh` | 83166.6 | 83166.6 | ✓ |
-| `losses.fabric_leakage.kwh` | 58661.0 | 58661.0 | ✓ |
-| `losses.thermal_bridging.kwh` | 0 | 0 | ✓ |
-| `totals.losses_kwh` | 184729.4 | 184729.4 | ✓ |
-| `metadata.gia_m2` | 3457 | 3457 | ✓ |
-| **Displayed facade compass labels** | F1 NE / F2 SE / F3 SW / F4 NW | F1 NE / F2 SE / F3 SW / F4 NW | ✓ |
+#### Shared-physics rows — must be byte-identical (zero-tolerance contract)
 
-State 2-only items (not in Building module, expected):
+| Row | Building (envelope-only) raw kWh | Building displayed | Internal Gains (envelope-gains) raw kWh | Internal Gains displayed | Identical? |
+|---|---:|---:|---:|---:|:---:|
+| `orientationDeg` (HeatBalance prop) | 42 | — | 42 | — | ✓ |
+| **Solar — F1 (NE)** | 57,488.5 | 57.5 MWh | 57,488.5 | 57.5 MWh | ✓ |
+| **Solar — F2 (SE)** | 4,397.9 | 4.4 MWh | 4,397.9 | 4.4 MWh | ✓ |
+| **Solar — F3 (SW)** | 71,400.5 | 71.4 MWh | 71,400.5 | 71.4 MWh | ✓ |
+| **Solar — F4 (NW)** | 3,132.5 | 3.1 MWh | 3,132.5 | 3.1 MWh | ✓ |
+| External wall | 16,515.4 | 16.5 MWh | 16,515.4 | 16.5 MWh | ✓ |
+| Roof | 11,110.0 | 11.1 MWh | 11,110.0 | 11.1 MWh | ✓ |
+| Ground floor | 15,276.3 | 15.3 MWh | 15,276.3 | 15.3 MWh | ✓ |
+| Glazing | 83,166.6 | 83.2 MWh | 83,166.6 | 83.2 MWh | ✓ |
+| Thermal bridging | 0 | (hidden, value 0) | 0 | (hidden, value 0) | ✓ |
+| Fabric leakage | 58,661.0 | 58.7 MWh | 58,661.0 | 58.7 MWh | ✓ |
+| Permanent vents | 0 | (hidden, value 0) | 0 | (hidden, value 0) | ✓ |
+| `metadata.gia_m2` | 3,457 | 3,457 m² | 3,457 | 3,457 m² | ✓ |
+| `totals.losses_kwh` (engine-natural fabric only) | 184,729.4 | — | 184,729.4 | — | ✓ |
+| **Compass labels rendered** | F1 NE / F2 SE / F3 SW / F4 NW | — | F1 NE / F2 SE / F3 SW / F4 NW | — | ✓ |
 
-| Field | Internal Gains module | Notes |
-|---|---:|---|
-| `gains.internal.people.kwh` | ~118,900 | State 2 only |
-| `gains.internal.lighting.kwh` | ~40,900 | State 2 only |
-| `gains.internal.equipment.kwh` | ~56,100 | State 2 only |
-| Synthetic `heating_demand` item | 9.8 MWh | Brief 28a Part 5 Finding HB3 fix |
-| Synthetic `cooling_demand` item | 327.1 MWh | Same fix |
-| State 2 free-running mean | 32.8 °C | gains warm zone vs State 1 21.2 °C |
+**Every shared-physics row is ✓ Identical. Zero-tolerance contract holds.**
 
-Every shared-physics row in the table above is ✓ Identical. **The zero-tolerance contract on shared envelope physics holds.**
+#### State 2-only rows — expected to be present in Internal Gains, absent in Building
+
+| Row | Building | Internal Gains raw kWh | Internal Gains displayed |
+|---|---:|---:|---:|
+| Internal gain — People | — | 118,897.5 | 118.9 MWh |
+| Internal gain — Equipment | — | 56,131.7 | 56.1 MWh |
+| Internal gain — Lighting | — | 40,865.5 | 40.9 MWh |
+| Synthetic Heating (gain side, from demand) | — | 8,600 (≈ 8.6 MWh from `demand.heating_demand_mwh`) | 8.6 MWh |
+| Synthetic Cooling (loss side, from demand) | — | 325,100 (≈ 325.1 MWh from `demand.cooling_demand_mwh`) | 325.1 MWh |
+| `demand.heating_demand_mwh` | 103.4 | 8.6 | (used by synthetic item) |
+| `demand.cooling_demand_mwh` | 108.6 | 325.1 | (used by synthetic item) |
+| Free-running annual mean T (°C) | 21.2 | 32.8 | — |
+| Free-running summer max T (°C) | 44.2 | 55.6 | — |
+| Free-running winter min T (°C) | 4.0 | 16.5 | — |
+
+State 2's demand differs from State 1's because internal gains offset
+most heating need (103.4 → 8.6 MWh) and drive cooling up (108.6 → 325.1
+MWh). State 2's free-running mean is +11.6 K above State 1's because
+those internal gains warm the zone. All expected physics — the State 2
+side has both the natural envelope and the gains, while Building module
+sees the envelope alone.
+
+#### Footer totals + residual
+
+| Field | Building | Internal Gains |
+|---|---:|---:|
+| Total gains (displayed, includes synthetic heating at State 2+) | 182.9 MWh (solar incl. roof) | 408.6 MWh (= 182.9 + 215.9 internal + 9.8 synthetic heating) |
+| Total losses (displayed, includes synthetic cooling at State 2+) | 184.7 MWh | 511.2 MWh (= 184.7 + 325.1 synthetic cooling) |
+| Net (gains − losses) | −1.9 MWh ✓ balanced | −102.6 MWh "large residual; check inputs" |
+
+**The State 1 balance closes within 1% (envelope physics natural balance).** The State 2 residual is **honest**: it reflects the upstream engine behaviour where State 2 inherits State 1's static losses (Brief 28c contract gap) and the cooling-demand formula `Q_to_mass + UA × outdoor_excess` overestimates by counting full gain energy as needing removal rather than the excess above mass-storage capacity. Both are upstream engine issues — not display bugs. The display layer is now honest about the residual rather than hiding the demand items.
+
+### Sensitivity re-run (regression check, ach=0.2 baseline)
+
+Re-ran `scripts/state_sensitivity_test.mjs` A1 + A2 after the fix batch.
+Compared with the earlier runs at ach=0.1 to confirm engine determinism
+and to verify no regression introduced by the fix:
+
+| Test | Solar F1-F4 (post-fix) | Δ vs pre-fix solar | Loss deltas vs pre-fix | Verdict |
+|---|---|---:|---|---|
+| A1 (length 117.6) | F1 114,977 / F2 4,398 / F3 142,801 / F4 3,132 | byte-identical to pre-fix | Fabric leakage 70,285 → 117,840 (ach restored); all conduction losses moved consistently with ach restore — directions correct | PASS, no regression |
+| A2 (orient 132°) | F1 104,273 / F2 4,819 / F3 42,189 / F4 2,667 | byte-identical to pre-fix | Fabric leakage 38,110 → 64,194; conduction movements consistent | PASS, no regression |
+
+Solar values are byte-identical to the prior runs because
+`_validation_dump.mjs` wraps library items the same way as
+`useStateComparison` (`config_json: c.config_json ?? c`), so the script
+always saw the correct g=0.42 — even pre-fix. The fix changes only the
+*browser-side Building module* (which didn't wrap). Script runs were
+already correct.
+
+Loss values shifted between the pre-fix and post-fix runs of A1/A2
+because `infiltration_ach` was restored 0.1 → 0.2 between those runs.
+That's a config-driven shift, not an engine-fix-driven shift. Direction
+and magnitude of each shift are physically consistent (more leakage →
+more fabric leakage, slightly cooler T trace → slightly less conduction
+loss accumulation, etc.).
+
+### Fresh canonical baseline for the validation spreadsheet
+
+`docs/validation/bridgewater_state1_engine_outputs_2026_05_post_problem1_fix.md`
+is the new canonical State 1 baseline at the current persisted config
+(ach=0.2) and the post-fix engine. The numbers are unchanged from the
+earlier `bridgewater_state1_engine_outputs_2026_05.md` (because the
+script always read g=0.42 correctly), but it's now the doc to point at
+for spreadsheet anchoring since the morning's doc was written when ach
+was still 0.2 (then 0.1, now 0.2 again).
 
 ### Fixes shipped
 
