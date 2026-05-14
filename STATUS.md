@@ -133,7 +133,7 @@ Brief 29 plan was rescoped after the physics + UX audits into a
 walkthrough at the end). See:
 
 - `docs/briefs/current.md` — pointer to active brief
-- `docs/briefs/batch_orchestration.md` — full 5-brief plan, halt protocol, sequencing rationale
+- `docs/briefs/batch_orchestration_2026_05.md` — full 5-brief plan, halt protocol, sequencing rationale
 - `docs/batch_progress_2026_05.md` — per-part execution state + decisions log
 
 Batch sequence:

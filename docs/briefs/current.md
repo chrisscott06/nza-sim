@@ -2,7 +2,7 @@
 
 **Active:** [`active/28_prereq_free_running_ep.md`](active/28_prereq_free_running_ep.md) — Free-running EnergyPlus simulation pipeline (Brief 28 prerequisite). ~3 days.
 
-This pointer file is updated each time a brief in the batch closes. See [`batch_orchestration.md`](batch_orchestration.md) for the full 5-brief plan, sequencing, halt conditions, and per-part discipline.
+This pointer file is updated each time a brief in the batch closes. See [`batch_orchestration_2026_05.md`](batch_orchestration_2026_05.md) for the full 5-brief plan, sequencing, halt conditions, and per-part discipline.
 
 ## Batch state (Brief 27 cleanup + Brief 28 + Brief 29)
 

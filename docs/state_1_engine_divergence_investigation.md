@@ -258,7 +258,7 @@ needs its own brief.
 > dominant divergence cause is the mass model, not the sky model).
 >
 > The work is now structured across the May 2026 batch (see
-> `docs/briefs/batch_orchestration.md`):
+> `docs/briefs/batch_orchestration_2026_05.md`):
 > - **Brief 28 prerequisite** — persist a free-running EP run so the
 >   engine comparison is honest. Without this, all the "Live high by
 >   X%" claims in this doc are confounded with HVAC clamping.
