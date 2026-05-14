@@ -1,5 +1,47 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-14 — paused at Brief 28a Part 3 mid-slice (3a/3b/3c done, awaiting walkthrough before 3d/3e/3f)
+
+**State:** `paused_for_walkthrough`
+**Latest commits this session (pushed to origin/main):**
+- `496cda3` Brief 28a Part 3c: consolidate Free-running + Hourly + Annual breakdown into Load shape tab
+- `8b33206` Brief 28a Part 3b: fold Delta into Summary + gains-vs-demand stacked bar + remove standalone Delta tab
+- `7782556` Brief 28a Part 3a: new Summary tab as default for Internal Gains
+- (earlier this session: Brief 27 cleanup Part 3 corrected close, Finding 2 fix-(b), Brief 28a Parts 1+2)
+
+### Walkthrough targets for 3a-3c (Internal Gains canvas restructure, interim)
+
+Tab strip is now **5 tabs** (down from 7): `Schedule | Summary | Heat balance | Load shape | 3D Model`. The 3D Model tab gets removed in 3d. Pavlo-pattern unified time-series view lands in Parts 4-5.
+
+1. **Load `/gains` on Bridgewater.** Confirm the tab strip shows the 5 tabs above (Delta and Free-running / Hourly profile / Annual breakdown are gone from the top-level strip).
+2. **Default landing tab is Summary.** First load (or clear localStorage) lands on Summary, not Schedule. The Static badge reads "Static".
+3. **Summary tab content** — should render the following sections top-to-bottom:
+   - Headline 4-up stat cards: Internal gains / Heating demand / Cooling demand / Comfort hours (each with MWh + kWh/m²·yr + delta vs State 1 where applicable).
+   - **Gains vs demand stacked bar** with `kWh | kWh/m²·yr` unit toggle at top-right of that card.
+   - Demand paired bars (State 1 vs State 2 for heating + cooling) — moved from old Delta tab.
+   - Comfort impact (hours deltas + annual-mean T shift).
+   - "What gains contribute" with per-gain attribution + per-profile sub-rows.
+   - Footnote referencing Static engine + the 2026-05-14 corrected disclosure (mass model, ~8.8°C gap).
+4. **Load shape tab** — internal sub-view toggle at top with three buttons: `Temperature trace | Hourly profile | Annual breakdown`. Each renders the existing component unchanged. Sub-view selection persists via localStorage. Interim sub-toggle is documented in the footnote at top.
+5. **Heat balance tab** — should still render (Brief 27 cleanup Part 3 corrected close fix). Sankey / Stacked / Rows layouts work; gains.internal renders.
+6. **Schedule tab** — still works (no functional change in 3a-3c; just no longer the default).
+7. **3D Model tab** — still present (placeholder); removal in 3d.
+8. **No console errors** during tab switches.
+
+### What's still in the queue after walkthrough
+
+- **3d** — Remove 3D Model tab from Internal Gains (keep `ThreeDView.jsx` on disk for future multi-zone revival).
+- **3e** — Apply the consolidated 5-tab pattern to Building module (Summary / Heat balance / Load shape / 3D Model — Building keeps 3D Model because facades / orientation / shading have visual meaning).
+- **3f** — Update `docs/ui_principles.md` with the canonical tab structure.
+
+After 3d-3f close, Brief 28a Part 4 (Pavlo port) → Part 5 (Load shape unified time-series + engine toggle wiring) → Parts 6-7.
+
+### Brief 27 cleanup walkthrough findings — both resolved earlier this session
+
+(unchanged from previous session-close; sections below this one capture the audit trail)
+
+---
+
 ## 🚧 Session 2026-05-14 — paused after walkthrough findings (Brief 27 Part 3 + Finding 2 investigation)
 
 **State:** still `paused_for_walkthrough` (halt continues pending Finding 2 fix-path decision)
