@@ -1,3 +1,7 @@
+> **Superseded by the Brief 28-29 batch (May 2026).** See `docs/batch_orchestration_2026_05.md` for the current scope. This file represents the original pre-audit scoping.
+
+---
+
 # Brief 28: Cross-cutting polish
 
 BEFORE DOING ANYTHING:
