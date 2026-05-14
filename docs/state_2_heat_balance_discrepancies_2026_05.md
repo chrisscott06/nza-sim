@@ -11,6 +11,22 @@ is purely the Static-engine output and its in-browser display.
 
 ---
 
+## ⚠ Discipline note (2026-05-14, Chris's correction)
+
+**Zero tolerance for State-to-State drift on shared physics.** Solar gain
+(which depends only on envelope inputs) MUST be byte-identical between
+State 1 and State 2 displays. Facade compass labels MUST be identical
+across all States. Any difference is a bug regardless of magnitude. The
+±15% tolerance discussed earlier in `docs/state_contracts.md` applies
+only to engine-vs-first-principles, **never** to engine-vs-itself.
+
+This re-frames Problems 1, 1a, and 4 below: the question is not "is the
+delta acceptably small?" but "is there *any* path through which State 1
+and State 2 can disagree on the same envelope physics?" If yes — bug.
+If no — prove it with byte-identity invariants.
+
+---
+
 ## Reported numbers (Bridgewater, post 5f890c2 day=1 fix)
 
 ### State 1 (Building module, envelope-only)
@@ -98,6 +114,45 @@ for the same building config + same engine invocation.
 
 ---
 
+## Problem 1a — Facade compass labels asymmetric between State 1 and State 2
+
+### Confirmed bug regardless of numeric outcome
+
+`solarLabel(face, orientationDeg)` (`facadeLabel.js:34`) renders the
+compass letter by rotating `BASE_ANGLES[faceNum] + orientationDeg`.
+
+- **Building module** (`BuildingDefinition.jsx:860`) passes
+  `orientationDeg={orientationDeg}` where `orientationDeg = Number(params.orientation ?? 0)`.
+  For Bridgewater (orientation 42°): F1 (north) → "NE", F3 (south) → "SW", etc.
+- **Internal Gains module** (`HeatBalanceView.jsx:59`) passes
+  **no `orientationDeg` prop**, so it defaults to 0° (HeatBalance.jsx:495).
+  For Bridgewater (same orientation 42°): F1 (north) → "N", F3 (south) → "S".
+
+**Same facade, same building, same orientation, different label.**
+
+Chris's screenshots reflect this: State 1 shows "F1 NE / F2 SE / F3 SW /
+F4 NW"; State 2 shows "F1 N / F2 E / F3 S / F4 W". Per the zero-tolerance
+rule on label consistency, this is a definite bug independent of any
+numeric drift question.
+
+### Proposed fix (HIGH confidence, one-line patch)
+
+`frontend/src/components/modules/gains/canvas/HeatBalanceView.jsx:59`:
+```diff
+-<HeatBalance liveData={state2?.heat_balance} mode="envelope-gains" />
++<HeatBalance
++  liveData={state2?.heat_balance}
++  mode="envelope-gains"
++  orientationDeg={Number(params?.orientation ?? 0)}
++/>
+```
+
+Reads `params` from `ProjectContext` (already imported by `HeatBalanceView` siblings).
+
+After the fix, both modules will render the same facade with the same compass letter at the same orientation.
+
+---
+
 ## Problem 1 — Solar shifts 5% between State 1 and State 2
 
 ### Reported delta
@@ -137,21 +192,34 @@ Depends on: `hourlySolar` (passed in), `glazing` (from `computeGeometry`), `g_va
 
 **Conclusion: the engine math mandates identical per-facade solar values between the two displays for the same project at the same point in time.**
 
-### Working hypothesis
-The 5% delta cannot come from the engine code. Most likely cause:
-**the two screenshots were taken at moments when the project config differed slightly** (live edit in progress, stale React state in one of the modules, or `params` mutating between the two memoised computations). The roughly-uniform ~5% per-facade pattern is consistent with a single geometric input changing — e.g., a small wwr edit, a shading-fin removal, or an orientation tweak that proportionally rescales irradiance projection.
+### Working hypothesis (subject to live repro)
 
-### Diagnostic step before any fix
-Walk through the live app:
-1. Open Bridgewater, navigate to Building → Heat Balance. Record the four facade values.
-2. Without editing anything, navigate to Internal Gains → Heat balance tab. Record again.
-3. If values match within rounding, problem 1 was screenshot-time-skew (no bug).
-4. If values still differ, dump `state1.heat_balance.annual.gains.solar` and `state2.heat_balance.annual.gains.solar` to console — by code construction they are the same object reference and **cannot** differ at runtime.
+The 5% delta cannot come from the engine code on a single building config.
+The current live engine extract (see `docs/validation/bridgewater_state1_engine_outputs_2026_05.md`) emits facade values that match Chris's State 2 screenshot exactly (57.5 / 4.4 / 71.4 / 3.1) and do NOT match the State 1 screenshot (54.8 / 4.2 / 68.0 / 3.0). The roughly-uniform ~5% per-facade pattern is consistent with a single geometric input changing between the two screenshots — e.g., a small wwr edit, a shading-fin removal, or an orientation tweak that proportionally rescales irradiance projection.
 
-### Proposed fix (only if step 4 reproduces)
-Add a dev-mode `console.warn` when the spread breaks — i.e., if any value in `state2.heat_balance.annual.gains.solar.{south,east,west,north}` differs from `state1Result` by more than rounding noise. Filed as: a defensive invariant check in `_calculateState2` would surface drift immediately.
+**Per zero-tolerance discipline this is not yet resolved**, only narrowed:
 
-**Confidence the engine is correct: HIGH. Confidence the displays drift: LOW until live repro.**
+- If live repro (Chris running the comparison in one session, no edits) shows matching values → numeric drift is screenshot-skew; the engine path is byte-identical as the code mandates. Still need an explicit invariant test to *prove* this for all input configurations (see invariance runbook below).
+- If live repro shows real drift in the same session → hidden source of divergence to be found.
+
+### Diagnostic steps (for Chris's live repro)
+
+1. Open Bridgewater. Navigate to Building → Heat Balance. Record the four facade solar values + losses values (kWh, not kWh/m²·yr — same unit makes byte comparison cleaner).
+2. Without editing anything (no input change, no schedule edit, no re-save), navigate to Internal Gains → Heat balance tab. Record again.
+3. **Expected per code (zero-tolerance):** all values byte-identical to step 1.
+4. If they match → write up the result. Fix Problem 1a (label asymmetry) anyway.
+5. If they don't match → halt. Open React DevTools, inspect `useStateComparison`'s `state1` vs Building module's `instantResult`, locate where they diverge.
+
+### Defensive invariant (recommended either way)
+
+Even if the live repro confirms byte-identity today, the engine should *prove* this invariant programmatically. Two options:
+
+1. **Engine-internal assertion** in `_calculateState2`: after computing `state1Result`, compare `state1Result.heat_balance.annual.gains.solar` against a fresh `_calculateEnvelopeOnly(withMode(building, 'envelope-only'), ...)` invocation. In dev mode, `console.warn` on any drift. In production, silent. Implementation cost: trivial — one extra envelope-only call per engine run; ~15 ms on Bridgewater.
+2. **Cross-module React assertion** in `HeatBalanceView.jsx`: assert `state1.heat_balance.annual.gains.solar === state2.heat_balance.annual.gains.solar` (object reference equality) in dev. Cheaper than option 1 (no recompute) but only checks the symptom, not the engine-internal contract.
+
+Recommend option 1 — engine-internal — because it surfaces drift even when the consumer code is silent. Filed as a candidate for the invariance test runbook (`docs/validation/state_1_invariance_tests.md`).
+
+**Confidence the engine is correct on Bridgewater today: HIGH (extract proves it). Confidence the engine path is correct for arbitrary inputs: NOT YET PROVEN — need invariance tests + invariant assertion.**
 
 ---
 
@@ -365,8 +433,10 @@ Chris's hypothesis ("internal gains warm zone, ΔT increases, conduction up") de
 - OR Chris's screenshots captured different building configs (same explanation as Problem 1)
 
 ### Same diagnostic as Problem 1
-- If live repro shows State 1 and State 2 loss values differ → there's a hidden source of drift I haven't found.
-- If they match in live repro → both Problem 1 and Problem 4 were screenshot-time-skew.
+- If live repro shows State 1 and State 2 loss values differ in the same session → halt; hidden source of drift.
+- If they match → byte-identity confirmed on Bridgewater. Still need the invariance assertion (option 1 under Problem 1) to prove it for arbitrary inputs.
+
+**Per zero-tolerance:** byte-identity is the bar. The validation extract confirms current Bridgewater, but doesn't prove the invariant across rotations / different fabric / different shading. The break-the-building tests in the runbook (`state_1_invariance_tests.md`) exercise that span.
 
 ### Open physics question (separate from the bug)
 **Should State 2 recompute conduction losses against the new T_op trace?**
@@ -392,19 +462,22 @@ This comment is mathematically wrong (UA × dT_air IS sensitive to the T_air tra
 
 | Problem | Diagnosis | Confidence | Recommended fix |
 |---|---|---|---|
-| 1 — Solar 5% delta | Engine produces identical values by spread; observed delta cannot come from code. Most likely screenshot-time skew. | LOW (need live repro) | Live repro first. If reproducible, add an invariant assert in `_calculateState2` to detect spread breakage. |
-| 2 — Fabric leakage missing | `LOSS_ORDERS` has no `ENVELOPE_GAINS` entry; falls through to FULL which omits `fabric_leakage`, `permanent_vents`, `thermal_bridging`. Engine emits them; consumer filters them out. | HIGH | Add `LOSS_ORDERS[MODES.ENVELOPE_GAINS]` + `GAIN_ORDERS[MODES.ENVELOPE_GAINS]` to `stateMode.js` with the State 2 keys. Trivial. |
+| 1a — Facade label asymmetric (NE/SE/SW/NW vs N/E/S/W) | `HeatBalanceView` doesn't pass `orientationDeg` to `HeatBalance`; defaults to 0° regardless of `params.orientation`. | HIGH (confirmed by code reading) | One-line patch in `HeatBalanceView.jsx` to pass `orientationDeg={params.orientation}`. Zero-tolerance bug — fix in same patch as Problem 2. |
+| 1 — Solar 5% numeric delta | Engine produces identical values by spread; observed delta cannot come from code on a single config. Current live engine extract matches Chris's State 2 numbers exactly, not State 1's. Working hypothesis: input changed between screenshots. | HIGH that engine is correct today on Bridgewater (extract proves it); MEDIUM that the engine path is correct across all inputs (need invariance tests) | Live repro first. Add a dev-mode invariant assertion in `_calculateState2` that recomputes envelope-only and compares against `state1Result.heat_balance.annual.gains.solar` byte-for-byte. |
+| 2 — Fabric leakage missing | `LOSS_ORDERS` has no `ENVELOPE_GAINS` entry; falls through to FULL which omits `fabric_leakage`, `permanent_vents`, `thermal_bridging`. Engine emits them; consumer filters them out. | HIGH (confirmed by code reading) | Add `LOSS_ORDERS[MODES.ENVELOPE_GAINS]` + `GAIN_ORDERS[MODES.ENVELOPE_GAINS]` to `stateMode.js` with the State 2 keys. Trivial. |
 | 3 — +214.6 MWh residual | UI design gap. State 2's gains include internal (+215 MWh) but display doesn't include mechanical cooling/heating demand. Residual ≈ cooling demand by construction. | HIGH (UI design) | Option A: append synthetic `heating_demand` + `cooling_demand` items in flattenGains/Losses when mode ≥ envelope-gains. Option B: reframe "Net" line. Recommend A. |
-| 4 — Loss element shifts 4-5% | Same as Problem 1 — engine inherits losses from State 1 verbatim, so values MUST match. Observed drift cannot come from code. Separately: there's a contract gap (State 2 should arguably recompute losses against its T_op trace). | LOW (need live repro) for the drift; SEPARATE for the contract gap | Same live repro. Separately: file a brief to decide whether State 2 should recompute losses on its own T_op trace. |
+| 4 — Loss element shifts 4-5% | Same as Problem 1 — engine inherits losses from State 1 verbatim, so values MUST match. Live engine extract confirms current Bridgewater values match the State 2 screenshot. Separately: contract gap exists (State 2 arguably should recompute losses against its T_op trace — Brief 28c). | HIGH that engine is correct today on Bridgewater; MEDIUM across input space; SEPARATE for the contract gap | Same live repro + same invariant assertion as Problem 1. Brief 28c for the contract gap. |
 
 ---
 
 ## Recommended sequence (after walkthrough approves direction)
 
-1. **Live repro for Problems 1 + 4.** Open Bridgewater, capture State 1 vs State 2 numbers without editing. If they match, problems 1 + 4 are explained away. If they don't, dig further before any fix.
-2. **Fix Problem 2** (highest confidence, smallest patch). Extend `LOSS_ORDERS` + `GAIN_ORDERS` in `stateMode.js`. Build + verify the State 2 breakdown now includes fabric_leakage (~56.6 MWh on Bridgewater).
-3. **Fix Problem 3** (Option A). Append demand items to flattenLosses/Gains in State 2+ mode. Verify residual closes to ≈ 0 on Bridgewater.
-4. **File the Problem-4 contract gap** as a separate brief (probably Brief 28c) to decide whether State 2 should compute its own losses or continue inheriting from State 1.
+1. **Live repro for Problems 1 + 4.** Open Bridgewater, capture State 1 vs State 2 numbers without editing. Per zero-tolerance, this is a binary pass/fail — values must match byte-identically for the same config. If they match, the engine is correct today on Bridgewater; still need invariance tests (next item) before claiming the engine path is correct in general.
+2. **Run invariance test runbook.** `docs/validation/state_1_invariance_tests.md` defines break-the-building tests (double GIA, rotate 90°/180°, zero U-values, zero glazing, infiltration extremes, comfort band widen, weather extremes, State 2 occupancy/LPD/baseload extremes). Each tests a different region of input space against zero-tolerance State-to-State byte-identity. Pass criteria: no State-to-State drift on shared physics across any test.
+3. **Fix Problem 1a + Problem 2 together.** Both are one-line patches in adjacent files. Trivial.
+4. **Fix Problem 3** (Option A). Append demand items to flattenLosses/Gains in State 2+ mode. Verify residual closes to ≈ 0 on Bridgewater.
+5. **Add invariant assertion in `_calculateState2`** to prove byte-identity at runtime (option 1 under Problem 1). Catches drift the moment any future change introduces it.
+6. **File Problem-4 contract gap** as Brief 28c, gated on validation spreadsheet outcome.
 
 **No fix lands until walkthrough confirms direction.** This document is the proposal; Chris's review gates each numbered fix.
 

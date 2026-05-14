@@ -34,17 +34,29 @@ in the session):
 (State 2 reports Solar F1 N 57.5 / F2 E 4.4 / F3 S 71.4 / F4 W 3.1 = 136.4
 MWh; External wall 16.5 / Roof 11.1 / Ground 15.2 / Glazing 82.9 — all
 identical or within rounding to this extract). The State 1 screenshot
-numbers reflect a previous config snapshot that hadn't yet propagated
-through to the displayed View — or, more likely, the building config
-was edited between the two screenshots and the State 1 screenshot
-captured a pre-edit state.
+numbers (54.8 / 4.2 / 68.0 / 3.0 + 15.9 / 10.7 / 14.7 / 80.3) are 3-5%
+lower across the board, uniformly, for both solar and conduction. The
+most parsimonious explanation: the building config was edited between
+the two screenshots and the State 1 screenshot captured a pre-edit
+state.
 
-**Implication for the heat-balance investigation:** Problems 1 + 4 from
-`state_2_heat_balance_discrepancies_2026_05.md` are **screenshot-time-skew
-artifacts, not engine bugs.** The Static engine produces identical solar
-and conduction values for State 1 and State 2 on the same config — as
-the code mandates via the spread. The walkthrough should confirm by
-running State 1 vs State 2 in one session with no edits between.
+**Implication for the heat-balance investigation:** This extract is
+evidence — not proof — that Problems 1 + 4 are screenshot-time-skew
+rather than engine bugs. Per Chris's zero-tolerance rule on
+State-to-State drift, the bar is byte-identity. Live repro in one
+session with no edits is the binary pass/fail test for the current
+config; the invariance test runbook
+(`docs/validation/state_1_invariance_tests.md`) probes byte-identity
+across geometry rotations, fabric extremes, and weather extremes that
+this single extract cannot reach. Both are required before declaring
+the engine path correct.
+
+**Note also:** the facade compass labels in the two screenshots
+("F1 NE" vs "F1 N") reflect a separate, confirmed bug (Problem 1a):
+Internal Gains' `HeatBalanceView` doesn't pass `orientationDeg` to
+`HeatBalance`, so labels don't rotate with the building's orientation.
+This is independent of any numeric drift question and remains a bug
+regardless of how the live repro resolves.
 
 ---
 
