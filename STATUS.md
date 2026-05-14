@@ -1,40 +1,45 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-14 — paused at Brief 28a Part 3 mid-slice (3a/3b/3c done, awaiting walkthrough before 3d/3e/3f)
+## 🚧 Session 2026-05-14 — paused at Brief 28a Part 3 mid-slice (3a-3d done, awaiting walkthrough before 3e/3f)
 
 **State:** `paused_for_walkthrough`
 **Latest commits this session (pushed to origin/main):**
-- `496cda3` Brief 28a Part 3c: consolidate Free-running + Hourly + Annual breakdown into Load shape tab
+- `359861c` Brief 28a Part 3d: 3D Model removal + auto-simulate default off + Load shape → Conditions
+- `496cda3` Brief 28a Part 3c: consolidate Free-running + Hourly + Annual breakdown into Conditions tab
 - `8b33206` Brief 28a Part 3b: fold Delta into Summary + gains-vs-demand stacked bar + remove standalone Delta tab
 - `7782556` Brief 28a Part 3a: new Summary tab as default for Internal Gains
 - (earlier this session: Brief 27 cleanup Part 3 corrected close, Finding 2 fix-(b), Brief 28a Parts 1+2)
 
-### Walkthrough targets for 3a-3c (Internal Gains canvas restructure, interim)
+### Walkthrough targets for 3d (refinements on top of 3a-3c)
 
-Tab strip is now **5 tabs** (down from 7): `Schedule | Summary | Heat balance | Load shape | 3D Model`. The 3D Model tab gets removed in 3d. Pavlo-pattern unified time-series view lands in Parts 4-5.
+Tab strip is now **4 tabs** (down from 7 originally): `Schedule | Summary | Heat balance | Conditions`. Pavlo-pattern unified time-series view replaces the Conditions sub-view toggle in Parts 4-5. Brief 28a Part 8 (state-aware Dynamic runs) newly scoped.
 
-1. **Load `/gains` on Bridgewater.** Confirm the tab strip shows the 5 tabs above (Delta and Free-running / Hourly profile / Annual breakdown are gone from the top-level strip).
-2. **Default landing tab is Summary.** First load (or clear localStorage) lands on Summary, not Schedule. The Static badge reads "Static".
-3. **Summary tab content** — should render the following sections top-to-bottom:
+1. **Load `/gains` on Bridgewater.** Confirm the tab strip shows the 4 tabs above (Delta / Free-running / Hourly profile / Annual breakdown / 3D Model are all gone from the top-level strip).
+2. **Default landing tab is Summary.** First load lands on Summary, not Schedule. The Static badge reads "Static".
+3. **Summary tab content** — renders top-to-bottom:
    - Headline 4-up stat cards: Internal gains / Heating demand / Cooling demand / Comfort hours (each with MWh + kWh/m²·yr + delta vs State 1 where applicable).
    - **Gains vs demand stacked bar** with `kWh | kWh/m²·yr` unit toggle at top-right of that card.
    - Demand paired bars (State 1 vs State 2 for heating + cooling) — moved from old Delta tab.
    - Comfort impact (hours deltas + annual-mean T shift).
    - "What gains contribute" with per-gain attribution + per-profile sub-rows.
    - Footnote referencing Static engine + the 2026-05-14 corrected disclosure (mass model, ~8.8°C gap).
-4. **Load shape tab** — internal sub-view toggle at top with three buttons: `Temperature trace | Hourly profile | Annual breakdown`. Each renders the existing component unchanged. Sub-view selection persists via localStorage. Interim sub-toggle is documented in the footnote at top.
+4. **Conditions tab** (renamed from "Load shape" in 3d) — internal sub-view toggle at top with three buttons: `Temperature trace | Hourly profile | Annual breakdown`. Each renders the existing component unchanged. Sub-view selection persists via localStorage. Interim sub-toggle is documented in the footnote at top.
 5. **Heat balance tab** — should still render (Brief 27 cleanup Part 3 corrected close fix). Sankey / Stacked / Rows layouts work; gains.internal renders.
-6. **Schedule tab** — still works (no functional change in 3a-3c; just no longer the default).
-7. **3D Model tab** — still present (placeholder); removal in 3d.
-8. **No console errors** during tab switches.
+6. **Schedule tab** — still works (no functional change since 3a; just no longer the default).
+7. **3D Model tab** — **gone** from Internal Gains (3d removed it; Building still has it, that lands in 3e).
+8. **Top-bar Auto-simulate toggle** — defaults to **OFF** (grey dot) on fresh load. Click to enable; tooltip shows current state. With auto-sim OFF: editing a value updates Static numbers immediately but does NOT trigger a Dynamic EP run. With auto-sim ON + user edit: Dynamic fires after 2s debounce as before (Halt 3 saveSource gating intact).
+9. **Run Dynamic button** — click triggers a full mode EP run, status banner reads "Running Dynamic…" (state-aware mode detection lands in Brief 28a Part 8, not yet implemented).
+10. **No console errors** during tab switches.
 
 ### What's still in the queue after walkthrough
 
-- **3d** — Remove 3D Model tab from Internal Gains (keep `ThreeDView.jsx` on disk for future multi-zone revival).
-- **3e** — Apply the consolidated 5-tab pattern to Building module (Summary / Heat balance / Load shape / 3D Model — Building keeps 3D Model because facades / orientation / shading have visual meaning).
-- **3f** — Update `docs/ui_principles.md` with the canonical tab structure.
-
-After 3d-3f close, Brief 28a Part 4 (Pavlo port) → Part 5 (Load shape unified time-series + engine toggle wiring) → Parts 6-7.
+- **3e** — Apply the consolidated pattern to Building module (Summary / Heat balance / Conditions / 3D Model — Building keeps 3D Model because facades / orientation / shading have visual meaning). **Note (per Chris):** Building's Conditions tab won't have the same content as Internal Gains' Conditions tab. Building's load-shape lens is fabric heat-flow time series + element-by-element conduction, not gain temperature trace. 3e isn't a copy-paste; needs Building-specific content design.
+- **3f** — Update `docs/ui_principles.md` with the canonical tab structure: Summary / Schedule (if module has schedules) / Heat balance / Conditions / 3D Model (optional, modules with facade-meaningful 3D content).
+- **Part 4** — Pavlo component port (ChartContainer / ZoomNav / MonthJumpButtons / DataCard / chartTokens.js).
+- **Part 5** — Migrate Conditions tab to Pavlo unified pattern + engine toggle wiring.
+- **Part 6** — Roll out Pavlo pattern to remaining time-series views (Building, etc.).
+- **Part 7** — Close-out + completion checklist + canvas rendering smoketest acceptance gate.
+- **Part 8 (newly scoped)** — State-aware Dynamic runs (detect project state, dispatch EP run with the matching mode).
 
 ### Brief 27 cleanup walkthrough findings — both resolved earlier this session
 
