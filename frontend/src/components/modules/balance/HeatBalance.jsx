@@ -51,30 +51,67 @@ function readValue(node, unit) {
  * Flatten the heat_balance into [{key, label, value, colour}] arrays
  * for each side (losses + gains). Elements with zero value are kept so
  * the user can still see them — they'll just render as a 1px sliver.
+ *
+ * Brief 28a Part 5 walkthrough Finding HB3 (2026-05-14): 'cooling' is
+ * synthesised from `data.demand.cooling_demand_mwh` when the mode order
+ * includes it (envelope-gains + full). At State 2 this is "what a
+ * mechanical system WOULD remove to hold the comfort band"; at State 3
+ * it's the actual mechanical service. PHPP convention puts mechanical
+ * cooling on the loss side to balance natural surplus. Without this,
+ * the gain side at State 2 includes internal gains (people / lighting /
+ * equipment) but the loss side has no mechanical sink, so the balance
+ * fails to close by exactly the cooling-demand magnitude (the
+ * "+214.6 MWh residual; check inputs" warning on Bridgewater).
  */
 function flattenLosses(data, unit, mode = DEFAULT_MODE) {
   const losses = data?.annual?.losses ?? {}
   const allowed = new Set(loadOrderFor(mode))
+  const gia    = data?.metadata?.gia_m2 ?? 0
   return loadOrderFor(mode)
-    .filter(k => losses[k] != null && allowed.has(k))
+    .filter(k => {
+      if (!allowed.has(k)) return false
+      // 'cooling' is synthesised from demand — falls through the normal
+      // losses[k] lookup. Only present when the mode order includes it
+      // (envelope-gains, full).
+      if (k === 'cooling') {
+        const mwh = data?.demand?.cooling_demand_mwh
+        return mwh != null && mwh > 0.01
+      }
+      return losses[k] != null
+    })
     // Hide opening-line items when there's no opening flow — keeps the chart
     // clean for projects that haven't opted in to wind-driven openings.
-    .filter(k => !k.startsWith('openings_') || (losses[k].kwh ?? 0) > 0.01)
+    .filter(k => !k.startsWith('openings_') || (losses[k]?.kwh ?? 0) > 0.01)
     // Also hide State-1-specific keys (fabric_leakage, permanent_vents,
     // thermal_bridging) when they're 0 — Part 0 keeps the column compact
     // until Part 2 actually populates them.
     .filter(k => !['fabric_leakage', 'permanent_vents', 'thermal_bridging'].includes(k)
-                 || (losses[k].kwh ?? 0) > 0.01)
-    .map(k => ({
-      key: k,
-      label: LABELS[k],
-      value: readValue(losses[k], unit),
-      raw_kwh: losses[k].kwh ?? 0,
-      raw_kwh_per_m2: losses[k].kwh_per_m2 ?? 0,
-      colour: colourForElement(k),
-      area_m2: losses[k].area_m2,
-      meta: losses[k],
-    }))
+                 || (losses[k]?.kwh ?? 0) > 0.01)
+    .map(k => {
+      if (k === 'cooling') {
+        const kwh = (data.demand.cooling_demand_mwh ?? 0) * 1000
+        const kwh_per_m2 = gia > 0 ? kwh / gia : 0
+        return {
+          key:   'cooling',
+          label: LABELS.cooling,
+          value: unit === 'kwh_per_m2' ? kwh_per_m2 : kwh,
+          raw_kwh: kwh,
+          raw_kwh_per_m2: kwh_per_m2,
+          colour: colourForElement('cooling'),
+          meta:  { kwh, kwh_per_m2, synthetic: true, source: 'demand.cooling_demand_mwh' },
+        }
+      }
+      return {
+        key: k,
+        label: LABELS[k],
+        value: readValue(losses[k], unit),
+        raw_kwh: losses[k].kwh ?? 0,
+        raw_kwh_per_m2: losses[k].kwh_per_m2 ?? 0,
+        colour: colourForElement(k),
+        area_m2: losses[k].area_m2,
+        meta: losses[k],
+      }
+    })
 }
 
 function flattenGains(data, unit, orientationDeg = 0, mode = DEFAULT_MODE) {
@@ -115,17 +152,43 @@ function flattenGains(data, unit, orientationDeg = 0, mode = DEFAULT_MODE) {
       meta:   node,
     })
   }
-  // Mechanical heating — State 3 service, never a gain at State 1/2/2.5
-  if (gains.heating && allowed.has('heating')) {
-    out.push({
-      key: 'heating',
-      label: LABELS.heating,
-      value: readValue(gains.heating, unit),
-      raw_kwh: gains.heating.kwh ?? 0,
-      raw_kwh_per_m2: gains.heating.kwh_per_m2 ?? 0,
-      colour: HEATING_COLOUR,
-      meta: gains.heating,
-    })
+  // Mechanical heating — surfaces whenever the gain order includes 'heating'.
+  // Brief 28a Part 5 walkthrough Finding HB3 (2026-05-14): at State 2 this
+  // is "what a mechanical system WOULD provide to hold the comfort band";
+  // at State 3 it's the actual mechanical service. Same source either way:
+  // data.demand.heating_demand_mwh. PHPP convention puts mechanical heating
+  // on the gain side to balance natural deficit. Falls back to the engine's
+  // `gains.heating` block if the engine ever emits one directly (preserves
+  // forward compatibility with potential State 3 changes).
+  if (allowed.has('heating')) {
+    const engineHeating = gains.heating
+    if (engineHeating?.kwh != null) {
+      out.push({
+        key: 'heating',
+        label: LABELS.heating,
+        value: readValue(engineHeating, unit),
+        raw_kwh: engineHeating.kwh ?? 0,
+        raw_kwh_per_m2: engineHeating.kwh_per_m2 ?? 0,
+        colour: HEATING_COLOUR,
+        meta: engineHeating,
+      })
+    } else {
+      const mwh = data?.demand?.heating_demand_mwh
+      if (mwh != null && mwh > 0.01) {
+        const kwh = mwh * 1000
+        const gia = data?.metadata?.gia_m2 ?? 0
+        const kwh_per_m2 = gia > 0 ? kwh / gia : 0
+        out.push({
+          key:   'heating',
+          label: LABELS.heating,
+          value: unit === 'kwh_per_m2' ? kwh_per_m2 : kwh,
+          raw_kwh: kwh,
+          raw_kwh_per_m2: kwh_per_m2,
+          colour: HEATING_COLOUR,
+          meta:  { kwh, kwh_per_m2, synthetic: true, source: 'demand.heating_demand_mwh' },
+        })
+      }
+    }
   }
   return out
 }
@@ -535,8 +598,21 @@ export default function HeatBalance({
     const gainItems = flattenGains(data, unit, orientationDeg, mode)
     const allValues = [...lossItems.map(i => i.value), ...gainItems.map(i => i.value)]
     const scale = Math.max(...allValues, 0.1)
-    const totalLosses = data?.annual?.totals?.[unit === 'kwh_per_m2' ? 'losses_kwh_per_m2' : 'losses_kwh'] ?? 0
-    const totalGains  = data?.annual?.totals?.[unit === 'kwh_per_m2' ? 'gains_kwh_per_m2'  : 'gains_kwh']  ?? 0
+    // Engine-emitted totals (fabric + solar only at State 2; engine omits
+    // mechanical demand from totals).
+    let totalLosses = data?.annual?.totals?.[unit === 'kwh_per_m2' ? 'losses_kwh_per_m2' : 'losses_kwh'] ?? 0
+    let totalGains  = data?.annual?.totals?.[unit === 'kwh_per_m2' ? 'gains_kwh_per_m2'  : 'gains_kwh']  ?? 0
+    // Brief 28a Part 5 walkthrough Finding HB3 (2026-05-14): the
+    // flattened breakdown surfaces mechanical heating + cooling demand
+    // as synthetic items at State 2+; the totals must include them too
+    // or the "Net (gains - losses)" residual won't close. Add the
+    // synthetic items (identified by `meta.synthetic === true`).
+    for (const item of lossItems) {
+      if (item.meta?.synthetic) totalLosses += item.value
+    }
+    for (const item of gainItems) {
+      if (item.meta?.synthetic) totalGains += item.value
+    }
     return {
       losses: lossItems,
       gains:  gainItems,
@@ -545,7 +621,7 @@ export default function HeatBalance({
       totalGains,
       gia: data?.metadata?.gia_m2 ?? 0,
     }
-  }, [data, unit, orientationDeg])
+  }, [data, unit, orientationDeg, mode])
 
   if (!data || !data.annual) {
     return (

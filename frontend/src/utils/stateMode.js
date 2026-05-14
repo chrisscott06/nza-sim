@@ -179,6 +179,29 @@ const LOSS_ORDERS = {
     'infiltration',
     'openings_louvre',
   ],
+  // Brief 28a Part 5 walkthrough Finding HB2 (2026-05-14): explicit
+  // ENVELOPE_GAINS entry. Previously fell through to LOSS_ORDERS[FULL]
+  // which omits fabric_leakage / permanent_vents / thermal_bridging --
+  // _calculateState2 emits these keys (inherited from State 1 via
+  // spread), but the consumer's flattenLosses filter hid them. Result:
+  // the State 2 breakdown summed to ~125 MWh while totals.losses_kwh
+  // (which the engine computes against all losses including the hidden
+  // ones) read ~184 MWh -- 58 MWh discrepancy ~= fabric_leakage.
+  //
+  // Order mirrors ENVELOPE_ONLY (same envelope physics). Mechanical
+  // cooling appears here too because Brief 28a Part 5 walkthrough
+  // Finding HB3 adds it as a synthetic loss item (mechanical sink
+  // for excess internal gains; PHPP convention).
+  [MODES.ENVELOPE_GAINS]: [
+    'external_wall',
+    'roof',
+    'ground_floor',
+    'glazing',
+    'thermal_bridging',
+    'fabric_leakage',
+    'permanent_vents',
+    'cooling',
+  ],
   [MODES.FULL]: [
     'external_wall',
     'roof',
@@ -203,6 +226,25 @@ const GAIN_ORDERS = {
     'solar_east',
     'solar_west',
     'solar_north',
+  ],
+  // Brief 28a Part 5 walkthrough Finding HB2 (2026-05-14): explicit
+  // ENVELOPE_GAINS entry. Previously fell through to FULL which works
+  // by coincidence (FULL includes people/equipment/lighting; heating
+  // filters out at runtime because State 2 has no mechanical systems).
+  // Making it explicit removes the documented-by-fallthrough fragility.
+  //
+  // Mechanical heating appears here because Brief 28a Part 5 walkthrough
+  // Finding HB3 adds it as a synthetic gain item (mechanical source
+  // for offsetting envelope deficit; PHPP convention).
+  [MODES.ENVELOPE_GAINS]: [
+    'solar_south',
+    'solar_east',
+    'solar_west',
+    'solar_north',
+    'people',
+    'equipment',
+    'lighting',
+    'heating',
   ],
   [MODES.FULL]: [
     'solar_south',

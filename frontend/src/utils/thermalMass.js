@@ -86,7 +86,14 @@ export function deriveConstructionMass(constructionItem) {
   // floors per the library convention). The detail endpoint and any code
   // that hands us a raw library_items.config_json row still has the full
   // epjson nested form. Support both.
-  let rawLayers = constructionItem.layers
+  //
+  // Brief 28a Part 5 walkthrough Finding HB1 root-cause (2026-05-14):
+  // also accept `config_json.layers` for the case where a consumer wraps
+  // the raw library row inside `config_json` (e.g. useStateComparison's
+  // shape after the wrap pattern). Otherwise the C_mass derivation
+  // silently falls through to the empty-layers branch and the engine
+  // diverges between consumers that wrap vs. don't.
+  let rawLayers = constructionItem.layers ?? constructionItem.config_json?.layers
   if (!rawLayers || !Array.isArray(rawLayers)) {
     const ordered = layerOrder(epjson, constructionItem.name ?? cfg?.name)
     const materials = epjson.Material ?? {}

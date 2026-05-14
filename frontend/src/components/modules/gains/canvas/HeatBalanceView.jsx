@@ -7,12 +7,22 @@
  * Brief 27 Revised Part 11.
  */
 
+import { useContext } from 'react'
 import { useStateComparison } from './useStateComparison.js'
 import HeatBalance from '../../balance/HeatBalance.jsx'
 import EngineBadge from './EngineBadge.jsx'
+import { ProjectContext } from '../../../../context/ProjectContext.jsx'
 
 export default function HeatBalanceView() {
   const { state2, ready, libraryLoading } = useStateComparison()
+  // Brief 28a Part 5 walkthrough Finding HB1a (2026-05-14): pass
+  // orientationDeg so facade compass labels match the Building module
+  // (where `BuildingDefinition.jsx:860` passes the same value). Without
+  // this, labels default to 0 deg regardless of `params.orientation` and
+  // Internal Gains shows "F1 (N)" while Building shows "F1 (NE)" for the
+  // same facade at orientation 42 deg.
+  const { params } = useContext(ProjectContext)
+  const orientationDeg = Number(params?.orientation ?? 0)
 
   if (!ready) {
     return (
@@ -56,7 +66,11 @@ export default function HeatBalanceView() {
           "No heat balance data available" empty state fires. Brief 27 cleanup
           Part 3 (2026-05-14) fixed this after the Part 1 prop-rename was
           discovered to be necessary-but-insufficient via Chris's walkthrough. */}
-      <HeatBalance liveData={state2?.heat_balance} mode="envelope-gains" />
+      <HeatBalance
+        liveData={state2?.heat_balance}
+        mode="envelope-gains"
+        orientationDeg={orientationDeg}
+      />
     </div>
     </div>
   )

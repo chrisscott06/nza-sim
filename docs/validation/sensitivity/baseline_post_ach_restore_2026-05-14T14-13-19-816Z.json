@@ -1,0 +1,720 @@
+{
+  "generated_at": "2026-05-14T14:13:19.815Z",
+  "test_name": "baseline_post_ach_restore",
+  "project_id": "14b4a5b1-8c73-4acb-8b65-1d22f05ec969",
+  "project_name": "HIX Bridgewater",
+  "baseline_orientation": 42,
+  "effective_orientation": 42,
+  "overrides": {},
+  "building_config_used": {
+    "name": "HIX Bridgewater",
+    "length": 58.8,
+    "width": 14.7,
+    "num_floors": 4,
+    "floor_height": 3.2,
+    "orientation": 42,
+    "wwr": {
+      "north": 0.55,
+      "south": 0.38,
+      "east": 0.1,
+      "west": 0.11
+    },
+    "infiltration_ach": 0.2,
+    "window_count": {
+      "north": 18,
+      "south": 16,
+      "east": 1,
+      "west": 1
+    },
+    "num_bedrooms": 134,
+    "occupancy_rate": 1,
+    "people_per_room": 1.5,
+    "location": {
+      "latitude": 51.087,
+      "longitude": -2.985,
+      "name": "Bridgwater, Somerset"
+    },
+    "address": "Market Way, Bridgwater TA6 6DF",
+    "postcode": "TA6 6DF",
+    "building_type": "Hotel",
+    "operator": "",
+    "weather_file": "GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw",
+    "future_weather_file": null,
+    "shading_overhang": {
+      "south": {
+        "depth_m": 0.5,
+        "offset_m": 0
+      },
+      "east": {
+        "depth_m": 0.5,
+        "offset_m": 0
+      },
+      "west": {
+        "depth_m": 0.5,
+        "offset_m": 0
+      },
+      "north": {
+        "depth_m": 0.5,
+        "offset_m": 0
+      }
+    },
+    "shading_fin": {
+      "north": {
+        "left_depth_m": 0.5,
+        "right_depth_m": 0.5
+      },
+      "south": {
+        "left_depth_m": 0.5,
+        "right_depth_m": 0.5
+      },
+      "east": {
+        "left_depth_m": 0.5,
+        "right_depth_m": 0.5
+      },
+      "west": {
+        "left_depth_m": 0.5,
+        "right_depth_m": 0.5
+      }
+    },
+    "openings": {
+      "schedule": "occupied",
+      "site_exposure": "normal",
+      "north": {
+        "louvre_area_m2": 0,
+        "openable_fraction": 0.3
+      },
+      "south": {
+        "louvre_area_m2": 0,
+        "openable_fraction": 0
+      },
+      "east": {
+        "louvre_area_m2": 0,
+        "openable_fraction": 0
+      },
+      "west": {
+        "louvre_area_m2": 0,
+        "openable_fraction": 0
+      }
+    },
+    "thermal_mass_category": "light",
+    "thermal_mass_mode": "auto",
+    "occupancy": {
+      "occupancy_rate": 1,
+      "density": {
+        "value": 2,
+        "basis": "per_room"
+      },
+      "sensible_w_per_person": 75,
+      "latent_w_per_person": 55,
+      "schedule": {
+        "weekday": [
+          0.92,
+          0.92,
+          0.91,
+          0.89,
+          0.89,
+          0.88,
+          0.9299999999999999,
+          0.9,
+          0.54,
+          0.28,
+          0.36,
+          0.28,
+          0.49,
+          0.27,
+          0.19,
+          0.31,
+          0.6,
+          0.9,
+          0.95,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "saturday": [
+          0.92,
+          0.92,
+          0.91,
+          0.89,
+          0.89,
+          0.88,
+          0.9299999999999999,
+          0.9,
+          0.34,
+          0.28,
+          0.36,
+          0.28,
+          0.49,
+          0.27,
+          0.19,
+          0.31,
+          0.6,
+          0.9,
+          0.95,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "sunday": [
+          0.92,
+          0.92,
+          0.91,
+          0.89,
+          0.89,
+          0.88,
+          0.9299999999999999,
+          0.9,
+          0.34,
+          0.28,
+          0.36,
+          0.28,
+          0.49,
+          0.27,
+          0.19,
+          0.31,
+          0.6,
+          0.9,
+          0.95,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "monthly_multipliers": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          0.94,
+          0.89,
+          0.83,
+          0.87,
+          0.91
+        ],
+        "exceptions": [
+          {
+            "name": "Xmas",
+            "start_date": "24-12",
+            "end_date": "01-07",
+            "weekday": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "saturday": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "sunday": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "ignore_monthly_multipliers": false,
+            "id": "legacy_0_xmas_24-12"
+          }
+        ]
+      },
+      "_provenance": {
+        "source": "migrated_from_legacy",
+        "confidence": "medium"
+      }
+    },
+    "gains": {
+      "lighting": {
+        "profiles": [
+          {
+            "id": "hotel_bedroom_lighting_mp4j51hx_4",
+            "label": "Bedroom lighting",
+            "magnitude": {
+              "value": 2,
+              "unit": "w_per_m2"
+            },
+            "relationship_to_occupancy": "independent",
+            "spill_minutes": 15,
+            "daylight_factor": 0.16,
+            "area_share": 1,
+            "schedule": {
+              "weekday": [
+                0.51,
+                0.52,
+                0.55,
+                0.55,
+                0.54,
+                0.56,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                0.47,
+                0.47,
+                0.45,
+                0.45
+              ],
+              "saturday": [
+                0.51,
+                0.52,
+                0.55,
+                0.55,
+                0.54,
+                0.56,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                0.47,
+                0.47,
+                0.45,
+                0.45
+              ],
+              "sunday": [
+                0.51,
+                0.52,
+                0.55,
+                0.55,
+                0.54,
+                0.56,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                0.47,
+                0.47,
+                0.45,
+                0.45
+              ],
+              "monthly_multipliers": [
+                1,
+                1,
+                0.9,
+                0.8,
+                0.7,
+                0.7,
+                0.7,
+                0.7,
+                0.8,
+                0.9,
+                1,
+                1
+              ],
+              "exceptions": []
+            },
+            "_provenance": {
+              "source": "load_type_library",
+              "template_id": "hotel_bedroom_lighting",
+              "confidence": "medium"
+            }
+          }
+        ]
+      },
+      "equipment": {
+        "profiles": [
+          {
+            "id": "custom_equipment_mp4j3fhe_3",
+            "label": "Custom equipment",
+            "baseload": {
+              "value": 1,
+              "unit": "w_per_m2"
+            },
+            "active": {
+              "value": 1.5,
+              "unit": "w_per_m2"
+            },
+            "relationship_to_occupancy": "independent",
+            "standby_factor": 1,
+            "area_share": 1,
+            "schedule": {
+              "weekday": [
+                0.61,
+                0.84,
+                0.86,
+                0.72,
+                0.54,
+                0.38,
+                0.34,
+                0.48,
+                0.58,
+                0.75,
+                0.73,
+                0.47,
+                0.6,
+                0.33,
+                0.95,
+                0.33,
+                0.36,
+                0.43,
+                0.56,
+                0.1,
+                0.58,
+                0.53,
+                0.51,
+                0.56
+              ],
+              "saturday": [
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.1,
+                0.3,
+                0.7,
+                0.9,
+                0.95,
+                0.95,
+                0.6,
+                0.9,
+                0.95,
+                0.9,
+                0.7,
+                0.3,
+                0.15,
+                0.1,
+                0.05,
+                0.05,
+                0.05,
+                0.05
+              ],
+              "sunday": [
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.1,
+                0.3,
+                0.7,
+                0.9,
+                0.95,
+                0.95,
+                0.6,
+                0.9,
+                0.95,
+                0.9,
+                0.7,
+                0.3,
+                0.15,
+                0.1,
+                0.05,
+                0.05,
+                0.05,
+                0.05
+              ],
+              "monthly_multipliers": [
+                0.9,
+                0.9,
+                1,
+                1,
+                1,
+                0.9,
+                0.8,
+                0.8,
+                1,
+                1,
+                1,
+                0.85
+              ],
+              "exceptions": []
+            },
+            "_provenance": {
+              "source": "load_type_library",
+              "template_id": "custom_equipment",
+              "confidence": "medium"
+            }
+          },
+          {
+            "id": "custom_equipment_mp4j6877_6",
+            "label": "Custom equipment",
+            "baseload": {
+              "value": 1,
+              "unit": "w_per_m2"
+            },
+            "active": {
+              "value": 2,
+              "unit": "w_per_m2"
+            },
+            "relationship_to_occupancy": "proportional",
+            "standby_factor": 0.1,
+            "area_share": 0.1,
+            "schedule": {
+              "weekday": [
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.1,
+                0.3,
+                0.7,
+                0.9,
+                0.95,
+                0.95,
+                0.6,
+                0.9,
+                0.95,
+                0.9,
+                0.7,
+                0.3,
+                0.15,
+                0.1,
+                0.05,
+                0.05,
+                0.05,
+                0.05
+              ],
+              "saturday": [
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.1,
+                0.15,
+                0.15,
+                0.15,
+                0.1,
+                0.1,
+                0.1,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05
+              ],
+              "sunday": [
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05,
+                0.05
+              ],
+              "monthly_multipliers": [
+                0.9,
+                0.9,
+                1,
+                1,
+                1,
+                0.9,
+                0.8,
+                0.8,
+                1,
+                1,
+                1,
+                0.85
+              ],
+              "exceptions": []
+            },
+            "_provenance": {
+              "source": "load_type_library",
+              "template_id": "custom_equipment",
+              "confidence": "medium"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "weather_file": "GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw",
+  "comfort_band": {
+    "lower_c": 21,
+    "upper_c": 25
+  },
+  "state1": {
+    "state": 1,
+    "mode": "envelope-only",
+    "solar_facades": {
+      "F1": {
+        "kwh": 57488.5,
+        "compass": "NE"
+      },
+      "F2": {
+        "kwh": 4397.9,
+        "compass": "SE"
+      },
+      "F3": {
+        "kwh": 71400.5,
+        "compass": "SW"
+      },
+      "F4": {
+        "kwh": 3132.5,
+        "compass": "NW"
+      },
+      "roof": {
+        "kwh": 46454.2
+      },
+      "total_kwh": 182873.6
+    },
+    "losses": {
+      "external_wall": 16515.4,
+      "roof": 11110,
+      "ground_floor": 15276.3,
+      "glazing": 83166.6,
+      "thermal_bridging": 0,
+      "fabric_leakage": 58661,
+      "permanent_vents": 0
+    },
+    "losses_per_facade_glazing": {
+      "F1": 46556.4,
+      "F2": 2116.2,
+      "F3": 32166.2,
+      "F4": 2327.8
+    },
+    "totals": {
+      "losses_kwh": 184729.4,
+      "gains_kwh": 182873.6,
+      "losses_kwh_per_m2": 53.43,
+      "gains_kwh_per_m2": 52.89
+    },
+    "metadata": {
+      "gia_m2": 3457
+    },
+    "demand": {
+      "heating_demand_mwh": 103.4,
+      "cooling_demand_mwh": 108.6,
+      "underheating_hours": 4430,
+      "overheating_hours": 3449,
+      "comfort_hours": 881
+    },
+    "free_running": {
+      "annual_mean_c": 21.2,
+      "winter_min_c": 4,
+      "summer_max_c": 44.2,
+      "hourly_mean_c": 21.22395600722805,
+      "hourly_std_c": 8.735574853801184,
+      "hourly_count": 8760
+    },
+    "internal_gains": null
+  },
+  "state2": null
+}

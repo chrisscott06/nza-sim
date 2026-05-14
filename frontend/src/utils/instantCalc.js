@@ -226,11 +226,29 @@ function computeGeometry(building) {
 
 // ── G-value lookup ────────────────────────────────────────────────────────────
 
+// Brief 28a Part 5 walkthrough Finding HB1 root cause (2026-05-14):
+// Accept both library-item shapes so the engine's g-value lookup
+// produces the same result regardless of which consumer prepared
+// libraryData:
+//   - List endpoint `/api/library/constructions` returns items with
+//     `g_value` at the top level (no `config_json` wrapper).
+//   - Detail endpoint + raw library_items rows return the value nested
+//     under `config_json.g_value`.
+// Reading only the nested path silently fell back to DEFAULT_G_VALUE
+// (0.40) for Bridgewater's `double_low_e` (real g = 0.42), giving a
+// ~4.8% solar drift between modules — Building module (which stores
+// API items as-is) saw default 0.40 while Internal Gains (which wraps
+// items via `useStateComparison`) saw 0.42. Shared envelope physics
+// must be byte-identical across State 1 and State 2 displays per
+// zero-tolerance contract.
 function getGValue(constructionChoices, libraryData) {
   const name = constructionChoices?.glazing
   if (name && libraryData?.constructions) {
     const item = libraryData.constructions.find(c => c.name === name)
-    if (item?.config_json?.g_value != null) return Number(item.config_json.g_value)
+    if (item) {
+      const g = item.g_value ?? item.config_json?.g_value
+      if (g != null) return Number(g)
+    }
   }
   return DEFAULT_G_VALUE
 }

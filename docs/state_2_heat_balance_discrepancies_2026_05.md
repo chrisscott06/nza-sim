@@ -4,6 +4,106 @@
 vs Internal Gains State 2 Heat Balance on Bridgewater surfaced four concrete
 problems with the numbers. Investigation read-only; no fix applied yet.
 
+---
+
+## RESOLUTION (2026-05-14, after fix batch + live repro)
+
+Status of each problem after the fix batch landed and was validated in the
+browser against Bridgewater:
+
+| Problem | Status | Evidence |
+|---|---|---|
+| 1 — Solar 5% numeric drift | **RESOLVED** — root cause was `getGValue` reading only `item.config_json.g_value` while `BuildingDefinition.jsx` stored library items as-is (with `g_value` at top level). Engine fell back to `DEFAULT_G_VALUE = 0.40` for Building module while `useStateComparison` wrapped items as `config_json: c.config_json ?? c` so Internal Gains saw the real 0.42. Exact ratio: 0.40/0.42 = 0.9524 ≈ observed 5% drift. **Fix:** `getGValue` accepts both `item.g_value` (top level) and `item.config_json.g_value` (nested). Same shape fix applied to `thermalMass.js::resolveCmass` for the `layers` lookup (caused a 0.31% loss-side residual drift). | Live repro evidence below: Building solar.north.kwh = 57488.5; Internal Gains solar.north.kwh = 57488.5 (byte-identical). |
+| 1a — Facade compass label asymmetry | **RESOLVED** — `HeatBalanceView.jsx` now passes `orientationDeg={params.orientation}` to `HeatBalance`. Internal Gains labels rotate with orientation matching Building. | Live repro: both show "F1 (NE)" at orientation 42°. |
+| 2 — fabric_leakage / permanent_vents / thermal_bridging missing from State 2 breakdown | **RESOLVED** — `stateMode.js` `LOSS_ORDERS` and `GAIN_ORDERS` now have explicit `[MODES.ENVELOPE_GAINS]` entries with the State 2 keys. Engine emits these keys (inherited from State 1 via spread); consumer's `flattenLosses` no longer filters them out. | Live repro: Internal Gains breakdown shows External wall / Roof / Ground floor / Glazing / Fabric leakage (58.7 MWh) — all present. |
+| 3 — Large residual (mechanical demand not in display) | **PARTIALLY RESOLVED** — synthetic `heating_demand` (gain side) and `cooling_demand` (loss side) appear in the breakdown for State 2+ modes. Totals include them via the `meta.synthetic` flag in the useMemo. The "Net (gains − losses)" still shows a non-zero residual (-102.7 MWh on Bridgewater) because (a) State 2 inherits State 1's static losses without recomputing against its T_op trace (Problem 4 contract gap, queued as Brief 28c), and (b) the engine's cooling-demand formula `Q_to_mass + UA × outdoor_excess` overestimates by counting full gain energy as needing removal rather than the excess above mass-storage capacity. **The residual is now an honest reflection of upstream engine behaviour rather than a hidden display omission.** Filed: Brief 28c (loss recompute) + a separate brief on cooling-demand formulation. | Live repro: Heating 9.8 MWh and Cooling 327.1 MWh appear as labelled items in the breakdown. |
+| 4 — Loss element shifts 4-5% between State 1 and State 2 | **SCREENSHOT-SKEW ARTIFACT (root-cause confirmed)** — the original screenshot showed lower Building values because of Problem 1's g_value bug (Building module used g=0.40, gave lower solar AND lower loss-integration because the T trace was cooler). After the fix, Building module's losses now match the engine (ext_wall 16515.4, roof 11110, ground 15276.3, glazing 83166.6, fabric_leakage 58661) — byte-identical to Internal Gains' State 1 baseline. The "is there a real engine-vs-itself contract gap?" question (State 2 should arguably recompute losses against its own T_op trace) is still **open** as Brief 28c. | Live repro: byte-identical shared physics across both modules. |
+
+### Live-repro evidence — side-by-side from React props after fix batch
+
+Captured by walking the React tree to read `HeatBalance.liveData` directly
+(no display rounding). Building module rendered at /building with the Heat
+Balance pane active. Internal Gains rendered at /gains with the Heat
+balance tab active. Same browser session, same backend, same persisted
+config (`infiltration_ach=0.2`, the value restored before the fix batch).
+
+| Field | Building module (envelope-only) | Internal Gains module (envelope-gains) | Byte-identical? |
+|---|---:|---:|:---:|
+| `orientationDeg` (HeatBalance prop) | 42 | 42 | ✓ |
+| `solar.north.kwh` (F1) | 57488.5 | 57488.5 | ✓ |
+| `solar.south.kwh` (F3) | 71400.5 | 71400.5 | ✓ |
+| `solar.east.kwh` (F2) | 4397.9 | 4397.9 | ✓ |
+| `solar.west.kwh` (F4) | 3132.5 | 3132.5 | ✓ |
+| `losses.external_wall.kwh` | 16515.4 | 16515.4 | ✓ |
+| `losses.roof.kwh` | 11110.0 | 11110.0 | ✓ |
+| `losses.ground_floor.kwh` | 15276.3 | 15276.3 | ✓ |
+| `losses.glazing.kwh` | 83166.6 | 83166.6 | ✓ |
+| `losses.fabric_leakage.kwh` | 58661.0 | 58661.0 | ✓ |
+| `losses.thermal_bridging.kwh` | 0 | 0 | ✓ |
+| `totals.losses_kwh` | 184729.4 | 184729.4 | ✓ |
+| `metadata.gia_m2` | 3457 | 3457 | ✓ |
+| **Displayed facade compass labels** | F1 NE / F2 SE / F3 SW / F4 NW | F1 NE / F2 SE / F3 SW / F4 NW | ✓ |
+
+State 2-only items (not in Building module, expected):
+
+| Field | Internal Gains module | Notes |
+|---|---:|---|
+| `gains.internal.people.kwh` | ~118,900 | State 2 only |
+| `gains.internal.lighting.kwh` | ~40,900 | State 2 only |
+| `gains.internal.equipment.kwh` | ~56,100 | State 2 only |
+| Synthetic `heating_demand` item | 9.8 MWh | Brief 28a Part 5 Finding HB3 fix |
+| Synthetic `cooling_demand` item | 327.1 MWh | Same fix |
+| State 2 free-running mean | 32.8 °C | gains warm zone vs State 1 21.2 °C |
+
+Every shared-physics row in the table above is ✓ Identical. **The zero-tolerance contract on shared envelope physics holds.**
+
+### Fixes shipped
+
+1. `frontend/src/components/modules/gains/canvas/HeatBalanceView.jsx:14-20` —
+   import `ProjectContext`, read `params.orientation`, pass `orientationDeg`
+   to `HeatBalance`.
+2. `frontend/src/utils/stateMode.js` `LOSS_ORDERS`/`GAIN_ORDERS` — explicit
+   `[MODES.ENVELOPE_GAINS]` entries. Loss order now includes
+   `external_wall, roof, ground_floor, glazing, thermal_bridging,
+   fabric_leakage, permanent_vents, cooling`. Gain order now includes
+   `solar_south..north, people, equipment, lighting, heating`.
+3. `frontend/src/components/modules/balance/HeatBalance.jsx`
+   `flattenLosses` + `flattenGains` — synthetic `cooling`/`heating` items
+   sourced from `data.demand.{cooling,heating}_demand_mwh` with
+   `meta.synthetic: true` flag.
+4. `frontend/src/components/modules/balance/HeatBalance.jsx` totals memo —
+   iterates loss/gain items, adds `meta.synthetic` items into the totals
+   so the "Net" line reflects what the breakdown shows.
+5. `frontend/src/utils/instantCalc.js::getGValue` — accept both
+   `item.g_value` (top level, served by `/api/library/constructions` list
+   endpoint) and `item.config_json.g_value` (nested, served by detail
+   endpoint or wrapped by `useStateComparison`).
+6. `frontend/src/utils/thermalMass.js::resolveCmass` —
+   `rawLayers = constructionItem.layers ?? constructionItem.config_json?.layers`.
+   Same shape robustness as `getGValue`.
+7. Persisted Bridgewater config: `infiltration_ach` restored 0.1 → 0.2 via
+   `PUT /api/projects/{id}` before the fix-batch verification run.
+
+### What's still open
+
+- **Brief 28c — State 2 loss-recompute contract gap.** State 2 currently
+  inherits State 1's losses via `losses: state1Result.losses`. Physics
+  suggests State 2 losses should be slightly higher (warmer T_op trace
+  → more dT_air-positive hours → more conduction). Documented in this
+  doc's Problem 4 section. Needs first-principles validation against
+  the hand-calc spreadsheet before scope is set.
+- **Cooling-demand formula refinement.** The current
+  `Q_gain_at_upper = Q_to_mass + UA × outdoor_excess` overestimates by
+  counting all hourly gain energy as needing removal, ignoring mass
+  storage. This is why the Net residual didn't close to ≈ 0 even
+  after Problem 3. Sub-item of Brief 28c, or its own brief.
+- **Invariant assertion in `_calculateState2`** — recommended in earlier
+  versions of this doc. Now lower priority since `getGValue` +
+  `resolveCmass` are robust to both library-item shapes. Still worth
+  adding as defence against future drift.
+
+---
+
 **Scope:** Static engine only (`frontend/src/utils/instantCalc.js`) + its
 consumer (`frontend/src/components/modules/balance/HeatBalance.jsx`) + mode
 routing (`frontend/src/utils/stateMode.js`). EnergyPlus side unaffected — this
