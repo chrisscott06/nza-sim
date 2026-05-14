@@ -122,20 +122,30 @@ def main() -> int:
 
     print()
 
-    # ── Check 2: No internal-gain objects ──────────────────────────────────
-    people  = len(epjson.get("People", {}))
-    lights  = len(epjson.get("Lights", {}))
-    equip   = len(epjson.get("ElectricEquipment", {}))
+    # ── Check 2: Zero gain magnitudes ──────────────────────────────────────
+    # Updated 2026-05-14 (Option C+): we check magnitudes, not object counts.
+    # Emitting zero-density placeholder objects is fine -- they keep schedule
+    # references valid and contribute no heat. What matters is that the
+    # densities themselves are zero.
+    def max_value(section: str, field: str) -> float:
+        objs = epjson.get(section, {})
+        if not objs:
+            return 0.0
+        return max(obj.get(field, 0.0) for obj in objs.values())
 
-    print("  Check 2: No internal-gain objects")
-    print(f"    People:            {people}     (expected 0)")
-    print(f"    Lights:            {lights}     (expected 0)")
-    print(f"    ElectricEquipment: {equip}     (expected 0)")
-    if people == 0 and lights == 0 and equip == 0:
+    max_people = max_value("People",            "people_per_floor_area")
+    max_lights = max_value("Lights",            "watts_per_floor_area")
+    max_equip  = max_value("ElectricEquipment", "watts_per_floor_area")
+
+    print("  Check 2: Zero gain magnitudes (object counts irrelevant; magnitudes must be 0)")
+    print(f"    max People  people_per_floor_area: {max_people}     (expected 0.0)")
+    print(f"    max Lights  watts_per_floor_area:  {max_lights}     (expected 0.0)")
+    print(f"    max Equip   watts_per_floor_area:  {max_equip}     (expected 0.0)")
+    if max_people == 0.0 and max_lights == 0.0 and max_equip == 0.0:
         print("    PASS")
     else:
         print("    FAIL")
-        failures.append("gain-objects-present")
+        failures.append("non-zero-gain-magnitudes")
 
     print()
 

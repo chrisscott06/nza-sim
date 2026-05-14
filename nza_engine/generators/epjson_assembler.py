@@ -188,8 +188,15 @@ def _build_people_objects(
     """
     loads = get_zone_loads(zone_type)
     density = density_override if density_override is not None else loads["occupancy_density_people_per_m2"]
-    # Guard against zero density
-    density = max(density, 1e-4)
+    # Guard against unintentionally tiny non-zero density (likely a unit
+    # error). Brief 28 prereq Option C+ 2026-05-14: the previous unconditional
+    # `max(density, 1e-4)` was silently overriding State 1's explicit zero-out
+    # (line 1152 below sets `_density_override = 0.0` for envelope-only mode),
+    # producing 0.0001 ppl/m^2 placeholder People objects (~35 W building-wide
+    # on Bridgewater). Allow exact 0.0 to pass through unmodified so the
+    # envelope-only epJSON is genuinely free-running on the People axis.
+    if density > 0:
+        density = max(density, 1e-4)
 
     people = {}
     for zone_name in zones:
