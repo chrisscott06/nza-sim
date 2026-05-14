@@ -74,6 +74,12 @@ export default function EquipmentSection({
             {e?.active_kwh != null && annual?.ready ? `${(e.active_kwh / 1000).toFixed(1)} MWh` : '—'}
           </span>
         </div>
+        <div className="flex justify-between">
+          <span className="text-mid-grey">Per m²</span>
+          <span className="text-navy font-medium">
+            {e?.kwh != null && annual?.gia_m2 ? `${(e.kwh / annual.gia_m2).toFixed(1)} kWh/m²·yr` : '—'}
+          </span>
+        </div>
         <div className="flex justify-between mt-1 pt-1 border-t border-light-grey/40">
           <span className="text-mid-grey">Peak</span>
           <span className="text-navy font-medium">
@@ -94,6 +100,7 @@ export default function EquipmentSection({
         accent={GAIN_COLOURS.equipment}
         renderDetail={renderDetail}
         annualPerProfile={e?.profiles ?? []}
+        giaM2={annual?.gia_m2}
       />
     </div>
   )

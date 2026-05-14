@@ -129,6 +129,12 @@ export default function OccupancySection({ annual, onEditSchedule }) {
           </span>
         </div>
         <div className="flex justify-between">
+          <span className="text-mid-grey">Per m²</span>
+          <span className="text-navy font-medium">
+            {p?.kwh != null && annual?.gia_m2 ? `${(p.kwh / annual.gia_m2).toFixed(1)} kWh/m²·yr` : '—'}
+          </span>
+        </div>
+        <div className="flex justify-between">
           <span className="text-mid-grey">Peak</span>
           <span className="text-navy font-medium">
             {p?.peak_kw != null ? `${p.peak_kw.toFixed(1)} kW` : '—'}

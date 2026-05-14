@@ -302,6 +302,7 @@ export default function MultiProfileList({
   accent,
   renderDetail,         // (profile) => ReactNode for the per-profile detail line
   annualPerProfile = [],  // annual[].kwh per profile id (from useAnnualGains)
+  giaM2,                  // building GIA in m^2 (for kWh/m^2.yr per-profile readout)
 }) {
   const profilesList = profiles ?? []
 
@@ -400,7 +401,9 @@ export default function MultiProfileList({
               {/* Annual readout per profile */}
               {ann && (
                 <div className="text-xxs text-mid-grey/70 ml-2.5 mt-0.5">
-                  {(ann.kwh / 1000).toFixed(1)} MWh · {ann.peak_kw.toFixed(1)} kW peak
+                  {(ann.kwh / 1000).toFixed(1)} MWh
+                  {giaM2 ? ` · ${(ann.kwh / giaM2).toFixed(1)} kWh/m²·yr` : ''}
+                  {' · '}{ann.peak_kw.toFixed(1)} kW peak
                 </div>
               )}
 

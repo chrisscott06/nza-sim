@@ -66,6 +66,12 @@ export default function LightingSection({
           </span>
         </div>
         <div className="flex justify-between">
+          <span className="text-mid-grey">Per m²</span>
+          <span className="text-navy font-medium">
+            {l?.kwh != null && annual?.gia_m2 ? `${(l.kwh / annual.gia_m2).toFixed(1)} kWh/m²·yr` : '—'}
+          </span>
+        </div>
+        <div className="flex justify-between">
           <span className="text-mid-grey">Peak</span>
           <span className="text-navy font-medium">
             {l?.peak_kw != null ? `${l.peak_kw.toFixed(1)} kW` : '—'}
@@ -93,6 +99,7 @@ export default function LightingSection({
         accent={GAIN_COLOURS.lighting}
         renderDetail={renderDetail}
         annualPerProfile={l?.profiles ?? []}
+        giaM2={annual?.gia_m2}
       />
     </div>
   )
