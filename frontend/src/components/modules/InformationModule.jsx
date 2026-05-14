@@ -332,7 +332,7 @@ export default function InformationModule() {
         />
 
         <SummaryCard
-          title="Simulation"
+          title="Dynamic simulation"
           icon={BarChart3}
           accent="#2B2A4C"
           to="/results"
@@ -370,7 +370,7 @@ export default function InformationModule() {
             <CheckItem done={hasActualData} label="Energy consumption data"
               sub={hasActualData ? `${yearsInData.size} year${yearsInData.size !== 1 ? 's' : ''} of data` : 'Upload or enter in Consumption module'}
               href="/consumption" />
-            <CheckItem done={hasSimulation} label="Simulation run"
+            <CheckItem done={hasSimulation} label="Dynamic run"
               sub={hasSimulation ? `Modelled EUI: ${Math.round(modelledEui ?? 0)} kWh/m²` : 'Run from the top bar'}
               href="/results" />
           </div>

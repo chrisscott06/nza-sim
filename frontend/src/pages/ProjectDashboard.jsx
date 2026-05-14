@@ -336,8 +336,8 @@ export default function ProjectDashboard() {
               }`}
             >
               {simStatus === 'running'
-                ? <><Loader2 size={13} className="animate-spin" /> Simulating…</>
-                : <><Play size={13} fill="currentColor" /> Run Simulation</>
+                ? <><Loader2 size={13} className="animate-spin" /> Running Dynamic…</>
+                : <><Play size={13} fill="currentColor" /> Run Dynamic</>
               }
             </button>
           </div>
@@ -456,7 +456,7 @@ export default function ProjectDashboard() {
               />
               <CheckItem
                 done={hasSimulation}
-                label="EnergyPlus simulation run"
+                label="EnergyPlus Dynamic run"
                 sub={
                   hasSimulation
                     ? `EUI: ${Math.round(results?.summary?.eui_kWh_per_m2 ?? 0)} kWh/m² · ${simulationCount} run${simulationCount !== 1 ? 's' : ''}`

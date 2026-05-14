@@ -247,14 +247,17 @@ export default function DeltaView() {
 
       {/* Footnote */}
       <p className="text-xxs italic text-mid-grey/70">
-        Numbers from the <strong>live engine</strong> — in-browser lumped-
-        capacitance two-node model + multi-profile gain summing. The EnergyPlus
-        simulation toggle lands when State 2 EP results plumbing wires through
-        (Brief 28). Live vs Sim State 1 divergences for high-WWR-on-side-facades
-        configs are documented in <code>docs/state_2_part2_verification.md</code>
-        and <code>docs/state_2_expected_ranges.md</code>; the live engine's
-        isotropic sky model over-counts diffuse solar on N/E/W facades, so
-        State 1 → State 2 deltas are most reliable when WWR is roughly balanced.
+        Numbers from the <strong>Static engine</strong> — in-browser lumped-
+        capacitance two-node model + multi-profile gain summing. The
+        Dynamic toggle (EnergyPlus) lands when State 2 EP results plumbing
+        wires through (Brief 28a Part 5). Static vs Dynamic State 1
+        divergences are documented in
+        <code>docs/state_1_engine_divergence_investigation.md</code> (updated
+        2026-05-14) and <code>docs/state_2_expected_ranges.md</code>; the
+        dominant driver of Static's summer-max over-prediction is the
+        lumped two-node mass model (~8.8K gap on Bridgewater), not the
+        sky model. Per-facade solar redistributes ±19% between NNE and
+        SSW vs Dynamic — Brief 28b Part 2 lands the HDKR/Perez upgrade.
       </p>
     </div>
   )

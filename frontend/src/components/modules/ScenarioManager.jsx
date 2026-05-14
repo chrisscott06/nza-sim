@@ -242,7 +242,7 @@ function ScenarioDetail({ scenario, projectId, onEdit }) {
       {/* Results */}
       {scenario.latest_run_id && (
         <div className="bg-white rounded-xl border border-light-grey p-4">
-          <p className="text-caption font-semibold text-navy mb-3">Latest Simulation Results</p>
+          <p className="text-caption font-semibold text-navy mb-3">Latest Dynamic Results</p>
           <ScenarioResults latestRunId={scenario.latest_run_id} projectId={projectId} />
         </div>
       )}

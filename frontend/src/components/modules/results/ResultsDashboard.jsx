@@ -58,8 +58,8 @@ function ResultsSidebar({ activeTab, onTabChange, scenarios, scenarioResults, se
       {/* Status banner */}
       {status === 'idle' && (
         <div className="mx-3 mt-3 rounded border border-light-grey bg-off-white p-3 text-center">
-          <p className="text-caption text-dark-grey font-medium">No simulation run</p>
-          <p className="text-xxs text-mid-grey mt-1">Click Run Simulation in the toolbar to generate results.</p>
+          <p className="text-caption text-dark-grey font-medium">No Dynamic run</p>
+          <p className="text-xxs text-mid-grey mt-1">Click Run Dynamic in the toolbar to generate results.</p>
           <button
             onClick={() => navigate('/building')}
             className="mt-2 text-xxs text-teal hover:underline"
@@ -71,21 +71,21 @@ function ResultsSidebar({ activeTab, onTabChange, scenarios, scenarioResults, se
 
       {status === 'running' && (
         <div className="mx-3 mt-3 rounded border border-teal/30 bg-teal/5 p-3 text-center">
-          <p className="text-caption text-teal font-medium animate-pulse">Simulating…</p>
+          <p className="text-caption text-teal font-medium animate-pulse">Running Dynamic…</p>
           <p className="text-xxs text-mid-grey mt-1">EnergyPlus is running. This takes 5–30 seconds.</p>
         </div>
       )}
 
       {status === 'error' && (
         <div className="mx-3 mt-3 rounded border border-coral/30 bg-coral/5 p-3">
-          <p className="text-caption text-coral font-medium">Simulation failed</p>
+          <p className="text-caption text-coral font-medium">Dynamic failed</p>
           <p className="text-xxs text-mid-grey mt-1 break-words">{error}</p>
         </div>
       )}
 
       {status === 'complete' && s && (
         <div className="mx-3 mt-3 rounded border border-green-200 bg-green-50 p-3">
-          <p className="text-caption text-green-700 font-medium">Simulation complete</p>
+          <p className="text-caption text-green-700 font-medium">Dynamic complete</p>
           {eui != null && (
             <p className="text-xxs text-mid-grey mt-1">
               EUI: <span className="text-navy font-medium">{eui.toFixed(1)} kWh/m²</span>

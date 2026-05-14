@@ -462,21 +462,24 @@ function StateOneDemandPanel({ data, comfortBand, onComfortBandChange, unit, eng
         </div>
       </div>
 
-      {/* Engine-disclosure note. The live engine's State 1 path uses an
-          isotropic sky-diffuse model (solarCalc.facadeRadiation) which
-          over-predicts annual solar gain into the zone by ~30% vs EP's
-          Perez anisotropic. This shifts the seasonal baseline up, so the
-          live engine's `summer_max_c` runs ~8°C above the simulation
-          value for high-WWR buildings. Annual integrated metrics (heating
-          demand, comfort hours, distribution) are silent-agreement
-          between engines; only peak temperatures diverge.
-          See docs/state_1_divergences.md §1 + §7. */}
+      {/* Engine-disclosure note. The Static engine's State 1 path uses a
+          lumped two-node thermal mass model that under-stores heat in
+          construction layers compared to EP's per-layer CTF. The result:
+          summer_max_c runs ~8.8K above Dynamic free-running on Bridgewater.
+          Originally attributed to the isotropic sky model -- Brief 28
+          prereq close (2026-05-14) corrected the attribution: aggregate
+          transmitted solar agrees within a few percent across engines;
+          the dominant driver of the summer-max gap is the mass model.
+          See docs/state_1_engine_divergence_investigation.md (2026-05-14
+          update). Brief 28b Part 3 lands the multi-layer CTF fix. */}
       {engineMode === 'live' && (fr.summer_max_c ?? 0) > 36 && (
         <p className="text-xxs text-mid-grey mt-2 italic leading-tight">
-          Live engine uses a simplified isotropic sky model — peak summer
-          temperatures may read ~5–10°C high vs EnergyPlus. <strong>For
-          peak comfort assessment, the Simulation view is canonical.</strong> Annual
-          mean and comfort-hour distribution agree silently between engines.
+          Static's lumped two-node mass model under-stores heat compared
+          to EnergyPlus's per-layer construction — peak summer reads
+          ~8.8°C above Dynamic on Bridgewater. <strong>For peak comfort
+          assessment, the Dynamic view is canonical.</strong> Annual mean and
+          comfort-hour distribution agree silently between engines. Multi-
+          layer CTF fix queued for Brief 28b Part 3.
         </p>
       )}
     </div>
@@ -757,10 +760,10 @@ function EngineToggle({ engineMode, onChange, hasLive, hasSimulation, simulation
             ? 'bg-white text-navy font-medium shadow-sm'
             : 'text-mid-grey hover:text-navy disabled:opacity-40'
         }`}
-        title="Live estimate — instant feedback as you edit inputs"
+        title="Static engine — instant calculation, updates as you edit inputs"
       >
         <Zap size={10} />
-        Live
+        Static
       </button>
       <button
         onClick={() => onChange('simulation')}
@@ -772,10 +775,10 @@ function EngineToggle({ engineMode, onChange, hasLive, hasSimulation, simulation
         }`}
         title={hasSimulation
           ? `Last EnergyPlus run${simulationInfo?.ranAt ? ` ${relativeTime(simulationInfo.ranAt)}` : ''}`
-          : 'No simulation has been run yet'}
+          : 'No Dynamic run yet'}
       >
         <Activity size={10} />
-        Simulation
+        Dynamic
         {simulationInfo?.ranAt && (
           <span className="text-mid-grey font-normal ml-0.5">
             · {relativeTime(simulationInfo.ranAt)}

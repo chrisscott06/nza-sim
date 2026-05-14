@@ -55,7 +55,7 @@ export default function EnergyBalanceTab({ activeResults } = {}) {
       <ModuleEmptyState
         icon={BarChart3}
         title="No results yet"
-        description="Run a simulation to see the monthly energy balance."
+        description="Run Dynamic to see the monthly energy balance."
         className="p-6"
       />
     )

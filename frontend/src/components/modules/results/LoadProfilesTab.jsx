@@ -78,7 +78,7 @@ export default function LoadProfilesTab({ activeResults } = {}) {
       <ModuleEmptyState
         icon={Activity}
         title="No results yet"
-        description="Run a simulation to see load profiles."
+        description="Run Dynamic to see load profiles."
         className="p-6"
       />
     )
@@ -212,7 +212,7 @@ export default function LoadProfilesTab({ activeResults } = {}) {
           <ModuleEmptyState
             icon={Activity}
             title="Profile data unavailable"
-            description="Run a new simulation to generate profile data."
+            description="Run Dynamic again to generate profile data."
             className="py-6"
           />
         )}

@@ -206,9 +206,10 @@ export default function FreeRunningView() {
         <p className="text-xxs text-mid-grey mt-0.5">
           Annual hourly trace. <span className="text-mid-grey/80">Grey</span> = State 1
           (envelope only); <span style={{ color: '#EA580C' }} className="font-medium">orange</span> =
-          State 2 (with gains). Comfort band shaded blue. Live-engine summer
-          max can sit above EnergyPlus for high-WWR-on-side-facades configs —
-          isotropic sky residual, see <code>docs/state_2_part2_verification.md</code>.
+          State 2 (with gains). Comfort band shaded blue. Static summer max sits
+          ~8.8°C above Dynamic on Bridgewater — lumped two-node mass model
+          (not sky model, corrected 2026-05-14). See
+          <code>docs/state_1_engine_divergence_investigation.md</code>.
         </p>
       </div>
 

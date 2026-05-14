@@ -4,15 +4,16 @@
  *
  * Brief 27 close-out follow-up. The State 1 → State 2 Delta view + the
  * Heat balance + Free-running views all surface engine output that comes
- * from the LIVE engine (instantCalc.js) right now. Without labelling,
- * the numbers look like they could be from either engine — and the
- * Brief 26.2 close documented Live vs Sim divergences (isotropic sky
- * residual on solar gain, especially for high-WWR-on-side-facades
- * configs) so it MATTERS which engine the user is reading.
+ * from the Static engine (instantCalc.js) right now. Without labelling,
+ * the numbers look like they could be from either engine — and Brief 28
+ * prereq close (2026-05-14) confirmed real Static vs Dynamic divergences
+ * (lumped two-node mass model, summer-max ~8.8K gap on Bridgewater) so
+ * it MATTERS which engine the user is reading.
  *
- * Tooltip explains the engine choice + that the Live | Simulation
- * toggle will land when the State 2 EP results plumbing carries through
- * (Brief 28).
+ * Tooltip explains the engine choice + that the Static | Dynamic toggle
+ * will land when the State 2 EP results plumbing carries through
+ * (Brief 28a Part 5). Terminology renamed Live -> Static, Simulation ->
+ * Dynamic per Brief 28a Part 1.
  */
 
 import { Zap } from 'lucide-react'
@@ -28,12 +29,12 @@ export default function EngineBadge({ engine = 'live' }) {
       }`}
       title={
         isLive
-          ? 'Numbers from the live engine (instantCalc.js). The simulation toggle (EnergyPlus) lands once State 2 EP results plumbing is wired in Brief 28. See docs/state_2_part2_verification.md for Live vs Sim divergences.'
-          : 'Numbers from the EnergyPlus simulation engine.'
+          ? 'Static engine — instant calculation from instantCalc.js, updates as you edit inputs. The Dynamic toggle (EnergyPlus) lands once State 2 EP results plumbing is wired in Brief 28a Part 5. See docs/state_1_engine_divergence_investigation.md for Static vs Dynamic divergences.'
+          : 'Dynamic engine — full EnergyPlus simulation, run on demand.'
       }
     >
       <Zap size={9} />
-      {isLive ? 'Live engine' : 'Simulation'}
+      {isLive ? 'Static' : 'Dynamic'}
     </span>
   )
 }

@@ -310,7 +310,7 @@ export default function EnergyFlowsTab({ activeResults } = {}) {
       <ModuleEmptyState
         icon={GitFork}
         title="No results yet"
-        description="Run a simulation to see the energy flow diagram."
+        description="Run Dynamic to see the energy flow diagram."
         className="p-6"
       />
     )
@@ -322,7 +322,7 @@ export default function EnergyFlowsTab({ activeResults } = {}) {
   const ae = results.annual_energy ?? {}
   const total = (ae.heating_kWh ?? 0) + (ae.cooling_kWh ?? 0) + (ae.lighting_kWh ?? 0) + (ae.equipment_kWh ?? 0)
 
-  const scenarioName  = results.scenario_name ?? 'Simulation'
+  const scenarioName  = results.scenario_name ?? 'Dynamic'
   const totalMWh      = ((results.annual_energy?.total_kWh ?? total) / 1000).toFixed(1)
   const totalLabel    = `${totalMWh} MWh/yr`
 

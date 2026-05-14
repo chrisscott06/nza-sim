@@ -52,7 +52,7 @@ export default function FabricAnalysisTab({ activeResults } = {}) {
       <ModuleEmptyState
         icon={Layers}
         title="No results yet"
-        description="Run a simulation to see the fabric heat flow analysis."
+        description="Run Dynamic to see the fabric heat flow analysis."
         className="p-6"
       />
     )

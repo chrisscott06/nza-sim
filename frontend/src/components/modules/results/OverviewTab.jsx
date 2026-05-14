@@ -64,7 +64,7 @@ export default function OverviewTab({ activeResults } = {}) {
       <ModuleEmptyState
         icon={BarChart3}
         title="No results yet"
-        description="Run a simulation to see the energy overview."
+        description="Run Dynamic to see the energy overview."
         className="p-6"
       />
     )
@@ -254,7 +254,7 @@ export default function OverviewTab({ activeResults } = {}) {
               label="EnergyPlus severe errors"
               value={severes}
               status="warn"
-              note="Review simulation log"
+              note="Review Dynamic log"
             />
           )}
         </div>

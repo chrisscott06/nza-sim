@@ -69,7 +69,7 @@ function ScenarioCard({ scenario, selected, runStatus, onSelect, onRun }) {
             <button
               className="p-1 rounded hover:bg-teal/10 text-mid-grey hover:text-teal transition-colors"
               onClick={e => { e.stopPropagation(); onRun() }}
-              title="Run simulation for this scenario"
+              title="Run Dynamic for this scenario"
             >
               <Play size={12} />
             </button>

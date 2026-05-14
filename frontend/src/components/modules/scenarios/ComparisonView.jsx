@@ -188,7 +188,7 @@ function EuiRankingChart({ scenarios, results }) {
   if (withResults.length === 0) {
     return (
       <div className="bg-white rounded-xl border border-light-grey p-4 text-center">
-        <p className="text-xxs text-mid-grey">No results yet — run simulations to see the EUI ranking.</p>
+        <p className="text-xxs text-mid-grey">No results yet — run Dynamic on scenarios to see the EUI ranking.</p>
       </div>
     )
   }
@@ -393,8 +393,8 @@ export default function ComparisonView({ scenarios, projectId }) {
 
       {!hasAnyResults && (
         <div className="bg-white rounded-xl border border-light-grey p-8 text-center">
-          <p className="text-caption font-medium text-dark-grey">No simulation results yet</p>
-          <p className="text-xxs text-mid-grey mt-1">Run simulations for one or more scenarios to see the comparison.</p>
+          <p className="text-caption font-medium text-dark-grey">No Dynamic results yet</p>
+          <p className="text-xxs text-mid-grey mt-1">Run Dynamic for one or more scenarios to see the comparison.</p>
         </div>
       )}
     </div>

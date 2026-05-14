@@ -476,8 +476,8 @@ export default function CRREMTab({ scenarios = [], scenarioResults = {} }) {
     return (
       <ModuleEmptyState
         icon={TrendingDown}
-        title="No simulation results"
-        message="Run a simulation first to see CRREM trajectory analysis."
+        title="No Dynamic results"
+        message="Run Dynamic first to see CRREM trajectory analysis."
       />
     )
   }

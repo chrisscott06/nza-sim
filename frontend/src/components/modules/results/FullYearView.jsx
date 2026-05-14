@@ -188,7 +188,7 @@ export default function FullYearView({ results, fuelFilter }) {
 
   if (!rawData) return (
     <div className="bg-off-white border border-light-grey rounded-lg px-3 py-2">
-      <p className="text-xxs text-mid-grey">No hourly data available. Run a simulation first.</p>
+      <p className="text-xxs text-mid-grey">No hourly data available. Run Dynamic first.</p>
     </div>
   )
 

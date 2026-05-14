@@ -111,12 +111,12 @@ export default function TopBar() {
 
   const buttonContent = (() => {
     if (status === 'running')
-      return <><Loader2 size={13} className="animate-spin" /><span>Simulating…</span></>
+      return <><Loader2 size={13} className="animate-spin" /><span>Running Dynamic…</span></>
     if (status === 'complete')
-      return <><CheckCircle2 size={13} /><span>Re-run Simulation</span></>
+      return <><CheckCircle2 size={13} /><span>Re-run Dynamic</span></>
     if (status === 'error')
-      return <><AlertCircle size={13} /><span>Retry Simulation</span></>
-    return <><Play size={13} fill="currentColor" /><span>Run Simulation</span></>
+      return <><AlertCircle size={13} /><span>Retry Dynamic</span></>
+    return <><Play size={13} fill="currentColor" /><span>Run Dynamic</span></>
   })()
 
   return (

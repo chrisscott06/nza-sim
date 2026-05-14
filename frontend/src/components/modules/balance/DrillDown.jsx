@@ -149,7 +149,7 @@ export default function DrillDown({
                unit={unit}
                muted={liveValue == null} />
           <Row label="EnergyPlus"
-               sub="Last simulation run"
+               sub="Last Dynamic run"
                value={simValue}
                unit={unit}
                muted={simValue == null} />
