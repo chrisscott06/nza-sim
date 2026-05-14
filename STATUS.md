@@ -1,5 +1,59 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-14 — paused for walkthrough
+
+**State:** `paused_for_walkthrough`
+**Commits shipped this session:** 11 (all pushed to `origin/main`)
+**Next:** Brief 28a Part 3 (canvas tab restructure) — resumes in a fresh conversation
+
+### What shipped
+
+| # | Brief | What |
+|---|---|---|
+| 1 | **27 cleanup** ✅ closed | Heat Balance prop bug fix (`HeatBalanceView.jsx:45` `balance=` → `liveData=`); divergence-doc corrections via `[CORRECTED 2026-05-14]` annotations |
+| 2 | **28 prereq** ✅ closed (Option C+) | Zeroed People density in envelope-only mode; added `simulation_mode` column to `simulation_runs`; persisted Bridgewater envelope-only EP run `8d7fc517`; repointed `state1_engine_agreement.mjs` to filter by `simulation_mode='envelope-only'`; re-ran agreement and captured corrected divergence (conduction 23.5% → 6.8%, summer max gap 15K → 8.8K, audit's mass-model story confirmed at smaller magnitude) |
+| 3 | **28a visible polish** 2/7 parts | Part 1: Static/Dynamic terminology rename across 19 user-facing files + corrected disclosure text (mass model, not sky model). Part 2: kWh/m²·yr live readouts on Occupancy/Lighting/Equipment section blocks + per-profile inline readout in MultiProfileList |
+
+### Verification on pause
+
+- State 1 Live isolation: 40/40 byte-identical
+- State 1 EP isolation: 41/41 byte-identical (incl. end-to-end with People = 0.0)
+- State 2 Live isolation: 21/21 byte-identical
+- State 2 EP isolation: 21/21 byte-identical
+- Frontend build: clean (12.58s last run)
+- Working tree: clean after the session-close commit (this one)
+
+### Walkthrough targets
+
+When Chris loads the app:
+1. **Restart uvicorn** to pick up the `/simulations` and `/simulate` endpoint changes (`simulation_mode` field now in responses + writes). DB and code on disk are correct; only the running process is stale.
+2. **`/gains` → Heat balance tab** — confirms (a) prop-name bug fix (no more empty state on loaded Bridgewater) and (b) corrected disclosure text mentioning the lumped two-node mass model + ~8.8°C gap. The EngineBadge should read "Static" with the new tooltip.
+3. **`/gains` → Free-running tab** — confirms updated disclosure (mass model, not sky model).
+4. **`/gains` → State 1 → State 2 Delta tab** — confirms updated footnote with Static-vs-Dynamic terminology + mass-model story.
+5. **Top bar** — buttons now read "Run Dynamic" / "Re-run Dynamic" / "Running Dynamic…".
+6. **`/results`** — all empty states say "Run Dynamic" not "Run Simulation"; status banners say "Dynamic complete" / "Dynamic failed".
+7. **`/information`** — Simulation summary card now reads "Dynamic simulation"; data-completeness item reads "Dynamic run".
+8. **Each gain section's live readout** — should show a new "Per m²" row in `kWh/m²·yr` between Annual MWh and Peak kW.
+9. **Per-profile readouts in Lighting / Equipment profile cards** — inline format `X MWh · Y kWh/m²·yr · Z kW peak`.
+
+### Outstanding for the next conversation
+
+- **Brief 28a Parts 3-7** — canvas tab restructure (Part 3 — slicing plan in `docs/briefs/active/28a_visible_polish.md`), Pavlo component port (Part 4), Load shape + engine toggle wiring (Part 5, closes the Brief 27 9/10 holdback), Pavlo pattern roll-out (Part 6), close-out (Part 7).
+- **Brief 28b** — physics overhaul (HDKR/Perez solar + multi-layer CTF mass model). Mass-model target metric revised down to 8.8K (was 15K) per the prereq's corrected comparison.
+- **Brief 29** — Building module completion (State 1 diagnostic views, UI conformance, constants cleanup, BREDEM phasing factors).
+- **Open question routed to Brief 28b Part 2:** aggregate solar Live 182.9 GWh vs Sim 133.0 GWh = −27% disagreement, conflicts with physics audit's +1% aggregate finding. Probable pre-vs-post-shading accumulator mismatch in `state1_engine_agreement.mjs`. The HDKR/Perez upgrade touches the same code path.
+- **Design gap logged:** the engine_agreement script's solar accumulator question + the `state2_heating_setpoint`/`state2_cooling_setpoint` schedule definition gap in `epjson_assembler.py` for envelope-gains mode (noted in `docs/state_1_free_running_verification.md` auxiliary observations).
+
+### Resumption protocol
+
+When the fresh conversation starts:
+1. Read `CLAUDE.md`, `STATUS.md` (this section + the brief close-out sections below), `docs/briefs/current.md` (pointer to `28a_visible_polish.md`), `docs/briefs/batch_orchestration_2026_05.md` (halt protocol).
+2. Run pre-flight checks (all 4 regressions + build) per `batch_orchestration_2026_05.md` starting checklist.
+3. Update progress doc state `paused_for_walkthrough` → `running`.
+4. Begin Brief 28a Part 3 per the slicing plan in the brief file. Standing order: proceed per the orchestration doc until halt or Brief 29 close.
+
+---
+
 ## ✅ Brief 28 prereq closed — Free-running EnergyPlus pipeline (Option C+)
 
 **Date closed:** 2026-05-14
