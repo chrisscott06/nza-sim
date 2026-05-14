@@ -47,7 +47,7 @@ import LoadShapeView       from './canvas/LoadShapeView.jsx'
 // Brief 28a Part 3c (2026-05-14): FreeRunningView + HourlyProfileView +
 // AnnualBreakdownView are now consumed by LoadShapeView's internal sub-view
 // toggle. The three files stay on disk for now (LoadShapeView imports them);
-// Parts 4-5 will replace them with a unified Pavlo-pattern time-series view.
+// Parts 4-5 will replace them with a unified Pablo-pattern time-series view.
 import HeatBalanceView     from './canvas/HeatBalanceView.jsx'
 // Brief 28a Part 3d (2026-05-14): ThreeDView import removed — '3d' tab
 // dropped from the tab strip. ThreeDView.jsx kept on disk (no multi-zone
@@ -152,7 +152,7 @@ function CollapsibleSection({ title, accent, onActivate, children, defaultOpen =
 // Brief 28a Part 3c (2026-05-14): 'freerunning' + 'hourly' + 'breakdown'
 //   consolidated into a single 'loadshape' tab with an internal sub-view
 //   toggle. The three sub-components remain reachable via the toggle.
-//   Parts 4-5 will rewrite this as a unified Pavlo time-series view.
+//   Parts 4-5 will rewrite this as a unified Pablo time-series view.
 // Brief 28a Part 3d (2026-05-14): '3d' tab removed (no multi-zone content
 //   yet; placeholder removed until that brief lands). ThreeDView.jsx kept
 //   on disk for future revival. Tab 'loadshape' renamed user-facing label

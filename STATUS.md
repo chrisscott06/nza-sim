@@ -12,7 +12,7 @@
 
 ### Walkthrough targets for 3d (refinements on top of 3a-3c)
 
-Tab strip is now **4 tabs** (down from 7 originally): `Schedule | Summary | Heat balance | Conditions`. Pavlo-pattern unified time-series view replaces the Conditions sub-view toggle in Parts 4-5. Brief 28a Part 8 (state-aware Dynamic runs) newly scoped.
+Tab strip is now **4 tabs** (down from 7 originally): `Schedule | Summary | Heat balance | Conditions`. Pablo-pattern unified time-series view replaces the Conditions sub-view toggle in Parts 4-5. Brief 28a Part 8 (state-aware Dynamic runs) newly scoped.
 
 1. **Load `/gains` on Bridgewater.** Confirm the tab strip shows the 4 tabs above (Delta / Free-running / Hourly profile / Annual breakdown / 3D Model are all gone from the top-level strip).
 2. **Default landing tab is Summary.** First load lands on Summary, not Schedule. The Static badge reads "Static".
@@ -35,9 +35,9 @@ Tab strip is now **4 tabs** (down from 7 originally): `Schedule | Summary | Heat
 
 - **3e** — Apply the consolidated pattern to Building module (Summary / Heat balance / Conditions / 3D Model — Building keeps 3D Model because facades / orientation / shading have visual meaning). **Note (per Chris):** Building's Conditions tab won't have the same content as Internal Gains' Conditions tab. Building's load-shape lens is fabric heat-flow time series + element-by-element conduction, not gain temperature trace. 3e isn't a copy-paste; needs Building-specific content design.
 - **3f** — Update `docs/ui_principles.md` with the canonical tab structure: Summary / Schedule (if module has schedules) / Heat balance / Conditions / 3D Model (optional, modules with facade-meaningful 3D content).
-- **Part 4** — Pavlo component port (ChartContainer / ZoomNav / MonthJumpButtons / DataCard / chartTokens.js).
-- **Part 5** — Migrate Conditions tab to Pavlo unified pattern + engine toggle wiring.
-- **Part 6** — Roll out Pavlo pattern to remaining time-series views (Building, etc.).
+- **Part 4** — Pablo component port (ChartContainer / ZoomNav / MonthJumpButtons / DataCard / chartTokens.js).
+- **Part 5** — Migrate Conditions tab to Pablo unified pattern + engine toggle wiring.
+- **Part 6** — Roll out Pablo pattern to remaining time-series views (Building, etc.).
 - **Part 7** — Close-out + completion checklist + canvas rendering smoketest acceptance gate.
 - **Part 8 (newly scoped)** — State-aware Dynamic runs (detect project state, dispatch EP run with the matching mode).
 
@@ -137,7 +137,7 @@ When Chris loads the app:
 
 ### Outstanding for the next conversation
 
-- **Brief 28a Parts 3-7** — canvas tab restructure (Part 3 — slicing plan in `docs/briefs/active/28a_visible_polish.md`), Pavlo component port (Part 4), Load shape + engine toggle wiring (Part 5, closes the Brief 27 9/10 holdback), Pavlo pattern roll-out (Part 6), close-out (Part 7).
+- **Brief 28a Parts 3-7** — canvas tab restructure (Part 3 — slicing plan in `docs/briefs/active/28a_visible_polish.md`), Pablo component port (Part 4), Load shape + engine toggle wiring (Part 5, closes the Brief 27 9/10 holdback), Pablo pattern roll-out (Part 6), close-out (Part 7).
 - **Brief 28b** — physics overhaul (HDKR/Perez solar + multi-layer CTF mass model). Mass-model target metric revised down to 8.8K (was 15K) per the prereq's corrected comparison.
 - **Brief 29** — Building module completion (State 1 diagnostic views, UI conformance, constants cleanup, BREDEM phasing factors).
 - **Open question routed to Brief 28b Part 2:** aggregate solar Live 182.9 GWh vs Sim 133.0 GWh = −27% disagreement, conflicts with physics audit's +1% aggregate finding. Probable pre-vs-post-shading accumulator mismatch in `state1_engine_agreement.mjs`. The HDKR/Perez upgrade touches the same code path.
@@ -342,7 +342,7 @@ walkthrough at the end). See:
 Batch sequence:
 1. ~~Brief 27 cleanup~~ — **closed 2026-05-14**
 2. ~~Brief 28 prereq (free-running EP simulation)~~ — **closed 2026-05-14 (Option C+)**
-3. Brief 28a (visible polish: rename, kWh/m²·yr readouts, canvas restructure, Pavlo port, engine toggle) — **next**
+3. Brief 28a (visible polish: rename, kWh/m²·yr readouts, canvas restructure, Pablo port, engine toggle) — **next**
 4. Brief 28b (physics overhaul: HDKR/Perez solar + multi-layer CTF mass model)
 5. Brief 29 (Building module completion: State 1 diagnostic views, UI conformance, constants cleanup, BREDEM phasing)
 
@@ -1175,7 +1175,7 @@ This is the older verbose queue kept for historical context.
   Brief 28 makes it functional.
 - **Pablo chart component port** (ChartContainer / ZoomNav /
   MonthJumpButtons / DataCard / chartTokens.js). Report at
-  `docs/pavlo_chart_components_investigation.md`.
+  `docs/pablo_chart_components_investigation.md`.
 - **Canvas restructure** — shared DiagnosticCanvas + TimeSeriesCanvas
   used by Internal Gains / Building / Operation.
 

@@ -11,7 +11,7 @@ BEFORE DOING ANYTHING:
 3. Read `docs/state_contracts.md` v2.4 (Brief 27 close)
 4. Read `docs/state_1_engine_divergence_investigation.md` — the solar
    model fix scope and the engine-toggle holdback rationale
-5. Read `docs/pavlo_chart_components_investigation.md` — the lift plan
+5. Read `docs/pablo_chart_components_investigation.md` — the lift plan
    for the Pablo primitives
 6. Read `docs/ui_principles.md` v1.0 + `docs/module_completion_checklist.md`
 7. Read this ENTIRE brief before writing a single line of code
@@ -44,7 +44,7 @@ coherent + credible:
    segmented control. Requires SQL parser per-profile breakdown +
    `useStateComparison` reading from the most recent EP run.
 
-3. **Pablo component port + canvas restructure** — bring the Pavlo
+3. **Pablo component port + canvas restructure** — bring the Pablo
    chart primitives in (ChartContainer / ZoomNav / MonthJumpButtons /
    DataCard / chartTokens.js) and consolidate the time-series + Heat
    Balance views across modules so the tool reads as one coherent
@@ -264,7 +264,7 @@ new `frontend/src/components/ui/ChartContainer.jsx`
 
 ### Context
 
-Full report at `docs/pavlo_chart_components_investigation.md`. Five
+Full report at `docs/pablo_chart_components_investigation.md`. Five
 primitives lift cleanly from Pablo; TabBar is excluded (nza-sim's
 existing tab strip pattern is canonical). ChartContainer ships
 stripped — no ChartPrintModal yet, so no html2canvas / jspdf

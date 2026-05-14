@@ -639,7 +639,7 @@ Updates live as inputs change. This is the "play with it and see what happens" d
 
 **View 4: Gain Profile**
 
-Stacked area chart (Pavlo-inspired) showing the three gain types combined over time:
+Stacked area chart (Pablo-inspired) showing the three gain types combined over time:
 
 - People (purple) + Lighting (gold) + Equipment (orange) as stacked area
 - Time scale toggle: `[Year] [Month] [Week] [Day]`

@@ -2,7 +2,7 @@
 
 **Reference building:** HIX Bridgewater (GIA 3,457 m², 134 rooms, comfort band 21/25°C).
 **Scope:** Overview, Weather, Building, Internal Gains, Operation, Systems, Results.
-**Method:** Source-level walkthrough (read-only) of each module's JSX, augmented by reference docs `ui_principles.md`, `pavlo_chart_components_investigation.md`, `state_1_engine_divergence_investigation.md`, and the `module_checklists/internal_gains_brief_27.md` close-out.
+**Method:** Source-level walkthrough (read-only) of each module's JSX, augmented by reference docs `ui_principles.md`, `pablo_chart_components_investigation.md`, `state_1_engine_divergence_investigation.md`, and the `module_checklists/internal_gains_brief_27.md` close-out.
 **Out of scope:** Implementation/code review, physics correctness (parallel audit), visual redesign proposals.
 **Score key:** STRONG / OK / WEAK / BROKEN. Recommendation key: KEEP / POLISH / REWORK / REPLACE.
 
@@ -352,11 +352,11 @@ The user manually triggers EnergyPlus via the top-bar Run Simulation button. The
 
 ---
 
-## Dimension 10 — The Pavlo benchmark (time-series viz)
+## Dimension 10 — The Pablo benchmark (time-series viz)
 
-NZA-Sim's time-series is fragmented across three tabs (Free-running, Hourly profile, Annual breakdown). Pablo's Load Inspector consolidates equivalent views via shared primitives: `ChartContainer`, `ZoomNav`, `MonthJumpButtons`, `DataCard`, `chartTokens.js`. Detail in `docs/pavlo_chart_components_investigation.md`.
+NZA-Sim's time-series is fragmented across three tabs (Free-running, Hourly profile, Annual breakdown). Pablo's Load Inspector consolidates equivalent views via shared primitives: `ChartContainer`, `ZoomNav`, `MonthJumpButtons`, `DataCard`, `chartTokens.js`. Detail in `docs/pablo_chart_components_investigation.md`.
 
-| Feature | NZA-Sim current | Pavlo | Recommendation |
+| Feature | NZA-Sim current | Pablo | Recommendation |
 |---|---|---|---|
 | Time zoom (period buttons 1d / 7d / 14d / 30d / Q / 6m / Year) | None — fixed annual canvas in Free-running; fixed 24h in Hourly profile | `ZoomNav` with period buttons | Adopt. Brief 28 Part 4 — already planned. |
 | Date scrubbing (◄ ► to move window) | None | `ZoomNav` start-day scrubbing | Adopt. |
@@ -364,7 +364,7 @@ NZA-Sim's time-series is fragmented across three tabs (Free-running, Hourly prof
 | Stat panel (Annual mean / Winter min / Summer max / etc.) | Free-running has three stat cards above the trace | `DataCard` — uniform style | Adopt the DataCard component for consistency. |
 | Multi-series display (State 1 + State 2; or per-profile) | Yes — but custom Canvas drawing per view | Recharts-based, composable | Use Recharts with `chartTokens` style objects. |
 | Unit toggle (kW / kWh / kWh-m2) | HeatBalance has a unit toggle (kWh / kWh/m²); time-series views don't | Pablo has £/kWh / kWh toggles | Add unit toggle to time-series views. |
-| Chart container with title + optional export | Custom div per view; no export | `ChartContainer` (incl. print modal) | Adopt stripped lift (no jsPDF dep) per Pavlo investigation. |
+| Chart container with title + optional export | Custom div per view; no export | `ChartContainer` (incl. print modal) | Adopt stripped lift (no jsPDF dep) per Pablo investigation. |
 
 **Patterns to adopt** (already queued as Brief 28 Part 4):
 
@@ -374,7 +374,7 @@ NZA-Sim's time-series is fragmented across three tabs (Free-running, Hourly prof
 4. `DataCard` — uniform stat card.
 5. `chartTokens.js` — Recharts style objects.
 
-**Recommendation:** Execute Brief 28 Part 4 as scoped. No additional Pavlo work to suggest.
+**Recommendation:** Execute Brief 28 Part 4 as scoped. No additional Pablo work to suggest.
 
 ---
 

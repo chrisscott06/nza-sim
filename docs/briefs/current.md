@@ -1,6 +1,6 @@
 # Current brief
 
-**Active:** [`active/28a_visible_polish.md`](active/28a_visible_polish.md) — UX polish: Static/Dynamic rename, kWh/m²·yr readouts, canvas tab restructure, Pavlo port, engine toggle wiring. ~2 weeks.
+**Active:** [`active/28a_visible_polish.md`](active/28a_visible_polish.md) — UX polish: Static/Dynamic rename, kWh/m²·yr readouts, canvas tab restructure, Pablo port, engine toggle wiring. ~2 weeks.
 
 This pointer file is updated each time a brief in the batch closes. See [`batch_orchestration_2026_05.md`](batch_orchestration_2026_05.md) for the full 5-brief plan, sequencing, halt conditions, and per-part discipline.
 

@@ -34,7 +34,7 @@ A dedicated temperature diagnostic for State 1, separate from Heat Balance.
 
 Layout:
 - Stat panel: annual mean, winter min, summer max, hours below 20°C, hours above 26°C, hours in band (using the comfort band)
-- Time-series chart using the Pavlo Load shape pattern (ported in Brief 28a Part 4-5):
+- Time-series chart using the Pablo Load shape pattern (ported in Brief 28a Part 4-5):
   - Outdoor temperature
   - Indoor free-running temperature (Static engine)
   - Indoor free-running temperature (Dynamic engine) — using Brief 28 prereq's free-running EP data
@@ -64,7 +64,7 @@ This is the "where does the heat actually go?" diagnostic. Genuinely useful for 
 
 **Steps:**
 
-1. Build `FreeRunningView.jsx` (or `LoadShapeView.jsx` for Building) using the Pavlo components.
+1. Build `FreeRunningView.jsx` (or `LoadShapeView.jsx` for Building) using the Pablo components.
 2. Build `HeatLossBreakdownView.jsx` with the stacked bar + table.
 3. Add both as tabs in the Building module canvas (alongside Heat Balance, 3D Model).
 4. Wire engine toggles consistently with Internal Gains module pattern from Brief 28a Part 5.

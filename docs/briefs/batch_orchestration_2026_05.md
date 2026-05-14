@@ -14,7 +14,7 @@ Five briefs in sequence. Each brief's individual file is in `docs/briefs/active/
 
 1. **`27_cleanup.md`** — Heat Balance prop bug + divergence doc correction. ~1 hour.
 2. **`28_prereq_free_running_ep.md`** — Run and persist a true free-running EP simulation for Bridgewater so engines compare comparable outputs. ~3 days.
-3. **`28a_visible_polish.md`** — Static/Dynamic rename, kWh/m²·yr readouts, canvas restructure, Pavlo port, engine toggle wiring. ~2 weeks.
+3. **`28a_visible_polish.md`** — Static/Dynamic rename, kWh/m²·yr readouts, canvas restructure, Pablo port, engine toggle wiring. ~2 weeks.
 4. **`28b_physics_overhaul.md`** — Solar model upgrade (HDKR/Perez), multi-layer CTF mass model in Static engine. ~3 weeks.
 5. **`29_building_completion.md`** — State 1 diagnostic views (Free-running Temp, Heat Loss Breakdown), Building UI principles conformance, constants cleanup, BREDEM phasing factors. ~2 weeks.
 
@@ -213,7 +213,7 @@ Total: ~7-8 weeks of focused Claude Code work, depending on what surfaces.
 
 **Why Brief 28a (visible polish) before Brief 28b (physics overhaul):** Visible improvements ship sooner; physics work has more uncertainty; the audit's findings on physics priorities depend on data we'll have after Brief 28a. Pause-and-reassess opportunity at Brief 28a close.
 
-**Why Brief 29 last:** Depends on Brief 28a's chart components (Pavlo port), Brief 28b's physics improvements (so Building module's diagnostic views are honest), and the established UI patterns. Lands the State 1 diagnostic views that have been deferred since Brief 26.1.
+**Why Brief 29 last:** Depends on Brief 28a's chart components (Pablo port), Brief 28b's physics improvements (so Building module's diagnostic views are honest), and the established UI patterns. Lands the State 1 diagnostic views that have been deferred since Brief 26.1.
 
 ---
 

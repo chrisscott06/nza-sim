@@ -16,7 +16,7 @@
 2. `docs/ui_principles.md`
 3. `docs/module_completion_checklist.md`
 4. `docs/ux_audit_2026_05.md` (drives most of this brief's scope)
-5. `docs/pavlo_chart_components_investigation.md`
+5. `docs/pablo_chart_components_investigation.md`
 6. `docs/state_1_engine_divergence_investigation.md` (updated by Brief 28 prereq)
 
 ---
@@ -105,14 +105,14 @@ Internal code names (e.g., `liveData`, `simulationResults`) stay as-is — these
 1. **Summary** (new, default) — stacked bar of gains vs demand, total kWh/m²·yr, headline numbers, State 1 → State 2 delta as a section within
 2. **Schedule** — the centre-canvas schedule editor for the active gain (Occupancy / Lighting profile / Equipment profile)
 3. **Heat balance** — the State 2 heat balance (Sankey / Stacked / Rows layouts, plus a new "Delta" layout showing State 1 → State 2 change as a layout option)
-4. **Conditions** (rename of Free-running OR merge with Hourly Profile + Annual Breakdown) — single time-series view with Pavlo zoom controls
+4. **Conditions** (rename of Free-running OR merge with Hourly Profile + Annual Breakdown) — single time-series view with Pablo zoom controls
 5. **(Optional) 3D Model** — hide entirely in Internal Gains until multi-zone arrives. Don't keep as placeholder.
 
 **Steps:**
 
 1. Add new Summary tab as default. Move headline content there.
 2. Fold State 1 → State 2 Delta content into the Summary tab and into Heat balance as a "Delta" layout.
-3. Merge Free-running + Hourly Profile + Annual Breakdown into a single Conditions tab. This is where the Pavlo zoom pattern lands (Part 4 below provides the components).
+3. Merge Free-running + Hourly Profile + Annual Breakdown into a single Conditions tab. This is where the Pablo zoom pattern lands (Part 4 below provides the components).
 4. Remove 3D Model tab from Internal Gains canvas configuration. (Keep the component code in case it's revived for multi-zone.)
 5. Apply the same tab structure pattern to Building module: Summary / Heat balance / Conditions / 3D Model (the 3D model is kept here because facades / orientation / shading have visual meaning).
 6. Update `docs/ui_principles.md` with the canonical tab structure: Summary / Schedule (if module has schedules) / Heat balance / Conditions / 3D Model (optional).
@@ -133,24 +133,24 @@ Internal code names (e.g., `liveData`, `simulationResults`) stay as-is — these
 
 ---
 
-## Part 4 — Pavlo component port
+## Part 4 — Pablo component port
 
 **Files:** `frontend/src/components/chart/` (new directory), `frontend/src/data/chartTokens.js`, updates to consumers
 
-**Goal:** Port the Pavlo chart components per the investigation report. Five components clean lift, ChartContainer needs stripping.
+**Goal:** Port the Pablo chart components per the investigation report. Five components clean lift, ChartContainer needs stripping.
 
 **Steps:**
 
-1. Re-read `docs/pavlo_chart_components_investigation.md` for the specific components and line counts.
-2. Copy components from Pavlo repo:
+1. Re-read `docs/pablo_chart_components_investigation.md` for the specific components and line counts.
+2. Copy components from Pablo repo:
    - `ZoomNav` — clean lift
    - `MonthJumpButtons` — clean lift
    - `DataCard` — clean lift
    - `chartTokens.js` — clean lift, merge with any existing NZA-Sim tokens
    - `ChartContainer` — strip export functionality (lose html2canvas + jspdf deps, ~250KB). Build a `ChartContainerMinimal` if that's cleaner.
 3. Add appropriate import paths.
-4. NZA-Sim already has its own tab strip — do NOT port Pavlo's TabBar (audit confirmed).
-5. Add comment headers to ported files: "Ported from Pavlo {date}. Original at: {Pavlo path}. Adjustments: {list}."
+4. NZA-Sim already has its own tab strip — do NOT port Pablo's TabBar (audit confirmed).
+5. Add comment headers to ported files: "Ported from Pablo {date}. Original at: {Pablo path}. Adjustments: {list}."
 6. Create a simple test harness that demonstrates each component working in isolation.
 
 **Verify:**
@@ -160,19 +160,19 @@ Internal code names (e.g., `liveData`, `simulationResults`) stay as-is — these
 - No NZA-Sim-specific dependencies broken
 - Existing charts unaffected (they still use Recharts directly until Part 5 migrates them)
 
-**Commit message:** "Brief 28a Part 4: Port Pavlo chart components"
+**Commit message:** "Brief 28a Part 4: Port Pablo chart components"
 
 **Decision points:**
 - Whether to strip ChartContainer or build minimal version: try strip first, fall back to minimal if strip is messy.
-- Tokens merge: keep Pavlo's where they exist, add NZA-Sim ones where Pavlo doesn't cover (e.g., gain-specific colours from `gainColours.js` stay).
+- Tokens merge: keep Pablo's where they exist, add NZA-Sim ones where Pablo doesn't cover (e.g., gain-specific colours from `gainColours.js` stay).
 
 ---
 
-## Part 5 — Migrate Conditions tab to Pavlo pattern + engine toggle wiring
+## Part 5 — Migrate Conditions tab to Pablo pattern + engine toggle wiring
 
 **Files:** `frontend/src/components/modules/gains/canvas/LoadShapeView.jsx` (new), engine result fetchers, SQL parser
 
-**Goal:** The new Conditions tab uses Pavlo's zoom pattern AND wires the Static/Dynamic engine toggle.
+**Goal:** The new Conditions tab uses Pablo's zoom pattern AND wires the Static/Dynamic engine toggle.
 
 **Steps:**
 
@@ -204,7 +204,7 @@ This part closes Brief 27's 9/10 holdback (engine toggle wiring).
 - State 2 EP run produces per-profile data extractable by the parser
 - State isolation regressions still byte-identical
 
-**Commit message:** "Brief 28a Part 5: Conditions view + Pavlo zoom + engine toggle wiring"
+**Commit message:** "Brief 28a Part 5: Conditions view + Pablo zoom + engine toggle wiring"
 
 **Decision points:**
 - Default engine for LoadShapeView: Static (instant). Dynamic is opt-in.
@@ -213,11 +213,11 @@ This part closes Brief 27's 9/10 holdback (engine toggle wiring).
 
 ---
 
-## Part 6 — Apply Pavlo pattern to remaining time-series views
+## Part 6 — Apply Pablo pattern to remaining time-series views
 
 **Files:** Building module's Free-running view (if any), any other time-series in the tool
 
-**Goal:** Establish Conditions / Pavlo pattern as the standard for time-series visualisation. Apply it where it makes sense.
+**Goal:** Establish Conditions / Pablo pattern as the standard for time-series visualisation. Apply it where it makes sense.
 
 **Steps:**
 
@@ -226,7 +226,7 @@ This part closes Brief 27's 9/10 holdback (engine toggle wiring).
    - Building module's other time-series outputs
    - Internal Gains Conditions (done in Part 5)
    - Anywhere else hourly data is displayed
-2. For each, migrate to use the Pavlo components (ZoomNav, MonthJumpButtons, DataCard, ChartContainer).
+2. For each, migrate to use the Pablo components (ZoomNav, MonthJumpButtons, DataCard, ChartContainer).
 3. Standardise the layout: stat panel on left or top, chart on right or bottom, controls above.
 4. Document the canonical pattern in `docs/ui_principles.md` under "Time-series views."
 
@@ -236,10 +236,10 @@ This part closes Brief 27's 9/10 holdback (engine toggle wiring).
 - Zoom navigation works uniformly
 - Visual style consistent across modules
 
-**Commit message:** "Brief 28a Part 6: Apply Pavlo pattern across time-series views"
+**Commit message:** "Brief 28a Part 6: Apply Pablo pattern across time-series views"
 
 **Decision points:**
-- Some time-series might not benefit from Pavlo zoom (e.g., a small inline mini-profile). Use judgement.
+- Some time-series might not benefit from Pablo zoom (e.g., a small inline mini-profile). Use judgement.
 - Building module work in this part should be minimal — substantial Building changes belong to Brief 29.
 
 ---
@@ -378,6 +378,6 @@ After all parts complete:
 
 **Halt triggers specific to this brief:**
 - Tab restructure breaks an existing test → HH1 / HH6
-- Pavlo port introduces dependencies that break the build → HH5
+- Pablo port introduces dependencies that break the build → HH5
 - Engine toggle wiring reveals SQL parser issues that can't be cleanly resolved → SH3
 - Static/Dynamic rename misses cases that cause confusion → not halt-worthy; document and continue

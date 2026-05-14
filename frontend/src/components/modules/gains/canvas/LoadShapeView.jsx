@@ -18,7 +18,7 @@
  *
  * This is an INTERIM consolidation: each sub-view renders its existing
  * component as-is, just bundled under one tab. Brief 28a Parts 4-5 lands
- * the Pavlo zoom pattern (ChartContainer / ZoomNav / MonthJumpButtons /
+ * the Pablo zoom pattern (ChartContainer / ZoomNav / MonthJumpButtons /
  * DataCard) and rewrites this into a single unified time-series view
  * with period zoom + stat panel. The three sub-components remain on
  * disk for reuse OR deletion at Part 7 close-out.
@@ -79,7 +79,7 @@ export default function LoadShapeView() {
           ))}
         </div>
         <p className="text-xxs text-mid-grey/70 mt-1.5 italic">
-          Interim sub-view toggle. Brief 28a Parts 4-5 (Pavlo port + Conditions
+          Interim sub-view toggle. Brief 28a Parts 4-5 (Pablo port + Conditions
           migration) replace these three perspectives with a single unified
           time-series view with period zoom.
         </p>
