@@ -1197,43 +1197,69 @@ export {
  * State 2 envelope + internal gains computation per `docs/state_contracts.md`
  * § State 2 (v2.3).
  *
- * Brief 27 Part 2. Runs the same physics as State 1 (two-node lumped
- * capacitance, shading-aware solar, etc.) with internal gains added to
- * the energy balance on the T_mass node alongside solar. Returns the
- * State 2 contract output shape including `state1_delta` and
- * `occupancy_summary`.
+ * Brief 27 Part 2 (initial). Brief 28c (2026-05-14): refactored the inner
+ * loop to share the same multi-node CTF wall model used by State 1 (from
+ * Brief 28b Part 3 v3). State 2 now recomputes losses on its OWN T_op
+ * trace rather than inheriting State 1's static losses — closes the
+ * contract gap. Same tuning values as State 1 v3:
+ *   solar_radiative_fraction        = 0.30
+ *   internal_mass_kJ_per_K_per_m2   = 250
+ *   glazing_inside_absorption_frac  = 0.07
+ * Internal gains use the same radiative/convective split as solar (30/70).
  *
  * Implementation: calls `_calculateEnvelopeOnly` first to get the
- * canonical State 1 baseline (with State 1 input filter via withMode so
- * no gain inputs leak), then runs an INDEPENDENT 8760-hour loop with
- * gains added. Two parallel runs intentionally — the only difference
- * is Q_gains. state1_delta = state2_metrics − state1_metrics.
+ * canonical State 1 baseline (state1Result, used for solar gains in the
+ * heat_balance output + delta computations). Then runs an INDEPENDENT
+ * 8760-hour loop with internal gains added to the zone air balance.
  */
 function _calculateState2(building, constructions, libraryData, weatherData, hourlySolar, comfortBand) {
   // ── State 1 baseline ─────────────────────────────────────────────────────
-  // The State 1 path uses withMode('envelope-only') internally to strip
-  // forbidden inputs; doing it here too means our state1Result is
-  // byte-identical to what `mode='envelope-only'` would return for this
-  // building.
   const state1Result = _calculateEnvelopeOnly(
     withMode(building, 'envelope-only'),
     constructions, libraryData, weatherData, hourlySolar, comfortBand,
   )
   if (state1Result.state !== 1) return state1Result   // bailout: _empty() or similar
 
-  // ── State 2 inner loop (clone of State 1 with gains added) ───────────────
+  // ── State 2 inner loop (multi-node walls, sol-air, glazing inside absorption,
+  //                       internal gains distributed radiative + convective) ──
   const geo = computeGeometry(building)
-  const { gia, volume, total_wall_opaque, total_glazing, glazing, roof_area, ground_area } = geo
+  const { gia, volume, total_wall_opaque, total_glazing, glazing, wall_opaque, roof_area, ground_area } = geo
   if (gia <= 0) return state1Result
 
-  const u_wall  = getUValue(constructions, 'external_wall', libraryData)
-  const u_roof  = getUValue(constructions, 'roof',          libraryData)
-  const u_floor = getUValue(constructions, 'ground_floor',  libraryData)
-  const u_glaz  = getUValue(constructions, 'glazing',       libraryData)
+  // Match State 1 v3 production tuning
+  const TUNE_SOLAR_RAD_FRAC = 0.30
+  const TUNE_INTERNAL_MASS_J_M2 = 250_000
+  const TUNE_GLAZ_INSIDE_ABS = 0.07
+
+  // Glazing U + g, shading factors (same as State 1)
+  const u_glaz = getUValue(constructions, 'glazing', libraryData)
   const g_value = getGValue(constructions, libraryData)
   const FRAME_FRACTION = 0.20
   const shadingFactors = computeShadingFactors(building)
-  const UA_fabric = u_wall*total_wall_opaque + u_roof*roof_area + u_floor*ground_area + u_glaz*total_glazing
+
+  // Multi-node wall models for opaque elements
+  const extWallItem = getConstructionItem(constructions, libraryData, 'external_wall')
+  const roofItem    = getConstructionItem(constructions, libraryData, 'roof')
+  const floorItem   = getConstructionItem(constructions, libraryData, 'ground_floor')
+  const extWallModel = buildWallModel(extractLayers(extWallItem), { R_si: R_SI_WALL,  solar_abs: 0.6, h_out: 25 })
+  const roofModel    = buildWallModel(extractLayers(roofItem),    { R_si: R_SI_ROOF,  solar_abs: 0.7, h_out: 25 })
+  const floorModel   = buildWallModel(extractLayers(floorItem),   { R_so: 0.0, R_si: R_SI_FLOOR, solar_abs: 0, h_out: 1e9 })
+
+  // Whole-wall U-values (for loss + demand UA totals)
+  const wholeWallU_ext   = extWallModel.type === 'mass' ? 1 / extWallModel.R_total : (extWallModel.U ?? 0)
+  const wholeWallU_roof  = roofModel.type    === 'mass' ? 1 / roofModel.R_total    : (roofModel.U ?? 0)
+  const wholeWallU_floor = floorModel.type   === 'mass' ? 1 / floorModel.R_total   : (floorModel.U ?? 0)
+
+  // Glazing UA
+  const UA_glaz = u_glaz * total_glazing
+  const glaz_face_UA = (f) => u_glaz * (glazing[f] ?? 0)
+
+  // Ground T (annual mean, constant — matches State 1)
+  let _T_out_sum = 0
+  for (let h = 0; h < weatherData.temperature.length; h++) _T_out_sum += weatherData.temperature[h]
+  const T_ground = _T_out_sum / weatherData.temperature.length
+
+  // Ventilation
   const ach = Number(building.infiltration_ach ?? 0.5)
   const UA_leakage = AIR_HEAT_CAPACITY * ach * volume
   const openings = building.openings ?? {}
@@ -1242,30 +1268,34 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   const sqrtCw = Math.sqrt(Cw)
   const louvre_area_total = ['north','south','east','west']
     .reduce((s, f) => s + Number(openings?.[f]?.louvre_area_m2 ?? 0), 0)
-  const cmass = resolveCmass(building, constructions, libraryData)
-  const C_mass_Wh = cmass.C_mass_Wh
-  const A_internal_surface = roof_area + ground_area + total_wall_opaque
-  const h_am_total = 4.5 * A_internal_surface
 
+  // Zone-air effective mass (matches State 1 v3 tuning)
+  const C_air_air_J = volume * 1.2 * 1005
+  const C_air_internal_J = TUNE_INTERNAL_MASS_J_M2 * gia
+  const C_air_total_J = C_air_air_J + C_air_internal_J
+
+  // 8760-hour loop setup
   const n = weatherData.temperature.length
   const T_hourly = new Float32Array(n)
-  let T_mass = comfortBand.lower_c
-  let T_air  = comfortBand.lower_c
+  const dt = 3600
 
-  // State 2 accumulators (Wh per year)
+  let TS_wall  = new Float64Array(extWallModel.type === 'mass' ? extWallModel.n : 0).fill(comfortBand.lower_c)
+  let TS_roof  = new Float64Array(roofModel.type    === 'mass' ? roofModel.n    : 0).fill(comfortBand.lower_c)
+  let TS_floor = new Float64Array(floorModel.type   === 'mass' ? floorModel.n   : 0).fill(comfortBand.lower_c)
+  let T_air = comfortBand.lower_c
+
+  const wallOpaqueByFace = wall_opaque
+  const _safe_wall_opaque_total = Math.max(total_wall_opaque, 1e-9)
+
+  // Internal-gain accumulators (existing State 2 pattern)
   let acc_people = 0, acc_lighting = 0
   let acc_equip_baseload = 0, acc_equip_active = 0
   let peak_people = 0, peak_lighting = 0, peak_equipment = 0
   let hours_people = 0, hours_lighting = 0, hours_equipment_active = 0
   let sum_effective_occupants = 0, peak_occupants = 0
 
-  // v2.4 per-profile accumulators — keyed by profile.id. Each entry tracks
-  // { kwh, peak_kw, hours_active, baseload_kwh, active_kwh (equipment only) }.
-  // Built up incrementally during the 8,760-hour loop from the per-profile
-  // breakdown computeHourlyGains now returns.
-  const lightingProfileAccum = new Map()  // id → { acc_wh, peak_w, hours }
-  const equipmentProfileAccum = new Map()  // id → { acc_wh, peak_w, hours, base_wh, active_wh }
-
+  const lightingProfileAccum = new Map()
+  const equipmentProfileAccum = new Map()
   function accumLighting(id, value_w) {
     let a = lightingProfileAccum.get(id)
     if (!a) { a = { acc_wh: 0, peak_w: 0, hours: 0 }; lightingProfileAccum.set(id, a) }
@@ -1283,9 +1313,12 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     if (active_w > 0.01) a.hours++
   }
 
-  // Plus a slim set of State 2 demand/comfort accumulators (same shape as
-  // State 1 but recomputed with gains in the energy balance — that's the
-  // whole point of running the loop again).
+  // State 2 own loss + demand accumulators (Brief 28c — replaces state1Result inheritance)
+  let acc_solar_n = 0, acc_solar_s = 0, acc_solar_e = 0, acc_solar_w = 0
+  let acc_cond_wall = 0, acc_cond_roof = 0, acc_cond_floor = 0
+  let acc_cond_glaz_n = 0, acc_cond_glaz_s = 0, acc_cond_glaz_e = 0, acc_cond_glaz_w = 0
+  let acc_thermal_bridging = 0
+  let acc_vent_leakage = 0, acc_vent_permanent = 0
   let acc_heating_demand_Wh = 0, acc_cooling_demand_Wh = 0
   let underheating_hours = 0, overheating_hours = 0, comfort_hours = 0
   let T_winter_min = Infinity, T_summer_max = -Infinity
@@ -1294,51 +1327,125 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     const T_out = weatherData.temperature[h]
     const v_wind = weatherData.wind_speed?.[h] ?? 0
 
+    // Solar through glazing per facade (Wh into zone, post g × frame × shading)
     const sol_n = hourlySolar.f1[h] * (glazing.north ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.north
     const sol_e = hourlySolar.f2[h] * (glazing.east  ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.east
     const sol_s = hourlySolar.f3[h] * (glazing.south ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.south
     const sol_w = hourlySolar.f4[h] * (glazing.west  ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.west
-    const sol_roof = hourlySolar.roof[h] * roof_area * 0.05
-    const Q_solar_in_Wh = sol_n + sol_e + sol_s + sol_w + sol_roof
+    const Q_solar_glaz_zone = sol_n + sol_e + sol_s + sol_w
+    acc_solar_n += sol_n; acc_solar_e += sol_e; acc_solar_s += sol_s; acc_solar_w += sol_w
 
-    // ── Internal gains for this hour (the State 2 addition) ─────────────────
+    // Internal gains
     const gains = computeHourlyGains(building, h, weatherData, gia)
-    acc_people    += gains.people
-    acc_lighting  += gains.lighting
-    acc_equip_baseload += gains.equipment_baseload
-    acc_equip_active   += gains.equipment_active
-    if (gains.people    > peak_people)    peak_people    = gains.people
-    if (gains.lighting  > peak_lighting)  peak_lighting  = gains.lighting
+    acc_people += gains.people; acc_lighting += gains.lighting
+    acc_equip_baseload += gains.equipment_baseload; acc_equip_active += gains.equipment_active
+    if (gains.people > peak_people) peak_people = gains.people
+    if (gains.lighting > peak_lighting) peak_lighting = gains.lighting
     if (gains.equipment > peak_equipment) peak_equipment = gains.equipment
-    if (gains.people    > 0.01) hours_people++
-    if (gains.lighting  > 0.01) hours_lighting++
+    if (gains.people > 0.01) hours_people++
+    if (gains.lighting > 0.01) hours_lighting++
     if (gains.equipment_active > 0.01) hours_equipment_active++
     sum_effective_occupants += gains.effective_occupants
     if (gains.effective_occupants > peak_occupants) peak_occupants = gains.effective_occupants
-    // v2.4 per-profile accumulators
-    if (gains.lighting_per_profile) {
-      for (const p of gains.lighting_per_profile) accumLighting(p.id, p.value)
-    }
-    if (gains.equipment_per_profile) {
-      for (const p of gains.equipment_per_profile) accumEquipment(p.id, p.value, p.baseload, p.active)
-    }
+    if (gains.lighting_per_profile)  for (const p of gains.lighting_per_profile)  accumLighting(p.id, p.value)
+    if (gains.equipment_per_profile) for (const p of gains.equipment_per_profile) accumEquipment(p.id, p.value, p.baseload, p.active)
+    const Q_internal_total_Wh = gains.total
 
+    // Sol-air outside boundary for opaque elements (area-weighted G)
+    const G_wall_avg = (
+      hourlySolar.f1[h] * wallOpaqueByFace.north +
+      hourlySolar.f2[h] * wallOpaqueByFace.east  +
+      hourlySolar.f3[h] * wallOpaqueByFace.south +
+      hourlySolar.f4[h] * wallOpaqueByFace.west
+    ) / _safe_wall_opaque_total
+    const T_sa_wall = solAirT(T_out, G_wall_avg, extWallModel.solar_abs ?? 0.6, extWallModel.h_out ?? 25)
+    const T_sa_roof = solAirT(T_out, hourlySolar.roof[h], roofModel.solar_abs ?? 0.7, roofModel.h_out ?? 25)
+
+    // Permanent vents UA
     const Q_louvre_m3s = Cd * louvre_area_total * sqrtCw * v_wind
     const UA_permanent = AIR_HEAT_CAPACITY * (Q_louvre_m3s * 3600)
-    const UA_total = UA_fabric + UA_leakage + UA_permanent
 
-    // Two-node step — gains land on T_mass alongside solar (radiant/long-wave
-    // absorption simplification matching the State 1 convention).
-    T_air = (h_am_total * T_mass + UA_total * T_out) / (h_am_total + UA_total)
-    const Q_mass_to_air = h_am_total * (T_mass - T_air)
-    const Q_to_mass = Q_solar_in_Wh + gains.total
-    const Q_mass_net = Q_to_mass - Q_mass_to_air
-    T_mass = T_mass + Q_mass_net / C_mass_Wh
-    if (T_mass < -20) T_mass = -20
-    if (T_mass > 60)  T_mass = 60
-    const T_op = 0.5 * (T_air + T_mass)
+    // Glazing inside-surface absorption (extra direct-to-air term)
+    const Q_glaz_incident_post_shading = (
+      hourlySolar.f1[h] * (glazing.north ?? 0) * shadingFactors.north +
+      hourlySolar.f2[h] * (glazing.east  ?? 0) * shadingFactors.east  +
+      hourlySolar.f3[h] * (glazing.south ?? 0) * shadingFactors.south +
+      hourlySolar.f4[h] * (glazing.west  ?? 0) * shadingFactors.west
+    ) * (1 - FRAME_FRACTION)
+    const Q_solar_glazing_inside_abs = TUNE_GLAZ_INSIDE_ABS * Q_glaz_incident_post_shading
+
+    // Solar + internal gain distribution (same radiative/convective split for both)
+    const Q_short_wave_total = Q_solar_glaz_zone + Q_internal_total_Wh
+    const A_internal_opaque = total_wall_opaque + roof_area + ground_area
+    const q_to_inside_surf = (A_internal_opaque > 0)
+      ? (TUNE_SOLAR_RAD_FRAC * Q_short_wave_total) / A_internal_opaque
+      : 0
+    const Q_to_zone_air = (1 - TUNE_SOLAR_RAD_FRAC) * Q_short_wave_total + Q_solar_glazing_inside_abs
+
+    // Linearised wall step
+    const stepWall  = stepWallLinearized(extWallModel,  TS_wall,  T_sa_wall, dt, q_to_inside_surf)
+    const stepRoof  = stepWallLinearized(roofModel,     TS_roof,  T_sa_roof, dt, q_to_inside_surf)
+    const stepFloor = stepWallLinearized(floorModel,    TS_floor, T_ground,  dt, q_to_inside_surf)
+    const UA_wall_eff  = stepWall.U_eff  * total_wall_opaque
+    const UA_roof_eff  = stepRoof.U_eff  * roof_area
+    const UA_floor_eff = stepFloor.U_eff * ground_area
+
+    // Zone air implicit Euler balance
+    const C_air_per_dt = C_air_total_J / dt
+    const C_coef =
+      UA_wall_eff  * (stepWall.b_inside_node  - 1) +
+      UA_roof_eff  * (stepRoof.b_inside_node  - 1) +
+      UA_floor_eff * (stepFloor.b_inside_node - 1) -
+      UA_glaz - UA_leakage - UA_permanent -
+      C_air_per_dt
+    const D_coef =
+      UA_wall_eff  * stepWall.a_inside_node +
+      UA_roof_eff  * stepRoof.a_inside_node +
+      UA_floor_eff * stepFloor.a_inside_node +
+      (UA_glaz + UA_leakage + UA_permanent) * T_out +
+      C_air_per_dt * T_air +
+      Q_to_zone_air
+    T_air = (Math.abs(C_coef) > 1e-9) ? (-D_coef / C_coef) : T_out
+
+    TS_wall  = combineLinearizedStep(stepWall,  T_air)
+    TS_roof  = combineLinearizedStep(stepRoof,  T_air)
+    TS_floor = combineLinearizedStep(stepFloor, T_air)
+
+    // Operative T = ½ (T_air + T_radiant)
+    const t_node_wall  = stepWall.massless  ? T_sa_wall  : TS_wall[TS_wall.length   - 1]
+    const t_node_roof  = stepRoof.massless  ? T_sa_roof  : TS_roof[TS_roof.length   - 1]
+    const t_node_floor = stepFloor.massless ? T_ground   : TS_floor[TS_floor.length - 1]
+    const T_in_surf_wall  = T_air + (t_node_wall  - T_air) * (stepWall.R_si  * stepWall.U_eff)
+    const T_in_surf_roof  = T_air + (t_node_roof  - T_air) * (stepRoof.R_si  * stepRoof.U_eff)
+    const T_in_surf_floor = T_air + (t_node_floor - T_air) * (stepFloor.R_si * stepFloor.U_eff)
+    const _A_total_surf = total_wall_opaque + roof_area + ground_area + total_glazing
+    const T_radiant = (
+      T_in_surf_wall  * total_wall_opaque +
+      T_in_surf_roof  * roof_area +
+      T_in_surf_floor * ground_area +
+      T_air           * total_glazing
+    ) / Math.max(_A_total_surf, 1e-9)
+    const T_op = 0.5 * (T_air + T_radiant)
     T_hourly[h] = T_op
 
+    // Loss accumulators (whole-wall U × area × dT_pos, same convention as State 1)
+    const dT_air_for_loss  = T_air - T_out
+    const dT_air_to_ground = T_air - T_ground
+    if (dT_air_for_loss > 0) {
+      acc_cond_wall      += wholeWallU_ext   * total_wall_opaque * dT_air_for_loss
+      acc_cond_roof      += wholeWallU_roof  * roof_area         * dT_air_for_loss
+      acc_cond_glaz_n    += glaz_face_UA('north') * dT_air_for_loss
+      acc_cond_glaz_e    += glaz_face_UA('east')  * dT_air_for_loss
+      acc_cond_glaz_s    += glaz_face_UA('south') * dT_air_for_loss
+      acc_cond_glaz_w    += glaz_face_UA('west')  * dT_air_for_loss
+      acc_vent_leakage   += UA_leakage    * dT_air_for_loss
+      acc_vent_permanent += UA_permanent  * dT_air_for_loss
+    }
+    if (dT_air_to_ground > 0) {
+      acc_cond_floor     += wholeWallU_floor * ground_area * dT_air_to_ground
+    }
+
+    // Comfort hours + T extremes
     const month = weatherData.month[h]
     if (T_op < comfortBand.lower_c)      underheating_hours++
     else if (T_op > comfortBand.upper_c) overheating_hours++
@@ -1346,16 +1453,19 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     if (month >= 12 || month <= 2) T_winter_min = Math.min(T_winter_min, T_op)
     if (month >= 6  && month <= 8) T_summer_max = Math.max(T_summer_max, T_op)
 
+    // Demand derivation — use whole-wall U × area UA totals
+    const UA_total_now =
+      wholeWallU_ext   * total_wall_opaque +
+      wholeWallU_roof  * roof_area +
+      wholeWallU_floor * ground_area +
+      UA_glaz + UA_leakage + UA_permanent
+    const Q_gain_to_zone = Q_solar_glaz_zone + Q_internal_total_Wh
     if (T_op < comfortBand.lower_c) {
-      // Heating demand: deficit at the lower bound, minus the gain energy
-      // already injected into the zone this hour (solar + internal gains
-      // both offset heating demand).
-      const Q_loss_at_lower = UA_total * Math.max(0, comfortBand.lower_c - T_out)
-      const heating_Wh = Math.max(0, Q_loss_at_lower - Q_to_mass)
+      const Q_loss_at_lower = UA_total_now * Math.max(0, comfortBand.lower_c - T_out)
+      const heating_Wh = Math.max(0, Q_loss_at_lower - Q_gain_to_zone)
       acc_heating_demand_Wh += heating_Wh
     } else if (T_op > comfortBand.upper_c) {
-      // Cooling: gain energy plus heat coming IN from outside (if T_out > upper)
-      const Q_gain_at_upper = Q_to_mass + UA_total * Math.max(0, T_out - comfortBand.upper_c)
+      const Q_gain_at_upper = Q_gain_to_zone + UA_total_now * Math.max(0, T_out - comfortBand.upper_c)
       acc_cooling_demand_Wh += Q_gain_at_upper
     }
   }
@@ -1458,10 +1568,29 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
         total_hours_active:  hours_equipment_active,
       },
     },
-    // State 2 keeps the State 1 losses unchanged (gains don't change fabric
-    // UA × dT; the only change is the temperature trace which is captured in
-    // free_running below).
-    losses: state1Result.losses,
+    // Brief 28c (2026-05-14): State 2 now computes its OWN losses against
+    // the State 2 T_op trace, instead of inheriting state1Result.losses.
+    // Closes the contract gap where conduction losses didn't reflect the
+    // gains-warmed zone. Shape mirrors state1Result.losses for HeatBalance
+    // consumer compatibility.
+    losses: {
+      conduction: {
+        external_wall: Math.round(acc_cond_wall  / 1000 * 10) / 10,
+        roof:          Math.round(acc_cond_roof  / 1000 * 10) / 10,
+        ground_floor:  Math.round(acc_cond_floor / 1000 * 10) / 10,
+        glazing: {
+          f1: Math.round(acc_cond_glaz_n / 1000 * 10) / 10,
+          f2: Math.round(acc_cond_glaz_e / 1000 * 10) / 10,
+          f3: Math.round(acc_cond_glaz_s / 1000 * 10) / 10,
+          f4: Math.round(acc_cond_glaz_w / 1000 * 10) / 10,
+        },
+        thermal_bridging: Math.round(acc_thermal_bridging / 1000 * 10) / 10,
+      },
+      ventilation: {
+        fabric_leakage:  Math.round(acc_vent_leakage   / 1000 * 10) / 10,
+        permanent_vents: Math.round(acc_vent_permanent / 1000 * 10) / 10,
+      },
+    },
     free_running: {
       annual_mean_c: Math.round(T_mean * 10) / 10,
       winter_min_c:  isFinite(T_winter_min) ? Math.round(T_winter_min * 10) / 10 : null,
@@ -1487,47 +1616,60 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       peak_occupants:          Math.round(peak_occupants * 10) / 10,
       annual_occupant_hours:   Math.round(sum_effective_occupants),
     },
-    // Mirror the state1 heat_balance shape so the existing HeatBalance
-    // component renders State 2 without further changes. The losses block
-    // is identical to State 1; the gains block adds people/lighting/equipment
-    // nested under .internal (the consumer's flattenGains in HeatBalance.jsx
-    // looks for `gains.internal.{people,equipment,lighting}` -- placing them
-    // directly under `gains.*` caused them to render empty. Brief 27 cleanup
-    // Part 3 (2026-05-14) corrected this.) Solar stays at gains.solar.
-    heat_balance: {
-      ...state1Result.heat_balance,
-      annual: {
-        ...state1Result.heat_balance.annual,
-        gains: {
-          ...state1Result.heat_balance.annual.gains,
-          internal: {
-            people:    { kwh: r1(acc_people),    kwh_per_m2: Math.round(acc_people / 1000 / gia * 100) / 100 },
-            lighting:  { kwh: r1(acc_lighting),  kwh_per_m2: Math.round(acc_lighting / 1000 / gia * 100) / 100 },
-            equipment: { kwh: r1(totalEquipmentWh), kwh_per_m2: Math.round(totalEquipmentWh / 1000 / gia * 100) / 100 },
+    // Brief 28c (2026-05-14): heat_balance.annual.losses now reflects State 2's
+    // own accumulators (computed against the State 2 T_air trace), not
+    // state1Result's. Solar gains still come from state1Result (envelope-only
+    // physics, byte-identical between states by design). Internal gains added
+    // nested under gains.internal per Brief 27 cleanup Part 3.
+    heat_balance: (() => {
+      const total_cond_glaz_Wh = acc_cond_glaz_n + acc_cond_glaz_e + acc_cond_glaz_s + acc_cond_glaz_w
+      const total_loss_Wh = acc_cond_wall + acc_cond_roof + acc_cond_floor +
+                            total_cond_glaz_Wh + acc_thermal_bridging +
+                            acc_vent_leakage + acc_vent_permanent
+      const perM2 = (Wh) => Math.round(Wh / 1000 / gia * 100) / 100
+      return {
+        annual: {
+          losses: {
+            external_wall:    { kwh: r1(acc_cond_wall),  kwh_per_m2: perM2(acc_cond_wall),  area_m2: Math.round(total_wall_opaque) },
+            roof:             { kwh: r1(acc_cond_roof),  kwh_per_m2: perM2(acc_cond_roof),  area_m2: Math.round(roof_area) },
+            ground_floor:     { kwh: r1(acc_cond_floor), kwh_per_m2: perM2(acc_cond_floor), area_m2: Math.round(ground_area) },
+            glazing:          { kwh: r1(total_cond_glaz_Wh), kwh_per_m2: perM2(total_cond_glaz_Wh), area_m2: Math.round(total_glazing) },
+            thermal_bridging: { kwh: r1(acc_thermal_bridging), kwh_per_m2: perM2(acc_thermal_bridging) },
+            fabric_leakage:   { kwh: r1(acc_vent_leakage), kwh_per_m2: perM2(acc_vent_leakage), ach },
+            permanent_vents:  { kwh: r1(acc_vent_permanent), kwh_per_m2: perM2(acc_vent_permanent) },
+          },
+          gains: {
+            // Solar from State 1 (envelope-only physics — same as State 2 by design)
+            ...state1Result.heat_balance.annual.gains,
+            internal: {
+              people:    { kwh: r1(acc_people),    kwh_per_m2: Math.round(acc_people / 1000 / gia * 100) / 100 },
+              lighting:  { kwh: r1(acc_lighting),  kwh_per_m2: Math.round(acc_lighting / 1000 / gia * 100) / 100 },
+              equipment: { kwh: r1(totalEquipmentWh), kwh_per_m2: Math.round(totalEquipmentWh / 1000 / gia * 100) / 100 },
+            },
+          },
+          totals: {
+            losses_kwh:         r1(total_loss_Wh),
+            losses_kwh_per_m2:  perM2(total_loss_Wh),
+            gains_kwh:          r1((state1Result.heat_balance.annual.totals.gains_kwh ?? 0) * 1000 + acc_people + acc_lighting + totalEquipmentWh),
+            gains_kwh_per_m2:   Math.round(((state1Result.heat_balance.annual.totals.gains_kwh ?? 0) + (acc_people + acc_lighting + totalEquipmentWh) / 1000) / gia * 100) / 100,
           },
         },
-        // Update totals to include internal gains (was solar-only when
-        // people/lighting/equipment were placed at gains.* directly).
-        totals: {
-          losses_kwh:         state1Result.heat_balance.annual.totals.losses_kwh,
-          losses_kwh_per_m2:  state1Result.heat_balance.annual.totals.losses_kwh_per_m2,
-          gains_kwh:          r1((state1Result.heat_balance.annual.totals.gains_kwh ?? 0) * 1000 + acc_people + acc_lighting + totalEquipmentWh),
-          gains_kwh_per_m2:   Math.round(((state1Result.heat_balance.annual.totals.gains_kwh ?? 0) + (acc_people + acc_lighting + totalEquipmentWh) / 1000) / gia * 100) / 100,
+        metadata: { gia_m2: Math.round(gia) },
+        demand: {
+          heating_demand_mwh: Math.round(acc_heating_demand_Wh / 1_000_000 * 10) / 10,
+          cooling_demand_mwh: Math.round(acc_cooling_demand_Wh / 1_000_000 * 10) / 10,
+          underheating_hours,
+          overheating_hours,
+          comfort_hours,
         },
-      },
-      demand: {
-        heating_demand_mwh: Math.round(acc_heating_demand_Wh / 1_000_000 * 10) / 10,
-        cooling_demand_mwh: Math.round(acc_cooling_demand_Wh / 1_000_000 * 10) / 10,
-        underheating_hours,
-        overheating_hours,
-        comfort_hours,
-      },
-      free_running: {
-        annual_mean_c: Math.round(T_mean * 10) / 10,
-        winter_min_c:  isFinite(T_winter_min) ? Math.round(T_winter_min * 10) / 10 : null,
-        summer_max_c:  isFinite(T_summer_max) ? Math.round(T_summer_max * 10) / 10 : null,
-      },
-    },
+        free_running: {
+          annual_mean_c: Math.round(T_mean * 10) / 10,
+          winter_min_c:  isFinite(T_winter_min) ? Math.round(T_winter_min * 10) / 10 : null,
+          summer_max_c:  isFinite(T_summer_max) ? Math.round(T_summer_max * 10) / 10 : null,
+        },
+        comfort_band_used: { lower_c: comfortBand.lower_c, upper_c: comfortBand.upper_c },
+      }
+    })(),
   }
 }
 

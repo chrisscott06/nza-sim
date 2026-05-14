@@ -192,6 +192,24 @@ Canonical baseline: `docs/validation/bridgewater_state1_engine_outputs_2026_05_p
 
 ---
 
+## Status snapshot (2026-05-14, post Part 3 v3 ship)
+
+| Part | Status | Notes |
+|---|---|---|
+| Part 1 (verify envelope-only mode) | DONE | Brief 28 prereq close |
+| Part 2 (HDKR/Perez solar) | **DEFERRED** | Skipped per Chris's call (2026-05-14). Facade-total agrees within 2.5% of EP, which is what matters for energy balance. Per-facade ±17-18% is real but only matters when per-facade accuracy becomes a user need. Return when use case demands. |
+| Part 3 v1 (multi-node CTF) | DONE | commit `1d6fc79` |
+| Part 3 v2 (data-driven tuning) | DONE | commit `18e262f` |
+| Part 3 v3 (glazing inside-surface absorption) | DONE | commit `5342090`. **State 1 validated with documented limitations.** |
+| Part 4 (multi-construction validation) | **DEFERRED** | Synthetic-cube testing pre-empts a problem we'd get free information about when a second real building arrives. Return when use case demands. |
+| Part 5 (auto-derived mass) | **DEFERRED** | Manual tuning (`internal_mass=250 kJ/(K·m²)`) acceptable for now; revisit when the next building reveals the manual-tuning limitation operationally. |
+| Part 6 (engine agreement re-baseline) | DONE inline | Captured in `docs/validation/bridgewater_state1_engine_outputs_2026_05_post_part3_v3.md` |
+| Part 7 (close-out) | **archived in-place** | This file remains for reference; Brief 28c is the next active brief. |
+
+**Move to Brief 28c (State 2 contract gap on losses recompute).**
+
+---
+
 ## Part 3 v3 — Glazing inside-surface solar absorption (immediate follow-up)
 
 **Files:** `frontend/src/utils/instantCalc.js::_calculateEnvelopeOnly`, `frontend/src/utils/wallModel.js` (possibly), engine output schema (if needed).
