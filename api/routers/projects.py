@@ -505,8 +505,9 @@ async def simulate_project(project_id: str, scenario_name: str = "Baseline", mod
                 """
                 INSERT INTO simulation_runs
                     (id, project_id, scenario_name, status, input_snapshot,
-                     energyplus_warnings, energyplus_errors, error_message, simulation_time_seconds)
-                VALUES (?, ?, ?, 'error', ?, ?, ?, ?, ?)
+                     energyplus_warnings, energyplus_errors, error_message, simulation_time_seconds,
+                     simulation_mode)
+                VALUES (?, ?, ?, 'error', ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run_id,
@@ -517,6 +518,7 @@ async def simulate_project(project_id: str, scenario_name: str = "Baseline", mod
                     sim_result.fatal_errors,
                     f"{sim_result.fatal_errors} fatal, {sim_result.severe_errors} severe errors",
                     sim_result.runtime_seconds,
+                    mode,
                 ),
             )
             await db.commit()
@@ -570,8 +572,9 @@ async def simulate_project(project_id: str, scenario_name: str = "Baseline", mod
                 (id, project_id, scenario_name, status, input_snapshot,
                  results_summary, results_monthly, results_hourly_path,
                  envelope_heat_flow, hourly_profiles, sankey_data, annual_energy,
-                 energyplus_warnings, energyplus_errors, simulation_time_seconds)
-            VALUES (?, ?, ?, 'complete', ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                 energyplus_warnings, energyplus_errors, simulation_time_seconds,
+                 simulation_mode)
+            VALUES (?, ?, ?, 'complete', ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
             """,
             (
                 run_id,
@@ -587,6 +590,7 @@ async def simulate_project(project_id: str, scenario_name: str = "Baseline", mod
                 json.dumps(annual_energy),
                 sim_result.warnings,
                 sim_result.runtime_seconds,
+                mode,
             ),
         )
         # Update project updated_at
@@ -619,7 +623,8 @@ async def list_project_simulations(project_id: str):
         cursor = await db.execute(
             """
             SELECT id, scenario_name, status, simulation_time_seconds, created_at,
-                   results_summary, energyplus_warnings, energyplus_errors, error_message
+                   results_summary, energyplus_warnings, energyplus_errors, error_message,
+                   simulation_mode
             FROM simulation_runs
             WHERE project_id = ?
             ORDER BY created_at DESC
@@ -639,6 +644,7 @@ async def list_project_simulations(project_id: str):
             "energyplus_warnings":     r["energyplus_warnings"],
             "energyplus_errors":       r["energyplus_errors"],
             "error_message":           r["error_message"],
+            "simulation_mode":         r["simulation_mode"],
         }
         for r in rows
     ]

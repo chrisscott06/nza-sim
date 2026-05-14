@@ -291,3 +291,108 @@ user walkthrough. After this investigation:
 Brief 27 can close at 9/10 confidence once the user confirms the four
 close-out bugs (commit `4f4f3a5`) behave as expected in the browser. The
 State 1 vs Sim divergence does not block close-out; it informs Brief 28.
+
+---
+
+## Update 2026-05-14 — Brief 28 prereq Option C+ findings
+
+The Brief 28 prereq (free-running EP simulation) landed via Option C+:
+zero the People density placeholder, persist a genuine envelope-only EP
+run for Bridgewater, repoint `state1_engine_agreement.mjs` to use it.
+New persisted run: **`8d7fc517`** (`simulation_mode='envelope-only'`,
+runtime 35.4 s, 20 warnings, 0 fatal). The engine-agreement comparison
+is now Static-truly-free-running vs Dynamic-truly-free-running.
+
+### Corrected comparison (`8d7fc517`)
+
+| Metric                  | Live (Static) | Sim free-running | Δ           | Previous Sim (HVAC-clamped re-parse) |
+|-------------------------|---------------|------------------|-------------|--------------------------------------|
+| annual_mean_c           | 21.2 °C       | **19.8 °C**      | −6.6%       | 18.2 °C                              |
+| winter_min_c            |  4.0 °C       |  **8.3 °C**      | +107%       | −2.5 °C                              |
+| summer_max_c            | 44.2 °C       | **35.4 °C**      | −19.9%      | 28.9 °C                              |
+| heating_demand_mwh      | 103.4         | **110.2**        | +6.6%       | 130.9                                |
+| cooling_demand_mwh      | 108.6         |  **61.7**        | −43.2%      | 5.0                                  |
+| underheating_hours      | 4430          |  4618            | +4.2%       | 6294                                 |
+| overheating_hours       | 3449          |  2746            | −20.4%      | 96                                   |
+| Conduction (any element)| —             | —                | **−6.8%**   | −23.5%                               |
+| Fabric leakage          | —             | —                | **−6.8%**   | −23.5%                               |
+
+### Verdicts vs prior findings
+
+**The 23.5% uniform conduction divergence WAS the HVAC-clamping
+artefact, almost entirely.** The corrected comparison shows the
+across-all-elements ΔT-integrand difference dropped from −23.5% to
+−6.8%. The remaining 6.8% is real physics divergence (Static's annual
+mean T of 21.2 °C vs Sim's 19.8 °C — a 1.4 K offset that flows through
+conduction uniformly). That residual is consistent with the lumped vs
+multi-layer mass model story.
+
+**Mass-model summer-max story holds, smaller magnitude.** The Static
+free-running engine still over-predicts summer max compared to Dynamic
+free-running, but the gap is **8.8 K (44.2 → 35.4 °C)**, not the ~15 K
+the previous HVAC-clamped comparison showed. Brief 28b Part 3
+(multi-layer CTF / multi-node mass model) is still the right fix; the
+magnitude target should be revised to "close the 8.8 K gap" rather
+than "close the 15 K gap."
+
+**Winter-min flipped sign.** Dynamic free-running shows +8.3 °C winter
+min, not the −2.5 °C the HVAC-clamped re-parse showed. Static's 4.0 °C
+is now LOWER than Dynamic's 8.3 °C — Static may be **under-predicting**
+winter min by ~4 K because its lumped two-node lacks thermal storage
+that EP's full construction stack provides. This is the same mass
+model story playing out on the opposite seasonal extreme.
+
+**Cooling demand divergence is real but smaller.** Static 108.6 MWh vs
+Dynamic 61.7 MWh = −43% (Static high). The previous −95% was almost
+entirely the HVAC-clamping artefact (clamped Sim T → no cooling
+demand). The real −43% comes from Static's summer-max over-prediction
+flowing through the demand integral.
+
+### Open question — solar aggregate disagreement
+
+The corrected engine-agreement output still shows total annual solar
+gain Live 182,873 kWh vs Sim 132,987 kWh = **−27.3%** aggregate.
+`docs/physics_audit_2026_05.md` Audit 3 reported the apples-to-apples
+post-shading transmitted aggregate at +1%. These two numbers cannot
+both be right. The per-facade ratios from engine_agreement
+(Live −22% on NNE, Live +8.7% on SSW) roughly match the audit's +19% /
+−10% per-facade finding, but the aggregate doesn't reconcile.
+
+Probable cause: `state1_engine_agreement.mjs` may be reading the live
+engine's pre-shading or pre-glazing-attenuation solar accumulator
+(`live.gains.solar.*`) and comparing it to the parser's post-shading
+transmitted figure (`sim.gains.solar.*`). The audit drilled into this
+precisely and found the +1% aggregate at the post-shading-transmitted
+boundary on both sides.
+
+Filed as a follow-up — clarify which solar accumulator each side reads
+and reconcile the aggregate. Likely lives in Brief 28b Part 2 (solar
+model upgrade) scope since the HDKR fix touches the same code path.
+
+### Implications for the May 2026 batch
+
+- **Brief 28b Part 2 (HDKR/Perez solar)** — still warranted for the
+  ±19% per-facade redistribution between NNE and SSW. Aggregate impact
+  remains uncertain pending the solar accumulator reconciliation above.
+- **Brief 28b Part 3 (multi-layer CTF mass model)** — confirmed as the
+  dominant physics fix needed. Revised target: close the 8.8 K
+  summer-max gap and the ~4 K winter-min sign-flip. Expected to also
+  shrink the 6.8 K residual conduction delta toward zero.
+- **`docs/state_2_expected_ranges.md` re-baseline** (Brief 28b Part 5)
+  should use these new free-running Dynamic numbers as the comparison
+  baseline rather than the historical HVAC-clamped re-parse numbers.
+
+### How to reproduce
+
+1. Ensure `simulation_mode` column exists on `simulation_runs`:
+   `python scripts/migrate_add_simulation_mode.py` (idempotent).
+2. Persist the envelope-only EP run:
+   ```
+   $env:ENERGYPLUS_DIR = "C:\EnergyPlusV26-1-0"
+   python scripts/run_envelope_only_sim_bridgewater.py
+   ```
+3. Re-run the agreement check (auto-picks the newest envelope-only run):
+   ```
+   node scripts/state1_engine_agreement.mjs
+   ```
+   Or pass the run_id explicitly: `node scripts/state1_engine_agreement.mjs <project_id> <run_id>`.

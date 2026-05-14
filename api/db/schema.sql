@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS simulation_runs (
     energyplus_errors INTEGER DEFAULT 0,
     error_message TEXT,
     simulation_time_seconds REAL,
+    simulation_mode TEXT,              -- state-contract mode: 'full' | 'envelope-only' | 'envelope-gains' | NULL (legacy)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );

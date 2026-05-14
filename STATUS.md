@@ -1,5 +1,55 @@
 # NZA SIMULATE — Status
 
+## ✅ Brief 28 prereq closed — Free-running EnergyPlus pipeline (Option C+)
+
+**Date closed:** 2026-05-14
+**Confidence:** 9/10 (one open question on solar aggregate routed to Brief 28b Part 2)
+
+The Brief 28 prerequisite (free-running EP simulation pipeline) shipped
+via Option C+ after the initial Part 1 verification surfaced — then
+resolved — a halt-2 premise question. Final scope:
+
+- **C+ Step 1.** `epjson_assembler.py:192` `_build_people_objects` had
+  `density = max(density, 1e-4)` unconditionally, silently overriding
+  State 1's explicit zero-out. Now gated on `density > 0` so exact 0.0
+  passes through. EP accepts `people_per_floor_area: 0.0`.
+- **C+ Step 2.** New `simulation_mode` column on `simulation_runs`
+  (idempotent migration script). Schema + `/simulate` and
+  `/simulations` API endpoints updated. New
+  `scripts/run_envelope_only_sim_bridgewater.py` persisted run
+  **`8d7fc517`** with `simulation_mode='envelope-only'`.
+- **C+ Step 3.** `state1_engine_agreement.mjs` repointed to filter by
+  `simulation_mode === 'envelope-only'` rather than picking the most-
+  recent-any-mode sim.
+- **C+ Step 4.** Re-ran the agreement check on the new envelope-only
+  run. Captured corrected numbers in
+  `docs/state_1_engine_divergence_investigation.md` as a dated
+  addendum.
+
+Headline finding (full table in the divergence doc):
+
+| Metric                | Live (Static) | Sim free-running | Δ      |
+|-----------------------|--------------:|-----------------:|-------:|
+| summer_max_c          | 44.2 °C       | 35.4 °C          | −8.8 K |
+| winter_min_c          |  4.0 °C       |  8.3 °C          | +4.3 K |
+| cooling_demand_mwh    | 108.6         | 61.7             | −43%   |
+| Conduction uniform-Δ  | —             | —                | −6.8%  |
+
+The 23.5% uniform conduction divergence WAS the HVAC-clamping artefact
+(now 6.8% with proper free-running comparison). The mass-model
+summer-max story stands but at smaller magnitude (8.8 K gap, not
+~15 K) — Brief 28b Part 3 (multi-layer CTF) target metrics revised.
+
+State isolation regressions still byte-identical post-changes
+(40/40 + 41/41 EP + 21/21 + 21/21). Build clean.
+
+One open question: aggregate solar Live vs Sim still shows −27.3%
+disagreement, which conflicts with the physics audit's +1% aggregate
+finding. Probable pre-vs-post-shading accumulator mismatch in
+`state1_engine_agreement.mjs`. Routed to Brief 28b Part 2.
+
+---
+
 ## ✅ Brief 27 cleanup closed — Heat Balance prop bug + divergence doc correction
 
 **Date closed:** 2026-05-14
@@ -138,8 +188,8 @@ walkthrough at the end). See:
 
 Batch sequence:
 1. ~~Brief 27 cleanup~~ — **closed 2026-05-14**
-2. Brief 28 prereq (free-running EP simulation) — **next**
-3. Brief 28a (visible polish: rename, kWh/m²·yr readouts, canvas restructure, Pavlo port, engine toggle)
+2. ~~Brief 28 prereq (free-running EP simulation)~~ — **closed 2026-05-14 (Option C+)**
+3. Brief 28a (visible polish: rename, kWh/m²·yr readouts, canvas restructure, Pavlo port, engine toggle) — **next**
 4. Brief 28b (physics overhaul: HDKR/Perez solar + multi-layer CTF mass model)
 5. Brief 29 (Building module completion: State 1 diagnostic views, UI conformance, constants cleanup, BREDEM phasing)
 

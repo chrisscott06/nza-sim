@@ -125,12 +125,33 @@ if (MASS_OVERRIDE) console.log(`Live engine thermal_mass_category override: ${MA
 
 // ── 5. Fetch simulation State 1 output ────────────────────────────────────────
 
+// Brief 28 prereq Option C+ Step 3 (2026-05-14): filter by
+// simulation_mode='envelope-only' so the comparison is honestly
+// Static-free-running vs Dynamic-free-running. Previous behaviour
+// (`sims[0]?.id`) picked the most-recent sim of any mode and re-parsed
+// full-sim HVAC-clamped SQL through the State 1 parser view, which
+// produced the misleading "Dynamic was HVAC-clamped" picture in
+// docs/state_1_engine_divergence_investigation.md.
+//
+// Create an envelope-only run with:
+//   python scripts/run_envelope_only_sim_bridgewater.py <project_id>
+//
+// To override the auto-pick, pass run_id as argv[3].
 let runIdToUse = RUN_ID
 if (!runIdToUse) {
   const sims = await fetchJson(`${API}/api/projects/${PROJECT_ID}/simulations`)
-  runIdToUse = sims[0]?.id
+  const envelopeOnly = sims.filter(s => s.simulation_mode === 'envelope-only')
+  if (envelopeOnly.length === 0) {
+    console.error('')
+    console.error('ERROR: No envelope-only simulation runs found for this project.')
+    console.error('       Run: python scripts/run_envelope_only_sim_bridgewater.py ' + PROJECT_ID)
+    console.error('       Then re-run this script.')
+    console.error('')
+    process.exit(1)
+  }
+  runIdToUse = envelopeOnly[0].id   // most-recent envelope-only run (DESC ordered by API)
 }
-console.log('Sim run_id:', runIdToUse)
+console.log('Sim run_id:', runIdToUse, '(simulation_mode=envelope-only)')
 const sim = await fetchJson(
   `${API}/api/projects/${PROJECT_ID}/simulations/${runIdToUse}/balance?mode=envelope-only`
 )
