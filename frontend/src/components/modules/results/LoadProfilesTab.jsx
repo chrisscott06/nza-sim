@@ -4,7 +4,7 @@ import {
   Legend, ResponsiveContainer,
 } from 'recharts'
 import { SimulationContext } from '../../../context/SimulationContext.jsx'
-import DataCard from '../../ui/DataCard.jsx'
+import DataCard from '../../chart/DataCard.jsx'
 import ModuleEmptyState from '../../ui/ModuleEmptyState.jsx'
 import FullYearView from './FullYearView.jsx'
 import {

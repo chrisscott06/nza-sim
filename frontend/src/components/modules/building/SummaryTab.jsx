@@ -1,6 +1,6 @@
 import { useContext } from 'react'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
-import DataCard from '../../ui/DataCard.jsx'
+import DataCard from '../../chart/DataCard.jsx'
 
 function Row({ label, value, unit }) {
   return (

@@ -18,8 +18,8 @@ import {
   CartesianGrid,
 } from 'recharts'
 import { TrendingDown, CheckCircle2, AlertTriangle } from 'lucide-react'
-import ChartContainer from '../../ui/ChartContainer.jsx'
-import DataCard from '../../ui/DataCard.jsx'
+import ChartContainer from '../../chart/ChartContainer.jsx'
+import DataCard from '../../chart/DataCard.jsx'
 import ModuleEmptyState from '../../ui/ModuleEmptyState.jsx'
 import { SimulationContext } from '../../../context/SimulationContext.jsx'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'

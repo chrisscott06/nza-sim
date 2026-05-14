@@ -12,7 +12,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, Brush,
 } from 'recharts'
-import DataCard from '../../ui/DataCard.jsx'
+import DataCard from '../../chart/DataCard.jsx'
 import {
   TICK_STYLE, TOOLTIP_STYLE, TOOLTIP_WRAPPER_STYLE, LEGEND_STYLE,
   GRID_STYLE, AXIS_PROPS,

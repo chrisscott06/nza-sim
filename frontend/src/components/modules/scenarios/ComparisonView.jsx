@@ -17,8 +17,8 @@ import {
   Cell, ReferenceLine, ResponsiveContainer
 } from 'recharts'
 import { TrendingDown, Trophy } from 'lucide-react'
-import ChartContainer from '../../ui/ChartContainer.jsx'
-import DataCard from '../../ui/DataCard.jsx'
+import ChartContainer from '../../chart/ChartContainer.jsx'
+import DataCard from '../../chart/DataCard.jsx'
 import { SCENARIO_COLORS } from '../../../data/chartTokens.js'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

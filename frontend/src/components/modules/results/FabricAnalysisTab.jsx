@@ -4,7 +4,7 @@ import {
   ReferenceLine, ResponsiveContainer, Cell, LabelList,
 } from 'recharts'
 import { SimulationContext } from '../../../context/SimulationContext.jsx'
-import DataCard from '../../ui/DataCard.jsx'
+import DataCard from '../../chart/DataCard.jsx'
 import ModuleEmptyState from '../../ui/ModuleEmptyState.jsx'
 import {
   TICK_STYLE, TOOLTIP_STYLE, TOOLTIP_WRAPPER_STYLE,

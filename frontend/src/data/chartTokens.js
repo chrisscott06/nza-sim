@@ -74,3 +74,50 @@ export const FABRIC_COLORS = {
   infiltration: '#9E9E9E',
   ventilation:  '#06B6D4',
 }
+
+// ── Pablo-port tokens (Brief 28a Part 4, 2026-05-14) ────────────────────────
+// Ported from pablo-2/frontend/src/data/chartTokens.js. MODELLER_COLORS
+// intentionally NOT ported (Pablo-specific). BUILDING_SERVICE_COLORS not
+// ported here either — NZA-Sim's heat-balance views consume the canonical
+// palette in frontend/src/data/balanceColours.js (INTERNAL_COLOURS,
+// SOLAR_COLOURS, FABRIC_COLOURS, HEATING_COLOUR, COOLING_COLOUR). Reconciling
+// the two palettes into a single canon is a Brief 28a Part 3f / ui_principles
+// decision and is deferred until that work lands.
+
+/**
+ * Generic chart series colours — for multi-series charts (load profiles,
+ * energy flows, etc.) where the series identity doesn't map to a known
+ * domain palette. Use SCENARIO_COLORS for scenario comparison; use
+ * ENDUSE_COLORS / FABRIC_COLORS / balanceColours.js for domain-specific
+ * series.
+ */
+export const CHART_SERIES_COLORS = [
+  '#00AEEF', // teal (always first)
+  '#E84393', // magenta
+  '#ECB01F', // gold
+  '#F48379', // coral
+  '#2ECC71', // green
+  '#9B59B6', // purple
+  '#C8423C', // red
+  '#2B2A4C', // navy
+]
+
+/** Season colours — used by MonthJumpButtons (0-indexed month → season). */
+export const SEASON_COLORS = {
+  Winter: '#00AEEF',
+  Spring: '#2ECC71',
+  Summer: '#ECB01F',
+  Autumn: '#F48379',
+}
+
+/** Month → season lookup (index 0–11 → key in SEASON_COLORS). */
+export const MONTH_SEASON = [
+  'Winter', 'Winter', 'Spring', 'Spring', 'Spring', 'Summer',
+  'Summer', 'Summer', 'Autumn', 'Autumn', 'Autumn', 'Winter',
+]
+
+/** Short calendar-month labels (index 0–11). */
+export const MONTH_LABELS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+]
