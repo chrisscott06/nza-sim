@@ -714,8 +714,23 @@ function decomposeHour(h, weatherData) {
   let month, day, hourOfDay
   if (weatherData?.month && weatherData?.month[h] != null) {
     month = weatherData.month[h]                     // 1-12
-    day = weatherData.day?.[h] ?? 1                  // 1-31
     hourOfDay = (weatherData.hour?.[h] ?? 1) - 1     // EPW 1-24 → 0-23
+    // Brief 28a Part 5 walkthrough fix (2026-05-14): derive `day` from
+    // `h` if `weatherData.day` is missing, rather than silently defaulting
+    // to 1. Previous `day = weatherData.day?.[h] ?? 1` caused every hour
+    // in a month to be interpreted as the 1st of that month — broke both
+    // day-of-week (months whose 1st was Sat/Sun read all-month as Sat/Sun)
+    // AND date-range exception matching (every Jan hour matched the Xmas
+    // exception "24-12 to 01-07", zeroing the People schedule for January).
+    // The backend `parse_epw` was fixed in the same commit to populate
+    // `day`; this fallback is defensive against any upstream loader (test
+    // scripts, future routes) that forgets to populate it.
+    if (weatherData.day?.[h] != null) {
+      day = weatherData.day[h]                       // 1-31
+    } else {
+      const dayOfYear = Math.floor(h / 24)
+      day = dayOfYear - _CUM_DAYS_NON_LEAP[month - 1] + 1
+    }
   } else {
     // Fallback: derive from h
     const dayOfYear = Math.floor(h / 24) // 0..364

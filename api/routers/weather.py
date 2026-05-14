@@ -183,6 +183,7 @@ def parse_epw(filepath: Path) -> dict:
     diffuse_horizontal:   list[float] = []
     wind_speed_arr:       list[float] = []
     month_arr:            list[int]   = []
+    day_arr:              list[int]   = []  # Brief 28a Part 5 walkthrough fix (2026-05-14)
     hour_arr:             list[int]   = []
 
     for line in lines[8 : 8 + 8760]:
@@ -191,6 +192,7 @@ def parse_epw(filepath: Path) -> dict:
             continue
         try:
             month_arr.append(int(parts[1]))
+            day_arr.append(int(parts[2]))   # EPW field 2 = day-of-month (1-31)
             hour_arr.append(int(parts[3]))
             temperature.append(float(parts[6]))
             # Field 13 is GHI — we don't return it directly, but the solar
@@ -202,11 +204,22 @@ def parse_epw(filepath: Path) -> dict:
         except (IndexError, ValueError):
             # Corrupt row — insert zeros to keep arrays aligned
             month_arr.append(1)
+            day_arr.append(1)
             hour_arr.append(1)
             temperature.append(0.0)
             direct_normal.append(0.0)
             diffuse_horizontal.append(0.0)
             wind_speed_arr.append(0.0)
+
+    # NB: `day_arr` was previously not parsed. The frontend `decomposeHour`
+    # helper looked up `weatherData.day?.[h] ?? 1`, silently defaulting every
+    # hour to day-of-month 1. Result: every hour in a given month was
+    # interpreted as the 1st of that month, which broke both day-of-week
+    # (months where the 1st landed on Sat/Sun read the whole month as Sat/Sun)
+    # AND date-range exception matching (every January hour matched the Xmas
+    # exception "24-12 to 01-07" -> People schedule read 0 across the month).
+    # Found during Brief 28a Part 5 walkthrough on Bridgewater; fix landed
+    # 2026-05-14 alongside a defensive fallback in decomposeHour itself.
 
     return {
         "temperature":        temperature,
@@ -214,6 +227,7 @@ def parse_epw(filepath: Path) -> dict:
         "diffuse_horizontal": diffuse_horizontal,
         "wind_speed":         wind_speed_arr,
         "month":              month_arr,
+        "day":                day_arr,
         "hour":               hour_arr,
         "location": {
             "city":      city,
