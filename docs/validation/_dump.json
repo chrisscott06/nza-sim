@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-14T14:48:53.641Z",
+  "generated_at": "2026-05-14T17:38:56.211Z",
   "project": {
     "id": "14b4a5b1-8c73-4acb-8b65-1d22f05ec969",
     "name": "HIX Bridgewater",
@@ -1031,64 +1031,64 @@
         "f2": 4397.9,
         "f3": 71400.5,
         "f4": 3132.5,
-        "roof": 46454.2,
-        "total": 182873.6
+        "roof": 0,
+        "total": 136419.3
       }
     },
     "losses": {
       "conduction": {
-        "external_wall": 16515.4,
-        "roof": 11110,
-        "ground_floor": 15276.3,
+        "external_wall": 9334,
+        "roof": 9401.2,
+        "ground_floor": 15076.8,
         "glazing": {
-          "f1": 46556.4,
-          "f2": 2116.2,
-          "f3": 32166.2,
-          "f4": 2327.8
+          "f1": 35038.1,
+          "f2": 1592.6,
+          "f3": 24208.2,
+          "f4": 1751.9
         },
         "thermal_bridging": 0
       },
       "ventilation": {
-        "fabric_leakage": 58661,
+        "fabric_leakage": 44148,
         "permanent_vents": 0
       }
     },
     "free_running": {
-      "annual_mean_c": 21.2,
-      "winter_min_c": 4,
-      "summer_max_c": 44.2,
-      "hourly_mean_c": 21.22395600722805,
-      "hourly_std_c": 8.735574853801184,
+      "annual_mean_c": 18.1,
+      "winter_min_c": 4.2,
+      "summer_max_c": 35.5,
+      "hourly_mean_c": 18.135459969141714,
+      "hourly_std_c": 6.669418584418291,
       "hourly_count": 8760
     },
     "demand": {
-      "heating_demand_mwh": 103.4,
-      "cooling_demand_mwh": 108.6,
-      "underheating_hours": 4430,
-      "overheating_hours": 3449,
-      "comfort_hours": 881
+      "heating_demand_mwh": 121.4,
+      "cooling_demand_mwh": 40.3,
+      "underheating_hours": 5404,
+      "overheating_hours": 1546,
+      "comfort_hours": 1810
     },
     "heat_balance": {
       "annual": {
         "losses": {
           "external_wall": {
-            "kwh": 16515.4,
-            "kwh_per_m2": 4.78,
+            "kwh": 9334,
+            "kwh_per_m2": 2.7,
             "area_m2": 1142
           },
           "roof": {
-            "kwh": 11110,
-            "kwh_per_m2": 3.21,
+            "kwh": 9401.2,
+            "kwh_per_m2": 2.72,
             "area_m2": 864
           },
           "ground_floor": {
-            "kwh": 15276.3,
-            "kwh_per_m2": 4.42,
+            "kwh": 15076.8,
+            "kwh_per_m2": 4.36,
             "area_m2": 864
           },
           "glazing": {
-            "kwh": 83166.6,
-            "kwh_per_m2": 24.05,
+            "kwh": 62590.8,
+            "kwh_per_m2": 18.1,
             "area_m2": 739
           },
           "thermal_bridging": {
@@ -1096,8 +1096,8 @@
             "kwh_per_m2": 0
           },
           "fabric_leakage": {
-            "kwh": 58661,
-            "kwh_per_m2": 16.97,
+            "kwh": 44148,
+            "kwh_per_m2": 12.77,
             "ach": 0.2
           },
           "permanent_vents": {
@@ -1127,31 +1127,31 @@
               "kwh_per_m2": 0.91,
               "area_m2": 21
             },
-            "total_kwh": 182873.6,
-            "total_kwh_per_m2": 52.89
+            "total_kwh": 136419.3,
+            "total_kwh_per_m2": 39.46
           }
         },
         "totals": {
-          "losses_kwh": 184729.4,
-          "gains_kwh": 182873.6,
-          "losses_kwh_per_m2": 53.43,
-          "gains_kwh_per_m2": 52.89
+          "losses_kwh": 140550.8,
+          "gains_kwh": 136419.3,
+          "losses_kwh_per_m2": 40.65,
+          "gains_kwh_per_m2": 39.46
         }
       },
       "metadata": {
         "gia_m2": 3457
       },
       "demand": {
-        "heating_demand_mwh": 103.4,
-        "cooling_demand_mwh": 108.6,
-        "underheating_hours": 4430,
-        "overheating_hours": 3449,
-        "comfort_hours": 881
+        "heating_demand_mwh": 121.4,
+        "cooling_demand_mwh": 40.3,
+        "underheating_hours": 5404,
+        "overheating_hours": 1546,
+        "comfort_hours": 1810
       },
       "free_running": {
-        "annual_mean_c": 21.2,
-        "winter_min_c": 4,
-        "summer_max_c": 44.2
+        "annual_mean_c": 18.1,
+        "winter_min_c": 4.2,
+        "summer_max_c": 35.5
       },
       "comfort_band_used": {
         "lower_c": 21,

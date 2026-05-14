@@ -182,6 +182,54 @@ If no contract changes are needed (the physics affects internal calculation but 
 - After implementation, summer max divergence with Dynamic *increases* → HH4. Something's wrong with the model.
 - Multi-node implementation produces numerical instability (oscillations, blow-up) → HH6.
 
+### Part 3 ship log
+
+- **Part 3 v1 (commit `1d6fc79`, 2026-05-14):** multi-node implicit RC model + sol-air boundary + distributed glazing solar + zone-air internal mass. Summer max gap 8.8 K → 1.3 K. Net pass count 14/21 → 10/21 (4 loss-side rows regressed because zone T mean dropped below EP's).
+- **Part 3 v2 (this commit, 2026-05-14):** tuning values from response-surface sweep — `solar_radiative_fraction = 0.30`, `internal_mass_kJ_per_K_per_m2 = 100`. Summer max gap 1.3 K → 0.1 K (essentially exact). Same pass count (10/21), but PASS magnitudes improved across the board (heating demand within ±10%, all temperature trace within ±10%).
+
+Response surface evidence: `docs/validation/state1_part3_response_surface_2026_05.md`.
+Canonical baseline: `docs/validation/bridgewater_state1_engine_outputs_2026_05_post_part3_v2.md`.
+
+---
+
+## Part 3 v3 — Glazing inside-surface solar absorption (immediate follow-up)
+
+**Files:** `frontend/src/utils/instantCalc.js::_calculateEnvelopeOnly`, `frontend/src/utils/wallModel.js` (possibly), engine output schema (if needed).
+
+**Goal:** Close the persistent **1.7 K mean-T undershoot** (Static 18.1 °C vs EP 19.8 °C) that the Part 3 v2 tuning sweep proved cannot be closed by the three existing knobs.
+
+**Hypothesis:** EnergyPlus's glazing model absorbs ~5-10% of incident solar AT the inside glazing surface (it's not all transmitted to interior). The absorbed energy heats the glazing inside surface, which convects directly to T_air with no transit loss through wall mass. My current model transmits 100% to interior surfaces — missing this air-side heating term.
+
+**Implementation:**
+
+1. Add a `glazing_inside_absorption_fraction` parameter (default ~0.07 — typical for double-low-e per ASHRAE Handbook Fundamentals Ch 15).
+2. Modify `_calculateEnvelopeOnly`:
+   - Total incident on glazing per facade = `hourlySolar.f<n>[h] × glazing.<face>` (already computed).
+   - **New term:** `Q_solar_absorbed_at_glazing_inside = sum_facades(incident × glazing_inside_absorption_fraction × (1 − frame_fraction))`.
+   - Add `Q_solar_absorbed_at_glazing_inside` directly to the zone air balance D_coef (alongside the existing convective fraction of transmitted solar).
+   - **Reduce transmitted solar accordingly:** `Q_solar_glaz_zone = sum_facades(incident × g_value × (1 − frame_fraction) × shading) × (1 − absorption_fraction)`.
+   - Keep the 30/70 radiative/convective split applied to the transmitted fraction.
+3. Re-run the response surface (or at least a focused sweep on `absorption_fraction = [0.03, 0.05, 0.07, 0.10, 0.15]`) to confirm monotonic mean-T response.
+4. Pick the value that best matches EP's mean T (target ±0.5 K).
+5. Re-run Static vs Dynamic on Bridgewater. Document.
+
+**Verify:**
+
+- Monotonic response of mean T with absorption fraction.
+- Best-match value brings mean T within ±0.5 K of EP.
+- Summer max stays within ±1 K of EP (Part 3 v2 win not regressed).
+- Cooling demand gap reduces meaningfully (target: from −35% to within ±15%).
+- Loss-side rows (ext_wall, glazing, fabric_leakage) move toward EP (less under-prediction because Static now warms toward EP's mean).
+- Aggregate pass count improves from 10/21 toward 15+/21.
+
+**Commit message:** "Brief 28b Part 3 v3: glazing inside-surface solar absorption"
+
+**Halt triggers:**
+
+- Absorption fraction sweep is non-monotonic → SH2 (model bug).
+- Best-match value gives mean T match but summer max regresses materially → HH4 (the win on summer max is the headline; don't trade it away).
+- Absorption fraction needed to close mean T exceeds 15% (physically implausible for double-low-e) → SH2 (model lacks another physics element).
+
 ---
 
 ## Part 4 — Validate against multiple constructions and weather conditions
@@ -217,7 +265,50 @@ If any construction type produces poor agreement, document and decide:
 
 ---
 
-## Part 5 — Engine agreement re-baselining
+## Part 5 — Construction-stack-aware mass derivation
+
+**Files:** `frontend/src/utils/wallModel.js`, `frontend/src/utils/thermalMass.js` (or a sibling), `frontend/src/utils/instantCalc.js`
+
+**Goal:** Remove the **per-building manual tuning** of `internal_mass_kJ_per_K_per_m2`. Currently a fixed default (100 kJ/(K·m²)) calibrated to Bridgewater. Compute it from the library construction stack using CIBSE thermal admittance (Y-value) or ASHRAE response factors so the engine generalises across building types without per-project tuning.
+
+**Background:** The Part 3 response-surface sweep proved internal mass is a real lever, but the optimal value is construction-stack-dependent:
+- Lightweight (steel frame, partition-walled office): ~30-50 kJ/(K·m²)
+- Medium (cavity wall with masonry inner leaf, like Bridgewater): ~100 kJ/(K·m²)
+- Heavyweight (concrete frame, exposed concrete slabs): ~200+ kJ/(K·m²)
+
+A fixed default mis-predicts for non-Bridgewater buildings.
+
+**Steps:**
+
+1. Read CIBSE Guide A § thermal admittance method:
+   - Each construction layer has a Y-value (admittance, W/m²K at 24h period)
+   - Y-values can be combined into a whole-construction Y
+   - Sum across inside surface areas gives whole-building effective dynamic mass
+2. Decide between CIBSE Y-method vs ASHRAE response factor method (latter more accurate, more complex). Default: CIBSE Y.
+3. Implement `deriveInternalMass(constructions, libraryData, geo)` in `thermalMass.js` (extend the existing `resolveCmass` or add a new helper).
+4. Replace the hardcoded 100 kJ/(K·m²) default in `_calculateEnvelopeOnly` with a call to the derived value. Keep the override path for tuning experiments.
+5. Validate on the three Part 4 test cases (lightweight cube, medium cube, heavy cube). Each should now produce summer max ±1 K of EP without manual tuning.
+6. Re-run Bridgewater to confirm the derived value lands near 100 kJ/(K·m²) (the empirically-tuned best fit).
+
+**Verify:**
+
+- Derived internal mass values are reasonable across the three test cases:
+  - Lightweight: 20-60 kJ/(K·m²)
+  - Medium (Bridgewater): 80-120 kJ/(K·m²) — must match Part 3 v2 tuning within ~20%
+  - Heavyweight: 150-300 kJ/(K·m²)
+- Summer max prediction stays within ±1 K of EP across all three after switching to derived mass.
+- No per-building tuning required for typical UK construction types.
+
+**Commit message:** "Brief 28b Part 5: Construction-stack-aware internal mass derivation"
+
+**Halt triggers:**
+
+- Derived value for Bridgewater is wildly different from 100 kJ/(K·m²) (e.g. 30 or 300) — suggests Y-method implementation bug or construction library data issue → SH2.
+- Derived values fail to discriminate between lightweight and heavyweight test cases → HH4.
+
+---
+
+## Part 6 — Engine agreement re-baselining
 
 **Files:** `docs/state_1_divergences.md`, `scripts/state1_engine_agreement.mjs` if needed
 
@@ -241,11 +332,11 @@ If any construction type produces poor agreement, document and decide:
 - Expected ranges current
 - BREDEM ranges met on Bridgewater for both engines
 
-**Commit message:** "Brief 28b Part 5: Engine agreement re-baselining post physics overhaul"
+**Commit message:** "Brief 28b Part 6: Engine agreement re-baselining post physics overhaul"
 
 ---
 
-## Part 6 — Completion checklist + close-out
+## Part 7 — Completion checklist + close-out
 
 **Files:** `docs/module_checklists/state_1_physics_brief_28b.md`, STATUS.md, archive
 
@@ -264,7 +355,7 @@ If any construction type produces poor agreement, document and decide:
 - STATUS.md current
 - Archive done
 
-**Commit message:** "Brief 28b Part 6: Close-out + completion checklist"
+**Commit message:** "Brief 28b Part 7: Close-out + completion checklist"
 
 ---
 

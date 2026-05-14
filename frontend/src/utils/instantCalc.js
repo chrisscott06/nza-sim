@@ -404,15 +404,25 @@ function getConstructionItem(constructions, libraryData, element) {
  *      cooling_demand[h] = max(0, Q_solar + UA·(T_out − upper_c)) if T_op > upper_c
  */
 function _calculateEnvelopeOnly(building, constructions, libraryData, weatherData, hourlySolar, comfortBand, tuning = null) {
-  // Brief 28b Part 3 v2 scaffolding (2026-05-14): optional `tuning` overrides
-  // for the three thermal-mass / solar-distribution / surface-resistance
-  // parameters. Default values match the v1 commit (1d6fc79). The sweep
-  // harness in scripts/_part3_response_surface.mjs passes overrides; the
-  // production code path passes nothing and gets v1 behaviour byte-for-byte.
+  // Brief 28b Part 3 v2 (2026-05-14 commit d7c7aad + this commit):
+  // optional `tuning` overrides for the three thermal-mass /
+  // solar-distribution / surface-resistance parameters. Defaults set
+  // from the response-surface sweep in
+  // docs/validation/state1_part3_response_surface_2026_05.md.
+  // The sweep showed:
+  //   - solar_radiative_fraction = 0.30 gives best mean-T match (rest
+  //     leak too much heat outward through wall sol-air pathway)
+  //   - internal_mass = 100 kJ/(K·m²) gives EXACT summer max match
+  //     to EnergyPlus (35.5 °C vs EP 35.4 °C on Bridgewater)
+  //   - R_si has no measurable response at Bridgewater's R_total
+  //     (insulation dominates); kept at BS EN ISO 6946 defaults.
+  // Structural gaps remain (mean T ~1.7 K cooler than EP, winter min
+  // 4 K cooler, cooling demand 35% under) — these don't close with
+  // these knobs and need Part 3 v3 (glazing-inside solar absorption).
   const TUNE_SOLAR_RAD_FRAC      = (tuning && Number.isFinite(tuning.solar_radiative_fraction))
-    ? tuning.solar_radiative_fraction : 0.50
+    ? tuning.solar_radiative_fraction : 0.30
   const TUNE_INTERNAL_MASS_J_M2  = (tuning && Number.isFinite(tuning.internal_mass_J_per_K_per_m2))
-    ? tuning.internal_mass_J_per_K_per_m2 : 50_000
+    ? tuning.internal_mass_J_per_K_per_m2 : 100_000
   const TUNE_R_SI_WALL_OVR       = (tuning && Number.isFinite(tuning.R_si_wall))
     ? tuning.R_si_wall : R_SI_WALL
   const TUNE_R_SI_ROOF_OVR       = (tuning && Number.isFinite(tuning.R_si_roof))
@@ -497,9 +507,14 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   // Represents zone air + internal mass (furniture, partitions, content)
   // well-coupled to T_air. Without this term the zone air balance is
   // purely quasi-steady, so T_air tracks the outside-air signal too
-  // tightly in winter night periods (no buffering). Typical "InternalMass"
-  // contributions in EnergyPlus simulations sit in the 30–80 kJ/(K·m²
-  // floor area) range; 50 kJ/(K·m²) is a midline value.
+  // tightly in winter night periods (no buffering). EnergyPlus
+  // "InternalMass" contributions typically fall in 30-200 kJ/(K·m²)
+  // depending on building type; 100 kJ/(K·m²) is the v2 default, picked
+  // from the response-surface sweep against EP on Bridgewater. Lighter
+  // buildings (steel frame, partition-walled offices) may benefit from
+  // 50; heavier (concrete frame, exposed slabs) from 200. Brief 28b
+  // Part 5 candidate: derive from library construction stack instead
+  // of fixed default.
   const INTERNAL_MASS_J_PER_K_PER_M2_GIA = TUNE_INTERNAL_MASS_J_M2  // J/(K·m²) — partitions + furniture estimate
   const C_air_air_J = (volume * 1.2 * 1005)   // pure zone-air heat capacity (J/K) — ≈ 13 MJ/K for Bridgewater
   const C_air_internal_J = INTERNAL_MASS_J_PER_K_PER_M2_GIA * gia

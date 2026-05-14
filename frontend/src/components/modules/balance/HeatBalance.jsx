@@ -525,24 +525,25 @@ function StateOneDemandPanel({ data, comfortBand, onComfortBandChange, unit, eng
         </div>
       </div>
 
-      {/* Engine-disclosure note. The Static engine's State 1 path uses a
-          lumped two-node thermal mass model that under-stores heat in
-          construction layers compared to EP's per-layer CTF. The result:
-          summer_max_c runs ~8.8K above Dynamic free-running on Bridgewater.
-          Originally attributed to the isotropic sky model -- Brief 28
-          prereq close (2026-05-14) corrected the attribution: aggregate
-          transmitted solar agrees within a few percent across engines;
-          the dominant driver of the summer-max gap is the mass model.
-          See docs/state_1_engine_divergence_investigation.md (2026-05-14
-          update). Brief 28b Part 3 lands the multi-layer CTF fix. */}
-      {engineMode === 'live' && (fr.summer_max_c ?? 0) > 36 && (
+      {/* Engine-disclosure note. Post Brief 28b Part 3 v2 (2026-05-14):
+          summer max gap closed to within 0.3 K of Dynamic on Bridgewater
+          (was ~8.8 K with the previous lumped two-node mass model). Three
+          known limitations remain — documented in
+          docs/validation/bridgewater_state1_engine_outputs_2026_05_post_part3_v2.md.
+          Brief 28b Part 3 v3 + Part 4 are the queued follow-ups. */}
+      {engineMode === 'live' && (
         <p className="text-xxs text-mid-grey mt-2 italic leading-tight">
-          Static's lumped two-node mass model under-stores heat compared
-          to EnergyPlus's per-layer construction — peak summer reads
-          ~8.8°C above Dynamic on Bridgewater. <strong>For peak comfort
-          assessment, the Dynamic view is canonical.</strong> Annual mean and
-          comfort-hour distribution agree silently between engines. Multi-
-          layer CTF fix queued for Brief 28b Part 3.
+          <strong>Static engine — known limitations vs Dynamic (Brief 28b Part 3 v2):</strong>
+          <br />
+          • <strong>Summer max:</strong> within 0.3 K of Dynamic — credible for peak comfort assessment.
+          <br />
+          • <strong>Mean T trace:</strong> ~1.7 K cooler than Dynamic year-round. Known limitation, conservative for overheating risk.
+          <br />
+          • <strong>Cooling demand:</strong> ~35% lower than Dynamic.
+          {' '}<strong>For mechanical cooling sizing use the Dynamic engine.</strong>
+          <br />
+          The structural causes (glazing inside-surface absorption, long-wave radiative exchange between
+          interior surfaces) are queued as Brief 28b Part 3 v3 + Part 4.
         </p>
       )}
     </div>
