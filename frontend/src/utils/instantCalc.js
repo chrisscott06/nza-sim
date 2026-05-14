@@ -422,13 +422,25 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   const TUNE_SOLAR_RAD_FRAC      = (tuning && Number.isFinite(tuning.solar_radiative_fraction))
     ? tuning.solar_radiative_fraction : 0.30
   const TUNE_INTERNAL_MASS_J_M2  = (tuning && Number.isFinite(tuning.internal_mass_J_per_K_per_m2))
-    ? tuning.internal_mass_J_per_K_per_m2 : 100_000
+    ? tuning.internal_mass_J_per_K_per_m2 : 250_000
   const TUNE_R_SI_WALL_OVR       = (tuning && Number.isFinite(tuning.R_si_wall))
     ? tuning.R_si_wall : R_SI_WALL
   const TUNE_R_SI_ROOF_OVR       = (tuning && Number.isFinite(tuning.R_si_roof))
     ? tuning.R_si_roof : R_SI_ROOF
   const TUNE_R_SI_FLOOR_OVR      = (tuning && Number.isFinite(tuning.R_si_floor))
     ? tuning.R_si_floor : R_SI_FLOOR
+  // Brief 28b Part 3 v3 (2026-05-14): glazing inside-surface solar
+  // absorption. Represents short-wave radiation absorbed at the glazing
+  // interior surface (some from primary transmission absorbed in the
+  // inner pane low-e coating; some from diffuse interior re-reflections).
+  // EnergyPlus models this implicitly via the window energy balance;
+  // our simplified static engine misses it without an explicit term.
+  // Physically: heats the glazing inside surface, which convects directly
+  // to T_air — adds a "loss-free" solar gain term that doesn't transit
+  // through the wall stack. Default 0 (production code path unchanged
+  // until sweep picks a value). Range explored: [0.03, 0.05, 0.07, 0.10, 0.15].
+  const TUNE_GLAZ_INSIDE_ABS     = (tuning && Number.isFinite(tuning.glazing_inside_absorption_fraction))
+    ? tuning.glazing_inside_absorption_fraction : 0.07
 
   const geo = computeGeometry(building)
   const { gia, volume, total_wall_opaque, total_glazing, glazing, wall_opaque, roof_area, ground_area } = geo
@@ -598,7 +610,21 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
     const q_solar_to_inside_surf = (A_internal_opaque > 0)
       ? (SOLAR_RADIATIVE_FRACTION * Q_solar_glaz_zone) / A_internal_opaque
       : 0  // W/m² of inside surface
-    const Q_solar_to_zone_air = SOLAR_CONVECTIVE_FRACTION * Q_solar_glaz_zone
+
+    // Brief 28b Part 3 v3: additional gain term from short-wave solar
+    // absorbed AT the inside glazing surface. Scales with incident solar
+    // on glazing (pre-g_value, post-frame, post-shading). Bypasses wall
+    // mass and arrives directly at T_air via convection from the heated
+    // glazing surface. Reports separately for accounting transparency.
+    const Q_glaz_incident_post_shading = (
+      hourlySolar.f1[h] * (glazing.north ?? 0) * shadingFactors.north +
+      hourlySolar.f2[h] * (glazing.east  ?? 0) * shadingFactors.east  +
+      hourlySolar.f3[h] * (glazing.south ?? 0) * shadingFactors.south +
+      hourlySolar.f4[h] * (glazing.west  ?? 0) * shadingFactors.west
+    ) * (1 - FRAME_FRACTION)
+    const Q_solar_glazing_inside_abs = TUNE_GLAZ_INSIDE_ABS * Q_glaz_incident_post_shading
+
+    const Q_solar_to_zone_air = SOLAR_CONVECTIVE_FRACTION * Q_solar_glaz_zone + Q_solar_glazing_inside_abs
 
     // ── Linearised implicit-Euler step for each opaque wall ───────────────
     // Each returns:

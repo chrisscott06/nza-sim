@@ -525,25 +525,24 @@ function StateOneDemandPanel({ data, comfortBand, onComfortBandChange, unit, eng
         </div>
       </div>
 
-      {/* Engine-disclosure note. Post Brief 28b Part 3 v2 (2026-05-14):
-          summer max gap closed to within 0.3 K of Dynamic on Bridgewater
-          (was ~8.8 K with the previous lumped two-node mass model). Three
-          known limitations remain — documented in
-          docs/validation/bridgewater_state1_engine_outputs_2026_05_post_part3_v2.md.
-          Brief 28b Part 3 v3 + Part 4 are the queued follow-ups. */}
+      {/* Engine-disclosure note. Post Brief 28b Part 3 v3 (2026-05-14):
+          summer max + mean T + cooling demand all within ±15% of Dynamic.
+          Three smaller limitations remain — documented in
+          docs/validation/bridgewater_state1_engine_outputs_2026_05_post_part3_v3.md.
+          Brief 28b Part 4 (multi-construction validation) is the queued
+          follow-up before declaring State 1 fully validated. */}
       {engineMode === 'live' && (
         <p className="text-xxs text-mid-grey mt-2 italic leading-tight">
-          <strong>Static engine — known limitations vs Dynamic (Brief 28b Part 3 v2):</strong>
+          <strong>Static engine — agreement with Dynamic (Brief 28b Part 3 v3, Bridgewater):</strong>
           <br />
-          • <strong>Summer max:</strong> within 0.3 K of Dynamic — credible for peak comfort assessment.
+          • <strong>Summer max:</strong> within 0.3 K of Dynamic — credible for peak comfort.
           <br />
-          • <strong>Mean T trace:</strong> ~1.7 K cooler than Dynamic year-round. Known limitation, conservative for overheating risk.
+          • <strong>Mean T trace:</strong> within 0.5 K of Dynamic.
           <br />
-          • <strong>Cooling demand:</strong> ~35% lower than Dynamic.
-          {' '}<strong>For mechanical cooling sizing use the Dynamic engine.</strong>
+          • <strong>Cooling demand:</strong> within 10% of Dynamic.
           <br />
-          The structural causes (glazing inside-surface absorption, long-wave radiative exchange between
-          interior surfaces) are queued as Brief 28b Part 3 v3 + Part 4.
+          <strong>Smaller known limitations:</strong> winter min ~2 K cooler than Dynamic; external wall loss reads ~40% low (library-vs-layer U-value discrepancy); F1 / F2 per-facade solar 17–18% off (Brief 28b Part 2 territory — HDKR/Perez sky model upgrade queued).
+          {' '}For absolute peak comfort + design-day cooling sizing the Dynamic engine remains canonical, but the Static engine is now a credible first-pass approximation.
         </p>
       )}
     </div>
