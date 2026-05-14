@@ -224,10 +224,12 @@ export default function SummaryView() {
 
   if (!ready) {
     return (
-      <div className="mx-auto px-6 py-8 max-w-[1000px]">
-        <p className="text-caption text-mid-grey">
-          {libraryLoading ? 'Loading constructions library…' : 'Waiting for engine output…'}
-        </p>
+      <div className="h-full overflow-y-auto">
+        <div className="mx-auto px-6 py-8 max-w-[1000px]">
+          <p className="text-caption text-mid-grey">
+            {libraryLoading ? 'Loading constructions library…' : 'Waiting for engine output…'}
+          </p>
+        </div>
       </div>
     )
   }
@@ -253,7 +255,12 @@ export default function SummaryView() {
   const cooling_change = (s2d.cooling_demand_mwh ?? 0) - (s1d.cooling_demand_mwh ?? 0)
 
   return (
-    <div className="mx-auto px-6 py-5 max-w-[1000px] space-y-5">
+    // Brief 28a Part 5 walkthrough scroll fix (2026-05-14): wrap in a
+    // bounded outer container that owns the internal scroll. Page-level
+    // scroll banned per Pablo discipline; Summary is a multi-panel
+    // dashboard view so internal scrolling within the canvas is allowed.
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto px-6 py-5 max-w-[1000px] space-y-5">
       {/* ── Title ────────────────────────────────────────────────────── */}
       <div className="pb-3 border-b border-light-grey">
         <div className="flex items-center gap-2 flex-wrap">
@@ -390,6 +397,7 @@ export default function SummaryView() {
         the lumped two-node mass model (~8.8K gap on Bridgewater), not the sky
         model — Brief 28b Part 3 lands the multi-layer CTF fix.
       </p>
+      </div>
     </div>
   )
 }

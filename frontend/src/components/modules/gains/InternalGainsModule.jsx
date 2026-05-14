@@ -161,11 +161,19 @@ function CollapsibleSection({ title, accent, onActivate, children, defaultOpen =
 //   viewport in Parts 4-5 will host temperature traces + profiles +
 //   hourly distributions etc. -- all conditions). Internal key 'loadshape'
 //   kept stable so saved layout prefs don't lose state.
+// Brief 28a Part 5 walkthrough Finding 1 (2026-05-14): user-facing label
+//   renamed again 'Conditions' -> 'Profiles'. Rationale (Chris): "Profiles"
+//   matches the schedule-driven nature of what the tab actually shows
+//   (People/Lighting/Equipment time-varying profiles), and aligns with
+//   how the rest of the tool talks about gains. Internal key 'loadshape'
+//   + localStorage keys 'nza-conditions-*' kept stable per Chris's call
+//   on internal-vs-user-facing churn. Internal filename LoadShapeView.jsx
+//   stays for now; cosmetic file rename queued for Part 7 close-out.
 const TABS = [
   { key: 'schedule',    label: 'Schedule',     fullWidth: true,  hasEngineToggle: false, isSchedule: true                  },
   { key: 'summary',     label: 'Summary',      fullWidth: false, hasEngineToggle: true,  headline: true                    },
   { key: 'balance',     label: 'Heat balance', fullWidth: false, hasEngineToggle: true                                     },
-  { key: 'loadshape',   label: 'Conditions',   fullWidth: true,  hasEngineToggle: true                                     },
+  { key: 'loadshape',   label: 'Profiles',     fullWidth: true,  hasEngineToggle: true                                     },
 ]
 const TAB_KEYS = TABS.map(t => t.key)
 
@@ -457,8 +465,12 @@ export default function InternalGainsModule() {
             )}
           </div>
 
-          {/* Tab content */}
-          <div className="flex-1 overflow-y-auto">
+          {/* Tab content. Brief 28a Part 5 walkthrough finding (2026-05-14):
+              overflow changed auto -> hidden. Each tab view now bounds its
+              own height; whole-page scroll banned per Pablo discipline. If a
+              view's content truly exceeds the canvas, it manages an internal
+              scroll region (see SummaryView). */}
+          <div className="flex-1 overflow-hidden min-h-0">
             <TabContent
               tab={tab}
               activeSection={activeSection}

@@ -1,10 +1,16 @@
 /**
- * LoadShapeView.jsx — Internal Gains module "Conditions" tab.
+ * LoadShapeView.jsx — Internal Gains module "Profiles" tab.
+ * (File name LoadShapeView.jsx kept for now; cosmetic rename to
+ *  ProfilesView.jsx queued for Brief 28a Part 7 close-out.)
  *
  * Brief 28a Part 3c (2026-05-14): interim consolidation with sub-view
  *                                  toggle (Temperature / Hourly / Breakdown).
  * Brief 28a Part 3d (2026-05-14): user-facing tab label "Load shape" →
  *                                  "Conditions".
+ * Brief 28a Part 5 walkthrough Finding 1 (2026-05-14): user-facing tab
+ *                                  label renamed again "Conditions" →
+ *                                  "Profiles". Internal storage keys
+ *                                  ('nza-conditions-*') kept stable.
  * Brief 28a Part 5 (2026-05-14): rewritten to use the Pablo composition
  *                                pattern (ZoomNav + chart + DataCards
  *                                stacked right + MonthJumpButtons), with
@@ -26,7 +32,7 @@
  *                                helpful).
  *
  * Lens decision (Chris's UX question):
- *   Option (a) chosen — lens selector toggle inside the Conditions card,
+ *   Option (a) chosen — lens selector toggle inside the Profiles card,
  *   above the chart. Rejected:
  *     (b) all-stacked: three full-height charts violate bounded-chart-
  *         height principle and would page-scroll.
@@ -40,7 +46,7 @@
  *   - Gain profile — hourly internal gain breakdown (People + Lighting
  *                   + Equipment stacked area, kW)
  *
- *   Annual breakdown lens DROPPED from Conditions tab — it's not a time-
+ *   Annual breakdown lens DROPPED from Profiles tab — it's not a time-
  *   varying signal (so doesn't fit the ZoomNav/MonthJump pattern); the
  *   per-gain attribution it provided already lives in the Summary tab's
  *   "What gains contribute" section. Filed as a walkthrough flag in case
@@ -63,6 +69,7 @@ import ChartContainer  from '../../../chart/ChartContainer.jsx'
 import DataCard        from '../../../chart/DataCard.jsx'
 import ZoomNav         from '../../../chart/ZoomNav.jsx'
 import MonthJumpButtons, { dayOffsetForMonth } from '../../../chart/MonthJumpButtons.jsx'
+import TotalEnergyBar  from '../../../chart/TotalEnergyBar.jsx'
 import { TICK_STYLE, TOOLTIP_STYLE, GRID_STYLE, AXIS_PROPS } from '../../../../data/chartTokens.js'
 
 const TOTAL_HOURS = 8760
@@ -71,6 +78,7 @@ const START_DATE = new Date(2026, 0, 1)
 const LENS_STORAGE_KEY = 'nza-conditions-lens'
 const ZOOM_STORAGE_KEY = 'nza-conditions-zoom'
 const ENABLED_GAINS_KEY = 'nza-conditions-enabled-gains'
+const ENERGY_UNIT_KEY = 'nza-conditions-energy-unit'
 
 const ZOOM_OPTIONS = [
   { label: '1d',  days: 1 },
@@ -163,6 +171,19 @@ export default function LoadShapeView() {
       return next
     })
   }
+
+  // Brief 28a Part 5 walkthrough Finding 3 (2026-05-14): unit toggle for
+  // the TotalEnergyBar. 'kWh' = window total; 'kWh_per_m2' = annual EUI.
+  const [energyUnit, setEnergyUnit] = useState(() => {
+    try {
+      const saved = localStorage.getItem(ENERGY_UNIT_KEY)
+      if (saved === 'kWh' || saved === 'kWh_per_m2') return saved
+    } catch {}
+    return 'kWh'
+  })
+  useEffect(() => {
+    try { localStorage.setItem(ENERGY_UNIT_KEY, energyUnit) } catch {}
+  }, [energyUnit])
 
   // ── Annual hourly arrays — memoised on params + weather ───────────────
   const annualTemperature = useMemo(() => {
@@ -268,8 +289,37 @@ export default function LoadShapeView() {
       sharePeople:   totalKWh > 0 ? Math.round((sumPeople    / totalKWh) * 100) : 0,
       shareLighting: totalKWh > 0 ? Math.round((sumLighting  / totalKWh) * 100) : 0,
       shareEquip:    totalKWh > 0 ? Math.round((sumEquip     / totalKWh) * 100) : 0,
+      // Brief 28a Part 5 Finding 3 — absolute per-gain kWh totals for the
+      // visible window (each row is kW for 1 hour, so a row-sum is kWh).
+      windowKWhPeople:    sumPeople,
+      windowKWhLighting:  sumLighting,
+      windowKWhEquipment: sumEquip,
     }
   }, [gainsWindow, enabledGains])
+
+  // Annual full-year per-gain totals (kWh). Used by the TotalEnergyBar's
+  // kWh/m²·yr mode. Independent of enabledGains so the bar's annual
+  // benchmark stays stable when shares are toggled visually.
+  const annualGainTotals = useMemo(() => {
+    if (!annualGains?.length) return { people: 0, lighting: 0, equipment: 0 }
+    let p = 0, l = 0, e = 0
+    for (const row of annualGains) {
+      p += row.people
+      l += row.lighting
+      e += row.equipment
+    }
+    return { people: p, lighting: l, equipment: e }
+  }, [annualGains])
+
+  // Human-readable window label for the TotalEnergyBar header.
+  const windowLabel = (() => {
+    if (zoomDays >= 365) return 'full year'
+    if (selectedMonth != null) {
+      const monthName = dayToDate(startDay).toLocaleDateString('en-GB', { month: 'long' })
+      return `${monthName}`
+    }
+    return `${zoomDays}d window · ${dateRangeLabel}`
+  })()
 
   // ── Month jump handler ────────────────────────────────────────────────
   const onSelectMonth = (m) => {
@@ -304,13 +354,17 @@ export default function LoadShapeView() {
     : `Internal gain profile${zoomDays >= 365 ? ' — annual' : ` — ${dateRangeLabel}`}`
 
   return (
-    <div className="px-5 py-4 space-y-3 max-w-[1100px] mx-auto">
+    // Brief 28a Part 5 walkthrough Finding "fix scrolling" (2026-05-14):
+    // root is now a height-bounded flex column. Header + footnote take
+    // their natural height; the chart card stretches to fill the rest.
+    // No page-level scroll on standard viewports.
+    <div className="px-5 py-3 max-w-[1100px] mx-auto h-full flex flex-col gap-2 min-h-0">
 
       {/* ── Header: title + EngineBadge + lens selector ─────────────── */}
-      <div className="flex items-end justify-between gap-3 flex-wrap">
+      <div className="flex items-end justify-between gap-3 flex-wrap flex-shrink-0">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-section font-semibold text-navy">Conditions</h2>
+            <h2 className="text-section font-semibold text-navy">Profiles</h2>
             <EngineBadge />
           </div>
           <p className="text-xxs text-mid-grey mt-0.5">
@@ -337,7 +391,7 @@ export default function LoadShapeView() {
       </div>
 
       {/* ── Canonical chart-with-stat-panel card ────────────────────── */}
-      <div className="bg-white border border-light-grey rounded-lg p-3 space-y-2">
+      <div className="bg-white border border-light-grey rounded-lg p-3 flex flex-col gap-2 flex-1 min-h-0">
 
         {/* Zoom row, full width */}
         <ZoomNav
@@ -355,10 +409,12 @@ export default function LoadShapeView() {
           }
         />
 
-        {/* Body: chart left (~2/3), DataCards stacked right (180px) */}
-        <div className="flex gap-3 mt-2">
-          <div className="flex-1 min-w-0">
-            <ChartContainer title={chartTitle} height={300}>
+        {/* Body: chart left (~2/3), DataCards stacked right (180px).
+            flex-1 with min-h-0 lets the chart absorb available height
+            so the whole card fits the bounded canvas. */}
+        <div className="flex gap-3 flex-1 min-h-0">
+          <div className="flex-1 min-w-0 flex flex-col">
+            <ChartContainer title={chartTitle} fluid>
               {isTemperature ? (
                 <LineChart data={tempPlot ?? []} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid {...GRID_STYLE} />
@@ -408,8 +464,8 @@ export default function LoadShapeView() {
             </ChartContainer>
           </div>
 
-          {/* Stats column */}
-          <div className="w-[180px] flex-shrink-0 space-y-2">
+          {/* Stats column — internal scroll if content exceeds chart height. */}
+          <div className="w-[180px] flex-shrink-0 space-y-2 overflow-y-auto">
             {isTemperature && tempStats && (
               <>
                 <DataCard label="Peak"     value={tempStats.peak}   unit="°C" accent="heating-red"  icon={Thermometer} />
@@ -420,6 +476,27 @@ export default function LoadShapeView() {
             )}
             {!isTemperature && gainStats && (
               <>
+                {/* Magnitude anchor — Brief 28a Part 5 Finding 3. Lives at
+                    the top of the stats column so users see the absolute
+                    energy total before reading the time-series detail. */}
+                <TotalEnergyBar
+                  unit={energyUnit}
+                  setUnit={setEnergyUnit}
+                  windowTotals={{
+                    people:    gainStats.windowKWhPeople,
+                    lighting:  gainStats.windowKWhLighting,
+                    equipment: gainStats.windowKWhEquipment,
+                  }}
+                  annualTotals={annualGainTotals}
+                  enabledGains={enabledGains}
+                  gia={gia}
+                  windowLabel={windowLabel}
+                  colors={{
+                    people:    GAIN_COLOURS.occupancy,
+                    lighting:  GAIN_COLOURS.lighting,
+                    equipment: GAIN_COLOURS.equipment,
+                  }}
+                />
                 <DataCard label="Peak"     value={gainStats.peakKW}        unit="kW"    accent="navy"  />
                 <DataCard label="Mean"     value={gainStats.meanKW}        unit="kW"    accent="slate" />
                 {/* Share rows act as visibility toggles — click to isolate
@@ -457,7 +534,7 @@ export default function LoadShapeView() {
         </div>
 
         {/* MonthJumpButtons row, full width below chart */}
-        <div className="pt-2 border-t border-light-grey/60">
+        <div className="pt-2 border-t border-light-grey/60 flex-shrink-0">
           <MonthJumpButtons
             selectedMonth={selectedMonth}
             onSelect={onSelectMonth}
@@ -468,14 +545,15 @@ export default function LoadShapeView() {
       </div>
 
       {/* ── Footnote ────────────────────────────────────────────────── */}
-      <p className="text-xxs text-mid-grey/70 italic">
+      <p className="text-xxs text-mid-grey/70 italic flex-shrink-0">
         Static engine numbers. Static summer max sits ~8.8°C above Dynamic on
         Bridgewater — lumped two-node mass model (Brief 28b Part 3 lands the
         multi-layer CTF fix). The Annual breakdown lens that lived in the
         interim 3-sub-view toggle (Brief 28a Part 3c) is dropped here — per-gain
-        attribution is already in the Summary tab; "Conditions" is the time-
-        varying-signals tab. Walkthrough flag: revisit if you want that view
-        back as a third lens or a separate tab.
+        attribution is already in the Summary tab; "Profiles" is the time-
+        varying-signals tab. The new total-energy bar in the stats column
+        addresses much of what the Annual breakdown lens used to show
+        (magnitude anchor segmented by gain).
       </p>
     </div>
   )

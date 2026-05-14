@@ -238,16 +238,23 @@ export default function ScheduleEditorCanvas({
 
   if (!parentSchedule) {
     return (
-      <div className="mx-auto px-6 py-8 max-w-[1100px]">
-        <p className="text-caption text-mid-grey">
-          No schedule on this gain yet. Add a magnitude in the left panel,
-          then return here to author the hourly profile.
-        </p>
+      <div className="h-full overflow-y-auto">
+        <div className="mx-auto px-6 py-8 max-w-[1100px]">
+          <p className="text-caption text-mid-grey">
+            No schedule on this gain yet. Add a magnitude in the left panel,
+            then return here to author the hourly profile.
+          </p>
+        </div>
       </div>
     )
   }
 
   return (
+    // Brief 28a Part 5 walkthrough scroll fix (2026-05-14): bounded outer
+    // container with internal scroll. Schedule editor has many sub-sections
+    // (curve, day-types, exceptions, monthly multipliers) so internal
+    // scrolling within the canvas is the right pattern.
+    <div className="h-full overflow-y-auto">
     <div className="mx-auto px-6 py-5 max-w-[1100px]">
       {/* Title bar — always reflects the default schedule label */}
       <div
@@ -367,6 +374,7 @@ export default function ScheduleEditorCanvas({
           highlightExceptionId={effectiveHighlight}
         />
       </div>
+    </div>
     </div>
   )
 }

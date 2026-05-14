@@ -16,10 +16,12 @@ export default function HeatBalanceView() {
 
   if (!ready) {
     return (
-      <div className="mx-auto px-6 py-8 max-w-[1000px]">
-        <p className="text-caption text-mid-grey">
-          {libraryLoading ? 'Loading constructions library…' : 'Waiting for engine output…'}
-        </p>
+      <div className="h-full overflow-y-auto">
+        <div className="mx-auto px-6 py-8 max-w-[1000px]">
+          <p className="text-caption text-mid-grey">
+            {libraryLoading ? 'Loading constructions library…' : 'Waiting for engine output…'}
+          </p>
+        </div>
       </div>
     )
   }
@@ -29,6 +31,10 @@ export default function HeatBalanceView() {
   // distributions). Our State 2 output mirrors that exact shape per the
   // v2.4 contract — pass directly through.
   return (
+    // Brief 28a Part 5 walkthrough scroll fix (2026-05-14): bounded outer
+    // container with internal overflow. Tab content area is overflow-hidden;
+    // HeatBalance is a multi-section dashboard so internal scroll is fine.
+    <div className="h-full overflow-y-auto">
     <div className="mx-auto px-6 py-5 max-w-[1100px]">
       <div className="pb-3 border-b border-light-grey mb-4">
         <div className="flex items-center gap-2 flex-wrap">
@@ -51,6 +57,7 @@ export default function HeatBalanceView() {
           Part 3 (2026-05-14) fixed this after the Part 1 prop-rename was
           discovered to be necessary-but-insufficient via Chris's walkthrough. */}
       <HeatBalance liveData={state2?.heat_balance} mode="envelope-gains" />
+    </div>
     </div>
   )
 }
