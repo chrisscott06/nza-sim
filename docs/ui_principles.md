@@ -73,6 +73,22 @@ When in doubt, stack vertically. Horizontal layouts are for genuinely-parallel c
 
 Two pieces of information that aren't directly comparable should not be placed left/right at opposite ends of the screen. They should be stacked or grouped into a single card.
 
+### 6. Density baseline — working tool, not marketing page
+
+NZA-Sim's surfaces are working tools. They should read as such: information-dense, compact, scannable. They should NOT read as marketing landing pages with oversized hero text, generous whitespace, and pacing-for-effect section gaps.
+
+**Concrete baseline:**
+- Body text default: `text-xxs` / `text-caption` (not `text-base` / `text-lg`)
+- Section headings: `text-section` or smaller; reserve `text-base` / `text-h2` / `text-h3` for top-of-page headers
+- Padding inside cards: `p-2` / `p-3` (not `p-4` / `p-6`)
+- Gap between sections: `space-y-3` / `space-y-4` / `space-y-5` (not `space-y-8` / `space-y-12`)
+- Buttons: compact; `px-2 py-0.5` / `px-2.5 py-1` typical; pill buttons rare
+- Numbers: `tabular-nums` always (so column-aligned readout panels scan cleanly)
+
+**Rule of thumb:** if a surface needs scrolling to read content that should fit at-a-glance, density is too low. If text feels cramped or unreadable at default zoom, density is too high. Calibrate to the consultant doing real work, not a first-time visitor scanning a homepage.
+
+This principle was added 2026-05-14 after the Brief 28a Part 4 component-harness walkthrough surfaced sprawl in `/chart-test`. The principle existed implicitly in the existing modules (Internal Gains, Building) but wasn't documented.
+
 ---
 
 ## Common patterns and their canonical treatment
@@ -107,6 +123,38 @@ Tab strip at the top, centred. Tab content uses the centre canvas's maximum read
 ### A flow visualisation (Sankey, time-series, etc.)
 
 Use full available width. These earn their horizontal space because width carries data.
+
+**Height, however, is bounded.** A chart should NEVER flex-fill viewport height. The Y-axis range carries less meaning than the X-axis range, so unbounded vertical growth produces wasted whitespace and forces page scrolling.
+
+- Default chart height: **280–360 px** for full-width time-series; **280–320 px** for square-ish category charts (e.g. a 12-month bar chart).
+- Aspect ratio: time-series ~16:9 (wide); category charts (≤ 30 points) closer to 4:3 or square. The data determines it, not the container.
+- Charts rendered inside a Pablo `ChartContainer` set height via the `height` prop (number, in px). Avoid `h-full` / `flex-1` on chart wrappers.
+
+### A chart paired with a stat panel (Pablo Load Inspector pattern)
+
+Time-series or category charts often appear alongside read-at-a-glance summary numbers. The canonical composition mirrors Pablo's Load Inspector:
+
+```
+┌── header: zoom controls, period buttons, unit toggle ─────────┐
+├──────────────────────────────────────────────┬────────────────┤
+│                                              │  Stat 1        │
+│                                              │  Stat 2        │
+│            CHART AREA  (~2/3 width)          │  Stat 3        │
+│                                              │  Stat 4        │
+│                                              │                │
+├──────────────────────────────────────────────┴────────────────┤
+│  [All] [Jan] [Feb] [Mar] ... [Dec]   (MonthJumpButtons)        │
+└────────────────────────────────────────────────────────────────┘
+```
+
+Rules:
+- **Chart on the left, stats on the right.** The chart is the main visual surface; stats are scanning metadata. Left-bias matches reading order (eye lands on chart first, then scans the stats column).
+- **Stats column is narrower** (~1/3 of the layout, or fixed ~180–220 px). DataCards stacked vertically; not arranged in a grid.
+- **Zoom + period controls go above** the chart, spanning the full layout width. Aligned to the left edge of the chart so the chart "owns" the column it sits in.
+- **MonthJumpButtons (if present) go below** the chart, also spanning full width. They drive the chart's date window; placing them below keeps the eye flow chart → month-jump → chart-updates.
+- **No vertical fill.** Chart height bounded per the previous pattern. Stats panel can be shorter than the chart; whitespace at the bottom of the stats column is fine.
+
+This pattern lands in Brief 28a Part 5 (Internal Gains Conditions tab) and is mirrored in 3e (Building Conditions tab) with Building-specific data lenses.
 
 ### Mini-profiles and inline indicators
 

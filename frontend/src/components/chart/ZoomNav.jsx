@@ -44,11 +44,14 @@ export default function ZoomNav({
 }) {
   const maxStart = Math.max(0, totalDays - zoomDays)
 
+  // Density-tightened vs Pablo's source per ui_principles.md §6 (added
+  // 2026-05-14): text-caption -> text-xxs on the zoom buttons; text-xs ->
+  // text-xxs on the date range label; padding kept tight at px-2 py-0.5.
   return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2">
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-1.5">
         <span className="text-xxs font-medium text-navy">Zoom:</span>
-        <div className="flex bg-white rounded-lg border border-light-grey p-0.5 gap-0.5">
+        <div className="flex bg-white rounded border border-light-grey p-0.5 gap-0.5">
           {options.map(opt => (
             <button
               key={opt.days}
@@ -56,7 +59,7 @@ export default function ZoomNav({
                 setZoomDays(opt.days)
                 setStartDay(Math.min(startDay, Math.max(0, totalDays - opt.days)))
               }}
-              className={`px-2.5 py-1 text-caption rounded-md transition-colors ${
+              className={`px-2 py-0.5 text-xxs rounded transition-colors ${
                 zoomDays === opt.days
                   ? 'bg-teal text-white font-medium'
                   : 'text-mid-grey hover:text-navy'
@@ -69,22 +72,22 @@ export default function ZoomNav({
         <button
           onClick={() => setStartDay(Math.max(0, startDay - zoomDays))}
           disabled={startDay <= 0}
-          className="p-1 rounded border border-light-grey hover:bg-off-white disabled:opacity-30"
+          className="p-0.5 rounded border border-light-grey hover:bg-off-white disabled:opacity-30"
         >
-          <ChevronLeft size={14} />
+          <ChevronLeft size={12} />
         </button>
-        <span className="text-xs text-navy font-medium min-w-[120px] text-center">
+        <span className="text-xxs text-navy font-medium min-w-[110px] text-center tabular-nums">
           {dateRangeLabel}
         </span>
         <button
           onClick={() => setStartDay(Math.min(maxStart, startDay + zoomDays))}
           disabled={startDay >= maxStart}
-          className="p-1 rounded border border-light-grey hover:bg-off-white disabled:opacity-30"
+          className="p-0.5 rounded border border-light-grey hover:bg-off-white disabled:opacity-30"
         >
-          <ChevronRight size={14} />
+          <ChevronRight size={12} />
         </button>
       </div>
-      {rightContent && <div className="flex items-center gap-2">{rightContent}</div>}
+      {rightContent && <div className="flex items-center gap-1.5">{rightContent}</div>}
     </div>
   )
 }

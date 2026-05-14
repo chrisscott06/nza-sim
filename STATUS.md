@@ -13,14 +13,28 @@
 - `7782556` Brief 28a Part 3a: new Summary tab as default for Internal Gains
 - (earlier this session: Brief 27 cleanup Part 3 corrected close, Finding 2 fix-(b), Brief 28a Parts 1+2)
 
-### Walkthrough target for Part 4 — visit `/chart-test`
+### Walkthrough target for Part 4 (refined) — re-visit `/chart-test`
 
-Open `http://localhost:5176/chart-test` (dev-only route, not linked in sidebar). The page renders all four chart components in isolation with sample state + data:
+First walkthrough (2026-05-14) flagged three composition problems: chart filled viewport height; DataCards stacked above/below at full width; density too low (marketing-page feel). All three addressed. Plus `docs/ui_principles.md` updated with the new layout rules so Part 5 + 3e inherit them cleanly.
 
-1. **DataCard** — 8 accent variants with sub-labels and icons. Inline-style `borderLeft` uses free-form CSS colour from the ACCENT_COLORS map (the refactored form — no Tailwind class lookup).
-2. **ChartContainer** — wraps a small Recharts BarChart with placeholder monthly data. Compact uppercase title; light-grey border; ResponsiveContainer; **no print/export button** (intentional strip — NZA's existing version was already in this stripped state; matches the brief's spec).
-3. **ZoomNav** — interactive: pick 1d/7d/14d/30d, step forward/back. Active zoom button is teal; chevrons disable at boundaries. Date range label updates live.
-4. **MonthJumpButtons** — interactive in two sizes (`sm` default + `md`). Season-coloured selection (Winter teal / Spring green / Summer gold / Autumn coral). Aug + Sep shown disabled to demonstrate `disabledMonths`. Clicking a month also drives the ZoomNav above via `dayOffsetForMonth`.
+Open `http://localhost:5176/chart-test` (dev-only route, not linked in sidebar). The page is now structured as two sections:
+
+**Section 1 — Canonical composition (Part 5 preview).** Single bounded card containing:
+- ZoomNav at top spanning full card width (zoom buttons tightened to `text-xxs`)
+- **Two-column body:** chart on the left (~2/3 width, constrained to 300px height, LineChart of synthetic daily trace, 21°C / 25°C comfort-band reference lines), **DataCards stacked vertically on the right** (180px-wide column, 4 cards: Peak / Trough / Mean / Window-days). Stats read at-a-glance against the visible window — they update live as you zoom or jump.
+- MonthJumpButtons below the chart, spanning full card width. Aug + Sep shown disabled (demo of `disabledMonths`). Clicking a month drives the chart window via `dayOffsetForMonth`.
+
+**Section 2 — DataCard accent variants.** Compact 4-up grid of 8 accents.
+
+Density baseline now matches NZA-Sim's working-tool aesthetic: text-xxs / text-section / tabular-nums throughout; tighter padding (p-2/p-3); shorter section gaps (space-y-5).
+
+### Layout rules now in `docs/ui_principles.md`
+
+Three additions land in this commit so Part 5 and 3e can build to spec rather than rework after walkthrough:
+
+- **Principle 6 — Density baseline.** Working tool, not marketing page. Concrete typography / padding / button-size defaults captured.
+- **Pattern update — "A flow visualisation (Sankey, time-series, etc.)."** Now includes chart-height rules: never flex-fill viewport; 280–360 px for time-series, 280–320 px for category charts; aspect determined by data not container.
+- **New pattern — "A chart paired with a stat panel."** The canonical Pablo Load Inspector composition: chart left, narrower stats column right, zoom controls above, period buttons below. Diagram + rules in the doc.
 
 ### After component walkthrough
 
