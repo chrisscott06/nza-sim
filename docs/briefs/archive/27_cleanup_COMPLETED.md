@@ -91,3 +91,50 @@ After both parts complete:
 **Confidence target:** 10/10 (these are bug fixes, no design decisions).
 
 If anything in this brief takes more than 2 hours or surfaces unexpected complexity, halt under HH3 and report.
+
+---
+
+## Part 3 — Corrected close-out (added 2026-05-14 after walkthrough)
+
+**Reason for reopening:** Brief 27 cleanup Part 1 closed at 10/10 confidence based on a static-code verification that the prop rename had landed (`balance=` → `liveData=` on `HeatBalanceView.jsx:45`). The rename was correct but NOT sufficient. Chris's walkthrough confirmed the Heat balance tab still showed the empty state on a loaded Bridgewater. Honest root cause: I missed the brief's explicit Step 4 — "Verify the data shape matches what the consumer expects — if not, transform the data appropriately." I verified the prop name but not the shape contract.
+
+### What was actually wrong
+
+`_calculateState2` in `frontend/src/utils/instantCalc.js` returns the state contract output with `annual`/`losses`/`gains`/`metadata` NESTED under `heat_balance` (lines 1302-1325). The engine author's comment at the same site says explicitly: *"Mirror the state1 heat_balance shape so the existing HeatBalance component renders State 2 without further changes."* They intended the consumer to receive `state2.heat_balance`, not the full `state2`.
+
+A second, secondary mismatch: `_calculateState2` placed `people` / `lighting` / `equipment` directly under `gains.*` while `HeatBalance.jsx`'s `flattenGains` looks for them under `gains.internal.*` (lines 102-117 of HeatBalance.jsx). So even after the wrapper unwrap, internal gains would have rendered empty.
+
+### Fixes shipped in Part 3
+
+1. **Wrapper unwrap.** `frontend/src/components/modules/gains/canvas/HeatBalanceView.jsx:45`:
+   - Was: `<HeatBalance liveData={state2} mode="envelope-gains" />`
+   - Now: `<HeatBalance liveData={state2?.heat_balance} mode="envelope-gains" />`
+   - Inline comment explains the unwrap and references this Part 3.
+
+2. **Engine output shape.** `frontend/src/utils/instantCalc.js` `_calculateState2` return at line 1299+:
+   - Moved `people` / `lighting` / `equipment` from `gains.*` to `gains.internal.*` to match what `flattenGains` consumes.
+   - Recomputed `totals.gains_kwh` and `totals.gains_kwh_per_m2` to include the new internal gains (was previously solar-only when internal gains were misplaced at `gains.*` and `flattenGains` couldn't see them anyway — but the totals were under-counting either way).
+
+### Verification
+
+New diagnostic script `scripts/verify_state2_heat_balance_shape.mjs`. All 15 shape checks pass:
+- `state2.heat_balance.annual` exists (empty-state check passes)
+- `annual.totals.losses_kwh` = 184,729.4 kWh ; `gains_kwh` = 307,594.3 kWh (now includes internal gains)
+- `annual.gains.solar` exists ✓ ; `annual.gains.internal.{people,lighting,equipment}` all exist ✓
+- `annual.losses.external_wall` exists ✓ ; `metadata.gia_m2` = 3,457 m² ✓
+- `annual.gains.{people,lighting,equipment}` correctly absent at top level
+
+Isolation regressions remain byte-identical post-shape-change (the new shape applies consistently across baseline + absurd-input cases):
+- State 1 Live: 40/40
+- State 2 Live: 21/21
+- Build clean
+
+### Revised confidence
+
+**Part 3 confidence: 9/10.** One open question — `mode="envelope-gains"` is still being passed to a consumer whose `mode` prop is documented `'envelope-only' | 'full'`. `stateMode.js` falls through to `FULL` for unrecognised modes, which gives us the right gain/loss order (solar + internal + heating; heating filters out at runtime since state 2 has none). So this works, but it's documented-by-fallthrough rather than first-class. Suggest extending `LOSS_ORDERS` and `GAIN_ORDERS` in `stateMode.js` to include `ENVELOPE_GAINS` explicitly during Brief 28a Part 3 (canvas restructure) or as a small standalone follow-up.
+
+**Brief 27 cleanup overall confidence after Part 3: 9/10.** The original 10/10 was wrong; Part 1's verification gap is the 1/10 gap. A regression test that loads the rendered HeatBalance with state2 data and confirms it doesn't fall into the empty-state branch would have caught this. Filed as a candidate test for Brief 28a Part 7 close-out.
+
+### Lesson for future verification
+
+When the brief says "Verify the data shape matches what the consumer expects — if not, transform the data appropriately," do not stop at the prop-name check. Read the engine's return statement, read the consumer's prop reads, and confirm the two shapes match field-by-field. A regression script that renders the React component server-side (or via a smoketest) and asserts on visible output would have caught this. Brief 28a Part 7 close-out gets a new acceptance gate: rendering smoketest for HeatBalanceView with Bridgewater state2 data, asserting `data.annual` resolves and gains.internal renders.

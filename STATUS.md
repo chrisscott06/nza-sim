@@ -1,6 +1,52 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-14 — paused for walkthrough
+## 🚧 Session 2026-05-14 — paused after walkthrough findings (Brief 27 Part 3 + Finding 2 investigation)
+
+**State:** still `paused_for_walkthrough` (halt continues pending Finding 2 fix-path decision)
+**Walkthrough findings:**
+
+### Finding 1 (Heat balance bug) — FIXED in this session
+
+Brief 27 cleanup Part 1 closed at 10/10 but the fix was incomplete. The prop name was renamed correctly (`balance=` → `liveData=`) but the data shape didn't match. `_calculateState2` nests `annual`/`losses`/`gains`/`metadata` under `state2.heat_balance`, not at top level (the engine author's comment explicitly intended `state2.heat_balance` to be consumed). Second: internal gains were under `gains.*` rather than `gains.internal.*` where `flattenGains` looks for them.
+
+Brief 27 cleanup reopened and closed with **Part 3 (corrected)** — see `docs/briefs/archive/27_cleanup_COMPLETED.md` Part 3 section. Revised overall Brief 27 cleanup confidence: **9/10** (was 10/10; the 1/10 gap is the missed shape verification, captured as a learning + a regression-test candidate for Brief 28a Part 7).
+
+Fixes shipped:
+- `HeatBalanceView.jsx:45` — `<HeatBalance liveData={state2?.heat_balance} ...>` (unwrap the nested heat_balance subset)
+- `instantCalc.js _calculateState2` — move `people`/`lighting`/`equipment` to `gains.internal.*`; recompute `totals.gains_kwh` to include them
+
+Verified via new `scripts/verify_state2_heat_balance_shape.mjs` (15/15 shape checks pass). State 1 + State 2 Live regressions byte-identical.
+
+### Finding 2 (slow State 1 → State 2 transition) — ROOT CAUSE IDENTIFIED, fix-path needs Chris's call
+
+The Static engine itself is **sub-30ms cold, sub-10ms warm** on Bridgewater. Profiled via new `scripts/profile_static_engine.mjs`:
+
+```
+state1 cold:  7.8 ms
+state2 cold:  23.5 ms
+warm runs:    state1 ~1-2 ms, state2 ~6-17 ms
+```
+
+So the engine is not the bottleneck. The "~1 minute" delay is **auto-simulate firing a full Dynamic EP run in the background**:
+- `SimulationContext.jsx:59` defaults `autoSimulate = true`
+- `SimulationContext.jsx:92-115` triggers `runSimulation()` 2 seconds after every save (including project-load normalisations + migrations)
+- Full mode EP runs take ~35-45s
+- Status flips to `'running'` during the EP run
+
+If the UI is blocking on Dynamic completion anywhere, that's a separate UI bug (Static engine numbers should appear immediately regardless). Worth verifying with Chris's browser dev tools (Network tab will show the POST to `/api/projects/{id}/simulate`).
+
+Three plausible fix-paths for Chris's call:
+- **(a)** Disable auto-simulate by default (`useState(false)` at line 59). User explicitly clicks "Run Dynamic" when they want EP.
+- **(b)** Gate auto-simulate on first user edit only (skip when `saveStatus='saved'` is triggered by project-load normalisations / migrations). Preserves the convenience but eliminates the surprise EP run on initial load.
+- **(c)** Surface a clearer "Dynamic running in background…" indicator separate from Static-engine state, so the user knows it's not the Static engine being slow.
+
+My weak lean: (b). Auto-simulate is a useful affordance for iterative editing; gating on user-initiated saves preserves that while killing the surprise on load.
+
+This is a behaviour change crossing into "Chris should weigh in" territory per the orchestration doc. Filed as **Halt 3** in `docs/batch_halt_report.md`.
+
+---
+
+## 🚧 Session 2026-05-14 — paused for walkthrough (initial pause, superseded by findings above)
 
 **State:** `paused_for_walkthrough`
 **Commits shipped this session:** 11 (all pushed to `origin/main`)

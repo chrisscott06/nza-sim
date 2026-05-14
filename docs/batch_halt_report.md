@@ -193,6 +193,58 @@ Chris's explicit "go Option C+" to unhalt and proceed. The four sub-steps above 
 
 ---
 
+# Halt 3 — 2026-05-14 (Walkthrough Finding 2: auto-simulate vs Static engine)
+
+**Halt condition triggered:** SH3-adjacent (perceived performance regression in a "fresh-on-fresh" walkthrough surface; the Static engine itself is healthy, but the user-visible behaviour suggests it isn't, which makes the symptom load-bearing for batch confidence)
+**Brief:** 28a (in flight; Part 3 blocked)
+**Finding:** Chris's walkthrough reported a ~1-minute delay from "State 1 numbers appear" to "State 2 numbers appear." Investigation:
+
+**Static engine measured cold = 25 ms** on Bridgewater (`scripts/profile_static_engine.mjs`):
+```
+  state1 cold:  7.8 ms
+  state2 cold:  23.5 ms
+  warm runs:    state1 1-2 ms, state2 6-17 ms
+```
+
+So the engine itself is performant. The "~1 minute" delay is **auto-simulate firing a full Dynamic EP run** in the background:
+- `SimulationContext.jsx:59` defaults `autoSimulate = true`
+- `SimulationContext.jsx:92-115` triggers `runSimulation()` (POST `/api/projects/{id}/simulate`) 2 seconds after any save
+- Save events include project-load normalisations + migrations + every input edit
+- Full mode EP runs take ~35-45s
+- Status flips to `'running'` during the EP run
+
+The Static engine numbers should appear immediately regardless. If the UI is blocking on Dynamic anywhere, that's a separate UI bug worth tracking. The likely user-visible chain:
+1. User loads /gains
+2. Project-load normalisation in ProjectContext flips `saveStatus` to `'saved'`
+3. 2-second timer kicks off, then auto-simulate begins
+4. Network tab shows POST `/api/projects/.../simulate` running for 35-45s
+5. User perceives "the tool is loading something" — but it's the Dynamic EP run, not the Static engine
+
+## Three plausible fix-paths
+
+| Option | Change | Pros | Cons |
+|---|---|---|---|
+| **(a)** Disable auto-simulate by default | `SimulationContext.jsx:59` `useState(true)` → `useState(false)` | Simplest; no surprise EP runs; matches the principle "Static is canonical for editing, Dynamic on demand" | Loses the convenience of automatic Dynamic refresh after edits; user must remember to click Run Dynamic |
+| **(b)** Gate auto-simulate on first user edit only | Track whether `saveStatus='saved'` was triggered by user input vs project-load/migration; only fire auto-simulate for the former | Preserves convenience for iterative editing; eliminates the surprise on initial load | Requires distinguishing user-saves from system-saves at the ProjectContext level — small refactor |
+| **(c)** UI signalling improvement only | Add a "Dynamic running in background…" indicator, separate from Static-engine state; don't change auto-simulate behaviour | Zero behaviour change; clarifies UX | Doesn't address the underlying surprise; user still waits 35-45s for full EP to complete |
+
+My lean: **(b)**. Auto-simulate is genuinely useful for iterative editing — when the user changes an input, they want Dynamic to refresh without clicking. But auto-simulate firing on project-load normalisation is surprising and produces exactly the "Static engine is slow" misimpression. Tracking the source of the save event is a small ProjectContext change.
+
+Recommendation if (b) chosen: add `saveSource` to ProjectContext (`'user' | 'system'`), set it on each save action, and gate the auto-simulate effect on `saveSource === 'user'`. ~30 minutes of work.
+
+## What's needed from Chris
+
+A verdict on (a) / (b) / (c). The Static engine is fine; this is a fix to the auto-simulate UX, not to the Static engine itself.
+
+## State of the work
+
+- **Working tree:** clean after this commit (Finding 1 fix + corrected close-out doc).
+- **Last commit on `main`:** (next push after this halt report update)
+- **Files modified to surface the halt:** STATUS.md, batch_progress_2026_05.md, batch_halt_report.md. All are documentation; no code touched for Finding 2.
+- **Brief 28a Part 3 remains blocked** until Chris weighs in on the fix-path.
+
+---
+
 ## ~~Note on the batch_orchestration path discrepancy~~ Resolved 2026-05-14
 
 ~~The supersession notes in the two archived briefs reference `docs/batch_orchestration_2026_05.md`. The actual file is at `docs/briefs/batch_orchestration.md`.~~

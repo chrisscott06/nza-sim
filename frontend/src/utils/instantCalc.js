@@ -1298,16 +1298,30 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     },
     // Mirror the state1 heat_balance shape so the existing HeatBalance
     // component renders State 2 without further changes. The losses block
-    // is identical to State 1; the gains block adds people/lighting/equipment.
+    // is identical to State 1; the gains block adds people/lighting/equipment
+    // nested under .internal (the consumer's flattenGains in HeatBalance.jsx
+    // looks for `gains.internal.{people,equipment,lighting}` -- placing them
+    // directly under `gains.*` caused them to render empty. Brief 27 cleanup
+    // Part 3 (2026-05-14) corrected this.) Solar stays at gains.solar.
     heat_balance: {
       ...state1Result.heat_balance,
       annual: {
         ...state1Result.heat_balance.annual,
         gains: {
           ...state1Result.heat_balance.annual.gains,
-          people:    { kwh: r1(acc_people),    kwh_per_m2: Math.round(acc_people / 1000 / gia * 100) / 100 },
-          lighting:  { kwh: r1(acc_lighting),  kwh_per_m2: Math.round(acc_lighting / 1000 / gia * 100) / 100 },
-          equipment: { kwh: r1(totalEquipmentWh), kwh_per_m2: Math.round(totalEquipmentWh / 1000 / gia * 100) / 100 },
+          internal: {
+            people:    { kwh: r1(acc_people),    kwh_per_m2: Math.round(acc_people / 1000 / gia * 100) / 100 },
+            lighting:  { kwh: r1(acc_lighting),  kwh_per_m2: Math.round(acc_lighting / 1000 / gia * 100) / 100 },
+            equipment: { kwh: r1(totalEquipmentWh), kwh_per_m2: Math.round(totalEquipmentWh / 1000 / gia * 100) / 100 },
+          },
+        },
+        // Update totals to include internal gains (was solar-only when
+        // people/lighting/equipment were placed at gains.* directly).
+        totals: {
+          losses_kwh:         state1Result.heat_balance.annual.totals.losses_kwh,
+          losses_kwh_per_m2:  state1Result.heat_balance.annual.totals.losses_kwh_per_m2,
+          gains_kwh:          r1((state1Result.heat_balance.annual.totals.gains_kwh ?? 0) * 1000 + acc_people + acc_lighting + totalEquipmentWh),
+          gains_kwh_per_m2:   Math.round(((state1Result.heat_balance.annual.totals.gains_kwh ?? 0) + (acc_people + acc_lighting + totalEquipmentWh) / 1000) / gia * 100) / 100,
         },
       },
       demand: {

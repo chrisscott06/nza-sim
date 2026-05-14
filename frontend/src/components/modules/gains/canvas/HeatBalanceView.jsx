@@ -42,7 +42,15 @@ export default function HeatBalanceView() {
           breakdown tab.
         </p>
       </div>
-      <HeatBalance liveData={state2} mode="envelope-gains" />
+      {/* Unwrap state2.heat_balance — _calculateState2 nests annual / metadata /
+          losses / gains under .heat_balance (per the engine's design comment
+          "Mirror the state1 heat_balance shape so the existing HeatBalance
+          component renders State 2 without further changes"). Passing the
+          full state2 object causes data.annual to be undefined and the
+          "No heat balance data available" empty state fires. Brief 27 cleanup
+          Part 3 (2026-05-14) fixed this after the Part 1 prop-rename was
+          discovered to be necessary-but-insufficient via Chris's walkthrough. */}
+      <HeatBalance liveData={state2?.heat_balance} mode="envelope-gains" />
     </div>
   )
 }
