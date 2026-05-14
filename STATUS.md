@@ -1,14 +1,34 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-14 — paused at Brief 28a Part 3 mid-slice (3a-3d done, awaiting walkthrough before 3e/3f)
+## 🚧 Session 2026-05-14 — paused at Brief 28a Part 4 (Pablo components ported in isolation, awaiting component-level walkthrough before Part 5 wiring)
 
 **State:** `paused_for_walkthrough`
 **Latest commits this session (pushed to origin/main):**
+- `042dc84` Brief 28a Part 4 follow-up: `/chart-test` test harness for component-level walkthrough
+- `c54ee6f` Brief 28a Part 4: Pablo chart components port (ZoomNav + MonthJumpButtons + tokens)
+- `abdf5d7` Housekeeping: Pavlo → Pablo typo correction across 12 docs + comments
 - `359861c` Brief 28a Part 3d: 3D Model removal + auto-simulate default off + Load shape → Conditions
 - `496cda3` Brief 28a Part 3c: consolidate Free-running + Hourly + Annual breakdown into Conditions tab
 - `8b33206` Brief 28a Part 3b: fold Delta into Summary + gains-vs-demand stacked bar + remove standalone Delta tab
 - `7782556` Brief 28a Part 3a: new Summary tab as default for Internal Gains
 - (earlier this session: Brief 27 cleanup Part 3 corrected close, Finding 2 fix-(b), Brief 28a Parts 1+2)
+
+### Walkthrough target for Part 4 — visit `/chart-test`
+
+Open `http://localhost:5176/chart-test` (dev-only route, not linked in sidebar). The page renders all four chart components in isolation with sample state + data:
+
+1. **DataCard** — 8 accent variants with sub-labels and icons. Inline-style `borderLeft` uses free-form CSS colour from the ACCENT_COLORS map (the refactored form — no Tailwind class lookup).
+2. **ChartContainer** — wraps a small Recharts BarChart with placeholder monthly data. Compact uppercase title; light-grey border; ResponsiveContainer; **no print/export button** (intentional strip — NZA's existing version was already in this stripped state; matches the brief's spec).
+3. **ZoomNav** — interactive: pick 1d/7d/14d/30d, step forward/back. Active zoom button is teal; chevrons disable at boundaries. Date range label updates live.
+4. **MonthJumpButtons** — interactive in two sizes (`sm` default + `md`). Season-coloured selection (Winter teal / Spring green / Summer gold / Autumn coral). Aug + Sep shown disabled to demonstrate `disabledMonths`. Clicking a month also drives the ZoomNav above via `dayOffsetForMonth`.
+
+### After component walkthrough
+
+- **Part 5** — wire the components into LoadShapeView (the Conditions tab) to replace the interim sub-view toggle (Temperature / Hourly / Breakdown). Single unified time-series view with ZoomNav + MonthJumpButtons + DataCard stat panel + ChartContainer.
+- Then walkthrough of the live Conditions tab with Pablo zoom.
+- Then **3e** mirror the pattern to Building module with Building-specific data lenses.
+- Then **3f** update `docs/ui_principles.md` with the canonical pattern.
+- Then Brief 28a Parts 6, 7, 8 (Pablo rollout / close-out / state-aware Dynamic).
 
 ### Walkthrough targets for 3d (refinements on top of 3a-3c)
 
