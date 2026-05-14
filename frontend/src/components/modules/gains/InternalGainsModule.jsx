@@ -43,9 +43,11 @@ import SummaryView         from './canvas/SummaryView.jsx'
 // DeltaView removed from imports — its content lives in SummaryView as of
 // Brief 28a Part 3b (2026-05-14). File kept on disk as deprecated; will be
 // deleted at Brief 28a Part 7 close-out.
-import AnnualBreakdownView from './canvas/AnnualBreakdownView.jsx'
-import FreeRunningView     from './canvas/FreeRunningView.jsx'
-import HourlyProfileView   from './canvas/HourlyProfileView.jsx'
+import LoadShapeView       from './canvas/LoadShapeView.jsx'
+// Brief 28a Part 3c (2026-05-14): FreeRunningView + HourlyProfileView +
+// AnnualBreakdownView are now consumed by LoadShapeView's internal sub-view
+// toggle. The three files stay on disk for now (LoadShapeView imports them);
+// Parts 4-5 will replace them with a unified Pavlo-pattern time-series view.
 import HeatBalanceView     from './canvas/HeatBalanceView.jsx'
 import ThreeDView          from './canvas/ThreeDView.jsx'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
@@ -142,22 +144,20 @@ function CollapsibleSection({ title, accent, onActivate, children, defaultOpen =
 
 // ── Tab definitions ─────────────────────────────────────────────────────────
 // Brief 28a Part 3a (2026-05-14): new Summary tab inserted as the headline.
-// Brief 28a Part 3b (2026-05-14): 'delta' tab removed — its content (paired
-//   bars, comfort impact, per-gain attribution) is now inside Summary,
-//   alongside the new gains-vs-demand stacked bar with unit toggle.
-//   DeltaView.jsx kept as deprecated dead code; will be deleted at
-//   Brief 28a Part 7 close-out.
-// Brief 28a Part 3c (2026-05-14): 'freerunning' / 'hourly' / 'breakdown'
-//   tabs consolidated into a single 'loadshape' tab (next slice).
+// Brief 28a Part 3b (2026-05-14): 'delta' tab removed — content folded
+//   into Summary (paired bars + comfort impact + per-gain attribution +
+//   new gains-vs-demand stacked bar with unit toggle).
+// Brief 28a Part 3c (2026-05-14): 'freerunning' + 'hourly' + 'breakdown'
+//   consolidated into a single 'loadshape' tab with an internal sub-view
+//   toggle. The three sub-components remain reachable via the toggle.
+//   Parts 4-5 will rewrite this as a unified Pavlo time-series view.
 // 3D Model removal lands in 3d.
 const TABS = [
-  { key: 'schedule',    label: 'Schedule',          fullWidth: true,  hasEngineToggle: false, isSchedule: true                  },
-  { key: 'summary',     label: 'Summary',           fullWidth: false, hasEngineToggle: true,  headline: true                    },
-  { key: 'balance',     label: 'Heat balance',      fullWidth: false, hasEngineToggle: true                                     },
-  { key: 'freerunning', label: 'Free-running',      fullWidth: true,  hasEngineToggle: true                                     },
-  { key: 'hourly',      label: 'Hourly profile',    fullWidth: true,  hasEngineToggle: false                                    },
-  { key: 'breakdown',   label: 'Annual breakdown',  fullWidth: false, hasEngineToggle: false                                    },
-  { key: '3d',          label: '3D Model',          fullWidth: true,  hasEngineToggle: false                                    },
+  { key: 'schedule',    label: 'Schedule',     fullWidth: true,  hasEngineToggle: false, isSchedule: true                  },
+  { key: 'summary',     label: 'Summary',      fullWidth: false, hasEngineToggle: true,  headline: true                    },
+  { key: 'balance',     label: 'Heat balance', fullWidth: false, hasEngineToggle: true                                     },
+  { key: 'loadshape',   label: 'Load shape',   fullWidth: true,  hasEngineToggle: true                                     },
+  { key: '3d',          label: '3D Model',     fullWidth: true,  hasEngineToggle: false                                    },
 ]
 const TAB_KEYS = TABS.map(t => t.key)
 
@@ -269,14 +269,13 @@ function TabContent({
 
   // Brief 27 Revised Part 11: real canvas views. Brief 28a Part 3a adds
   // Summary. Part 3b removes 'delta' (content folded into Summary).
+  // Part 3c collapses 'freerunning' / 'hourly' / 'breakdown' into 'loadshape'.
   switch (tab) {
-    case 'summary':     return <SummaryView />
-    case 'breakdown':   return <AnnualBreakdownView />
-    case 'freerunning': return <FreeRunningView />
-    case 'hourly':      return <HourlyProfileView />
-    case 'balance':     return <HeatBalanceView />
-    case '3d':          return <ThreeDView />
-    default:            return null
+    case 'summary':   return <SummaryView />
+    case 'loadshape': return <LoadShapeView />
+    case 'balance':   return <HeatBalanceView />
+    case '3d':        return <ThreeDView />
+    default:          return null
   }
 }
 
