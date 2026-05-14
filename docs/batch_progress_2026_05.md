@@ -26,7 +26,7 @@ All four state-isolation regressions pass. Build is clean. The working-tree-clea
 
 | Part | Status | Start | End | Commit | Notes |
 |------|--------|-------|-----|--------|-------|
-| 1. Heat Balance prop bug fix | **halted before start** | — | — | — | Premise of fix called into question by Chris. UX audit identified prop-name bug; Chris asks whether what the audit saw was actually the race condition already fixed in commit `4f4f3a5` (Brief 27 close-out). Awaiting verification. |
+| 1. Heat Balance prop bug fix | **complete** | 2026-05-14 | 2026-05-14 | (this commit) | One-line rename `balance=` → `liveData=` on `HeatBalanceView.jsx:45`. Shape contract holds (`instantCalc.js` returns `annual.totals` + `metadata.gia_m2` matching what `HeatBalance.jsx` reads at lines 535-543). No transform needed per Chris's "rename is the complete fix if shape matches" guidance. All 4 isolation regressions still byte-identical (40/40 + 41/41 EP + 21/21 + 21/21). Build clean (10.99s). |
 | 2. Divergence doc correction | queued | — | — | — | Independent of Part 1; physics audit finding stands regardless. |
 
 ## Brief 28 Prereq Free-running EP
@@ -79,6 +79,7 @@ All four state-isolation regressions pass. Build is clean. The working-tree-clea
 | Part / decision | Rationale |
 |---|---|
 | Use `$env:ENERGYPLUS_DIR = "C:\EnergyPlusV26-1-0"` inline for EP scripts | `nza_engine/config.py:17` falls back to `/Applications/EnergyPlus-25-2-0` (macOS-only) when env var unset. Not in scope to change config; setting inline works. Filed under "things worth fixing as part of constants cleanup in Brief 29 Part 3." |
+| Part 1 — keep `mode="envelope-gains"` as-is in `HeatBalanceView.jsx:45`, don't expand scope to also fix the mode prop | The consumer `HeatBalance.jsx:494` declares `mode = DEFAULT_MODE   // 'envelope-only' \| 'full'`. The wrapper passes `'envelope-gains'` which is outside the documented enum — a pre-existing condition not flagged by the audit. Chris's instruction was specifically the prop name rename. Logged as a follow-up candidate: either extend the consumer's `mode` enum to include `'envelope-gains'` (with appropriate handling in `flattenGains` / `flattenLosses`), or change the wrapper to pass `'full'` semantically. Defer to Brief 28a (canvas restructure) or document as accepted-pre-existing. |
 
 ## Halts
 

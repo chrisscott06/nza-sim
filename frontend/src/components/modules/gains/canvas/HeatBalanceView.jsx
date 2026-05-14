@@ -42,7 +42,7 @@ export default function HeatBalanceView() {
           breakdown tab.
         </p>
       </div>
-      <HeatBalance balance={state2} mode="envelope-gains" />
+      <HeatBalance liveData={state2} mode="envelope-gains" />
     </div>
   )
 }
