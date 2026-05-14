@@ -39,6 +39,7 @@ import EquipmentSection from './EquipmentSection.jsx'
 import { GAIN_COLOURS, GAIN_LABELS } from './gainColours.js'
 import { useAnnualGains } from './useAnnualGains.js'
 import ScheduleEditorCanvas from './canvas/ScheduleEditorCanvas.jsx'
+import SummaryView         from './canvas/SummaryView.jsx'
 import DeltaView           from './canvas/DeltaView.jsx'
 import AnnualBreakdownView from './canvas/AnnualBreakdownView.jsx'
 import FreeRunningView     from './canvas/FreeRunningView.jsx'
@@ -59,18 +60,21 @@ const LEFT_MAX = 520
 function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)) }
 
 function loadLayoutPrefs() {
+  // Brief 28a Part 3a (2026-05-14): default tab flipped 'schedule' → 'summary'.
+  // Summary is the new headline landing tab. Schedule remains accessible but
+  // is no longer the default — users land on outputs, not the editor.
   try {
     const saved = JSON.parse(localStorage.getItem(LAYOUT_STORAGE_KEY))
     if (saved && typeof saved === 'object') {
       return {
         left:          clamp(Number(saved.left) || LEFT_DEFAULT, LEFT_MIN, LEFT_MAX),
-        tab:           TAB_KEYS.includes(saved.tab) ? saved.tab : 'schedule',
+        tab:           TAB_KEYS.includes(saved.tab) ? saved.tab : 'summary',
         activeSection: ['occupancy','lighting','equipment'].includes(saved.activeSection)
                          ? saved.activeSection : 'occupancy',
       }
     }
   } catch {}
-  return { left: LEFT_DEFAULT, tab: 'schedule', activeSection: 'occupancy' }
+  return { left: LEFT_DEFAULT, tab: 'summary', activeSection: 'occupancy' }
 }
 
 function ResizeHandle({ onResize }) {
@@ -134,15 +138,20 @@ function CollapsibleSection({ title, accent, onActivate, children, defaultOpen =
   )
 }
 
-// ── Tab definitions (v2.4 — 7 tabs, Schedule first + context-sensitive) ─────
+// ── Tab definitions ─────────────────────────────────────────────────────────
+// Brief 28a Part 3a (2026-05-14): new Summary tab inserted as the headline.
+// Tab strip will consolidate further in 3b (fold Delta into Summary, remove
+// the standalone Delta tab) and 3c (merge Free-running + Hourly + Breakdown
+// into a single Load shape tab). 3D Model removal lands in 3d.
 const TABS = [
-  { key: 'schedule',    label: 'Schedule',          fullWidth: true,  hasEngineToggle: false, isSchedule: true   },
-  { key: 'delta',       label: 'State 1 → State 2', fullWidth: false, hasEngineToggle: true,  headline: true     },
-  { key: 'balance',     label: 'Heat balance',      fullWidth: false, hasEngineToggle: true                       },
-  { key: 'freerunning', label: 'Free-running',      fullWidth: true,  hasEngineToggle: true                       },
-  { key: 'hourly',      label: 'Hourly profile',    fullWidth: true,  hasEngineToggle: false                     },
-  { key: 'breakdown',   label: 'Annual breakdown',  fullWidth: false, hasEngineToggle: false                     },
-  { key: '3d',          label: '3D Model',          fullWidth: true,  hasEngineToggle: false                     },
+  { key: 'schedule',    label: 'Schedule',          fullWidth: true,  hasEngineToggle: false, isSchedule: true                  },
+  { key: 'summary',     label: 'Summary',           fullWidth: false, hasEngineToggle: true,  headline: true                    },
+  { key: 'delta',       label: 'State 1 → State 2', fullWidth: false, hasEngineToggle: true                                     },
+  { key: 'balance',     label: 'Heat balance',      fullWidth: false, hasEngineToggle: true                                     },
+  { key: 'freerunning', label: 'Free-running',      fullWidth: true,  hasEngineToggle: true                                     },
+  { key: 'hourly',      label: 'Hourly profile',    fullWidth: true,  hasEngineToggle: false                                    },
+  { key: 'breakdown',   label: 'Annual breakdown',  fullWidth: false, hasEngineToggle: false                                    },
+  { key: '3d',          label: '3D Model',          fullWidth: true,  hasEngineToggle: false                                    },
 ]
 const TAB_KEYS = TABS.map(t => t.key)
 
@@ -252,8 +261,9 @@ function TabContent({
     )
   }
 
-  // Brief 27 Revised Part 11: real canvas views.
+  // Brief 27 Revised Part 11: real canvas views. Brief 28a Part 3a adds Summary.
   switch (tab) {
+    case 'summary':     return <SummaryView />
     case 'delta':       return <DeltaView />
     case 'breakdown':   return <AnnualBreakdownView />
     case 'freerunning': return <FreeRunningView />
