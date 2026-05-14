@@ -13,6 +13,7 @@
 
 import { createContext, useState, useContext, useEffect, useRef } from 'react'
 import { ProjectContext } from './ProjectContext.jsx'
+import { detectProjectState } from '../utils/stateMode.js'
 
 export const SimulationContext = createContext(null)
 
@@ -64,8 +65,15 @@ export function SimulationProvider({ children }) {
   // remains as a safety net for that path.
   const [autoSimulate,   setAutoSimulate]   = useState(false)   // off by default; user opts in via top bar toggle
 
-  const { currentProjectId, saveStatus, saveSource } = useContext(ProjectContext)
+  const { currentProjectId, saveStatus, saveSource, params, systems } = useContext(ProjectContext)
   const autoTimerRef = useRef(null)
+
+  // Brief 28a Part 8 (2026-05-14): detect project state for state-aware
+  // Dynamic runs. The detected mode is passed to the backend so EP runs
+  // match the user's current config (envelope-only / envelope-gains /
+  // envelope-gains-operation / full). Exposed via context so the TopBar
+  // can show "Will run: <mode>" in the button tooltip.
+  const detectedMode = detectProjectState(params, systems)
 
   // When the project changes, restore the latest complete simulation from the DB
   useEffect(() => {
@@ -139,8 +147,22 @@ export function SimulationProvider({ children }) {
     setError(null)
 
     try {
+      // Brief 28a Part 8: thread detected mode into the POST URL so the
+      // backend runs the simulation matching the project's current state.
+      // The /simulate endpoint accepts `mode` as a query param (projects.py
+      // line 427); defaults to 'full' if not provided.
+      //
+      // State 2.5 fallthrough (Brief 30 territory): the backend assembler
+      // doesn't have a `mode='envelope-gains-operation'` path yet. Per the
+      // Brief 28a Part 8 brief's decision points, fall through to
+      // `'envelope-gains'` for the run when 2.5 is detected. The TopBar
+      // button tooltip surfaces this so the user sees what's happening.
+      let mode = detectProjectState(params, systems)
+      if (mode === 'envelope-gains-operation') {
+        mode = 'envelope-gains'
+      }
       const response = await fetch(
-        `/api/projects/${currentProjectId}/simulate`,
+        `/api/projects/${currentProjectId}/simulate?mode=${encodeURIComponent(mode)}`,
         { method: 'POST' },
       )
 
@@ -161,7 +183,7 @@ export function SimulationProvider({ children }) {
   }
 
   return (
-    <SimulationContext.Provider value={{ status, runId, results, error, resultsLoading, runSimulation, autoSimulate, setAutoSimulate }}>
+    <SimulationContext.Provider value={{ status, runId, results, error, resultsLoading, runSimulation, autoSimulate, setAutoSimulate, detectedMode }}>
       {children}
     </SimulationContext.Provider>
   )

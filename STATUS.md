@@ -1,6 +1,33 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-14 — paused at Brief 28a Part 5 (Conditions tab live with Pablo composition + real Bridgewater data, awaiting walkthrough before 3e)
+## 🚧 Session 2026-05-14 — paused at Brief 28a Part 5 + Part 8 done; 3e still waiting on Conditions-tab walkthrough
+
+**State:** `paused_for_walkthrough` (Part 5 walkthrough still pending; Part 8 done in parallel since it's independent of Part 5/3e)
+**Latest commits this session (pushed to origin/main):**
+- (Part 8 commit pending push at next step)
+- `d44ab70` Brief 28a Part 5: Conditions tab live with Pablo composition + lens selector
+- `8f4e84f` Brief 28a Part 4 refinement: /chart-test composition fix + ui_principles.md density + chart-with-stat-panel pattern
+- `042dc84` Brief 28a Part 4 follow-up: /chart-test test harness
+- `c54ee6f` Brief 28a Part 4: Pablo chart components port
+- `abdf5d7` Housekeeping: Pavlo → Pablo
+- `359861c` Brief 28a Part 3d
+- (earlier in this session: Brief 27 cleanup Parts 1-3, 28 prereq close, Brief 28a Parts 1, 2, 3a-3d)
+
+### Part 8 — State-aware Dynamic runs (NEW — done while Part 5 walkthrough pending)
+
+Independent of Part 5 / 3e. Threads project-state detection into the Run Dynamic button so the EP run matches the user's current config (envelope-only / envelope-gains / envelope-gains-operation / full) rather than always defaulting to full mode.
+
+**What landed:**
+- `frontend/src/utils/stateMode.js` — new exports: `detectProjectState(building, systems)`, `hasRealSystems`, `hasOperableWindows`, `hasInternalGains`. Predicates conservative (zero/empty configs return false; only genuinely-populated config triggers each state).
+- `frontend/src/context/SimulationContext.jsx` — `runSimulation()` reads `params` + `systems` from ProjectContext, calls `detectProjectState`, threads detected mode into the POST URL (`?mode=<detected>`). **State 2.5 fallthrough:** if detected mode is `'envelope-gains-operation'`, falls through to `'envelope-gains'` for the actual POST because the assembler doesn't have a 2.5 path yet (Brief 30 territory). `detectedMode` exposed via SimulationContext value.
+- `frontend/src/components/layout/TopBar.jsx` — Run Dynamic button gets a state-aware tooltip: "Run EnergyPlus in `<mode>` mode" + brief explanation per state (e.g. "State 2; envelope + internal gains, no real systems, no operable windows").
+- New `scripts/detect_project_state_smoketest.mjs` — 8 scenarios pass: 4 synthetic isolating each predicate + 4 Bridgewater rewinds (as-is → 'full'; -systems → '2.5'; -systems -openings → 'envelope-gains'; everything stripped → 'envelope-only').
+
+**Bridgewater observation worth flagging:** the persisted config has `openings.schedule: "occupied"` + `openings.north.openable_fraction: 0.3` → operable windows ARE configured in the data, even if the user hadn't thought of it that way. So stripping just systems gives `'envelope-gains-operation'` (State 2.5), which falls through to State 2 for the actual EP run. Today this is invisible to the user (button tooltip just says "envelope-gains" because of the fallthrough). When Brief 30 lands the assembler 2.5 path, this fallthrough comes out and the user sees genuine 2.5 runs.
+
+**Walkthrough target (when Part 5 walkthrough fires):** hover the Run Dynamic button. The tooltip should say something like "Run EnergyPlus in full mode" for Bridgewater as-loaded. Verify in browser dev-tools Network tab: clicking Run Dynamic should POST to `/api/projects/{id}/simulate?mode=full` for Bridgewater (not just `/simulate`). The `simulation_mode` column in the resulting `simulation_runs` row should match.
+
+### Walkthrough target — Conditions tab live with Bridgewater data
 
 **State:** `paused_for_walkthrough`
 **Latest commits this session (pushed to origin/main):**

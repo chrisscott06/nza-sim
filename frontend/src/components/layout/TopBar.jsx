@@ -51,7 +51,7 @@ function SaveIndicator({ status }) {
 }
 
 export default function TopBar() {
-  const { status, results, error, runSimulation, autoSimulate, setAutoSimulate } = useContext(SimulationContext)
+  const { status, results, error, runSimulation, autoSimulate, setAutoSimulate, detectedMode } = useContext(SimulationContext)
   const projectCtx = useContext(ProjectContext)
   const buildingName = projectCtx?.params?.name || 'NZA Simulate'
   const saveStatus = projectCtx?.saveStatus ?? 'idle'
@@ -163,10 +163,25 @@ export default function TopBar() {
           Auto-simulate
         </button>
 
-        {/* Run Simulation button */}
+        {/* Run Dynamic button — Brief 28a Part 8: tooltip shows the state-
+            aware mode that will actually trigger (envelope-only / envelope-
+            gains / envelope-gains-operation / full), based on which config
+            sections are populated on the current project. */}
         <button
           onClick={handleRun}
           disabled={status === 'running'}
+          title={
+            status === 'running'
+              ? 'EnergyPlus is running…'
+              : `Run EnergyPlus in ${detectedMode ?? 'full'} mode\n` +
+                (detectedMode === 'envelope-only'
+                  ? '— State 1, fastest run; no internal gains, no systems'
+                  : detectedMode === 'envelope-gains'
+                    ? '— State 2; envelope + internal gains, no real systems, no operable windows'
+                    : detectedMode === 'envelope-gains-operation'
+                      ? '— State 2.5; adds operable windows. Falls through to envelope-gains until Brief 30 lands the assembler support.'
+                      : '— State 3; full model: envelope + gains + operation + real systems')
+          }
           className={`
             flex items-center gap-1.5 px-3 py-1.5 rounded
             text-white text-caption font-medium

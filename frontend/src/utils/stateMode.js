@@ -221,6 +221,119 @@ export function loadOrderFor(mode) {
   return LOSS_ORDERS[mode] ?? LOSS_ORDERS[DEFAULT_MODE]
 }
 
+// ── Brief 28a Part 8: State-aware Dynamic run detection ─────────────────────
+//
+// When the user clicks "Run Dynamic" in the top bar, we want the simulation
+// triggered to match the current project state -- envelope-only if only the
+// envelope is defined, envelope-gains if gains added, envelope-gains-operation
+// if operable windows configured, full if real systems are set.
+//
+// Foundation: Brief 28 prereq's envelope-only EP pipeline + the
+// `simulation_mode` column on `simulation_runs`. The backend `/simulate`
+// endpoint already accepts a `mode` query param; this helper provides the
+// frontend side of the detection.
+//
+// Predicates are conservative: return true only when the config is GENUINELY
+// populated for that state's inputs. A populated-but-zeroed config returns
+// false. Matches the conservativeness of the FORBIDDEN_*_INPUTS lists.
+
+const IDEAL_LOADS_SYSTEM_KEYS = new Set([
+  '', 'none', 'none_heating', 'none_cooling',
+  'ideal_loads', 'ideal_loads_heating', 'ideal_loads_cooling',
+])
+
+/**
+ * Does the project have at least one real (non-ideal-loads) HVAC system
+ * configured? Real systems put the project at State 3.
+ *
+ * Checks systems.space_heating.primary.system (the v2.x demand-keyed shape).
+ * Falls back to systems.hvac_type for legacy projects that haven't migrated
+ * to the demand-keyed shape yet.
+ */
+export function hasRealSystems(systems) {
+  if (!systems) return false
+  const sh = systems.space_heating?.primary?.system
+  if (sh && !IDEAL_LOADS_SYSTEM_KEYS.has(String(sh))) return true
+  const sc = systems.space_cooling?.primary?.system
+  if (sc && !IDEAL_LOADS_SYSTEM_KEYS.has(String(sc))) return true
+  const dhw = systems.dhw?.primary?.system
+  if (dhw && !IDEAL_LOADS_SYSTEM_KEYS.has(String(dhw))) return true
+  // Legacy fallback
+  const hvac = systems.hvac_type
+  if (hvac && !IDEAL_LOADS_SYSTEM_KEYS.has(String(hvac))) return true
+  return false
+}
+
+/**
+ * Does the project have operable windows configured? Operable windows
+ * (controlled openings) put the project at State 2.5.
+ *
+ * Checks for a non-empty openings.schedule object OR any face with a
+ * non-zero openable_fraction.
+ */
+export function hasOperableWindows(building) {
+  if (!building?.openings) return false
+  const sched = building.openings.schedule
+  if (sched && typeof sched === 'object') {
+    const keys = Object.keys(sched)
+    if (keys.length > 0) return true
+  }
+  for (const face of ['north', 'south', 'east', 'west']) {
+    const f = building.openings[face]
+    const frac = Number(f?.openable_fraction ?? 0)
+    if (frac > 0) return true
+  }
+  return false
+}
+
+/**
+ * Does the project have non-zero internal gains configured? Any of:
+ *   - occupancy.density.value > 0 (v2.3 occupancy block)
+ *   - any lighting profile with magnitude.value > 0
+ *   - any equipment profile with baseload.value > 0 OR active.value > 0
+ *   - legacy params.num_bedrooms > 0 (pre-v2.3 occupancy)
+ *
+ * Returns true if ANY of these is true. Conservative: a populated-but-zeroed
+ * config returns false.
+ */
+export function hasInternalGains(building) {
+  if (!building) return false
+  // v2.3 occupancy
+  const occDensity = Number(building.occupancy?.density?.value ?? 0)
+  if (occDensity > 0) return true
+  // Legacy num_bedrooms occupancy
+  const numBeds = Number(building.num_bedrooms ?? 0)
+  if (numBeds > 0) return true
+  // v2.4 lighting profiles
+  const lightingProfiles = building.gains?.lighting?.profiles ?? []
+  for (const p of lightingProfiles) {
+    if (Number(p?.magnitude?.value ?? 0) > 0) return true
+  }
+  // v2.4 equipment profiles
+  const equipmentProfiles = building.gains?.equipment?.profiles ?? []
+  for (const p of equipmentProfiles) {
+    if (Number(p?.baseload?.value ?? 0) > 0) return true
+    if (Number(p?.active?.value ?? 0) > 0) return true
+  }
+  return false
+}
+
+/**
+ * Detect which state the project's current config represents, returning the
+ * canonical mode string for use with `/api/projects/{id}/simulate?mode=...`.
+ *
+ * Order matters — returns the MOST SPECIFIC state that matches. A project
+ * with both gains and systems is `'full'`, not `'envelope-gains'`.
+ *
+ * Returns: 'envelope-only' | 'envelope-gains' | 'envelope-gains-operation' | 'full'
+ */
+export function detectProjectState(building, systems) {
+  if (hasRealSystems(systems))         return MODES.FULL
+  if (hasOperableWindows(building))    return MODES.ENVELOPE_GAINS_OPERATION
+  if (hasInternalGains(building))      return MODES.ENVELOPE_GAINS
+  return MODES.ENVELOPE_ONLY
+}
+
 /** Get the canonical gain-element order for a given mode. */
 export function gainOrderFor(mode) {
   return GAIN_ORDERS[mode] ?? GAIN_ORDERS[DEFAULT_MODE]
