@@ -40,7 +40,9 @@ import { GAIN_COLOURS, GAIN_LABELS } from './gainColours.js'
 import { useAnnualGains } from './useAnnualGains.js'
 import ScheduleEditorCanvas from './canvas/ScheduleEditorCanvas.jsx'
 import SummaryView         from './canvas/SummaryView.jsx'
-import DeltaView           from './canvas/DeltaView.jsx'
+// DeltaView removed from imports — its content lives in SummaryView as of
+// Brief 28a Part 3b (2026-05-14). File kept on disk as deprecated; will be
+// deleted at Brief 28a Part 7 close-out.
 import AnnualBreakdownView from './canvas/AnnualBreakdownView.jsx'
 import FreeRunningView     from './canvas/FreeRunningView.jsx'
 import HourlyProfileView   from './canvas/HourlyProfileView.jsx'
@@ -140,13 +142,17 @@ function CollapsibleSection({ title, accent, onActivate, children, defaultOpen =
 
 // ── Tab definitions ─────────────────────────────────────────────────────────
 // Brief 28a Part 3a (2026-05-14): new Summary tab inserted as the headline.
-// Tab strip will consolidate further in 3b (fold Delta into Summary, remove
-// the standalone Delta tab) and 3c (merge Free-running + Hourly + Breakdown
-// into a single Load shape tab). 3D Model removal lands in 3d.
+// Brief 28a Part 3b (2026-05-14): 'delta' tab removed — its content (paired
+//   bars, comfort impact, per-gain attribution) is now inside Summary,
+//   alongside the new gains-vs-demand stacked bar with unit toggle.
+//   DeltaView.jsx kept as deprecated dead code; will be deleted at
+//   Brief 28a Part 7 close-out.
+// Brief 28a Part 3c (2026-05-14): 'freerunning' / 'hourly' / 'breakdown'
+//   tabs consolidated into a single 'loadshape' tab (next slice).
+// 3D Model removal lands in 3d.
 const TABS = [
   { key: 'schedule',    label: 'Schedule',          fullWidth: true,  hasEngineToggle: false, isSchedule: true                  },
   { key: 'summary',     label: 'Summary',           fullWidth: false, hasEngineToggle: true,  headline: true                    },
-  { key: 'delta',       label: 'State 1 → State 2', fullWidth: false, hasEngineToggle: true                                     },
   { key: 'balance',     label: 'Heat balance',      fullWidth: false, hasEngineToggle: true                                     },
   { key: 'freerunning', label: 'Free-running',      fullWidth: true,  hasEngineToggle: true                                     },
   { key: 'hourly',      label: 'Hourly profile',    fullWidth: true,  hasEngineToggle: false                                    },
@@ -261,10 +267,10 @@ function TabContent({
     )
   }
 
-  // Brief 27 Revised Part 11: real canvas views. Brief 28a Part 3a adds Summary.
+  // Brief 27 Revised Part 11: real canvas views. Brief 28a Part 3a adds
+  // Summary. Part 3b removes 'delta' (content folded into Summary).
   switch (tab) {
     case 'summary':     return <SummaryView />
-    case 'delta':       return <DeltaView />
     case 'breakdown':   return <AnnualBreakdownView />
     case 'freerunning': return <FreeRunningView />
     case 'hourly':      return <HourlyProfileView />
