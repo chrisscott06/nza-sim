@@ -1,8 +1,8 @@
 # Batch Progress — Brief 27 Cleanup + Brief 28 + Brief 29
 
-**Current state:** `running`
+**Current state:** `halted_for_review` (halt 2 — Brief 28 prereq Part 1)
 **Last update:** 2026-05-14
-**Resumed after halt 1.** Halt resolved by Chris's runtime verification: the prop-name bug is real and is distinct from the `4f4f3a5` race condition (the race fix unblocked `ready`, which then exposed the prop-name mismatch as the next downstream failure). Brief 27 cleanup Part 1 proceeds as written, with the small refinement that `mode="envelope-gains"` is also dropped (not a prop the consumer accepts).
+**Brief 27 cleanup closed at 10/10 (commits `2a9dd90`, `d281a16`, `8dc1909`, `a26b0b9`, pushed to origin/main).** Brief 28 prereq Part 1 verification surfaced a finding that may invalidate the prereq's premise: the Dynamic envelope-only mode is already wide-band (−60/+100 °C setpoints), so previous Static-vs-Dynamic comparisons were *not* Static-free-running vs Dynamic-HVAC-clamped as the physics audit claimed. They were both free-running on both sides (modulo a 35 W placeholder gain from People objects at 0.0001 ppl/m²). See `docs/state_1_free_running_verification.md` for the full inspection and `docs/batch_halt_report.md` Halt 2 for the resolution options.
 
 ---
 
@@ -34,10 +34,10 @@ All four state-isolation regressions pass. Build is clean. The working-tree-clea
 
 | Part | Status | Start | End | Commit | Notes |
 |------|--------|-------|-----|--------|-------|
-| 1. Verify assembler envelope-only mode | queued | — | — | — | |
-| 2. Run + persist free-running EP | queued | — | — | — | |
-| 3. Update engine_agreement script | queued | — | — | — | |
-| 4. Re-scope check | queued | — | — | — | |
+| 1. Verify assembler envelope-only mode | **halted (HH4 premise question)** | 2026-05-14 | — | (this halt commit) | 3/4 checks pass: wide-band setpoints (−60/+100 °C) ✓, no operable windows ✓, no real systems ✓. 1/4 check fails strictly but passes pragmatically: People/Lights/ElectricEquipment objects ARE emitted, but Lights and Equipment have `watts_per_floor_area: 0.0` (clean zero) and People has `people_per_floor_area: 0.0001` (≈35 W building-wide, 0.001% noise floor). Practical impact: envelope-only IS free-running. But this means the prereq's premise (Static-free-running vs Dynamic-HVAC-clamped comparison) was wrong — Dynamic envelope-only has been wide-band all along. The 23.5% conduction divergence in the physics audit must have a different attribution. See `docs/state_1_free_running_verification.md` + `docs/batch_halt_report.md` Halt 2. |
+| 2. Run + persist free-running EP | queued (blocked by halt 2) | — | — | — | |
+| 3. Update engine_agreement script | queued (blocked by halt 2) | — | — | — | |
+| 4. Re-scope check | queued (blocked by halt 2) | — | — | — | |
 
 ## Brief 28a Visible Polish
 
@@ -87,3 +87,4 @@ All four state-isolation regressions pass. Build is clean. The working-tree-clea
 | # | Date | Brief | Part | Classification | Resolution |
 |---|------|-------|------|----------------|------------|
 | 1 | 2026-05-14 | 27 cleanup | 1 (Heat Balance prop fix) | HH4 (premise concern) | **Resolved 2026-05-14.** Chris verified the empty state in browser. Bug is real, distinct from `4f4f3a5` race fix. Part 1 proceeds. See `docs/batch_halt_report.md` resolution section. |
+| 2 | 2026-05-14 | 28 prereq | 1 (Verify envelope-only mode) | HH4 (premise wrong) | **Open.** Verification shows Dynamic envelope-only is already wide-band, contradicting the physics audit's "Dynamic was HVAC-clamped" attribution that motivated this prereq. Awaiting Chris's verdict on whether Brief 28 prereq is still warranted, and if so what its revised goal is. See `docs/batch_halt_report.md` Halt 2 for the four resolution options. |
