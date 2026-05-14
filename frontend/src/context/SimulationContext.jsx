@@ -56,7 +56,13 @@ export function SimulationProvider({ children }) {
   const [results,        setResults]        = useState(null)
   const [error,          setError]          = useState(null)
   const [resultsLoading, setResultsLoading] = useState(false)   // true while fetching from DB
-  const [autoSimulate,   setAutoSimulate]   = useState(true)    // auto-trigger after 3s inactivity
+  // Brief 28a Part 3d (2026-05-14): auto-simulate default flipped true -> false.
+  // The Halt 3 saveSource gating (2026-05-14) prevents system-saves from
+  // triggering a surprise Dynamic run, but the default behaviour Chris wants
+  // is Dynamic-runs-only-when-explicitly-requested. Power users can enable
+  // the toggle from the top bar for auto-Dynamic-on-edit; saveSource gating
+  // remains as a safety net for that path.
+  const [autoSimulate,   setAutoSimulate]   = useState(false)   // off by default; user opts in via top bar toggle
 
   const { currentProjectId, saveStatus, saveSource } = useContext(ProjectContext)
   const autoTimerRef = useRef(null)

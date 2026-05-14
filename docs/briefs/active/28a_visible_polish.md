@@ -105,17 +105,17 @@ Internal code names (e.g., `liveData`, `simulationResults`) stay as-is — these
 1. **Summary** (new, default) — stacked bar of gains vs demand, total kWh/m²·yr, headline numbers, State 1 → State 2 delta as a section within
 2. **Schedule** — the centre-canvas schedule editor for the active gain (Occupancy / Lighting profile / Equipment profile)
 3. **Heat balance** — the State 2 heat balance (Sankey / Stacked / Rows layouts, plus a new "Delta" layout showing State 1 → State 2 change as a layout option)
-4. **Load shape** (rename of Free-running OR merge with Hourly Profile + Annual Breakdown) — single time-series view with Pavlo zoom controls
+4. **Conditions** (rename of Free-running OR merge with Hourly Profile + Annual Breakdown) — single time-series view with Pavlo zoom controls
 5. **(Optional) 3D Model** — hide entirely in Internal Gains until multi-zone arrives. Don't keep as placeholder.
 
 **Steps:**
 
 1. Add new Summary tab as default. Move headline content there.
 2. Fold State 1 → State 2 Delta content into the Summary tab and into Heat balance as a "Delta" layout.
-3. Merge Free-running + Hourly Profile + Annual Breakdown into a single Load shape tab. This is where the Pavlo zoom pattern lands (Part 4 below provides the components).
+3. Merge Free-running + Hourly Profile + Annual Breakdown into a single Conditions tab. This is where the Pavlo zoom pattern lands (Part 4 below provides the components).
 4. Remove 3D Model tab from Internal Gains canvas configuration. (Keep the component code in case it's revived for multi-zone.)
-5. Apply the same tab structure pattern to Building module: Summary / Heat balance / Load shape / 3D Model (the 3D model is kept here because facades / orientation / shading have visual meaning).
-6. Update `docs/ui_principles.md` with the canonical tab structure: Summary / Schedule (if module has schedules) / Heat balance / Load shape / 3D Model (optional).
+5. Apply the same tab structure pattern to Building module: Summary / Heat balance / Conditions / 3D Model (the 3D model is kept here because facades / orientation / shading have visual meaning).
+6. Update `docs/ui_principles.md` with the canonical tab structure: Summary / Schedule (if module has schedules) / Heat balance / Conditions / 3D Model (optional).
 
 **Verify:**
 - Internal Gains has 5 tabs (or 4 if 3D Model removed)
@@ -127,7 +127,7 @@ Internal code names (e.g., `liveData`, `simulationResults`) stay as-is — these
 **Commit message:** "Brief 28a Part 3: Canvas tab restructure across modules"
 
 **Decision points:**
-- "Free-running" terminology — rename to "Load shape" per audit recommendation, or keep? My lean: rename to "Load shape" to remove industry jargon.
+- "Free-running" terminology — rename to "Conditions" per audit recommendation, or keep? My lean: rename to "Conditions" to remove industry jargon.
 - 3D Model tab removal in Internal Gains: my lean is hide entirely (placeholder is worse than absent). But if there's reason to keep it visible with a clear "coming with multi-zone" message, that's defensible.
 - Building module restructure scope: if it expands significantly, halt under SH and reassess. Don't expand beyond the tab structure.
 
@@ -168,11 +168,11 @@ Internal code names (e.g., `liveData`, `simulationResults`) stay as-is — these
 
 ---
 
-## Part 5 — Migrate Load shape tab to Pavlo pattern + engine toggle wiring
+## Part 5 — Migrate Conditions tab to Pavlo pattern + engine toggle wiring
 
 **Files:** `frontend/src/components/modules/gains/canvas/LoadShapeView.jsx` (new), engine result fetchers, SQL parser
 
-**Goal:** The new Load shape tab uses Pavlo's zoom pattern AND wires the Static/Dynamic engine toggle.
+**Goal:** The new Conditions tab uses Pavlo's zoom pattern AND wires the Static/Dynamic engine toggle.
 
 **Steps:**
 
@@ -196,7 +196,7 @@ Internal code names (e.g., `liveData`, `simulationResults`) stay as-is — these
 This part closes Brief 27's 9/10 holdback (engine toggle wiring).
 
 **Verify:**
-- Load shape tab renders with Static engine on first visit
+- Conditions tab renders with Static engine on first visit
 - Zoom navigation works (Year → Month → Week → Day)
 - Stat panel updates as zoom changes
 - Toggle to Dynamic fetches and renders the latest sim run's data
@@ -204,7 +204,7 @@ This part closes Brief 27's 9/10 holdback (engine toggle wiring).
 - State 2 EP run produces per-profile data extractable by the parser
 - State isolation regressions still byte-identical
 
-**Commit message:** "Brief 28a Part 5: Load shape view + Pavlo zoom + engine toggle wiring"
+**Commit message:** "Brief 28a Part 5: Conditions view + Pavlo zoom + engine toggle wiring"
 
 **Decision points:**
 - Default engine for LoadShapeView: Static (instant). Dynamic is opt-in.
@@ -217,14 +217,14 @@ This part closes Brief 27's 9/10 holdback (engine toggle wiring).
 
 **Files:** Building module's Free-running view (if any), any other time-series in the tool
 
-**Goal:** Establish Load shape / Pavlo pattern as the standard for time-series visualisation. Apply it where it makes sense.
+**Goal:** Establish Conditions / Pavlo pattern as the standard for time-series visualisation. Apply it where it makes sense.
 
 **Steps:**
 
 1. Audit time-series views across the tool:
    - Building module Free-running (if it exists as a tab)
    - Building module's other time-series outputs
-   - Internal Gains Load shape (done in Part 5)
+   - Internal Gains Conditions (done in Part 5)
    - Anywhere else hourly data is displayed
 2. For each, migrate to use the Pavlo components (ZoomNav, MonthJumpButtons, DataCard, ChartContainer).
 3. Standardise the layout: stat panel on left or top, chart on right or bottom, controls above.
@@ -288,6 +288,81 @@ Brief 27 cleanup walkthrough exposed a discipline gap: the Heat balance prop-fix
 This gate exists because the Brief 27 cleanup Part 1 fix passed every other gate (build, byte-identity, static inspection) but failed at the user-visible layer. A rendering smoketest is the cheap discipline that catches the gap between "the prop is renamed" and "the component renders data."
 
 **Commit message:** "Brief 28a Part 7: Close-out + completion checklist + canvas rendering smoketest"
+
+---
+
+## Part 8 — State-aware Dynamic runs
+
+**Files:** `frontend/src/utils/stateMode.js` (new helper), `frontend/src/context/SimulationContext.jsx` (use detected mode), optionally `frontend/src/components/layout/TopBar.jsx` (mode badge)
+
+**Goal:** When the user clicks "Run Dynamic," the simulation triggered should match the current project state — envelope-only if only envelope is defined, envelope-gains if gains added, envelope-gains-operation if operable windows configured, full if systems set. Today the Run Dynamic button always POSTs with no mode parameter, falling through to backend default `mode='full'`. Runs faster + more honestly per state.
+
+The envelope-only EP pipeline shipped in Brief 28 prereq (Option C+ — `simulation_mode` column, `run_envelope_only_sim_bridgewater.py`) is the foundation. Backend `simulate_project` endpoint already accepts a `mode` query param (`api/routers/projects.py:427`). The missing piece is frontend detection + threading the mode through `runSimulation()`.
+
+### Detection logic
+
+New helper in `frontend/src/utils/stateMode.js`:
+
+```js
+export function detectProjectState(building, systems) {
+  // Order matters — return the most specific state that matches.
+  if (hasRealSystems(systems))              return 'full'
+  if (hasOperableWindows(building))         return 'envelope-gains-operation'
+  if (hasInternalGains(building))           return 'envelope-gains'
+  return 'envelope-only'
+}
+```
+
+Predicates:
+- `hasRealSystems(systems)` — `systems.space_heating?.primary?.system` exists AND is not an `ideal_loads_*` placeholder, OR `systems.hvac_type` is set to a real system (VRF, ASHP, gas boiler, etc.).
+- `hasOperableWindows(building)` — `building.openings.schedule` is populated (non-empty schedule object).
+- `hasInternalGains(building)` — `building.occupancy.density.value > 0` OR `building.gains.lighting.profiles[].magnitude.value > 0` OR `building.gains.equipment.profiles[].baseload.value > 0` (etc.).
+
+The predicates are conservative — a populated-but-zeroed config returns false (no gains genuinely defined). Match the same conservativeness the FORBIDDEN_*_INPUTS lists use.
+
+### Steps
+
+1. Implement `detectProjectState` + its predicates in `stateMode.js`. Add unit-test-style assertions in a small smoketest script (`scripts/detect_project_state_smoketest.mjs`):
+   - Bridgewater → returns `'full'` (has gains, has systems)
+   - Bridgewater with systems object stripped → returns `'envelope-gains'`
+   - Bridgewater with gains profiles emptied AND systems stripped → returns `'envelope-only'`
+   - Bridgewater with operable windows configured + systems stripped → returns `'envelope-gains-operation'`
+2. Update `SimulationContext.runSimulation()` to call the helper and pass mode to the POST URL:
+   ```js
+   const mode = detectProjectState(building, systems)
+   const response = await fetch(
+     `/api/projects/${currentProjectId}/simulate?mode=${encodeURIComponent(mode)}`,
+     { method: 'POST' },
+   )
+   ```
+3. **Optional UI affordance:** add a `Will run: <mode>` line to the Run Dynamic button's `title` attribute (tooltip), so the user can see what mode will be triggered before clicking. Cheap; ships with the rest.
+4. Backend verification: after a Run Dynamic click, query the new run row in `simulation_runs` — confirm `simulation_mode` column matches the detected mode.
+
+### Verify
+
+- Bridgewater (default, all sections populated): detection returns `'full'` ; Run Dynamic triggers `?mode=full` ; row written with `simulation_mode='full'`. Matches current behaviour.
+- Bridgewater with `systems_config` stripped to empty: detection returns `'envelope-gains'` ; run completes in less time than a full mode run (gains evaluated but no real system curves).
+- Fresh project with only geometry: detection returns `'envelope-only'` ; run completes faster still (~35 s on a typical box).
+- `simulation_mode` column populated correctly for each detection outcome.
+- State isolation regressions still byte-identical (this changes frontend dispatch, not engine output).
+
+### Decision points
+
+- **Override?** Should the user be able to manually override the auto-detected mode (e.g., "Run as State 1 even though systems are configured")? My lean: **no for now** — keep it simple, add an override only if a real workflow needs it. Filing this as a follow-up if it surfaces.
+- **State 2.5 (`envelope-gains-operation`):** the assembler may not yet support this mode end-to-end (Brief 30 territory). If detection returns 2.5, fall through to `'envelope-gains'` for the run and surface a note in the tooltip ("operable windows detected; running as State 2 until State 2.5 lands in Brief 30"). Document the limitation.
+- **Badge placement:** my lean is the Run Dynamic button's `title` tooltip rather than a separate badge — keeps the top bar compact. A persistent visible badge is a Brief 28a Part 4 / 6 polish if it becomes important.
+
+### Halt triggers
+
+- Detection returns wrong mode for Bridgewater (e.g., returns `'envelope-only'` when systems are populated) → HH4 (premise wrong)
+- Backend rejects the mode param value or fails the run → HH5 (build broken)
+- Detection produces a different mode for the same config across two consecutive calls → HH6 (deterministic dispatch violation)
+
+### Confidence target
+
+**9/10.** Well-scoped; foundation exists (envelope-only persisted run pipeline from Brief 28 prereq); detection logic is straightforward; backend already accepts the mode param. The 1/10 gap is the State 2.5 fallthrough edge case (no Brief 30 yet).
+
+**Commit message:** "Brief 28a Part 8: State-aware Dynamic runs"
 
 ---
 

@@ -49,7 +49,9 @@ import LoadShapeView       from './canvas/LoadShapeView.jsx'
 // toggle. The three files stay on disk for now (LoadShapeView imports them);
 // Parts 4-5 will replace them with a unified Pavlo-pattern time-series view.
 import HeatBalanceView     from './canvas/HeatBalanceView.jsx'
-import ThreeDView          from './canvas/ThreeDView.jsx'
+// Brief 28a Part 3d (2026-05-14): ThreeDView import removed — '3d' tab
+// dropped from the tab strip. ThreeDView.jsx kept on disk (no multi-zone
+// content yet; placeholder removed until that brief lands).
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { useContext } from 'react'
 
@@ -151,13 +153,19 @@ function CollapsibleSection({ title, accent, onActivate, children, defaultOpen =
 //   consolidated into a single 'loadshape' tab with an internal sub-view
 //   toggle. The three sub-components remain reachable via the toggle.
 //   Parts 4-5 will rewrite this as a unified Pavlo time-series view.
-// 3D Model removal lands in 3d.
+// Brief 28a Part 3d (2026-05-14): '3d' tab removed (no multi-zone content
+//   yet; placeholder removed until that brief lands). ThreeDView.jsx kept
+//   on disk for future revival. Tab 'loadshape' renamed user-facing label
+//   to 'Conditions' (Chris: "Load shape" is industry jargon; "Conditions"
+//   is accurate, doesn't lock to a single lens, and the eventual unified
+//   viewport in Parts 4-5 will host temperature traces + profiles +
+//   hourly distributions etc. -- all conditions). Internal key 'loadshape'
+//   kept stable so saved layout prefs don't lose state.
 const TABS = [
   { key: 'schedule',    label: 'Schedule',     fullWidth: true,  hasEngineToggle: false, isSchedule: true                  },
   { key: 'summary',     label: 'Summary',      fullWidth: false, hasEngineToggle: true,  headline: true                    },
   { key: 'balance',     label: 'Heat balance', fullWidth: false, hasEngineToggle: true                                     },
-  { key: 'loadshape',   label: 'Load shape',   fullWidth: true,  hasEngineToggle: true                                     },
-  { key: '3d',          label: '3D Model',     fullWidth: true,  hasEngineToggle: false                                    },
+  { key: 'loadshape',   label: 'Conditions',   fullWidth: true,  hasEngineToggle: true                                     },
 ]
 const TAB_KEYS = TABS.map(t => t.key)
 
@@ -270,11 +278,11 @@ function TabContent({
   // Brief 27 Revised Part 11: real canvas views. Brief 28a Part 3a adds
   // Summary. Part 3b removes 'delta' (content folded into Summary).
   // Part 3c collapses 'freerunning' / 'hourly' / 'breakdown' into 'loadshape'.
+  // Part 3d removes '3d' tab (ThreeDView.jsx kept on disk for future revival).
   switch (tab) {
     case 'summary':   return <SummaryView />
     case 'loadshape': return <LoadShapeView />
     case 'balance':   return <HeatBalanceView />
-    case '3d':        return <ThreeDView />
     default:          return null
   }
 }

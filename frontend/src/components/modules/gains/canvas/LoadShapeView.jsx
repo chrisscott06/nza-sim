@@ -1,5 +1,5 @@
 /**
- * LoadShapeView.jsx — Internal Gains module Load shape tab.
+ * LoadShapeView.jsx — Internal Gains module "Conditions" tab.
  *
  * Brief 28a Part 3c (2026-05-14): consolidates three previously-separate
  * canvas tabs into one umbrella tab with an internal sub-view toggle:
@@ -7,6 +7,14 @@
  *   - Temperature trace  -> existing FreeRunningView
  *   - Hourly profile     -> existing HourlyProfileView
  *   - Annual breakdown   -> existing AnnualBreakdownView
+ *
+ * Brief 28a Part 3d (2026-05-14): user-facing tab label changed from
+ * "Load shape" to "Conditions" (Chris: industry jargon -> plain English;
+ * the tab will eventually host temperature traces + profiles + hourly
+ * distributions etc. -- all conditions). The internal file name +
+ * component name stay as `LoadShapeView` to avoid churning component
+ * imports across the codebase mid-Part-3; rename can happen at
+ * Brief 28a Part 7 close-out alongside other deprecated-file deletions.
  *
  * This is an INTERIM consolidation: each sub-view renders its existing
  * component as-is, just bundled under one tab. Brief 28a Parts 4-5 lands
@@ -71,9 +79,9 @@ export default function LoadShapeView() {
           ))}
         </div>
         <p className="text-xxs text-mid-grey/70 mt-1.5 italic">
-          Interim sub-view toggle. Brief 28a Parts 4-5 (Pavlo port + Load
-          shape migration) replace these three perspectives with a single
-          unified time-series view with period zoom.
+          Interim sub-view toggle. Brief 28a Parts 4-5 (Pavlo port + Conditions
+          migration) replace these three perspectives with a single unified
+          time-series view with period zoom.
         </p>
       </div>
 
