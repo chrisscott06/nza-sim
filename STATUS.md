@@ -1,5 +1,73 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-14 — paused at Brief 28a Part 5 (Conditions tab live with Pablo composition + real Bridgewater data, awaiting walkthrough before 3e)
+
+**State:** `paused_for_walkthrough`
+**Latest commits this session (pushed to origin/main):**
+- (Part 5 commit pending push at next step)
+- `8f4e84f` Brief 28a Part 4 refinement: /chart-test composition fix + ui_principles.md density + chart-with-stat-panel pattern
+- `042dc84` Brief 28a Part 4 follow-up: /chart-test test harness
+- `c54ee6f` Brief 28a Part 4: Pablo chart components port
+- `abdf5d7` Housekeeping: Pavlo → Pablo
+- `359861c` Brief 28a Part 3d
+- (earlier in this session: Brief 27 cleanup Parts 1-3, 28 prereq close, Brief 28a Parts 1, 2, 3a-3d)
+
+### Walkthrough target — Conditions tab live with Bridgewater data
+
+Open `http://localhost:5176/gains` on Bridgewater, click the **Conditions** tab (4th tab from the left, after Schedule / Summary / Heat balance).
+
+Layout you should see (canonical composition from `/chart-test`):
+- Header row: "Conditions" + Static badge on the left; **lens selector** on the right with two pills: `Temperature | Gain profile` (default: Temperature, persists to localStorage).
+- Single bounded card containing:
+  - **ZoomNav** full width above the chart. Options: `1d | 7d | 14d | 30d | Yr`. Default 7d. Step forward/back with chevrons.
+  - **Body:** chart on the left (~2/3 width, 300px height bounded), **DataCards stacked vertically on the right** (180px column).
+  - **MonthJumpButtons** below the chart, spanning full width. Click a month to jump the window.
+- Footnote below the card.
+
+### Lens 1 — Temperature (default)
+
+- Chart: Recharts LineChart with two series.
+  - State 1 (envelope only) in grey
+  - State 2 (with gains) in orange (the gains module accent #EA580C)
+  - Reference lines at `21°C` (bandLo) and `25°C` (bandHi) — your comfort band.
+- DataCards (right column): Peak / Trough / Mean / In-band hours-out-of-window.
+- Stats update live as you zoom or jump months.
+
+### Lens 2 — Gain profile
+
+- Chart: Recharts stacked AreaChart with three series.
+  - People (occupancy purple, the module's people accent)
+  - Lighting (lighting accent)
+  - Equipment (equipment accent)
+- Y-axis in kW (instantaneous power; computeHourlyGains returns W → ÷ 1000 here).
+- DataCards: Peak kW / Mean kW / People % / Lighting % / Equipment % (five cards in this lens; the share triplet is most useful here).
+
+### Lens decision rationale (recap)
+
+I chose option (a) — **toggle inside the Conditions card** — over your other options (b stacked / c overlay):
+- (b) all-stacked would violate the bounded-chart-height principle just added to `ui_principles.md` §6 (three 300-px charts vertically would force page scrolling).
+- (c) multi-select overlay can't work cleanly: temperature is °C, gain is kW. Different units, different scales. Dual-y-axis charts violate readability discipline.
+
+### Walkthrough flag — Annual breakdown lens DROPPED
+
+The interim sub-view toggle had three sub-views (Temperature / Hourly profile / Annual breakdown). I dropped Annual breakdown from the Conditions tab in this rewrite. Rationale:
+- "Conditions" semantically means time-varying signals. Annual breakdown is not time-varying; it's an aggregate.
+- Per-gain attribution (which Annual breakdown showed) already lives in Summary tab's "What gains contribute" section.
+
+If you disagree: revisit in Part 7 close-out. Easy to add back either as a third lens (with ZoomNav/MonthJump disabled when active) or a dedicated tab.
+
+### Engine toggle status
+
+EngineBadge ships as a **label only** (renders "Static"). The Live/Simulation segmented control + State 2 EP results plumbing remains the Brief 27 close-out 9/10 holdback. Brief 28a Part 5 in the original brief included engine-toggle wiring; I deferred that piece to either a follow-up commit within Part 5 (if you want it before walkthrough) or to Part 7 close-out. Open question for your walkthrough.
+
+### What's queued after walkthrough
+
+- **3e** — mirror the Conditions composition to Building module with Building-specific data lenses (fabric heat-flow time series + element conduction over time).
+- **3f** — `ui_principles.md` already has the patterns. 3f may not need much beyond a canonical-tab-structure section.
+- **Parts 6, 7, 8** — Pablo rollout to remaining time-series views (if any beyond Conditions), close-out + completion checklist + canvas rendering smoketest acceptance gate, state-aware Dynamic runs.
+
+---
+
 ## 🚧 Session 2026-05-14 — paused at Brief 28a Part 4 (Pablo components ported in isolation, awaiting component-level walkthrough before Part 5 wiring)
 
 **State:** `paused_for_walkthrough`
