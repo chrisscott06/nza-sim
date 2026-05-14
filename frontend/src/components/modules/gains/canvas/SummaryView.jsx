@@ -294,6 +294,22 @@ export default function SummaryView() {
               sub={`of 8,760 (${Math.round((s2d.comfort_hours ?? 0) / 8760 * 100)}%)`} />
       </div>
 
+      {/* Brief 28c caveat (2026-05-14): at State 2 the demand numbers above
+          are free-running comfort-band integrals — what a perfect system would
+          deliver to hold the zone in band, assuming no operable windows and
+          unlimited plant. Real cooling demand in particular can be much lower
+          once operable windows (State 2.5) and HVAC plant limits (State 3)
+          are applied. Treat State 2 cooling demand as an upper-bound, not a
+          design figure. */}
+      <div className="bg-off-white border border-light-grey rounded px-3 py-2 text-xxs text-mid-grey leading-snug">
+        <strong className="text-navy">Note:</strong> Heating and cooling demand
+        at State 2 are <em>free-running comfort-band integrals</em> — the energy
+        a perfect system would deliver to hold the zone in band, given the
+        gains alone. Operable windows (State 2.5) typically reduce cooling
+        demand; HVAC plant capacity and deadband (State 3) refine both numbers
+        toward what a real system would deliver.
+      </div>
+
       {/* ── Gains vs Demand stacked bar (Brief 28a Part 2 sub-step 3) ── */}
       <div className="bg-white border border-light-grey rounded p-5">
         <div className="flex items-center justify-between mb-3">

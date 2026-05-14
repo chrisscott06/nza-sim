@@ -677,15 +677,16 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
     TS_floor = combineLinearizedStep(stepFloor, T_air)
 
     // Inside surface T per wall (just inside R_si) — used for T_radiant.
-    // T_in_surf = T_air + (T_inside_node − T_air) × R_si / R_n
-    // (where R_n includes R_si). For air balance + losses we use T_inside_node
+    // T_in_surf = T_air + (T_inside_node − T_air) × (R_si × U_eff)
+    // (R_si × U_eff = R_si / R_total is the fraction of the temperature drop
+    // that falls across R_si). For air balance + losses we use T_inside_node
     // directly; for T_radiant we want the surface T users see.
     const t_node_wall  = stepWall.massless  ? T_sa_wall  : TS_wall[TS_wall.length   - 1]
     const t_node_roof  = stepRoof.massless  ? T_sa_roof  : TS_roof[TS_roof.length   - 1]
     const t_node_floor = stepFloor.massless ? T_ground   : TS_floor[TS_floor.length - 1]
-    const T_in_surf_wall  = T_air + (t_node_wall  - T_air) * (stepWall.R_si  / Math.max(1 / Math.max(stepWall.U_eff,  1e-9), 1e-9))
-    const T_in_surf_roof  = T_air + (t_node_roof  - T_air) * (stepRoof.R_si  / Math.max(1 / Math.max(stepRoof.U_eff,  1e-9), 1e-9))
-    const T_in_surf_floor = T_air + (t_node_floor - T_air) * (stepFloor.R_si / Math.max(1 / Math.max(stepFloor.U_eff, 1e-9), 1e-9))
+    const T_in_surf_wall  = T_air + (t_node_wall  - T_air) * (stepWall.R_si  * stepWall.U_eff)
+    const T_in_surf_roof  = T_air + (t_node_roof  - T_air) * (stepRoof.R_si  * stepRoof.U_eff)
+    const T_in_surf_floor = T_air + (t_node_floor - T_air) * (stepFloor.R_si * stepFloor.U_eff)
 
     // T_radiant: area-weighted mean inside-surface T. Glazing inside surface
     // ≈ T_air (no mass), so it doesn't shift T_radiant much; include it for
