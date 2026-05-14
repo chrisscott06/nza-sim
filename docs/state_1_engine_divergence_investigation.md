@@ -1,5 +1,25 @@
 # State 1 Live vs Sim divergence — investigation (2026-05-13)
 
+> **[CORRECTED 2026-05-14]** Per `docs/physics_audit_2026_05.md`, two
+> load-bearing claims in this investigation were overstated and one
+> was an artefact of comparison methodology. See inline `[CORRECTED
+> 2026-05-14]` blocks. Headline:
+> - The "38% solar over-count / 50 GWh phantom solar" was a
+>   pre-shading-vs-post-shading methodology error. Apples-to-apples
+>   aggregate deviation is +1% (with ±19% per-facade redistribution
+>   NNE vs SSW). See `physics_audit_2026_05.md` Audit 3.
+> - The "23.5% uniform conduction divergence" was an artefact of
+>   comparing Static (free-running) vs Dynamic (HVAC-clamped at 18°C
+>   night / 21°C day). A true `mode=envelope-only` EP run with wide
+>   setpoints is queued as the Brief 28 prerequisite. The 23.5% figure
+>   is provisional. See `physics_audit_2026_05.md` Audit 1.
+> - The HDKR/Perez solar model fix (now Brief 28b Part 2) is still
+>   warranted, but its expected impact on State 1 agreement is smaller
+>   than this doc originally claimed. The likely dominant cause of
+>   Static's 44.2°C summer max is the lumped two-node thermal mass
+>   model, not the sky model. See `physics_audit_2026_05.md` Audit 4
+>   and Brief 28b Part 3.
+
 **Trigger:** Brief 27 close-out walkthrough surfaced a 15°C summer-max gap
 between Live and Sim on Bridgewater State 1, with cooling demand
 diverging from 109 MWh (Live) to 5 MWh (Sim). Chris flagged it as
@@ -120,10 +140,69 @@ gap of 3°C × the building's UA (~10 W/K total) × 8760 hours = roughly
 260 GJ of extra heat in Live, consistent with the 50 GWh solar
 over-count flowing through the lumped-capacitance balance.
 
+> **[CORRECTED 2026-05-14]** The 38% / 50 GWh figures above came from
+> comparing the Live engine's **pre-shading solar accumulator** (the
+> raw input to the absorber, before overhang + fin shading is applied)
+> against the Sim engine's **post-shading transmitted solar** (the
+> shaded, glazing-attenuated total that actually reaches the zone).
+> They are different quantities and were never directly comparable.
+>
+> Per `docs/physics_audit_2026_05.md` Audit 3, the apples-to-apples
+> comparison (both engines, post-shading transmitted solar) on
+> Bridgewater is:
+>
+> | Orientation | WWR  | Live vs Sim (post-shading transmitted) |
+> |-------------|------|-----------------------------------------|
+> | F1 (NNE)    | 0.55 | +19% Live over Sim                      |
+> | F2 (SE)     | 0.10 | within ±5%                              |
+> | F3 (SSW)    | 0.38 | −10% Live under Sim                     |
+> | F4 (NW)     | 0.11 | within ±5%                              |
+> | **Aggregate**| —   | **+1% Live over Sim**                   |
+>
+> The per-facade ±19% redistribution between NNE and SSW is real and is
+> what the HDKR/Perez upgrade in Brief 28b Part 2 addresses. The "50
+> GWh phantom solar" figure does not exist as a real engine divergence.
+> The downstream reasoning (260 GJ extra heat, 3°C annual mean gap
+> attributed to solar over-count flowing through lumped-capacitance) is
+> therefore unsupported.
+>
+> The likely real driver of Static's high summer max (44.2°C) is the
+> lumped two-node thermal mass model — see `physics_audit_2026_05.md`
+> Audit 4 and the Brief 28b Part 3 multi-layer CTF mass-model overhaul.
+
 The fabric conduction line items differ by exactly 23.5% across **all**
 elements — that's the signature of an indoor-temperature-driven
 divergence (not an element-specific one). U × A is identical; only ΔT
 integral differs, and that's because Live's indoor T is higher.
+
+> **[CORRECTED 2026-05-14]** The 23.5%-uniform-across-elements signature
+> is real (U × A × ΔT integral is genuinely the same up to a single
+> multiplicative factor across all elements), but the attribution above
+> to "Live's indoor T is higher because of solar over-count" is wrong
+> in two ways:
+>
+> 1. **Solar over-count framing is wrong.** Per the correction above
+>    and `physics_audit_2026_05.md` Audit 3, aggregate transmitted
+>    solar agrees to +1%. There is no 50 GWh of phantom solar driving
+>    a 3°C indoor-T offset.
+>
+> 2. **The comparison was not apples-to-apples.** The Live engine here
+>    is genuinely free-running (ideal loads at −60/+100°C setpoints,
+>    no real conditioning). The Sim figures in the table at the top of
+>    this doc came from a Dynamic EP run that was HVAC-clamped (18°C
+>    night / 21°C day setback). One engine is unconditioned; the other
+>    is conditioned. Of course the ΔT integrand differs uniformly —
+>    the conditioned engine has its T held in the comfort band most of
+>    the year, the unconditioned engine drifts. That's a comparison
+>    artefact, not a physics divergence.
+>
+> A true `mode=envelope-only` EP run with wide setpoints exists in the
+> assembler (`epjson_assembler.py:1358` supports −60/+100°C) but has
+> not been persisted yet. Brief 28 prerequisite (`docs/briefs/active/
+> 28_prereq_free_running_ep.md`) ships it. When that run lands, the
+> engine_agreement script will be re-run against comparable free-
+> running Dynamic output. The 23.5% figure is provisional and almost
+> certainly will not survive apples-to-apples comparison.
 
 ## Why this is not a regression
 
@@ -172,6 +251,30 @@ needs its own brief.
 - The Live | Simulation engine-toggle UI control (currently a
   placeholder slot) — once both engines emit comparable State 2
   results, the user can flip between them via the in-tab toggle.
+
+> **[CORRECTED 2026-05-14]** "Largest impact on State 1 free-running
+> temperature accuracy" is overstated. Per `physics_audit_2026_05.md`,
+> the HDKR/Perez fix's expected impact on summer max is small (the
+> dominant divergence cause is the mass model, not the sky model).
+>
+> The work is now structured across the May 2026 batch (see
+> `docs/briefs/batch_orchestration.md`):
+> - **Brief 28 prerequisite** — persist a free-running EP run so the
+>   engine comparison is honest. Without this, all the "Live high by
+>   X%" claims in this doc are confounded with HVAC clamping.
+> - **Brief 28a** — engine toggle wiring + UX (terminology rename
+>   "Live → Static", "Simulation → Dynamic", kWh/m²·yr readouts,
+>   canvas restructure).
+> - **Brief 28b Part 2** — isotropic → HDKR sky model. Addresses the
+>   real ±19% per-facade redistribution between NNE and SSW.
+> - **Brief 28b Part 3** — multi-layer CTF (or simplified multi-node)
+>   thermal mass model. Expected dominant lever for closing the
+>   Static-Dynamic summer-max gap.
+>
+> Re-baselining `state_2_expected_ranges.md` happens after both physics
+> fixes land (Brief 28b Part 5), with the new Bridgewater Static vs
+> Dynamic numbers measured against the now-correct free-running
+> Dynamic trace.
 
 ## What this means for the Brief 27 module completion checklist
 
