@@ -403,7 +403,23 @@ function getConstructionItem(constructions, libraryData, element) {
  *      heating_demand[h] = max(0, UA·(lower_c − T_out) − Q_solar) if T_op < lower_c
  *      cooling_demand[h] = max(0, Q_solar + UA·(T_out − upper_c)) if T_op > upper_c
  */
-function _calculateEnvelopeOnly(building, constructions, libraryData, weatherData, hourlySolar, comfortBand) {
+function _calculateEnvelopeOnly(building, constructions, libraryData, weatherData, hourlySolar, comfortBand, tuning = null) {
+  // Brief 28b Part 3 v2 scaffolding (2026-05-14): optional `tuning` overrides
+  // for the three thermal-mass / solar-distribution / surface-resistance
+  // parameters. Default values match the v1 commit (1d6fc79). The sweep
+  // harness in scripts/_part3_response_surface.mjs passes overrides; the
+  // production code path passes nothing and gets v1 behaviour byte-for-byte.
+  const TUNE_SOLAR_RAD_FRAC      = (tuning && Number.isFinite(tuning.solar_radiative_fraction))
+    ? tuning.solar_radiative_fraction : 0.50
+  const TUNE_INTERNAL_MASS_J_M2  = (tuning && Number.isFinite(tuning.internal_mass_J_per_K_per_m2))
+    ? tuning.internal_mass_J_per_K_per_m2 : 50_000
+  const TUNE_R_SI_WALL_OVR       = (tuning && Number.isFinite(tuning.R_si_wall))
+    ? tuning.R_si_wall : R_SI_WALL
+  const TUNE_R_SI_ROOF_OVR       = (tuning && Number.isFinite(tuning.R_si_roof))
+    ? tuning.R_si_roof : R_SI_ROOF
+  const TUNE_R_SI_FLOOR_OVR      = (tuning && Number.isFinite(tuning.R_si_floor))
+    ? tuning.R_si_floor : R_SI_FLOOR
+
   const geo = computeGeometry(building)
   const { gia, volume, total_wall_opaque, total_glazing, glazing, wall_opaque, roof_area, ground_area } = geo
   if (gia <= 0) return _empty()
@@ -424,18 +440,18 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   const roofItem    = getConstructionItem(constructions, libraryData, 'roof')
   const floorItem   = getConstructionItem(constructions, libraryData, 'ground_floor')
   const extWallModel = buildWallModel(extractLayers(extWallItem), {
-    R_si: R_SI_WALL,
+    R_si: TUNE_R_SI_WALL_OVR,
     solar_abs: 0.6,    // brick / render typical
     h_out: 25,
   })
   const roofModel = buildWallModel(extractLayers(roofItem), {
-    R_si: R_SI_ROOF,
+    R_si: TUNE_R_SI_ROOF_OVR,
     solar_abs: 0.7,    // tiles / dark roofing typical
     h_out: 25,
   })
   const floorModel = buildWallModel(extractLayers(floorItem), {
     R_so: 0.0,         // ground in direct contact, no external film
-    R_si: R_SI_FLOOR,
+    R_si: TUNE_R_SI_FLOOR_OVR,
     solar_abs: 0,      // no solar on slab outer face
     h_out: 1e9,        // effectively bypasses sol-air (no convection lost to sky)
   })
@@ -484,7 +500,7 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   // tightly in winter night periods (no buffering). Typical "InternalMass"
   // contributions in EnergyPlus simulations sit in the 30–80 kJ/(K·m²
   // floor area) range; 50 kJ/(K·m²) is a midline value.
-  const INTERNAL_MASS_J_PER_K_PER_M2_GIA = 50_000  // J/(K·m²) — partitions + furniture estimate
+  const INTERNAL_MASS_J_PER_K_PER_M2_GIA = TUNE_INTERNAL_MASS_J_M2  // J/(K·m²) — partitions + furniture estimate
   const C_air_air_J = (volume * 1.2 * 1005)   // pure zone-air heat capacity (J/K) — ≈ 13 MJ/K for Bridgewater
   const C_air_internal_J = INTERNAL_MASS_J_PER_K_PER_M2_GIA * gia
   const C_air_total_J = C_air_air_J + C_air_internal_J   // J/K coupled to T_air
@@ -561,7 +577,7 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
     // plus immediate convective gain from heated interior surfaces),
     // remainder absorbed at opaque interior surfaces where it enters
     // wall thermal mass.
-    const SOLAR_RADIATIVE_FRACTION = 0.50  // fraction absorbed slowly at opaque interior surfaces
+    const SOLAR_RADIATIVE_FRACTION = TUNE_SOLAR_RAD_FRAC  // fraction absorbed slowly at opaque interior surfaces
     const SOLAR_CONVECTIVE_FRACTION = 1.0 - SOLAR_RADIATIVE_FRACTION
     const A_internal_opaque = total_wall_opaque + roof_area + ground_area
     const q_solar_to_inside_surf = (A_internal_opaque > 0)
@@ -2189,6 +2205,7 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
       withMode(building, mode),
       constructions, libraryData, weatherData, hourlySolar,
       options.comfortBand ?? building.comfort_band ?? { lower_c: 20, upper_c: 26 },
+      options.tuning ?? null,
     )
   }
 

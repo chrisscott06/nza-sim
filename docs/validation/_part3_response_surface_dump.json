@@ -1,0 +1,217 @@
+{
+  "ep_ref": {
+    "annual_mean_c": 19.8,
+    "summer_max_c": 35.4,
+    "winter_min_c": 8.3,
+    "heating_demand_mwh": 110.2,
+    "cooling_demand_mwh": 61.7
+  },
+  "test1": {
+    "name": "Solar split sweep",
+    "knob": "solar_radiative_fraction",
+    "values": [
+      0.3,
+      0.5,
+      0.7,
+      0.85,
+      1
+    ],
+    "runs": [
+      {
+        "tuning": {
+          "solar_radiative_fraction": 0.3
+        },
+        "out": {
+          "annual_mean_c": 18.1,
+          "summer_max_c": 37.2,
+          "winter_min_c": 3.2,
+          "heating_demand_mwh": 122.7,
+          "cooling_demand_mwh": 42.3
+        }
+      },
+      {
+        "tuning": {
+          "solar_radiative_fraction": 0.5
+        },
+        "out": {
+          "annual_mean_c": 17.9,
+          "summer_max_c": 36.7,
+          "winter_min_c": 3.2,
+          "heating_demand_mwh": 123.6,
+          "cooling_demand_mwh": 39.5
+        }
+      },
+      {
+        "tuning": {
+          "solar_radiative_fraction": 0.7
+        },
+        "out": {
+          "annual_mean_c": 17.8,
+          "summer_max_c": 36.3,
+          "winter_min_c": 3.1,
+          "heating_demand_mwh": 124.5,
+          "cooling_demand_mwh": 37.6
+        }
+      },
+      {
+        "tuning": {
+          "solar_radiative_fraction": 0.85
+        },
+        "out": {
+          "annual_mean_c": 17.7,
+          "summer_max_c": 36,
+          "winter_min_c": 3.1,
+          "heating_demand_mwh": 125.1,
+          "cooling_demand_mwh": 35.8
+        }
+      },
+      {
+        "tuning": {
+          "solar_radiative_fraction": 1
+        },
+        "out": {
+          "annual_mean_c": 17.5,
+          "summer_max_c": 35.6,
+          "winter_min_c": 3,
+          "heating_demand_mwh": 125.8,
+          "cooling_demand_mwh": 34.1
+        }
+      }
+    ]
+  },
+  "test2": {
+    "name": "Mass parameter sweep",
+    "knob": "internal_mass_kJ_per_K_per_m2",
+    "values": [
+      50,
+      100,
+      150,
+      200
+    ],
+    "runs": [
+      {
+        "tuning": {
+          "solar_radiative_fraction": 0.3,
+          "internal_mass_J_per_K_per_m2": 50000
+        },
+        "out": {
+          "annual_mean_c": 18.1,
+          "summer_max_c": 37.2,
+          "winter_min_c": 3.2,
+          "heating_demand_mwh": 122.7,
+          "cooling_demand_mwh": 42.3
+        }
+      },
+      {
+        "tuning": {
+          "solar_radiative_fraction": 0.3,
+          "internal_mass_J_per_K_per_m2": 100000
+        },
+        "out": {
+          "annual_mean_c": 18.1,
+          "summer_max_c": 35.5,
+          "winter_min_c": 4.2,
+          "heating_demand_mwh": 121.4,
+          "cooling_demand_mwh": 40.3
+        }
+      },
+      {
+        "tuning": {
+          "solar_radiative_fraction": 0.3,
+          "internal_mass_J_per_K_per_m2": 150000
+        },
+        "out": {
+          "annual_mean_c": 18.2,
+          "summer_max_c": 34.7,
+          "winter_min_c": 4.8,
+          "heating_demand_mwh": 121.3,
+          "cooling_demand_mwh": 40.5
+        }
+      },
+      {
+        "tuning": {
+          "solar_radiative_fraction": 0.3,
+          "internal_mass_J_per_K_per_m2": 200000
+        },
+        "out": {
+          "annual_mean_c": 18.2,
+          "summer_max_c": 33.9,
+          "winter_min_c": 5.3,
+          "heating_demand_mwh": 121.4,
+          "cooling_demand_mwh": 40.3
+        }
+      }
+    ],
+    "best_solar_split": 0.3
+  },
+  "test3": {
+    "name": "R_si sweep",
+    "knob": "R_si",
+    "values": [
+      0.1,
+      0.13,
+      0.17,
+      0.2
+    ],
+    "runs": [
+      {
+        "tuning": {
+          "solar_radiative_fraction": 0.3,
+          "internal_mass_J_per_K_per_m2": 150000,
+          "R_si_wall": 0.1
+        },
+        "out": {
+          "annual_mean_c": 18.2,
+          "summer_max_c": 34.7,
+          "winter_min_c": 4.8,
+          "heating_demand_mwh": 121.5,
+          "cooling_demand_mwh": 40.5
+        }
+      },
+      {
+        "tuning": {
+          "solar_radiative_fraction": 0.3,
+          "internal_mass_J_per_K_per_m2": 150000,
+          "R_si_wall": 0.13
+        },
+        "out": {
+          "annual_mean_c": 18.2,
+          "summer_max_c": 34.7,
+          "winter_min_c": 4.8,
+          "heating_demand_mwh": 121.3,
+          "cooling_demand_mwh": 40.5
+        }
+      },
+      {
+        "tuning": {
+          "solar_radiative_fraction": 0.3,
+          "internal_mass_J_per_K_per_m2": 150000,
+          "R_si_wall": 0.17
+        },
+        "out": {
+          "annual_mean_c": 18.2,
+          "summer_max_c": 34.7,
+          "winter_min_c": 4.8,
+          "heating_demand_mwh": 121.1,
+          "cooling_demand_mwh": 40.6
+        }
+      },
+      {
+        "tuning": {
+          "solar_radiative_fraction": 0.3,
+          "internal_mass_J_per_K_per_m2": 150000,
+          "R_si_wall": 0.2
+        },
+        "out": {
+          "annual_mean_c": 18.2,
+          "summer_max_c": 34.7,
+          "winter_min_c": 4.8,
+          "heating_demand_mwh": 120.9,
+          "cooling_demand_mwh": 40.7
+        }
+      }
+    ],
+    "best_solar_split": 0.3,
+    "best_mass": 150000
+  }
+}
