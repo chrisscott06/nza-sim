@@ -70,12 +70,35 @@ Add 7 starter library items matching Bridgewater (the test fixture templates bec
 | `mvhr_with_hr` | ventilation | hre 0.8 (sfp default 1.4 W/(l/s)) | electricity |
 | `wc_extract_no_hr` | ventilation | hre 0.0 (sfp default 0.4 W/(l/s)) | electricity |
 
-### Sub-piece 5.4 — Systems config UI
+### Sub-piece 5.4 — Systems config UI (scope locked 2026-05-15 per Chris's browser review of legacy v2.4 UI)
 
-Extend the existing Systems module (`frontend/src/components/modules/systems/`). Per service:
-- **HVACTab** (heating + cooling): primary library_id picker + `primary_pct` slider + optional secondary toggle/picker + setpoint.
-- **DHWTab**: same pattern + circulation pump W field + the three DHW demand inputs from 5.1.
-- **VentilationTab**: add-new-system button; per-system inline `flow_l_s`, `sfp_w_per_l_s`, `hre`, `schedule_ref` fields.
+The v2.5 UI is a **partial rewrite** of the existing `SystemsZones.jsx` workspace, not an extension. Several legacy-v2.4 UI elements that are now redundant (since Path C shipped the Energy & Carbon Results tab) or never wired must be dropped before the v2.5 inputs land. Final scope:
+
+**Per-service editor (heating / cooling / DHW):**
+- **(a)** Each service starts as **"not configured"** with a "+ Add" affordance. User clicks to add. Services that aren't configured are **absent from the engine input entirely** (e.g. `systems_config_v25.heating = null`). Engine already handles this gracefully (verified in Part 2 byte-identity tests).
+- **(b)** Per-service **primary / optional secondary with `primary_pct` split**. Already in the engine; UI exposes it. Mirror the DHW partial UX already in legacy — make the pattern consistent across heating + cooling + DHW.
+- Library picker dropdown with **description inline** (per earlier decision — Pablo design system pattern, name + provenance flag visible without hover).
+- Numeric setpoint input per service (heating: 15–25 °C, cooling: 20–30 °C). Slider for `primary_pct`. DHW: circulation pump W field + DHW demand inputs (L/p/day, store_temp, cold_mains).
+
+**Per-service ventilation array editor:**
+- **(c)** Multiple independent ventilation systems with **add/remove/edit**. Bridgewater has at least two real ones (MVHR, WC extract) — the workbook mentions Public toilet extract + kitchen extract as further candidates. Per-system inline `flow_l_s`, `sfp_w_per_l_s`, `hre`, `schedule_ref` fields plus library template picker.
+
+**Drops (legacy-v2.4 cruft):**
+- **(d)** Drop the right-hand live results panel (`SystemsLiveResults`). Energy & Carbon tab (Path C, shipped) is the canonical v2.5 results display — two displays of similar data create confusion.
+- **(e)** Drop the "Detailed / Ideal Loads" simulation-mode toggle — v2.4 concept that doesn't exist in v2.5.
+- **(f)** Drop the non-interactive top-right pills ("Detailed / MEV / ASHP Preheat") on the Sankey — legacy placeholders, never wired.
+- **(g)** Drop the placeholder schedules showing "100%" without controls — v2.4 stub UI.
+
+**Centre canvas:**
+- **(h)** Keep the `SystemSankey` concept, but drive it from v2.5 engine output. It's a good visualisation. Add tabs alongside for alternative views — bar chart of fuel split, per-system efficiency comparison (SCOP/SEER tiles), demand vs delivered vs fuel (Sankey-adjacent). Pablo-pattern.
+
+**Architectural retentions:**
+- **System-first model retained.** No equipment-vs-system separation in V1. Library templates are the unit of equipment specification. Future enhancement if needed.
+- **MVHR is correctly a State 3 system, not a State 2 element.** Heat Balance at State 2 (fixed in Issue 3 commit) shows physical gains/losses only. MVHR recovery appears in State 3 Energy & Carbon tab through the ventilation system path. Brief 28j (hour-by-hour cap, shipped) makes the recovery-vs-heating interaction physically plausible.
+
+**Validation feedback (per earlier decision):** Catch `MissingLibraryField` errors and surface inline next to the relevant input using `subSystemPath` + `fieldName`. Block save with inline error. Allow saving partial (null/absent) `systems_config_v25` so users can leave the page half-configured.
+
+**Persistence (per earlier decision):** Existing `PUT /api/projects/{id}/building` accepts arbitrary new fields via deep-merge (verified during Path C plumbing); `systems_config_v25` lands nested in `building_config`. No new endpoint needed.
 
 ### Sub-piece 5.5 — State 3 results display
 
