@@ -10,6 +10,28 @@
 
 **After Part 5 lands:** measured-data ingest + comparison (next major piece). Calibration workflow follows. State 3 refinements (hourly HRE, persisted library schema for system_templates, ventilation schedules, HVAC-aware State 2 cooling, performance curves) queue behind calibration — measured data will reveal which are necessary.
 
+**Queue beyond 28g (data ingester):**
+
+- **Brief 28h — Carbon pathway library + selection + snapshot.** 505 Design HIX Decarb Pathways workbook (26002-NZA-XX-XX-CA-X-1000) curated seven pathways for asset trajectory analysis:
+  - CRREM v2 UK Hotel EUI pathway (2026–2050, kWh/m²/yr)
+  - UK NZCBS OE-2 Hotel Retrofit EUI pathway
+  - CRREM CO₂-only GHG intensity pathway
+  - CRREM CO₂e GHG intensity pathway (incl. F-gases)
+  - CRREM v2 UK electricity carbon factor (year-by-year)
+  - FES 2025 Holistic Transition (NESO V006)
+  - FES 2025 Electric Engagement
+  - FES 2025 Hydrogen Evolution
+
+  Plus DESNZ 2025 current factors as fallback (gas 0.18316, elec 0.20493 kg CO₂e/kWh). Workbook ref: `C:\Users\ChrisScott\OneDrive - NZA Consultancy Ltd\01a - Live Projects\26002 - Zeal HIX CRREM Study\01 - WIP\CA_Calcs\26002-NZA-XX-XX-CA-X-1000 - HIX Decarb Pathways.xlsx`.
+
+  Scope: `pathway_library.js` frontend constants (mirror system templates pattern — shape mappable to future backend table). `project.carbon_methodology = { eui_pathway_id, grid_factor_pathway_id, ghg_intensity_pathway_id }` schema addition. Methodology UI panel with library picker (description-in-option per the same pattern as system templates). "Current asset on pathway" snapshot chart (horizontal dot for current EUI vs selected EUI target pathway year-by-year). Methodology display footer on Energy & Carbon + future calibration + intervention views.
+
+  Out of scope for 28h: building-side projection over time (current EUI assumed flat unless intervention applied — that's 28i), intervention library (28i), MAC curve (28i).
+
+- **Brief 28i — Intervention library + full projection.** After 28h. Intervention catalogue from the workbook (Full MVHR, Extract rate reduction, DHW occupancy reduction, DHW ASHP increase, Washing machine removal, Electric panel heater removal — gas/electricity savings, capital cost, lifetime). Stacking logic with dual-impact handling. Projection chart with building's trajectory against the selected pathway target. MAC curve.
+
+  28i depends on calibration being grounded (otherwise we're projecting against a wrong baseline). So order is firmly: **28g ingester → calibration → 28h pathways → 28i interventions**.
+
 ---
 
 ## Part 5 — State 3 UI integration (SCOPED 2026-05-15, HALT-FOR-REVIEW)
