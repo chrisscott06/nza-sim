@@ -1,6 +1,98 @@
-# NZA-Sim State Contracts (v2.4)
+# NZA-Sim State Contracts (v2.5)
 
 **Status:** Canonical. Every brief that touches computation, UI, or data flow must conform to this document.
+
+**Changes from v2.4 (Brief 28f Part 1 — State 3 systems contract sharpening, 2026-05-15):**
+
+The State 3 section is refined to reflect Brief 28f's scope decisions, which
+codify what State 3 is and — equally important — what it deliberately is not.
+
+1. **Heating and cooling each gain a primary + optional secondary split.**
+   v2.4 treated each as a single system. Real buildings often run dual systems
+   (e.g. ASHP primary + gas boiler backup for heating, VRF primary + DX backup
+   for cooling). v2.5 introduces `primary` and `secondary` sub-systems per
+   service with a `primary_pct` allocation (0–100; secondary = 100 − primary).
+   Each sub-system references a library `system_template` for efficiency
+   and fuel.
+
+2. **DHW also splits into primary + optional secondary** (vocabulary mirrors
+   heating/cooling for consistency, not because of any operational order —
+   DHW is often dual-fuel by design, e.g. gas boiler primary + electric
+   immersion secondary). `systems.dhw.primary` + `systems.dhw.secondary`
+   with `systems.dhw.primary_pct` allocation.
+
+3. **DHW circulation pump is a flat field, not a sub-system.** Modelled as
+   `systems.dhw.circulation_pump_w` (continuous electrical baseload) plus
+   `systems.dhw.circulation_schedule_ref` (optional — defaults to 8760 h
+   on). NOT counted in primary or secondary delivered/fuel. Reported as its
+   own line in the energy output.
+
+4. **Mechanical ventilation becomes an array of independent systems.** v2.4
+   modelled a single `systems.ventilation` block. v2.5 lifts this to
+   `systems.ventilation[]` — an array of `{id, library_id, flow_l_s,
+   sfp_w_per_l_s, hre, schedule_ref}` per system. Sum across systems gives
+   total fan energy and total heating-offset from heat recovery.
+
+5. **V1 efficiency representation = scalars only.** SCOP, SEER,
+   `seasonal_efficiency`, COP — whichever metric is appropriate for the
+   system type. **No performance-curve lookups in V1.** Curves can be added
+   later only if calibration reveals they're needed; doing so requires a
+   contract version bump. This is a deliberate simplification to keep V1
+   tractable and to defer complexity to where evidence demands it.
+
+6. **Dual-function library items.** A library `system_template` declares
+   which services it supports via `supports_services: ['heating', 'cooling',
+   'dhw'?]` and carries the per-service efficiency fields it needs (e.g.
+   `heating_scop`, `cooling_seer`). The same `library_id` may be referenced
+   from `systems.heating.primary` AND `systems.cooling.primary` when one
+   physical unit does both jobs (e.g. VRF with heat recovery; ASHP with
+   reversing valve). Energy bookkeeping still attributes delivered + fuel
+   to each service independently.
+
+7. **Library-id is strict; engine halts on missing required field.** Every
+   sub-system MUST reference a `library_id`. Hardcoded efficiency values are
+   forbidden in engine and UI. If a required field is missing in the
+   referenced library item (e.g. HRE on a ventilation template,
+   `heating_scop` on a heating template, `cooling_seer` on a cooling
+   template), the engine halts with a `MissingLibraryField` error that
+   names the sub-system path AND the missing field. No silent defaults.
+   This is the same single-source-of-truth discipline that governs
+   constructions (per CLAUDE.md).
+
+8. **Building-level setpoint per service** — `systems.heating.setpoint_c`
+   and `systems.cooling.setpoint_c`. Sub-systems share the service setpoint.
+   This is a deliberate single-zone simplification for V1; multi-zone
+   setpoints land with the later multi-zone brief.
+
+9. **New `energy_use` output shape: per-fuel × per-service × per-system.**
+   v2.4's flat `consumption` (fuel totals only) and `end_use` (service
+   totals only) blocks are replaced by `energy_use`, which exposes all three
+   dimensions simultaneously. This shape enables calibration against
+   sub-metered electricity data (e.g. "the chiller circuit is metered
+   separately — does the model's `energy_use.electricity.cooling.primary`
+   match the meter?") without restructuring outputs later. `eui_kwh_per_m2`
+   and `carbon_kg_co2_per_m2` remain as top-level convenience aggregates.
+
+10. **Explicit out-of-scope list for State 3 at 28f.** Per-zone systems,
+    distribution losses, non-DHW pumps, air curtains (Brief 28e), and
+    on-site renewables are all explicitly excluded. Each future relaxation
+    requires a contract version bump.
+
+11. **Verification tightened to five gates.** Hand-calc per system at ±2%,
+    byte-identity on shared physics (State 1/2 outputs pass through
+    unchanged), ideal-loads regression (State 3 reduces to State 2.5 demand
+    at COP=1.0 / HRE=0), A1/A2 sensitivity tests pass with percentages
+    unchanged (demand scales, splits constant), EUI plausibility as sanity
+    check (not halt gate).
+
+The v2.4 changes (multi-profile gains, full exception schedules, canvas
+schedule editor, load-type library) carry forward unchanged. State 1 / State
+2 / State 2.5 sections are untouched.
+
+**Owner:** Chris.
+**Version:** 2.5 (May 2026).
+
+---
 
 **Changes from v2.3 (Brief 27 Revised Part 6 — Internal Gains walkthrough):**
 
@@ -911,24 +1003,45 @@ State 2.5 must equal State 2 when all operable areas are zero. Bridgewater (seal
 
 **Question this state answers:** *How does the building's demand translate into fuel consumption given the installed systems?*
 
-### Inputs honoured
+### Inputs honoured (Brief 28f sharpening — v2.5)
 
 Everything in State 2.5, plus:
 
 | Input | Source | Path |
 |---|---|---|
-| Space heating system type and efficiency | User | `systems.heating.{type, cop, efficiency, fuel}` |
-| Space heating setpoint | User | `systems.heating.setpoint_c` |
-| Space cooling system type and efficiency | User | `systems.cooling.{type, eer, fuel}` |
-| Space cooling setpoint | User | `systems.cooling.setpoint_c` |
-| Mechanical ventilation type and efficiency | User | `systems.ventilation.{type, sfp, heat_recovery, control}` |
-| DHW system type and efficiency | User | `systems.dhw.{type, primary, preheat, efficiencies}` |
-| Control schedules | User | `systems.*.control_schedule` |
-| Performance curves | Default or user | `systems.*.performance_curves` |
+| Heating setpoint (building-level, single-zone simplification) | User | `systems.heating.setpoint_c` |
+| Heating primary system (required) | User + library | `systems.heating.primary.library_id` |
+| Heating secondary system (optional) | User + library | `systems.heating.secondary.library_id` |
+| Heating primary/secondary split | User | `systems.heating.primary_pct` (0–100; secondary = 100 − primary; defaults to 100 if no secondary) |
+| Cooling setpoint (building-level, single-zone simplification) | User | `systems.cooling.setpoint_c` |
+| Cooling primary system (required) | User + library | `systems.cooling.primary.library_id` |
+| Cooling secondary system (optional) | User + library | `systems.cooling.secondary.library_id` |
+| Cooling primary/secondary split | User | `systems.cooling.primary_pct` (0–100; defaults to 100 if no secondary) |
+| DHW primary system (required) | User + library | `systems.dhw.primary.library_id` |
+| DHW secondary system (optional) | User + library | `systems.dhw.secondary.library_id` |
+| DHW primary/secondary split | User | `systems.dhw.primary_pct` (0–100; defaults to 100 if no secondary) |
+| DHW circulation pump baseload | User | `systems.dhw.circulation_pump_w` (electrical, continuous unless schedule_ref is set) |
+| DHW circulation pump schedule (optional) | User | `systems.dhw.circulation_schedule_ref` (defaults to 8760 h on if absent) |
+| Mechanical ventilation systems | User + library | `systems.ventilation[]` — array of `{id, library_id, flow_l_s, sfp_w_per_l_s, hre, schedule_ref}` |
 
-### Inputs ignored
+### Library reference rules (v2.5)
 
-None. State 3 is the full model.
+- **All efficiency / fuel data lives in `system_template` library items.** Engine and UI never carry hardcoded efficiency values. Sub-systems reference a template by `library_id`; the engine resolves the template at run time.
+- **V1 efficiency = scalar only.** SCOP, SEER, `seasonal_efficiency`, COP — whichever metric is appropriate for the system type. No performance-curve lookups in V1. Curves are a future contract bump.
+- **Dual-function library items are supported.** A `system_template` declares `supports_services: ['heating', 'cooling', 'dhw'?]` and carries the per-service efficiency fields it needs (`heating_scop`, `cooling_seer`, `dhw_seasonal_efficiency`, etc.). The same `library_id` may be referenced from `systems.heating.primary` AND `systems.cooling.primary` when one physical unit does both jobs (e.g. VRF heat recovery, ASHP with reversing valve). Engine attributes delivered + fuel to each service independently from the unit's per-service efficiency.
+- **Missing required field is a halt, not a default.** If a referenced template lacks a required field for the service it's being used for (e.g. `heating_scop` missing on a heating primary; HRE missing on a vent template), the engine throws `MissingLibraryField` with the sub-system path AND the missing field name — e.g. `MissingLibraryField: systems.cooling.primary (library_id = "vrf_brand_x_2023") is missing required field "cooling_seer"`. No silent defaults, ever.
+
+### Inputs ignored (Brief 28f — v2.5)
+
+State 3 in 28f is **building-level only**. The following are explicitly out of scope and must NOT be honoured at State 3:
+
+- **Per-zone systems.** One set of systems serves the whole building. Multi-zone HVAC is a later brief.
+- **Distribution losses.** End-to-end efficiency convention (CIBSE TM54) — library efficiencies include distribution implicitly.
+- **Pumps and fans other than DHW circulation.** No primary-heating pumps, no chiller pumps, no zone valves. The DHW circulation pump (continuous baseload) is the only auxiliary load.
+- **Air curtains.** Door-attached; land with Brief 28e (State 2.5 doors).
+- **On-site renewables** (PV, solar thermal, wind, batteries). Future brief.
+
+These exclusions are deliberate scope guards for 28f. Future briefs may relax them — each relaxation requires a contract version bump.
 
 ### Setpoint propagation
 
@@ -949,52 +1062,103 @@ State 2.5 demand (computed with Systems setpoints if configured) is served by th
   state: 3,
   mode: 'full',
 
-  demand: { ... },  // from State 2.5, recomputed with Systems setpoints
+  demand: { ... },   // from State 2.5, recomputed with Systems setpoints
 
-  consumption: {
-    electricity_kwh: number,
-    natural_gas_kwh: number,
-    other_kwh: number,
-    total_kwh: number,
-    electricity_fraction: number,
-    gas_fraction: number,
+  // ── Energy use: per-fuel × per-service × per-system ────────────────────
+  // The primary output structure. Replaces v2.4's flat `consumption` and
+  // `end_use` blocks. Each leaf is kWh/year. Sub-system fields are present
+  // only if that service has primary/secondary configured (secondary may
+  // be absent). Fuels other than electricity + gas are added by extending
+  // the shape (contract bump). At V1, only electricity + gas are emitted.
+  energy_use: {
+    electricity: {
+      heating:   { primary, secondary, total },           // kWh
+      cooling:   { primary, secondary, total },
+      fans:      { per_system: [{id, kwh}], total },      // mech vent fan electrical
+      dhw:       { primary, secondary, circulation, total },
+      lighting:  number,                                  // from State 2 internal gains
+      equipment: number,                                  // from State 2 internal gains
+      total:     number,
+    },
+    gas: {
+      heating:   { primary, secondary, total },
+      dhw:       { primary, secondary, total },
+      total:     number,
+    },
+    totals: {
+      electricity_kwh:      number,
+      gas_kwh:              number,
+      delivered_energy_kwh: number,
+      eui_kwh_per_m2:       number,
+    },
   },
 
-  end_use: {
-    space_heating_kwh: number,
-    space_cooling_kwh: number,
-    dhw_kwh: number,
-    ventilation_fans_kwh: number,
-    lighting_kwh: number,
-    equipment_kwh: number,
-    other_kwh: number,
-  },
-
-  eui_kwh_per_m2: number,
-  carbon_kg_co2_per_m2: number,
-
+  // ── System performance: delivered + avg efficiency (complementary view) ─
+  // Same numbers as energy_use but indexed by service rather than fuel,
+  // with the avg efficiency per sub-system surfaced. Useful for inspector
+  // panels and the ideal-loads regression test.
   system_performance: {
-    heating: { delivered_mwh, fuel_mwh, avg_cop_or_eff },
-    cooling: { delivered_mwh, fuel_mwh, avg_eer },
-    dhw: { delivered_mwh, fuel_mwh, avg_eff },
-    ventilation: { fan_kwh, recovery_mwh },
-  }
+    heating: {
+      primary:   { delivered_mwh, fuel_mwh, avg_cop_or_eff, fuel },
+      secondary: { delivered_mwh, fuel_mwh, avg_cop_or_eff, fuel } | null,
+      total:     { delivered_mwh, fuel_mwh },
+    },
+    cooling: {
+      primary:   { delivered_mwh, fuel_mwh, avg_eer_or_scop_cool, fuel },
+      secondary: { delivered_mwh, fuel_mwh, avg_eer_or_scop_cool, fuel } | null,
+      total:     { delivered_mwh, fuel_mwh },
+    },
+    dhw: {
+      primary:               { delivered_mwh, fuel_mwh, avg_eff, fuel },
+      secondary:             { delivered_mwh, fuel_mwh, avg_eff, fuel } | null,
+      circulation_pump_kwh:  number,    // separate line; not in primary/secondary fuel
+      total:                 { delivered_mwh, fuel_mwh },
+    },
+    ventilation: {
+      systems: [{ id, fan_kwh, recovery_mwh, hours_active }],
+      total:   { fan_kwh, recovery_mwh },
+    },
+  },
+
+  // Top-level convenience aggregate; emitted alongside energy_use.totals.
+  carbon_kg_co2_per_m2: number,
 }
 ```
+
+**Note on the two output blocks.** `energy_use` is the calibration-facing
+shape (fuel-indexed, system-resolved, sub-meter-comparable). `system_performance`
+is the engineering-facing shape (service-indexed, surfaces delivered +
+average efficiency per sub-system). They report the same underlying numbers
+in two indices; consumers pick whichever fits their question. The
+ideal-loads regression test compares against `system_performance.*.total`
+because that is where the engine-vs-State-2.5 demand check lives most
+naturally.
 
 ### UI rules
 
 - Each system has an **Inspector** view showing inferred vs. specified vs. defaulted values, and what's actually reaching EnergyPlus.
+- Primary + secondary sub-systems are displayed side-by-side with their split percentages; the inspector exposes per-sub-system delivered + fuel.
+- DHW shows primary, secondary, and the circulation pump baseload as three distinct rows on the energy-use breakdown.
+- Mechanical ventilation systems are listed individually (e.g. "AHU-1 supply 1500 l/s, SFP 1.6, HRE 85%, schedule occupied").
 - Inspectors must surface model simplifications honestly (e.g., "Daylight dimming applied as 0.6× LPD scalar — true zone-by-zone daylight modelling not enabled").
 - Inspectors must surface setpoint cross-state dependency: "Setpoint X°C drives State 2.5 demand re-computation."
-- End-use breakdown shown by fuel and by service.
-- Carbon trajectory uses real fuel split, not assumed all-electric.
+- Energy-use breakdown shown by fuel and by service (the `energy_use` shape carries both indices simultaneously).
+- Carbon trajectory uses real fuel split from `energy_use`, not assumed all-electric.
+- Dual-function library items surfaced in the inspector: "VRF unit `vrf_brand_x_2023` provides heating (SCOP 3.1) AND cooling (SEER 4.2) from one library entry."
 
-### Verification
+### Verification (Brief 28f discipline)
 
-State 3 EUI for Bridgewater expected in 150–300 kWh/m² (CIBSE TM54 hotel range, per Brief 07 acceptance criteria).
+1. **Hand-calc per system at ±2%.** For each system group (heating primary + secondary, cooling primary + secondary, DHW primary + secondary + circulation pump, mechanical ventilation per system), reproduce the engine's annual fuel + delivered + auxiliary numbers in a spreadsheet from first principles. Match within ±2%. Discrepancies above ±2% halt the brief.
 
-State 3 must reduce to State 2.5 demand when systems are switched to ideal loads — this is the regression that proves State 3 systems are working correctly.
+2. **Byte-identity on shared physics.** State 3 must emit byte-identical State 1 outputs (solar gains, fabric losses, free-running T_op) and byte-identical State 2 outputs (internal gains, gains-warmed T_op, State 2 demand integrals) compared to running State 1 / State 2 on the same project. State 3 only adds the system overlay; everything below it must pass through unchanged.
+
+3. **Ideal-loads regression.** State 3 must reduce to State 2.5 demand when all systems are switched to ideal loads (COP / efficiency = 1.0 for delivered:fuel; HRE = 0 for ventilation). With ideal loads, `total.fuel_mwh = total.delivered_mwh = State 2.5 demand_mwh`. This is the regression that proves the system-overlay layer is correctly composed.
+
+4. **Sensitivity tests pass with percentages unchanged.** A1 (double length) — system fuel + delivered should scale ≈ 2×; per-system split percentages unchanged (demand scales, splits constant). A2 (rotate 90°) — system fuel + delivered should shift consistently with State 2.5 demand redistribution; per-system split percentages unchanged.
+
+5. **Library-strict halt is verified by engine test.** A unit test must construct a project with a sub-system referencing a library template missing the required field for that service (e.g. heating primary pointing at a template without `heating_scop`) and verify the engine throws `MissingLibraryField` with both the sub-system path AND the missing field name. Silent default = test fail.
+
+6. **Headline EUI plausibility (sanity check, not halt gate).** Bridgewater State 3 EUI expected in 150–300 kWh/m² (CIBSE TM54 hotel range, per Brief 07 acceptance criteria). Outside-range values trigger investigation, not automatic halt.
 
 ---
 
