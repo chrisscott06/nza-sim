@@ -59,7 +59,8 @@ const comfortBand = {
   lower_c: project.comfort_band_lower_c ?? 20,
   upper_c: project.comfort_band_upper_c ?? 26,
 }
-const buildingBase = project.building_config
+// Strip systems_config_v25 from the test base; tests construct their own.
+const buildingBase = { ...project.building_config, systems_config_v25: undefined }
 
 const weatherFile = buildingBase.weather_file || project.weather_file
 const epwPath = path.join(REPO_ROOT, 'data/weather/current', weatherFile)

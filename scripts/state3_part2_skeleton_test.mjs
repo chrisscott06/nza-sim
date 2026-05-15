@@ -67,7 +67,11 @@ const libraryData = {
   })),
   system_templates: [],   // Part 2 tests inject these per case
 }
-const buildingBase = project.building_config
+// Strip systems_config_v25 from the test base so tests that intend the
+// "no v2.5 config" branch (auto-detect should NOT activate) get a clean
+// slate. Bridgewater's persisted v2.5 config is for the live UI; tests
+// own their own test buildings explicitly.
+const buildingBase = { ...project.building_config, systems_config_v25: undefined }
 const constructions = project.construction_choices
 const comfortBand = {
   lower_c: project.comfort_band_lower_c ?? 20,

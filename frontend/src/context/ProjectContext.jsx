@@ -560,6 +560,11 @@ export function ProjectProvider({ children }) {
       // the persisted bc, preserve them verbatim.
       occupancy: migrateOccupancyV23(bc),
       gains:     migrateGainsV23(bc),
+      // Brief 28f Part 5.6/5.7 — v2.5 systems config. Dual-format strategy:
+      // legacy systems_config is loaded via setSystems() below; v2.5 lands
+      // here under params.systems_config_v25 (the engine auto-detects this
+      // field and routes to the State 3 v2.5 path).
+      systems_config_v25: bc.systems_config_v25 ?? null,
     })
     setConstructions(project.construction_choices ?? DEFAULT_CONSTRUCTIONS)
     setSystems(migrateSystemsConfig(project.systems_config))
