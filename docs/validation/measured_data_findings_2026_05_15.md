@@ -44,7 +44,7 @@ State 3 modelled values reflect Bridgewater's v2.5 systems config at defaults (p
 | Electricity | 260 MWh | ~560 MWh | **~300 MWh missing** | Back-of-house loads not in our current categories: lifts, refrigeration, exterior lighting + signage, BMS, kitchen equipment, server room |
 | Gas | 139 MWh | ~205 MWh | **~70 MWh missing** | DHW `litres_per_person_per_day` at default 80 is too low under continuous occupancy; real value likely 150+ |
 | Total delivered | 399 MWh | ~765 MWh | ~366 MWh | Combined effect |
-| EUI (at corrected 4,215 m² GIA) | ~95 kWh/m² | 178–199 kWh/m² | ~80–100 kWh/m² | Both gaps contribute |
+| EUI (at corrected 4,322 m² GIA — `num_floors` 4→5) | ~92 kWh/m² | 178–199 kWh/m² | ~85–105 kWh/m² | Both gaps contribute |
 
 ### Electricity gap (~300 MWh) — likely sources to investigate during calibration
 
@@ -92,13 +92,13 @@ Apply when 5.7 lands:
 
 | Parameter | Before | After | Notes |
 |---|---:|---:|---|
-| GIA (derived) | 3,457 m² | **4,215 m²** | Per 505 Design's records. Adjust geometry: length 58.8 → ~71.7 m, keep width 14.7 m and 4 floors. Decision needed which dimension(s) to grow. |
+| `num_floors` | 4 | **5** | Ground + 4 above; config was missing the ground floor. 58.8 × 14.7 × 5 = 4,322 m², within 2.5% of 505 Design's recorded 4,215 m² (difference is footprint-not-rectangular and/or plant/circulation excluded from 4,215). |
 | `num_bedrooms` | 134 | 134 (unchanged) | The "138" was scope-doc prose only; project config already correct. |
 | MVHR `flow_l_s` | 5000 | **1,450** | 5 × Toshiba VN-M1000HE @ ~290 L/s each. Per Fabric & Systems Modelling Notes. (Already applied to test fixture; needs to land in v2.5 project config.) |
 | DHW `litres_per_person_per_day` | (default 80) | (stay at 80) | Calibration will tune. |
 | Occupancy banner | (none) | "Configured at design peak; calibration will ground-truth" | UI surfacing per Finding 2 deferral decision. |
 
-After applying GIA correction (alone), modelled EUI drops from 115.6 → ~95 kWh/m²: still substantially under measured (178–199 kWh/m²), but the gap becomes a meaningful calibration question rather than a units mismatch.
+After applying `num_floors` correction (4 → 5) alone, modelled EUI drops from 115.6 → ~92 kWh/m² (delivered 399 MWh / GIA 4,322 m²): still substantially under measured (178–199 kWh/m²), but the gap becomes a meaningful calibration question rather than a units mismatch. **Note:** the GIA increase doesn't change demand directly — heating + cooling demand are envelope-driven (more floors = more wall + roof + floor area; envelope grows with GIA so demand grows roughly proportionally). State 2 + State 3 outputs need re-running once 5.7 lands to confirm the actual post-fix numbers.
 
 ---
 

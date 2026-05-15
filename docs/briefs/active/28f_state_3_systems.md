@@ -67,7 +67,7 @@ So the UI actually invokes State 3 when v2.5 systems_config is present.
 
 Per Chris's data share 2026-05-15 — updates land alongside 5.4 UI build so the canonical test project is correct from first interaction:
 
-- **GIA: 3,457 → 4,215 m²** (real building per 505 Design's records). Current geometry inputs (L=58.8 × W=14.7 × N=4 floors → 3,457) need to grow ~22% to hit 4,215. Decision needed before 5.7: which dimension(s) to adjust? Footprint at 4 floors = 1,054 m² target (vs current 864). Likely length increase to ~71.7 m, keeping width at 14.7 m. Confirm with Chris.
+- **`num_floors`: 4 → 5** (ground + 4 above; missing floor in config). Result: 58.8 × 14.7 × 5 = **4,322 m²**, within 2.5% of 505 Design's recorded 4,215 m² (difference likely footprint-not-rectangular and/or plant/circulation excluded from the 4,215 figure). No dimension stretch needed.
 - **MVHR flow → 1,450 L/s** (per State 3 validation finding 1).
 - **`num_bedrooms` stays at 134** (already correct in project config; the "138" was only in my brief-scoping prose).
 - **Occupancy banner** flagging the design-peak vs annual-average mismatch (per State 3 validation finding 2). Will read "Bridgewater occupancy is configured at design peak (134 rooms × 100% × 1.5 ppr = 201). Measured operation 2023-2025 was 100% continuous Home Office accommodation. Calibration will ground-truth this once measured-data ingest lands."
