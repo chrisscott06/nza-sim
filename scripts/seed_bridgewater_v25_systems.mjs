@@ -78,11 +78,23 @@ const BRIDGEWATER_V25 = {
   ],
 }
 
-// ── Building geometry corrections ──────────────────────────────────────────
+// ── Bridgewater canonical geometry + counts ────────────────────────────────
+//
+// Seed-owned canonical values (Chris's directive 2026-05-15 after the
+// length-drift episode): the seed explicitly owns all geometry + count
+// fields it cares about, so re-runs restore canonical state regardless of
+// drift from in-UI experimentation. Without this, "playing with the model"
+// in the Building Definition module silently leaves diverged DB state that
+// future re-seeds can't detect.
+//
+// Future architectural fix (queued behind the complete-loop work): a
+// project-level `canonical_baseline_locked: true` flag that prevents the
+// UI from auto-saving over these fields without explicit confirmation.
 const BUILDING_CORRECTIONS = {
-  num_floors: 5,    // 4 above + ground; UK floor-counting
-  // num_bedrooms: 134 -- already correct
-  // length / width: unchanged
+  length:       58.8,   // canonical (State 1 validation baseline + all docs since)
+  width:        14.7,
+  num_floors:   5,      // 4 above + ground; UK floor-counting
+  num_bedrooms: 134,    // per consumption-analysis note (134 keys; supersedes fabric doc's 138 beds)
   systems_config_v25: BRIDGEWATER_V25,
 }
 
