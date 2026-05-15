@@ -41,12 +41,12 @@ State 3 modelled values reflect Bridgewater's v2.5 systems config at defaults (p
 
 | Fuel | Modelled | Measured (2024–25 avg) | Gap | Likely cause |
 |---|---:|---:|---:|---|
-| Electricity | 260 MWh | ~560 MWh | **~300 MWh missing** | Back-of-house loads not in our current categories: lifts, refrigeration, exterior lighting + signage, BMS, kitchen equipment, server room |
-| Gas | 139 MWh | ~205 MWh | **~70 MWh missing** | DHW `litres_per_person_per_day` at default 80 is too low under continuous occupancy; real value likely 150+ |
-| Total delivered | 399 MWh | ~765 MWh | ~366 MWh | Combined effect |
-| EUI (at corrected 4,322 m² GIA — `num_floors` 4→5) | ~92 kWh/m² | 178–199 kWh/m² | ~85–105 kWh/m² | Both gaps contribute |
+| Electricity | **294 MWh** (post-correction) | ~560 MWh | **~266 MWh missing** | Back-of-house loads not in our current categories: lifts, refrigeration, exterior lighting + signage, BMS, kitchen equipment, server room |
+| Gas | 139 MWh | ~205 MWh | **~66 MWh missing** | DHW `litres_per_person_per_day` at default 80 is too low under continuous occupancy; real value likely 150+ |
+| Total delivered | **433 MWh** (post-correction) | ~765 MWh | ~332 MWh | Combined effect |
+| EUI (post-correction: `num_floors` 4→5 + MVHR 5000→1450 L/s) | **100.3 kWh/m²** | 178–199 kWh/m² | ~78–99 kWh/m² | Both gaps contribute. Captured via `seed_bridgewater_v25_systems.mjs` 2026-05-15 with engine auto-detecting v2.5 path. |
 
-### Electricity gap (~300 MWh) — likely sources to investigate during calibration
+### Electricity gap (~266 MWh) — likely sources to investigate during calibration
 
 UK hotel reference benchmarks suggest the "missing" loads typically split as:
 

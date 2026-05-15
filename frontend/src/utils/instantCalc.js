@@ -2074,7 +2074,12 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
   const state2Result = _calculateState2(building, constructions, libraryData, weatherData, hourlySolar, comfortBand)
   if (state2Result.state !== 2) return state2Result   // bailout: _empty()
 
-  const sys = building.systems_config ?? {}
+  // Brief 28f Part 5.6/5.7: prefer the v2.5-shaped field (`systems_config_v25`)
+  // when present. Fall back to `systems_config` for back-compat with existing
+  // tests that wire v2.5-shape data into the legacy field name. Real projects
+  // persist the v2.5 shape under `building_config.systems_config_v25` via
+  // PUT /api/projects/{id}/building.
+  const sys = building.systems_config_v25 ?? building.systems_config ?? {}
   const resolved = resolveAndValidateSystems(sys, libraryData)
 
   // ── Demand inputs ─────────────────────────────────────────────────────────
@@ -2980,14 +2985,18 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
     )
   }
 
-  // State 3 v2.5 engine path (Brief 28f Part 2 skeleton). Opt-in via
-  // `options.engine === 'v2.5'` while the legacy 'full' code below is still
-  // wired into UI consumers. In Part 2 this returns State 2 outputs
-  // byte-identical, plus an empty system-overlay layer per contract v2.5.
-  // Heating/cooling/DHW/ventilation energy math lands in Part 3+. Library
-  // references validated upfront — throws MissingLibraryField on missing
-  // template or missing required scalar efficiency field.
-  if (mode === 'full' && options.engine === 'v2.5') {
+  // State 3 v2.5 engine path. Two activation modes per Brief 28f Part 5.6:
+  //   1) **Auto-detect** (production):  `building.systems_config_v25` exists
+  //      and is non-empty → route to v2.5. Legacy 'full' path serves projects
+  //      that haven't been migrated.
+  //   2) **Opt-in** (tests):  `options.engine === 'v2.5'` forces v2.5 route
+  //      regardless of building shape. Lets existing tests keep wiring
+  //      v2.5-shape data into the legacy `systems_config` field name.
+  //
+  // Either trigger activates `_calculateState3`. Library references validated
+  // upfront — throws MissingLibraryField on missing template or required field.
+  const hasV25Config = building.systems_config_v25 && Object.keys(building.systems_config_v25).length > 0
+  if (mode === 'full' && (options.engine === 'v2.5' || hasV25Config)) {
     return _calculateState3(
       withMode(building, mode),
       constructions, libraryData, weatherData, hourlySolar,
