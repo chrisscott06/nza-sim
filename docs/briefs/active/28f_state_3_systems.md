@@ -1,6 +1,6 @@
 # Brief 28f — State 3: Systems (heating, cooling, DHW, mechanical ventilation)
 
-**Status:** Scope captured 2026-05-14 (after Brief 28c ship). Part 1 (contract update v2.4 → v2.5) shipped 2026-05-15 with Chris's approval + four additions: V1 scalar efficiency, dual-function library items, DHW circulation pump as flat field, `energy_use` per-fuel × per-service × per-system output shape. **Part 2 (engine skeleton + byte-identity test) is the next step.**
+**Status:** Scope captured 2026-05-14 (after Brief 28c ship). Part 1 (contract update v2.4 → v2.5) shipped 2026-05-15 with Chris's approval + four additions: V1 scalar efficiency, dual-function library items, DHW circulation pump as flat field, `energy_use` per-fuel × per-service × per-system output shape. Part 2 (engine skeleton + library-strict halt + byte-identity tests) shipped 2026-05-15 (commit `4cab01d`). **Part 3 (heating + cooling energy math) shipped 2026-05-15 — halt for review before Part 4 (DHW + ventilation + lighting/equipment + carbon).**
 
 **Predecessor:** Brief 28c (State 2 loss recompute on its own zone-T trace).
 **Successor (queued):** Brief 28e (State 2.5 operable windows + doors).
@@ -69,8 +69,8 @@ State 3 takes the State 2 zone trace (gains-warmed, free-running) and applies a 
 | Part | Scope | Halt gate |
 |---|---|---|
 | Part 1 | State 3 contract update (`docs/state_contracts.md`) — output shapes, contract guarantees. | Chris approves contract before code. **DONE 2026-05-15** (v2.5 shipped with Chris's five clarifications + four additions a/b/c/d). |
-| Part 2 | Engine: `_calculateState3` skeleton; consumes `_calculateState2` output verbatim, adds an empty system-overlay pass. Byte-identity test passes (no systems = no change). **HALT before any actual energy-use calculation.** | Build clean. State 2 byte-identity holds. Library-strict halt test passes. |
-| Part 3 | Heating + cooling primary + secondary with % split. Hand-calc vs spreadsheet on Bridgewater. | ±2% hand-calc match. |
+| Part 2 | Engine: `_calculateState3` skeleton; consumes `_calculateState2` output verbatim, adds an empty system-overlay pass. Byte-identity test passes (no systems = no change). HALT before any actual energy-use calculation. **DONE 2026-05-15** (commit `4cab01d`, 40/40 tests). |
+| Part 3 | Heating + cooling primary + secondary with % split. Hand-calc vs spreadsheet on Bridgewater. **DONE 2026-05-15** (52/52 tests inc. hand-calc ±2%, ideal-loads regression, A1 fuel_ratio==demand_ratio, A2 splits unchanged, per-fuel gas+electric split). | ±2% hand-calc match. |
 | Part 4 | DHW two-system split + circulation pump baseload. Hand-calc on Bridgewater DHW demand. | ±2% hand-calc match. |
 | Part 5 | Mechanical ventilation: per-system flow/SFP/HRE/schedule. Hand-calc on fan energy + HRE offset. | ±2% hand-calc match. |
 | Part 6 | UI: three system groups in Systems module. | Browser verification 1440×900. |

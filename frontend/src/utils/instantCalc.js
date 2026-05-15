@@ -1764,54 +1764,57 @@ function validateTemplateForService(template, service, subSystemPath) {
 }
 
 /**
- * State 3 — Brief 28f Part 2 skeleton.
- *
- * Returns the State 2 result UNCHANGED for every State 2 field (byte-identity
- * pass-through). Adds the contract-v2.5 system-overlay layer (`energy_use`,
- * `system_performance`, `carbon_kg_co2_per_m2`) with all-zero placeholder
- * values. Validates any configured library_id references upfront and throws
- * MissingLibraryField if anything required is missing.
- *
- * Halt gate (Brief 28f Part 2): no energy-use math in this function. That
- * lands in Part 3 (heating + cooling) onwards. The empty overlay is here to
- * lock the output shape and the validation discipline; the values are zero
- * by design.
+ * Pull the scalar efficiency a template advertises for a service.
+ * Mirrors the precedence used by validateTemplateForService. Assumes the
+ * template has already passed validation; falls back to null if not (defensive).
  */
-function _calculateState3(building, constructions, libraryData, weatherData, hourlySolar, comfortBand) {
-  const state2Result = _calculateState2(building, constructions, libraryData, weatherData, hourlySolar, comfortBand)
-  if (state2Result.state !== 2) return state2Result   // bailout: _empty()
+function templateEfficiency(template, service) {
+  const primary = ({ heating: 'heating_scop', cooling: 'cooling_seer', dhw: 'dhw_seasonal_efficiency', ventilation: 'hre' })[service]
+  if (primary && template[primary] != null) return template[primary]
+  const altMap = ({
+    heating: ['heating_seasonal_efficiency', 'heating_cop'],
+    cooling: ['cooling_scop_cool', 'cooling_eer'],
+  })[service] ?? []
+  for (const alt of altMap) if (template[alt] != null) return template[alt]
+  return null
+}
 
-  const sys = building.systems_config ?? {}
-
-  // ── Library validation (halt on missing) ──────────────────────────────────
-  // Heating
-  if (sys.heating?.primary != null) {
-    validateTemplateForService(resolveSystemTemplate(sys.heating.primary.library_id,   libraryData, 'systems.heating.primary'),   'heating', 'systems.heating.primary')
+/**
+ * Validate + resolve every configured sub-system. Returns a Map keyed by
+ * sub-system path → { template, efficiency, fuel, library_id }. Throws
+ * MissingLibraryField on any missing template / required field / inline
+ * ventilation field.
+ *
+ * This consolidates Part 2's six repeated `validateTemplateForService(
+ * resolveSystemTemplate(...))` calls into a single pass and lets Part 3+
+ * energy math read efficiencies without re-resolving.
+ */
+function resolveAndValidateSystems(sys, libraryData) {
+  const m = new Map()
+  const resolveOne = (subCfg, service, path) => {
+    if (subCfg == null) return null
+    const t = resolveSystemTemplate(subCfg.library_id, libraryData, path)
+    validateTemplateForService(t, service, path)
+    const efficiency = templateEfficiency(t, service)
+    const fuel = t.fuel ?? 'electricity'
+    const record = { template: t, efficiency, fuel, library_id: t.id ?? t.library_id }
+    m.set(path, record)
+    return record
   }
-  if (sys.heating?.secondary != null) {
-    validateTemplateForService(resolveSystemTemplate(sys.heating.secondary.library_id, libraryData, 'systems.heating.secondary'), 'heating', 'systems.heating.secondary')
-  }
-  // Cooling
-  if (sys.cooling?.primary != null) {
-    validateTemplateForService(resolveSystemTemplate(sys.cooling.primary.library_id,   libraryData, 'systems.cooling.primary'),   'cooling', 'systems.cooling.primary')
-  }
-  if (sys.cooling?.secondary != null) {
-    validateTemplateForService(resolveSystemTemplate(sys.cooling.secondary.library_id, libraryData, 'systems.cooling.secondary'), 'cooling', 'systems.cooling.secondary')
-  }
-  // DHW (primary, secondary). Circulation pump is a flat field, no library ref.
-  if (sys.dhw?.primary != null) {
-    validateTemplateForService(resolveSystemTemplate(sys.dhw.primary.library_id,   libraryData, 'systems.dhw.primary'),   'dhw', 'systems.dhw.primary')
-  }
-  if (sys.dhw?.secondary != null) {
-    validateTemplateForService(resolveSystemTemplate(sys.dhw.secondary.library_id, libraryData, 'systems.dhw.secondary'), 'dhw', 'systems.dhw.secondary')
-  }
-  // Mech ventilation (array). library_id optional; inline fields required.
+  resolveOne(sys.heating?.primary,   'heating', 'systems.heating.primary')
+  resolveOne(sys.heating?.secondary, 'heating', 'systems.heating.secondary')
+  resolveOne(sys.cooling?.primary,   'cooling', 'systems.cooling.primary')
+  resolveOne(sys.cooling?.secondary, 'cooling', 'systems.cooling.secondary')
+  resolveOne(sys.dhw?.primary,       'dhw',     'systems.dhw.primary')
+  resolveOne(sys.dhw?.secondary,     'dhw',     'systems.dhw.secondary')
   const ventSystems = Array.isArray(sys.ventilation) ? sys.ventilation : []
   for (let i = 0; i < ventSystems.length; i++) {
     const vs = ventSystems[i]
     const path = `systems.ventilation[${i}](id="${vs.id ?? '?'}")`
     if (vs.library_id != null) {
-      validateTemplateForService(resolveSystemTemplate(vs.library_id, libraryData, path), 'ventilation', path)
+      const t = resolveSystemTemplate(vs.library_id, libraryData, path)
+      validateTemplateForService(t, 'ventilation', path)
+      m.set(path, { template: t, efficiency: vs.hre ?? t.hre, fuel: 'electricity', library_id: t.id ?? t.library_id })
     }
     for (const field of ['flow_l_s', 'sfp_w_per_l_s', 'hre']) {
       if (vs[field] == null) {
@@ -1819,46 +1822,164 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
       }
     }
   }
+  return m
+}
 
-  // ── Empty system overlay (Part 2 halt gate — no energy math) ──────────────
-  // Shape mirrors contract v2.5 exactly so the byte-identity test can be
-  // strict on State 2 fields without false positives from missing keys.
-  const empty_perfuel_perservice = { primary: 0, secondary: 0, total: 0 }
-  const empty_subsystem_perf     = null   // secondary fields default to null when absent
+/**
+ * Compute primary + secondary energy split for one service (heating or cooling).
+ *
+ * Returns:
+ *   {
+ *     primary_perf:     { delivered_mwh, fuel_mwh, avg_cop_or_eff, fuel } | null,
+ *     secondary_perf:   { delivered_mwh, fuel_mwh, avg_cop_or_eff, fuel } | null,
+ *     total_perf:       { delivered_mwh, fuel_mwh },
+ *     fuel_split:       { [fuel]: { primary_mwh, secondary_mwh } },
+ *   }
+ *
+ * Math (per Brief 28f Part 3 scope):
+ *   delivered_mwh    = demand_mwh × pct / 100
+ *   fuel_mwh         = delivered_mwh / efficiency  (efficiency = SCOP / SEER scalar)
+ *
+ * Brief 28f Part 3 covers heating + cooling only. DHW + ventilation deferred
+ * to Part 4. If serviceCfg.primary is null, returns all zeros / nulls (service
+ * not configured — no energy attributed).
+ */
+function computeServiceEnergy(serviceCfg, service, demand_mwh, resolved) {
+  const empty = { primary_perf: null, secondary_perf: null, total_perf: { delivered_mwh: 0, fuel_mwh: 0 }, fuel_split: {} }
+  if (serviceCfg == null || serviceCfg.primary == null) return empty
+
+  const primaryPct   = Number(serviceCfg.primary_pct ?? 100)
+  const secondaryPct = serviceCfg.secondary == null ? 0 : Math.max(0, 100 - primaryPct)
+  const primaryRec   = resolved.get(`systems.${service}.primary`)
+  const secondaryRec = serviceCfg.secondary != null ? resolved.get(`systems.${service}.secondary`) : null
+
+  const out = { primary_perf: null, secondary_perf: null, total_perf: { delivered_mwh: 0, fuel_mwh: 0 }, fuel_split: {} }
+  const attribute = (rec, pct, role) => {
+    if (!rec) return
+    const delivered = demand_mwh * pct / 100
+    const fuel      = rec.efficiency > 0 ? delivered / rec.efficiency : 0
+    const perf      = { delivered_mwh: delivered, fuel_mwh: fuel, avg_cop_or_eff: rec.efficiency, fuel: rec.fuel }
+    if (role === 'primary')   out.primary_perf   = perf
+    if (role === 'secondary') out.secondary_perf = perf
+    out.total_perf.delivered_mwh += delivered
+    out.total_perf.fuel_mwh      += fuel
+    const bucket = out.fuel_split[rec.fuel] ?? (out.fuel_split[rec.fuel] = { primary_mwh: 0, secondary_mwh: 0 })
+    bucket[`${role}_mwh`] += fuel
+  }
+  attribute(primaryRec,   primaryPct,   'primary')
+  attribute(secondaryRec, secondaryPct, 'secondary')
+  return out
+}
+
+/**
+ * State 3 — Brief 28f Part 3 (heating + cooling energy math).
+ *
+ * Returns the State 2 result UNCHANGED for every State 2 field (byte-identity
+ * pass-through). Populates the contract-v2.5 system-overlay layer (`energy_use`,
+ * `system_performance`, `carbon_kg_co2_per_m2`) with:
+ *   - Heating + cooling primary + secondary energy (delivered, fuel, COP)
+ *     attributed by `primary_pct`. Library scalar efficiency only (V1 — no
+ *     curves). Fuel routed by template.fuel (electricity / gas).
+ *   - DHW: zeros (deferred to Part 4).
+ *   - Mech ventilation: zeros (deferred to Part 4).
+ *   - Lighting + equipment: zeros (deferred to Part 4 — they're a direct
+ *     pull from State 2 internal_gains; not "served by a system").
+ *   - Carbon: zero (deferred to Part 4 — needs fuel-to-CO2 factors).
+ *
+ * Library refs validated upfront via resolveAndValidateSystems; throws
+ * MissingLibraryField on any missing template / required field.
+ *
+ * Brief 28f Part 3 halt gate honoured: no DHW, no ventilation, no lighting/
+ * equipment, no carbon. Those land in Part 4.
+ */
+function _calculateState3(building, constructions, libraryData, weatherData, hourlySolar, comfortBand) {
+  const state2Result = _calculateState2(building, constructions, libraryData, weatherData, hourlySolar, comfortBand)
+  if (state2Result.state !== 2) return state2Result   // bailout: _empty()
+
+  const sys = building.systems_config ?? {}
+  const resolved = resolveAndValidateSystems(sys, libraryData)
+
+  // Part 3 energy math: heating + cooling only.
+  const heating_demand_mwh = state2Result.demand?.heating_demand_mwh ?? 0
+  const cooling_demand_mwh = state2Result.demand?.cooling_demand_mwh ?? 0
+  const heating = computeServiceEnergy(sys.heating, 'heating', heating_demand_mwh, resolved)
+  const cooling = computeServiceEnergy(sys.cooling, 'cooling', cooling_demand_mwh, resolved)
+
+  // Per-fuel split for energy_use leaves (kWh). Heating + cooling only.
+  const fuel_kwh = (svc, fuel, role) => (svc.fuel_split[fuel]?.[`${role}_mwh`] ?? 0) * 1000
+  const elec_heat_prim = fuel_kwh(heating, 'electricity', 'primary')
+  const elec_heat_sec  = fuel_kwh(heating, 'electricity', 'secondary')
+  const gas_heat_prim  = fuel_kwh(heating, 'gas',         'primary')
+  const gas_heat_sec   = fuel_kwh(heating, 'gas',         'secondary')
+  const elec_cool_prim = fuel_kwh(cooling, 'electricity', 'primary')
+  const elec_cool_sec  = fuel_kwh(cooling, 'electricity', 'secondary')
+  const gas_cool_prim  = fuel_kwh(cooling, 'gas',         'primary')   // unusual but allowed
+  const gas_cool_sec   = fuel_kwh(cooling, 'gas',         'secondary')
+
+  const elec_heat_total = elec_heat_prim + elec_heat_sec
+  const elec_cool_total = elec_cool_prim + elec_cool_sec
+  const gas_heat_total  = gas_heat_prim  + gas_heat_sec
+  const gas_cool_total  = gas_cool_prim  + gas_cool_sec   // ≈ 0 in practice
+
+  // Top-level fuel sums. Lighting/equipment/DHW/fans = 0 in Part 3.
+  const electricity_total_kwh = elec_heat_total + elec_cool_total
+  const gas_total_kwh         = gas_heat_total  + gas_cool_total
+  const delivered_total_kwh   = electricity_total_kwh + gas_total_kwh
+  const gia                   = state2Result.heat_balance?.metadata?.gia_m2 ?? state2Result.metadata?.gia_m2 ?? 0
+  const eui_kwh_per_m2        = gia > 0 ? delivered_total_kwh / gia : 0
+
+  const r_kwh = (x) => Math.round(x * 10) / 10            // 0.1 kWh
+  const r_mwh = (x) => Math.round(x * 1000) / 1000        // 0.001 MWh = 1 kWh
+  const r_eff = (x) => Math.round(x * 1000) / 1000        // 3 dp on COP/SCOP/SEER
+  const perfOut = (p) => p == null ? null : ({
+    delivered_mwh:   r_mwh(p.delivered_mwh),
+    fuel_mwh:        r_mwh(p.fuel_mwh),
+    avg_cop_or_eff:  r_eff(p.avg_cop_or_eff),
+    fuel:            p.fuel,
+  })
 
   return {
     ...state2Result,
     state: 3,
     mode: 'full',
+    metadata: { gia_m2: gia },   // surfaced at top level for v2.5 contract symmetry with State 1
     energy_use: {
       electricity: {
-        heating:   { ...empty_perfuel_perservice },
-        cooling:   { ...empty_perfuel_perservice },
-        fans:      { per_system: [], total: 0 },
-        dhw:       { primary: 0, secondary: 0, circulation: 0, total: 0 },
-        lighting:  0,
-        equipment: 0,
-        total:     0,
+        heating:   { primary: r_kwh(elec_heat_prim), secondary: r_kwh(elec_heat_sec), total: r_kwh(elec_heat_total) },
+        cooling:   { primary: r_kwh(elec_cool_prim), secondary: r_kwh(elec_cool_sec), total: r_kwh(elec_cool_total) },
+        fans:      { per_system: [], total: 0 },                                   // Part 4
+        dhw:       { primary: 0, secondary: 0, circulation: 0, total: 0 },         // Part 4
+        lighting:  0,                                                              // Part 4
+        equipment: 0,                                                              // Part 4
+        total:     r_kwh(electricity_total_kwh),
       },
       gas: {
-        heating: { ...empty_perfuel_perservice },
-        dhw:     { ...empty_perfuel_perservice },
-        total:   0,
+        heating: { primary: r_kwh(gas_heat_prim), secondary: r_kwh(gas_heat_sec), total: r_kwh(gas_heat_total) },
+        dhw:     { primary: 0, secondary: 0, total: 0 },                           // Part 4
+        total:   r_kwh(gas_total_kwh),
       },
       totals: {
-        electricity_kwh:      0,
-        gas_kwh:              0,
-        delivered_energy_kwh: 0,
-        eui_kwh_per_m2:       0,
+        electricity_kwh:      r_kwh(electricity_total_kwh),
+        gas_kwh:              r_kwh(gas_total_kwh),
+        delivered_energy_kwh: r_kwh(delivered_total_kwh),
+        eui_kwh_per_m2:       Math.round(eui_kwh_per_m2 * 10) / 10,
       },
     },
     system_performance: {
-      heating:     { primary: empty_subsystem_perf, secondary: empty_subsystem_perf, total: { delivered_mwh: 0, fuel_mwh: 0 } },
-      cooling:     { primary: empty_subsystem_perf, secondary: empty_subsystem_perf, total: { delivered_mwh: 0, fuel_mwh: 0 } },
-      dhw:         { primary: empty_subsystem_perf, secondary: empty_subsystem_perf, circulation_pump_kwh: 0, total: { delivered_mwh: 0, fuel_mwh: 0 } },
-      ventilation: { systems: [], total: { fan_kwh: 0, recovery_mwh: 0 } },
+      heating: {
+        primary:   perfOut(heating.primary_perf),
+        secondary: perfOut(heating.secondary_perf),
+        total:     { delivered_mwh: r_mwh(heating.total_perf.delivered_mwh), fuel_mwh: r_mwh(heating.total_perf.fuel_mwh) },
+      },
+      cooling: {
+        primary:   perfOut(cooling.primary_perf),
+        secondary: perfOut(cooling.secondary_perf),
+        total:     { delivered_mwh: r_mwh(cooling.total_perf.delivered_mwh), fuel_mwh: r_mwh(cooling.total_perf.fuel_mwh) },
+      },
+      dhw:         { primary: null, secondary: null, circulation_pump_kwh: 0, total: { delivered_mwh: 0, fuel_mwh: 0 } },   // Part 4
+      ventilation: { systems: [], total: { fan_kwh: 0, recovery_mwh: 0 } },                                                  // Part 4
     },
-    carbon_kg_co2_per_m2: 0,
+    carbon_kg_co2_per_m2: 0,    // Part 4
   }
 }
 
