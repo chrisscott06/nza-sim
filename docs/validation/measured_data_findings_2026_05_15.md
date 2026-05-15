@@ -92,13 +92,13 @@ Apply when 5.7 lands:
 
 | Parameter | Before | After | Notes |
 |---|---:|---:|---|
-| `num_floors` | 4 | **5** | Ground + 4 above; config was missing the ground floor. 58.8 × 14.7 × 5 = 4,322 m², within 2.5% of 505 Design's recorded 4,215 m² (difference is footprint-not-rectangular and/or plant/circulation excluded from 4,215). |
+| `num_floors` | 4 | **5** | 4 storeys above + ground = 5 total in UK floor-counting. Fabric doc's "4-storey" framing referred to floors above ground. Result: 58.8 × 14.7 × 5 = 4,322 m², within 2.5% of consumption-analysis figure 4,215 (difference attributable to footprint-not-rectangular and/or plant/circulation excluded from 4,215). No dimension stretch needed. |
 | `num_bedrooms` | 134 | 134 (unchanged) | The "138" was scope-doc prose only; project config already correct. |
 | MVHR `flow_l_s` | 5000 | **1,450** | 5 × Toshiba VN-M1000HE @ ~290 L/s each. Per Fabric & Systems Modelling Notes. (Already applied to test fixture; needs to land in v2.5 project config.) |
 | DHW `litres_per_person_per_day` | (default 80) | (stay at 80) | Calibration will tune. |
 | Occupancy banner | (none) | "Configured at design peak; calibration will ground-truth" | UI surfacing per Finding 2 deferral decision. |
 
-After applying `num_floors` correction (4 → 5) alone, modelled EUI drops from 115.6 → ~92 kWh/m² (delivered 399 MWh / GIA 4,322 m²): still substantially under measured (178–199 kWh/m²), but the gap becomes a meaningful calibration question rather than a units mismatch. **Note:** the GIA increase doesn't change demand directly — heating + cooling demand are envelope-driven (more floors = more wall + roof + floor area; envelope grows with GIA so demand grows roughly proportionally). State 2 + State 3 outputs need re-running once 5.7 lands to confirm the actual post-fix numbers.
+After applying `num_floors` correction (4 → 5, no dimension stretch needed), modelled EUI drops from 115.6 → ~92 kWh/m² (delivered 399 MWh / GIA 4,322 m²): still substantially under measured (178–199 kWh/m²), but the gap becomes a meaningful calibration question rather than a units mismatch. **Note:** the GIA increase grows envelope (wall + roof + floor area scales with number of floors) so heating + cooling demand will grow too — State 2 + State 3 outputs need to be re-computed once 5.7 lands; the ~92 kWh/m² figure is approximate pre-re-run.
 
 ---
 

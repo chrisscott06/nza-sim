@@ -67,9 +67,9 @@ So the UI actually invokes State 3 when v2.5 systems_config is present.
 
 Per Chris's data share 2026-05-15 — updates land alongside 5.4 UI build so the canonical test project is correct from first interaction:
 
-- **`num_floors`: 4 → 5** (ground + 4 above; missing floor in config). Result: 58.8 × 14.7 × 5 = **4,322 m²**, within 2.5% of 505 Design's recorded 4,215 m² (difference likely footprint-not-rectangular and/or plant/circulation excluded from the 4,215 figure). No dimension stretch needed.
-- **MVHR flow → 1,450 L/s** (per State 3 validation finding 1).
-- **`num_bedrooms` stays at 134** (already correct in project config; the "138" was only in my brief-scoping prose).
+- **`num_floors`: 4 → 5** (4 storeys above + ground = 5 total in UK floor-counting convention; the fabric doc's "4-storey" refers to floors above ground only). Confirmed by Chris 2026-05-15 after a brief retract-and-restore loop. Result: 58.8 × 14.7 × 5 = **4,322 m²**, within 2.5% of consumption analysis's recorded 4,215 m² (difference attributable to footprint-not-rectangular and/or plant/circulation excluded from the 4,215 figure). **No dimension stretch needed.**
+- **MVHR flow → 1,450 L/s** (per fabric doc: 5 × 270-310 L/s commissioned units).
+- **`num_bedrooms` stays at 134** (already correct in project config; consumption analysis says 134 keys, supersedes the fabric doc's 138 beds — keys may have been consolidated post-opening).
 - **Occupancy banner** flagging the design-peak vs annual-average mismatch (per State 3 validation finding 2). Will read "Bridgewater occupancy is configured at design peak (134 rooms × 100% × 1.5 ppr = 201). Measured operation 2023-2025 was 100% continuous Home Office accommodation. Calibration will ground-truth this once measured-data ingest lands."
 - **DHW `litres_per_person_per_day` stays at default 80** for now (will tune during calibration; pre-calibration likely 150+ under Home Office regime per Chris's analysis).
 
@@ -154,6 +154,36 @@ This brief can run **in parallel** with Part 5 sub-pieces 5.4–5.6 (UI work) si
 ---
 
 **Proceeding with sub-piece 5.1 (DHW formula params) and 5.2 (vent schedule_ref lookup). Halt after 5.2 for first sanity check.**
+
+---
+
+## Sub-piece 5.4 + 5.6 + 5.7 — UI integration + dispatcher wire + Bridgewater config (NEXT, after dimension question resolved)
+
+**Approved 2026-05-15 by Chris with steering captured below. One blocker remains (dimension question) before code work starts.**
+
+### Approved decisions for 5.4+ (Chris, 2026-05-15)
+
+1. **Persistence:** lean (a) backend API. First confirm whether existing building-config save endpoint accepts arbitrary new fields. If yes, no new endpoint needed; save `systems_config_v25` through existing path. If not, build a generic PATCH endpoint now (will be needed for every future schema addition). **Don't write one-shot DB scripts.**
+2. **Library picker:** dropdown for V1, BUT with description text visible in the dropdown options — not just template name. Users selecting "VRF heat recovery" should see the provenance inline ("SCOP 5.12, SEER 3.51 — BRUKL design intent, calibration likely lowers these"). If component library doesn't support description-in-option natively, use name + hover tooltip. **Don't lose the provenance flagging built into the library.**
+3. **Setpoint input:** numeric input (not slider). Setpoints are discrete commissioned values, not exploration knobs. Validation bounds: heating 15–25 °C, cooling 20–30 °C. Sliders stay for `primary_pct` where exploration is the point.
+4. **Validation:** block save with inline error. Invalid persisted configs cause confusing reload-time failures; database stays clean. **Exception:** allow saving partial (null/absent) `systems_config_v25` so users can leave the page half-configured. Discipline = "either complete and valid, or absent."
+5. **Dispatcher (5.6):** `if building.systems_config_v25 exists and is non-empty → engine v2.5; else → legacy 'full'`. Graceful fallback for unmigrated projects.
+
+### Additional steering
+
+- **Bridgewater corrections to land in 5.7** (per 2026-05-15 consumption analysis + fabric docs):
+  - `num_floors`: 4 → **5** (4 above + ground; UK floor-counting → 58.8 × 14.7 × 5 = 4,322 m², within 2.5% of target 4,215)
+  - GIA: 3,457 → ~4,322 m² (derived; no explicit override needed)
+  - Bedrooms: stays at 134 (already correct)
+  - MVHR flow: 5000 → 1450 L/s (5 × 270-310 L/s commissioned units per fabric doc)
+  - DHW litres/p/day: stays at default 80 (calibration will tune)
+- **Validation feedback:** catch `MissingLibraryField` errors and surface inline next to the relevant input using `subSystemPath` + `fieldName` properties.
+- **Reactivity:** State 3 live-update on slider/input change should be sub-second (already achieved in engine layer — ~80 ms for Bridgewater).
+- **Screenshot walkthrough required** when 5.4 + 5.7 complete: per-service primary+secondary layout consistency, vent add-system pattern, library picker description visibility, occupancy banner placement + wording, validation error display. **Sanity check on UX coherence, not a halt gate** — proceed and ship, then post screenshots.
+
+### Parallel track (Chris, 2026-05-15)
+
+Chris is scoping the data-ingester brief in parallel. Don't wait for him on Part 5 — when 5.4+5.6+5.7 lands the ingester brief should be ready as the next major piece. No queue change.
 
 **Predecessor:** Brief 28c (State 2 loss recompute on its own zone-T trace).
 **Successor (queued):** Brief 28e (State 2.5 operable windows + doors).
