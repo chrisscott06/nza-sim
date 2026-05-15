@@ -2987,16 +2987,29 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
 
   // State 3 v2.5 engine path. Two activation modes per Brief 28f Part 5.6:
   //   1) **Auto-detect** (production):  `building.systems_config_v25` exists
-  //      and is non-empty → route to v2.5. Legacy 'full' path serves projects
-  //      that haven't been migrated.
-  //   2) **Opt-in** (tests):  `options.engine === 'v2.5'` forces v2.5 route
-  //      regardless of building shape. Lets existing tests keep wiring
-  //      v2.5-shape data into the legacy `systems_config` field name.
+  //      and is non-empty AND `libraryData.system_templates` is populated.
+  //      Both conditions required — the v2.5 engine validates library_id
+  //      refs upfront and throws MissingLibraryField if the library hasn't
+  //      been loaded. Without the library guard, modules that call
+  //      calculateInstant with empty libraryData (SystemsZones, SystemSankey,
+  //      SystemsLiveResults, BuildingDefinition liveResult, etc.) would
+  //      crash with a missing-template error and the ErrorBoundary would
+  //      catch it as "Module — Something went wrong" — bug observed during
+  //      Path C testing 2026-05-15.
   //
-  // Either trigger activates `_calculateState3`. Library references validated
-  // upfront — throws MissingLibraryField on missing template or required field.
+  //   2) **Opt-in** (tests):  `options.engine === 'v2.5'` forces v2.5 route
+  //      regardless of building / library state. Lets existing tests keep
+  //      wiring v2.5-shape data into the legacy `systems_config` field
+  //      name. When tests set the opt-in flag they're responsible for
+  //      providing libraryData.system_templates (and they do).
+  //
+  // Either trigger activates `_calculateState3`. Modules that want v2.5
+  // output (Energy & Carbon tab — Brief 28f Part 5.5) must pass
+  // SYSTEM_TEMPLATES_LIBRARY in libraryData; legacy callers that don't
+  // know about it stay on the legacy 'full' path.
   const hasV25Config = building.systems_config_v25 && Object.keys(building.systems_config_v25).length > 0
-  if (mode === 'full' && (options.engine === 'v2.5' || hasV25Config)) {
+  const hasV25Library = Array.isArray(libraryData?.system_templates) && libraryData.system_templates.length > 0
+  if (mode === 'full' && (options.engine === 'v2.5' || (hasV25Config && hasV25Library))) {
     return _calculateState3(
       withMode(building, mode),
       constructions, libraryData, weatherData, hourlySolar,

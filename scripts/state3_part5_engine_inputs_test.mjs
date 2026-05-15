@@ -141,9 +141,15 @@ console.log('Test 1 — DHW byte-identity at defaults (80 L / 60 °C / 10 °C)')
   console.log(`  implicit defaults DHW demand: ${result_implicit.system_performance.dhw.total.delivered_mwh} MWh`)
   record('explicit defaults match implicit defaults byte-identically',
     result_explicit.system_performance.dhw.total.delivered_mwh === result_implicit.system_performance.dhw.total.delivered_mwh)
-  // Cross-reference Part 4 ship value: 306.785 MWh
-  record('DHW demand at defaults == Part 4 ship value 306.785 MWh',
-    Math.abs(result_implicit.system_performance.dhw.total.delivered_mwh - 306.785) < 0.01)
+  // Hand-calc verification: DHW demand = annual_occupant_hours × 0.1935 / 1000.
+  // (Was previously a brittle "== 306.785 MWh" hardcoded check; updated
+  // 2026-05-15 to test the formula invariant after the Xmas-exception fix
+  // changed Bridgewater's annual occupant hours.)
+  const occHours = result_implicit.occupancy_summary?.annual_occupant_hours ?? 0
+  const KWH_PER_PERSON_HOUR_DEFAULT = 80 * (60 - 10) * 4.18 / 3600 / 24
+  const handDemandMwh = occHours * KWH_PER_PERSON_HOUR_DEFAULT / 1000
+  record('DHW demand at defaults === annual_occupant_hours × 0.1935 kWh/p/h (formula invariant)',
+    Math.abs(result_implicit.system_performance.dhw.total.delivered_mwh - handDemandMwh) < 0.02)
 }
 
 // ── Test 2: DHW scales with litres_per_person_per_day ───────────────────────

@@ -188,10 +188,14 @@ const LOSS_ORDERS = {
   // (which the engine computes against all losses including the hidden
   // ones) read ~184 MWh -- 58 MWh discrepancy ~= fabric_leakage.
   //
-  // Order mirrors ENVELOPE_ONLY (same envelope physics). Mechanical
-  // cooling appears here too because Brief 28a Part 5 walkthrough
-  // Finding HB3 adds it as a synthetic loss item (mechanical sink
-  // for excess internal gains; PHPP convention).
+  // Order mirrors ENVELOPE_ONLY (same envelope physics). NO synthetic
+  // mechanical cooling at State 2 -- 2026-05-15 Chris-flag (Issue 3):
+  // 'cooling' was previously surfaced as a synthetic loss derived from
+  // demand.cooling_demand_mwh. Removing it makes State 2 a purely physical
+  // gains-vs-losses balance. The residual = "system gap" that State 3
+  // attributes to real systems with real efficiencies. Honest about
+  // what State 2 is -- a free-running building before mechanical
+  // services. Cooling reappears at FULL (State 3) only.
   [MODES.ENVELOPE_GAINS]: [
     'external_wall',
     'roof',
@@ -200,7 +204,6 @@ const LOSS_ORDERS = {
     'thermal_bridging',
     'fabric_leakage',
     'permanent_vents',
-    'cooling',
   ],
   [MODES.FULL]: [
     'external_wall',
@@ -233,9 +236,11 @@ const GAIN_ORDERS = {
   // filters out at runtime because State 2 has no mechanical systems).
   // Making it explicit removes the documented-by-fallthrough fragility.
   //
-  // Mechanical heating appears here because Brief 28a Part 5 walkthrough
-  // Finding HB3 adds it as a synthetic gain item (mechanical source
-  // for offsetting envelope deficit; PHPP convention).
+  // NO synthetic mechanical heating at State 2 -- 2026-05-15 Chris-flag
+  // (Issue 3): 'heating' was previously surfaced as a synthetic gain
+  // derived from demand.heating_demand_mwh. Dropping it makes State 2
+  // a purely physical gains-vs-losses balance. Heating reappears at
+  // FULL (State 3) where systems with real efficiencies attribute it.
   [MODES.ENVELOPE_GAINS]: [
     'solar_south',
     'solar_east',
@@ -244,7 +249,6 @@ const GAIN_ORDERS = {
     'people',
     'equipment',
     'lighting',
-    'heating',
   ],
   [MODES.FULL]: [
     'solar_south',

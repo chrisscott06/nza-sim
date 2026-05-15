@@ -239,19 +239,29 @@ console.log('Test 2 — Mech ventilation hand-calc (±2%)')
   record('energy_use.electricity.fans.per_system[1].id === "MVHR"',     eu.electricity.fans.per_system[1].id === 'MVHR')
   record('energy_use.electricity.fans.total within 2% of hand-calc',    within(eu.electricity.fans.total, hand_total_fan))
 
-  // Recovery cap: theoretical recovery >> State 2 heating demand (11.5 MWh)
-  // → effective recovery = state2 heat demand = 11.5 MWh; heating fuel = 0.
+  // Recovery cap behaviour — engine invariant tests (regardless of whether
+  // Bridgewater happens to be in the cap regime today). Updated 2026-05-15
+  // after the Xmas-exception fix + length config drift made the previous
+  // "theoretical >> demand * 5" assertion no longer hold for the current
+  // Bridgewater state; the invariants below test the cap MATH not Bridgewater
+  // specifics.
   console.log(`  Theoretical MVHR recovery: ${sysVent.total.recovery_theoretical_mwh} MWh (uncapped)`)
   console.log(`  Effective recovery (capped at heat demand): ${sysVent.total.recovery_mwh} MWh`)
   console.log(`  State 2 heating demand: ${result.demand.heating_demand_mwh} MWh`)
-  record('theoretical recovery >> State 2 heating demand', sysVent.total.recovery_theoretical_mwh > result.demand.heating_demand_mwh * 5)
-  record('effective recovery capped at State 2 heating demand',
-    Math.abs(sysVent.total.recovery_mwh - result.demand.heating_demand_mwh) < 0.01)
-  record('heating.total.delivered_mwh === 0 (MVHR fully covers demand)',
-    result.system_performance.heating.total.delivered_mwh === 0)
-  record('heating.total.fuel_mwh === 0 (no remaining heating demand)',
-    result.system_performance.heating.total.fuel_mwh === 0)
-  record('energy_use.electricity.heating.total === 0', eu.electricity.heating.total === 0)
+  // Invariant 1: effective recovery never exceeds theoretical recovery
+  record('effective recovery <= theoretical recovery',
+    sysVent.total.recovery_mwh <= sysVent.total.recovery_theoretical_mwh + 0.01)
+  // Invariant 2: effective recovery never exceeds State 2 heating demand
+  record('effective recovery <= State 2 heating demand',
+    sysVent.total.recovery_mwh <= result.demand.heating_demand_mwh + 0.01)
+  // Invariant 3: effective recovery = min(theoretical, state2 demand)
+  const expectedEffective = Math.min(sysVent.total.recovery_theoretical_mwh, result.demand.heating_demand_mwh)
+  record('effective recovery === min(theoretical, state2 heat demand)',
+    Math.abs(sysVent.total.recovery_mwh - expectedEffective) < 0.01)
+  // Invariant 4: heating delivered = max(0, state2 demand - effective recovery)
+  const expectedHeatDelivered = Math.max(0, result.demand.heating_demand_mwh - sysVent.total.recovery_mwh)
+  record('heating delivered === max(0, state2 demand - effective recovery)',
+    Math.abs(result.system_performance.heating.total.delivered_mwh - expectedHeatDelivered) < 0.01)
 }
 
 // ── Test 3: Lighting + equipment pass-through ─────────────────────────────────

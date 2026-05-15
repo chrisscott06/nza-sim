@@ -86,6 +86,30 @@ const BUILDING_CORRECTIONS = {
   systems_config_v25: BRIDGEWATER_V25,
 }
 
+/**
+ * Issue 2 fix (Chris testing 2026-05-15): Bridgewater's occupancy schedule
+ * had a "Xmas" exception (Dec 24 – Jan 7 with all-zero weekday/saturday/
+ * sunday) inherited from a generic hotel-bedroom load-type template. Under
+ * Home Office continuous-occupancy operation (Dec 2022 onwards) the building
+ * isn't actually closed Christmas to New Year, so that exception zeros out
+ * 64,000+ person-hours unrealistically and shows as a sharp Jan 1-7 gap in
+ * the Profiles view. Drop the exception. Idempotent — empty if already
+ * cleared.
+ *
+ * If the project's actual operation ever does include a Christmas shutdown,
+ * the exception can be re-added via the Internal Gains schedule editor.
+ */
+function clearOccupancyXmasException(currentOccupancy) {
+  if (!currentOccupancy?.schedule?.exceptions) return currentOccupancy
+  const filtered = currentOccupancy.schedule.exceptions.filter(e =>
+    !(e?.name === 'Xmas' || e?.id?.includes('xmas') || /^24-12$/.test(e?.start_date ?? '')),
+  )
+  return {
+    ...currentOccupancy,
+    schedule: { ...currentOccupancy.schedule, exceptions: filtered },
+  }
+}
+
 console.log()
 console.log('=== Seed Bridgewater v2.5 systems config ===')
 console.log()
@@ -97,18 +121,27 @@ console.log()
 const before = await fj(`${API}/api/projects/${PROJECT_ID}`)
 console.log(`Before — num_floors=${before.building_config.num_floors}, num_bedrooms=${before.building_config.num_bedrooms}, length=${before.building_config.length}, width=${before.building_config.width}`)
 console.log(`         systems_config_v25 present: ${!!before.building_config.systems_config_v25}`)
+console.log(`         occupancy.schedule.exceptions: ${before.building_config.occupancy?.schedule?.exceptions?.length ?? 0}`)
 
-// 2. PUT the corrections via the existing /building endpoint
+// 2. PUT the corrections via the existing /building endpoint.
+// Apply Xmas-exception strip alongside the systems / num_floors fixes so
+// the seed produces a fully-corrected Bridgewater in one shot.
+const correctedOccupancy = clearOccupancyXmasException(before.building_config.occupancy)
+const correctionsToApply = {
+  ...BUILDING_CORRECTIONS,
+  occupancy: correctedOccupancy,
+}
 console.log()
 console.log('Applying corrections via PUT /api/projects/{id}/building...')
 const updated = await fj(`${API}/api/projects/${PROJECT_ID}/building`, {
   method:  'PUT',
   headers: { 'Content-Type': 'application/json' },
-  body:    JSON.stringify(BUILDING_CORRECTIONS),
+  body:    JSON.stringify(correctionsToApply),
 })
 
 console.log(`After  — num_floors=${updated.building_config.num_floors}, num_bedrooms=${updated.building_config.num_bedrooms}, length=${updated.building_config.length}, width=${updated.building_config.width}`)
 console.log(`         systems_config_v25 present: ${!!updated.building_config.systems_config_v25}`)
+console.log(`         occupancy.schedule.exceptions: ${updated.building_config.occupancy?.schedule?.exceptions?.length ?? 0}`)
 
 // 3. Verify nested structure persisted correctly
 const v25 = updated.building_config.systems_config_v25
