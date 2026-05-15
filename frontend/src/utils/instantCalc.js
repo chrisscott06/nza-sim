@@ -1674,6 +1674,194 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   }
 }
 
+// ── Brief 28f Part 2 (2026-05-15): State 3 skeleton (system overlay layer) ──
+//
+// State 3 = State 2 demand served by configured systems. Contract v2.5
+// (docs/state_contracts.md):
+//   - Heating + cooling each have primary + optional secondary (primary_pct split)
+//   - DHW has primary + optional secondary (primary_pct split) + a FLAT
+//     circulation pump baseload (systems.dhw.circulation_pump_w)
+//   - Mech ventilation is an array of independent systems with per-system
+//     library_id (optional), flow_l_s, sfp_w_per_l_s, hre, schedule_ref
+//   - All efficiencies resolve through library system_template items by
+//     library_id. V1 efficiency = scalar only (SCOP/SEER/seasonal_efficiency
+//     /COP). No performance-curve lookups.
+//   - Missing required library field → HALT with MissingLibraryField error
+//     naming the sub-system path AND the missing field. No silent defaults.
+//
+// Part 2 ships the SKELETON ONLY: library validation + halt-on-missing-field
+// + State 2 byte-identity pass-through. Energy-use values are all zero until
+// Part 3 (heating + cooling math) lands. The byte-identity test in
+// scripts/state3_part2_skeleton_test.mjs verifies that running State 3 with
+// no systems configured returns the State 2 fields byte-identical.
+
+/**
+ * Error thrown by the State 3 engine when a system sub-system's referenced
+ * library template is missing the field required to compute its service.
+ * Carries the sub-system path AND the field name so callers (UI, tests) can
+ * surface a clear, actionable message. Per contract v2.5 verification gate 5.
+ */
+export class MissingLibraryField extends Error {
+  constructor(subSystemPath, libraryId, fieldName) {
+    const msg = libraryId == null
+      ? `MissingLibraryField: ${subSystemPath} requires a library_id`
+      : `MissingLibraryField: ${subSystemPath} (library_id = "${libraryId}") is missing required field "${fieldName}"`
+    super(msg)
+    this.name = 'MissingLibraryField'
+    this.subSystemPath = subSystemPath
+    this.libraryId = libraryId
+    this.fieldName = fieldName
+  }
+}
+
+/**
+ * Resolve a library system_template by id. Throws MissingLibraryField if the
+ * sub-system has no library_id, or if the id does not resolve in libraryData.
+ */
+function resolveSystemTemplate(library_id, libraryData, subSystemPath) {
+  if (library_id == null) {
+    throw new MissingLibraryField(subSystemPath, null, 'library_id')
+  }
+  const templates = libraryData?.system_templates ?? []
+  const template = templates.find(t => (t.id ?? t.library_id) === library_id)
+  if (!template) {
+    throw new MissingLibraryField(subSystemPath, library_id, '(template not found in library)')
+  }
+  return template
+}
+
+/**
+ * Validate that a library template supports a service AND carries the
+ * per-service required scalar efficiency field. Throws MissingLibraryField
+ * on either failure with the sub-system path + the missing field name.
+ *
+ * Required scalar field per service (V1 — no curves):
+ *   heating     → heating_scop          (alt: heating_seasonal_efficiency, heating_cop)
+ *   cooling     → cooling_seer          (alt: cooling_scop_cool, cooling_eer)
+ *   dhw         → dhw_seasonal_efficiency
+ *   ventilation → hre                   (heat recovery effectiveness 0..1)
+ */
+function validateTemplateForService(template, service, subSystemPath) {
+  const supports = template.supports_services ?? []
+  const tid = template.id ?? template.library_id
+  if (!Array.isArray(supports) || !supports.includes(service)) {
+    throw new MissingLibraryField(subSystemPath, tid, `supports_services (does not include "${service}")`)
+  }
+  const primaryField = ({
+    heating:     'heating_scop',
+    cooling:     'cooling_seer',
+    dhw:         'dhw_seasonal_efficiency',
+    ventilation: 'hre',
+  })[service]
+  if (!primaryField) return
+  if (template[primaryField] != null) return
+  const altMap = ({
+    heating_scop: ['heating_seasonal_efficiency', 'heating_cop'],
+    cooling_seer: ['cooling_scop_cool', 'cooling_eer'],
+  })[primaryField] ?? []
+  if (altMap.some(a => template[a] != null)) return
+  throw new MissingLibraryField(subSystemPath, tid, primaryField)
+}
+
+/**
+ * State 3 — Brief 28f Part 2 skeleton.
+ *
+ * Returns the State 2 result UNCHANGED for every State 2 field (byte-identity
+ * pass-through). Adds the contract-v2.5 system-overlay layer (`energy_use`,
+ * `system_performance`, `carbon_kg_co2_per_m2`) with all-zero placeholder
+ * values. Validates any configured library_id references upfront and throws
+ * MissingLibraryField if anything required is missing.
+ *
+ * Halt gate (Brief 28f Part 2): no energy-use math in this function. That
+ * lands in Part 3 (heating + cooling) onwards. The empty overlay is here to
+ * lock the output shape and the validation discipline; the values are zero
+ * by design.
+ */
+function _calculateState3(building, constructions, libraryData, weatherData, hourlySolar, comfortBand) {
+  const state2Result = _calculateState2(building, constructions, libraryData, weatherData, hourlySolar, comfortBand)
+  if (state2Result.state !== 2) return state2Result   // bailout: _empty()
+
+  const sys = building.systems_config ?? {}
+
+  // ── Library validation (halt on missing) ──────────────────────────────────
+  // Heating
+  if (sys.heating?.primary != null) {
+    validateTemplateForService(resolveSystemTemplate(sys.heating.primary.library_id,   libraryData, 'systems.heating.primary'),   'heating', 'systems.heating.primary')
+  }
+  if (sys.heating?.secondary != null) {
+    validateTemplateForService(resolveSystemTemplate(sys.heating.secondary.library_id, libraryData, 'systems.heating.secondary'), 'heating', 'systems.heating.secondary')
+  }
+  // Cooling
+  if (sys.cooling?.primary != null) {
+    validateTemplateForService(resolveSystemTemplate(sys.cooling.primary.library_id,   libraryData, 'systems.cooling.primary'),   'cooling', 'systems.cooling.primary')
+  }
+  if (sys.cooling?.secondary != null) {
+    validateTemplateForService(resolveSystemTemplate(sys.cooling.secondary.library_id, libraryData, 'systems.cooling.secondary'), 'cooling', 'systems.cooling.secondary')
+  }
+  // DHW (primary, secondary). Circulation pump is a flat field, no library ref.
+  if (sys.dhw?.primary != null) {
+    validateTemplateForService(resolveSystemTemplate(sys.dhw.primary.library_id,   libraryData, 'systems.dhw.primary'),   'dhw', 'systems.dhw.primary')
+  }
+  if (sys.dhw?.secondary != null) {
+    validateTemplateForService(resolveSystemTemplate(sys.dhw.secondary.library_id, libraryData, 'systems.dhw.secondary'), 'dhw', 'systems.dhw.secondary')
+  }
+  // Mech ventilation (array). library_id optional; inline fields required.
+  const ventSystems = Array.isArray(sys.ventilation) ? sys.ventilation : []
+  for (let i = 0; i < ventSystems.length; i++) {
+    const vs = ventSystems[i]
+    const path = `systems.ventilation[${i}](id="${vs.id ?? '?'}")`
+    if (vs.library_id != null) {
+      validateTemplateForService(resolveSystemTemplate(vs.library_id, libraryData, path), 'ventilation', path)
+    }
+    for (const field of ['flow_l_s', 'sfp_w_per_l_s', 'hre']) {
+      if (vs[field] == null) {
+        throw new MissingLibraryField(path, vs.library_id ?? null, field)
+      }
+    }
+  }
+
+  // ── Empty system overlay (Part 2 halt gate — no energy math) ──────────────
+  // Shape mirrors contract v2.5 exactly so the byte-identity test can be
+  // strict on State 2 fields without false positives from missing keys.
+  const empty_perfuel_perservice = { primary: 0, secondary: 0, total: 0 }
+  const empty_subsystem_perf     = null   // secondary fields default to null when absent
+
+  return {
+    ...state2Result,
+    state: 3,
+    mode: 'full',
+    energy_use: {
+      electricity: {
+        heating:   { ...empty_perfuel_perservice },
+        cooling:   { ...empty_perfuel_perservice },
+        fans:      { per_system: [], total: 0 },
+        dhw:       { primary: 0, secondary: 0, circulation: 0, total: 0 },
+        lighting:  0,
+        equipment: 0,
+        total:     0,
+      },
+      gas: {
+        heating: { ...empty_perfuel_perservice },
+        dhw:     { ...empty_perfuel_perservice },
+        total:   0,
+      },
+      totals: {
+        electricity_kwh:      0,
+        gas_kwh:              0,
+        delivered_energy_kwh: 0,
+        eui_kwh_per_m2:       0,
+      },
+    },
+    system_performance: {
+      heating:     { primary: empty_subsystem_perf, secondary: empty_subsystem_perf, total: { delivered_mwh: 0, fuel_mwh: 0 } },
+      cooling:     { primary: empty_subsystem_perf, secondary: empty_subsystem_perf, total: { delivered_mwh: 0, fuel_mwh: 0 } },
+      dhw:         { primary: empty_subsystem_perf, secondary: empty_subsystem_perf, circulation_pump_kwh: 0, total: { delivered_mwh: 0, fuel_mwh: 0 } },
+      ventilation: { systems: [], total: { fan_kwh: 0, recovery_mwh: 0 } },
+    },
+    carbon_kg_co2_per_m2: 0,
+  }
+}
+
 // ── U-value lookup ────────────────────────────────────────────────────────────
 
 const DEFAULT_U_VALUES = {
@@ -2399,6 +2587,21 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
   // and `occupancy_summary`.
   if (mode === 'envelope-gains') {
     return _calculateState2(
+      withMode(building, mode),
+      constructions, libraryData, weatherData, hourlySolar,
+      options.comfortBand ?? building.comfort_band ?? { lower_c: 20, upper_c: 26 },
+    )
+  }
+
+  // State 3 v2.5 engine path (Brief 28f Part 2 skeleton). Opt-in via
+  // `options.engine === 'v2.5'` while the legacy 'full' code below is still
+  // wired into UI consumers. In Part 2 this returns State 2 outputs
+  // byte-identical, plus an empty system-overlay layer per contract v2.5.
+  // Heating/cooling/DHW/ventilation energy math lands in Part 3+. Library
+  // references validated upfront — throws MissingLibraryField on missing
+  // template or missing required scalar efficiency field.
+  if (mode === 'full' && options.engine === 'v2.5') {
+    return _calculateState3(
       withMode(building, mode),
       constructions, libraryData, weatherData, hourlySolar,
       options.comfortBand ?? building.comfort_band ?? { lower_c: 20, upper_c: 26 },
