@@ -36,6 +36,7 @@ import { fileURLToPath } from 'node:url'
 
 import { calculateInstant } from '../frontend/src/utils/instantCalc.js'
 import { computeHourlySolarByFacade } from '../frontend/src/utils/solarCalc.js'
+import { SYSTEM_TEMPLATES_LIBRARY } from '../frontend/src/data/systemTemplatesLibrary.js'
 
 const PROJECT_ID = process.argv[2] || '14b4a5b1-8c73-4acb-8b65-1d22f05ec969'
 const API = 'http://127.0.0.1:8002'
@@ -76,37 +77,13 @@ for (let i = 0; i < N; i++) {
 }
 const weatherData = { temperature, direct_normal, diffuse_horizontal, wind_speed, month, day, hour }
 
-// ── Bridgewater system templates (per Chris's Part 3 scope) ─────────────────
-const SYSTEM_TEMPLATES_BRIDGEWATER = [
-  {
-    id: 'vrf_heating_recovery',
-    name: 'VRF heat recovery — heating side',
-    supports_services: ['heating'],
-    heating_scop: 5.12,
-    fuel: 'electricity',
-  },
-  {
-    id: 'electric_panel_heater',
-    name: 'Electric panel heater',
-    supports_services: ['heating'],
-    heating_scop: 1.00,
-    fuel: 'electricity',
-  },
-  {
-    id: 'vrf_cooling',
-    name: 'VRF cooling',
-    supports_services: ['cooling'],
-    cooling_seer: 3.51,
-    fuel: 'electricity',
-  },
-  {
-    id: 'dx_split',
-    name: 'DX split unit',
-    supports_services: ['cooling'],
-    cooling_seer: 5.62,
-    fuel: 'electricity',
-  },
-]
+// Bridgewater system templates: imported from the canonical library file.
+// Part 3 uses the dual-function VRF as primary for BOTH heating and cooling
+// (one physical system serves both jobs — same library_id appears in both
+// systems.heating.primary AND systems.cooling.primary). Verified in Part 2
+// test 6 that dual-function is supported. Hand-calc unchanged from inline
+// templates because heating_scop and cooling_seer match (5.12 / 3.51).
+const SYSTEM_TEMPLATES_BRIDGEWATER = SYSTEM_TEMPLATES_LIBRARY
 
 function libraryDataWith(templates) {
   return {
@@ -135,14 +112,14 @@ function runState3(building, templates) {
 
 const BRIDGEWATER_SYSTEMS = {
   heating: {
-    primary:     { library_id: 'vrf_heating_recovery' },
+    primary:     { library_id: 'vrf_heat_recovery_dual_function' },
     secondary:   { library_id: 'electric_panel_heater' },
     primary_pct: 95,
     setpoint_c:  21,
   },
   cooling: {
-    primary:     { library_id: 'vrf_cooling' },
-    secondary:   { library_id: 'dx_split' },
+    primary:     { library_id: 'vrf_heat_recovery_dual_function' },
+    secondary:   { library_id: 'dx_split_cooling' },
     primary_pct: 95,
     setpoint_c:  25,
   },

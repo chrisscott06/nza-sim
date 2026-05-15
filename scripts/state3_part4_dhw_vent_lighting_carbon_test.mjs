@@ -40,6 +40,7 @@ import { fileURLToPath } from 'node:url'
 
 import { calculateInstant, BEIS_2024_FACTORS } from '../frontend/src/utils/instantCalc.js'
 import { computeHourlySolarByFacade } from '../frontend/src/utils/solarCalc.js'
+import { SYSTEM_TEMPLATES_LIBRARY } from '../frontend/src/data/systemTemplatesLibrary.js'
 
 const PROJECT_ID = process.argv[2] || '14b4a5b1-8c73-4acb-8b65-1d22f05ec969'
 const API = 'http://127.0.0.1:8002'
@@ -77,21 +78,15 @@ for (let i = 0; i < N; i++) {
 }
 const weatherData = { temperature, direct_normal, diffuse_horizontal, wind_speed, month, day, hour }
 
-const SYSTEM_TEMPLATES = [
-  // Heating
-  { id: 'vrf_heating_recovery', supports_services: ['heating'], heating_scop: 5.12, fuel: 'electricity' },
-  { id: 'electric_panel_heater', supports_services: ['heating'], heating_scop: 1.00, fuel: 'electricity' },
-  // Cooling
-  { id: 'vrf_cooling',           supports_services: ['cooling'], cooling_seer: 3.51, fuel: 'electricity' },
-  { id: 'dx_split',              supports_services: ['cooling'], cooling_seer: 5.62, fuel: 'electricity' },
-  // DHW
-  { id: 'ashp_dhw',              supports_services: ['dhw'],     dhw_seasonal_efficiency: 2.8,  fuel: 'electricity' },
-  { id: 'gas_boiler_calorifier', supports_services: ['dhw'],     dhw_seasonal_efficiency: 0.88, fuel: 'gas' },
-  // Ideal-loads
-  { id: 'ideal_heater',          supports_services: ['heating'], heating_scop: 1.0,   fuel: 'electricity' },
-  { id: 'ideal_cooler',          supports_services: ['cooling'], cooling_seer: 1.0,   fuel: 'electricity' },
-  { id: 'ideal_dhw',             supports_services: ['dhw'],     dhw_seasonal_efficiency: 1.0, fuel: 'electricity' },
+// Library = the canonical starter templates. Test also defines synthetic
+// "ideal" templates inline for ideal-loads regression (these aren't realistic
+// library items — they're test artifacts for the COP=1 boundary case).
+const IDEAL_LOADS_TEMPLATES = [
+  { id: 'ideal_heater', supports_services: ['heating'], heating_scop: 1.0,            fuel: 'electricity' },
+  { id: 'ideal_cooler', supports_services: ['cooling'], cooling_seer: 1.0,            fuel: 'electricity' },
+  { id: 'ideal_dhw',    supports_services: ['dhw'],     dhw_seasonal_efficiency: 1.0, fuel: 'electricity' },
 ]
+const SYSTEM_TEMPLATES = [...SYSTEM_TEMPLATES_LIBRARY, ...IDEAL_LOADS_TEMPLATES]
 
 function libraryDataWith(templates) {
   return {
@@ -120,19 +115,19 @@ function runState3(building, templates) {
 
 const BRIDGEWATER_FULL_SYSTEMS = {
   heating: {
-    primary:     { library_id: 'vrf_heating_recovery' },
+    primary:     { library_id: 'vrf_heat_recovery_dual_function' },
     secondary:   { library_id: 'electric_panel_heater' },
     primary_pct: 95,
     setpoint_c:  21,
   },
   cooling: {
-    primary:     { library_id: 'vrf_cooling' },
-    secondary:   { library_id: 'dx_split' },
+    primary:     { library_id: 'vrf_heat_recovery_dual_function' },
+    secondary:   { library_id: 'dx_split_cooling' },
     primary_pct: 95,
     setpoint_c:  25,
   },
   dhw: {
-    primary:           { library_id: 'ashp_dhw' },
+    primary:           { library_id: 'ashp_dhw_preheat' },
     secondary:         { library_id: 'gas_boiler_calorifier' },
     primary_pct:       60,
     circulation_pump_w: 120,
@@ -344,7 +339,7 @@ console.log('Test 6 — HRE recovery cap & option (a) heating demand reduction')
     {
       ...buildingBase,
       systems_config: {
-        heating: { primary: { library_id: 'vrf_heating_recovery' }, primary_pct: 100, setpoint_c: 21 },
+        heating: { primary: { library_id: 'vrf_heat_recovery_dual_function' }, primary_pct: 100, setpoint_c: 21 },
         ventilation: [
           // Tiny MVHR — theoretical recovery should be much less than heat demand
           { id: 'small_mvhr', flow_l_s: 100, sfp_w_per_l_s: 1.4, hre: 0.5, schedule_ref: 'always_on' },

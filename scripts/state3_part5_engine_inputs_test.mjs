@@ -29,6 +29,7 @@ import { fileURLToPath } from 'node:url'
 
 import { calculateInstant } from '../frontend/src/utils/instantCalc.js'
 import { computeHourlySolarByFacade } from '../frontend/src/utils/solarCalc.js'
+import { SYSTEM_TEMPLATES_LIBRARY } from '../frontend/src/data/systemTemplatesLibrary.js'
 
 const PROJECT_ID = process.argv[2] || '14b4a5b1-8c73-4acb-8b65-1d22f05ec969'
 const API = 'http://127.0.0.1:8002'
@@ -64,10 +65,10 @@ for (let i = 0; i < N; i++) {
 }
 const weatherData = { temperature, direct_normal, diffuse_horizontal, wind_speed, month, day, hour }
 
-const SYSTEM_TEMPLATES = [
-  { id: 'ashp_dhw',              supports_services: ['dhw'],     dhw_seasonal_efficiency: 2.8,  fuel: 'electricity' },
-  { id: 'gas_boiler_calorifier', supports_services: ['dhw'],     dhw_seasonal_efficiency: 0.88, fuel: 'gas' },
-]
+// All templates from the canonical library (Brief 28f Part 5.3 ship).
+// Part 5.1 + 5.2 tests only need DHW templates, but importing the whole
+// library is harmless and keeps the test in sync with library updates.
+const SYSTEM_TEMPLATES = SYSTEM_TEMPLATES_LIBRARY
 
 function libraryDataWith(templates) {
   return {
@@ -107,7 +108,7 @@ function within(actual, target, pct = 0.005) {
 function fmt(x, dp = 2) { return Number(x).toFixed(dp) }
 
 const DHW_PRIMARY_DHW_CFG = {
-  primary:           { library_id: 'ashp_dhw' },
+  primary:           { library_id: 'ashp_dhw_preheat' },
   secondary:         { library_id: 'gas_boiler_calorifier' },
   primary_pct:       60,
   circulation_pump_w: 120,
