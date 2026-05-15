@@ -11,7 +11,10 @@
  *   DHW demand:    138 beds × occupancy_fraction × 80 L/p/day × ΔT × c_p / 3600
  *                  Cold mains 10 °C; hot store 60 °C; constant for V1.
  *   WC Extract:    2292 l/s, SFP 0.4, HRE 0, always_on
- *   MVHR:          5000 l/s, SFP 1.4, HRE 0.8, always_on
+ *   MVHR:          1450 l/s aggregate (5 × Toshiba VN-M1000HE @ ~290 l/s each),
+ *                  SFP 1.4, HRE 0.8, always_on. (Corrected 2026-05-15 from
+ *                  initial 5000 l/s — Part 4 brief confused unit model name
+ *                  "1000HE" with flow; per Fabric & Systems Modelling Notes.)
  *
  * Carbon factors (BEIS 2024, hardcoded V1):
  *   electricity: 0.207 kg CO2e/kWh
@@ -136,7 +139,9 @@ const BRIDGEWATER_FULL_SYSTEMS = {
   },
   ventilation: [
     { id: 'WC_extract', flow_l_s: 2292, sfp_w_per_l_s: 0.4, hre: 0,   schedule_ref: 'always_on' },
-    { id: 'MVHR',       flow_l_s: 5000, sfp_w_per_l_s: 1.4, hre: 0.8, schedule_ref: 'always_on' },
+    // MVHR aggregate: 5 × Toshiba VN-M1000HE @ commissioned 270–310 l/s → 5 × 290 = 1450 l/s.
+    // Per Bridgewater Fabric and Systems Modelling Notes. (Was 5000 in Part 4 draft — wrong, code-review fix.)
+    { id: 'MVHR',       flow_l_s: 1450, sfp_w_per_l_s: 1.4, hre: 0.8, schedule_ref: 'always_on' },
   ],
 }
 
@@ -216,8 +221,8 @@ console.log('Test 2 — Mech ventilation hand-calc (±2%)')
     SYSTEM_TEMPLATES,
   )
   // Hand-calc fan energy
-  const hand_wc_fan_kwh   = 2292 * 0.4 * 8760 / 1000     // 8030.4
-  const hand_mvhr_fan_kwh = 5000 * 1.4 * 8760 / 1000     // 61320
+  const hand_wc_fan_kwh   = 2292 * 0.4 * 8760 / 1000     // 8031.2
+  const hand_mvhr_fan_kwh = 1450 * 1.4 * 8760 / 1000     // 17782.8  (corrected 2026-05-15)
   const hand_total_fan    = hand_wc_fan_kwh + hand_mvhr_fan_kwh
 
   const sysVent = result.system_performance.ventilation

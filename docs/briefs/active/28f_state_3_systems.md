@@ -1,6 +1,14 @@
 # Brief 28f — State 3: Systems (heating, cooling, DHW, mechanical ventilation)
 
-**Status:** Scope captured 2026-05-14 (after Brief 28c ship). Part 1 (contract update v2.4 → v2.5) shipped 2026-05-15. Part 2 (engine skeleton + library-strict halt + byte-identity tests) shipped 2026-05-15 (commit `4cab01d`). Part 3 (heating + cooling energy math) shipped 2026-05-15 (commit `518a6f7`). **Part 4 (DHW + ventilation + lighting/equipment + carbon) shipped 2026-05-15 — halt for review before declaring State 3 validated.**
+**Status:** COMPLETE 2026-05-15. State 3 is validated. 142/142 tests pass across Parts 2–4.
+
+- Part 1 (contract update v2.4 → v2.5): commit `b69f092`
+- Part 2 (engine skeleton + library-strict halt): commit `4cab01d` (40 tests)
+- Part 3 (heating + cooling energy math): commit `518a6f7` (56 tests)
+- Part 4 (DHW + ventilation + lighting/equipment + carbon): commit `79dfebc` (46 tests)
+- Validation + two input-refinement findings documented in `docs/validation/state3_part4_findings_2026_05_15.md`.
+
+**Next major piece:** measured-data ingest + comparison (half-hourly electricity, monthly gas, monthly water from FM; NMBE / CV(RMSE) vs modelled). Calibration workflow follows. State 3 refinements (hourly HRE, persisted library schema, ventilation schedules, HVAC-aware State 2 cooling, performance curves) queue behind calibration — they're refinements measured data will reveal as necessary, not before.
 
 **Predecessor:** Brief 28c (State 2 loss recompute on its own zone-T trace).
 **Successor (queued):** Brief 28e (State 2.5 operable windows + doors).
@@ -71,12 +79,8 @@ State 3 takes the State 2 zone trace (gains-warmed, free-running) and applies a 
 | Part 1 | State 3 contract update (`docs/state_contracts.md`) — output shapes, contract guarantees. | Chris approves contract before code. **DONE 2026-05-15** (v2.5 shipped with Chris's five clarifications + four additions a/b/c/d). |
 | Part 2 | Engine: `_calculateState3` skeleton; consumes `_calculateState2` output verbatim, adds an empty system-overlay pass. Byte-identity test passes (no systems = no change). HALT before any actual energy-use calculation. **DONE 2026-05-15** (commit `4cab01d`, 40/40 tests). |
 | Part 3 | Heating + cooling primary + secondary with % split. Hand-calc vs spreadsheet on Bridgewater. **DONE 2026-05-15** (52/52 tests inc. hand-calc ±2%, ideal-loads regression, A1 fuel_ratio==demand_ratio, A2 splits unchanged, per-fuel gas+electric split). | ±2% hand-calc match. |
-| Part 4 | DHW two-system split + circulation pump baseload. Hand-calc on Bridgewater DHW demand. | ±2% hand-calc match. |
-| Part 5 | Mechanical ventilation: per-system flow/SFP/HRE/schedule. Hand-calc on fan energy + HRE offset. | ±2% hand-calc match. |
-| Part 6 | UI: three system groups in Systems module. | Browser verification 1440×900. |
-| Part 7 | Sensitivity tests (A1, A2) + close-out doc. | A1/A2 pass + Brief 28c-style validation evidence captured. |
-
-(This split is provisional — finalise at brief activation.)
+| Part 4 | DHW two-system split + circulation pump + mech ventilation + lighting/equipment + carbon. Hand-calc on each. | **DONE 2026-05-15** (commit `79dfebc`, 46/46 tests inc. DHW ASHP/boiler/circulation hand-calc, vent fans + HRE recovery with cap, lighting/equipment byte-identity, carbon exact). |
+| (no Parts 5–7 needed) | The original split had separate parts for mech vent and a UI build. Mech ventilation landed in Part 4 alongside DHW (clean cohesion). UI build is queued behind measured-data ingest — it's premature to build the Systems UI before we have calibration evidence shaping the inspector design. | Closed out via `docs/validation/state3_part4_findings_2026_05_15.md`. |
 
 ---
 
