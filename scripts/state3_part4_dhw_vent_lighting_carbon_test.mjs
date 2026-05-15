@@ -248,16 +248,22 @@ console.log('Test 2 — Mech ventilation hand-calc (±2%)')
   console.log(`  Theoretical MVHR recovery: ${sysVent.total.recovery_theoretical_mwh} MWh (uncapped)`)
   console.log(`  Effective recovery (capped at heat demand): ${sysVent.total.recovery_mwh} MWh`)
   console.log(`  State 2 heating demand: ${result.demand.heating_demand_mwh} MWh`)
-  // Invariant 1: effective recovery never exceeds theoretical recovery
+  // Invariant 1: effective recovery never exceeds theoretical recovery.
   record('effective recovery <= theoretical recovery',
     sysVent.total.recovery_mwh <= sysVent.total.recovery_theoretical_mwh + 0.01)
-  // Invariant 2: effective recovery never exceeds State 2 heating demand
+  // Invariant 2: effective recovery never exceeds State 2 heating demand.
   record('effective recovery <= State 2 heating demand',
     sysVent.total.recovery_mwh <= result.demand.heating_demand_mwh + 0.01)
-  // Invariant 3: effective recovery = min(theoretical, state2 demand)
-  const expectedEffective = Math.min(sysVent.total.recovery_theoretical_mwh, result.demand.heating_demand_mwh)
-  record('effective recovery === min(theoretical, state2 heat demand)',
-    Math.abs(sysVent.total.recovery_mwh - expectedEffective) < 0.01)
+  // Invariant 3 (Brief 28j): effective recovery <= min(theoretical, state2 demand).
+  // Per-hour cap is STRICTER than the old annual-cap === because individual
+  // winter-peak hours can have theoretical_h > demand_h even when the annual
+  // totals don't. Annual-cap was `effective === min(theoretical, demand)`;
+  // per-hour cap is `effective <= min(theoretical, demand)`. Equality only
+  // when the cap never binds at any hour (small MVHR, or zero-demand months
+  // distributed such that no hour saturates).
+  const annualMinBound = Math.min(sysVent.total.recovery_theoretical_mwh, result.demand.heating_demand_mwh)
+  record('effective recovery <= min(theoretical, state2 heat demand)',
+    sysVent.total.recovery_mwh <= annualMinBound + 0.01)
   // Invariant 4: heating delivered = max(0, state2 demand - effective recovery)
   const expectedHeatDelivered = Math.max(0, result.demand.heating_demand_mwh - sysVent.total.recovery_mwh)
   record('heating delivered === max(0, state2 demand - effective recovery)',
@@ -367,8 +373,15 @@ console.log('Test 6 — HRE recovery cap & option (a) heating demand reduction')
   console.log(`  State 2 heat demand: ${heat_demand_state2}    theoretical recovery: ${theoretical}    effective: ${effective}`)
   console.log(`  Heating demand after recovery applied (delivered_mwh): ${remaining_demand_engine}`)
   record('theoretical recovery < State 2 heating demand (small MVHR)', theoretical < heat_demand_state2)
-  record('effective recovery === theoretical (no cap when below demand)',
-    Math.abs(effective - theoretical) < 0.002)
+  // Brief 28j: per-hour cap is stricter than annual cap. Even when annual
+  // theoretical < annual demand, individual winter-peak hours can saturate
+  // (theoretical_h > demand_h), so effective < theoretical at those hours.
+  // Annual-cap test was effective === theoretical; per-hour-cap test is
+  // effective <= theoretical (always) and effective > 0 (system is recovering
+  // something, just less than the annual integral suggests).
+  record('effective recovery <= theoretical recovery (per-hour cap is stricter)',
+    effective <= theoretical + 0.002)
+  record('effective recovery > 0 (recovery still occurs)', effective > 0)
   record('heating delivered === state2_demand − effective_recovery',
     Math.abs(remaining_demand_engine - (heat_demand_state2 - effective)) < 0.005)
 }

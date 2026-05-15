@@ -349,11 +349,21 @@ console.log('Test 10 — HRE recovery scales by schedule_factor (hours_active / 
     const v1 = alwaysOn.system_performance.ventilation.systems[0]
     const v2 = profiled.system_performance.ventilation.systems[0]
     const schedule_factor      = v2.hours_active / v1.hours_active
-    const recovery_ratio       = v2.recovery_mwh / v1.recovery_mwh
-    console.log(`  always-on recovery ${v1.recovery_mwh} MWh; profiled recovery ${v2.recovery_mwh} MWh`)
-    console.log(`  schedule_factor = ${fmt(schedule_factor, 4)};   recovery_ratio = ${fmt(recovery_ratio, 4)}`)
-    record('recovery ratio === schedule_factor (within 0.1%)',
-      Math.abs(recovery_ratio - schedule_factor) < 0.001)
+    // Brief 28j: comparing THEORETICAL (uncapped) recovery against schedule
+    // factor is the meaningful linearity test. The effective recovery
+    // (recovery_mwh) goes through the per-hour cap, which is non-linear in
+    // schedule_factor (cap binds in some hours and not others). Theoretical
+    // recovery is the pre-cap annual integral that scales linearly with
+    // schedule_factor — that's what this test validates.
+    const theoretical_ratio = v2.theoretical_recovery_mwh / v1.theoretical_recovery_mwh
+    const effective_ratio   = v2.recovery_mwh / v1.recovery_mwh
+    console.log(`  always-on theoretical ${v1.theoretical_recovery_mwh} MWh; profiled theoretical ${v2.theoretical_recovery_mwh} MWh`)
+    console.log(`  always-on effective   ${v1.recovery_mwh} MWh; profiled effective   ${v2.recovery_mwh} MWh`)
+    console.log(`  schedule_factor = ${fmt(schedule_factor, 4)};   theoretical_ratio = ${fmt(theoretical_ratio, 4)};   effective_ratio = ${fmt(effective_ratio, 4)}`)
+    record('theoretical recovery ratio === schedule_factor (within 0.1%)',
+      Math.abs(theoretical_ratio - schedule_factor) < 0.001)
+    record('effective recovery scales monotonically with schedule_factor (<= 1)',
+      effective_ratio > 0 && effective_ratio <= 1.001)
   }
 }
 

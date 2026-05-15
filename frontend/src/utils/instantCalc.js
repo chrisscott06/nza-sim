@@ -1323,6 +1323,14 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   let acc_heating_demand_Wh = 0, acc_cooling_demand_Wh = 0
   let underheating_hours = 0, overheating_hours = 0, comfort_hours = 0
   let T_winter_min = Infinity, T_summer_max = -Infinity
+  // Brief 28j: per-hour demand series for State 3 hour-by-hour MVHR recovery
+  // cap. State 3's computeVentilationEnergy iterates per-hour to apply the
+  // physical "you can't recover more than the building needs this hour" rule.
+  // Tiny memory cost (~70 kB total per simulation). Annual aggregate continues
+  // to be the headline; the per-hour series is engine-internal data exposed
+  // to State 3 only.
+  const heating_demand_hourly_kwh = new Float32Array(n)
+  const cooling_demand_hourly_kwh = new Float32Array(n)
 
   for (let h = 0; h < n; h++) {
     const T_out = weatherData.temperature[h]
@@ -1465,9 +1473,11 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       const Q_loss_at_lower = UA_total_now * Math.max(0, comfortBand.lower_c - T_out)
       const heating_Wh = Math.max(0, Q_loss_at_lower - Q_gain_to_zone)
       acc_heating_demand_Wh += heating_Wh
+      heating_demand_hourly_kwh[h] = heating_Wh / 1000   // Brief 28j: per-hour for State 3 MVHR cap
     } else if (T_op > comfortBand.upper_c) {
       const Q_gain_at_upper = Q_gain_to_zone + UA_total_now * Math.max(0, T_out - comfortBand.upper_c)
       acc_cooling_demand_Wh += Q_gain_at_upper
+      cooling_demand_hourly_kwh[h] = Q_gain_at_upper / 1000   // Brief 28j: per-hour (currently unused but available)
     }
   }
 
@@ -1604,6 +1614,11 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       underheating_hours,
       overheating_hours,
       comfort_hours,
+      // Brief 28j: per-hour series consumed by State 3's hour-by-hour MVHR
+      // recovery cap (computeVentilationEnergy). Engine-internal data
+      // exposed to State 3; not surfaced in normal UI consumers.
+      heating_demand_hourly_kwh,
+      cooling_demand_hourly_kwh,
     },
     state1_delta: {
       heating_demand_change_mwh:               heating_change_mwh,
@@ -1996,24 +2011,40 @@ function hoursActiveForSchedule(schedule_ref, building) {
  *     vent-on hours; tightenable when calibration shows it matters).
  *   - Recovery is THEORETICAL here; caller caps to heating_demand_mwh.
  */
-function computeVentilationEnergy(ventSystems, weatherData, T_setpoint_c, building) {
+function computeVentilationEnergy(ventSystems, weatherData, T_setpoint_c, building, heatingDemandHourlyKwh = null) {
   if (!Array.isArray(ventSystems) || ventSystems.length === 0) {
-    return { perSystem: [], totalFanKwh: 0, theoreticalRecoveryMwh: 0 }
+    return { perSystem: [], totalFanKwh: 0, theoreticalRecoveryMwh: 0, effectiveRecoveryMwh: 0 }
   }
   const AIR_HC_J_PER_M3_K = 1.2 * 1005   // air heat capacity at ~20 °C
-
-  // Annual heating ΔT integral (K·hours) — computed once, reused across systems.
-  // Each system scales by its own schedule_factor for non-always-on.
-  let dT_integral_K_hours = 0
   const n = weatherData?.temperature?.length ?? 0
+
+  // Annual heating ΔT integral (K·hours) — used for the THEORETICAL recovery
+  // (uncapped). Per-hour cap calculation iterates the same loop with a
+  // min(theoretical_h, heating_demand_h) check at each step.
+  let dT_integral_K_hours = 0
   for (let h = 0; h < n; h++) {
     const dT = T_setpoint_c - weatherData.temperature[h]
     if (dT > 0) dT_integral_K_hours += dT
   }
 
+  // Brief 28j (2026-05-15): hour-by-hour MVHR recovery cap. Replaces the
+  // earlier annual-aggregate min(theoretical, state2_demand) cap, which
+  // was physically wrong for over-sized MVHR systems on gain-dominated
+  // buildings: the annual cap let "recovery during summer" cancel
+  // "demand during winter" arithmetically, hiding the fact that real
+  // peak-winter heating still occurs.
+  //
+  // Per-hour cap is the physical rule: at hour h, recovery contributes at
+  // most the heating demand at hour h. If heatingDemandHourlyKwh isn't
+  // supplied (e.g., caller hasn't passed it through), fall back to the
+  // theoretical-only behaviour (= no cap) — caller is responsible for
+  // capping at annual level if it wants. _calculateState3 always passes
+  // the hourly series from State 2's output.
+
   const perSystem = []
   let totalFanKwh = 0
-  let theoreticalRecoveryMwh = 0
+  let totalTheoreticalRecoveryMwh = 0
+  let totalEffectiveRecoveryMwh = 0
 
   for (let i = 0; i < ventSystems.length; i++) {
     const vs = ventSystems[i]
@@ -2021,24 +2052,59 @@ function computeVentilationEnergy(ventSystems, weatherData, T_setpoint_c, buildi
     const { hours: hours_active, source: schedule_source } = hoursActiveForSchedule(vs.schedule_ref, building)
     const fan_kwh = (vs.flow_l_s * vs.sfp_w_per_l_s * hours_active) / 1000
 
-    // Recovery (theoretical, uncapped). Only relevant when HRE > 0.
-    // schedule_factor: V1 approximation that recovery scales linearly with
-    // vent-on hours. dT integration over actual vent-on hours is a future
-    // refinement (tightenable if calibration shows it matters).
-    let recovery_mwh = 0
-    if (vs.hre > 0 && dT_integral_K_hours > 0) {
+    // Theoretical (uncapped) — annual integral × schedule_factor, same as
+    // pre-28j. Surfaced as system_performance.ventilation.systems[*]
+    //  .theoretical_recovery_mwh + .total.recovery_theoretical_mwh so the
+    // user can see "what the unit could deliver" vs "what was actually
+    // useful" (= effective).
+    let theoretical_mwh = 0
+    let effective_mwh = 0
+    if (vs.hre > 0) {
       const flow_m3s        = vs.flow_l_s / 1000
       const schedule_factor = hours_active / 8760
-      const recovery_Wh     = flow_m3s * AIR_HC_J_PER_M3_K * vs.hre * dT_integral_K_hours * schedule_factor
-      recovery_mwh = recovery_Wh / 1_000_000
+      // Theoretical (annual aggregate)
+      const theoretical_Wh = flow_m3s * AIR_HC_J_PER_M3_K * vs.hre * dT_integral_K_hours * schedule_factor
+      theoretical_mwh = theoretical_Wh / 1_000_000
+      // Effective (per-hour cap). Iterate hours; at each heating-degree hour
+      // recovery contributes min(per-hour theoretical, per-hour demand). When
+      // hourly demand series isn't available, fall back to theoretical (no
+      // cap) — preserves engine usability for callers that haven't wired the
+      // demand series through.
+      if (heatingDemandHourlyKwh && heatingDemandHourlyKwh.length === n) {
+        let effective_Wh = 0
+        for (let h = 0; h < n; h++) {
+          const dT = T_setpoint_c - weatherData.temperature[h]
+          if (dT > 0) {
+            // Per-hour theoretical recovery, in Wh (flow × HC × HRE × dT × schedule_factor × 1 h)
+            const theoretical_h_Wh = flow_m3s * AIR_HC_J_PER_M3_K * vs.hre * dT * schedule_factor
+            // Per-hour heating demand, in Wh = kWh × 1000
+            const demand_h_Wh = (heatingDemandHourlyKwh[h] ?? 0) * 1000
+            // Per-hour cap: can't recover more heat than the building needed
+            effective_Wh += Math.min(theoretical_h_Wh, demand_h_Wh)
+          }
+        }
+        effective_mwh = effective_Wh / 1_000_000
+      } else {
+        effective_mwh = theoretical_mwh
+      }
     }
 
-    perSystem.push({ id, fan_kwh, recovery_mwh, hours_active, schedule_source })
+    perSystem.push({
+      id, fan_kwh, hours_active, schedule_source,
+      recovery_mwh: effective_mwh,                // effective (per-hour-capped) — the heating-offset value
+      theoretical_recovery_mwh: theoretical_mwh,  // uncapped, informational
+    })
     totalFanKwh += fan_kwh
-    theoreticalRecoveryMwh += recovery_mwh
+    totalTheoreticalRecoveryMwh += theoretical_mwh
+    totalEffectiveRecoveryMwh += effective_mwh
   }
 
-  return { perSystem, totalFanKwh, theoreticalRecoveryMwh }
+  return {
+    perSystem,
+    totalFanKwh,
+    theoreticalRecoveryMwh: totalTheoreticalRecoveryMwh,
+    effectiveRecoveryMwh: totalEffectiveRecoveryMwh,
+  }
 }
 
 /**
@@ -2100,21 +2166,28 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
   const dhw_demand_kwh = annual_occupant_hours * dhw_kwh_per_person_hour
   const dhw_demand_mwh = dhw_demand_kwh / 1000
 
-  // ── Mech ventilation (Part 4): fans + HRE recovery ────────────────────────
+  // ── Mech ventilation (Part 4 + Brief 28j hourly cap): fans + HRE recovery ─
   const T_heating_setpoint = sys.heating?.setpoint_c ?? comfortBand?.lower_c ?? 21
+  // Brief 28j: pass State 2's per-hour heating demand series so
+  // computeVentilationEnergy can apply the cap hour-by-hour rather than as
+  // an annual aggregate. The hourly cap is physically correct: at hour h
+  // recovery contributes at most the heating demand at hour h. Replaces the
+  // pre-28j annual-aggregate Math.min(theoretical, state2_demand) which
+  // could let summer recovery cancel winter demand arithmetically.
+  const heatingDemandHourlyKwh = state2Result.demand?.heating_demand_hourly_kwh ?? null
   const ventResult = computeVentilationEnergy(
     Array.isArray(sys.ventilation) ? sys.ventilation : [],
     weatherData,
     T_heating_setpoint,
-    building,                  // Brief 28f Part 5.2: needed for schedule_ref lookup
+    building,
+    heatingDemandHourlyKwh,
   )
 
-  // Effective recovery: cap at State 2 heating demand. The cap models the
-  // physical limit (you can't recover more heat than the building actually
-  // needs). Option (a) per Brief 28f spec: effective recovery reduces the
-  // heating-system demand. Option (b) transparency: recovery_mwh is also
-  // exposed as a discrete line in system_performance.ventilation.total.
-  const effective_recovery_mwh = Math.min(ventResult.theoreticalRecoveryMwh, heating_demand_state2_mwh)
+  // Effective recovery is computed per-hour inside computeVentilationEnergy
+  // and surfaced as ventResult.effectiveRecoveryMwh. Heating demand seen by
+  // the heating service is reduced accordingly. The annual-aggregate cap
+  // (pre-28j) has been removed -- the hourly cap is the correct physics.
+  const effective_recovery_mwh = ventResult.effectiveRecoveryMwh ?? 0
   const heating_demand_mwh     = Math.max(0, heating_demand_state2_mwh - effective_recovery_mwh)
 
   // ── Service energy math (heating, cooling, DHW) ───────────────────────────
@@ -2237,16 +2310,17 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
       },
       ventilation: {
         systems: ventResult.perSystem.map(v => ({
-          id:              v.id,
-          fan_kwh:         r_kwh(v.fan_kwh),
-          recovery_mwh:    r_mwh(v.recovery_mwh),    // theoretical per-system (uncapped)
-          hours_active:    Math.round(v.hours_active),
-          schedule_source: v.schedule_source,        // Brief 28f Part 5.2 — 'always_on' | 'profile' | 'unresolved_fallback'
+          id:                       v.id,
+          fan_kwh:                  r_kwh(v.fan_kwh),
+          recovery_mwh:             r_mwh(v.recovery_mwh),              // Brief 28j: effective (per-hour-capped) — the heating-offset value
+          theoretical_recovery_mwh: r_mwh(v.theoretical_recovery_mwh),  // Brief 28j: uncapped per-system theoretical (informational)
+          hours_active:             Math.round(v.hours_active),
+          schedule_source:          v.schedule_source,                  // Brief 28f Part 5.2 — 'always_on' | 'profile' | 'unresolved_fallback'
         })),
         total: {
           fan_kwh:                   r_kwh(total_fan_kwh),
-          recovery_mwh:              r_mwh(effective_recovery_mwh),       // capped, applied to heating
-          recovery_theoretical_mwh:  r_mwh(ventResult.theoreticalRecoveryMwh), // uncapped, informational
+          recovery_mwh:              r_mwh(effective_recovery_mwh),               // Brief 28j: per-hour-capped, applied to heating demand
+          recovery_theoretical_mwh:  r_mwh(ventResult.theoreticalRecoveryMwh),    // uncapped annual, informational
         },
       },
     },
