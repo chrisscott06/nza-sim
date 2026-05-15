@@ -234,15 +234,23 @@ console.log('Test 1 — Hand-calc agreement on Bridgewater (±2%)')
   record('energy_use.electricity.cooling.primary within 2% of hand-calc',     within(eu.electricity.cooling.primary,   hand_cool_prim_fuel * 1000))
   record('energy_use.electricity.cooling.secondary within 2% of hand-calc',   within(eu.electricity.cooling.secondary, hand_cool_sec_fuel  * 1000))
   record('energy_use.electricity.cooling.total within 2% of hand-calc',       within(eu.electricity.cooling.total,     hand_cool_total_fuel * 1000))
-  record('energy_use.electricity.total === heat + cool fuel sum',             within(eu.electricity.total, (hand_heat_total_fuel + hand_cool_total_fuel) * 1000))
-  record('energy_use.gas.total === 0 (Bridgewater all electric)',             eu.gas.total === 0)
-  record('energy_use.totals.electricity_kwh matches electricity.total',       eu.totals.electricity_kwh === eu.electricity.total)
-  record('energy_use.totals.gas_kwh === 0',                                   eu.totals.gas_kwh === 0)
-  record('energy_use.totals.delivered_energy_kwh === electricity + gas',      Math.abs(eu.totals.delivered_energy_kwh - (eu.totals.electricity_kwh + eu.totals.gas_kwh)) < 0.1)
+  // Part 4: electricity.total now includes lighting + equipment + DHW + fans
+  // (Bridgewater test config above has no DHW or ventilation configured, so
+  // only heating + cooling fuel + lighting + equipment are non-zero).
+  const expected_elec_total = (hand_heat_total_fuel + hand_cool_total_fuel) * 1000 + eu.electricity.lighting + eu.electricity.equipment
+  record('energy_use.electricity.total === heat+cool fuel + lighting + equipment',  within(eu.electricity.total, expected_elec_total))
+  record('energy_use.electricity.lighting > 0 (Part 4 pass-through)',                eu.electricity.lighting > 0)
+  record('energy_use.electricity.equipment > 0 (Part 4 pass-through)',               eu.electricity.equipment > 0)
+  record('energy_use.electricity.fans.total === 0 (no vent configured)',             eu.electricity.fans.total === 0)
+  record('energy_use.electricity.dhw.total === 0 (no DHW configured)',               eu.electricity.dhw.total === 0)
+  record('energy_use.gas.total === 0 (Bridgewater all electric, no gas DHW)',        eu.gas.total === 0)
+  record('energy_use.totals.electricity_kwh matches electricity.total',              eu.totals.electricity_kwh === eu.electricity.total)
+  record('energy_use.totals.gas_kwh === 0',                                          eu.totals.gas_kwh === 0)
+  record('energy_use.totals.delivered_energy_kwh === electricity + gas',             Math.abs(eu.totals.delivered_energy_kwh - (eu.totals.electricity_kwh + eu.totals.gas_kwh)) < 0.1)
 
   const gia_m2 = result.metadata?.gia_m2 ?? result.heat_balance?.metadata?.gia_m2 ?? 0
-  const expected_eui = (hand_heat_total_fuel + hand_cool_total_fuel) * 1000 / gia_m2
-  console.log(`  Expected EUI (heat+cool only): ${fmt(expected_eui, 1)} kWh/m²·a    Engine: ${eu.totals.eui_kwh_per_m2}`)
+  const expected_eui = expected_elec_total / gia_m2     // heat+cool fuel + lighting + equipment
+  console.log(`  Expected EUI (heat+cool+lighting+equipment): ${fmt(expected_eui, 1)} kWh/m²·a    Engine: ${eu.totals.eui_kwh_per_m2}`)
   record('result.metadata.gia_m2 present at top level', gia_m2 > 0)
   record('eui_kwh_per_m2 within 2% of hand-calc',                             within(eu.totals.eui_kwh_per_m2, expected_eui))
 }
@@ -425,8 +433,9 @@ console.log('Test 5 — Per-fuel split: gas heating primary + electric secondary
   record('electricity.heating.secondary > 0',                      eu.electricity.heating.secondary > 0)
   record('electricity.heating.secondary within 2% of hand-calc',   within(eu.electricity.heating.secondary, expected_elec_sec_fuel_kwh))
   record('totals.gas_kwh === gas.heating.total',                   eu.totals.gas_kwh === eu.gas.total)
-  record('totals.electricity_kwh === electricity.heating.secondary (no cooling configured)',
-    Math.abs(eu.totals.electricity_kwh - eu.electricity.heating.secondary) < 0.5)
+  // Part 4: totals.electricity_kwh now includes lighting + equipment in addition to heat.sec
+  record('totals.electricity_kwh === electricity.heating.secondary + lighting + equipment',
+    Math.abs(eu.totals.electricity_kwh - (eu.electricity.heating.secondary + eu.electricity.lighting + eu.electricity.equipment)) < 0.5)
 }
 
 // ── Summary ─────────────────────────────────────────────────────────────────

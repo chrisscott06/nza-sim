@@ -149,12 +149,18 @@ console.log('Test 1 — Byte-identity: State 3 (no systems) vs State 2')
   record('energy_use.electricity.heating.total === 0', s3.energy_use?.electricity?.heating?.total === 0)
   record('energy_use.gas present',                   typeof s3.energy_use?.gas === 'object')
   record('energy_use.gas.total === 0',               s3.energy_use?.gas?.total === 0)
-  record('energy_use.totals.eui_kwh_per_m2 === 0',   s3.energy_use?.totals?.eui_kwh_per_m2 === 0)
+  // Note (Part 4): eui_kwh_per_m2 and carbon are non-zero even with no
+  // systems configured, because lighting + equipment pass through from
+  // State 2 internal-gain accumulators (they're direct electricity loads
+  // independent of HVAC). Other system fields stay at zero.
+  record('energy_use.totals.eui_kwh_per_m2 reflects lighting+equipment only', s3.energy_use?.totals?.eui_kwh_per_m2 > 0 && s3.energy_use.totals.eui_kwh_per_m2 < 100,
+    `eui=${s3.energy_use?.totals?.eui_kwh_per_m2}`)
   record('system_performance.heating.total.fuel_mwh === 0', s3.system_performance?.heating?.total?.fuel_mwh === 0)
   record('system_performance.cooling.total.fuel_mwh === 0', s3.system_performance?.cooling?.total?.fuel_mwh === 0)
   record('system_performance.dhw.circulation_pump_kwh === 0', s3.system_performance?.dhw?.circulation_pump_kwh === 0)
   record('system_performance.ventilation.systems === []', Array.isArray(s3.system_performance?.ventilation?.systems) && s3.system_performance.ventilation.systems.length === 0)
-  record('carbon_kg_co2_per_m2 === 0',               s3.carbon_kg_co2_per_m2 === 0)
+  record('carbon_kg_co2_per_m2 reflects lighting+equipment electricity carbon', s3.carbon_kg_co2_per_m2 > 0 && s3.carbon_kg_co2_per_m2 < 20,
+    `carbon=${s3.carbon_kg_co2_per_m2} kg/m²`)
 }
 
 // ── Test 2: halt on missing library template ─────────────────────────────────

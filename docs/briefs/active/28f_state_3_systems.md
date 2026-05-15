@@ -1,6 +1,6 @@
 # Brief 28f — State 3: Systems (heating, cooling, DHW, mechanical ventilation)
 
-**Status:** Scope captured 2026-05-14 (after Brief 28c ship). Part 1 (contract update v2.4 → v2.5) shipped 2026-05-15 with Chris's approval + four additions: V1 scalar efficiency, dual-function library items, DHW circulation pump as flat field, `energy_use` per-fuel × per-service × per-system output shape. Part 2 (engine skeleton + library-strict halt + byte-identity tests) shipped 2026-05-15 (commit `4cab01d`). **Part 3 (heating + cooling energy math) shipped 2026-05-15 — halt for review before Part 4 (DHW + ventilation + lighting/equipment + carbon).**
+**Status:** Scope captured 2026-05-14 (after Brief 28c ship). Part 1 (contract update v2.4 → v2.5) shipped 2026-05-15. Part 2 (engine skeleton + library-strict halt + byte-identity tests) shipped 2026-05-15 (commit `4cab01d`). Part 3 (heating + cooling energy math) shipped 2026-05-15 (commit `518a6f7`). **Part 4 (DHW + ventilation + lighting/equipment + carbon) shipped 2026-05-15 — halt for review before declaring State 3 validated.**
 
 **Predecessor:** Brief 28c (State 2 loss recompute on its own zone-T trace).
 **Successor (queued):** Brief 28e (State 2.5 operable windows + doors).

@@ -1872,25 +1872,109 @@ function computeServiceEnergy(serviceCfg, service, demand_mwh, resolved) {
 }
 
 /**
- * State 3 — Brief 28f Part 3 (heating + cooling energy math).
+ * BEIS 2024 fuel-to-CO2 factors (kg CO2e per kWh delivered).
+ * V1 hardcoded; future brief moves to library / grid-evolution data.
+ * Used by State 3 to compute carbon_kg_co2_per_m2.
+ */
+export const BEIS_2024_FACTORS = {
+  electricity: 0.207,   // kg CO2e/kWh — UK grid average, BEIS 2024
+  gas:         0.183,   // kg CO2e/kWh — natural gas, BEIS 2024
+}
+
+/**
+ * Per-person DHW load (kWh/person/hour).
+ * Derivation: 80 L/person/day × (60 − 10) °C × 4.18 kJ/(kg·K) / 3600 s/h / 24 h/day
+ *           = 4.644 kWh/person/day / 24 = 0.1935 kWh/person/hour
+ * Multiplied by State 2's annual_occupant_hours to give annual DHW demand.
+ * 60 °C = hot-water store temperature; 10 °C = cold-mains (V1 constant —
+ * seasonal variation is a future contract bump; small annual-energy impact).
+ */
+const DHW_KWH_PER_PERSON_HOUR = 80 * (60 - 10) * 4.18 / 3600 / 24
+
+/**
+ * Compute mechanical-ventilation per-system fan energy + theoretical HRE
+ * heat-recovery offset for State 3. Per Brief 28f Part 4 V1 simplification:
+ *   - schedule_ref = 'always_on' (or absent) → 8760 hours active.
+ *   - schedule_ref otherwise → also 8760 in V1; schedule-library hook is a
+ *     future enhancement (TODO).
+ *   - Recovery uses an annual ΔT_integral against the heating setpoint
+ *     (sum over hours where T_out < T_setpoint of T_setpoint − T_out).
+ *   - Recovery is THEORETICAL here; caller caps to heating_demand_mwh.
+ */
+function computeVentilationEnergy(ventSystems, weatherData, T_setpoint_c) {
+  if (!Array.isArray(ventSystems) || ventSystems.length === 0) {
+    return { perSystem: [], totalFanKwh: 0, theoreticalRecoveryMwh: 0 }
+  }
+  const AIR_HC_J_PER_M3_K = 1.2 * 1005   // air heat capacity at ~20 °C
+
+  // Annual heating ΔT integral (K·hours) — computed once, reused across systems.
+  let dT_integral_K_hours = 0
+  const n = weatherData?.temperature?.length ?? 0
+  for (let h = 0; h < n; h++) {
+    const dT = T_setpoint_c - weatherData.temperature[h]
+    if (dT > 0) dT_integral_K_hours += dT
+  }
+
+  const perSystem = []
+  let totalFanKwh = 0
+  let theoreticalRecoveryMwh = 0
+
+  for (let i = 0; i < ventSystems.length; i++) {
+    const vs = ventSystems[i]
+    const id = vs.id ?? `vent_${i}`
+    // V1: hours active = 8760 unless schedule wired in later
+    const hours_active = 8760
+    const fan_kwh = (vs.flow_l_s * vs.sfp_w_per_l_s * hours_active) / 1000
+
+    // Recovery (theoretical, uncapped). Only relevant when HRE > 0.
+    let recovery_mwh = 0
+    if (vs.hre > 0 && dT_integral_K_hours > 0) {
+      const flow_m3s = vs.flow_l_s / 1000
+      // power_W × hours × 3600 s/h would give J; but flow × HC × dT integrated
+      // over K·hours has units (m³/s × J/(m³·K) × K·h) = J/s × h = Wh. So
+      // recovery_Wh = flow_m3s × AIR_HC × HRE × dT_integral_K_hours.
+      // No 3600 multiplier — dT_integral is already in K·hours, and the
+      // (m³/s × J/(m³·K)) product is W/K.
+      const recovery_Wh = flow_m3s * AIR_HC_J_PER_M3_K * vs.hre * dT_integral_K_hours
+      recovery_mwh = recovery_Wh / 1_000_000
+    }
+
+    perSystem.push({ id, fan_kwh, recovery_mwh, hours_active })
+    totalFanKwh += fan_kwh
+    theoreticalRecoveryMwh += recovery_mwh
+  }
+
+  return { perSystem, totalFanKwh, theoreticalRecoveryMwh }
+}
+
+/**
+ * State 3 — Brief 28f Part 4 (full system overlay: heating + cooling + DHW
+ * + ventilation + lighting/equipment + carbon).
  *
  * Returns the State 2 result UNCHANGED for every State 2 field (byte-identity
- * pass-through). Populates the contract-v2.5 system-overlay layer (`energy_use`,
- * `system_performance`, `carbon_kg_co2_per_m2`) with:
- *   - Heating + cooling primary + secondary energy (delivered, fuel, COP)
- *     attributed by `primary_pct`. Library scalar efficiency only (V1 — no
- *     curves). Fuel routed by template.fuel (electricity / gas).
- *   - DHW: zeros (deferred to Part 4).
- *   - Mech ventilation: zeros (deferred to Part 4).
- *   - Lighting + equipment: zeros (deferred to Part 4 — they're a direct
- *     pull from State 2 internal_gains; not "served by a system").
- *   - Carbon: zero (deferred to Part 4 — needs fuel-to-CO2 factors).
+ * pass-through). Populates the contract-v2.5 system-overlay layer:
+ *   - Heating + cooling primary + secondary (Part 3 math, unchanged)
+ *   - DHW demand from State 2 occupancy × 80 L/person/day × ΔT × c_p
+ *   - DHW primary + secondary energy via the same primary/secondary split
+ *   - DHW circulation pump baseload (continuous W × 8760 h)
+ *   - Mech ventilation per-system fan energy (flow × SFP × hours)
+ *   - Mech ventilation HRE recovery: theoretical (flow × AIR_HC × HRE ×
+ *     ΔT_integral) capped at State 2 heating demand. Effective recovery
+ *     reduces the heating demand passed to the heating service (option a
+ *     per Brief 28f Part 4 spec; recovery_mwh shown as discrete line in
+ *     system_performance.ventilation.total for transparency — option b).
+ *   - Lighting + equipment pass-through from State 2 heat_balance gains
+ *   - Carbon = (elec_kWh × 0.207 + gas_kWh × 0.183) / gia_m2 (BEIS 2024)
+ *
+ * V1 limitations documented in brief:
+ *   - DHW cold-mains temperature constant 10 °C (no seasonal variation)
+ *   - HRE recovery is annual aggregate; cap at heating demand means peak-
+ *     winter heating demand is under-represented when MVHR is oversized
+ *     relative to building demand (as on Bridgewater).
+ *   - Ventilation schedule_ref always_on; bespoke schedules deferred.
  *
  * Library refs validated upfront via resolveAndValidateSystems; throws
  * MissingLibraryField on any missing template / required field.
- *
- * Brief 28f Part 3 halt gate honoured: no DHW, no ventilation, no lighting/
- * equipment, no carbon. Those land in Part 4.
  */
 function _calculateState3(building, constructions, libraryData, weatherData, hourlySolar, comfortBand) {
   const state2Result = _calculateState2(building, constructions, libraryData, weatherData, hourlySolar, comfortBand)
@@ -1899,13 +1983,42 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
   const sys = building.systems_config ?? {}
   const resolved = resolveAndValidateSystems(sys, libraryData)
 
-  // Part 3 energy math: heating + cooling only.
-  const heating_demand_mwh = state2Result.demand?.heating_demand_mwh ?? 0
-  const cooling_demand_mwh = state2Result.demand?.cooling_demand_mwh ?? 0
+  // ── Demand inputs ─────────────────────────────────────────────────────────
+  const heating_demand_state2_mwh = state2Result.demand?.heating_demand_mwh ?? 0
+  const cooling_demand_mwh        = state2Result.demand?.cooling_demand_mwh ?? 0
+
+  // DHW demand (Part 4): annual_occupant_hours × per-person DHW load.
+  const annual_occupant_hours = state2Result.occupancy_summary?.annual_occupant_hours ?? 0
+  const dhw_demand_kwh        = annual_occupant_hours * DHW_KWH_PER_PERSON_HOUR
+  const dhw_demand_mwh        = dhw_demand_kwh / 1000
+
+  // ── Mech ventilation (Part 4): fans + HRE recovery ────────────────────────
+  const T_heating_setpoint = sys.heating?.setpoint_c ?? comfortBand?.lower_c ?? 21
+  const ventResult = computeVentilationEnergy(
+    Array.isArray(sys.ventilation) ? sys.ventilation : [],
+    weatherData,
+    T_heating_setpoint,
+  )
+
+  // Effective recovery: cap at State 2 heating demand. The cap models the
+  // physical limit (you can't recover more heat than the building actually
+  // needs). Option (a) per Brief 28f spec: effective recovery reduces the
+  // heating-system demand. Option (b) transparency: recovery_mwh is also
+  // exposed as a discrete line in system_performance.ventilation.total.
+  const effective_recovery_mwh = Math.min(ventResult.theoreticalRecoveryMwh, heating_demand_state2_mwh)
+  const heating_demand_mwh     = Math.max(0, heating_demand_state2_mwh - effective_recovery_mwh)
+
+  // ── Service energy math (heating, cooling, DHW) ───────────────────────────
   const heating = computeServiceEnergy(sys.heating, 'heating', heating_demand_mwh, resolved)
   const cooling = computeServiceEnergy(sys.cooling, 'cooling', cooling_demand_mwh, resolved)
+  const dhw     = computeServiceEnergy(sys.dhw,     'dhw',     dhw_demand_mwh,     resolved)
 
-  // Per-fuel split for energy_use leaves (kWh). Heating + cooling only.
+  // DHW circulation pump (Part 4): continuous electrical baseload.
+  // V1: schedule_ref hookup deferred — 8760 h hardcoded.
+  const circulation_pump_w   = Number(sys.dhw?.circulation_pump_w ?? 0)
+  const circulation_pump_kwh = circulation_pump_w * 8760 / 1000
+
+  // ── Per-fuel split (kWh) for energy_use leaves ────────────────────────────
   const fuel_kwh = (svc, fuel, role) => (svc.fuel_split[fuel]?.[`${role}_mwh`] ?? 0) * 1000
   const elec_heat_prim = fuel_kwh(heating, 'electricity', 'primary')
   const elec_heat_sec  = fuel_kwh(heating, 'electricity', 'secondary')
@@ -1913,24 +2026,47 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
   const gas_heat_sec   = fuel_kwh(heating, 'gas',         'secondary')
   const elec_cool_prim = fuel_kwh(cooling, 'electricity', 'primary')
   const elec_cool_sec  = fuel_kwh(cooling, 'electricity', 'secondary')
-  const gas_cool_prim  = fuel_kwh(cooling, 'gas',         'primary')   // unusual but allowed
+  const gas_cool_prim  = fuel_kwh(cooling, 'gas',         'primary')
   const gas_cool_sec   = fuel_kwh(cooling, 'gas',         'secondary')
+  const elec_dhw_prim  = fuel_kwh(dhw,     'electricity', 'primary')
+  const elec_dhw_sec   = fuel_kwh(dhw,     'electricity', 'secondary')
+  const gas_dhw_prim   = fuel_kwh(dhw,     'gas',         'primary')
+  const gas_dhw_sec    = fuel_kwh(dhw,     'gas',         'secondary')
 
   const elec_heat_total = elec_heat_prim + elec_heat_sec
   const elec_cool_total = elec_cool_prim + elec_cool_sec
   const gas_heat_total  = gas_heat_prim  + gas_heat_sec
-  const gas_cool_total  = gas_cool_prim  + gas_cool_sec   // ≈ 0 in practice
+  const gas_cool_total  = gas_cool_prim  + gas_cool_sec
+  const elec_dhw_total  = elec_dhw_prim  + elec_dhw_sec + circulation_pump_kwh
+  const gas_dhw_total   = gas_dhw_prim   + gas_dhw_sec
 
-  // Top-level fuel sums. Lighting/equipment/DHW/fans = 0 in Part 3.
-  const electricity_total_kwh = elec_heat_total + elec_cool_total
-  const gas_total_kwh         = gas_heat_total  + gas_cool_total
+  // Lighting + equipment pass-through from State 2 internal-gain accumulators.
+  // 100% of installed electricity becomes heat in zone (already counted as a
+  // gain in State 2 — here we count it as electricity-used in State 3).
+  const lighting_kwh  = state2Result.heat_balance?.annual?.gains?.internal?.lighting?.kwh  ?? 0
+  const equipment_kwh = state2Result.heat_balance?.annual?.gains?.internal?.equipment?.kwh ?? 0
+  const total_fan_kwh = ventResult.totalFanKwh
+
+  // ── Top-level fuel sums ───────────────────────────────────────────────────
+  const electricity_total_kwh =
+      elec_heat_total + elec_cool_total + elec_dhw_total +
+      total_fan_kwh + lighting_kwh + equipment_kwh
+  const gas_total_kwh         = gas_heat_total + gas_cool_total + gas_dhw_total
   const delivered_total_kwh   = electricity_total_kwh + gas_total_kwh
   const gia                   = state2Result.heat_balance?.metadata?.gia_m2 ?? state2Result.metadata?.gia_m2 ?? 0
   const eui_kwh_per_m2        = gia > 0 ? delivered_total_kwh / gia : 0
 
+  // ── Carbon ────────────────────────────────────────────────────────────────
+  const carbon_kg_co2 =
+      electricity_total_kwh * BEIS_2024_FACTORS.electricity +
+      gas_total_kwh         * BEIS_2024_FACTORS.gas
+  const carbon_kg_co2_per_m2 = gia > 0 ? carbon_kg_co2 / gia : 0
+
+  // ── Rounding helpers ──────────────────────────────────────────────────────
   const r_kwh = (x) => Math.round(x * 10) / 10            // 0.1 kWh
   const r_mwh = (x) => Math.round(x * 1000) / 1000        // 0.001 MWh = 1 kWh
   const r_eff = (x) => Math.round(x * 1000) / 1000        // 3 dp on COP/SCOP/SEER
+  const r_co2 = (x) => Math.round(x * 100) / 100          // 0.01 kg/m²
   const perfOut = (p) => p == null ? null : ({
     delivered_mwh:   r_mwh(p.delivered_mwh),
     fuel_mwh:        r_mwh(p.fuel_mwh),
@@ -1947,15 +2083,23 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
       electricity: {
         heating:   { primary: r_kwh(elec_heat_prim), secondary: r_kwh(elec_heat_sec), total: r_kwh(elec_heat_total) },
         cooling:   { primary: r_kwh(elec_cool_prim), secondary: r_kwh(elec_cool_sec), total: r_kwh(elec_cool_total) },
-        fans:      { per_system: [], total: 0 },                                   // Part 4
-        dhw:       { primary: 0, secondary: 0, circulation: 0, total: 0 },         // Part 4
-        lighting:  0,                                                              // Part 4
-        equipment: 0,                                                              // Part 4
+        fans:      {
+          per_system: ventResult.perSystem.map(v => ({ id: v.id, kwh: r_kwh(v.fan_kwh) })),
+          total:      r_kwh(total_fan_kwh),
+        },
+        dhw: {
+          primary:      r_kwh(elec_dhw_prim),
+          secondary:    r_kwh(elec_dhw_sec),
+          circulation:  r_kwh(circulation_pump_kwh),
+          total:        r_kwh(elec_dhw_total),
+        },
+        lighting:  r_kwh(lighting_kwh),
+        equipment: r_kwh(equipment_kwh),
         total:     r_kwh(electricity_total_kwh),
       },
       gas: {
         heating: { primary: r_kwh(gas_heat_prim), secondary: r_kwh(gas_heat_sec), total: r_kwh(gas_heat_total) },
-        dhw:     { primary: 0, secondary: 0, total: 0 },                           // Part 4
+        dhw:     { primary: r_kwh(gas_dhw_prim),  secondary: r_kwh(gas_dhw_sec),  total: r_kwh(gas_dhw_total) },
         total:   r_kwh(gas_total_kwh),
       },
       totals: {
@@ -1976,10 +2120,27 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
         secondary: perfOut(cooling.secondary_perf),
         total:     { delivered_mwh: r_mwh(cooling.total_perf.delivered_mwh), fuel_mwh: r_mwh(cooling.total_perf.fuel_mwh) },
       },
-      dhw:         { primary: null, secondary: null, circulation_pump_kwh: 0, total: { delivered_mwh: 0, fuel_mwh: 0 } },   // Part 4
-      ventilation: { systems: [], total: { fan_kwh: 0, recovery_mwh: 0 } },                                                  // Part 4
+      dhw: {
+        primary:               perfOut(dhw.primary_perf),
+        secondary:             perfOut(dhw.secondary_perf),
+        circulation_pump_kwh:  r_kwh(circulation_pump_kwh),
+        total:                 { delivered_mwh: r_mwh(dhw.total_perf.delivered_mwh), fuel_mwh: r_mwh(dhw.total_perf.fuel_mwh) },
+      },
+      ventilation: {
+        systems: ventResult.perSystem.map(v => ({
+          id:           v.id,
+          fan_kwh:      r_kwh(v.fan_kwh),
+          recovery_mwh: r_mwh(v.recovery_mwh),     // theoretical per-system (uncapped)
+          hours_active: v.hours_active,
+        })),
+        total: {
+          fan_kwh:                   r_kwh(total_fan_kwh),
+          recovery_mwh:              r_mwh(effective_recovery_mwh),       // capped, applied to heating
+          recovery_theoretical_mwh:  r_mwh(ventResult.theoreticalRecoveryMwh), // uncapped, informational
+        },
+      },
     },
-    carbon_kg_co2_per_m2: 0,    // Part 4
+    carbon_kg_co2_per_m2: r_co2(carbon_kg_co2_per_m2),
   }
 }
 
