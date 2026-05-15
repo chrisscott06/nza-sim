@@ -1873,8 +1873,16 @@ function computeServiceEnergy(serviceCfg, service, demand_mwh, resolved) {
 
 /**
  * BEIS 2024 fuel-to-CO2 factors (kg CO2e per kWh delivered).
- * V1 hardcoded; future brief moves to library / grid-evolution data.
- * Used by State 3 to compute carbon_kg_co2_per_m2.
+ *
+ * Source: BEIS / DESNZ 2024 conversion factors publication (UK government,
+ * annual update). Pinned here as a snapshot of the 2024-published values.
+ * Grid factors are per-year-global, not per-project — different from
+ * construction U-values which are project-specific library items.
+ *
+ * **Update annually until per-year grid-factor infrastructure lands**
+ * (which itself is queued behind CRREM-pathway work — future briefs).
+ * Future CRREM work needs per-year curves to model decarbonisation
+ * trajectories; that's distinct storage and out of scope for V1 systems.
  */
 export const BEIS_2024_FACTORS = {
   electricity: 0.207,   // kg CO2e/kWh — UK grid average, BEIS 2024
@@ -1882,32 +1890,120 @@ export const BEIS_2024_FACTORS = {
 }
 
 /**
- * Per-person DHW load (kWh/person/hour).
- * Derivation: 80 L/person/day × (60 − 10) °C × 4.18 kJ/(kg·K) / 3600 s/h / 24 h/day
- *           = 4.644 kWh/person/day / 24 = 0.1935 kWh/person/hour
- * Multiplied by State 2's annual_occupant_hours to give annual DHW demand.
- * 60 °C = hot-water store temperature; 10 °C = cold-mains (V1 constant —
- * seasonal variation is a future contract bump; small annual-energy impact).
+ * DHW formula default constants (V1).
+ * Each is overridable per-project via systems.dhw.{litres_per_person_per_day,
+ * store_temperature_c, cold_mains_temperature_c} — Brief 28f Part 5.1.
+ * Cold mains is a V1 constant (no seasonal variation); annual-energy impact
+ * is small — refine if calibration shows a per-month profile is needed.
+ *
+ * Engine derives kWh/person/hour at call time as
+ *   L × (T_store − T_cold) × 4.18 / 3600 / 24
+ * which equals 0.1935 kWh/p/h at defaults (matches the Part 4 ship value).
  */
-const DHW_KWH_PER_PERSON_HOUR = 80 * (60 - 10) * 4.18 / 3600 / 24
+const DHW_DEFAULT_LITRES_PER_PERSON_DAY  = 80
+const DHW_DEFAULT_STORE_TEMPERATURE_C    = 60
+const DHW_DEFAULT_COLD_MAINS_TEMPERATURE_C = 10
+const C_P_WATER_KJ_PER_KG_K              = 4.18
+
+function dhwKwhPerPersonHour(litres_per_person_per_day, store_temp_c, cold_mains_c) {
+  const L  = Number.isFinite(litres_per_person_per_day) ? litres_per_person_per_day : DHW_DEFAULT_LITRES_PER_PERSON_DAY
+  const Th = Number.isFinite(store_temp_c)               ? store_temp_c              : DHW_DEFAULT_STORE_TEMPERATURE_C
+  const Tc = Number.isFinite(cold_mains_c)               ? cold_mains_c              : DHW_DEFAULT_COLD_MAINS_TEMPERATURE_C
+  const dT = Math.max(0, Th - Tc)                        // negative ΔT clamps to 0 (cold mains > store ⇒ no heating needed)
+  return L * dT * C_P_WATER_KJ_PER_KG_K / 3600 / 24
+}
+
+/**
+ * Find a schedule profile by id in the building's gain profile arrays.
+ * Searches lighting profiles → equipment profiles → occupancy schedule.
+ * Returns the matched profile object (with a `.schedule` field carrying
+ * weekday/saturday/sunday arrays), or null if not found.
+ *
+ * Used by Brief 28f Part 5.2 to resolve ventilation `schedule_ref` against
+ * the same schedule infrastructure State 2 uses for internal gains.
+ */
+function findScheduleProfileById(id, building) {
+  if (id == null) return null
+  const lighting = building?.gains?.lighting?.profiles
+  if (Array.isArray(lighting)) {
+    const m = lighting.find(p => p?.id === id)
+    if (m) return m
+  }
+  const equipment = building?.gains?.equipment?.profiles
+  if (Array.isArray(equipment)) {
+    const m = equipment.find(p => p?.id === id)
+    if (m) return m
+  }
+  const occ = building?.gains?.occupancy
+  if (occ?.id === id) return occ
+  if (occ?.schedule?.id === id) return occ.schedule
+  return null
+}
+
+/**
+ * Annual hours-active for a ventilation schedule_ref (Brief 28f Part 5.2).
+ *
+ *   - null / undefined / 'always_on' → 8760 hours (always-on default).
+ *   - Resolvable profile id          → weighted day-count annualization:
+ *                                       261 weekdays + 52 Saturdays + 52 Sundays
+ *                                       × 24 h/day × mean hourly fraction
+ *                                       (does not honour exceptions or
+ *                                       monthly multipliers — V1 simplification;
+ *                                       reasonable for vent systems with
+ *                                       steady occupied-hours operation).
+ *   - Unresolvable string            → 8760 + console.warn, so the system
+ *                                       still runs but the diagnostic is
+ *                                       visible (devtools). Tightening to a
+ *                                       hard halt is a future contract bump.
+ *
+ * Returns { hours, source } so callers (and tests) can see how the lookup
+ * resolved without re-doing the work.
+ */
+function hoursActiveForSchedule(schedule_ref, building) {
+  if (schedule_ref == null || schedule_ref === 'always_on') {
+    return { hours: 8760, source: 'always_on' }
+  }
+  const profile = findScheduleProfileById(schedule_ref, building)
+  if (!profile) {
+    // eslint-disable-next-line no-console
+    console.warn(`[State 3 / ventilation] Unknown schedule_ref "${schedule_ref}" — falling back to always_on (8760 h). Define the profile in building.gains.{lighting,equipment,occupancy} or use 'always_on' explicitly.`)
+    return { hours: 8760, source: 'unresolved_fallback' }
+  }
+  const sched = profile.schedule ?? profile
+  const weekday  = Array.isArray(sched.weekday)  ? sched.weekday  : null
+  if (!weekday) {
+    // eslint-disable-next-line no-console
+    console.warn(`[State 3 / ventilation] schedule_ref "${schedule_ref}" resolved but has no weekday array — falling back to always_on.`)
+    return { hours: 8760, source: 'unresolved_fallback' }
+  }
+  const saturday = Array.isArray(sched.saturday) ? sched.saturday : weekday
+  const sunday   = Array.isArray(sched.sunday)   ? sched.sunday   : saturday
+  const avg = arr => arr.reduce((s, v) => s + Number(v ?? 0), 0) / Math.max(arr.length, 1)
+  // 261 weekdays + 52 Sat + 52 Sun ≈ 365 days/year (rounded UK calendar).
+  const hours = 24 * (261 * avg(weekday) + 52 * avg(saturday) + 52 * avg(sunday))
+  return { hours, source: 'profile' }
+}
 
 /**
  * Compute mechanical-ventilation per-system fan energy + theoretical HRE
- * heat-recovery offset for State 3. Per Brief 28f Part 4 V1 simplification:
- *   - schedule_ref = 'always_on' (or absent) → 8760 hours active.
- *   - schedule_ref otherwise → also 8760 in V1; schedule-library hook is a
- *     future enhancement (TODO).
- *   - Recovery uses an annual ΔT_integral against the heating setpoint
- *     (sum over hours where T_out < T_setpoint of T_setpoint − T_out).
+ * heat-recovery offset for State 3. Per Brief 28f Part 5.2:
+ *   - schedule_ref = 'always_on' (or null/undefined) → 8760 hours active.
+ *   - schedule_ref = profile id    → annualized hours from the resolved profile.
+ *   - schedule_ref unresolved      → 8760 + console.warn (diagnosable fallback).
+ *   - Recovery uses an annual ΔT_integral against the heating setpoint,
+ *     scaled by (hours_active / 8760) for non-always-on systems (V1
+ *     approximation — strict physics would integrate ΔT only over the
+ *     vent-on hours; tightenable when calibration shows it matters).
  *   - Recovery is THEORETICAL here; caller caps to heating_demand_mwh.
  */
-function computeVentilationEnergy(ventSystems, weatherData, T_setpoint_c) {
+function computeVentilationEnergy(ventSystems, weatherData, T_setpoint_c, building) {
   if (!Array.isArray(ventSystems) || ventSystems.length === 0) {
     return { perSystem: [], totalFanKwh: 0, theoreticalRecoveryMwh: 0 }
   }
   const AIR_HC_J_PER_M3_K = 1.2 * 1005   // air heat capacity at ~20 °C
 
   // Annual heating ΔT integral (K·hours) — computed once, reused across systems.
+  // Each system scales by its own schedule_factor for non-always-on.
   let dT_integral_K_hours = 0
   const n = weatherData?.temperature?.length ?? 0
   for (let h = 0; h < n; h++) {
@@ -1922,24 +2018,22 @@ function computeVentilationEnergy(ventSystems, weatherData, T_setpoint_c) {
   for (let i = 0; i < ventSystems.length; i++) {
     const vs = ventSystems[i]
     const id = vs.id ?? `vent_${i}`
-    // V1: hours active = 8760 unless schedule wired in later
-    const hours_active = 8760
+    const { hours: hours_active, source: schedule_source } = hoursActiveForSchedule(vs.schedule_ref, building)
     const fan_kwh = (vs.flow_l_s * vs.sfp_w_per_l_s * hours_active) / 1000
 
     // Recovery (theoretical, uncapped). Only relevant when HRE > 0.
+    // schedule_factor: V1 approximation that recovery scales linearly with
+    // vent-on hours. dT integration over actual vent-on hours is a future
+    // refinement (tightenable if calibration shows it matters).
     let recovery_mwh = 0
     if (vs.hre > 0 && dT_integral_K_hours > 0) {
-      const flow_m3s = vs.flow_l_s / 1000
-      // power_W × hours × 3600 s/h would give J; but flow × HC × dT integrated
-      // over K·hours has units (m³/s × J/(m³·K) × K·h) = J/s × h = Wh. So
-      // recovery_Wh = flow_m3s × AIR_HC × HRE × dT_integral_K_hours.
-      // No 3600 multiplier — dT_integral is already in K·hours, and the
-      // (m³/s × J/(m³·K)) product is W/K.
-      const recovery_Wh = flow_m3s * AIR_HC_J_PER_M3_K * vs.hre * dT_integral_K_hours
+      const flow_m3s        = vs.flow_l_s / 1000
+      const schedule_factor = hours_active / 8760
+      const recovery_Wh     = flow_m3s * AIR_HC_J_PER_M3_K * vs.hre * dT_integral_K_hours * schedule_factor
       recovery_mwh = recovery_Wh / 1_000_000
     }
 
-    perSystem.push({ id, fan_kwh, recovery_mwh, hours_active })
+    perSystem.push({ id, fan_kwh, recovery_mwh, hours_active, schedule_source })
     totalFanKwh += fan_kwh
     theoreticalRecoveryMwh += recovery_mwh
   }
@@ -1987,10 +2081,19 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
   const heating_demand_state2_mwh = state2Result.demand?.heating_demand_mwh ?? 0
   const cooling_demand_mwh        = state2Result.demand?.cooling_demand_mwh ?? 0
 
-  // DHW demand (Part 4): annual_occupant_hours × per-person DHW load.
+  // DHW demand (Brief 28f Part 5.1): annual_occupant_hours × per-person DHW
+  // load, where per-person load is derived from the three new DHW formula
+  // inputs (litres_per_person_per_day, store_temperature_c, cold_mains_
+  // temperature_c) with defaults 80/60/10. At defaults the per-person-hour
+  // value is 0.1935 kWh — byte-identical to the Part 4 ship constant.
   const annual_occupant_hours = state2Result.occupancy_summary?.annual_occupant_hours ?? 0
-  const dhw_demand_kwh        = annual_occupant_hours * DHW_KWH_PER_PERSON_HOUR
-  const dhw_demand_mwh        = dhw_demand_kwh / 1000
+  const dhw_kwh_per_person_hour = dhwKwhPerPersonHour(
+    sys.dhw?.litres_per_person_per_day,
+    sys.dhw?.store_temperature_c,
+    sys.dhw?.cold_mains_temperature_c,
+  )
+  const dhw_demand_kwh = annual_occupant_hours * dhw_kwh_per_person_hour
+  const dhw_demand_mwh = dhw_demand_kwh / 1000
 
   // ── Mech ventilation (Part 4): fans + HRE recovery ────────────────────────
   const T_heating_setpoint = sys.heating?.setpoint_c ?? comfortBand?.lower_c ?? 21
@@ -1998,6 +2101,7 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
     Array.isArray(sys.ventilation) ? sys.ventilation : [],
     weatherData,
     T_heating_setpoint,
+    building,                  // Brief 28f Part 5.2: needed for schedule_ref lookup
   )
 
   // Effective recovery: cap at State 2 heating demand. The cap models the
@@ -2128,10 +2232,11 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
       },
       ventilation: {
         systems: ventResult.perSystem.map(v => ({
-          id:           v.id,
-          fan_kwh:      r_kwh(v.fan_kwh),
-          recovery_mwh: r_mwh(v.recovery_mwh),     // theoretical per-system (uncapped)
-          hours_active: v.hours_active,
+          id:              v.id,
+          fan_kwh:         r_kwh(v.fan_kwh),
+          recovery_mwh:    r_mwh(v.recovery_mwh),    // theoretical per-system (uncapped)
+          hours_active:    Math.round(v.hours_active),
+          schedule_source: v.schedule_source,        // Brief 28f Part 5.2 — 'always_on' | 'profile' | 'unresolved_fallback'
         })),
         total: {
           fan_kwh:                   r_kwh(total_fan_kwh),

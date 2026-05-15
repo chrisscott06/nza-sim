@@ -68,54 +68,42 @@ So the UI actually invokes State 3 when v2.5 systems_config is present.
 - MVHR flow → 1450 L/s (per State 3 validation finding 1)
 - Flag occupancy assumption visibly (per finding 2)
 
-### Halt-points within Part 5
+### Halt-points within Part 5 (re-ordered per Chris's steering 2026-05-15)
+
+5.7 (Bridgewater config update) moved to land WITH 5.4 (Systems UI). Reason: opening Bridgewater in the new UI with empty v2.5 state would be misleading on the first interaction. Bridgewater must be the canonical-and-working test project from the moment the UI ships.
 
 | After | Sanity-check | Sign-off needed |
 |---|---|---|
-| 5.1 + 5.2 (engine changes) | DHW + vent schedule work end-to-end via test fixtures; byte-identity at defaults preserved; existing 142 tests still green | YES |
-| 5.3 + 5.7 (library + Bridgewater config) | Library items render; Bridgewater project record persists v2.5 config with MVHR 1450 | YES |
-| 5.4 + 5.5 (UI build) | Systems module + new Results tab render Bridgewater outputs matching canonical values from validation doc | YES |
-| 5.6 (engine wire-up) | Live engine invokes v2.5 when v2.5 systems_config is present; legacy 'full' path still serves projects without v2.5 config | YES |
+| 5.1 + 5.2 (engine changes) | DHW formula + vent schedule work end-to-end via test fixtures; byte-identity at defaults preserved; existing 142 tests still green | YES |
+| 5.3 (library frontend constants) | systemTemplatesLibrary.js shape mappable to future backend table; consumed by engine validation | YES |
+| 5.4 + 5.7 (Systems UI + Bridgewater config) | Systems module renders Bridgewater outputs matching canonical values; v2.5 systems_config_v25 persists; occupancy banner visible | YES |
+| 5.5 (Energy & Carbon tab) | New Results tab renders v2.5 outputs (energy_use breakdown by fuel × service, EUI, carbon, per-system perf) | YES |
+| 5.6 (engine wire-up) | Live engine invokes v2.5 when `building.systems_config_v25` exists and is non-empty; legacy 'full' path still serves unmigrated projects | YES |
 
 ---
 
-## Open questions before Part 5 starts (need Chris's decisions)
+## Decisions approved 2026-05-15 (Chris)
 
-1. **Persistence strategy for v2.5 `systems_config`** during transition. Legacy v2.4 systems_config is what the project DB holds today and is what the legacy 'full' UI consumes. Options:
-   - (a) **Dual format** — add a new field `systems_config_v25` alongside legacy `systems_config`. v2.5 engine reads the new field; legacy UI keeps reading the old. Migrate later.
-   - (b) **Replace** — migrate Bridgewater's `systems_config` to v2.5 shape now; legacy UI breaks until 5.4 lands.
-   - (c) **Migrate everything in one shot** — schema migration script converts legacy → v2.5, legacy UI ports to v2.5 in 5.4, no transition period.
-   - **Recommend (a).** Lowest-risk; keeps existing UI working until 5.4 lands.
+1. **Persistence strategy:** (a) **Dual-format** — add `systems_config_v25` alongside legacy `systems_config`. Lowest risk.
+2. **Library location:** (b) **Frontend constants** — single `frontend/src/data/systemTemplatesLibrary.js` file, shape mappable to future backend table for trivial migration.
+3. **Systems UI strategy:** (a) **Replace** internals of existing HVACTab/DHWTab/VentilationTab with v2.5 inputs.
+4. **Results display:** New 4th tab in Results module called **"Energy & Carbon"** alongside Overview / Heat Balance / CRREM.
+5. **Bridgewater occupancy (Finding 2):** Flag in UI banner; defer fix until measured-data ingest grounds it.
+6. **Ventilation schedule reuse:** (a) **Share** the schedule infrastructure that lighting + equipment use in State 2.
 
-2. **Library `system_templates` location**:
-   - (a) **Backend library API** — new `/api/library/system_templates` endpoint, persisted in DB, treated like constructions.
-   - (b) **Frontend constants** — stub in a `data/systemTemplatesLibrary.js` file for V1; backend persistence later.
-   - **Recommend (a)** if you want library items to be user-editable in the UI eventually; **(b)** if V1 is "engineer-supplied, user-pickable but not user-editable" and you want to ship faster.
+## Additional steering from Chris
 
-3. **Systems UI strategy** — extend existing tabs vs replace:
-   - (a) **Replace** existing HVACTab/DHWTab/VentilationTab internals with v2.5 inputs. Cleaner final state.
-   - (b) **Side-by-side v2.5 section** within each tab. Allows comparison during transition.
-   - **Recommend (a)** — given v2.5 supersedes v2.4 conceptually, side-by-side adds confusion.
-
-4. **State 3 results display** — new tab vs replace legacy Results:
-   - (a) **New tab** called "State 3" or "Energy & Carbon" in Results module. Legacy Results untouched.
-   - (b) **Replace** existing Overview / Sankey / CRREM tabs with v2.5 outputs.
-   - **Recommend (a)** — keeps legacy outputs accessible for cross-reference during transition; users can compare side-by-side while we're validating.
-
-5. **Bridgewater occupancy** — what action on Finding 2?
-   - (a) Just flag in `STATUS.md` / a UI banner; defer fix.
-   - (b) Update `building.occupancy_rate` from 1.0 → ~0.7 (UK hotel industry average).
-   - (c) Update the occupancy schedule profile to a more realistic shape.
-   - **Recommend (a)** — measured-data ingest is the natural place to ground-truth this. Don't fudge inputs preemptively.
-
-6. **Ventilation schedule reuse**:
-   - (a) **Share** the same `schedule_assignments` / profile library that lighting + equipment use in State 2.
-   - (b) **Separate** namespace for ventilation schedules.
-   - **Recommend (a)** — one schedule infrastructure is simpler. State 2's gains profile shape already covers what ventilation needs.
+7. **Results tab placement:** 4th tab under existing Results module. Name = "Energy & Carbon".
+8. **Carbon factors:** stay hardcoded in `instantCalc.js` for V1. Grid factors are per-year-global, not per-project. Future CRREM pathway work needs per-year curves (different storage entirely). Pin `BEIS_2024_FACTORS` to its source publication year in a comment for traceability; document "update annually until grid-factor infrastructure lands."
+9. **Setpoints UI:** per-service in Systems config, not bundled with comfort band. Heating setpoint in Heating config; cooling setpoint in Cooling config; DHW store temperature is the DHW setpoint (already exists in 5.1). Comfort band stays a State 1/2 concept in Heat Balance; setpoints are a State 3 concept. They answer different questions.
+10. **5.7 moves to land with 5.4** (re-ordered above).
+11. **Dispatcher (5.6):** `if building.systems_config_v25 exists and is non-empty → engine v2.5; else → legacy 'full'`. Graceful fallback for unmigrated projects.
+12. **UI validation feedback:** catch `MissingLibraryField` errors and surface inline next to the relevant input using `subSystemPath` + `fieldName` properties. "Heating primary system needs a library template" beats a generic error toast. Users debug their own configs.
+13. **Reactivity:** State 3 live-update on slider change should be sub-second. Same live-engine model as the rest of the tool. (Confirming, not aspirational — current `calculateInstant` returns in ~80ms for Bridgewater, well under sub-second.)
 
 ---
 
-**Awaiting Chris's decisions on the six questions before Part 5 sub-piece 5.1 starts.**
+**Proceeding with sub-piece 5.1 (DHW formula params) and 5.2 (vent schedule_ref lookup). Halt after 5.2 for first sanity check.**
 
 **Predecessor:** Brief 28c (State 2 loss recompute on its own zone-T trace).
 **Successor (queued):** Brief 28e (State 2.5 operable windows + doors).
