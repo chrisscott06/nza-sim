@@ -65,8 +65,58 @@ So the UI actually invokes State 3 when v2.5 systems_config is present.
 
 ### Sub-piece 5.7 — Update Bridgewater project record
 
-- MVHR flow → 1450 L/s (per State 3 validation finding 1)
-- Flag occupancy assumption visibly (per finding 2)
+Per Chris's data share 2026-05-15 — updates land alongside 5.4 UI build so the canonical test project is correct from first interaction:
+
+- **GIA: 3,457 → 4,215 m²** (real building per 505 Design's records). Current geometry inputs (L=58.8 × W=14.7 × N=4 floors → 3,457) need to grow ~22% to hit 4,215. Decision needed before 5.7: which dimension(s) to adjust? Footprint at 4 floors = 1,054 m² target (vs current 864). Likely length increase to ~71.7 m, keeping width at 14.7 m. Confirm with Chris.
+- **MVHR flow → 1,450 L/s** (per State 3 validation finding 1).
+- **`num_bedrooms` stays at 134** (already correct in project config; the "138" was only in my brief-scoping prose).
+- **Occupancy banner** flagging the design-peak vs annual-average mismatch (per State 3 validation finding 2). Will read "Bridgewater occupancy is configured at design peak (134 rooms × 100% × 1.5 ppr = 201). Measured operation 2023-2025 was 100% continuous Home Office accommodation. Calibration will ground-truth this once measured-data ingest lands."
+- **DHW `litres_per_person_per_day` stays at default 80** for now (will tune during calibration; pre-calibration likely 150+ under Home Office regime per Chris's analysis).
+
+---
+
+## Measured-data context (2026-05-15) — calibration inputs, not engine work
+
+Chris shared three years of half-hourly electricity (Apr 2024–Mar 2026) + 50 months of monthly gas/electricity/water/occupancy (Jan 2022–Feb 2026) plus a 505 Design consumption analysis note. **No engine fixes are warranted from this — these are calibration findings for the measured-data ingest brief.**
+
+### Regime change (operational): two-mode calibration target
+
+The building changed regime in Dec 2022:
+
+| Period | Regime | Occupancy |
+|---|---|---|
+| Jan 2022 – Nov 2022 | Normal Holiday Inn Express | ~69% |
+| Dec 2022 onwards | Refugee accommodation (Home Office) | 100% continuous |
+
+| Metric | Pre-HO | Post-HO | Change |
+|---|---:|---:|---|
+| Electricity | 50.3 MWh/month | 37.5 MWh/month | -25% (variability suppressed, not total energy reduced) |
+| Gas | 9.7 MWh/month | 14.8 MWh/month | +52% (DHW load multiplied) |
+| Gas / HDD | 464 kWh/HDD | 1,549 kWh/HDD | ×3.3 (DHW dominance confirmed under continuous occupancy) |
+
+Ultimate calibration target: two calibrated models — "Normal trading" (2022 data) and "Home Office continuous" (2023–2025 data). Same building, two operational profiles. **Calibrate against the recent stable period (2024-25, Home Office mode) first; add second mode after.**
+
+### Headline modelled vs measured gaps (pre-calibration baseline)
+
+These will be the visible findings the tool surfaces once ingest + comparison lands. Both are expected; neither is an engine bug:
+
+| Fuel | Modelled (current, defaults) | Measured 2024-25 avg | Gap | Likely cause |
+|---|---:|---:|---:|---|
+| Electricity | 260 MWh | ~560 MWh | ~300 MWh missing | Back-of-house, lifts, refrigeration, exterior lighting, signage, BMS — none currently in `gains.{lighting,equipment}.profiles` |
+| Gas | 139 MWh | ~205 MWh | ~70 MWh missing | DHW `litres_per_person_per_day` at default 80; real likely 150+ under continuous occupancy |
+
+GIA correction (3,457 → 4,215 m²) drops modelled EUI from 115.6 → ~95 kWh/m² but doesn't close either gap (the gaps are absolute kWh, not normalisation issues). Measured EUI is 178–199 kWh/m².
+
+### Data ingester (parallel work track — scope arriving separately)
+
+Chris is reading the consumption analysis note and the half-hourly file structure; will send a scoping brief separately. Targets:
+- Parser for half-hourly electricity (Apr 2024–Mar 2026) and monthly gas/electricity/water/occupancy (Jan 2022–Feb 2026)
+- Storage + UI surface in the Consumption module
+- Per-month + per-day + per-half-hour comparison against modelled
+- NMBE / CV(RMSE) computation per service / per fuel / per period
+- Regime-aware bucketing (pre-HO vs post-HO) so calibration can use the right slice
+
+This brief can run **in parallel** with Part 5 sub-pieces 5.4–5.6 (UI work) since the data is independently visualisable and regression-analysable. Sub-pieces 5.1–5.3 (engine work) take precedence on the v2.5 path.
 
 ### Halt-points within Part 5 (re-ordered per Chris's steering 2026-05-15)
 
