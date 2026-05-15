@@ -311,11 +311,45 @@ export default function EnergyCarbonTab() {
   const occupancyRate  = params?.occupancy_rate ?? params?.gains?.occupancy?.occupancy_rate
   const showOccupancyBanner = Number(occupancyRate) === 1 && (params?.num_bedrooms ?? 0) > 50
 
+  // Measured comparison (per Chris's flag (c) — show "Model output (uncalibrated)"
+  // alongside Bridgewater's measured 2024-25 numbers so external readers don't
+  // misread the modelled headlines as a real-world estimate). V1 hardcodes the
+  // Bridgewater comparison; once measured-data ingest (Brief 28g) lands, this
+  // pulls from a project-level measured_summary field instead.
+  const BRIDGEWATER_PROJECT_ID = '14b4a5b1-8c73-4acb-8b65-1d22f05ec969'
+  const isBridgewater = params?.id === BRIDGEWATER_PROJECT_ID || params?.name === 'HIX Bridgewater'
+  const measuredComparison = isBridgewater
+    ? { eui_low: 178, eui_high: 199, carbon: 36, period: '2024–25' }
+    : null
+
   const chartFuelSplitRef = useRef(null)
   const chartFuelTotalRef = useRef(null)
 
   return (
     <div className="p-4 space-y-5">
+      {/* ─── Uncalibrated-model banner (flag (c) — protects against the tab
+            being misread as a real-world estimate). Always shown until
+            calibration workflow lands (Brief 28g+). Project-specific
+            measured comparison appears when available. */}
+      <div className="bg-coral/5 border border-coral/30 rounded-lg px-3 py-2.5 flex items-start gap-2">
+        <AlertTriangle size={14} className="text-coral flex-shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="text-caption font-medium text-dark-grey">Model output (uncalibrated)</p>
+          <p className="text-xxs text-mid-grey mt-0.5 leading-snug">
+            These are engine outputs against design-intent inputs — not a real-world consumption estimate.
+            {measuredComparison && (
+              <>
+                {' '}
+                <strong className="text-dark-grey">Bridgewater measured {measuredComparison.period}:</strong>{' '}
+                EUI {measuredComparison.eui_low}–{measuredComparison.eui_high} kWh/m²,
+                carbon ~{measuredComparison.carbon} kg CO₂e/m² (vs modelled EUI {eui.toFixed(1)}, carbon {carbon.toFixed(1)}).
+              </>
+            )}
+            {' '}Calibration against measured data (Brief 28g+) will close the gap.
+          </p>
+        </div>
+      </div>
+
       {/* ─── Occupancy banner (Finding 2 surfacing) ──────────────────────── */}
       {showOccupancyBanner && (
         <div className="bg-gold/5 border border-gold/30 rounded-lg px-3 py-2.5 flex items-start gap-2">
@@ -331,7 +365,15 @@ export default function EnergyCarbonTab() {
         </div>
       )}
 
-      {/* ─── Headline KPI tiles ──────────────────────────────────────────── */}
+      {/* ─── Headline KPI tiles ──────────────────────────────────────────────
+        DataCard accent-colour semantics (per flag (d) — Pablo design system
+        principle: accent colour maps to data semantics):
+          - navy  / slate : headline aggregates (intensity, carbon — neutral palette)
+          - teal  / gold  : per-fuel cards matching the chart fuel palette
+                            (chartTokens.ENDUSE_COLORS + the fans/dhw mapping)
+        Future fuel additions (district heat, oil, biomass) get their own
+        chart palette entry + DataCard accent — never re-use existing fuel
+        colours. */}
       <div>
         <p className="text-xxs uppercase tracking-wider text-mid-grey mb-2">Annual energy & carbon</p>
         <div className="grid grid-cols-4 gap-3">
@@ -446,27 +488,40 @@ export default function EnergyCarbonTab() {
               </tr>
             </thead>
             <tbody>
-              {/* Heating */}
+              {/* Heating — flag (a): when MVHR covers full demand, replace
+                   the 0/0 primary/secondary/total rows with a single italic
+                   explainer line so the zeros don't read as a calculated
+                   headline ("Heating: 0 kWh" looking like the engine is
+                   broken). Show full rows otherwise. */}
               <tr><td colSpan={5} className="px-3 pt-3 pb-1 text-xxs uppercase tracking-wider text-mid-grey bg-off-white/50 border-t border-light-grey">
                 <span className="inline-flex items-center gap-1.5"><ServiceIcon service="heating" />Heating</span>
               </td></tr>
-              <SystemRow role="Primary"   label={params?.systems_config_v25?.heating?.primary?.library_id ?? '—'}
-                delivered_mwh={sp.heating?.primary?.delivered_mwh ?? 0}
-                fuel_mwh={sp.heating?.primary?.fuel_mwh ?? 0}
-                avg={sp.heating?.primary?.avg_cop_or_eff}
-                fuel={sp.heating?.primary?.fuel} />
-              {sp.heating?.secondary && (
-                <SystemRow role="Secondary" label={params?.systems_config_v25?.heating?.secondary?.library_id ?? '—'}
-                  delivered_mwh={sp.heating.secondary.delivered_mwh}
-                  fuel_mwh={sp.heating.secondary.fuel_mwh}
-                  avg={sp.heating.secondary.avg_cop_or_eff}
-                  fuel={sp.heating.secondary.fuel} />
+              {(sp.heating?.total?.delivered_mwh ?? 0) === 0 && recoveryCapped ? (
+                <tr className="border-t border-light-grey">
+                  <td colSpan={5} className="px-3 py-3 text-caption text-mid-grey italic leading-snug">
+                    Heating demand fully offset by MVHR heat recovery (see Ventilation below — recovery {recoveryEff.toFixed(1)} MWh equals full State 2 heating demand). Primary and secondary heating systems remain configured ({params?.systems_config_v25?.heating?.primary?.library_id} {sp.heating?.secondary ? `+ ${params?.systems_config_v25?.heating?.secondary?.library_id}` : ''}) but contribute zero fuel under the current annual-aggregate model.
+                  </td>
+                </tr>
+              ) : (
+                <>
+                  <SystemRow role="Primary"   label={params?.systems_config_v25?.heating?.primary?.library_id ?? '—'}
+                    delivered_mwh={sp.heating?.primary?.delivered_mwh ?? 0}
+                    fuel_mwh={sp.heating?.primary?.fuel_mwh ?? 0}
+                    avg={sp.heating?.primary?.avg_cop_or_eff}
+                    fuel={sp.heating?.primary?.fuel} />
+                  {sp.heating?.secondary && (
+                    <SystemRow role="Secondary" label={params?.systems_config_v25?.heating?.secondary?.library_id ?? '—'}
+                      delivered_mwh={sp.heating.secondary.delivered_mwh}
+                      fuel_mwh={sp.heating.secondary.fuel_mwh}
+                      avg={sp.heating.secondary.avg_cop_or_eff}
+                      fuel={sp.heating.secondary.fuel} />
+                  )}
+                  <SystemRow role="Total" label="Heating total"
+                    delivered_mwh={sp.heating?.total?.delivered_mwh ?? 0}
+                    fuel_mwh={sp.heating?.total?.fuel_mwh ?? 0}
+                  />
+                </>
               )}
-              <SystemRow role="Total" label="Heating total"
-                delivered_mwh={sp.heating?.total?.delivered_mwh ?? 0}
-                fuel_mwh={sp.heating?.total?.fuel_mwh ?? 0}
-                note={(sp.heating?.total?.delivered_mwh ?? 0) === 0 && recoveryCapped ? 'MVHR recovery covers full demand' : null}
-              />
 
               {/* Cooling */}
               <tr><td colSpan={5} className="px-3 pt-3 pb-1 text-xxs uppercase tracking-wider text-mid-grey bg-off-white/50 border-t border-light-grey">
@@ -559,6 +614,29 @@ export default function EnergyCarbonTab() {
               {recoveryCapped
                 ? ` Annual aggregate exceeds heating demand (${recoveryEff.toFixed(2)} MWh) — effective recovery clipped to demand. Real-world peak-winter heating still occurs; the annual model under-represents winter-peak need when MVHR is oversized.`
                 : ' Within heating demand envelope; recovery applies fully.'}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Cooling caveat (flag (b) — Cooling is the largest electrical
+            load and propagates State 2's free-running comfort-band integral
+            with no HVAC clamping. Without this note, a consultant could read
+            80 MWh as real measured cooling). */}
+      {(sp.cooling?.total?.fuel_mwh ?? 0) > 0 && (
+        <div className="bg-gold/5 border border-gold/30 rounded-lg px-3 py-2.5 flex items-start gap-2">
+          <AlertTriangle size={14} className="text-gold flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-caption font-medium text-dark-grey">
+              Cooling demand is an upper bound: {sp.cooling.total.fuel_mwh.toFixed(2)} MWh fuel against
+              State 2 free-running comfort-band integral of {result.demand?.cooling_demand_mwh?.toFixed?.(1) ?? '—'} MWh demand
+            </p>
+            <p className="text-xxs text-mid-grey mt-0.5 leading-snug">
+              State 2's cooling demand is integrated over hours when the free-running zone
+              exceeds the comfort band's upper bound, assuming an idealised system. No HVAC clamping
+              (plant capacity, deadband, operable-window mitigation) is applied yet — measured
+              consumption is likely materially lower. HVAC-clamped cooling demand becomes available
+              once calibration against measured data lands.
             </p>
           </div>
         </div>
