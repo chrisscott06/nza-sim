@@ -313,6 +313,22 @@ SCHEDULES["hotel_ventilation_timer"] = _compact(
     ],
 )
 
+# Brief 28e — business_hours_09_18_weekdays: 09:00–18:00 Mon-Fri, otherwise 0.
+# Used by operable_openings entries (e.g. Bridgewater's gf_entrance_door) to
+# represent "doors propped open during business hours".
+SCHEDULES["business_hours_09_18_weekdays"] = _compact(
+    "business_hours_09_18_weekdays", "Fraction",
+    [
+        "Through: 12/31",
+        "For: Weekdays",
+        "Until: 09:00, 0.0",
+        "Until: 18:00, 1.0",
+        "Until: 24:00, 0.0",
+        "For: AllOtherDays",
+        "Until: 24:00, 0.0",
+    ],
+)
+
 
 # ── Thermostat control type — always DualSetpoint (4) ─────────────────────────
 SCHEDULES["ThermostatControlType_DualSetpoint"] = _compact(

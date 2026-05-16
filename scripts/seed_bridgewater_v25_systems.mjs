@@ -125,6 +125,43 @@ const BRIDGEWATER_FABRIC = {
   thermal_bridging_alpha_pct: 200,
 }
 
+// ── Brief 28e: Bridgewater operable openings ──────────────────────────────
+//
+// One realistic V1 entry: a 2m × 2m main entrance door on the south facade,
+// scheduled open during business hours (09:00-18:00 Mon-Fri). No bedroom
+// windows — real Bridgewater bedrooms don't open. Permanent louvres
+// (configured in `openings.{face}.louvre_area_m2`) stay unchanged.
+//
+// Control modes per Brief 28e §A.1:
+//   - permanent:   always open
+//   - scheduled:   open per `schedule_ref` (uses the schedule library)
+//   - temperature: open when zone T > threshold (with hysteresis +
+//                  optional `require_outside_cooler` gate)
+//
+// Note: `require_outside_cooler` is a temperature-mode-only field per
+// Brief 28e ruling 3 (2026-05-16). Engine ignores it in permanent and
+// scheduled modes; the schedule encodes user intent there.
+const BRIDGEWATER_OPERABLE_OPENINGS = [
+  {
+    id:                  'gf_entrance_door',
+    name:                'Main entrance door (south)',
+    facade:              'south',
+    area_m2:             4.0,
+    height_m:            2.0,
+    discharge_coefficient: 0.6,
+    wind_coefficient:    0.25,        // BS 5925 typical sheltered/open door
+    opening_type:        'door',
+    parent_glazing_face: null,        // doors add envelope area, not glazing
+    control: {
+      mode:                  'scheduled',
+      schedule_ref:          'business_hours_09_18_weekdays',
+      open_above_zone_c:     22.0,    // unused for 'scheduled' but pre-populated
+      hysteresis_c:          1.0,     // ditto
+      require_outside_cooler: true,    // ditto — temperature-mode only
+    },
+  },
+]
+
 // ── Bridgewater canonical geometry + counts ────────────────────────────────
 //
 // Seed-owned canonical values (Chris's directive 2026-05-15 after the
@@ -149,6 +186,9 @@ const BUILDING_CORRECTIONS = {
   // Sheet shows α = 200.31% of fabric transfer coefficient).
   fabric: BRIDGEWATER_FABRIC,
   systems_config_v25: BRIDGEWATER_V25,
+  // Brief 28e: operable openings (entrance door scheduled during business hours).
+  // Engine math lands at Gate E2; Gate E1 just persists the schema.
+  operable_openings: BRIDGEWATER_OPERABLE_OPENINGS,
 }
 
 /**
@@ -249,6 +289,7 @@ console.log(`         glazing        g_value_override → ${BRIDGEWATER_CONSTRUC
 console.log(`         fabric.thermal_bridging_alpha_pct → ${BRIDGEWATER_FABRIC.thermal_bridging_alpha_pct}%`)
 console.log(`         infiltration_ach → ${BUILDING_CORRECTIONS.infiltration_ach}`)
 console.log(`         ventilation systems: ${BRIDGEWATER_V25.ventilation.length} (mvhr_gf_public 1425, bedroom_extract 2208, public_toilet_extract 210 L/s)`)
+console.log(`         operable_openings: ${BRIDGEWATER_OPERABLE_OPENINGS.length} → ${BRIDGEWATER_OPERABLE_OPENINGS.map(o => `${o.id} (${o.area_m2}m² ${o.facade}, ${o.control.mode}: ${o.control.schedule_ref ?? o.control.mode})`).join('; ')}`)
 
 console.log(`After  — num_floors=${updated.building_config.num_floors}, num_bedrooms=${updated.building_config.num_bedrooms}, length=${updated.building_config.length}, width=${updated.building_config.width}`)
 console.log(`         systems_config_v25 present: ${!!updated.building_config.systems_config_v25}`)

@@ -323,16 +323,33 @@ const THERMAL_MASS_J_PER_K_PER_M2 = {
 function withMode(building, mode) {
   if (mode !== 'envelope-only' && mode !== 'envelope-gains') return building
   const ops = building?.openings ?? {}
-  // Keep only the louvre permanent-openings half of the openings dict; drop
-  // operable-window fraction + schedule entirely so the State 1/2 paths can't
-  // see them even by accident (operable windows are State 2.5 territory).
-  const permanentOpenings = {
+  // Brief 28e Gate E1 (2026-05-16): the "State 2.5 territory" framing for
+  // operable openings is retired. Operable openings are now first-class
+  // envelope features (Brief 28e § Background) and pass through to State 1
+  // + State 2. The legacy `openings.schedule` and per-facade
+  // `openable_fraction` fields stay accessible so the engine's
+  // synthesiseOperableOpeningsFromLegacy() helper can read them at engine
+  // entry. Permanent louvres (BuildingDefinition) keep their own dedicated
+  // path and are unchanged.
+  const passThroughOpenings = {
     site_exposure: ops.site_exposure ?? 'normal',
-    north: { louvre_area_m2: ops?.north?.louvre_area_m2 ?? 0 },
-    south: { louvre_area_m2: ops?.south?.louvre_area_m2 ?? 0 },
-    east:  { louvre_area_m2: ops?.east?.louvre_area_m2  ?? 0 },
-    west:  { louvre_area_m2: ops?.west?.louvre_area_m2  ?? 0 },
-    // No `schedule`, no `openable_fraction` — state isolation.
+    north: {
+      louvre_area_m2:    ops?.north?.louvre_area_m2 ?? 0,
+      openable_fraction: ops?.north?.openable_fraction ?? 0,
+    },
+    south: {
+      louvre_area_m2:    ops?.south?.louvre_area_m2 ?? 0,
+      openable_fraction: ops?.south?.openable_fraction ?? 0,
+    },
+    east:  {
+      louvre_area_m2:    ops?.east?.louvre_area_m2  ?? 0,
+      openable_fraction: ops?.east?.openable_fraction  ?? 0,
+    },
+    west:  {
+      louvre_area_m2:    ops?.west?.louvre_area_m2  ?? 0,
+      openable_fraction: ops?.west?.openable_fraction  ?? 0,
+    },
+    schedule: ops.schedule ?? 'never',
   }
   const base = {
     length:        building?.length,
@@ -347,12 +364,16 @@ function withMode(building, mode) {
     infiltration_ach:      building?.infiltration_ach,
     thermal_mass_mode:     building?.thermal_mass_mode ?? 'auto',
     thermal_mass_category: building?.thermal_mass_category ?? 'light',
-    openings:      permanentOpenings,
+    openings:      passThroughOpenings,
     location:      building?.location,
     // Brief 28k Gate 3+: thermal bridging is a pure fabric input (BRUKL-
     // sourced α coefficient). Belongs to both State 1 and State 2 — it's
     // not a system, it's a junction-loss multiplier on the area-element UA.
     fabric:        building?.fabric,
+    // Brief 28e Gate E1: operable openings (doors, windows, vents) are
+    // first-class envelope features. State 1 + State 2 both see them.
+    // Engine math at Gate E2.
+    operable_openings: building?.operable_openings,
     // weather_file kept off — solar latitude comes from EPW location directly.
   }
   if (mode === 'envelope-only') return base
@@ -440,6 +461,84 @@ function getConstructionItem(constructions, libraryData, element) {
  *      cooling_demand[h] = max(0, Q_solar + UA·(T_out − upper_c)) if T_op > upper_c
  */
 
+// Brief 28e Gate E1 (2026-05-16): operable openings schema + legacy migration.
+//
+// Schema lives on `building_config.operable_openings` — array of objects with
+// per-opening definition, control mode (permanent / scheduled / temperature),
+// and physics parameters. Engine math is at Gate E2; Gate E1 lands schema +
+// compute-time synthesis from legacy `openings.{face}.openable_fraction`.
+//
+// Synthesis rule (per Chris's Gate E1 ruling 2026-05-16):
+//   - If `building.operable_openings` exists and is non-empty, return it
+//     verbatim. Native schema wins.
+//   - Otherwise, for each facade with non-zero `openings.{face}.openable_fraction`,
+//     synthesise one entry with parent_glazing_face = face, area derived from
+//     openable_fraction × glazing[face], height from facade height, control
+//     mode 'scheduled' with schedule_ref mapped from legacy global schedule.
+//   - Pure compute-time: no DB writes. UI at Gate E5 persists on first user
+//     edit (legacy fields stay on disk but get ignored once
+//     operable_openings is present).
+//
+// Returns an array (may be empty). All downstream Gate E2+ code treats the
+// returned array as the canonical operable-openings list.
+const _LEGACY_OPENINGS_SCHEDULE_MAP = {
+  always:      'business_hours_09_18_weekdays',  // placeholder; real mapping land at Gate E2
+  occupied:    'hotel_ventilation_occupied',
+  summer_day:  'business_hours_09_18_weekdays',  // V1 approximation; refine at Gate E2
+  never:       null,
+}
+export function synthesiseOperableOpeningsFromLegacy(building) {
+  const native = building?.operable_openings
+  if (Array.isArray(native) && native.length > 0) return native
+
+  const openings = building?.openings ?? {}
+  const wwr = building?.wwr ?? {}
+  const length = Number(building?.length ?? 0)
+  const width  = Number(building?.width ?? 0)
+  const floor_height = Number(building?.floor_height ?? 0)
+  const num_floors   = Number(building?.num_floors ?? 0)
+  const legacy_schedule = openings.schedule ?? 'never'
+  const synthesised_schedule_ref = _LEGACY_OPENINGS_SCHEDULE_MAP[legacy_schedule] ?? null
+  if (synthesised_schedule_ref == null) return []
+
+  const FACADES = [
+    { face: 'north', long: true  },
+    { face: 'south', long: true  },
+    { face: 'east',  long: false },
+    { face: 'west',  long: false },
+  ]
+  const out = []
+  for (const { face, long } of FACADES) {
+    const openable_fraction = Number(openings[face]?.openable_fraction ?? 0)
+    if (!(openable_fraction > 0)) continue
+    const facade_area = (long ? length : width) * floor_height * num_floors
+    const wwr_face = Number(wwr[face] ?? 0)
+    const glazing_area = facade_area * wwr_face
+    const area_m2 = openable_fraction * glazing_area
+    if (!(area_m2 > 0)) continue
+    out.push({
+      id:                  `legacy_${face}_operable`,
+      name:                `Legacy operable window bank (${face})`,
+      facade:              face,
+      area_m2:             Math.round(area_m2 * 100) / 100,
+      height_m:            floor_height,
+      discharge_coefficient: 0.6,
+      wind_coefficient:    0.25,
+      opening_type:        'window',
+      parent_glazing_face: face,
+      control: {
+        mode:                  'scheduled',
+        schedule_ref:          synthesised_schedule_ref,
+        open_above_zone_c:     22.0,
+        hysteresis_c:          1.0,
+        require_outside_cooler: true,
+      },
+      _synthesised_from_legacy: true,
+    })
+  }
+  return out
+}
+
 // Brief 28k (2026-05-16): construction whole-element U-value precedence used
 // for steady-state loss reporting + UA-based demand calc.
 //   1. config_json.u_value_override       — explicit per-construction override
@@ -499,6 +598,11 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   const geo = computeGeometry(building)
   const { gia, volume, total_wall_opaque, total_glazing, glazing, wall_opaque, roof_area, ground_area } = geo
   if (gia <= 0) return _empty()
+
+  // Brief 28e Gate E1: resolve operable openings (native schema OR synthesise
+  // from legacy openable_fraction). Consumed at Gate E2 for natural ventilation
+  // accumulators; currently unread.
+  const operableOpenings = synthesiseOperableOpeningsFromLegacy(building)   // eslint-disable-line no-unused-vars
 
   // ── Library U / g values (used for glazing only post Brief 28b Part 3) ────
   const u_glaz  = getUValue(constructions, 'glazing', libraryData)
@@ -1595,6 +1699,10 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   const geo = computeGeometry(building)
   const { gia, volume, total_wall_opaque, total_glazing, glazing, wall_opaque, roof_area, ground_area } = geo
   if (gia <= 0) return state1Result
+
+  // Brief 28e Gate E1: resolve operable openings (mirror of State 1 entry).
+  // Consumed at Gate E2 for natural ventilation accumulators.
+  const operableOpenings = synthesiseOperableOpeningsFromLegacy(building)   // eslint-disable-line no-unused-vars
 
   // Match State 1 v3 production tuning
   const TUNE_SOLAR_RAD_FRAC = 0.30
