@@ -80,8 +80,16 @@ function _normaliseSetpointNode(node, gia) {
   if (!node) return null
   const kwh = node.heating_loss_kwh ?? 0
   if (!(kwh > 0.01)) return null
-  const kwh_per_m2 = gia > 0 ? kwh / gia : 0
-  return { kwh, kwh_per_m2, area_m2: node.area_m2 }
+  // Preserve the engine's own kwh_per_m2 when it's already present on the
+  // setpoint node (external_wall / roof / ground_floor / glazing all carry
+  // it). For nodes without a precomputed kwh_per_m2 (fabric_leakage /
+  // permanent_vents / thermal_bridging in the State 2 shape), fall back to
+  // kwh / gia. Spread the original node so by_face / area_m2 / any other
+  // fields the row drill-down might want are preserved.
+  const kwh_per_m2 = (node.kwh_per_m2 != null && Number.isFinite(node.kwh_per_m2))
+    ? node.kwh_per_m2
+    : (gia > 0 ? kwh / gia : 0)
+  return { ...node, kwh, kwh_per_m2 }
 }
 
 function flattenLosses(data, unit, mode = DEFAULT_MODE) {
@@ -115,23 +123,31 @@ function flattenLosses(data, unit, mode = DEFAULT_MODE) {
   // categories not previously in the load order.
   const baseOrder = loadOrderFor(mode).filter(k => allowed.has(k))
   const orderWithNew = []
-  for (const k of baseOrder) {
-    orderWithNew.push(k)
-    if (k === 'ventilation') {
-      // Per-system mech vent expansion — replaces / supplements the legacy
-      // single 'ventilation' aggregate line.
-      const ventSystems = setpoint?.ventilation ?? []
-      for (const v of ventSystems) {
-        if ((v.heat_loss_kwh ?? 0) > 0.01) {
-          const key = `ventilation_${v.name}`
-          const kwh = v.heat_loss_kwh
-          const kwh_per_m2 = gia > 0 ? kwh / gia : 0
-          losses[key] = { kwh, kwh_per_m2, _label: `Ventilation: ${v.name}` }
-          orderWithNew.push(key)
-        }
+  let perSystemVentAppended = false
+  const appendPerSystemVent = () => {
+    if (perSystemVentAppended) return
+    perSystemVentAppended = true
+    const ventSystems = setpoint?.ventilation ?? []
+    for (const v of ventSystems) {
+      if ((v.heat_loss_kwh ?? 0) > 0.01) {
+        const key = `ventilation_${v.name}`
+        const kwh = v.heat_loss_kwh
+        const kwh_per_m2 = gia > 0 ? kwh / gia : 0
+        losses[key] = { kwh, kwh_per_m2, _label: `Ventilation: ${v.name}` }
+        orderWithNew.push(key)
       }
     }
   }
+  for (const k of baseOrder) {
+    orderWithNew.push(k)
+    if (k === 'ventilation') appendPerSystemVent()
+  }
+  // Envelope-gains / envelope-only modes have no 'ventilation' key in their
+  // load order (they have 'permanent_vents' instead, and per-system mech
+  // vent is a Brief 28k Gate 3+ addition that the legacy order predates).
+  // Append per-system mech vent at the end if not already inserted, so the
+  // three Bridgewater ventilation systems still render.
+  appendPerSystemVent()
   // Per-opening natural ventilation — always appended at the end (operable
   // doors / windows from Brief 28e). Each opening becomes its own line.
   const natvents = setpoint?.natural_ventilation ?? []

@@ -47,14 +47,23 @@ export default function BalanceTestPage() {
   // efficiencies — exactly the scope of a pre-systems heat balance.
   const liveResult = useMemo(() => {
     if (weatherData && hourlySolar) {
+      // Brief 28-TB-Simple TB-V1b second fix: previously passed {} as
+      // libraryData here (4th arg). That dropped the construction layer
+      // stack the engine needs for pickWholeWallU to resolve the
+      // BRUKL-aligned U-values per element. Result: wholeWallU_ext fell
+      // through to the model-based fallback which gave a wildly inflated
+      // U-value (~5.8 W/m²K vs the 0.14 BRUKL override), inflating
+      // external_wall / roof / ground_floor heat loss by ~42x in the
+      // browser even though Node validation passed (because the Node
+      // script normalised libraryData correctly).
       return calculateInstant(
-        params || {}, constructions || {}, systems || {}, {},
+        params || {}, constructions || {}, systems || {}, libraryData,
         weatherData, hourlySolar, null,
         { mode: 'envelope-gains' },
       )
     }
-    return calculateInstantDegreeDay(params || {}, constructions || {}, systems || {}, {})
-  }, [params, constructions, systems, weatherData, hourlySolar])
+    return calculateInstantDegreeDay(params || {}, constructions || {}, systems || {}, libraryData)
+  }, [params, constructions, systems, weatherData, hourlySolar, libraryData])
 
   // Test harness defaults to full-model shape; flip to 'envelope-only' to
   // exercise the State 1 contract output path manually.

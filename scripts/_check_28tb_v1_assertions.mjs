@@ -62,6 +62,20 @@ console.log()
 const project = await fj(`${API}/api/projects/${PROJECT_ID}`)
 const lib = await fj(`${API}/api/library/constructions`)
 
+// TB-V1b Operation tab assertion (per Chris's TB-V1b instruction): verify
+// that building_config.operable_openings is on the wire with the expected
+// gf_entrance_door entry. This is the persisted-state half — confirms the
+// ProjectContext allowlist will have something to surface. UI rendering
+// verification still requires the screenshot.
+const persistedOpenings = project?.building_config?.operable_openings ?? []
+console.log('=== Persisted state (project API response) ===')
+console.log()
+console.log(`  building_config.operable_openings.length : ${persistedOpenings.length}`)
+for (const o of persistedOpenings) {
+  console.log(`    - id=${o.id}  facade=${o.facade}  area=${o.area_m2}  mode=${o?.control?.mode}`)
+}
+console.log()
+
 const libraryData = {
   constructions: (lib.constructions ?? []).map(c => ({
     name: c.name,
@@ -141,8 +155,17 @@ console.log(`  demand.heating_demand_mwh : ${demand.heating_demand_mwh}`)
 console.log(`  demand.cooling_demand_mwh : ${demand.cooling_demand_mwh}`)
 console.log()
 
-// Assertions (per Chris's TB-V1 instruction)
+// Assertions (per Chris's TB-V1 instruction + TB-V1b Operation tab addition)
 const failures = []
+
+// TB-V1b: verify the persisted state has the Bridgewater gf_entrance_door
+// — the precondition for the OperationModule to render anything. The UI
+// allowlist fix (ProjectContext._applyProject) is verified by screenshot.
+if (persistedOpenings.length !== 1) {
+  failures.push(`building_config.operable_openings.length = ${persistedOpenings.length}, expected 1 (gf_entrance_door from Bridgewater seed)`)
+} else if (persistedOpenings[0].id !== 'gf_entrance_door') {
+  failures.push(`building_config.operable_openings[0].id = "${persistedOpenings[0].id}", expected "gf_entrance_door"`)
+}
 
 if (!(tb.heating_loss_kwh > 0)) {
   failures.push(`thermal_bridging.heating_loss_kwh missing or zero (got ${tb.heating_loss_kwh})`)

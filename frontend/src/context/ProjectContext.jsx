@@ -553,6 +553,24 @@ export function ProjectProvider({ children }) {
       openings: bc.openings ?? DEFAULT_PARAMS.openings,
       thermal_mass_mode:     bc.thermal_mass_mode     ?? DEFAULT_PARAMS.thermal_mass_mode,
       thermal_mass_category: bc.thermal_mass_category ?? DEFAULT_PARAMS.thermal_mass_category,
+      // Brief 28k Gate 3+ fabric-level inputs (e.g. thermal_bridging_alpha_pct
+      // legacy fallback). Engine reads building.fabric.* via withMode passthrough;
+      // previously dropped here, surfaced now so legacy Brief 28L projects
+      // route correctly through the back-compat fallback.
+      fabric:             bc.fabric             ?? null,
+      // Brief 28-TB-Simple ISO 14683 junction-based thermal bridging config.
+      // Engine reads building.thermal_bridges via withMode passthrough; without
+      // this allowlist entry, the OperationModule + HeatBalance would never
+      // see the seeded mode='iso14683_auto' and the engine helper would always
+      // fall through to the legacy α fallback (or mode='absent').
+      thermal_bridges:    bc.thermal_bridges    ?? null,
+      // Brief 28e operable openings (doors / window banks / vents). Engine
+      // reads via withMode; OperationModule (Gate E5a 4152e92) reads
+      // params.operable_openings directly. Without this allowlist entry the
+      // Bridgewater gf_entrance_door from the seed never reaches the UI
+      // (confirmed via 4-tab baseline 43a35ea: Operation tab shows "No
+      // operable openings yet" despite seed-persisted entry).
+      operable_openings:  bc.operable_openings  ?? null,
       // Brief 27 Part 1 — occupancy + gains migration. Persisted projects
       // pre-26.2 don't have these fields; build from legacy num_bedrooms /
       // occupancy_rate / people_per_room and the seeded hotel-bedroom
