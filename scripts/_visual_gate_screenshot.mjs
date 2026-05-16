@@ -96,7 +96,7 @@ const DEFAULT_VIEWPORT = { width: 1440, height: 900 }
 function parseArgs(argv) {
   const positional = []
   const opts = { base: DEFAULT_BASE, wait: DEFAULT_WAIT_MS, projectId: DEFAULT_PROJECT_ID,
-                 viewport: DEFAULT_VIEWPORT, fullpage: false }
+                 viewport: DEFAULT_VIEWPORT, fullpage: false, clickText: null }
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i]
     if (a === '--base')        opts.base = argv[++i]
@@ -107,6 +107,7 @@ function parseArgs(argv) {
       opts.viewport = { width: w, height: h }
     }
     else if (a === '--fullpage') opts.fullpage = true
+    else if (a === '--click-text') opts.clickText = argv[++i]
     else if (a.startsWith('--')) {
       console.error(`Unknown flag: ${a}`)
       process.exit(3)
@@ -187,10 +188,25 @@ page.on('pageerror', err => {
 try {
   // 1. Land on /project?id=<projectId> first so ProjectContext fetches
   //    the building_config and constructions. Then forward to the
-  //    target route — ProjectContext stays populated.
+  //    target route — ProjectContext stays populated. We also wait for
+  //    the weather hourly fetch to complete here, because downstream
+  //    pages that drive calculateInstant in 'envelope-gains' / State 2
+  //    depend on weatherData being populated to take the hourly path
+  //    (otherwise they fall through to calculateInstantDegreeDay which
+  //    doesn't emit losses_at_setpoint).
   const seedUrl = `${opts.base}/project?id=${opts.projectId}`
   console.log(`Seeding ProjectContext via ${seedUrl}...`)
+  const weatherResponsePromise = page.waitForResponse(
+    r => r.url().includes('/api/weather/') && r.url().endsWith('/hourly'),
+    { timeout: 15000 },
+  ).catch(() => null)
   await page.goto(seedUrl, { waitUntil: 'load', timeout: 30000 })
+  const weatherResp = await weatherResponsePromise
+  if (weatherResp) {
+    console.log(`  weather hourly loaded (HTTP ${weatherResp.status()})`)
+  } else {
+    console.warn('  warning: weather hourly fetch not observed within 15s — page may render in degree-day fallback mode')
+  }
   await page.waitForTimeout(PROJECT_LOAD_WAIT_MS)
 
   // 2. Navigate to the target route
@@ -198,7 +214,24 @@ try {
   console.log(`Navigating to ${targetUrl}...`)
   await page.goto(targetUrl, { waitUntil: 'load', timeout: 30000 })
 
-  // 3. Settle wait — Sankey + Three.js scenes finish hydrating
+  // 3a. Optional click-by-text — used to toggle into a specific view (e.g.
+  //     the "Heat Balance" toggle on the Building tab's centre column).
+  if (opts.clickText) {
+    console.log(`Clicking element with text "${opts.clickText}"...`)
+    try {
+      const el = page.getByText(opts.clickText, { exact: true }).first()
+      await el.waitFor({ state: 'visible', timeout: 5000 })
+      await el.click()
+      // Short settle after click before main settle wait — let any toggle
+      // animation / mount complete.
+      await page.waitForTimeout(500)
+    } catch (err) {
+      console.warn(`  WARNING: click-text "${opts.clickText}" failed: ${err.message}`)
+      console.warn('  Proceeding to capture without the click — the screenshot may not show the intended view.')
+    }
+  }
+
+  // 3b. Settle wait — Sankey + Three.js scenes finish hydrating
   console.log(`Settle wait ${opts.wait} ms...`)
   await page.waitForTimeout(opts.wait)
 

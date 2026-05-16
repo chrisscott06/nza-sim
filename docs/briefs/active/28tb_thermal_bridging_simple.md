@@ -17,6 +17,8 @@ This brief fixes that. **Every gate ends with a screenshot of the working number
 
 Practical consequence: this brief includes the display-layer rewire for the components affected. It's not deferred to a separate "Brief 28-DisplayLayer." Two gates, both produce visible results in the browser.
 
+> **TB-V1 update (inline, 2026-05-16):** brief was originally drafted against the pre-Brief 24 component layout. `FabricSankey.jsx` and `LiveResultsPanel.jsx` named in the original TB-V1 file list were Brief 24 casualties — neither is mounted today (`LiveResultsPanel` explicitly removed per `BuildingDefinition.jsx:13` comment; `FabricSankey.jsx` has zero importers). The actually-mounted Heat Balance view on the Building tab is `balance/HeatBalance.jsx` (the same component as `/balance-test`), so rewiring `HeatBalance.jsx` lights both routes up in one change. File list updated below to reflect this. Dead `FabricSankey.jsx` and `LiveResultsPanel.jsx` left in tree for now (queued as a separate housekeeping commit). Pre-existing 4 HTTP 500s on baseline captures (visible on both routes before any TB-V1 change) are surveillance noise unrelated to TB; queued as `Brief 28-Console500s`. **PASS criteria refined: "no NEW console errors introduced by this commit"** — the helper's console-error capture logs them as warnings without failing the gate.
+
 ---
 
 ## Background
@@ -99,18 +101,22 @@ Expected post-seed Bridgewater results:
 
 ### Part C — Display layer rewire (this is the crucial bit)
 
-**Components rewired to read `losses_at_setpoint.*` instead of legacy blocks:**
+**Components rewired to read `losses_at_setpoint.*` instead of legacy blocks** (file list updated per the TB-V1 inline note — see "Discipline correction" section):
 
-| File | Currently reads from | Rewire to |
-|---|---|---|
-| `frontend/src/components/modules/building/FabricSankey.jsx` | `result.fabric_losses` | `losses_at_setpoint.{external_wall, roof, ground_floor, glazing, fabric_leakage, permanent_vents, thermal_bridging, ventilation[], natural_ventilation[]}` |
-| `frontend/src/components/modules/balance/HeatBalance.jsx` | `data.annual.losses` | same |
-| `frontend/src/components/modules/balance/DrillDown.jsx` | `annual.losses` | same |
-| `frontend/src/components/modules/building/GainsLossesChart.jsx` | `result.gains_losses.{heating,cooling}_side` | `losses_at_setpoint.*` + `gains_bucketed` |
-| `frontend/src/components/modules/building/ExpandedSankeyOverlay.jsx` | same as GainsLossesChart | same |
-| `frontend/src/components/modules/building/LiveResultsPanel.jsx` | demand fields | `demand.heating_demand_mwh`, `demand.cooling_demand_mwh` |
+| Gate | File | Currently reads from | Rewire to |
+|---|---|---|---|
+| **TB-V1** | `frontend/src/components/modules/balance/HeatBalance.jsx` | `data.annual.losses` | `data.losses_at_setpoint.{external_wall, roof, ground_floor, glazing, fabric_leakage, permanent_vents, thermal_bridging, ventilation[], natural_ventilation[]}` — covers both **Building tab Heat Balance toggle** (via `BuildingDefinition.jsx`) AND **`/balance-test` route** (via `BalanceTestPage.jsx`) in one rewire |
+| **TB-V2** | `frontend/src/components/modules/balance/DrillDown.jsx` | `annual.losses` | same shape as above |
+| **TB-V2** | `frontend/src/components/modules/building/GainsLossesChart.jsx` | `result.gains_losses.{heating,cooling}_side` | `losses_at_setpoint.*` + `gains_bucketed` |
+| **TB-V2** | `frontend/src/components/modules/building/ExpandedSankeyOverlay.jsx` | same as GainsLossesChart | same |
 
-Each component renders new lines for: **thermal bridging** (with α convention removed), **per-system mechanical ventilation** (3 lines for Bridgewater), **operable openings / natural ventilation** (door line).
+**Removed from the file list** (dead code after Brief 24, not mounted):
+- ~~`frontend/src/components/modules/building/FabricSankey.jsx`~~ — no importers
+- ~~`frontend/src/components/modules/building/LiveResultsPanel.jsx`~~ — explicitly removed per `BuildingDefinition.jsx:13` comment
+
+These two files stay in the tree as dead code; flagged for a separate housekeeping commit later (NOT in scope for TB-V1).
+
+Each rewired component renders new lines for: **thermal bridging** (ISO 14683 H_TB, not α convention), **per-system mechanical ventilation** (3 lines for Bridgewater), **operable openings / natural ventilation** (door line).
 
 Legacy output blocks stay in the engine response (transition diagnostic) but display layer no longer reads them.
 
@@ -148,28 +154,32 @@ Land all of the following in one push:
 1. Engine math (Part A)
 2. Default ψ library (`frontend/src/data/thermalBridgesLibrary.js` new file)
 3. Bridgewater seed update (Part B)
-4. Display rewire: `FabricSankey.jsx` + `LiveResultsPanel.jsx` only (Building tab essentials)
+4. Display rewire: `HeatBalance.jsx` (covers Building tab Heat Balance toggle AND `/balance-test` route — same component on both)
 
 **Halt produces:**
 
 - Diff of all changes (code review)
-- **Screenshot of Building tab → Heat Balance view (Sankey)** showing:
+- **Two screenshots** comparing BEFORE/AFTER state (the captures in `docs/validation/screenshots/tbv1_BASELINE_*.png` provide BEFORE):
+  - `tbv1_AFTER_building_tab.png` — Building tab Heat Balance view
+  - `tbv1_AFTER_balance_page.png` — `/balance-test` route Heat Balance view
+- Both AFTER screenshots showing:
   - All Brief 28k/L/e fabric+ventilation lines visible
   - **Thermal bridging line at expected ~10-15 MWh/yr**
-  - Operable door line at ~140 MWh/yr (Brief 28e)
+  - Operable door line at ~140 MWh/yr (Brief 28e `gf_entrance_door`)
   - Per-system mechanical ventilation lines (3 for Bridgewater)
-  - Heating demand in the LiveResultsPanel showing a sensible number (expected ~450-550 MWh range, much lower than current 711 because the TB over-count and NE glazing over-count are both fixed)
-- Console log of engine output `losses_at_setpoint` block for verification
+  - Heating demand showing a sensible number (expected ~450-550 MWh range, much lower than current 711 because TB over-count and NE glazing over-count are both fixed)
+- Pre-screenshot assertion-script output verifying engine numbers in expected ranges (see `scripts/_check_28tb_v1_assertions.mjs`)
+- Console-error log from screenshot helper
 
 **PASS criteria:**
-- All lines render in the Sankey
-- Numbers within expected ranges
-- No console errors
-- Heating demand looks sensible
+- All lines render in the Heat Balance view
+- Engine assertions pass (TB heat loss 8,000–18,000 kWh, 1 natural_ventilation entry, 3 ventilation entries, heating demand 400–600 MWh)
+- **No NEW console errors introduced by this commit** (the 4 pre-existing HTTP 500s visible on baseline captures are acknowledged as background — queued as `Brief 28-Console500s`, not gating)
+- Heating demand looks sensible vs BASELINE 711 MWh
 
 **FAIL:**
-- Any line missing, NaN, wildly out of range
-- Console errors
+- Any expected line missing, NaN, or wildly out of asserted range
+- New console errors introduced by this commit (i.e., errors that weren't present on the BASELINE captures)
 - Demand still showing pre-fix 711 MWh (indicates display not actually rewired)
 
 ### Gate TB-V2 — Validation + remaining display consumers
@@ -179,14 +189,14 @@ Land:
 1. Spreadsheet `06_Thermal_Bridges` tab + `05_Heat_Loss` update
 2. Hand-calc validation script `scripts/_check_28tb_handcalc.mjs`
 3. EnergyPlus assembler `_apply_thermal_bridges_to_constructions` + comparison script
-4. Display rewire: `HeatBalance.jsx`, `DrillDown.jsx`, `GainsLossesChart.jsx`, `ExpandedSankeyOverlay.jsx`
+4. Display rewire: `DrillDown.jsx`, `GainsLossesChart.jsx`, `ExpandedSankeyOverlay.jsx` (`HeatBalance.jsx` already landed in TB-V1)
 
 **Halt produces:**
 
 - Diff of all changes
 - Hand-calc vs engine table (per-junction, ±5%)
 - Static vs Dynamic table (aggregate fabric+TB, ±15%)
-- **Screenshot of Heat Balance page** (`/balance` route) showing correct numbers
+- **Screenshot of Heat Balance page** (`/balance-test` route — note `/balance` is not a registered route; rename to `/balance` is a future cleanup, out of scope here) showing correct numbers
 - **Screenshot of Building tab gains/losses chart** showing the rewired output
 
 **PASS criteria:**

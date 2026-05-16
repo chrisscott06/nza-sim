@@ -13,6 +13,7 @@
 
 import { resolveCmass } from './thermalMass.js'
 import { resolveScheduleAtHour } from './scheduleLibrary.js'
+import { computeThermalBridges } from './thermalBridges.js'
 import {
   buildWallModel,
   stepWallLinearized,
@@ -379,10 +380,17 @@ function withMode(building, mode) {
     thermal_mass_category: building?.thermal_mass_category ?? 'light',
     openings:      passThroughOpenings,
     location:      building?.location,
-    // Brief 28k Gate 3+: thermal bridging is a pure fabric input (BRUKL-
-    // sourced α coefficient). Belongs to both State 1 and State 2 — it's
-    // not a system, it's a junction-loss multiplier on the area-element UA.
+    // Brief 28k Gate 3+: thermal bridging is a pure fabric input. Belongs
+    // to both State 1 and State 2 — junction-loss contribution on the
+    // area-element UA. Brief 28-TB-Simple replaces the SBEM α convention
+    // with ISO 14683 junction-based H_TB (see thermal_bridges below);
+    // fabric stays passed-through for backward-compat with legacy
+    // fabric.thermal_bridging_alpha_pct (handled inside computeThermalBridges).
     fabric:        building?.fabric,
+    // Brief 28-TB-Simple: ISO 14683 thermal bridges block. State 1 + State 2
+    // both consume it; the engine helper auto-computes junction lengths from
+    // geometry and looks up ψ defaults from thermalBridgesLibrary.js.
+    thermal_bridges: building?.thermal_bridges,
     // Brief 28e Gate E1: operable openings (doors, windows, vents) are
     // first-class envelope features. State 1 + State 2 both see them.
     // Engine math at Gate E2.
@@ -801,7 +809,14 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   // opaque roof is now in sol-air → conduction → inside flux.
   let acc_cond_wall  = 0, acc_cond_roof = 0, acc_cond_floor = 0
   let acc_cond_glaz_n = 0, acc_cond_glaz_s = 0, acc_cond_glaz_e = 0, acc_cond_glaz_w = 0
-  let acc_thermal_bridging = 0   // remains for the breakdown shape; populated only if Y-factor > 1 (not used yet)
+  // Legacy free-running heat_balance.annual.losses block. The free-running
+  // TB convention (Y-factor multiplier on conduction) is superseded by
+  // Brief 28-TB-Simple ISO 14683 setpoint-convention H_TB × ΔT_out below.
+  // Backfilled after the hour loop with acc_heat_loss_thermal_bridging so
+  // any legacy consumer of annual.losses.thermal_bridging.kwh sees the
+  // corrected number rather than zero. Display rewire under TB-V1 moves
+  // consumers to losses_at_setpoint.thermal_bridging directly.
+  let acc_thermal_bridging = 0
   let acc_vent_leakage = 0, acc_vent_permanent = 0
   let acc_heating_demand_Wh = 0, acc_cooling_demand_Wh = 0
   let underheating_hours = 0, overheating_hours = 0, comfort_hours = 0
@@ -829,21 +844,27 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   let acc_cool_gain_glaz_n = 0, acc_cool_gain_glaz_e = 0, acc_cool_gain_glaz_s = 0, acc_cool_gain_glaz_w = 0
   let acc_cool_gain_leakage = 0, acc_cool_gain_permanent = 0
 
-  // ── Thermal bridging (Brief 28k Gate 3+) ─────────────────────────────────
-  // BRUKL convention: thermal bridges contribute α (linear-junction coefficient
-  // ratio) on top of the area-element fabric UA. Default α = 18% (BRUKL
-  // notional Part L baseline). Project-specific values come from
-  // building.fabric.thermal_bridging_alpha_pct (Bridgewater = 200%).
-  // Driven by T_out (no sol-air for bridges — most bridges are at corners,
-  // floor-wall junctions, window perimeters where simple T_out is appropriate).
-  // Included in H_full / C_full for demand calc AND in H_weather / C_weather
-  // for the gate (per Chris ruling 3).
-  const thermal_bridging_alpha_pct = Number(building?.fabric?.thermal_bridging_alpha_pct ?? 18)
-  const tb_factor = thermal_bridging_alpha_pct / 100
+  // ── Thermal bridging (Brief 28-TB-Simple, supersedes Brief 28k Gate 3+) ──
+  // ISO 14683 junction-based physics: H_TB = Σ(ψ × L) over the building's
+  // envelope junctions, with ψ defaults from ISO 14683 Table A.2 and lengths
+  // auto-computed from existing geometry. See frontend/src/utils/thermalBridges.js
+  // for the helper and frontend/src/data/thermalBridgesLibrary.js for ψ values.
+  //
+  // Driven by T_out (no sol-air for bridges — most are at corners, floor-wall
+  // junctions, window perimeters where simple T_out is appropriate). Included
+  // in H_full / C_full for demand calc AND in H_weather / C_weather for the
+  // shoulder gate (Brief 28k convention preserved).
+  //
+  // Backward compat for legacy Brief 28L building.fabric.thermal_bridging_alpha_pct
+  // is handled inside computeThermalBridges (one-shot deprecation warning +
+  // α/100 × area_UA fallback). Area_UA computed here and passed in so the helper
+  // stays pure-functional.
   const fabric_area_UA = wholeWallU_ext * total_wall_opaque
                        + wholeWallU_roof * roof_area
                        + wholeWallU_floor * ground_area
                        + UA_glaz
+  const tb_result = computeThermalBridges(building, geo, fabric_area_UA)
+  const total_H_TB_W_per_K = tb_result.total_H_TB_W_per_K
   let acc_heat_loss_thermal_bridging = 0
   let acc_cool_gain_thermal_bridging = 0
 
@@ -1094,9 +1115,10 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
     acc_heat_loss_floor += wholeWallU_floor * ground_area * Math.max(0, T_heat - T_ground)
     acc_cool_gain_floor += wholeWallU_floor * ground_area * Math.max(0, T_ground - T_cool)
 
-    // Thermal bridging (Brief 28k Gate 3+): α × fabric_area_UA × ΔT_out
-    const TB_heat_h = fabric_area_UA * tb_factor * dT_heat_out
-    const TB_cool_h = fabric_area_UA * tb_factor * dT_cool_out
+    // Thermal bridging (Brief 28-TB-Simple): H_TB × ΔT_out (ISO 14683 physics).
+    // Supersedes Brief 28k Gate 3+ α-multiplier convention.
+    const TB_heat_h = total_H_TB_W_per_K * dT_heat_out
+    const TB_cool_h = total_H_TB_W_per_K * dT_cool_out
     acc_heat_loss_thermal_bridging += TB_heat_h
     acc_cool_gain_thermal_bridging += TB_cool_h
 
@@ -1280,6 +1302,11 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   // ── Aggregates ────────────────────────────────────────────────────────────
   const r1 = (Wh) => Math.round(Wh / 1000 * 10) / 10
   const perM2 = (Wh) => Math.round(Wh / 1000 / gia * 100) / 100
+  // Backfill legacy free-running TB accumulator with the new
+  // setpoint-convention H_TB × ΔT_out total so the legacy
+  // heat_balance.annual.losses.thermal_bridging.kwh field stays consistent
+  // with losses_at_setpoint.thermal_bridging (Brief 28-TB-Simple transition).
+  acc_thermal_bridging = acc_heat_loss_thermal_bridging
   const T_mean = T_hourly.reduce((s, v) => s + v, 0) / n
 
   const total_solar_Wh = acc_solar_n + acc_solar_e + acc_solar_s + acc_solar_w + acc_solar_roof
@@ -1340,7 +1367,7 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
     comfort_band_used: { lower_c: comfortBand.lower_c, upper_c: comfortBand.upper_c },
   }
 
-  return {
+  const result = {
     state: 1,
     mode: 'envelope-only',
     inputs_used: [
@@ -1458,10 +1485,19 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
       fabric_leakage:   { heating_loss_kwh: r1(acc_heat_loss_leakage),   cooling_gain_kwh: r1(acc_cool_gain_leakage)   },
       permanent_vents:  { heating_loss_kwh: r1(acc_heat_loss_permanent), cooling_gain_kwh: r1(acc_cool_gain_permanent) },
       thermal_bridging: {
-        heating_loss_kwh: r1(acc_heat_loss_thermal_bridging),
-        cooling_gain_kwh: r1(acc_cool_gain_thermal_bridging),
-        alpha_pct: thermal_bridging_alpha_pct,
-        fabric_area_UA_W_per_K: Math.round(fabric_area_UA * 10) / 10,
+        heating_loss_kwh:           r1(acc_heat_loss_thermal_bridging),
+        cooling_gain_kwh:           r1(acc_cool_gain_thermal_bridging),
+        // Brief 28-TB-Simple: ISO 14683 junction-based shape replaces the
+        // SBEM α convention from Brief 28k Gate 3+. Engine consumes
+        // total_H_TB_W_per_K; junctions[] is breakdown for display layer +
+        // validation; derived_alpha_pct and y_value are diagnostic.
+        mode:                       tb_result.mode,
+        multiplier:                 tb_result.multiplier,
+        total_H_TB_W_per_K:         tb_result.total_H_TB_W_per_K,
+        junctions:                  tb_result.junctions,
+        derived_alpha_pct:          tb_result.derived_alpha_pct,
+        y_value_W_per_m2K_derived:  tb_result.y_value_W_per_m2K_derived,
+        fabric_area_UA_W_per_K:     Math.round(fabric_area_UA * 10) / 10,
       },
       // Brief 28e Gate E2: per-operable-opening natural ventilation
       natural_ventilation: operableOpenings.map(o => {
@@ -1518,6 +1554,16 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
     },
     heat_balance,
   }
+
+  // Brief 28-TB-Simple Gate TB-V1: surface the top-level losses_at_setpoint
+  // block inside heat_balance so display consumers that receive heat_balance
+  // as a prop (BuildingDefinition + BalanceTestPage) can read the new
+  // Brief 28k+ setpoint-convention loss breakdown without the caller
+  // having to thread a separate prop. HeatBalance.jsx prefers
+  // heat_balance.losses_at_setpoint over the legacy heat_balance.annual.losses
+  // block when present.
+  result.heat_balance.losses_at_setpoint = result.losses_at_setpoint
+  return result
 }
 
 // ── Brief 27 — State 2 (envelope + internal gains) helpers ─────────────────────
@@ -2004,13 +2050,18 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   let acc_gains_added_cooling_Wh  = 0
   let acc_gains_shoulder_Wh       = 0
 
-  // Brief 28k Gate 3+: thermal bridging (BRUKL convention)
-  const thermal_bridging_alpha_pct = Number(building?.fabric?.thermal_bridging_alpha_pct ?? 18)
-  const tb_factor = thermal_bridging_alpha_pct / 100
+  // Brief 28-TB-Simple (supersedes Brief 28k Gate 3+): ISO 14683
+  // junction-based thermal bridging. State 2 mirror of State 1.
+  // See frontend/src/utils/thermalBridges.js for the helper, and
+  // frontend/src/data/thermalBridgesLibrary.js for ψ defaults.
+  // Backward compat for legacy fabric.thermal_bridging_alpha_pct handled
+  // inside computeThermalBridges (deprecation warning + α/100 × area_UA).
   const fabric_area_UA = wholeWallU_ext * total_wall_opaque
                        + wholeWallU_roof * roof_area
                        + wholeWallU_floor * ground_area
                        + UA_glaz
+  const tb_result = computeThermalBridges(building, geo, fabric_area_UA)
+  const total_H_TB_W_per_K = tb_result.total_H_TB_W_per_K
   let acc_heat_loss_thermal_bridging = 0
   let acc_cool_gain_thermal_bridging = 0
 
@@ -2232,9 +2283,10 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     acc_heat_loss_floor += wholeWallU_floor * ground_area * Math.max(0, T_heat - T_ground)
     acc_cool_gain_floor += wholeWallU_floor * ground_area * Math.max(0, T_ground - T_cool)
 
-    // Brief 28k Gate 3+: thermal bridging (BRUKL α × area_UA × ΔT_out)
-    const TB_heat_h = fabric_area_UA * tb_factor * dT_heat_out
-    const TB_cool_h = fabric_area_UA * tb_factor * dT_cool_out
+    // Brief 28-TB-Simple: thermal bridging via ISO 14683 H_TB × ΔT_out
+    // (supersedes Brief 28k Gate 3+ α × area_UA convention)
+    const TB_heat_h = total_H_TB_W_per_K * dT_heat_out
+    const TB_cool_h = total_H_TB_W_per_K * dT_cool_out
     acc_heat_loss_thermal_bridging += TB_heat_h
     acc_cool_gain_thermal_bridging += TB_cool_h
 
@@ -2454,6 +2506,11 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     }
   })
 
+  // Backfill State 2 legacy free-running TB accumulator with the new
+  // setpoint-convention H_TB × ΔT_out total (Brief 28-TB-Simple
+  // transition diagnostic, mirrors State 1).
+  acc_thermal_bridging = acc_heat_loss_thermal_bridging
+
   // ── State 1 → State 2 delta ──────────────────────────────────────────────
   const s1d = state1Result.demand ?? {}
   const s1fr = state1Result.free_running ?? {}
@@ -2463,7 +2520,7 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   const comfort_change     = comfort_hours    - (s1d.comfort_hours    ?? 0)
   const T_mean_change      = Math.round((T_mean - (s1fr.annual_mean_c ?? 0)) * 10) / 10
 
-  return {
+  const result = {
     state: 2,
     mode: 'envelope-gains',
     inputs_used: [
@@ -2579,10 +2636,16 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
         fabric_leakage:   { heating_loss_kwh: r1k(acc_heat_loss_leakage),   cooling_gain_kwh: r1k(acc_cool_gain_leakage)   },
         permanent_vents:  { heating_loss_kwh: r1k(acc_heat_loss_permanent), cooling_gain_kwh: r1k(acc_cool_gain_permanent) },
         thermal_bridging: {
-          heating_loss_kwh: r1k(acc_heat_loss_thermal_bridging),
-          cooling_gain_kwh: r1k(acc_cool_gain_thermal_bridging),
-          alpha_pct: thermal_bridging_alpha_pct,
-          fabric_area_UA_W_per_K: Math.round(fabric_area_UA * 10) / 10,
+          heating_loss_kwh:           r1k(acc_heat_loss_thermal_bridging),
+          cooling_gain_kwh:           r1k(acc_cool_gain_thermal_bridging),
+          // Brief 28-TB-Simple State 2 mirror — same shape as State 1.
+          mode:                       tb_result.mode,
+          multiplier:                 tb_result.multiplier,
+          total_H_TB_W_per_K:         tb_result.total_H_TB_W_per_K,
+          junctions:                  tb_result.junctions,
+          derived_alpha_pct:          tb_result.derived_alpha_pct,
+          y_value_W_per_m2K_derived:  tb_result.y_value_W_per_m2K_derived,
+          fabric_area_UA_W_per_K:     Math.round(fabric_area_UA * 10) / 10,
         },
         // Brief 28k Gate 3+: per-system mechanical ventilation (each entry
         // contributes its own heat loss / cool gain / fan electricity line).
@@ -2728,6 +2791,12 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       }
     })(),
   }
+
+  // Brief 28-TB-Simple Gate TB-V1: State 2 mirror — surface
+  // losses_at_setpoint inside heat_balance so consumers reading the
+  // heat_balance prop get the new Brief 28k+ shape.
+  result.heat_balance.losses_at_setpoint = result.losses_at_setpoint
+  return result
 }
 
 // ── Brief 28f Part 2 (2026-05-15): State 3 skeleton (system overlay layer) ──

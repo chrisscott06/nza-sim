@@ -63,13 +63,90 @@ function readValue(node, unit) {
  * fails to close by exactly the cooling-demand magnitude (the
  * "+214.6 MWh residual; check inputs" warning on Bridgewater).
  */
+/**
+ * Pull a {kwh, kwh_per_m2} pair from a losses_at_setpoint element node,
+ * normalising the Brief 28k+ shape (heating_loss_kwh) to the legacy shape
+ * the rest of HeatBalance expects (kwh / kwh_per_m2). Returns null when
+ * the node is absent or its heating_loss_kwh is 0/missing — caller filters.
+ *
+ * Brief 28-TB-Simple TB-V1: the engine's losses_at_setpoint block carries
+ * the post-Brief 28k convention numbers (setpoint-anchored, sol-air-driven,
+ * thermal bridging via ISO 14683 H_TB, per-system mech vent breakdown,
+ * per-opening natvent breakdown). This adapter lets the existing
+ * flattenLosses → row-render pipeline consume the new shape without a
+ * full row-renderer rewrite.
+ */
+function _normaliseSetpointNode(node, gia) {
+  if (!node) return null
+  const kwh = node.heating_loss_kwh ?? 0
+  if (!(kwh > 0.01)) return null
+  const kwh_per_m2 = gia > 0 ? kwh / gia : 0
+  return { kwh, kwh_per_m2, area_m2: node.area_m2 }
+}
+
 function flattenLosses(data, unit, mode = DEFAULT_MODE) {
-  const losses = data?.annual?.losses ?? {}
-  const allowed = new Set(loadOrderFor(mode))
+  // Brief 28-TB-Simple TB-V1: prefer losses_at_setpoint when present
+  // (carries thermal_bridging via ISO 14683 H_TB, per-system mech vent
+  // breakdown, per-opening natural-ventilation breakdown — none of which
+  // exist on the legacy annual.losses block).
+  const setpoint = data?.losses_at_setpoint
+  const legacyLosses = data?.annual?.losses ?? {}
   const gia    = data?.metadata?.gia_m2 ?? 0
-  return loadOrderFor(mode)
+  const allowed = new Set(loadOrderFor(mode))
+
+  // Build a working losses map keyed by the same element names the load
+  // order uses. Setpoint values win where they exist; legacy values fill
+  // gaps so any element the new shape doesn't carry (e.g. 'infiltration'
+  // legacy alias) still renders.
+  const losses = { ...legacyLosses }
+  if (setpoint) {
+    for (const elementKey of [
+      'external_wall', 'roof', 'ground_floor', 'glazing',
+      'fabric_leakage', 'permanent_vents', 'thermal_bridging',
+    ]) {
+      const sp = _normaliseSetpointNode(setpoint[elementKey], gia)
+      if (sp) losses[elementKey] = sp
+    }
+  }
+
+  // Build the rendering order. Start from the mode's canonical order, then
+  // splice in per-system mech vent + per-opening natvent lines AFTER the
+  // legacy 'ventilation' key (or at the end if absent) — these are new
+  // categories not previously in the load order.
+  const baseOrder = loadOrderFor(mode).filter(k => allowed.has(k))
+  const orderWithNew = []
+  for (const k of baseOrder) {
+    orderWithNew.push(k)
+    if (k === 'ventilation') {
+      // Per-system mech vent expansion — replaces / supplements the legacy
+      // single 'ventilation' aggregate line.
+      const ventSystems = setpoint?.ventilation ?? []
+      for (const v of ventSystems) {
+        if ((v.heat_loss_kwh ?? 0) > 0.01) {
+          const key = `ventilation_${v.name}`
+          const kwh = v.heat_loss_kwh
+          const kwh_per_m2 = gia > 0 ? kwh / gia : 0
+          losses[key] = { kwh, kwh_per_m2, _label: `Ventilation: ${v.name}` }
+          orderWithNew.push(key)
+        }
+      }
+    }
+  }
+  // Per-opening natural ventilation — always appended at the end (operable
+  // doors / windows from Brief 28e). Each opening becomes its own line.
+  const natvents = setpoint?.natural_ventilation ?? []
+  for (const o of natvents) {
+    if ((o.heat_loss_kwh ?? 0) > 0.01) {
+      const key = `natvent_${o.id}`
+      const kwh = o.heat_loss_kwh
+      const kwh_per_m2 = gia > 0 ? kwh / gia : 0
+      losses[key] = { kwh, kwh_per_m2, _label: `Operable: ${o.name || o.id}` }
+      orderWithNew.push(key)
+    }
+  }
+
+  return orderWithNew
     .filter(k => {
-      if (!allowed.has(k)) return false
       // 'cooling' is synthesised from demand — falls through the normal
       // losses[k] lookup. Only present when the mode order includes it
       // (envelope-gains, full).
@@ -77,14 +154,12 @@ function flattenLosses(data, unit, mode = DEFAULT_MODE) {
         const mwh = data?.demand?.cooling_demand_mwh
         return mwh != null && mwh > 0.01
       }
+      // Drop the legacy aggregate 'ventilation' line when we've already
+      // expanded it into per-system entries — avoids double-counting.
+      if (k === 'ventilation' && orderWithNew.some(x => x.startsWith('ventilation_'))) return false
       return losses[k] != null
     })
-    // Hide opening-line items when there's no opening flow — keeps the chart
-    // clean for projects that haven't opted in to wind-driven openings.
     .filter(k => !k.startsWith('openings_') || (losses[k]?.kwh ?? 0) > 0.01)
-    // Also hide State-1-specific keys (fabric_leakage, permanent_vents,
-    // thermal_bridging) when they're 0 — Part 0 keeps the column compact
-    // until Part 2 actually populates them.
     .filter(k => !['fabric_leakage', 'permanent_vents', 'thermal_bridging'].includes(k)
                  || (losses[k]?.kwh ?? 0) > 0.01)
     .map(k => {
@@ -101,15 +176,20 @@ function flattenLosses(data, unit, mode = DEFAULT_MODE) {
           meta:  { kwh, kwh_per_m2, synthetic: true, source: 'demand.cooling_demand_mwh' },
         }
       }
+      const node = losses[k]
+      // Per-system vent + per-opening natvent rows carry a synthetic _label
+      // so they render with a descriptive name instead of the synthetic
+      // composite key. Everything else uses the canonical LABELS table.
+      const label = node?._label ?? LABELS[k] ?? k
       return {
         key: k,
-        label: LABELS[k],
-        value: readValue(losses[k], unit),
-        raw_kwh: losses[k].kwh ?? 0,
-        raw_kwh_per_m2: losses[k].kwh_per_m2 ?? 0,
-        colour: colourForElement(k),
-        area_m2: losses[k].area_m2,
-        meta: losses[k],
+        label,
+        value: readValue(node, unit),
+        raw_kwh: node?.kwh ?? 0,
+        raw_kwh_per_m2: node?.kwh_per_m2 ?? 0,
+        colour: colourForElement(k.startsWith('ventilation_') ? 'ventilation' : k.startsWith('natvent_') ? 'openings_window' : k),
+        area_m2: node?.area_m2,
+        meta: node,
       }
     })
 }

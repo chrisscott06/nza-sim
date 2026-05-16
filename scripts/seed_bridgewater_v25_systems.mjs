@@ -115,14 +115,37 @@ const BRIDGEWATER_CONSTRUCTION_CHOICES = {
   glazing:       { library_id: 'double_low_e',          g_value_override: 0.50 },
 }
 
-// ── Bridgewater fabric-level inputs (Brief 28k Gate 3+) ────────────────────
+// ── Bridgewater fabric-level inputs ───────────────────────────────────────
 //
-// thermal_bridging_alpha_pct: BRUKL Technical Data Sheet shows total thermal
-// bridging α = 200.31% of fabric transfer coefficient. Notional/Part L
-// baseline is 18%. Bridgewater's α=200% indicates poor thermal-bridge
-// detailing — junctions are ~2× the area-element fabric losses.
+// Brief 28L's fabric.thermal_bridging_alpha_pct = 200 (SBEM α convention,
+// "200% of area-UA") has been DEPRECATED by Brief 28-TB-Simple in favour of
+// ISO 14683 junction-based physics (see BRIDGEWATER_THERMAL_BRIDGES below).
+// The α=200 number has been removed from the seed body; it's a stale BRUKL
+// reporting artefact, not modelling input. The schema field
+// `fabric.thermal_bridging_alpha_pct` stays alive as a deprecated read-only
+// fallback (engine logs deprecation warning + α/100 × area_UA conversion
+// for any project not yet re-seeded under Brief 28-TB-Simple).
 const BRIDGEWATER_FABRIC = {
-  thermal_bridging_alpha_pct: 200,
+  // (no fabric-level overrides currently; reserved for future use)
+}
+
+// ── Brief 28-TB-Simple: Bridgewater thermal bridges ───────────────────────
+//
+// ISO 14683 auto-computation with multiplier 1.0 — typical UK Notional /
+// AD L compliance-quality detailing, no specific psi-value calculations
+// available. Junction lengths derived from geometry; ψ defaults from
+// frontend/src/data/thermalBridgesLibrary.js (ISO 14683 Table A.2 typical
+// values). Expected H_TB for Bridgewater post-WWR-correction: ~95-100 W/K,
+// annual TB loss ~10-12 MWh/yr at Yeovilton.
+//
+// BRUKL Technical Data Sheet reports α = 200.31% (SBEM convention,
+// non-standard reading); this is recorded as observation only in
+// docs/research/sbem_thermal_bridging_convention.md, not consumed by the
+// engine. See docs/briefs/active/28tb_thermal_bridging_simple.md for the
+// reframe rationale.
+const BRIDGEWATER_THERMAL_BRIDGES = {
+  mode:       'iso14683_auto',
+  multiplier: 1.0,
 }
 
 // ── Brief 28e: Bridgewater operable openings ──────────────────────────────
@@ -182,9 +205,19 @@ const BUILDING_CORRECTIONS = {
   // Brief 28k Gate 3+ (2026-05-16): BRUKL air permeability 4.64 m³/h·m² @ 50 Pa
   // → rule-of-thumb /20 ≈ 0.23 ac/h background infiltration.
   infiltration_ach: 0.23,
-  // Brief 28k Gate 3+: fabric.thermal_bridging_alpha_pct = 200 (BRUKL Tech Data
-  // Sheet shows α = 200.31% of fabric transfer coefficient).
-  fabric: BRIDGEWATER_FABRIC,
+  // Brief 28-TB-Simple Bridgewater geometry correction:
+  // wwr.north was 0.55 (overstated NE glazing as 517 m² of 940 m² wall);
+  // CAD-measured real NE glazing is 339 m² of 964 m² wall, giving WWR = 0.351.
+  // Phantom heat loss at the over-glazed WWR: ~+19.5 MWh/yr (diagnosis in
+  // docs/research/sbem_thermal_bridging_convention.md). The wwr.south /
+  // .east / .west values look right against CAD; only north needed fixing.
+  // (Engine schema is a single WWR per facade — future Brief 28-PerFacade-
+  // GlazingArea can extend to itemised per-window if/when needed.)
+  wwr: { north: 0.35, south: 0.12, east: 0.02, west: 0.02 },
+  // Brief 28-TB-Simple supersedes Brief 28k's thermal_bridging_alpha_pct
+  // mechanism. See BRIDGEWATER_FABRIC + BRIDGEWATER_THERMAL_BRIDGES above.
+  fabric:           BRIDGEWATER_FABRIC,
+  thermal_bridges:  BRIDGEWATER_THERMAL_BRIDGES,
   systems_config_v25: BRIDGEWATER_V25,
   // Brief 28e: operable openings (entrance door scheduled during business hours).
   // Engine math lands at Gate E2; Gate E1 just persists the schema.
@@ -286,7 +319,8 @@ console.log(`         external_wall  u_value_override → ${BRIDGEWATER_CONSTRUC
 console.log(`         roof           u_value_override → ${BRIDGEWATER_CONSTRUCTION_CHOICES.roof.u_value_override} W/m²K`)
 console.log(`         ground_floor   u_value_override → ${BRIDGEWATER_CONSTRUCTION_CHOICES.ground_floor.u_value_override} W/m²K`)
 console.log(`         glazing        g_value_override → ${BRIDGEWATER_CONSTRUCTION_CHOICES.glazing.g_value_override}`)
-console.log(`         fabric.thermal_bridging_alpha_pct → ${BRIDGEWATER_FABRIC.thermal_bridging_alpha_pct}%`)
+console.log(`         thermal_bridges → mode=${BRIDGEWATER_THERMAL_BRIDGES.mode}, multiplier=${BRIDGEWATER_THERMAL_BRIDGES.multiplier} (Brief 28-TB-Simple ISO 14683)`)
+console.log(`         wwr.north → ${BUILDING_CORRECTIONS.wwr.north} (was 0.55; Brief 28-TB-Simple NE glazing correction)`)
 console.log(`         infiltration_ach → ${BUILDING_CORRECTIONS.infiltration_ach}`)
 console.log(`         ventilation systems: ${BRIDGEWATER_V25.ventilation.length} (mvhr_gf_public 1425, bedroom_extract 2208, public_toilet_extract 210 L/s)`)
 console.log(`         operable_openings: ${BRIDGEWATER_OPERABLE_OPENINGS.length} → ${BRIDGEWATER_OPERABLE_OPENINGS.map(o => `${o.id} (${o.area_m2}m² ${o.facade}, ${o.control.mode}: ${o.control.schedule_ref ?? o.control.mode})`).join('; ')}`)
