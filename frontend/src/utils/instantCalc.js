@@ -252,10 +252,33 @@ function computeGeometry(building) {
 // items via `useStateComparison`) saw 0.42. Shared envelope physics
 // must be byte-identical across State 1 and State 2 displays per
 // zero-tolerance contract.
+// Brief 28k Gate 3+ (2026-05-16): construction_choices entries can be either
+// a string (just a library_id) or an object carrying per-project overrides
+// alongside the library_id. The override fields are project-scoped; they
+// don't mutate the shared library.
+//
+//   string form:   "cavity_wall_enhanced"
+//   object form:   { library_id: "cavity_wall_enhanced", u_value_override: 0.14 }
+//
+// Per-project overrides currently honoured:
+//   - u_value_override   (W/m²K)
+//   - g_value_override   (-, glazing only)
+function resolveChoice(choice) {
+  if (!choice) return { id: null, overrides: {} }
+  if (typeof choice === 'string') return { id: choice, overrides: {} }
+  if (typeof choice === 'object') {
+    return { id: choice.library_id ?? choice.id ?? choice.name ?? null, overrides: choice }
+  }
+  return { id: null, overrides: {} }
+}
+
 function getGValue(constructionChoices, libraryData) {
-  const name = constructionChoices?.glazing
-  if (name && libraryData?.constructions) {
-    const item = libraryData.constructions.find(c => c.name === name)
+  const { id, overrides } = resolveChoice(constructionChoices?.glazing)
+  if (Number.isFinite(overrides.g_value_override) && overrides.g_value_override > 0) {
+    return Number(overrides.g_value_override)
+  }
+  if (id && libraryData?.constructions) {
+    const item = libraryData.constructions.find(c => c.name === id)
     if (item) {
       const g = item.g_value ?? item.config_json?.g_value
       if (g != null) return Number(g)
@@ -326,16 +349,25 @@ function withMode(building, mode) {
     thermal_mass_category: building?.thermal_mass_category ?? 'light',
     openings:      permanentOpenings,
     location:      building?.location,
+    // Brief 28k Gate 3+: thermal bridging is a pure fabric input (BRUKL-
+    // sourced α coefficient). Belongs to both State 1 and State 2 — it's
+    // not a system, it's a junction-loss multiplier on the area-element UA.
+    fabric:        building?.fabric,
     // weather_file kept off — solar latitude comes from EPW location directly.
   }
   if (mode === 'envelope-only') return base
   // mode === 'envelope-gains': add State 2 inputs (occupancy + gains), keep
-  // legacy num_bedrooms for `per_room` density basis. Systems stay stripped.
+  // legacy num_bedrooms for `per_room` density basis. Brief 28k Gate 3+:
+  // also pass through systems_config_v25 so State 2 can read the ventilation
+  // array — extract-only flows are real continuous heat losses (no recovery)
+  // and need to be in the State 2 setpoint demand. Other systems_config_v25
+  // fields (heating, cooling, dhw) are inert in State 2.
   return {
     ...base,
-    num_bedrooms: building?.num_bedrooms,
-    occupancy:    building?.occupancy,
-    gains:        building?.gains,
+    num_bedrooms:        building?.num_bedrooms,
+    occupancy:           building?.occupancy,
+    gains:               building?.gains,
+    systems_config_v25:  building?.systems_config_v25,
   }
 }
 
@@ -344,9 +376,13 @@ function withMode(building, mode) {
  * Returns the item object (with layers) or null if not found.
  */
 function getConstructionItem(constructions, libraryData, element) {
-  const name = constructions?.[element]
-  if (!name) return null
-  return libraryData?.constructions?.find(c => c.name === name) ?? null
+  const { id, overrides } = resolveChoice(constructions?.[element])
+  if (!id) return null
+  const baseItem = libraryData?.constructions?.find(c => c.name === id) ?? null
+  if (!baseItem) return null
+  // Brief 28k Gate 3+: overlay per-project overrides on the library item so
+  // pickWholeWallU and downstream code see them as native fields.
+  return { ...baseItem, ...overrides }
 }
 
 /**
@@ -403,6 +439,24 @@ function getConstructionItem(constructions, libraryData, element) {
  *      heating_demand[h] = max(0, UA·(lower_c − T_out) − Q_solar) if T_op < lower_c
  *      cooling_demand[h] = max(0, Q_solar + UA·(T_out − upper_c)) if T_op > upper_c
  */
+
+// Brief 28k (2026-05-16): construction whole-element U-value precedence used
+// for steady-state loss reporting + UA-based demand calc.
+//   1. config_json.u_value_override       — explicit per-construction override
+//   2. u_value_W_per_m2K (top-level or in config_json) — library's published
+//                                                      canonical U (e.g. BRUKL)
+//   3. 1 / R_total from the layer stack  — fallback
+//
+// The mass-model (stepWallLinearized) keeps using the layer stack for the
+// dynamic thermal-mass response — that separation is intentional.
+function pickWholeWallU(item, model) {
+  const ov = item?.config_json?.u_value_override ?? item?.u_value_override
+  if (Number.isFinite(ov) && ov > 0) return ov
+  const pub = item?.u_value_W_per_m2K ?? item?.config_json?.u_value_W_per_m2K
+  if (Number.isFinite(pub) && pub > 0) return pub
+  return model.type === 'mass' ? 1 / model.R_total : (model.U ?? 0)
+}
+
 function _calculateEnvelopeOnly(building, constructions, libraryData, weatherData, hourlySolar, comfortBand, tuning = null) {
   // Brief 28b Part 3 v2 (2026-05-14 commit d7c7aad + this commit):
   // optional `tuning` overrides for the three thermal-mass /
@@ -478,13 +532,13 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
     h_out: 1e9,        // effectively bypasses sol-air (no convection lost to sky)
   })
 
-  // ── Whole-wall U-values from the layer stack (for demand UA calc) ────────
-  // Note: model.U_eff used in the zone-balance linearisation is the
-  // node-to-air conductance (1/R_n), NOT the whole-wall U. For demand
-  // calculations we need 1/R_total = whole-wall steady-state U.
-  const wholeWallU_ext   = extWallModel.type === 'mass' ? 1 / extWallModel.R_total : (extWallModel.U ?? 0)
-  const wholeWallU_roof  = roofModel.type    === 'mass' ? 1 / roofModel.R_total    : (roofModel.U ?? 0)
-  const wholeWallU_floor = floorModel.type   === 'mass' ? 1 / floorModel.R_total   : (floorModel.U ?? 0)
+  // ── Whole-wall U-values for loss reporting + UA-based demand calc ────────
+  // Precedence: config_json.u_value_override → u_value_W_per_m2K (library
+  // published, e.g. BRUKL) → 1/R_total from layer stack. See pickWholeWallU
+  // module-scope helper above _calculateEnvelopeOnly for full rationale.
+  const wholeWallU_ext   = pickWholeWallU(extWallItem, extWallModel)
+  const wholeWallU_roof  = pickWholeWallU(roofItem,    roofModel)
+  const wholeWallU_floor = pickWholeWallU(floorItem,   floorModel)
   const UA_wall_whole  = wholeWallU_ext   * total_wall_opaque
   const UA_roof_whole  = wholeWallU_roof  * roof_area
   const UA_floor_whole = wholeWallU_floor * ground_area
@@ -502,6 +556,18 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   let _T_out_sum = 0
   for (let h = 0; h < weatherData.temperature.length; h++) _T_out_sum += weatherData.temperature[h]
   const T_ground = _T_out_sum / weatherData.temperature.length
+
+  // ── Floor's constant contribution to H and C (Brief 28k Gate 2, opt. i) ──
+  // T_ground is annual-mean (constant), so the floor terms in
+  // hourly_heat_loss_Wh and hourly_cool_gain_Wh are the same every hour.
+  // We subtract these from the full hourly totals to get a weather-driven
+  // H_weather / C_weather, used ONLY to gate the demand branch (heating
+  // direction / cooling direction / shoulder). The full H_full / C_full
+  // (including floor) is still used in the demand subtraction itself.
+  // Rationale: "shoulder" should mean the weather is mild, not that the
+  // floor stopped losing heat to constant 11 °C ground.
+  const H_floor_const = wholeWallU_floor * ground_area * Math.max(0, comfortBand.lower_c - T_ground)
+  const C_floor_const = wholeWallU_floor * ground_area * Math.max(0, T_ground - comfortBand.upper_c)
 
   // ── Ventilation (split) ──────────────────────────────────────────────────
   const ach = Number(building.infiltration_ach ?? 0.5)
@@ -561,6 +627,56 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   let acc_heating_demand_Wh = 0, acc_cooling_demand_Wh = 0
   let underheating_hours = 0, overheating_hours = 0, comfort_hours = 0
   let T_winter_min = Infinity, T_summer_max = -Infinity
+
+  // ── Setpoint-convention accumulators (Brief 28k Gate 1) ──────────────────
+  // Standard convention (ISO 52016 / CIBSE / ASHRAE):
+  //   Q_heating_loss_h = max(0, U × A × (T_setpoint_heat − T_driving_h))
+  //   Q_cooling_gain_h = max(0, U × A × (T_driving_h − T_setpoint_cool))
+  // T_driving = T_sa (sol-air) for opaque walls + roof; T_out for glazing
+  // and ventilation; T_ground for ground floor.
+  //
+  // These accumulators are reported alongside the existing free-running
+  // `losses` block. The existing `losses` block remains unchanged for now —
+  // it represents a free-running heat balance (zone vs outdoor) and stays
+  // in place during the transition. Brief 28k Gate 2+ will replace the
+  // demand calc and Gate 3+ will reach into _calculateState2.
+  let acc_heat_loss_wall_n = 0, acc_heat_loss_wall_e = 0, acc_heat_loss_wall_s = 0, acc_heat_loss_wall_w = 0
+  let acc_heat_loss_roof = 0, acc_heat_loss_floor = 0
+  let acc_heat_loss_glaz_n = 0, acc_heat_loss_glaz_e = 0, acc_heat_loss_glaz_s = 0, acc_heat_loss_glaz_w = 0
+  let acc_heat_loss_leakage = 0, acc_heat_loss_permanent = 0
+
+  let acc_cool_gain_wall_n = 0, acc_cool_gain_wall_e = 0, acc_cool_gain_wall_s = 0, acc_cool_gain_wall_w = 0
+  let acc_cool_gain_roof = 0, acc_cool_gain_floor = 0
+  let acc_cool_gain_glaz_n = 0, acc_cool_gain_glaz_e = 0, acc_cool_gain_glaz_s = 0, acc_cool_gain_glaz_w = 0
+  let acc_cool_gain_leakage = 0, acc_cool_gain_permanent = 0
+
+  // ── Thermal bridging (Brief 28k Gate 3+) ─────────────────────────────────
+  // BRUKL convention: thermal bridges contribute α (linear-junction coefficient
+  // ratio) on top of the area-element fabric UA. Default α = 18% (BRUKL
+  // notional Part L baseline). Project-specific values come from
+  // building.fabric.thermal_bridging_alpha_pct (Bridgewater = 200%).
+  // Driven by T_out (no sol-air for bridges — most bridges are at corners,
+  // floor-wall junctions, window perimeters where simple T_out is appropriate).
+  // Included in H_full / C_full for demand calc AND in H_weather / C_weather
+  // for the gate (per Chris ruling 3).
+  const thermal_bridging_alpha_pct = Number(building?.fabric?.thermal_bridging_alpha_pct ?? 18)
+  const tb_factor = thermal_bridging_alpha_pct / 100
+  const fabric_area_UA = wholeWallU_ext * total_wall_opaque
+                       + wholeWallU_roof * roof_area
+                       + wholeWallU_floor * ground_area
+                       + UA_glaz
+  let acc_heat_loss_thermal_bridging = 0
+  let acc_cool_gain_thermal_bridging = 0
+
+  // ── Solar-bucket per-facade accumulators (Brief 28k Gate 2) ──────────────
+  // Three-way classification of glazing-transmitted solar per facade:
+  //   beneficial: offset fabric heating need at setpoint
+  //   cooling:    contributed to fabric+vent cooling load
+  //   shoulder:   fell during fabric-shoulder hours (no heating/cooling need)
+  // Conservation per hour: beneficial + cooling + shoulder = Q_solar_h.
+  let acc_solar_beneficial_n = 0, acc_solar_beneficial_e = 0, acc_solar_beneficial_s = 0, acc_solar_beneficial_w = 0
+  let acc_solar_cooling_n    = 0, acc_solar_cooling_e    = 0, acc_solar_cooling_s    = 0, acc_solar_cooling_w    = 0
+  let acc_solar_shoulder_n   = 0, acc_solar_shoulder_e   = 0, acc_solar_shoulder_s   = 0, acc_solar_shoulder_w   = 0
 
   for (let h = 0; h < n; h++) {
     const T_out = weatherData.temperature[h]
@@ -727,6 +843,56 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
       acc_cond_floor     += wholeWallU_floor * ground_area * dT_air_to_ground
     }
 
+    // ── Setpoint-convention loss/gain accumulators (Brief 28k Gate 1) ────
+    // Per-element heat loss against T_setpoint_heat and per-element heat
+    // gain against T_setpoint_cool, using sol-air for opaque elements.
+    // Mass step above keeps using the area-weighted T_sa_wall (single shared
+    // wall state); for the loss *report* we want per-facade sol-air to
+    // compare against the per-facade spreadsheet hand-calc breakdown.
+    const T_heat = comfortBand.lower_c
+    const T_cool = comfortBand.upper_c
+    const T_sa_wall_n_h = solAirT(T_out, hourlySolar.f1[h], extWallModel.solar_abs ?? 0.6, extWallModel.h_out ?? 25)
+    const T_sa_wall_e_h = solAirT(T_out, hourlySolar.f2[h], extWallModel.solar_abs ?? 0.6, extWallModel.h_out ?? 25)
+    const T_sa_wall_s_h = solAirT(T_out, hourlySolar.f3[h], extWallModel.solar_abs ?? 0.6, extWallModel.h_out ?? 25)
+    const T_sa_wall_w_h = solAirT(T_out, hourlySolar.f4[h], extWallModel.solar_abs ?? 0.6, extWallModel.h_out ?? 25)
+    const dT_heat_out = Math.max(0, T_heat - T_out)
+    const dT_cool_out = Math.max(0, T_out - T_cool)
+    // Walls per facade (sol-air driving T)
+    acc_heat_loss_wall_n += wholeWallU_ext * wallOpaqueByFace.north * Math.max(0, T_heat - T_sa_wall_n_h)
+    acc_heat_loss_wall_e += wholeWallU_ext * wallOpaqueByFace.east  * Math.max(0, T_heat - T_sa_wall_e_h)
+    acc_heat_loss_wall_s += wholeWallU_ext * wallOpaqueByFace.south * Math.max(0, T_heat - T_sa_wall_s_h)
+    acc_heat_loss_wall_w += wholeWallU_ext * wallOpaqueByFace.west  * Math.max(0, T_heat - T_sa_wall_w_h)
+    acc_cool_gain_wall_n += wholeWallU_ext * wallOpaqueByFace.north * Math.max(0, T_sa_wall_n_h - T_cool)
+    acc_cool_gain_wall_e += wholeWallU_ext * wallOpaqueByFace.east  * Math.max(0, T_sa_wall_e_h - T_cool)
+    acc_cool_gain_wall_s += wholeWallU_ext * wallOpaqueByFace.south * Math.max(0, T_sa_wall_s_h - T_cool)
+    acc_cool_gain_wall_w += wholeWallU_ext * wallOpaqueByFace.west  * Math.max(0, T_sa_wall_w_h - T_cool)
+    // Roof (sol-air driving T, single area)
+    acc_heat_loss_roof += wholeWallU_roof * roof_area * Math.max(0, T_heat - T_sa_roof)
+    acc_cool_gain_roof += wholeWallU_roof * roof_area * Math.max(0, T_sa_roof - T_cool)
+    // Glazing per facade (T_out driving T, no sol-air on glass)
+    acc_heat_loss_glaz_n += glaz_face_UA('north') * dT_heat_out
+    acc_heat_loss_glaz_e += glaz_face_UA('east')  * dT_heat_out
+    acc_heat_loss_glaz_s += glaz_face_UA('south') * dT_heat_out
+    acc_heat_loss_glaz_w += glaz_face_UA('west')  * dT_heat_out
+    acc_cool_gain_glaz_n += glaz_face_UA('north') * dT_cool_out
+    acc_cool_gain_glaz_e += glaz_face_UA('east')  * dT_cool_out
+    acc_cool_gain_glaz_s += glaz_face_UA('south') * dT_cool_out
+    acc_cool_gain_glaz_w += glaz_face_UA('west')  * dT_cool_out
+    // Ventilation (T_out)
+    acc_heat_loss_leakage   += UA_leakage   * dT_heat_out
+    acc_heat_loss_permanent += UA_permanent * dT_heat_out
+    acc_cool_gain_leakage   += UA_leakage   * dT_cool_out
+    acc_cool_gain_permanent += UA_permanent * dT_cool_out
+    // Ground floor (T_ground driving T)
+    acc_heat_loss_floor += wholeWallU_floor * ground_area * Math.max(0, T_heat - T_ground)
+    acc_cool_gain_floor += wholeWallU_floor * ground_area * Math.max(0, T_ground - T_cool)
+
+    // Thermal bridging (Brief 28k Gate 3+): α × fabric_area_UA × ΔT_out
+    const TB_heat_h = fabric_area_UA * tb_factor * dT_heat_out
+    const TB_cool_h = fabric_area_UA * tb_factor * dT_cool_out
+    acc_heat_loss_thermal_bridging += TB_heat_h
+    acc_cool_gain_thermal_bridging += TB_cool_h
+
     // Comfort hours + T extremes
     const month = weatherData.month[h]
     if (T_op < comfortBand.lower_c)      underheating_hours++
@@ -735,22 +901,119 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
     if (month >= 12 || month <= 2) T_winter_min = Math.min(T_winter_min, T_op)
     if (month >= 6  && month <= 8) T_summer_max = Math.max(T_summer_max, T_op)
 
-    // ── Demand derivation ───────────────────────────────────────────────
-    // Count Wh a perfect system would have delivered to hold T_op at the
-    // comfort band edge. UA totals use WHOLE-WALL U-values (1/Σ R from
-    // the layer stack), not node-to-air conductance — the latter would
-    // double-count the wall internals on the demand side.
-    const UA_total_now =
-      UA_wall_whole + UA_roof_whole + UA_floor_whole +
-      UA_glaz + UA_leakage + UA_permanent
-    const Q_solar_in_Wh_for_demand = Q_solar_glaz_zone   // glazing transmitted only
-    if (T_op < comfortBand.lower_c) {
-      const Q_loss_at_lower = UA_total_now * Math.max(0, comfortBand.lower_c - T_out)
-      const heating_Wh = Math.max(0, Q_loss_at_lower - Q_solar_in_Wh_for_demand)
-      acc_heating_demand_Wh += heating_Wh
-    } else if (T_op > comfortBand.upper_c) {
-      const Q_gain_at_upper = Q_solar_in_Wh_for_demand + UA_total_now * Math.max(0, T_out - comfortBand.upper_c)
-      acc_cooling_demand_Wh += Q_gain_at_upper
+    // ── Demand derivation (Brief 28k Gate 2 — option (c) with shoulder) ──
+    // Setpoint-anchored net energy balance, fabric-direction-gated. No free-
+    // running gate (no reference to T_op_free_running). Three regimes per
+    // hour, classified by fabric direction at setpoint:
+    //
+    //   H > 0   (heating-direction): solar offsets fabric loss first, surplus
+    //           pushes into cooling.
+    //     heating_h = max(0, H − Q)
+    //     cooling_h = max(0, Q − H)
+    //   C > 0   (cooling-direction): solar adds to cooling load.
+    //     heating_h = 0
+    //     cooling_h = C + Q
+    //   H = C = 0 (fabric-shoulder): solar lands in a hour with no setpoint
+    //             demand, treated as shoulder (not cooling demand).
+    //     heating_h = 0
+    //     cooling_h = 0
+    //
+    // Solar through glazing is bucketed into three per-facade categories
+    // that conserve Q per hour:
+    //   beneficial = min(Q, H)               (offset heating)
+    //   cooling    = (Q − H) if H > 0; Q if C > 0; 0 if shoulder
+    //   shoulder   = Q if H = C = 0; 0 otherwise
+    //
+    // Internal gains and utilisation factor are out of scope (envelope-
+    // only). State 2+ will add internal-gain offset at Gate 3.
+    const hourly_heat_loss_Wh =
+      wholeWallU_ext  * (wallOpaqueByFace.north * Math.max(0, T_heat - T_sa_wall_n_h)
+                       + wallOpaqueByFace.east  * Math.max(0, T_heat - T_sa_wall_e_h)
+                       + wallOpaqueByFace.south * Math.max(0, T_heat - T_sa_wall_s_h)
+                       + wallOpaqueByFace.west  * Math.max(0, T_heat - T_sa_wall_w_h))
+      + wholeWallU_roof  * roof_area    * Math.max(0, T_heat - T_sa_roof)
+      + wholeWallU_floor * ground_area  * Math.max(0, T_heat - T_ground)
+      + (glaz_face_UA('north') + glaz_face_UA('east')
+       + glaz_face_UA('south') + glaz_face_UA('west')) * dT_heat_out
+      + (UA_leakage + UA_permanent) * dT_heat_out
+      + TB_heat_h   // Brief 28k Gate 3+: thermal bridging
+
+    const hourly_cool_gain_Wh =
+      wholeWallU_ext  * (wallOpaqueByFace.north * Math.max(0, T_sa_wall_n_h - T_cool)
+                       + wallOpaqueByFace.east  * Math.max(0, T_sa_wall_e_h - T_cool)
+                       + wallOpaqueByFace.south * Math.max(0, T_sa_wall_s_h - T_cool)
+                       + wallOpaqueByFace.west  * Math.max(0, T_sa_wall_w_h - T_cool))
+      + wholeWallU_roof  * roof_area    * Math.max(0, T_sa_roof - T_cool)
+      + wholeWallU_floor * ground_area  * Math.max(0, T_ground  - T_cool)
+      + (glaz_face_UA('north') + glaz_face_UA('east')
+       + glaz_face_UA('south') + glaz_face_UA('west')) * dT_cool_out
+      + (UA_leakage + UA_permanent) * dT_cool_out
+      + TB_cool_h   // Brief 28k Gate 3+: thermal bridging
+
+    const Q_solar_through_glazing_Wh = sol_n + sol_e + sol_s + sol_w
+
+    // Brief 28k Gate 2 opt. (i): gate the regime on WEATHER-DRIVEN H/C
+    // (i.e. fabric loss/gain with the constant-floor term backed out). The
+    // floor still contributes to H_full / C_full for the demand subtraction
+    // when we ARE in a heating- or cooling-direction hour. Weather-shoulder
+    // hours produce zero demand regardless of floor. Thermal bridging IS
+    // weather-driven (uses T_out) so it stays in H_weather/C_weather.
+    const H_weather = hourly_heat_loss_Wh - H_floor_const
+    const C_weather = hourly_cool_gain_Wh - C_floor_const
+
+    let heating_Wh_at_setpoint = 0
+    let cooling_Wh_at_setpoint = 0
+    let beneficial_h_Wh = 0
+    let cooling_solar_h_Wh = 0
+    let shoulder_h_Wh = 0
+    if (H_weather > 0) {
+      heating_Wh_at_setpoint = Math.max(0, hourly_heat_loss_Wh - Q_solar_through_glazing_Wh)
+      cooling_Wh_at_setpoint = Math.max(0, Q_solar_through_glazing_Wh - hourly_heat_loss_Wh)
+      beneficial_h_Wh   = Math.min(Q_solar_through_glazing_Wh, hourly_heat_loss_Wh)
+      cooling_solar_h_Wh = Math.max(0, Q_solar_through_glazing_Wh - hourly_heat_loss_Wh)
+      shoulder_h_Wh = 0
+    } else if (C_weather > 0) {
+      heating_Wh_at_setpoint = 0
+      cooling_Wh_at_setpoint = hourly_cool_gain_Wh + Q_solar_through_glazing_Wh
+      beneficial_h_Wh = 0
+      cooling_solar_h_Wh = Q_solar_through_glazing_Wh
+      shoulder_h_Wh = 0
+    } else {
+      // Weather-shoulder: H_weather = 0 AND C_weather = 0. The floor may
+      // still be losing heat (H_floor_const > 0 in UK) but the weather
+      // isn't pushing the envelope in either direction. No demand is
+      // attributed to this hour. All solar transmission goes to the
+      // shoulder bucket.
+      heating_Wh_at_setpoint = 0
+      cooling_Wh_at_setpoint = 0
+      beneficial_h_Wh = 0
+      cooling_solar_h_Wh = 0
+      shoulder_h_Wh = Q_solar_through_glazing_Wh
+    }
+    acc_heating_demand_Wh += heating_Wh_at_setpoint
+    acc_cooling_demand_Wh += cooling_Wh_at_setpoint
+
+    // Per-facade allocation of the three solar buckets, proportional to each
+    // facade's share of Q_solar_through_glazing_Wh this hour. Skip when Q=0
+    // (no allocation needed, all buckets are 0).
+    if (Q_solar_through_glazing_Wh > 0) {
+      const inv_Q = 1 / Q_solar_through_glazing_Wh
+      const share_n = sol_n * inv_Q
+      const share_e = sol_e * inv_Q
+      const share_s = sol_s * inv_Q
+      const share_w = sol_w * inv_Q
+      acc_solar_beneficial_n += beneficial_h_Wh    * share_n
+      acc_solar_beneficial_e += beneficial_h_Wh    * share_e
+      acc_solar_beneficial_s += beneficial_h_Wh    * share_s
+      acc_solar_beneficial_w += beneficial_h_Wh    * share_w
+      acc_solar_cooling_n    += cooling_solar_h_Wh * share_n
+      acc_solar_cooling_e    += cooling_solar_h_Wh * share_e
+      acc_solar_cooling_s    += cooling_solar_h_Wh * share_s
+      acc_solar_cooling_w    += cooling_solar_h_Wh * share_w
+      acc_solar_shoulder_n   += shoulder_h_Wh      * share_n
+      acc_solar_shoulder_e   += shoulder_h_Wh      * share_e
+      acc_solar_shoulder_s   += shoulder_h_Wh      * share_s
+      acc_solar_shoulder_w   += shoulder_h_Wh      * share_w
     }
   }
   // No more roof solar heuristic — kept the variable name acc_solar_roof = 0
@@ -855,6 +1118,112 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
         fabric_leakage:  r1(acc_vent_leakage),
         permanent_vents: r1(acc_vent_permanent),
       },
+    },
+    // ── Setpoint-convention loss/gain block (Brief 28k Gate 1) ────────────
+    // Heat loss/gain per element computed against fixed indoor setpoints
+    // (T_heat = comfort_band.lower_c, T_cool = comfort_band.upper_c) using
+    // ISO 52016 / CIBSE / ASHRAE convention:
+    //   Q_heating_loss_h = max(0, U × A × (T_heat − T_driving_h))
+    //   Q_cooling_gain_h = max(0, U × A × (T_driving_h − T_cool))
+    // T_driving = sol-air for opaque (walls, roof); T_out for glazing and
+    // ventilation; T_ground for floor.
+    // Solar transmission through glazing reported separately (always-on,
+    // not gated by setpoint) for full accounting.
+    losses_at_setpoint: {
+      external_wall: {
+        heating_loss_kwh: r1(acc_heat_loss_wall_n + acc_heat_loss_wall_e + acc_heat_loss_wall_s + acc_heat_loss_wall_w),
+        cooling_gain_kwh: r1(acc_cool_gain_wall_n + acc_cool_gain_wall_e + acc_cool_gain_wall_s + acc_cool_gain_wall_w),
+        area_m2:    Math.round(total_wall_opaque),
+        kwh_per_m2: perM2(acc_heat_loss_wall_n + acc_heat_loss_wall_e + acc_heat_loss_wall_s + acc_heat_loss_wall_w),
+        by_face: {
+          F1: { heating_loss_kwh: r1(acc_heat_loss_wall_n), cooling_gain_kwh: r1(acc_cool_gain_wall_n), area_m2: Math.round(wallOpaqueByFace.north ?? 0) },
+          F2: { heating_loss_kwh: r1(acc_heat_loss_wall_e), cooling_gain_kwh: r1(acc_cool_gain_wall_e), area_m2: Math.round(wallOpaqueByFace.east  ?? 0) },
+          F3: { heating_loss_kwh: r1(acc_heat_loss_wall_s), cooling_gain_kwh: r1(acc_cool_gain_wall_s), area_m2: Math.round(wallOpaqueByFace.south ?? 0) },
+          F4: { heating_loss_kwh: r1(acc_heat_loss_wall_w), cooling_gain_kwh: r1(acc_cool_gain_wall_w), area_m2: Math.round(wallOpaqueByFace.west  ?? 0) },
+        },
+      },
+      roof: {
+        heating_loss_kwh: r1(acc_heat_loss_roof),
+        cooling_gain_kwh: r1(acc_cool_gain_roof),
+        area_m2:    Math.round(roof_area),
+        kwh_per_m2: perM2(acc_heat_loss_roof),
+      },
+      ground_floor: {
+        heating_loss_kwh: r1(acc_heat_loss_floor),
+        cooling_gain_kwh: r1(acc_cool_gain_floor),
+        area_m2:    Math.round(ground_area),
+        kwh_per_m2: perM2(acc_heat_loss_floor),
+      },
+      glazing: {
+        heating_loss_kwh:       r1(acc_heat_loss_glaz_n + acc_heat_loss_glaz_e + acc_heat_loss_glaz_s + acc_heat_loss_glaz_w),
+        cooling_gain_kwh:       r1(acc_cool_gain_glaz_n + acc_cool_gain_glaz_e + acc_cool_gain_glaz_s + acc_cool_gain_glaz_w),
+        solar_transmission_kwh: r1(acc_solar_n + acc_solar_e + acc_solar_s + acc_solar_w),
+        // Brief 28k Gate 2: three-way solar split (sums to solar_transmission_kwh)
+        solar_beneficial_heating_kwh:   r1(acc_solar_beneficial_n + acc_solar_beneficial_e + acc_solar_beneficial_s + acc_solar_beneficial_w),
+        solar_contributing_cooling_kwh: r1(acc_solar_cooling_n    + acc_solar_cooling_e    + acc_solar_cooling_s    + acc_solar_cooling_w),
+        solar_shoulder_kwh:             r1(acc_solar_shoulder_n   + acc_solar_shoulder_e   + acc_solar_shoulder_s   + acc_solar_shoulder_w),
+        area_m2:                Math.round(total_glazing),
+        by_face: {
+          F1: {
+            heating_loss_kwh: r1(acc_heat_loss_glaz_n), cooling_gain_kwh: r1(acc_cool_gain_glaz_n),
+            solar_transmission_kwh:         r1(acc_solar_n),
+            solar_beneficial_heating_kwh:   r1(acc_solar_beneficial_n),
+            solar_contributing_cooling_kwh: r1(acc_solar_cooling_n),
+            solar_shoulder_kwh:             r1(acc_solar_shoulder_n),
+            area_m2: Math.round(glazing.north ?? 0),
+          },
+          F2: {
+            heating_loss_kwh: r1(acc_heat_loss_glaz_e), cooling_gain_kwh: r1(acc_cool_gain_glaz_e),
+            solar_transmission_kwh:         r1(acc_solar_e),
+            solar_beneficial_heating_kwh:   r1(acc_solar_beneficial_e),
+            solar_contributing_cooling_kwh: r1(acc_solar_cooling_e),
+            solar_shoulder_kwh:             r1(acc_solar_shoulder_e),
+            area_m2: Math.round(glazing.east ?? 0),
+          },
+          F3: {
+            heating_loss_kwh: r1(acc_heat_loss_glaz_s), cooling_gain_kwh: r1(acc_cool_gain_glaz_s),
+            solar_transmission_kwh:         r1(acc_solar_s),
+            solar_beneficial_heating_kwh:   r1(acc_solar_beneficial_s),
+            solar_contributing_cooling_kwh: r1(acc_solar_cooling_s),
+            solar_shoulder_kwh:             r1(acc_solar_shoulder_s),
+            area_m2: Math.round(glazing.south ?? 0),
+          },
+          F4: {
+            heating_loss_kwh: r1(acc_heat_loss_glaz_w), cooling_gain_kwh: r1(acc_cool_gain_glaz_w),
+            solar_transmission_kwh:         r1(acc_solar_w),
+            solar_beneficial_heating_kwh:   r1(acc_solar_beneficial_w),
+            solar_contributing_cooling_kwh: r1(acc_solar_cooling_w),
+            solar_shoulder_kwh:             r1(acc_solar_shoulder_w),
+            area_m2: Math.round(glazing.west ?? 0),
+          },
+        },
+      },
+      fabric_leakage:   { heating_loss_kwh: r1(acc_heat_loss_leakage),   cooling_gain_kwh: r1(acc_cool_gain_leakage)   },
+      permanent_vents:  { heating_loss_kwh: r1(acc_heat_loss_permanent), cooling_gain_kwh: r1(acc_cool_gain_permanent) },
+      thermal_bridging: {
+        heating_loss_kwh: r1(acc_heat_loss_thermal_bridging),
+        cooling_gain_kwh: r1(acc_cool_gain_thermal_bridging),
+        alpha_pct: thermal_bridging_alpha_pct,
+        fabric_area_UA_W_per_K: Math.round(fabric_area_UA * 10) / 10,
+      },
+      totals: {
+        total_heating_loss_kwh: r1(
+          acc_heat_loss_wall_n + acc_heat_loss_wall_e + acc_heat_loss_wall_s + acc_heat_loss_wall_w +
+          acc_heat_loss_roof + acc_heat_loss_floor +
+          acc_heat_loss_glaz_n + acc_heat_loss_glaz_e + acc_heat_loss_glaz_s + acc_heat_loss_glaz_w +
+          acc_heat_loss_leakage + acc_heat_loss_permanent +
+          acc_heat_loss_thermal_bridging
+        ),
+        total_cooling_gain_kwh: r1(
+          acc_cool_gain_wall_n + acc_cool_gain_wall_e + acc_cool_gain_wall_s + acc_cool_gain_wall_w +
+          acc_cool_gain_roof + acc_cool_gain_floor +
+          acc_cool_gain_glaz_n + acc_cool_gain_glaz_e + acc_cool_gain_glaz_s + acc_cool_gain_glaz_w +
+          acc_cool_gain_leakage + acc_cool_gain_permanent +
+          acc_cool_gain_thermal_bridging
+        ),
+        total_solar_transmission_kwh: r1(acc_solar_n + acc_solar_e + acc_solar_s + acc_solar_w),
+      },
+      setpoints_used: { heating_c: comfortBand.lower_c, cooling_c: comfortBand.upper_c },
     },
     free_running: {
       annual_mean_c: Math.round(T_mean * 10) / 10,
@@ -1246,10 +1615,12 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   const roofModel    = buildWallModel(extractLayers(roofItem),    { R_si: R_SI_ROOF,  solar_abs: 0.7, h_out: 25 })
   const floorModel   = buildWallModel(extractLayers(floorItem),   { R_so: 0.0, R_si: R_SI_FLOOR, solar_abs: 0, h_out: 1e9 })
 
-  // Whole-wall U-values (for loss + demand UA totals)
-  const wholeWallU_ext   = extWallModel.type === 'mass' ? 1 / extWallModel.R_total : (extWallModel.U ?? 0)
-  const wholeWallU_roof  = roofModel.type    === 'mass' ? 1 / roofModel.R_total    : (roofModel.U ?? 0)
-  const wholeWallU_floor = floorModel.type   === 'mass' ? 1 / floorModel.R_total   : (floorModel.U ?? 0)
+  // Whole-wall U-values (Brief 28k: pickWholeWallU honours
+  // u_value_override / u_value_W_per_m2K / layer-computed precedence —
+  // same convention as State 1.)
+  const wholeWallU_ext   = pickWholeWallU(extWallItem, extWallModel)
+  const wholeWallU_roof  = pickWholeWallU(roofItem,    roofModel)
+  const wholeWallU_floor = pickWholeWallU(floorItem,   floorModel)
 
   // Glazing UA
   const UA_glaz = u_glaz * total_glazing
@@ -1259,6 +1630,14 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   let _T_out_sum = 0
   for (let h = 0; h < weatherData.temperature.length; h++) _T_out_sum += weatherData.temperature[h]
   const T_ground = _T_out_sum / weatherData.temperature.length
+
+  // Brief 28k Gate 3: floor's constant contributions to H and C used to
+  // gate the demand branch (heating-direction / cooling-direction / shoulder).
+  // Floor still appears in the full H/C sums for the demand subtraction; it
+  // just doesn't determine the regime. Same as Gate 2 option (i) in
+  // _calculateEnvelopeOnly.
+  const H_floor_const = wholeWallU_floor * ground_area * Math.max(0, comfortBand.lower_c - T_ground)
+  const C_floor_const = wholeWallU_floor * ground_area * Math.max(0, T_ground - comfortBand.upper_c)
 
   // Ventilation
   const ach = Number(building.infiltration_ach ?? 0.5)
@@ -1323,6 +1702,61 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   let acc_heating_demand_Wh = 0, acc_cooling_demand_Wh = 0
   let underheating_hours = 0, overheating_hours = 0, comfort_hours = 0
   let T_winter_min = Infinity, T_summer_max = -Infinity
+
+  // Brief 28k Gate 3 — setpoint-convention accumulators (mirror Gate 1 in State 1)
+  let acc_heat_loss_wall_n = 0, acc_heat_loss_wall_e = 0, acc_heat_loss_wall_s = 0, acc_heat_loss_wall_w = 0
+  let acc_heat_loss_roof = 0, acc_heat_loss_floor = 0
+  let acc_heat_loss_glaz_n = 0, acc_heat_loss_glaz_e = 0, acc_heat_loss_glaz_s = 0, acc_heat_loss_glaz_w = 0
+  let acc_heat_loss_leakage = 0, acc_heat_loss_permanent = 0
+  let acc_cool_gain_wall_n = 0, acc_cool_gain_wall_e = 0, acc_cool_gain_wall_s = 0, acc_cool_gain_wall_w = 0
+  let acc_cool_gain_roof = 0, acc_cool_gain_floor = 0
+  let acc_cool_gain_glaz_n = 0, acc_cool_gain_glaz_e = 0, acc_cool_gain_glaz_s = 0, acc_cool_gain_glaz_w = 0
+  let acc_cool_gain_leakage = 0, acc_cool_gain_permanent = 0
+  // Three-way solar bucket per facade (sums to acc_solar_*)
+  let acc_solar_beneficial_n = 0, acc_solar_beneficial_e = 0, acc_solar_beneficial_s = 0, acc_solar_beneficial_w = 0
+  let acc_solar_cooling_n    = 0, acc_solar_cooling_e    = 0, acc_solar_cooling_s    = 0, acc_solar_cooling_w    = 0
+  let acc_solar_shoulder_n   = 0, acc_solar_shoulder_e   = 0, acc_solar_shoulder_s   = 0, acc_solar_shoulder_w   = 0
+  // Internal-gain bucketing (informational): how much of total gains
+  // contributed to heating offset vs cooling load vs shoulder.
+  let acc_gains_offset_heating_Wh = 0
+  let acc_gains_added_cooling_Wh  = 0
+  let acc_gains_shoulder_Wh       = 0
+
+  // Brief 28k Gate 3+: thermal bridging (BRUKL convention)
+  const thermal_bridging_alpha_pct = Number(building?.fabric?.thermal_bridging_alpha_pct ?? 18)
+  const tb_factor = thermal_bridging_alpha_pct / 100
+  const fabric_area_UA = wholeWallU_ext * total_wall_opaque
+                       + wholeWallU_roof * roof_area
+                       + wholeWallU_floor * ground_area
+                       + UA_glaz
+  let acc_heat_loss_thermal_bridging = 0
+  let acc_cool_gain_thermal_bridging = 0
+
+  // Brief 28k Gate 3+: per-system mechanical ventilation. Each entry in
+  // building.systems_config_v25.ventilation contributes its own heat loss
+  // line: flow × ρCp × (1 − HRE) × max(0, T_heat − T_out). No netting
+  // across systems; transparent per-system reporting. Fan electricity
+  // computed alongside for State 3 / Energy display use.
+  const ventSystems = (building?.systems_config_v25?.ventilation ?? []).map(v => ({
+    name:       v.name ?? v.id ?? v.library_id ?? '?',
+    library_id: v.library_id,
+    flow_l_s:   Number(v.flow_l_s ?? v.flow_L_s ?? 0),
+    hre:        Number(v.hre ?? 0),
+    sfp:        Number(v.sfp_w_per_l_s ?? v.sfp ?? 0),
+    hours:      Number(v.hours ?? 8760),
+    schedule_ref: v.schedule_ref ?? 'always_on',
+  }))
+  // Per-system UA (W/K). Schedule_factor = hours/8760 (proportional approx;
+  // schedule-profile-aware integration is a future refinement).
+  const ventUA = ventSystems.map(v => {
+    const Q_m3_h = v.flow_l_s * 3.6      // L/s × 3.6 = m³/h
+    const sched_factor = v.hours / 8760
+    return AIR_HEAT_CAPACITY * Q_m3_h * (1 - v.hre) * sched_factor   // W/K
+  })
+  const ventTotalUA = ventUA.reduce((s, x) => s + x, 0)
+  const acc_mech_vent_heat_per_system = new Float64Array(ventSystems.length)
+  const acc_mech_vent_cool_per_system = new Float64Array(ventSystems.length)
+
   // Brief 28j: per-hour demand series for State 3 hour-by-hour MVHR recovery
   // cap. State 3's computeVentilationEnergy iterates per-hour to apply the
   // physical "you can't recover more than the building needs this hour" rule.
@@ -1437,7 +1871,8 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     const T_op = 0.5 * (T_air + T_radiant)
     T_hourly[h] = T_op
 
-    // Loss accumulators (whole-wall U × area × dT_pos, same convention as State 1)
+    // ── Free-running loss accumulators (legacy convention; retained for ──
+    //    transition. Brief 28k Gate 3 adds setpoint-convention block below.)
     const dT_air_for_loss  = T_air - T_out
     const dT_air_to_ground = T_air - T_ground
     if (dT_air_for_loss > 0) {
@@ -1454,6 +1889,62 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       acc_cond_floor     += wholeWallU_floor * ground_area * dT_air_to_ground
     }
 
+    // ── Setpoint-convention loss/gain accumulators (Brief 28k Gate 3) ────
+    // Mirror of Gate 1 in _calculateEnvelopeOnly. Per-facade sol-air on
+    // walls so per-facade reporting tracks the spreadsheet hand-calc;
+    // single-state mass model still uses area-weighted T_sa_wall.
+    const T_heat = comfortBand.lower_c
+    const T_cool = comfortBand.upper_c
+    const T_sa_wall_n_h = solAirT(T_out, hourlySolar.f1[h], extWallModel.solar_abs ?? 0.6, extWallModel.h_out ?? 25)
+    const T_sa_wall_e_h = solAirT(T_out, hourlySolar.f2[h], extWallModel.solar_abs ?? 0.6, extWallModel.h_out ?? 25)
+    const T_sa_wall_s_h = solAirT(T_out, hourlySolar.f3[h], extWallModel.solar_abs ?? 0.6, extWallModel.h_out ?? 25)
+    const T_sa_wall_w_h = solAirT(T_out, hourlySolar.f4[h], extWallModel.solar_abs ?? 0.6, extWallModel.h_out ?? 25)
+    const dT_heat_out = Math.max(0, T_heat - T_out)
+    const dT_cool_out = Math.max(0, T_out - T_cool)
+    acc_heat_loss_wall_n += wholeWallU_ext * wallOpaqueByFace.north * Math.max(0, T_heat - T_sa_wall_n_h)
+    acc_heat_loss_wall_e += wholeWallU_ext * wallOpaqueByFace.east  * Math.max(0, T_heat - T_sa_wall_e_h)
+    acc_heat_loss_wall_s += wholeWallU_ext * wallOpaqueByFace.south * Math.max(0, T_heat - T_sa_wall_s_h)
+    acc_heat_loss_wall_w += wholeWallU_ext * wallOpaqueByFace.west  * Math.max(0, T_heat - T_sa_wall_w_h)
+    acc_cool_gain_wall_n += wholeWallU_ext * wallOpaqueByFace.north * Math.max(0, T_sa_wall_n_h - T_cool)
+    acc_cool_gain_wall_e += wholeWallU_ext * wallOpaqueByFace.east  * Math.max(0, T_sa_wall_e_h - T_cool)
+    acc_cool_gain_wall_s += wholeWallU_ext * wallOpaqueByFace.south * Math.max(0, T_sa_wall_s_h - T_cool)
+    acc_cool_gain_wall_w += wholeWallU_ext * wallOpaqueByFace.west  * Math.max(0, T_sa_wall_w_h - T_cool)
+    acc_heat_loss_roof += wholeWallU_roof * roof_area * Math.max(0, T_heat - T_sa_roof)
+    acc_cool_gain_roof += wholeWallU_roof * roof_area * Math.max(0, T_sa_roof - T_cool)
+    acc_heat_loss_glaz_n += glaz_face_UA('north') * dT_heat_out
+    acc_heat_loss_glaz_e += glaz_face_UA('east')  * dT_heat_out
+    acc_heat_loss_glaz_s += glaz_face_UA('south') * dT_heat_out
+    acc_heat_loss_glaz_w += glaz_face_UA('west')  * dT_heat_out
+    acc_cool_gain_glaz_n += glaz_face_UA('north') * dT_cool_out
+    acc_cool_gain_glaz_e += glaz_face_UA('east')  * dT_cool_out
+    acc_cool_gain_glaz_s += glaz_face_UA('south') * dT_cool_out
+    acc_cool_gain_glaz_w += glaz_face_UA('west')  * dT_cool_out
+    acc_heat_loss_leakage   += UA_leakage   * dT_heat_out
+    acc_heat_loss_permanent += UA_permanent * dT_heat_out
+    acc_cool_gain_leakage   += UA_leakage   * dT_cool_out
+    acc_cool_gain_permanent += UA_permanent * dT_cool_out
+    acc_heat_loss_floor += wholeWallU_floor * ground_area * Math.max(0, T_heat - T_ground)
+    acc_cool_gain_floor += wholeWallU_floor * ground_area * Math.max(0, T_ground - T_cool)
+
+    // Brief 28k Gate 3+: thermal bridging (BRUKL α × area_UA × ΔT_out)
+    const TB_heat_h = fabric_area_UA * tb_factor * dT_heat_out
+    const TB_cool_h = fabric_area_UA * tb_factor * dT_cool_out
+    acc_heat_loss_thermal_bridging += TB_heat_h
+    acc_cool_gain_thermal_bridging += TB_cool_h
+
+    // Brief 28k Gate 3+: per-system mechanical ventilation. Each system
+    // contributes flow × ρCp × (1 − HRE) × ΔT independently.
+    let mech_vent_heat_h = 0
+    let mech_vent_cool_h = 0
+    for (let vi = 0; vi < ventSystems.length; vi++) {
+      const heat_h = ventUA[vi] * dT_heat_out
+      const cool_h = ventUA[vi] * dT_cool_out
+      mech_vent_heat_h += heat_h
+      mech_vent_cool_h += cool_h
+      acc_mech_vent_heat_per_system[vi] += heat_h
+      acc_mech_vent_cool_per_system[vi] += cool_h
+    }
+
     // Comfort hours + T extremes
     const month = weatherData.month[h]
     if (T_op < comfortBand.lower_c)      underheating_hours++
@@ -1462,23 +1953,120 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     if (month >= 12 || month <= 2) T_winter_min = Math.min(T_winter_min, T_op)
     if (month >= 6  && month <= 8) T_summer_max = Math.max(T_summer_max, T_op)
 
-    // Demand derivation — use whole-wall U × area UA totals
-    const UA_total_now =
-      wholeWallU_ext   * total_wall_opaque +
-      wholeWallU_roof  * roof_area +
-      wholeWallU_floor * ground_area +
-      UA_glaz + UA_leakage + UA_permanent
-    const Q_gain_to_zone = Q_solar_glaz_zone + Q_internal_total_Wh
-    if (T_op < comfortBand.lower_c) {
-      const Q_loss_at_lower = UA_total_now * Math.max(0, comfortBand.lower_c - T_out)
-      const heating_Wh = Math.max(0, Q_loss_at_lower - Q_gain_to_zone)
-      acc_heating_demand_Wh += heating_Wh
-      heating_demand_hourly_kwh[h] = heating_Wh / 1000   // Brief 28j: per-hour for State 3 MVHR cap
-    } else if (T_op > comfortBand.upper_c) {
-      const Q_gain_at_upper = Q_gain_to_zone + UA_total_now * Math.max(0, T_out - comfortBand.upper_c)
-      acc_cooling_demand_Wh += Q_gain_at_upper
-      cooling_demand_hourly_kwh[h] = Q_gain_at_upper / 1000   // Brief 28j: per-hour (currently unused but available)
+    // ── Demand derivation (Brief 28k Gate 3 — option (c) + option (i) ────
+    //    + internal gain offset per brief V1 spec) ───────────────────────
+    // Total fabric loss / gain at setpoint, per Gate 1 accumulators
+    const hourly_heat_loss_Wh =
+      wholeWallU_ext  * (wallOpaqueByFace.north * Math.max(0, T_heat - T_sa_wall_n_h)
+                       + wallOpaqueByFace.east  * Math.max(0, T_heat - T_sa_wall_e_h)
+                       + wallOpaqueByFace.south * Math.max(0, T_heat - T_sa_wall_s_h)
+                       + wallOpaqueByFace.west  * Math.max(0, T_heat - T_sa_wall_w_h))
+      + wholeWallU_roof  * roof_area    * Math.max(0, T_heat - T_sa_roof)
+      + wholeWallU_floor * ground_area  * Math.max(0, T_heat - T_ground)
+      + (glaz_face_UA('north') + glaz_face_UA('east')
+       + glaz_face_UA('south') + glaz_face_UA('west')) * dT_heat_out
+      + (UA_leakage + UA_permanent) * dT_heat_out
+      + TB_heat_h           // Brief 28k Gate 3+: thermal bridging
+      + mech_vent_heat_h    // Brief 28k Gate 3+: per-system mechanical extract / MVHR
+
+    const hourly_cool_gain_Wh =
+      wholeWallU_ext  * (wallOpaqueByFace.north * Math.max(0, T_sa_wall_n_h - T_cool)
+                       + wallOpaqueByFace.east  * Math.max(0, T_sa_wall_e_h - T_cool)
+                       + wallOpaqueByFace.south * Math.max(0, T_sa_wall_s_h - T_cool)
+                       + wallOpaqueByFace.west  * Math.max(0, T_sa_wall_w_h - T_cool))
+      + wholeWallU_roof  * roof_area    * Math.max(0, T_sa_roof - T_cool)
+      + wholeWallU_floor * ground_area  * Math.max(0, T_ground  - T_cool)
+      + (glaz_face_UA('north') + glaz_face_UA('east')
+       + glaz_face_UA('south') + glaz_face_UA('west')) * dT_cool_out
+      + (UA_leakage + UA_permanent) * dT_cool_out
+      + TB_cool_h           // Brief 28k Gate 3+: thermal bridging
+      + mech_vent_cool_h    // Brief 28k Gate 3+: per-system mechanical (symmetric)
+
+    const Q_solar_through_glazing_Wh = sol_n + sol_e + sol_s + sol_w
+    const Q_internal_gains_Wh = Q_internal_total_Wh   // people + lighting + equipment
+
+    // Weather-only H/C (gate; floor backed out per option (i)). Thermal bridging
+    // and mech ventilation are weather-driven (use T_out) so they stay in
+    // H_weather / C_weather per Chris ruling 3.
+    const H_weather = hourly_heat_loss_Wh - H_floor_const
+    const C_weather = hourly_cool_gain_Wh - C_floor_const
+
+    let heating_Wh_at_setpoint = 0
+    let cooling_Wh_at_setpoint = 0
+    let beneficial_h_Wh = 0
+    let cooling_solar_h_Wh = 0
+    let shoulder_h_Wh = 0
+    let gains_offset_h_Wh = 0
+    let gains_cooling_h_Wh = 0
+    let gains_shoulder_h_Wh = 0
+    if (H_weather > 0) {
+      // Heating-direction hour. Internal gains and solar both offset fabric
+      // loss per brief V1 spec (useful gains = all gains at each hour).
+      // Convention: gains offset first (always-on baseline), then solar
+      // fills in remaining loss. Surplus (Q + G − H) pushes into cooling.
+      const offsetters_total = Q_solar_through_glazing_Wh + Q_internal_gains_Wh
+      heating_Wh_at_setpoint = Math.max(0, hourly_heat_loss_Wh - offsetters_total)
+      cooling_Wh_at_setpoint = Math.max(0, offsetters_total - hourly_heat_loss_Wh)
+      // Solar bucketing: gains absorbed first, then solar
+      const loss_after_gains = Math.max(0, hourly_heat_loss_Wh - Q_internal_gains_Wh)
+      beneficial_h_Wh    = Math.min(Q_solar_through_glazing_Wh, loss_after_gains)
+      cooling_solar_h_Wh = Math.max(0, Q_solar_through_glazing_Wh - loss_after_gains)
+      shoulder_h_Wh = 0
+      // Gain bucketing
+      gains_offset_h_Wh   = Math.min(Q_internal_gains_Wh, hourly_heat_loss_Wh)
+      gains_cooling_h_Wh  = Math.max(0, Q_internal_gains_Wh - hourly_heat_loss_Wh)
+      gains_shoulder_h_Wh = 0
+    } else if (C_weather > 0) {
+      // Cooling-direction hour. All solar AND all gains add to cooling load.
+      heating_Wh_at_setpoint = 0
+      cooling_Wh_at_setpoint = hourly_cool_gain_Wh + Q_solar_through_glazing_Wh + Q_internal_gains_Wh
+      beneficial_h_Wh = 0
+      cooling_solar_h_Wh = Q_solar_through_glazing_Wh
+      shoulder_h_Wh = 0
+      gains_offset_h_Wh = 0
+      gains_cooling_h_Wh = Q_internal_gains_Wh
+      gains_shoulder_h_Wh = 0
+    } else {
+      // Weather-shoulder. No demand attributed; gains and solar both go to
+      // their respective shoulder buckets.
+      heating_Wh_at_setpoint = 0
+      cooling_Wh_at_setpoint = 0
+      beneficial_h_Wh = 0
+      cooling_solar_h_Wh = 0
+      shoulder_h_Wh = Q_solar_through_glazing_Wh
+      gains_offset_h_Wh = 0
+      gains_cooling_h_Wh = 0
+      gains_shoulder_h_Wh = Q_internal_gains_Wh
     }
+    acc_heating_demand_Wh += heating_Wh_at_setpoint
+    acc_cooling_demand_Wh += cooling_Wh_at_setpoint
+    heating_demand_hourly_kwh[h] = heating_Wh_at_setpoint / 1000   // Brief 28j: per-hour for State 3 MVHR cap
+    cooling_demand_hourly_kwh[h] = cooling_Wh_at_setpoint / 1000
+
+    // Per-facade allocation of solar buckets, proportional to each facade's
+    // share of Q_h. Skip if Q_h = 0.
+    if (Q_solar_through_glazing_Wh > 0) {
+      const inv_Q = 1 / Q_solar_through_glazing_Wh
+      const share_n = sol_n * inv_Q
+      const share_e = sol_e * inv_Q
+      const share_s = sol_s * inv_Q
+      const share_w = sol_w * inv_Q
+      acc_solar_beneficial_n += beneficial_h_Wh    * share_n
+      acc_solar_beneficial_e += beneficial_h_Wh    * share_e
+      acc_solar_beneficial_s += beneficial_h_Wh    * share_s
+      acc_solar_beneficial_w += beneficial_h_Wh    * share_w
+      acc_solar_cooling_n    += cooling_solar_h_Wh * share_n
+      acc_solar_cooling_e    += cooling_solar_h_Wh * share_e
+      acc_solar_cooling_s    += cooling_solar_h_Wh * share_s
+      acc_solar_cooling_w    += cooling_solar_h_Wh * share_w
+      acc_solar_shoulder_n   += shoulder_h_Wh      * share_n
+      acc_solar_shoulder_e   += shoulder_h_Wh      * share_e
+      acc_solar_shoulder_s   += shoulder_h_Wh      * share_s
+      acc_solar_shoulder_w   += shoulder_h_Wh      * share_w
+    }
+    acc_gains_offset_heating_Wh += gains_offset_h_Wh
+    acc_gains_added_cooling_Wh  += gains_cooling_h_Wh
+    acc_gains_shoulder_Wh       += gains_shoulder_h_Wh
   }
 
   const r1 = (Wh) => Math.round(Wh / 1000 * 10) / 10
@@ -1602,6 +2190,91 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
         permanent_vents: Math.round(acc_vent_permanent / 1000 * 10) / 10,
       },
     },
+    // ── Brief 28k Gate 3: setpoint-convention loss/gain block ───────────
+    losses_at_setpoint: (() => {
+      const r1k = (Wh) => Math.round(Wh / 1000 * 10) / 10
+      const perM2k = (Wh) => Math.round(Wh / 1000 / gia * 100) / 100
+      const wallH = acc_heat_loss_wall_n + acc_heat_loss_wall_e + acc_heat_loss_wall_s + acc_heat_loss_wall_w
+      const wallC = acc_cool_gain_wall_n + acc_cool_gain_wall_e + acc_cool_gain_wall_s + acc_cool_gain_wall_w
+      const glazH = acc_heat_loss_glaz_n + acc_heat_loss_glaz_e + acc_heat_loss_glaz_s + acc_heat_loss_glaz_w
+      const glazC = acc_cool_gain_glaz_n + acc_cool_gain_glaz_e + acc_cool_gain_glaz_s + acc_cool_gain_glaz_w
+      const solar = acc_solar_n + acc_solar_e + acc_solar_s + acc_solar_w
+      const solarBen = acc_solar_beneficial_n + acc_solar_beneficial_e + acc_solar_beneficial_s + acc_solar_beneficial_w
+      const solarCool = acc_solar_cooling_n + acc_solar_cooling_e + acc_solar_cooling_s + acc_solar_cooling_w
+      const solarShoulder = acc_solar_shoulder_n + acc_solar_shoulder_e + acc_solar_shoulder_s + acc_solar_shoulder_w
+      return {
+        external_wall: {
+          heating_loss_kwh: r1k(wallH), cooling_gain_kwh: r1k(wallC),
+          area_m2: Math.round(total_wall_opaque), kwh_per_m2: perM2k(wallH),
+          by_face: {
+            F1: { heating_loss_kwh: r1k(acc_heat_loss_wall_n), cooling_gain_kwh: r1k(acc_cool_gain_wall_n), area_m2: Math.round(wallOpaqueByFace.north ?? 0) },
+            F2: { heating_loss_kwh: r1k(acc_heat_loss_wall_e), cooling_gain_kwh: r1k(acc_cool_gain_wall_e), area_m2: Math.round(wallOpaqueByFace.east  ?? 0) },
+            F3: { heating_loss_kwh: r1k(acc_heat_loss_wall_s), cooling_gain_kwh: r1k(acc_cool_gain_wall_s), area_m2: Math.round(wallOpaqueByFace.south ?? 0) },
+            F4: { heating_loss_kwh: r1k(acc_heat_loss_wall_w), cooling_gain_kwh: r1k(acc_cool_gain_wall_w), area_m2: Math.round(wallOpaqueByFace.west  ?? 0) },
+          },
+        },
+        roof:         { heating_loss_kwh: r1k(acc_heat_loss_roof),  cooling_gain_kwh: r1k(acc_cool_gain_roof),  area_m2: Math.round(roof_area),    kwh_per_m2: perM2k(acc_heat_loss_roof) },
+        ground_floor: { heating_loss_kwh: r1k(acc_heat_loss_floor), cooling_gain_kwh: r1k(acc_cool_gain_floor), area_m2: Math.round(ground_area),  kwh_per_m2: perM2k(acc_heat_loss_floor) },
+        glazing: {
+          heating_loss_kwh:               r1k(glazH),
+          cooling_gain_kwh:               r1k(glazC),
+          solar_transmission_kwh:         r1k(solar),
+          solar_beneficial_heating_kwh:   r1k(solarBen),
+          solar_contributing_cooling_kwh: r1k(solarCool),
+          solar_shoulder_kwh:             r1k(solarShoulder),
+          area_m2: Math.round(total_glazing),
+          by_face: {
+            F1: { heating_loss_kwh: r1k(acc_heat_loss_glaz_n), cooling_gain_kwh: r1k(acc_cool_gain_glaz_n), solar_transmission_kwh: r1k(acc_solar_n), solar_beneficial_heating_kwh: r1k(acc_solar_beneficial_n), solar_contributing_cooling_kwh: r1k(acc_solar_cooling_n), solar_shoulder_kwh: r1k(acc_solar_shoulder_n), area_m2: Math.round(glazing.north ?? 0) },
+            F2: { heating_loss_kwh: r1k(acc_heat_loss_glaz_e), cooling_gain_kwh: r1k(acc_cool_gain_glaz_e), solar_transmission_kwh: r1k(acc_solar_e), solar_beneficial_heating_kwh: r1k(acc_solar_beneficial_e), solar_contributing_cooling_kwh: r1k(acc_solar_cooling_e), solar_shoulder_kwh: r1k(acc_solar_shoulder_e), area_m2: Math.round(glazing.east ?? 0) },
+            F3: { heating_loss_kwh: r1k(acc_heat_loss_glaz_s), cooling_gain_kwh: r1k(acc_cool_gain_glaz_s), solar_transmission_kwh: r1k(acc_solar_s), solar_beneficial_heating_kwh: r1k(acc_solar_beneficial_s), solar_contributing_cooling_kwh: r1k(acc_solar_cooling_s), solar_shoulder_kwh: r1k(acc_solar_shoulder_s), area_m2: Math.round(glazing.south ?? 0) },
+            F4: { heating_loss_kwh: r1k(acc_heat_loss_glaz_w), cooling_gain_kwh: r1k(acc_cool_gain_glaz_w), solar_transmission_kwh: r1k(acc_solar_w), solar_beneficial_heating_kwh: r1k(acc_solar_beneficial_w), solar_contributing_cooling_kwh: r1k(acc_solar_cooling_w), solar_shoulder_kwh: r1k(acc_solar_shoulder_w), area_m2: Math.round(glazing.west ?? 0) },
+          },
+        },
+        fabric_leakage:   { heating_loss_kwh: r1k(acc_heat_loss_leakage),   cooling_gain_kwh: r1k(acc_cool_gain_leakage)   },
+        permanent_vents:  { heating_loss_kwh: r1k(acc_heat_loss_permanent), cooling_gain_kwh: r1k(acc_cool_gain_permanent) },
+        thermal_bridging: {
+          heating_loss_kwh: r1k(acc_heat_loss_thermal_bridging),
+          cooling_gain_kwh: r1k(acc_cool_gain_thermal_bridging),
+          alpha_pct: thermal_bridging_alpha_pct,
+          fabric_area_UA_W_per_K: Math.round(fabric_area_UA * 10) / 10,
+        },
+        // Brief 28k Gate 3+: per-system mechanical ventilation (each entry
+        // contributes its own heat loss / cool gain / fan electricity line).
+        ventilation: ventSystems.map((v, vi) => ({
+          name:             v.name,
+          flow_l_s:         v.flow_l_s,
+          hre:              v.hre,
+          sfp_w_per_l_s:    v.sfp,
+          hours:            v.hours,
+          heat_loss_kwh:    r1k(acc_mech_vent_heat_per_system[vi]),
+          cooling_gain_kwh: r1k(acc_mech_vent_cool_per_system[vi]),
+          fan_kwh:          Math.round(v.flow_l_s * v.sfp * v.hours / 1000 * 10) / 10,
+        })),
+        // Brief 28k Gate 3: internal-gain bucketing (informational)
+        internal_gains_bucketed: {
+          offset_heating_kwh:  r1k(acc_gains_offset_heating_Wh),
+          added_cooling_kwh:   r1k(acc_gains_added_cooling_Wh),
+          shoulder_kwh:        r1k(acc_gains_shoulder_Wh),
+          total_kwh:           r1k(acc_people + acc_lighting + (acc_equip_baseload + acc_equip_active)),
+        },
+        totals: {
+          total_heating_loss_kwh: r1k(
+            wallH + acc_heat_loss_roof + acc_heat_loss_floor + glazH +
+            acc_heat_loss_leakage + acc_heat_loss_permanent +
+            acc_heat_loss_thermal_bridging +
+            acc_mech_vent_heat_per_system.reduce((s, x) => s + x, 0)
+          ),
+          total_cooling_gain_kwh: r1k(
+            wallC + acc_cool_gain_roof + acc_cool_gain_floor + glazC +
+            acc_cool_gain_leakage + acc_cool_gain_permanent +
+            acc_cool_gain_thermal_bridging +
+            acc_mech_vent_cool_per_system.reduce((s, x) => s + x, 0)
+          ),
+          total_solar_transmission_kwh: r1k(solar),
+        },
+        setpoints_used: { heating_c: comfortBand.lower_c, cooling_c: comfortBand.upper_c },
+      }
+    })(),
     free_running: {
       annual_mean_c: Math.round(T_mean * 10) / 10,
       winter_min_c:  isFinite(T_winter_min) ? Math.round(T_winter_min * 10) / 10 : null,
@@ -2338,9 +3011,13 @@ const DEFAULT_U_VALUES = {
 }
 
 function getUValue(constructionChoices, element, libraryData) {
-  const name = constructionChoices?.[element]
-  if (name && libraryData?.constructions) {
-    const item = libraryData.constructions.find(c => c.name === name)
+  const { id, overrides } = resolveChoice(constructionChoices?.[element])
+  // Brief 28k Gate 3+: per-project u_value_override wins (BRUKL / as-built).
+  if (Number.isFinite(overrides.u_value_override) && overrides.u_value_override > 0) {
+    return Number(overrides.u_value_override)
+  }
+  if (id && libraryData?.constructions) {
+    const item = libraryData.constructions.find(c => c.name === id)
     if (item?.u_value_W_per_m2K != null) {
       // Apply thermal-bridging Y-factor if the library item has one. This
       // makes the live engine consistent with the BR443/SAP/Passivhaus

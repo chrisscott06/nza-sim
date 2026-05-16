@@ -138,13 +138,13 @@ export const SYSTEM_TEMPLATES_LIBRARY = [
       'demand operation (Home Office regime) due to defrost cycles and the ' +
       'COP drop at cold ambient temperatures.',
     supports_services: ['dhw'],
-    dhw_seasonal_efficiency: 2.8,
+    dhw_seasonal_efficiency: 3.0,
     fuel:              'electricity',
     provenance: {
       source:     'BRUKL design intent',
       confidence: 'medium',
       reference:  'Bridgewater Fabric & Systems Modelling Notes',
-      notes:      'Real-world likely lower under continuous high-demand; calibration target',
+      notes:      'BRUKL value 3.0; real-world likely lower under continuous high-demand (defrost cycles, cold-ambient COP drop); calibration target',
     },
   },
 
@@ -158,13 +158,13 @@ export const SYSTEM_TEMPLATES_LIBRARY = [
       'preheated by the ASHP. Seasonal efficiency reflects BRUKL design ' +
       'value for a modern condensing boiler.',
     supports_services: ['dhw'],
-    dhw_seasonal_efficiency: 0.88,
+    dhw_seasonal_efficiency: 0.90,
     fuel:              'gas',
     provenance: {
       source:     'BRUKL design intent',
       confidence: 'medium',
       reference:  'Bridgewater Fabric & Systems Modelling Notes',
-      notes:      'Within typical UK condensing-boiler range 0.85-0.92',
+      notes:      'BRUKL value 0.90; within typical UK condensing-boiler range 0.85-0.92',
     },
   },
 
