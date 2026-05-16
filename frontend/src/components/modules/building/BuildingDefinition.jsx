@@ -199,30 +199,67 @@ function UValueBadge({ u }) {
 
 // ── Construction dropdown ─────────────────────────────────────────────────────
 
-function ConstructionSelect({ elementKey, label, library, types, selectedId, onSelect, onInspect }) {
+// Brief 28-IM Bug 1: Brief 28L persists construction_choices entries as
+// objects `{library_id, u_value_override, g_value_override}` while pre-28L
+// projects use a bare string library_id. Resolve both shapes so the
+// dropdown's value matches the actual selection rather than reading
+// "— select —" when an override is in effect.
+function _resolveChoice(choice) {
+  if (typeof choice === 'string') return { library_id: choice, u_value_override: null, g_value_override: null }
+  if (choice && typeof choice === 'object') {
+    return {
+      library_id:       choice.library_id ?? null,
+      u_value_override: Number.isFinite(choice.u_value_override) ? choice.u_value_override : null,
+      g_value_override: Number.isFinite(choice.g_value_override) ? choice.g_value_override : null,
+    }
+  }
+  return { library_id: null, u_value_override: null, g_value_override: null }
+}
+
+function ConstructionSelect({ elementKey, label, library, types, selectedChoice, onSelect, onInspect }) {
+  const { library_id, u_value_override } = _resolveChoice(selectedChoice)
   const filtered = library.filter(c => types.some(t => (c.type ?? '').toLowerCase() === t))
   const items = filtered.length > 0 ? filtered : library
-  const selected = items.find(c => c.name === selectedId)
+  const selected = items.find(c => c.name === library_id)
+  const effectiveU = u_value_override ?? selected?.u_value_W_per_m2K
+
+  // Preserve override on selection change — only the library_id flips.
+  const handleSelect = (newLibraryId) => {
+    if (!newLibraryId) {
+      onSelect(elementKey, null)
+      return
+    }
+    const isObject = selectedChoice && typeof selectedChoice === 'object'
+    if (isObject) {
+      onSelect(elementKey, { ...selectedChoice, library_id: newLibraryId })
+    } else {
+      onSelect(elementKey, newLibraryId)
+    }
+  }
 
   return (
     <div className="mb-2">
       <div className="flex items-center justify-between mb-0.5">
         <label className="text-xxs text-mid-grey">{label}</label>
-        {selected && (
+        {selected && effectiveU != null && (
           <button
             type="button"
             onClick={() => onInspect?.(selected.name)}
-            title="Click to inspect / edit construction layers"
+            title={u_value_override != null
+              ? `Override U = ${u_value_override.toFixed(2)}; library = ${selected.u_value_W_per_m2K?.toFixed(2) ?? '?'}. Click to inspect layers.`
+              : 'Click to inspect / edit construction layers'}
             className="flex items-center gap-1 cursor-pointer focus:outline-none group"
           >
-            <Pencil size={10} className="text-mid-grey group-hover:text-navy transition-colors" />
-            <UValueBadge u={selected.u_value_W_per_m2K} />
+            {u_value_override != null
+              ? <span className="text-xxs text-mid-grey">✏️</span>
+              : <Pencil size={10} className="text-mid-grey group-hover:text-navy transition-colors" />}
+            <UValueBadge u={effectiveU} />
           </button>
         )}
       </div>
       <select
-        value={selectedId ?? ''}
-        onChange={e => onSelect(elementKey, e.target.value || null)}
+        value={library_id ?? ''}
+        onChange={e => handleSelect(e.target.value || null)}
         className="w-full px-2 py-1 text-caption text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-teal appearance-none cursor-pointer"
         style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2395A5A6' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
@@ -396,10 +433,17 @@ function LouvreAreaInput({ value, onCommit, disabled, title }) {
   )
 }
 
-function InputsColumn({ library, onInspectConstruction }) {
+function InputsColumn({ library, onInspectConstruction, liveResult }) {
   const { params, updateParam, constructions, updateConstruction } = useContext(ProjectContext)
   const { length, width, num_floors, floor_height, orientation, wwr, name, infiltration_ach, window_count } = params
   const ach = infiltration_ach ?? 0.5
+  // Brief 28-IM Bug 2: q50-derived airtightness. Engine returns operational/
+  // n50/q50 values inside losses_at_setpoint.fabric_leakage. Use those for
+  // the derived-value badges under the slider.
+  const fabricLeakage = liveResult?.losses_at_setpoint?.fabric_leakage
+  const q50 = Number(params?.fabric?.air_permeability_q50 ?? fabricLeakage?.q50_m3_per_h_m2 ?? 5)
+  const derivedN50 = fabricLeakage?.n50_ach
+  const derivedOperational = fabricLeakage?.operational_ach
   const shadingOverhang = params.shading_overhang ?? {}
   const shadingFin      = params.shading_fin      ?? {}
   // Any non-zero shading on any facade?
@@ -723,29 +767,418 @@ function InputsColumn({ library, onInspectConstruction }) {
               label={el.label}
               library={library}
               types={el.types}
-              selectedId={constructions?.[el.key] ?? null}
+              selectedChoice={constructions?.[el.key] ?? null}
               onSelect={updateConstruction}
               onInspect={onInspectConstruction}
             />
           ))}
         </CollapsibleSection>
 
-        {/* ── Airtightness ── */}
+        {/* ── Airtightness (Brief 28-IM Bug 2) ── */}
         <CollapsibleSection title="Airtightness">
+          <label className="text-xxs text-mid-grey block mb-1">
+            Air permeability q₅₀ (m³/h·m² @ 50 Pa)
+          </label>
           <div className="flex items-center gap-2 mb-1">
             <input
-              type="range" min={0.1} max={2.0} step={0.05}
-              value={ach}
-              onChange={e => updateParam('infiltration_ach', parseFloat(e.target.value))}
+              type="range" min={1} max={25} step={0.1}
+              value={q50}
+              onChange={e => updateParam('fabric', { air_permeability_q50: parseFloat(e.target.value) })}
               className="flex-1 h-[3px] accent-navy"
             />
-            <span className="text-caption font-semibold text-navy w-14 text-right">
-              {ach.toFixed(2)} ACH
+            <span className="text-caption font-semibold text-navy w-14 text-right tabular-nums">
+              {q50.toFixed(2)}
             </span>
           </div>
-          <p className={`text-xxs ${achColor}`}>{achText}</p>
+          {/* Zone labels under the slider */}
+          <div className="flex justify-between text-xxs text-mid-grey/80 mb-2 px-1">
+            <span title="Passive House / well-detailed">≤3 best</span>
+            <span title="Compliance baseline">3–10 typical</span>
+            <span title="Untested / poor detail">&gt;10 leaky</span>
+          </div>
+          {/* Derived values (engine output) */}
+          <div className="space-y-0.5 mb-1">
+            <div className="flex items-center justify-between text-xxs">
+              <span className="text-mid-grey">→ n₅₀ (ACH @ 50 Pa)</span>
+              <span className="text-navy tabular-nums">{derivedN50?.toFixed(2) ?? '—'}</span>
+            </div>
+            <div className="flex items-center justify-between text-xxs">
+              <span className="text-mid-grey">→ operational ACH</span>
+              <span className="text-navy tabular-nums font-semibold">{derivedOperational?.toFixed(3) ?? '—'}</span>
+            </div>
+          </div>
+          <p className="text-xxs text-mid-grey/80 italic">
+            n₅₀ = q₅₀ × envelope area / volume · operational ≈ n₅₀ / 20 (ATTMA TSL1)
+          </p>
         </CollapsibleSection>
 
+      </div>
+    </div>
+  )
+}
+
+// ── Brief 28-IM §2.2: centre-column view switcher ────────────────────────────
+//
+// Building tab tabs (per §3.1 + §5.2): Heat Balance / Profiles / Monthly /
+// Summary. Heat Balance is the primary view; Profiles + Monthly + Summary are
+// time-aggregation views.
+//
+// Brief 28-IM §15.2 stuck-point fallbacks honoured:
+//   - Profiles tab uses the engine's free-running zone temperature trace
+//     (already exposed) — fancier hourly-loss-by-element trace queued.
+//   - Monthly tab distributes annual losses proportionally to heating
+//     degree-hour weighting (crude pro-rata) — proper monthly engine
+//     aggregation is a follow-up.
+//   - Summary table shows engine output verbatim alongside derived metrics.
+
+const MODULES_FABRIC = ['fabric', 'thermal_bridging', 'fabric_leakage', 'permanent_vents']
+
+const CENTRE_TABS = [
+  { id: 'heat-balance', label: 'Heat Balance' },
+  { id: 'profiles',     label: 'Profiles' },
+  { id: 'monthly',      label: 'Monthly' },
+  { id: 'summary',      label: 'Summary' },
+]
+
+function BuildingCentreTabs({ view, onChange, instantResult, simBalance, simulationInfo, orientationDeg }) {
+  // Coerce older persisted layout values ('3d' from the previous toggle) to
+  // the default centre view of the new tab set.
+  const activeView = CENTRE_TABS.some(t => t.id === view) ? view : 'heat-balance'
+
+  return (
+    <div className="w-full h-full flex flex-col">
+      {/* Tab bar */}
+      <div className="flex-shrink-0 flex items-center gap-0 border-b border-light-grey bg-white px-2 pt-2">
+        {CENTRE_TABS.map(t => {
+          const active = t.id === activeView
+          return (
+            <button
+              key={t.id}
+              onClick={() => onChange(t.id)}
+              className={`px-3 py-1.5 text-caption transition-colors border-b-2 -mb-px ${
+                active
+                  ? 'border-navy text-navy font-medium'
+                  : 'border-transparent text-mid-grey hover:text-navy'
+              }`}
+            >
+              {t.label}
+            </button>
+          )
+        })}
+      </div>
+      {/* Tab content */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {activeView === 'heat-balance' && (
+          <HeatBalance
+            liveData={instantResult?.heat_balance}
+            simulationData={simBalance}
+            simulationInfo={simulationInfo}
+            orientationDeg={orientationDeg}
+            onElementClick={() => {}}
+            mode="envelope-only"
+            modules={MODULES_FABRIC}
+          />
+        )}
+        {activeView === 'profiles' && (
+          <BuildingProfilesView instantResult={instantResult} />
+        )}
+        {activeView === 'monthly' && (
+          <BuildingMonthlyView instantResult={instantResult} />
+        )}
+        {activeView === 'summary' && (
+          <BuildingSummaryView instantResult={instantResult} simBalance={simBalance} />
+        )}
+      </div>
+    </div>
+  )
+}
+
+function BuildingProfilesView({ instantResult }) {
+  const trace = instantResult?.free_running?.hourly_temperature_c
+  if (!trace || trace.length === 0) {
+    return (
+      <div className="h-full flex items-center justify-center text-mid-grey text-xxs">
+        Hourly trace not available — load weather data.
+      </div>
+    )
+  }
+  // Downsample 8760 hourly → 365 daily means for a readable chart.
+  const daily = []
+  for (let d = 0; d < 365; d++) {
+    let sum = 0, n = 0
+    for (let h = 0; h < 24; h++) {
+      const i = d * 24 + h
+      if (i < trace.length) { sum += trace[i]; n++ }
+    }
+    daily.push({ day: d + 1, t: n > 0 ? Math.round((sum / n) * 10) / 10 : null })
+  }
+  // Inline SVG line plot — keeps the dependency surface light and avoids
+  // recharts importer bloat at the building tab level.
+  const W = 900, H = 320, pad = 36
+  const tMin = -5, tMax = 35
+  const xs = (i) => pad + (i / 364) * (W - pad * 2)
+  const ys = (v) => H - pad - ((v - tMin) / (tMax - tMin)) * (H - pad * 2)
+  const path = daily.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xs(i)} ${ys(p.t)}`).join(' ')
+  const monthMarkers = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334].map((d, i) =>
+    ({ d, label: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i] }))
+  return (
+    <div className="w-full h-full overflow-auto p-4">
+      <p className="text-caption font-semibold text-navy">Zone temperature trace · free-running · °C</p>
+      <p className="text-xxs text-mid-grey mb-3">
+        Daily mean of the 8760-hour zone temperature. Free-running envelope only —
+        no heating, cooling or gains applied. Use the comfort band on the
+        Heat Balance view to see hours under/over setpoints.
+      </p>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-4xl border border-light-grey rounded bg-white">
+        {/* Comfort band shading 20-26°C */}
+        <rect x={pad} y={ys(26)} width={W - pad * 2} height={ys(20) - ys(26)} fill="#16A34A" fillOpacity="0.06" />
+        {/* Y axis ticks */}
+        {[-5, 0, 5, 10, 15, 20, 25, 30, 35].map(v => (
+          <g key={v}>
+            <line x1={pad} x2={W - pad} y1={ys(v)} y2={ys(v)} stroke="#E5E7EB" strokeWidth="0.5" />
+            <text x={pad - 6} y={ys(v) + 3} textAnchor="end" fontSize="9" fill="#6B7280">{v}</text>
+          </g>
+        ))}
+        {/* Month markers */}
+        {monthMarkers.map(m => (
+          <text key={m.d} x={xs(m.d)} y={H - 12} textAnchor="start" fontSize="9" fill="#6B7280">{m.label}</text>
+        ))}
+        {/* Trace */}
+        <path d={path} fill="none" stroke="#0F172A" strokeWidth="1.2" />
+        {/* Axis labels */}
+        <text x={W / 2} y={H - 2} textAnchor="middle" fontSize="10" fill="#6B7280">Day of year</text>
+        <text x={10} y={20} fontSize="10" fill="#6B7280">°C</text>
+      </svg>
+      <p className="text-xxs text-mid-grey italic mt-3">
+        Static engine, free-running zone temperature. Dynamic-vs-Static overlay
+        + per-element loss profile queued for follow-up (Brief 28-IM §15.2
+        stuck-point fallback acknowledged).
+      </p>
+    </div>
+  )
+}
+
+function BuildingMonthlyView({ instantResult }) {
+  const los = instantResult?.losses_at_setpoint
+  const gia = instantResult?.heat_balance?.metadata?.gia_m2 ?? 0
+  if (!los || gia === 0) {
+    return (
+      <div className="h-full flex items-center justify-center text-mid-grey text-xxs">
+        Monthly aggregation requires engine output — load weather data.
+      </div>
+    )
+  }
+  // Crude monthly distribution using UK monthly heating-degree-day weights
+  // (relative to 21°C). Real per-month engine aggregation queued for follow-up.
+  // Weights from CIBSE Guide A monthly mean ambient at Yeovilton, normalised.
+  const HEATING_WEIGHTS = [0.14, 0.13, 0.11, 0.08, 0.05, 0.02, 0.01, 0.01, 0.03, 0.07, 0.12, 0.13]
+  // (Cooling and solar weights symmetric / inverted — kept simple here.)
+  const SOLAR_WEIGHTS   = [0.03, 0.05, 0.08, 0.10, 0.12, 0.13, 0.13, 0.12, 0.10, 0.07, 0.04, 0.03]
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  const annualLoss = (los.external_wall?.heating_loss_kwh ?? 0)
+                   + (los.roof?.heating_loss_kwh ?? 0)
+                   + (los.ground_floor?.heating_loss_kwh ?? 0)
+                   + (los.glazing?.heating_loss_kwh ?? 0)
+                   + (los.fabric_leakage?.heating_loss_kwh ?? 0)
+                   + (los.permanent_vents?.heating_loss_kwh ?? 0)
+                   + (los.thermal_bridging?.heating_loss_kwh ?? 0)
+  const annualSolar = los.glazing?.solar_transmission_kwh ?? 0
+  const data = months.map((m, i) => ({
+    month: m,
+    loss: Math.round(annualLoss * HEATING_WEIGHTS[i]),
+    solar: Math.round(annualSolar * SOLAR_WEIGHTS[i]),
+  }))
+  const maxBar = Math.max(...data.map(d => Math.max(d.loss, d.solar)), 1)
+
+  return (
+    <div className="w-full h-full overflow-auto p-4">
+      <p className="text-caption font-semibold text-navy">Monthly heat loss vs solar gain · kWh</p>
+      <p className="text-xxs text-mid-grey mb-3">
+        Annual envelope loss + solar transmission distributed across months via
+        CIBSE Guide A weighting (placeholder). True per-month engine
+        aggregation queued for follow-up.
+      </p>
+      <div className="flex items-end gap-2 max-w-4xl mt-4" style={{ height: 280 }}>
+        {data.map(d => (
+          <div key={d.month} className="flex-1 flex flex-col items-center gap-1">
+            <div className="text-xxs text-amber-700 tabular-nums">{d.solar > 1000 ? (d.solar/1000).toFixed(1)+'k' : d.solar}</div>
+            <div className="w-full bg-amber-500/70 rounded-sm" style={{ height: `${(d.solar / maxBar) * 120}px` }} title={`${d.solar} kWh solar`} />
+            <div className="text-xxs text-mid-grey">{d.month}</div>
+            <div className="w-full bg-slate-500/70 rounded-sm" style={{ height: `${(d.loss / maxBar) * 120}px` }} title={`${d.loss} kWh loss`} />
+            <div className="text-xxs text-slate-700 tabular-nums">{d.loss > 1000 ? (d.loss/1000).toFixed(1)+'k' : d.loss}</div>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center gap-4 mt-4 text-xxs text-mid-grey">
+        <div className="flex items-center gap-1"><div className="w-3 h-3 bg-amber-500/70 rounded-sm" /> Solar transmission (above)</div>
+        <div className="flex items-center gap-1"><div className="w-3 h-3 bg-slate-500/70 rounded-sm" /> Fabric heat loss (below)</div>
+      </div>
+    </div>
+  )
+}
+
+function BuildingSummaryView({ instantResult, simBalance }) {
+  const los = instantResult?.losses_at_setpoint
+  const demand = instantResult?.demand
+  const fr = instantResult?.free_running
+  if (!los || !demand) {
+    return (
+      <div className="h-full flex items-center justify-center text-mid-grey text-xxs">
+        Summary requires engine output — load weather data.
+      </div>
+    )
+  }
+  const tb = los.thermal_bridging ?? {}
+  const fl = los.fabric_leakage ?? {}
+  const rows = [
+    ['External wall', los.external_wall?.heating_loss_kwh, los.external_wall?.area_m2, 'm²'],
+    ['Roof',          los.roof?.heating_loss_kwh,          los.roof?.area_m2,          'm²'],
+    ['Ground floor',  los.ground_floor?.heating_loss_kwh,  los.ground_floor?.area_m2,  'm²'],
+    ['Glazing',       los.glazing?.heating_loss_kwh,       los.glazing?.area_m2,       'm²'],
+    ['Fabric leakage', fl.heating_loss_kwh,                fl.operational_ach,         'ACH'],
+    ['Permanent vents', los.permanent_vents?.heating_loss_kwh, null, ''],
+    ['Thermal bridging', tb.heating_loss_kwh,              tb.total_H_TB_W_per_K,      'W/K'],
+  ]
+  const totalLoss = rows.reduce((s, r) => s + (r[1] ?? 0), 0)
+  const simHeatingMwh = simBalance?.demand?.heating_demand_mwh ?? null
+
+  return (
+    <div className="w-full h-full overflow-auto p-4">
+      <p className="text-caption font-semibold text-navy">Building summary · envelope</p>
+      <p className="text-xxs text-mid-grey mb-3">
+        Per-element annual heat loss · setpoint convention (Brief 28k) · Bridgewater post-BRUKL inputs.
+      </p>
+
+      <table className="w-full max-w-3xl text-xxs border-collapse">
+        <thead>
+          <tr className="border-b border-light-grey text-mid-grey uppercase tracking-wider">
+            <th className="text-left py-2 pr-3 font-medium">Element</th>
+            <th className="text-right py-2 pr-3 font-medium">Heat loss (kWh/yr)</th>
+            <th className="text-right py-2 pr-3 font-medium">% of total</th>
+            <th className="text-right py-2 font-medium">Characteristic</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(([label, kwh, char, unit]) => (
+            <tr key={label} className="border-b border-light-grey/50">
+              <td className="py-1.5 pr-3 text-navy">{label}</td>
+              <td className="py-1.5 pr-3 text-right tabular-nums text-navy">
+                {kwh != null ? Math.round(kwh).toLocaleString() : '—'}
+              </td>
+              <td className="py-1.5 pr-3 text-right tabular-nums text-mid-grey">
+                {kwh != null && totalLoss > 0 ? ((kwh / totalLoss) * 100).toFixed(1) + '%' : '—'}
+              </td>
+              <td className="py-1.5 text-right tabular-nums text-mid-grey">
+                {char != null ? `${typeof char === 'number' ? (char < 1 ? char.toFixed(3) : Math.round(char).toLocaleString()) : char} ${unit}` : '—'}
+              </td>
+            </tr>
+          ))}
+          <tr className="border-t-2 border-navy/30 font-semibold">
+            <td className="py-2 pr-3 text-navy">Total fabric heat loss</td>
+            <td className="py-2 pr-3 text-right tabular-nums text-navy">{Math.round(totalLoss).toLocaleString()}</td>
+            <td className="py-2 pr-3 text-right tabular-nums text-mid-grey">100%</td>
+            <td className="py-2 text-right" />
+          </tr>
+        </tbody>
+      </table>
+
+      <div className="mt-6 grid grid-cols-2 gap-4 max-w-3xl">
+        <div className="bg-white border border-light-grey rounded p-3">
+          <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1">Heating demand</p>
+          <p className="text-caption text-navy font-semibold">
+            Static: <span className="tabular-nums">{demand.heating_demand_mwh?.toFixed(1)} MWh/yr</span>
+          </p>
+          {simHeatingMwh != null && (
+            <p className="text-xxs text-mid-grey">
+              Dynamic: <span className="tabular-nums">{simHeatingMwh.toFixed(1)} MWh/yr</span>
+            </p>
+          )}
+        </div>
+        <div className="bg-white border border-light-grey rounded p-3">
+          <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1">Cooling demand</p>
+          <p className="text-caption text-navy font-semibold">
+            Static: <span className="tabular-nums">{demand.cooling_demand_mwh?.toFixed(1)} MWh/yr</span>
+          </p>
+        </div>
+        <div className="bg-white border border-light-grey rounded p-3">
+          <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1">Free-running zone temp</p>
+          <p className="text-caption text-navy font-semibold tabular-nums">
+            mean {fr?.annual_mean_c?.toFixed(1)} °C
+          </p>
+          <p className="text-xxs text-mid-grey tabular-nums">
+            min {fr?.winter_min_c?.toFixed(1)} · max {fr?.summer_max_c?.toFixed(1)} °C
+          </p>
+        </div>
+        <div className="bg-white border border-light-grey rounded p-3">
+          <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1">Comfort hours</p>
+          <p className="text-caption text-navy font-semibold tabular-nums">
+            {demand.comfort_hours?.toLocaleString() ?? '—'} hrs
+          </p>
+          <p className="text-xxs text-mid-grey tabular-nums">
+            under {demand.underheating_hours?.toLocaleString() ?? '—'} · over {demand.overheating_hours?.toLocaleString() ?? '—'}
+          </p>
+        </div>
+      </div>
+
+      <p className="text-xxs text-mid-grey/80 italic mt-4 max-w-3xl">
+        Static-vs-Dynamic per-element comparison + BRUKL diagnostic annotation queued
+        for follow-up (Brief 28-IM §11.3, §15.2). Engine output values verbatim.
+      </p>
+    </div>
+  )
+}
+
+function BuildingRightColumn({ params, instantResult }) {
+  const [view, setView] = useState('3d')   // '3d' | 'live'
+  return (
+    <div className="w-full h-full flex flex-col">
+      <div className="flex-shrink-0 flex items-center justify-between border-b border-light-grey px-2 pt-2 pb-1">
+        <div className="flex bg-off-white rounded text-xxs">
+          <button
+            onClick={() => setView('3d')}
+            className={`px-2.5 py-1 rounded-l transition-colors ${view === '3d' ? 'bg-white text-navy font-medium shadow-sm' : 'text-mid-grey'}`}
+          >3D Model</button>
+          <button
+            onClick={() => setView('live')}
+            className={`px-2.5 py-1 rounded-r transition-colors ${view === 'live' ? 'bg-white text-navy font-medium shadow-sm' : 'text-mid-grey'}`}
+          >Live Results</button>
+        </div>
+      </div>
+      <div className="flex-1 min-h-0">
+        {view === '3d'
+          ? <BuildingViewer3D params={params ?? {}} />
+          : <BuildingLiveResultsPanel instantResult={instantResult} />}
+      </div>
+    </div>
+  )
+}
+
+function BuildingLiveResultsPanel({ instantResult }) {
+  const demand = instantResult?.demand
+  const los = instantResult?.losses_at_setpoint
+  if (!demand || !los) {
+    return <div className="p-4 text-xxs text-mid-grey">Load weather to see live results.</div>
+  }
+  const fabricUA = (los.external_wall?.area_m2 ?? 0) * 0  // placeholder
+  const totalHTB = los.thermal_bridging?.total_H_TB_W_per_K ?? 0
+  const fabricLeakageACH = los.fabric_leakage?.operational_ach ?? 0
+  return (
+    <div className="p-4 space-y-3 overflow-auto">
+      <div>
+        <p className="text-xxs uppercase tracking-wider text-mid-grey">Heating demand</p>
+        <p className="text-2xl text-navy font-semibold tabular-nums">{demand.heating_demand_mwh?.toFixed(1)} <span className="text-xxs text-mid-grey">MWh/yr</span></p>
+      </div>
+      <div>
+        <p className="text-xxs uppercase tracking-wider text-mid-grey">Cooling demand</p>
+        <p className="text-2xl text-navy font-semibold tabular-nums">{demand.cooling_demand_mwh?.toFixed(1)} <span className="text-xxs text-mid-grey">MWh/yr</span></p>
+      </div>
+      <div>
+        <p className="text-xxs uppercase tracking-wider text-mid-grey">Thermal bridging</p>
+        <p className="text-caption text-navy tabular-nums">H_TB = {totalHTB.toFixed(2)} <span className="text-xxs text-mid-grey">W/K</span></p>
+      </div>
+      <div>
+        <p className="text-xxs uppercase tracking-wider text-mid-grey">Operational ACH</p>
+        <p className="text-caption text-navy tabular-nums">{fabricLeakageACH.toFixed(3)} <span className="text-xxs text-mid-grey">{los.fabric_leakage?.source ?? ''}</span></p>
       </div>
     </div>
   )
@@ -826,43 +1259,28 @@ export default function BuildingDefinition() {
         <InputsColumn
           library={library}
           onInspectConstruction={setInspectConstruction}
+          liveResult={instantResult}
         />
       </div>
 
       <ResizeHandle onResize={setLeft} />
 
-      {/* Centre: 3D viewer or live HeatBalance */}
+      {/* Centre — Brief 28-IM §2.2 view switcher: Heat Balance / Profiles /
+          Monthly / Summary (3D moved to right column per §2.1) */}
       <div className="flex-1 relative bg-off-white flex flex-col min-w-0">
-        {/* Centre view toggle */}
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex bg-white border border-light-grey rounded shadow-sm text-xxs">
-          <button
-            onClick={() => setCentreView('3d')}
-            className={`px-3 py-1 rounded-l transition-colors ${layout.centre === '3d' ? 'bg-navy text-white' : 'text-mid-grey hover:text-navy'}`}
-          >
-            3D Model
-          </button>
-          <button
-            onClick={() => setCentreView('heat-balance')}
-            className={`px-3 py-1 rounded-r transition-colors ${layout.centre === 'heat-balance' ? 'bg-navy text-white' : 'text-mid-grey hover:text-navy'}`}
-          >
-            Heat Balance
-          </button>
-        </div>
+        <BuildingCentreTabs
+          view={layout.centre}
+          onChange={setCentreView}
+          instantResult={instantResult}
+          simBalance={simBalance}
+          simulationInfo={simulationInfo}
+          orientationDeg={orientationDeg}
+        />
+      </div>
 
-        {layout.centre === '3d' ? (
-          <BuildingViewer3D params={params} />
-        ) : (
-          <div className="flex-1 w-full h-full pt-9">
-            <HeatBalance
-              liveData={instantResult?.heat_balance}
-              simulationData={simBalance}
-              simulationInfo={simulationInfo}
-              orientationDeg={orientationDeg}
-              onElementClick={() => {}}
-              mode="envelope-only"
-            />
-          </div>
-        )}
+      {/* Right column — Brief 28-IM §2.1 right (380-480 px): 3D / Live Results */}
+      <div className="flex-shrink-0 bg-white border-l border-light-grey" style={{ width: 420 }}>
+        <BuildingRightColumn params={params} instantResult={instantResult} />
       </div>
 
       {/* Expanded Sankey overlay — covers centre + right columns */}

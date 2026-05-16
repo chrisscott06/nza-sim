@@ -92,7 +92,42 @@ function _normaliseSetpointNode(node, gia) {
   return { ...node, kwh, kwh_per_m2 }
 }
 
-function flattenLosses(data, unit, mode = DEFAULT_MODE) {
+// Brief 28-IM §2.5 / §3 module ownership: each tab passes the categories
+// it owns; HeatBalance filters its rendered loss lines accordingly.
+// Building tab gets ['fabric', 'thermal_bridging', 'fabric_leakage',
+// 'permanent_vents']. Internal Gains adds nothing to losses but adds
+// gains. Operation adds 'natural_ventilation'. Systems adds
+// 'mechanical_ventilation'. Default = all categories (legacy behaviour).
+const MODULE_CATEGORY_KEYS = Object.freeze({
+  fabric:                 new Set(['external_wall', 'roof', 'ground_floor', 'glazing']),
+  thermal_bridging:       new Set(['thermal_bridging']),
+  fabric_leakage:         new Set(['fabric_leakage', 'infiltration']),
+  permanent_vents:        new Set(['permanent_vents', 'openings_louvre']),
+  internal_gains:         new Set([]),  // gains-side only; no loss filter contribution
+  natural_ventilation:    'prefix:natvent_',
+  mechanical_ventilation: new Set(['ventilation']).add('prefix:ventilation_'),
+})
+
+function _modulesToCategoryMatcher(modules) {
+  if (!Array.isArray(modules) || modules.length === 0) return () => true   // default = all
+  const allowed = new Set()
+  const prefixes = []
+  for (const mod of modules) {
+    const entry = MODULE_CATEGORY_KEYS[mod]
+    if (!entry) continue
+    if (typeof entry === 'string' && entry.startsWith('prefix:')) {
+      prefixes.push(entry.slice(7))
+    } else if (entry instanceof Set) {
+      for (const v of entry) {
+        if (typeof v === 'string' && v.startsWith('prefix:')) prefixes.push(v.slice(7))
+        else allowed.add(v)
+      }
+    }
+  }
+  return (key) => allowed.has(key) || prefixes.some(p => key.startsWith(p))
+}
+
+function flattenLosses(data, unit, mode = DEFAULT_MODE, modules = null) {
   // Brief 28-TB-Simple TB-V1: prefer losses_at_setpoint when present
   // (carries thermal_bridging via ISO 14683 H_TB, per-system mech vent
   // breakdown, per-opening natural-ventilation breakdown — none of which
@@ -161,11 +196,15 @@ function flattenLosses(data, unit, mode = DEFAULT_MODE) {
     }
   }
 
+  // Brief 28-IM §3 module ownership filter: only render keys owned by the
+  // requesting module. Cooling demand (synthesised) is always allowed when
+  // present — it's a State-2+ rollup, not a category line.
+  const moduleMatcher = _modulesToCategoryMatcher(modules)
   return orderWithNew
     .filter(k => {
       // 'cooling' is synthesised from demand — falls through the normal
       // losses[k] lookup. Only present when the mode order includes it
-      // (envelope-gains, full).
+      // (envelope-gains, full). Always allowed regardless of module filter.
       if (k === 'cooling') {
         const mwh = data?.demand?.cooling_demand_mwh
         return mwh != null && mwh > 0.01
@@ -173,6 +212,7 @@ function flattenLosses(data, unit, mode = DEFAULT_MODE) {
       // Drop the legacy aggregate 'ventilation' line when we've already
       // expanded it into per-system entries — avoids double-counting.
       if (k === 'ventilation' && orderWithNew.some(x => x.startsWith('ventilation_'))) return false
+      if (!moduleMatcher(k)) return false
       return losses[k] != null
     })
     .filter(k => !k.startsWith('openings_') || (losses[k]?.kwh ?? 0) > 0.01)
@@ -654,6 +694,13 @@ export default function HeatBalance({
   orientationDeg = 0,
   onElementClick,
   mode = DEFAULT_MODE,    // 'envelope-only' | 'full' (state contract `mode` field)
+  // Brief 28-IM §2.5 / §3 module ownership. Pass an array of module keys to
+  // restrict which categories render. Default null = all (legacy behaviour).
+  //   Building:        ['fabric', 'thermal_bridging', 'fabric_leakage', 'permanent_vents']
+  //   Internal Gains:  + internal_gains (gains side)
+  //   Operation:       + 'natural_ventilation'
+  //   Systems:         + 'mechanical_ventilation'
+  modules = null,
 }) {
   // State 1 envelope-only mode pulls comfortBand + the updater from project
   // context so the inline editor on the Heat Balance commits straight back
@@ -690,7 +737,7 @@ export default function HeatBalance({
   const data = engineMode === 'live' ? liveData : simulationData
 
   const { losses, gains, scale, totalLosses, totalGains, gia } = useMemo(() => {
-    const lossItems = flattenLosses(data, unit, mode)
+    const lossItems = flattenLosses(data, unit, mode, modules)
     const gainItems = flattenGains(data, unit, orientationDeg, mode)
     const allValues = [...lossItems.map(i => i.value), ...gainItems.map(i => i.value)]
     const scale = Math.max(...allValues, 0.1)
@@ -717,7 +764,7 @@ export default function HeatBalance({
       totalGains,
       gia: data?.metadata?.gia_m2 ?? 0,
     }
-  }, [data, unit, orientationDeg, mode])
+  }, [data, unit, orientationDeg, mode, modules])
 
   if (!data || !data.annual) {
     return (

@@ -126,7 +126,14 @@ const BRIDGEWATER_CONSTRUCTION_CHOICES = {
 // fallback (engine logs deprecation warning + α/100 × area_UA conversion
 // for any project not yet re-seeded under Brief 28-TB-Simple).
 const BRIDGEWATER_FABRIC = {
-  // (no fabric-level overrides currently; reserved for future use)
+  // Brief 28-IM Bug 2 (2026-05-17): air permeability from BRUKL Page 1
+  // pressurisation test. Engine derives operational ACH via
+  // deriveOperationalACH(building, geo): n50 = q50 × A_env / V, then
+  // operational ≈ n50 / 20 (ATTMA TSL1 divide-by-20 rule).
+  // For Bridgewater: A_env ≈ 4080 m², V = 13830 m³ → n50 ≈ 1.37 →
+  // operational ≈ 0.068 ACH. Replaces the legacy infiltration_ach: 0.23
+  // direct-input which was an order-of-magnitude estimate.
+  air_permeability_q50: 4.64,
 }
 
 // ── Brief 28-TB-Simple: Bridgewater thermal bridges ───────────────────────

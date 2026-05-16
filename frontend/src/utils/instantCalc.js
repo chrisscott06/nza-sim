@@ -249,6 +249,35 @@ function computeGeometry(building) {
   return { gia, volume, total_wall_opaque, total_glazing, glazing, wall_opaque, roof_area, ground_area }
 }
 
+// ── Operational air-change rate from air permeability q50 ────────────────────
+// Brief 28-IM Bug 2: real buildings are characterised by q50 (m³/h·m² @ 50 Pa,
+// pressurisation test result). Operational infiltration ≈ n50 / 20 (ATTMA TSL1
+// divide-by-20 rule) where n50 = q50 × A_envelope / V.
+//
+// Precedence:
+//   1. building.fabric.air_permeability_q50 (Brief 28-IM canonical input)
+//   2. building.infiltration_ach (Brief 28k legacy direct ACH — deprecated)
+//   3. default 0.5 ACH operational
+//
+// Returns the operational ACH used by the engine PLUS the derived n50 + q50
+// so the display layer can show the BRUKL-aligned numbers under the slider.
+export function deriveOperationalACH(building, geometry) {
+  const q50 = Number(building?.fabric?.air_permeability_q50)
+  if (Number.isFinite(q50) && q50 > 0 && geometry?.volume > 0) {
+    const A_env = (geometry.total_wall_opaque ?? 0)
+                + (geometry.total_glazing ?? 0)
+                + (geometry.roof_area ?? 0)
+                + (geometry.ground_area ?? 0)
+    const n50 = q50 * A_env / geometry.volume
+    return { n_op: n50 / 20, n50, q50, source: 'q50' }
+  }
+  const legacy = Number(building?.infiltration_ach)
+  if (Number.isFinite(legacy) && legacy >= 0) {
+    return { n_op: legacy, n50: legacy * 20, q50: null, source: 'legacy_ach' }
+  }
+  return { n_op: 0.5, n50: 10, q50: null, source: 'default' }
+}
+
 // ── G-value lookup ────────────────────────────────────────────────────────────
 
 // Brief 28a Part 5 walkthrough Finding HB1 root cause (2026-05-14):
@@ -757,7 +786,10 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   const C_floor_const = wholeWallU_floor * ground_area * Math.max(0, T_ground - comfortBand.upper_c)
 
   // ── Ventilation (split) ──────────────────────────────────────────────────
-  const ach = Number(building.infiltration_ach ?? 0.5)
+  // Brief 28-IM Bug 2: derive operational ACH from BRUKL-style q50 input
+  // (preferred). Falls back to legacy direct ACH for un-migrated projects.
+  const airtightness = deriveOperationalACH(building, geo)
+  const ach = airtightness.n_op
   const UA_leakage = AIR_HEAT_CAPACITY * ach * volume   // W/K (Wh/K per hour)
 
   // Permanent openings (louvres only — operable windows are State 2.5)
@@ -1482,7 +1514,17 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
           },
         },
       },
-      fabric_leakage:   { heating_loss_kwh: r1(acc_heat_loss_leakage),   cooling_gain_kwh: r1(acc_cool_gain_leakage)   },
+      fabric_leakage: {
+        heating_loss_kwh:        r1(acc_heat_loss_leakage),
+        cooling_gain_kwh:        r1(acc_cool_gain_leakage),
+        // Brief 28-IM Bug 2: surface the operational + n50 + q50 source so
+        // the Building tab airtightness input can show derived values
+        // under the q50 slider.
+        operational_ach:         Math.round(airtightness.n_op * 1000) / 1000,
+        n50_ach:                 Math.round(airtightness.n50 * 100) / 100,
+        q50_m3_per_h_m2:         airtightness.q50,
+        source:                  airtightness.source,
+      },
       permanent_vents:  { heating_loss_kwh: r1(acc_heat_loss_permanent), cooling_gain_kwh: r1(acc_cool_gain_permanent) },
       thermal_bridging: {
         heating_loss_kwh:           r1(acc_heat_loss_thermal_bridging),
@@ -1967,8 +2009,9 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   const H_floor_const = wholeWallU_floor * ground_area * Math.max(0, comfortBand.lower_c - T_ground)
   const C_floor_const = wholeWallU_floor * ground_area * Math.max(0, T_ground - comfortBand.upper_c)
 
-  // Ventilation
-  const ach = Number(building.infiltration_ach ?? 0.5)
+  // Ventilation — Brief 28-IM q50-derived operational ACH (State 2 mirror)
+  const airtightness = deriveOperationalACH(building, geo)
+  const ach = airtightness.n_op
   const UA_leakage = AIR_HEAT_CAPACITY * ach * volume
   const openings = building.openings ?? {}
   const Cd = 0.6
@@ -2633,7 +2676,15 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
             F4: { heating_loss_kwh: r1k(acc_heat_loss_glaz_w), cooling_gain_kwh: r1k(acc_cool_gain_glaz_w), solar_transmission_kwh: r1k(acc_solar_w), solar_beneficial_heating_kwh: r1k(acc_solar_beneficial_w), solar_contributing_cooling_kwh: r1k(acc_solar_cooling_w), solar_shoulder_kwh: r1k(acc_solar_shoulder_w), area_m2: Math.round(glazing.west ?? 0) },
           },
         },
-        fabric_leakage:   { heating_loss_kwh: r1k(acc_heat_loss_leakage),   cooling_gain_kwh: r1k(acc_cool_gain_leakage)   },
+        fabric_leakage: {
+          heating_loss_kwh:        r1k(acc_heat_loss_leakage),
+          cooling_gain_kwh:        r1k(acc_cool_gain_leakage),
+          // Brief 28-IM Bug 2 (State 2 mirror): q50-derived airtightness.
+          operational_ach:         Math.round(airtightness.n_op * 1000) / 1000,
+          n50_ach:                 Math.round(airtightness.n50 * 100) / 100,
+          q50_m3_per_h_m2:         airtightness.q50,
+          source:                  airtightness.source,
+        },
         permanent_vents:  { heating_loss_kwh: r1k(acc_heat_loss_permanent), cooling_gain_kwh: r1k(acc_cool_gain_permanent) },
         thermal_bridging: {
           heating_loss_kwh:           r1k(acc_heat_loss_thermal_bridging),
