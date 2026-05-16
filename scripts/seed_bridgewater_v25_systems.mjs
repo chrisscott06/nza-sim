@@ -72,10 +72,57 @@ const BRIDGEWATER_V25 = {
     store_temperature_c:       60,
     cold_mains_temperature_c:  10,
   },
+  // Brief 28k Gate 3+ (2026-05-16): per-BRUKL/as-built schedule
+  // (26002-NZA-XX-XX-SC-X-0010 v2), Bridgewater has THREE distinct mechanical
+  // ventilation systems, not the previous two-entry "MVHR + WC_extract"
+  // simplification. Each contributes its own heat loss line in the State 2
+  // setpoint demand. See docs/sources/bridgewater_assumptions_schedule.md
+  // for the OneDrive path to the canonical project record.
+  //
+  //   - mvhr_gf_public:        5 × Toshiba VN-M1000HE serving the GF public
+  //                            areas (staff/comms/restaurant). HRE 0.80.
+  //   - bedroom_extract:       Single roof fan EF R.01 serving all bedrooms
+  //                            via trickle-vent inlet. EXTRACT-ONLY, no HR.
+  //                            This was previously invisible to State 2 and
+  //                            is the single biggest under-counted heat loss
+  //                            mechanism (~230 MWh/yr at 2208 L/s).
+  //   - public_toilet_extract: 210 L/s small extract for public WCs.
   ventilation: [
-    { id: 'WC_extract', library_id: 'wc_extract_no_hr', flow_l_s: 2292, sfp_w_per_l_s: 0.4, hre: 0,   schedule_ref: 'always_on' },
-    { id: 'MVHR',       library_id: 'mvhr_with_hr',     flow_l_s: 1450, sfp_w_per_l_s: 1.4, hre: 0.8, schedule_ref: 'always_on' },
+    { name: 'mvhr_gf_public',       library_id: 'mvhr_with_hr',     flow_l_s: 1425, sfp_w_per_l_s: 1.4, hre: 0.80, hours: 8760, schedule_ref: 'always_on' },
+    { name: 'bedroom_extract',      library_id: 'wc_extract_no_hr', flow_l_s: 2208, sfp_w_per_l_s: 0.4, hre: 0.0,  hours: 8760, schedule_ref: 'always_on' },
+    { name: 'public_toilet_extract',library_id: 'wc_extract_no_hr', flow_l_s:  210, sfp_w_per_l_s: 0.4, hre: 0.0,  hours: 8760, schedule_ref: 'always_on' },
   ],
+}
+
+// ── Bridgewater per-project construction overrides (Brief 28k Gate 3+) ─────
+//
+// BRUKL/as-built U-values from 26002-NZA-XX-XX-SC-X-0010 v2 (Fabric & Systems
+// Assumptions Schedule). These are project-scoped overrides on top of the
+// shared library entries — the library is NOT modified. The engine's
+// pickWholeWallU + getGValue + getUValue helpers honour the override fields
+// in precedence order: u_value_override → u_value_W_per_m2K → layer-computed.
+//
+//   wall   0.18 → 0.14 W/m²K  (BRUKL Criterion 2 area-weighted)
+//   roof   0.16 → 0.15
+//   floor  0.22 → 0.13        (biggest change — much better insulated than assumed)
+//   glaz   1.40           ✓   (no U change; g-value override only)
+//   glaz   g 0.42 → 0.50     (BRUKL area-weighted: bedroom G1 g=0.56,
+//                             curtain wall G3 g=0.27)
+const BRIDGEWATER_CONSTRUCTION_CHOICES = {
+  external_wall: { library_id: 'cavity_wall_enhanced',  u_value_override: 0.14 },
+  roof:          { library_id: 'pitched_roof_standard', u_value_override: 0.15 },
+  ground_floor:  { library_id: 'ground_floor_slab',     u_value_override: 0.13 },
+  glazing:       { library_id: 'double_low_e',          g_value_override: 0.50 },
+}
+
+// ── Bridgewater fabric-level inputs (Brief 28k Gate 3+) ────────────────────
+//
+// thermal_bridging_alpha_pct: BRUKL Technical Data Sheet shows total thermal
+// bridging α = 200.31% of fabric transfer coefficient. Notional/Part L
+// baseline is 18%. Bridgewater's α=200% indicates poor thermal-bridge
+// detailing — junctions are ~2× the area-element fabric losses.
+const BRIDGEWATER_FABRIC = {
+  thermal_bridging_alpha_pct: 200,
 }
 
 // ── Bridgewater canonical geometry + counts ────────────────────────────────
@@ -95,6 +142,12 @@ const BUILDING_CORRECTIONS = {
   width:        14.7,
   num_floors:   5,      // 4 above + ground; UK floor-counting
   num_bedrooms: 134,    // per consumption-analysis note (134 keys; supersedes fabric doc's 138 beds)
+  // Brief 28k Gate 3+ (2026-05-16): BRUKL air permeability 4.64 m³/h·m² @ 50 Pa
+  // → rule-of-thumb /20 ≈ 0.23 ac/h background infiltration.
+  infiltration_ach: 0.23,
+  // Brief 28k Gate 3+: fabric.thermal_bridging_alpha_pct = 200 (BRUKL Tech Data
+  // Sheet shows α = 200.31% of fabric transfer coefficient).
+  fabric: BRIDGEWATER_FABRIC,
   systems_config_v25: BRIDGEWATER_V25,
 }
 
@@ -122,6 +175,31 @@ function clearOccupancyXmasException(currentOccupancy) {
   }
 }
 
+/**
+ * Brief 28k Gate 3 prep (2026-05-16): Bridgewater's persisted occupancy
+ * density was 2.0/room (peak booking capacity) while `people_per_room` was
+ * 1.5 (standard hotel occupancy assumption — couple/single mix). The engine
+ * uses `occupancy.density.value` for the State 2 people-gain integration,
+ * resulting in a +33% over-count of people sensible gain.
+ *
+ * Per Chris's ruling: 1.5/room is canonical hotel intent. Force the seed
+ * to set density to 1.5 so engine + people_per_room agree and future drift
+ * is auto-corrected. (Note: Bridgewater's actual current operation is Home
+ * Office single-occupier at 1.0/room — deferred as too-many-changes-at-once
+ * for this brief.)
+ */
+function setOccupancyDensity(currentOccupancy, valuePerRoom = 1.5) {
+  if (!currentOccupancy) return currentOccupancy
+  return {
+    ...currentOccupancy,
+    density: {
+      ...(currentOccupancy.density ?? {}),
+      value: valuePerRoom,
+      basis: 'per_room',
+    },
+  }
+}
+
 console.log()
 console.log('=== Seed Bridgewater v2.5 systems config ===')
 console.log()
@@ -136,9 +214,13 @@ console.log(`         systems_config_v25 present: ${!!before.building_config.sys
 console.log(`         occupancy.schedule.exceptions: ${before.building_config.occupancy?.schedule?.exceptions?.length ?? 0}`)
 
 // 2. PUT the corrections via the existing /building endpoint.
-// Apply Xmas-exception strip alongside the systems / num_floors fixes so
-// the seed produces a fully-corrected Bridgewater in one shot.
-const correctedOccupancy = clearOccupancyXmasException(before.building_config.occupancy)
+// Apply Xmas-exception strip + canonical occupancy density (1.5/room) alongside
+// the systems / num_floors fixes so the seed produces a fully-corrected
+// Bridgewater in one shot.
+const correctedOccupancy = setOccupancyDensity(
+  clearOccupancyXmasException(before.building_config.occupancy),
+  1.5,
+)
 const correctionsToApply = {
   ...BUILDING_CORRECTIONS,
   occupancy: correctedOccupancy,
@@ -150,6 +232,23 @@ const updated = await fj(`${API}/api/projects/${PROJECT_ID}/building`, {
   headers: { 'Content-Type': 'application/json' },
   body:    JSON.stringify(correctionsToApply),
 })
+
+// Brief 28k Gate 3+ (2026-05-16): apply per-project construction overrides
+// via PUT /api/projects/{id}. Construction choices are stored at the project
+// level (separate from building_config), so a separate PUT call is needed.
+console.log('Applying construction overrides via PUT /api/projects/{id}...')
+await fj(`${API}/api/projects/${PROJECT_ID}`, {
+  method:  'PUT',
+  headers: { 'Content-Type': 'application/json' },
+  body:    JSON.stringify({ construction_choices: BRIDGEWATER_CONSTRUCTION_CHOICES }),
+})
+console.log(`         external_wall  u_value_override → ${BRIDGEWATER_CONSTRUCTION_CHOICES.external_wall.u_value_override} W/m²K`)
+console.log(`         roof           u_value_override → ${BRIDGEWATER_CONSTRUCTION_CHOICES.roof.u_value_override} W/m²K`)
+console.log(`         ground_floor   u_value_override → ${BRIDGEWATER_CONSTRUCTION_CHOICES.ground_floor.u_value_override} W/m²K`)
+console.log(`         glazing        g_value_override → ${BRIDGEWATER_CONSTRUCTION_CHOICES.glazing.g_value_override}`)
+console.log(`         fabric.thermal_bridging_alpha_pct → ${BRIDGEWATER_FABRIC.thermal_bridging_alpha_pct}%`)
+console.log(`         infiltration_ach → ${BUILDING_CORRECTIONS.infiltration_ach}`)
+console.log(`         ventilation systems: ${BRIDGEWATER_V25.ventilation.length} (mvhr_gf_public 1425, bedroom_extract 2208, public_toilet_extract 210 L/s)`)
 
 console.log(`After  — num_floors=${updated.building_config.num_floors}, num_bedrooms=${updated.building_config.num_bedrooms}, length=${updated.building_config.length}, width=${updated.building_config.width}`)
 console.log(`         systems_config_v25 present: ${!!updated.building_config.systems_config_v25}`)
