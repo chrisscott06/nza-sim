@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { ProjectProvider } from './context/ProjectContext.jsx'
 import { SimulationProvider } from './context/SimulationContext.jsx'
 import { WeatherProvider } from './context/WeatherContext.jsx'
+import { UIProvider } from './context/UIContext.jsx'
 import AppShell from './components/layout/AppShell.jsx'
 import ErrorBoundary from './components/ui/ErrorBoundary.jsx'
 import HomePage from './pages/HomePage.jsx'
@@ -32,6 +33,7 @@ export default function App() {
       <ProjectProvider>
         <WeatherProvider>
           <SimulationProvider>
+            <UIProvider>
             <Routes>
               {/* Pop-out results window — standalone, no sidebar/topbar */}
               <Route path="/popout" element={<PopOutResults />} />
@@ -54,6 +56,7 @@ export default function App() {
                 <Route path="/library"   element={<ErrorBoundary moduleName="Library Browser"><LibraryBrowser /></ErrorBoundary>} />
               </Route>
             </Routes>
+            </UIProvider>
           </SimulationProvider>
         </WeatherProvider>
       </ProjectProvider>
