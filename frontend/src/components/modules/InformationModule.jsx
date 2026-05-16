@@ -11,7 +11,7 @@
  * Everything else is read-only with an "Edit in [Module] →" link:
  *   - Building summary (geometry + fabric)            → /building
  *   - Systems summary (HVAC, DHW, ventilation)        → /systems
- *   - Profiles & occupancy                            → /profiles
+ *   - Internal gains & occupancy                      → /gains
  *   - Consumption summary (years, kWh, fuels)         → /consumption
  *   - Simulation status                               → /results
  *
@@ -302,17 +302,17 @@ export default function InformationModule() {
         />
 
         <SummaryCard
-          title="Profiles & Occupancy"
+          title="Internal Gains & Occupancy"
           icon={Clock}
           accent="#8B5CF6"
-          to="/profiles"
+          to="/gains"
           stats={[
             { label: 'Rooms',           value: numBedrooms || null },
             { label: 'Occupancy rate',  value: occRate ? `${Math.round(occRate * 100)}%` : null },
             { label: 'People / room',   value: peoplePerRm ? peoplePerRm.toFixed(1) : null },
             { label: 'Avg occupants',   value: avgOccupants || null },
           ]}
-          footnote="Schedules and occupancy parameters · Edit in Profiles →"
+          footnote="Schedules and occupancy parameters · Edit in Internal Gains →"
         />
 
         <SummaryCard
@@ -359,8 +359,8 @@ export default function InformationModule() {
               sub={hasSystems ? sysLabel(systems?.space_heating) : 'Configure in Systems module'}
               href="/systems" />
             <CheckItem done={hasOccupancy} label="Occupancy set"
-              sub={hasOccupancy ? `${numBedrooms} rooms · ${Math.round(occRate * 100)}% occupancy` : 'Set in Profiles module'}
-              href="/profiles" />
+              sub={hasOccupancy ? `${numBedrooms} rooms · ${Math.round(occRate * 100)}% occupancy` : 'Set in Internal Gains module'}
+              href="/gains" />
             <CheckItem
               done={hasWeather && !weatherMismatch}
               warning={weatherMismatch}

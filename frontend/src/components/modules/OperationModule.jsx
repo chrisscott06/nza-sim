@@ -164,7 +164,7 @@ export default function OperationModule() {
             <span className="font-medium text-dark-grey">Where things live:</span> Permanent
             envelope openings (louvres, trickle vents) and site exposure are configured
             in <NavLink to="/building" className="text-navy underline">Building → Permanent openings</NavLink>.
-            Occupancy schedules sit in <NavLink to="/profiles" className="text-navy underline">Profiles</NavLink>.
+            Occupancy schedules sit in <NavLink to="/gains" className="text-navy underline">Internal Gains</NavLink>.
             Mechanical ventilation (MEV / MVHR) lives in <NavLink to="/systems" className="text-navy underline">Systems</NavLink>.
           </p>
         </div>
