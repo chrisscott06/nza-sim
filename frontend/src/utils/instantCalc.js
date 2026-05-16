@@ -12,6 +12,7 @@
  */
 
 import { resolveCmass } from './thermalMass.js'
+import { resolveScheduleAtHour } from './scheduleLibrary.js'
 import {
   buildWallModel,
   stepWallLinearized,
@@ -111,6 +112,18 @@ const DEFAULT_G_VALUE = 0.4
 
 // Air properties
 const AIR_HEAT_CAPACITY = 0.33  // kWh/m³/K (ρ × Cp for air)
+
+// Brief 28e Gate E2 (2026-05-16): explicit ρ + Cp constants for the
+// wind+stack natural ventilation physics. AIR_RHO × AIR_CP = 1206
+// W/(m³/s·K), which differs by ~1.5% from AIR_HEAT_CAPACITY × 3600 = 1188
+// (the existing permanent-vent code path uses AIR_HEAT_CAPACITY's rounded
+// value). This 1.5% drift was flagged in Brief 28L Gate L2 validation;
+// future cleanup brief can unify. For operable openings we follow the
+// brief's explicit constants because the per-opening reporting is more
+// granular and the precise values matter.
+const AIR_RHO = 1.2          // kg/m³
+const AIR_CP  = 1005         // J/(kg·K)
+const GRAVITY = 9.81         // m/s²
 
 // Hotel operating hours per year — calibrated against EnergyPlus results
 const HOTEL_OPERATING_HOURS    = 2200  // Effective lighting hours (hotel bedroom)
@@ -482,9 +495,9 @@ function getConstructionItem(constructions, libraryData, element) {
 // Returns an array (may be empty). All downstream Gate E2+ code treats the
 // returned array as the canonical operable-openings list.
 const _LEGACY_OPENINGS_SCHEDULE_MAP = {
-  always:      'business_hours_09_18_weekdays',  // placeholder; real mapping land at Gate E2
+  always:      'always_on',           // 24/7 (Gate E2 refinement: was business_hours placeholder)
   occupied:    'hotel_ventilation_occupied',
-  summer_day:  'business_hours_09_18_weekdays',  // V1 approximation; refine at Gate E2
+  summer_day:  'summer_day_daytime',  // 08-20 May-Sept (Gate E2 refinement: was business_hours placeholder)
   never:       null,
 }
 export function synthesiseOperableOpeningsFromLegacy(building) {
@@ -537,6 +550,68 @@ export function synthesiseOperableOpeningsFromLegacy(building) {
     })
   }
   return out
+}
+
+// Brief 28e Gate E2: opening control evaluator.
+//
+// Decides whether a given operable opening is "open" at hour h. Three modes:
+//
+//   permanent — always open. Schedule + temperature + outside-cooler gates
+//               all ignored. (User intent: door propped open year-round.)
+//
+//   scheduled — open when resolveScheduleAtHour(schedule_ref, h) > 0.5.
+//               Hysteresis + outside-cooler gates IGNORED per Chris's
+//               Gate E1 ruling 3 (the schedule itself encodes user intent).
+//
+//   temperature — open when zone_state.T_zone > control.open_above_zone_c.
+//                 Strict hysteresis (Chris ruling 4): once open, stays open
+//                 until T_zone drops below (open_above_zone_c − hysteresis_c).
+//                 Optional require_outside_cooler gate: when true, force
+//                 close if T_out >= T_zone (no point opening when outside is
+//                 warmer). Optional schedule_ref: AND-combined with the
+//                 temperature condition (open only when schedule says yes
+//                 AND temperature is above threshold).
+//
+// prev_open_state: { wasOpen: bool } from the previous hour's evaluation.
+// At hour 0, all openings start CLOSED (Chris ruling 4: "January cold
+// morning is closed regardless of opening type").
+//
+// Returns { is_open: bool, regime: 'permanent'|'scheduled'|'temperature' }.
+function evaluateOpeningControl(control, hour, weatherData, zone_state, prev_open_state) {
+  const mode = control?.mode ?? 'permanent'
+  if (mode === 'permanent') {
+    return { is_open: true, regime: 'permanent' }
+  }
+  if (mode === 'scheduled') {
+    const frac = resolveScheduleAtHour(control.schedule_ref, hour, weatherData)
+    return { is_open: frac > 0.5, regime: 'scheduled' }
+  }
+  if (mode === 'temperature') {
+    const T_zone = Number.isFinite(zone_state?.T_zone) ? zone_state.T_zone : -Infinity
+    const T_out  = Number.isFinite(zone_state?.T_out)  ? zone_state.T_out  :  Infinity
+    const threshold      = Number(control.open_above_zone_c ?? 22.0)
+    const hysteresis     = Number(control.hysteresis_c ?? 1.0)
+    const reclose_below  = threshold - Math.max(0, hysteresis)
+    // Optional combined schedule gate
+    if (control.schedule_ref) {
+      const frac = resolveScheduleAtHour(control.schedule_ref, hour, weatherData)
+      if (frac <= 0.5) return { is_open: false, regime: 'temperature' }
+    }
+    // Outside-cooler physical-sanity gate (temperature mode only)
+    if (control.require_outside_cooler && !(T_out < T_zone)) {
+      return { is_open: false, regime: 'temperature' }
+    }
+    // Strict hysteresis decision
+    const wasOpen = !!prev_open_state?.wasOpen
+    let is_open
+    if (wasOpen) {
+      is_open = (T_zone > reclose_below)
+    } else {
+      is_open = (T_zone > threshold)
+    }
+    return { is_open, regime: 'temperature' }
+  }
+  return { is_open: false, regime: mode }
 }
 
 // Brief 28k (2026-05-16): construction whole-element U-value precedence used
@@ -599,10 +674,10 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   const { gia, volume, total_wall_opaque, total_glazing, glazing, wall_opaque, roof_area, ground_area } = geo
   if (gia <= 0) return _empty()
 
-  // Brief 28e Gate E1: resolve operable openings (native schema OR synthesise
-  // from legacy openable_fraction). Consumed at Gate E2 for natural ventilation
-  // accumulators; currently unread.
-  const operableOpenings = synthesiseOperableOpeningsFromLegacy(building)   // eslint-disable-line no-unused-vars
+  // Brief 28e Gate E1+E2: resolve operable openings (native schema OR
+  // synthesise from legacy openable_fraction). Gate E2 consumes via the
+  // natural ventilation accumulators built below.
+  const operableOpenings = synthesiseOperableOpeningsFromLegacy(building)
 
   // ── Library U / g values (used for glazing only post Brief 28b Part 3) ────
   const u_glaz  = getUValue(constructions, 'glazing', libraryData)
@@ -782,6 +857,30 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   let acc_solar_cooling_n    = 0, acc_solar_cooling_e    = 0, acc_solar_cooling_s    = 0, acc_solar_cooling_w    = 0
   let acc_solar_shoulder_n   = 0, acc_solar_shoulder_e   = 0, acc_solar_shoulder_s   = 0, acc_solar_shoulder_w   = 0
 
+  // ── Brief 28e Gate E2: per-operable-opening accumulators ──────────────────
+  // One accumulator per opening, generated dynamically from `operableOpenings`.
+  // Each tracks annual heat loss (heating-direction), cool gain (cooling-
+  // direction), open-hour count, and flow + ΔT sums for averaging diagnostics.
+  // Hysteresis state for temperature mode persists across the 8760-hour loop;
+  // initialised closed at hour 0 per Chris's Gate E1 ruling 4.
+  const _natvent_acc = new Map()
+  const _natvent_state = new Map()
+  for (const o of operableOpenings) {
+    _natvent_acc.set(o.id, {
+      heat_loss_Wh:  0,
+      cool_gain_Wh:  0,
+      open_hours:    0,
+      flow_sum_m3s:  0,
+      dT_sum_K:      0,
+    })
+    _natvent_state.set(o.id, { wasOpen: false })
+  }
+  // T_op_prev: zone temperature from previous hour, used to decide opening
+  // control in the current hour (avoids within-hour coupling). Init at heating
+  // setpoint (sensible cold-start assumption; first-hour decision settles
+  // quickly).
+  let T_op_prev = comfortBand.lower_c
+
   for (let h = 0; h < n; h++) {
     const T_out = weatherData.temperature[h]
     const v_wind = weatherData.wind_speed?.[h] ?? 0
@@ -921,6 +1020,10 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
 
     const T_op = 0.5 * (T_air + T_radiant)
     T_hourly[h] = T_op
+    // Brief 28e Gate E2: update T_op_prev for the NEXT hour's opening
+    // control decision (temperature mode uses this; scheduled/permanent
+    // modes are unaffected).
+    T_op_prev = T_op
 
     // ── Loss accumulators ────────────────────────────────────────────────
     // Convention: report integrated annual loss via whole-wall U × area ×
@@ -997,6 +1100,54 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
     acc_heat_loss_thermal_bridging += TB_heat_h
     acc_cool_gain_thermal_bridging += TB_cool_h
 
+    // ── Brief 28e Gate E2: per-operable-opening natural ventilation ──────
+    // For each operable opening, evaluate the control mode (using T_op from
+    // the PREVIOUS hour to avoid within-hour coupling) to decide is_open.
+    // When open, compute combined wind+stack flow per EN 16798-7:
+    //   Q_wind  = Cd × A × √(Cw × v²)
+    //   Q_stack = Cd × A × √(2 × g × h × |ΔT| / T_avg)
+    //   Q_open  = √(Q_wind² + Q_stack²)
+    //   UA_open = ρ × Cp × Q_open    (W/K)
+    // Heat loss / cool gain follow Brief 28k setpoint convention.
+    //
+    // V1 simplification (Chris's Gate E1 ruling 5): when an opening has
+    // parent_glazing_face set, the parent glazing's static U×A conduction
+    // is NOT subtracted during open hours — natvent flow is additive on
+    // top of glazing conduction. The conduction is small relative to the
+    // open-area flow (sub-1% of the open-flow loss for typical Cd × A
+    // door/window), and keeping the per-element loss accounting clean
+    // outweighs the precision gain.
+    let nv_heat_h_total = 0
+    let nv_cool_h_total = 0
+    for (const o of operableOpenings) {
+      const prev = _natvent_state.get(o.id)
+      const decision = evaluateOpeningControl(
+        o.control, h, weatherData, { T_zone: T_op_prev, T_out }, prev,
+      )
+      _natvent_state.set(o.id, { wasOpen: decision.is_open })
+      if (!decision.is_open) continue
+      const dT_abs = Math.abs(T_op_prev - T_out)
+      const T_avg_K = 0.5 * (T_op_prev + T_out) + 273.15
+      const Cd = Number(o.discharge_coefficient ?? 0.6)
+      const A  = Number(o.area_m2 ?? 0)
+      const Cw = Number(o.wind_coefficient ?? 0.25)
+      const Hgt = Number(o.height_m ?? 1.0)
+      const Q_wind  = Cd * A * Math.sqrt(Cw * v_wind * v_wind)
+      const Q_stack = Cd * A * Math.sqrt(Math.max(0, 2 * GRAVITY * Hgt * dT_abs / Math.max(T_avg_K, 1)))
+      const Q_open  = Math.sqrt(Q_wind * Q_wind + Q_stack * Q_stack)   // m³/s
+      const UA_open = AIR_RHO * AIR_CP * Q_open                         // W/K
+      const heat_h  = UA_open * dT_heat_out
+      const cool_h  = UA_open * dT_cool_out
+      const acc = _natvent_acc.get(o.id)
+      acc.heat_loss_Wh += heat_h
+      acc.cool_gain_Wh += cool_h
+      acc.open_hours += 1
+      acc.flow_sum_m3s += Q_open
+      acc.dT_sum_K += dT_abs
+      nv_heat_h_total += heat_h
+      nv_cool_h_total += cool_h
+    }
+
     // Comfort hours + T extremes
     const month = weatherData.month[h]
     if (T_op < comfortBand.lower_c)      underheating_hours++
@@ -1040,7 +1191,8 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
       + (glaz_face_UA('north') + glaz_face_UA('east')
        + glaz_face_UA('south') + glaz_face_UA('west')) * dT_heat_out
       + (UA_leakage + UA_permanent) * dT_heat_out
-      + TB_heat_h   // Brief 28k Gate 3+: thermal bridging
+      + TB_heat_h           // Brief 28k Gate 3+: thermal bridging
+      + nv_heat_h_total     // Brief 28e Gate E2: operable-opening natural ventilation
 
     const hourly_cool_gain_Wh =
       wholeWallU_ext  * (wallOpaqueByFace.north * Math.max(0, T_sa_wall_n_h - T_cool)
@@ -1052,7 +1204,8 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
       + (glaz_face_UA('north') + glaz_face_UA('east')
        + glaz_face_UA('south') + glaz_face_UA('west')) * dT_cool_out
       + (UA_leakage + UA_permanent) * dT_cool_out
-      + TB_cool_h   // Brief 28k Gate 3+: thermal bridging
+      + TB_cool_h           // Brief 28k Gate 3+: thermal bridging
+      + nv_cool_h_total     // Brief 28e Gate E2: operable-opening natural ventilation
 
     const Q_solar_through_glazing_Wh = sol_n + sol_e + sol_s + sol_w
 
@@ -1310,20 +1463,41 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
         alpha_pct: thermal_bridging_alpha_pct,
         fabric_area_UA_W_per_K: Math.round(fabric_area_UA * 10) / 10,
       },
+      // Brief 28e Gate E2: per-operable-opening natural ventilation
+      natural_ventilation: operableOpenings.map(o => {
+        const acc = _natvent_acc.get(o.id)
+        const oh = acc.open_hours
+        return {
+          id:                       o.id,
+          name:                     o.name,
+          facade:                   o.facade,
+          area_m2:                  o.area_m2,
+          height_m:                 o.height_m,
+          mode:                     o.control?.mode,
+          schedule_ref:             o.control?.schedule_ref ?? null,
+          heat_loss_kwh:            r1(acc.heat_loss_Wh),
+          cooling_gain_kwh:         r1(acc.cool_gain_Wh),
+          open_hours:               oh,
+          avg_flow_when_open_l_s:   oh > 0 ? Math.round(acc.flow_sum_m3s * 1000 / oh) : 0,
+          avg_dT_when_open_k:       oh > 0 ? Math.round(acc.dT_sum_K / oh * 10) / 10 : 0,
+        }
+      }),
       totals: {
         total_heating_loss_kwh: r1(
           acc_heat_loss_wall_n + acc_heat_loss_wall_e + acc_heat_loss_wall_s + acc_heat_loss_wall_w +
           acc_heat_loss_roof + acc_heat_loss_floor +
           acc_heat_loss_glaz_n + acc_heat_loss_glaz_e + acc_heat_loss_glaz_s + acc_heat_loss_glaz_w +
           acc_heat_loss_leakage + acc_heat_loss_permanent +
-          acc_heat_loss_thermal_bridging
+          acc_heat_loss_thermal_bridging +
+          Array.from(_natvent_acc.values()).reduce((s, a) => s + a.heat_loss_Wh, 0)
         ),
         total_cooling_gain_kwh: r1(
           acc_cool_gain_wall_n + acc_cool_gain_wall_e + acc_cool_gain_wall_s + acc_cool_gain_wall_w +
           acc_cool_gain_roof + acc_cool_gain_floor +
           acc_cool_gain_glaz_n + acc_cool_gain_glaz_e + acc_cool_gain_glaz_s + acc_cool_gain_glaz_w +
           acc_cool_gain_leakage + acc_cool_gain_permanent +
-          acc_cool_gain_thermal_bridging
+          acc_cool_gain_thermal_bridging +
+          Array.from(_natvent_acc.values()).reduce((s, a) => s + a.cool_gain_Wh, 0)
         ),
         total_solar_transmission_kwh: r1(acc_solar_n + acc_solar_e + acc_solar_s + acc_solar_w),
       },
@@ -1700,9 +1874,9 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   const { gia, volume, total_wall_opaque, total_glazing, glazing, wall_opaque, roof_area, ground_area } = geo
   if (gia <= 0) return state1Result
 
-  // Brief 28e Gate E1: resolve operable openings (mirror of State 1 entry).
-  // Consumed at Gate E2 for natural ventilation accumulators.
-  const operableOpenings = synthesiseOperableOpeningsFromLegacy(building)   // eslint-disable-line no-unused-vars
+  // Brief 28e Gate E1+E2: resolve operable openings (mirror of State 1).
+  // Consumed below in the natural ventilation accumulators.
+  const operableOpenings = synthesiseOperableOpeningsFromLegacy(building)
 
   // Match State 1 v3 production tuning
   const TUNE_SOLAR_RAD_FRAC = 0.30
@@ -1864,6 +2038,30 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   const ventTotalUA = ventUA.reduce((s, x) => s + x, 0)
   const acc_mech_vent_heat_per_system = new Float64Array(ventSystems.length)
   const acc_mech_vent_cool_per_system = new Float64Array(ventSystems.length)
+
+  // ── Brief 28e Gate E2: per-operable-opening natural ventilation (State 2) ─
+  // Mirror of State 1. Same Map-based accumulators, same hysteresis state,
+  // same initial T_op_prev. State 1 ↔ State 2 invariance is intentional —
+  // both states use identical fabric / weather / opening config; only
+  // internal gains differ, and gains do NOT enter the opening flow physics
+  // (opening flow is fabric ventilation, weather-driven via T_out + v_wind,
+  // ZONE temperature reference uses T_op_prev which IS gain-warmed in
+  // State 2 — but only matters for temperature-mode control, not scheduled
+  // or permanent modes). For Bridgewater's scheduled gf_entrance_door, the
+  // per-element loss is byte-identical between State 1 and State 2.
+  const _natvent_acc = new Map()
+  const _natvent_state = new Map()
+  for (const o of operableOpenings) {
+    _natvent_acc.set(o.id, {
+      heat_loss_Wh:  0,
+      cool_gain_Wh:  0,
+      open_hours:    0,
+      flow_sum_m3s:  0,
+      dT_sum_K:      0,
+    })
+    _natvent_state.set(o.id, { wasOpen: false })
+  }
+  let T_op_prev = comfortBand.lower_c
 
   // Brief 28j: per-hour demand series for State 3 hour-by-hour MVHR recovery
   // cap. State 3's computeVentilationEnergy iterates per-hour to apply the
@@ -2053,6 +2251,42 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       acc_mech_vent_cool_per_system[vi] += cool_h
     }
 
+    // ── Brief 28e Gate E2: per-operable-opening natural ventilation (State 2) ─
+    // Identical math + structure to State 1. Uses T_op_prev (which is the
+    // gain-warmed free-running zone temp in State 2) for temperature-mode
+    // control. For scheduled / permanent modes, T_op_prev is unused —
+    // ensuring State 1 ↔ State 2 invariance on those modes.
+    let nv_heat_h_total = 0
+    let nv_cool_h_total = 0
+    for (const o of operableOpenings) {
+      const prev = _natvent_state.get(o.id)
+      const decision = evaluateOpeningControl(
+        o.control, h, weatherData, { T_zone: T_op_prev, T_out }, prev,
+      )
+      _natvent_state.set(o.id, { wasOpen: decision.is_open })
+      if (!decision.is_open) continue
+      const dT_abs = Math.abs(T_op_prev - T_out)
+      const T_avg_K = 0.5 * (T_op_prev + T_out) + 273.15
+      const Cd = Number(o.discharge_coefficient ?? 0.6)
+      const A  = Number(o.area_m2 ?? 0)
+      const Cw = Number(o.wind_coefficient ?? 0.25)
+      const Hgt = Number(o.height_m ?? 1.0)
+      const Q_wind  = Cd * A * Math.sqrt(Cw * v_wind * v_wind)
+      const Q_stack = Cd * A * Math.sqrt(Math.max(0, 2 * GRAVITY * Hgt * dT_abs / Math.max(T_avg_K, 1)))
+      const Q_open  = Math.sqrt(Q_wind * Q_wind + Q_stack * Q_stack)
+      const UA_open = AIR_RHO * AIR_CP * Q_open
+      const heat_h  = UA_open * dT_heat_out
+      const cool_h  = UA_open * dT_cool_out
+      const acc = _natvent_acc.get(o.id)
+      acc.heat_loss_Wh += heat_h
+      acc.cool_gain_Wh += cool_h
+      acc.open_hours += 1
+      acc.flow_sum_m3s += Q_open
+      acc.dT_sum_K += dT_abs
+      nv_heat_h_total += heat_h
+      nv_cool_h_total += cool_h
+    }
+
     // Comfort hours + T extremes
     const month = weatherData.month[h]
     if (T_op < comfortBand.lower_c)      underheating_hours++
@@ -2060,6 +2294,8 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     else                                  comfort_hours++
     if (month >= 12 || month <= 2) T_winter_min = Math.min(T_winter_min, T_op)
     if (month >= 6  && month <= 8) T_summer_max = Math.max(T_summer_max, T_op)
+    // Brief 28e Gate E2: persist T_op for the next hour's opening control.
+    T_op_prev = T_op
 
     // ── Demand derivation (Brief 28k Gate 3 — option (c) + option (i) ────
     //    + internal gain offset per brief V1 spec) ───────────────────────
@@ -2076,6 +2312,7 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       + (UA_leakage + UA_permanent) * dT_heat_out
       + TB_heat_h           // Brief 28k Gate 3+: thermal bridging
       + mech_vent_heat_h    // Brief 28k Gate 3+: per-system mechanical extract / MVHR
+      + nv_heat_h_total     // Brief 28e Gate E2: operable-opening natural ventilation
 
     const hourly_cool_gain_Wh =
       wholeWallU_ext  * (wallOpaqueByFace.north * Math.max(0, T_sa_wall_n_h - T_cool)
@@ -2089,6 +2326,7 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       + (UA_leakage + UA_permanent) * dT_cool_out
       + TB_cool_h           // Brief 28k Gate 3+: thermal bridging
       + mech_vent_cool_h    // Brief 28k Gate 3+: per-system mechanical (symmetric)
+      + nv_cool_h_total     // Brief 28e Gate E2: operable-opening natural ventilation
 
     const Q_solar_through_glazing_Wh = sol_n + sol_e + sol_s + sol_w
     const Q_internal_gains_Wh = Q_internal_total_Wh   // people + lighting + equipment
@@ -2358,6 +2596,26 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
           cooling_gain_kwh: r1k(acc_mech_vent_cool_per_system[vi]),
           fan_kwh:          Math.round(v.flow_l_s * v.sfp * v.hours / 1000 * 10) / 10,
         })),
+        // Brief 28e Gate E2: per-operable-opening natural ventilation
+        // (State 2 mirror — same shape as State 1).
+        natural_ventilation: operableOpenings.map(o => {
+          const acc = _natvent_acc.get(o.id)
+          const oh = acc.open_hours
+          return {
+            id:                       o.id,
+            name:                     o.name,
+            facade:                   o.facade,
+            area_m2:                  o.area_m2,
+            height_m:                 o.height_m,
+            mode:                     o.control?.mode,
+            schedule_ref:             o.control?.schedule_ref ?? null,
+            heat_loss_kwh:            r1k(acc.heat_loss_Wh),
+            cooling_gain_kwh:         r1k(acc.cool_gain_Wh),
+            open_hours:               oh,
+            avg_flow_when_open_l_s:   oh > 0 ? Math.round(acc.flow_sum_m3s * 1000 / oh) : 0,
+            avg_dT_when_open_k:       oh > 0 ? Math.round(acc.dT_sum_K / oh * 10) / 10 : 0,
+          }
+        }),
         // Brief 28k Gate 3: internal-gain bucketing (informational)
         internal_gains_bucketed: {
           offset_heating_kwh:  r1k(acc_gains_offset_heating_Wh),
@@ -2370,13 +2628,15 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
             wallH + acc_heat_loss_roof + acc_heat_loss_floor + glazH +
             acc_heat_loss_leakage + acc_heat_loss_permanent +
             acc_heat_loss_thermal_bridging +
-            acc_mech_vent_heat_per_system.reduce((s, x) => s + x, 0)
+            acc_mech_vent_heat_per_system.reduce((s, x) => s + x, 0) +
+            Array.from(_natvent_acc.values()).reduce((s, a) => s + a.heat_loss_Wh, 0)
           ),
           total_cooling_gain_kwh: r1k(
             wallC + acc_cool_gain_roof + acc_cool_gain_floor + glazC +
             acc_cool_gain_leakage + acc_cool_gain_permanent +
             acc_cool_gain_thermal_bridging +
-            acc_mech_vent_cool_per_system.reduce((s, x) => s + x, 0)
+            acc_mech_vent_cool_per_system.reduce((s, x) => s + x, 0) +
+            Array.from(_natvent_acc.values()).reduce((s, a) => s + a.cool_gain_Wh, 0)
           ),
           total_solar_transmission_kwh: r1k(solar),
         },

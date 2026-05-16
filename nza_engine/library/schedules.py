@@ -329,6 +329,37 @@ SCHEDULES["business_hours_09_18_weekdays"] = _compact(
     ],
 )
 
+# Brief 28e — always_on: 24/7 full rate. Used by operable_openings entries
+# in 'permanent' control mode (e.g. door propped open year-round).
+SCHEDULES["always_on"] = _compact(
+    "always_on", "Fraction",
+    [
+        "Through: 12/31",
+        "For: AllDays",
+        "Until: 24:00, 1.0",
+    ],
+)
+
+# Brief 28e — summer_day_daytime: 08:00–20:00 from May through September,
+# 0 otherwise. Used by operable_openings entries representing
+# "windows open on warm summer days".
+SCHEDULES["summer_day_daytime"] = _compact(
+    "summer_day_daytime", "Fraction",
+    [
+        "Through: 4/30",
+        "For: AllDays",
+        "Until: 24:00, 0.0",
+        "Through: 9/30",
+        "For: AllDays",
+        "Until: 08:00, 0.0",
+        "Until: 20:00, 1.0",
+        "Until: 24:00, 0.0",
+        "Through: 12/31",
+        "For: AllDays",
+        "Until: 24:00, 0.0",
+    ],
+)
+
 
 # ── Thermostat control type — always DualSetpoint (4) ─────────────────────────
 SCHEDULES["ThermostatControlType_DualSetpoint"] = _compact(
