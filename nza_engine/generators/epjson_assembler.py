@@ -358,6 +358,112 @@ def _build_openings_objects(zones: dict, building_params: dict, state1: bool = F
     return out
 
 
+def _build_operable_openings_objects(zones: dict, building_params: dict) -> dict:
+    """
+    Brief 28e Gate E4 — emit ZoneVentilation:WindandStackOpenArea objects
+    for each entry in building_config.operable_openings.
+
+    Mirrors the Static engine's per-opening natural ventilation accumulators
+    (Brief 28e Gate E2, instantCalc.js). Each opening becomes one EP object
+    per zone, with the opening_area split evenly across zones (single-zone
+    massing model). Stack term IS emitted (height_difference > 0) — Brief 28e
+    physics includes stack contribution, unlike the existing
+    _build_openings_objects() which suppresses it for permanent louvres.
+
+    Control-mode mapping to EP fields:
+      permanent  → opening_area_fraction_schedule_name = 'always_on'
+                   temperature gates wide (±100 °C)
+      scheduled  → opening_area_fraction_schedule_name = entry.control.schedule_ref
+                   (the Schedule:Compact must already exist in nza_engine/library/schedules.py)
+                   temperature gates wide
+      temperature → opening_area_fraction_schedule_name = entry.control.schedule_ref
+                    or 'always_on' if no schedule
+                    minimum_indoor_temperature = entry.control.open_above_zone_c
+                      (EP closes when T_zone < threshold — opens above)
+                    maximum_outdoor_temperature = entry.control.open_above_zone_c
+                      (rough approximation of require_outside_cooler: closes when
+                      T_out > threshold; the strict T_out < T_zone comparison
+                      EP doesn't directly support without DOAS/EMS)
+
+    Known limitations of the EP mapping (documented for Gate E5 doc):
+      - EP has no hysteresis on these temperature gates; each timestep is
+        independent. Static engine's strict hysteresis (Gate E2 ruling 4)
+        cannot be replicated. For Bridgewater (scheduled mode) this is moot.
+      - require_outside_cooler is approximated by maximum_outdoor_temperature.
+        The strict "T_out < T_zone" comparison is not representable in this
+        EP object without EMS or higher-fidelity ventilation models.
+
+    Returns dict keyed by '{zone}_{opening.id}'.
+    """
+    openings = building_params.get("operable_openings") or []
+    if not openings:
+        return {}
+
+    n_zones = max(1, len(zones))
+    facade_to_angle = {"north": 0.0, "east": 90.0, "south": 180.0, "west": 270.0}
+
+    out: dict = {}
+    for opening in openings:
+        area_m2 = float(opening.get("area_m2") or 0)
+        if area_m2 <= 0:
+            continue
+        area_per_zone = round(area_m2 / n_zones, 4)
+
+        Cd = float(opening.get("discharge_coefficient") or 0.6)
+        height_m = float(opening.get("height_m") or 1.0)
+        facade = opening.get("facade") or "south"
+        effective_angle = facade_to_angle.get(facade, 0.0)
+
+        control = opening.get("control") or {}
+        mode = control.get("mode") or "permanent"
+
+        # Schedule name resolution
+        if mode == "permanent":
+            sched_ref = "always_on"
+        elif mode == "scheduled":
+            sched_ref = control.get("schedule_ref") or "always_on"
+        elif mode == "temperature":
+            sched_ref = control.get("schedule_ref") or "always_on"
+        else:
+            sched_ref = "always_on"
+
+        # Temperature-gate fields (defaults wide for permanent / scheduled)
+        min_indoor  = -100.0
+        max_indoor  =  100.0
+        min_outdoor = -100.0
+        max_outdoor =  100.0
+        if mode == "temperature":
+            threshold = float(control.get("open_above_zone_c") or 22.0)
+            # EP closes when T_zone < min_indoor_temperature → opens above threshold
+            min_indoor = threshold
+            if control.get("require_outside_cooler"):
+                # Approximation: close when T_out > threshold (Static engine's
+                # strict T_out < T_zone is not directly representable).
+                max_outdoor = threshold
+
+        # Object name '{zone}_{opening.id}'. Each entry contributes one
+        # WindandStackOpenArea per zone — area split evenly. Stack lever arm
+        # is the user-set height_m (unlike permanent louvres which set 0).
+        opening_id = opening.get("id") or "operable_opening"
+        for zone_name in zones:
+            obj_name = f"{zone_name}_{opening_id}"
+            out[obj_name] = {
+                "zone_or_space_name": zone_name,
+                "opening_area": area_per_zone,
+                "opening_area_fraction_schedule_name": sched_ref,
+                "opening_effectiveness": "Autocalculate",
+                "effective_angle": effective_angle,
+                "height_difference": height_m,
+                "discharge_coefficient_for_opening": Cd,
+                "minimum_indoor_temperature": min_indoor,
+                "maximum_indoor_temperature": max_indoor,
+                "minimum_outdoor_temperature": min_outdoor,
+                "maximum_outdoor_temperature": max_outdoor,
+                "maximum_wind_speed": 40.0,
+            }
+    return out
+
+
 def _build_hvac_ideal_loads(zones: dict, state1: bool = False) -> tuple[dict, dict, dict, dict, dict]:
     """
     Build native ZoneHVAC:IdealLoadsAirSystem HVAC objects for each zone.
@@ -1217,6 +1323,15 @@ def assemble_epjson(
     # The `state1` kwarg name is kept for backward compatibility; semantically
     # it means "suppress operable-window stream".
     natural_vent_objects = _build_openings_objects(zones, building_params, state1=(state1 or state2))
+
+    # Brief 28e Gate E4: also emit per-opening ZoneVentilation:WindandStackOpenArea
+    # objects from building_config.operable_openings (doors, operable windows,
+    # vents). These coexist with the louvre objects above — both are
+    # ZoneVentilation:WindandStackOpenArea, keyed by object name. Operable
+    # openings get the stack term enabled (height_difference > 0), unlike
+    # louvres which suppress stack.
+    operable_opening_objects = _build_operable_openings_objects(zones, building_params)
+    natural_vent_objects = {**natural_vent_objects, **operable_opening_objects}
 
     # Always-on schedule referenced by louvres + 'always' window mode.
     # Also referenced by the State 2 baseload-equipment object, so we emit
