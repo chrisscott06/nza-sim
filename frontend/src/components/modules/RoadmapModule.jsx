@@ -478,17 +478,30 @@ function TrajectoryChart({ roadmapResult, interventions, selectedYear, onSelectY
 /* ───────────────────────────────────────────────────────────────────────────
    Intervention card — install-year marginal + sparkline + dependency badges
    ─────────────────────────────────────────────────────────────────────── */
+
+// Brief 28-IM-Polish POL-M3 §7.3: shared trend classifier so the sparkline
+// stroke and the card's text indicator stay in sync. growing = final > install
+// (compounds with grid decarb), decaying = final < install/2 (depletes as the
+// grid catches up), flat = anything in between.
+function _classifyTrend(values, installIdx) {
+  const installVal = values[installIdx] ?? 0
+  const finalVal = values[values.length - 1] ?? 0
+  if (finalVal > installVal * 1.05) return 'growing'
+  if (finalVal < installVal * 0.5)  return 'decaying'
+  return 'flat'
+}
+const TREND_COLOURS = {
+  growing: '#16A34A', // green-600
+  decaying:'#F59E0B', // amber-500
+  flat:    '#94A3B8', // slate-400
+}
+
 function InterventionCard({ summary, intervention, onEdit, onDelete }) {
   const color = TYPE_COLOURS[summary.type] ?? '#94A3B8'
 
-  // Detect compounding pattern from the sparkline shape
   const sparkline = summary.sparkline
   const installIdx = summary.year - Y_START
-  const installVal = sparkline[installIdx] ?? 0
-  const finalVal = sparkline[sparkline.length - 1] ?? 0
-  let trend = 'flat'
-  if (finalVal > installVal * 1.05) trend = 'growing'
-  else if (finalVal < installVal * 0.5) trend = 'decaying'
+  const trend = _classifyTrend(sparkline, installIdx)
 
   return (
     <div className="bg-white border border-light-grey rounded p-3" style={{ borderLeft: `3px solid ${color}` }}>
@@ -509,8 +522,10 @@ function InterventionCard({ summary, intervention, onEdit, onDelete }) {
         <span className="text-xxs text-mid-grey font-normal ml-1">kgCO₂/m²·yr install-year</span>
       </p>
 
-      {/* Sparkline — per-year marginal 2026-2050 */}
-      <Sparkline values={sparkline} color={color} installYear={summary.year} />
+      {/* Sparkline — per-year marginal 2026-2050. Brief POL-M3 §7.3:
+          120×40 with year markers, install-year dot, hover tooltip, trend
+          colour. Trend computed once and shared with the indicator below. */}
+      <Sparkline values={sparkline} trend={trend} installYear={summary.year} />
 
       {/* Trend + secondary stats */}
       <div className="flex items-center gap-2 mt-1 text-xxs text-mid-grey">
@@ -527,20 +542,90 @@ function InterventionCard({ summary, intervention, onEdit, onDelete }) {
   )
 }
 
-function Sparkline({ values, color, installYear }) {
-  const W = 200, H = 32
+// Brief 28-IM-Polish POL-M3 §7.3 — Sparkline polish.
+//
+// Geometry: viewBox 200 × 50 (was 200 × 32). Chart area 0-32; year-marker
+// strip 36-44; tooltip floats in the bottom-right corner of the SVG so it
+// doesn't add to the card height. CSS height bumped 32 → 50 to match.
+//
+// Markers: ticks at 2026 / 2030 / 2040 / 2050 with year labels; an install-
+// year dot painted on the sparkline (was a dashed vertical line only).
+//
+// Trend colour: the stroke now derives from `trend` (passed in by the card,
+// see `_classifyTrend`) rather than the per-intervention `TYPE_COLOURS`,
+// per the brief's "growing = green / decaying = amber / stable = grey".
+//
+// Hover: useState for hoverIdx; on pointer move we map clientX → year index
+// and float a small "YYYY · −X.XX" tooltip. Pointer-leave clears it.
+function Sparkline({ values, trend, installYear }) {
+  const W = 200
+  const CHART_H = 32
+  const STRIP_TOP = 36
+  const STRIP_BOT = 44
+  const H = 50  // viewBox + CSS height (room for year markers below chart)
   const N = values.length
   const maxV = Math.max(...values, 0.001)
   const x = (i) => (i / (N - 1)) * W
-  const y = (v) => H - (v / maxV) * H * 0.9 - 2
+  const y = (v) => CHART_H - (v / maxV) * CHART_H * 0.9 - 2
   const path = values.map((v, i) => `${i === 0 ? 'M' : 'L'} ${x(i)} ${y(v)}`).join(' ')
   const installIdx = installYear - Y_START
+
+  const stroke = TREND_COLOURS[trend] ?? TREND_COLOURS.flat
+  const yearMarkers = [Y_START, 2030, 2040, Y_END]
+
+  const [hoverIdx, setHoverIdx] = useState(null)
+  const onMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const px = e.clientX - rect.left
+    const idx = Math.round((px / rect.width) * (N - 1))
+    setHoverIdx(Math.max(0, Math.min(N - 1, idx)))
+  }
+  const onLeave = () => setHoverIdx(null)
+
+  const tipYear = hoverIdx == null ? null : Y_START + hoverIdx
+  const tipVal  = hoverIdx == null ? null : values[hoverIdx] ?? 0
+
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H, marginTop: 4 }}>
-      <line x1={x(installIdx)} x2={x(installIdx)} y1={0} y2={H} stroke="#9333EA" strokeOpacity={0.3} strokeDasharray="1 2" />
-      <path d={path} fill="none" stroke={color} strokeWidth="1.6" />
-      <text x={4} y={11} fontSize="8" fill="#94A3B8">{Y_START}</text>
-      <text x={W - 4} y={11} fontSize="8" fill="#94A3B8" textAnchor="end">{Y_END}</text>
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      className="w-full"
+      style={{ height: H, marginTop: 4 }}
+      onMouseMove={onMove}
+      onMouseLeave={onLeave}
+    >
+      {/* Install-year vertical guide (kept faint to emphasise the dot) */}
+      <line x1={x(installIdx)} x2={x(installIdx)} y1={0} y2={CHART_H} stroke="#9333EA" strokeOpacity={0.25} strokeDasharray="1 2" />
+      {/* Trend-coloured trace */}
+      <path d={path} fill="none" stroke={stroke} strokeWidth="1.6" />
+      {/* Install-year dot — sits on the sparkline at the install marginal */}
+      <circle cx={x(installIdx)} cy={y(values[installIdx] ?? 0)} r="2.4" fill="#9333EA" stroke="white" strokeWidth="0.8" />
+
+      {/* Year-marker strip */}
+      {yearMarkers.map(yr => {
+        const ix = yr - Y_START
+        const xpos = x(ix)
+        const anchor = yr === Y_START ? 'start' : yr === Y_END ? 'end' : 'middle'
+        return (
+          <g key={yr}>
+            <line x1={xpos} x2={xpos} y1={STRIP_TOP} y2={STRIP_TOP + 2} stroke="#CBD5E1" strokeWidth="0.6" />
+            <text x={xpos} y={STRIP_BOT} fontSize="7" fill="#94A3B8" textAnchor={anchor}>{yr}</text>
+          </g>
+        )
+      })}
+
+      {/* Hover crosshair + tooltip */}
+      {hoverIdx != null && (
+        <g>
+          <line x1={x(hoverIdx)} x2={x(hoverIdx)} y1={0} y2={CHART_H} stroke="#0F172A" strokeOpacity="0.3" strokeWidth="0.6" />
+          <circle cx={x(hoverIdx)} cy={y(tipVal)} r="1.8" fill="#0F172A" />
+          {/* Tooltip — anchored to right side of chart strip; never overflows */}
+          <g transform={`translate(${W - 2}, ${STRIP_BOT - 0.5})`}>
+            <text fontSize="7" fill="#0F172A" textAnchor="end">
+              {tipYear} · −{tipVal.toFixed(2)} kg
+            </text>
+          </g>
+        </g>
+      )}
     </svg>
   )
 }

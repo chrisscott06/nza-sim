@@ -26,6 +26,7 @@ import ThermalBridgesPanel from './ThermalBridgesPanel.jsx'
 import LiveResultsStrip from '../../shared/LiveResultsStrip.jsx'
 import EnginePill from '../../shared/EnginePill.jsx'
 import ChartTotalsBadge from '../../shared/ChartTotalsBadge.jsx'
+import ReconciliationRow from '../../shared/ReconciliationRow.jsx'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { SimulationContext } from '../../../context/SimulationContext.jsx'
 import { useWeather } from '../../../context/WeatherContext.jsx'
@@ -1202,6 +1203,30 @@ function BuildingSummaryView({ instantResult, simBalance }) {
   const totalLoss = rows.reduce((s, r) => s + (r[1] ?? 0), 0)
   const gia = instantResult?.heat_balance?.metadata?.gia_m2 ?? 0
 
+  // Brief 28-IM-Polish POL-M3 §7.2 — cross-chart total reconciliation.
+  // Compute the same fabric-loss total via the per-element monthly arrays
+  // (Source B, what the Monthly view sums) and compare against the per-
+  // element annual scalars (Source A, what the Heat Balance pane sums + the
+  // table above). If both come from the same engine step they MUST agree
+  // — divergence ⇒ engine bug. Surfaced as a tolerance-checked row.
+  const _sumMonthly = (arr) => Array.isArray(arr) ? arr.reduce((s, v) => s + (v ?? 0), 0) : 0
+  const monthlyFabricSum_kwh =
+      _sumMonthly(los.external_wall?.monthly_heating_loss_kwh)
+    + _sumMonthly(los.roof?.monthly_heating_loss_kwh)
+    + _sumMonthly(los.ground_floor?.monthly_heating_loss_kwh)
+    + _sumMonthly(los.glazing?.monthly_heating_loss_kwh)
+    + _sumMonthly(los.fabric_leakage?.monthly_heating_loss_kwh)
+    + _sumMonthly(los.permanent_vents?.monthly_heating_loss_kwh)
+    + _sumMonthly(los.thermal_bridging?.monthly_heating_loss_kwh)
+  const reconciliationRows = [{
+    label: 'Total fabric loss',
+    a_label: 'Heat Balance (annual sum)',
+    a_value: totalLoss / 1000,
+    b_label: 'Monthly (12-month sum)',
+    b_value: monthlyFabricSum_kwh / 1000,
+    unit: 'MWh',
+  }]
+
   // Brief 28-IM-Polish Bug 2.8: cumulative Static-vs-Dynamic fabric gap.
   // simBalance carries the Dynamic heating demand (envelope-only mode).
   // Building's STATIC `totalLoss` is the sum of `heating_loss_kwh` across
@@ -1265,6 +1290,17 @@ function BuildingSummaryView({ instantResult, simBalance }) {
             </tr>
           </tbody>
         </table>
+
+        {/* Brief 28-IM-Polish POL-M3 §7.2: cross-chart reconciliation.
+            Same total via two different upstream paths — annual scalar vs
+            12-month sum. Agreement (≤0.5%) ⇒ engine consistent. Mismatch ⇒
+            engine bug surfaced visually. */}
+        <div className="mt-4 max-w-3xl">
+          <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1.5">
+            Cross-chart reconciliation
+          </p>
+          <ReconciliationRow rows={reconciliationRows} />
+        </div>
 
         {/* Brief 28-IM-Polish Bug 2.11: Δ% empty state — when no Dynamic
             run is available, prompt to run rather than spam amber per-row

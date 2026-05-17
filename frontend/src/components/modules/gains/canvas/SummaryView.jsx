@@ -27,6 +27,8 @@ import { GAIN_COLOURS } from '../gainColours.js'
 // Brief 28-IM-Polish POL-M2: shared cross-module pill + totals badge.
 import EnginePill from '../../../shared/EnginePill.jsx'
 import ChartTotalsBadge from '../../../shared/ChartTotalsBadge.jsx'
+// Brief 28-IM-Polish POL-M3 §7.2: cross-chart reconciliation row.
+import ReconciliationRow from '../../../shared/ReconciliationRow.jsx'
 
 const HEATING_COLOUR = '#DC2626'
 const COOLING_COLOUR = '#00AEEF'
@@ -256,6 +258,34 @@ export default function SummaryView() {
   const heating_change = (s2d.heating_demand_mwh ?? 0) - (s1d.heating_demand_mwh ?? 0)
   const cooling_change = (s2d.cooling_demand_mwh ?? 0) - (s1d.cooling_demand_mwh ?? 0)
 
+  // Brief 28-IM-Polish POL-M3 §7.2 — cross-chart total reconciliation.
+  // Per-category gain totals come from two engine feeds:
+  //   A: state2.gains.{cat}.total_kwh           — what Heat Balance + this Summary use
+  //   B: losses_at_setpoint.internal_gains_monthly.{cat}_kwh[12] — what Monthly sums
+  // Same physics step ⇒ must agree. Surfaced as a tolerance-checked row.
+  const gainsMonthly = state2?.losses_at_setpoint?.internal_gains_monthly ?? {}
+  const _sumArr = (arr) => Array.isArray(arr) ? arr.reduce((s, v) => s + (v ?? 0), 0) : 0
+  const reconciliationRows = [
+    {
+      label: 'People gains',
+      a_label: 'Heat Balance',  a_value: (peopleKwh ?? 0) / 1000,
+      b_label: 'Monthly sum',   b_value: _sumArr(gainsMonthly.people_kwh) / 1000,
+      unit: 'MWh',
+    },
+    {
+      label: 'Lighting gains',
+      a_label: 'Heat Balance',  a_value: (lightingKwh ?? 0) / 1000,
+      b_label: 'Monthly sum',   b_value: _sumArr(gainsMonthly.lighting_kwh) / 1000,
+      unit: 'MWh',
+    },
+    {
+      label: 'Equipment gains',
+      a_label: 'Heat Balance',  a_value: (equipmentKwh ?? 0) / 1000,
+      b_label: 'Monthly sum',   b_value: _sumArr(gainsMonthly.equipment_kwh) / 1000,
+      unit: 'MWh',
+    },
+  ]
+
   return (
     // Brief 28a Part 5 walkthrough scroll fix (2026-05-14): wrap in a
     // bounded outer container that owns the internal scroll. Page-level
@@ -405,6 +435,18 @@ export default function SummaryView() {
               ? `Baseload ${fmtKWh(equipment.total_baseload_kwh)} (24/7) + active ${fmtKWh(equipment.total_active_kwh)}`
               : null} />
         </div>
+      </div>
+
+      {/* ── Cross-chart reconciliation (Brief POL-M3 §7.2) ──────────── */}
+      <div className="bg-white border border-light-grey rounded p-5">
+        <div className="text-xxs uppercase tracking-wider text-mid-grey mb-2">
+          Cross-chart reconciliation
+        </div>
+        <p className="text-xxs text-mid-grey/80 mb-3">
+          Same total via two engine paths — annual aggregation vs 12-month sum.
+          Agreement (≤0.5%) ⇒ engine consistent. Mismatch ⇒ engine bug surfaced.
+        </p>
+        <ReconciliationRow rows={reconciliationRows} />
       </div>
 
       {/* ── Footnote ────────────────────────────────────────────────── */}

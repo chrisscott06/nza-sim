@@ -50,6 +50,33 @@ import { useMemo, useState, useRef } from 'react'
 const MONTH_DAYS = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
 const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
+// Brief 28-IM-Polish POL-M3 §7.1 — Profile zoom/pan presets.
+//
+// Range buttons drive a viewport [dayStart, dayEnd]; xs() is rescaled so
+// the visible window stretches across the whole chart width. The brief's
+// preferred interaction was a Recharts <Brush>, but this component is
+// hand-rolled SVG, so the documented fallback ("Range preset buttons only,
+// no drag-to-zoom") applies. A brush track at the bottom shows the
+// viewport position within the full year for orientation.
+const FULL_YEAR = [0, 364]
+const QUARTER_RANGES = [
+  { label: 'Q1', range: [0, 89] },
+  { label: 'Q2', range: [90, 180] },
+  { label: 'Q3', range: [181, 272] },
+  { label: 'Q4', range: [273, 364] },
+]
+const MONTH_RANGES = MONTH_DAYS.map((startDay, i) => ({
+  label: MONTH_LABELS[i],
+  range: [startDay, i === 11 ? 364 : MONTH_DAYS[i + 1] - 1],
+}))
+function _dayToLabel(d) {
+  // Convert day-of-year [0..364] → "DD MMM"
+  let monthIdx = 0
+  for (let i = 0; i < 12; i++) if (MONTH_DAYS[i] <= d) monthIdx = i
+  const dayInMonth = d - MONTH_DAYS[monthIdx] + 1
+  return `${dayInMonth} ${MONTH_LABELS[monthIdx]}`
+}
+
 function _z365() { return new Array(365).fill(0) }
 
 // Daily kWh → daily mean kW (sum over 24 hours, divide by 24)
@@ -81,6 +108,11 @@ function _stackedAreaPaths(stacks, xs, ys) {
 
 export default function WeatherSynchronisedProfile({ primary, weather, height = 480, caption }) {
   const [hoverDay, setHoverDay] = useState(null)
+  // Brief 28-IM-Polish POL-M3 §7.1 — viewport state for zoom/pan.
+  const [viewport, setViewport] = useState(FULL_YEAR)
+  const [dayStart, dayEnd] = viewport
+  const viewportSpan = Math.max(1, dayEnd - dayStart)  // guard divide-by-zero
+  const isZoomed = viewport[0] !== 0 || viewport[1] !== 364
   const containerRef = useRef(null)
 
   // Pre-process all series into kW / kept-unit arrays
@@ -99,22 +131,30 @@ export default function WeatherSynchronisedProfile({ primary, weather, height = 
   // for the y-axis tick number + unit label without overlap. Pane heights
   // rebalanced (Bug 2.12) so the primary kW pane is ~40% rather than
   // dominating; the three weather panes get equal share.
+  // Brief POL-M3 §7.1: a 18px brush track now sits below the four panes
+  // (between the month axis labels and the bottom of the SVG). padB stays
+  // small because the month axis labels overlap with the brush track row.
   const W = 900
   const padL = 62
   const padR = 100  // room for line-overlay legend on right
   const padT = 22   // extra room at top of pane 1 for the unit label
   const padB = 22
+  const BRUSH_H = 14
+  const BRUSH_GAP = 6
   // Pane heights — primary slightly larger but not dominant
   const paneHeights = [0.40, 0.20, 0.20, 0.20]   // sum 1.0
   const paneGap = 8
-  const usableH = height - padT - padB - paneGap * 3
+  const usableH = height - padT - padB - paneGap * 3 - BRUSH_H - BRUSH_GAP
   const panes = paneHeights.map(h => Math.max(40, h * usableH))
   const paneYs = []
   let y = padT
   for (const h of panes) { paneYs.push(y); y += h + paneGap }
+  const brushTop = y - paneGap + BRUSH_GAP   // just below the last pane
 
-  // X axis: 0..364 → padL..(W - padR)
-  const xs = (i) => padL + (i / 364) * (W - padL - padR)
+  // X axis: viewport day → padL..(W - padR)
+  const xs = (i) => padL + ((i - dayStart) / viewportSpan) * (W - padL - padR)
+  // Brush track uses the full year (always 0..364) regardless of zoom.
+  const xs_full = (i) => padL + (i / 364) * (W - padL - padR)
 
   // Y axes per pane
   const primaryMax = (() => {
@@ -139,19 +179,23 @@ export default function WeatherSynchronisedProfile({ primary, weather, height = 
 
   const stackPaths = useMemo(() => _stackedAreaPaths(stacks, xs, ysPrim), [stacks, primaryMax])
 
-  // Mouse-move handler: convert client X → day index in [0, 364]
+  // Mouse-move handler: convert client X → day index inside viewport.
+  // Brief POL-M3 §7.1: clamp to [dayStart, dayEnd] so the crosshair never
+  // points at off-screen data when zoomed in.
   const onMove = (e) => {
     const rect = containerRef.current?.getBoundingClientRect()
     if (!rect) return
     const px = e.clientX - rect.left
     const svgW = rect.width
-    // Map px in [0, svgW] to viewBox X in [0, W]
     const vbX = (px / svgW) * W
     const norm = (vbX - padL) / (W - padL - padR)
-    const d = Math.max(0, Math.min(364, Math.round(norm * 364)))
+    if (norm < 0 || norm > 1) { setHoverDay(null); return }
+    const d = Math.max(dayStart, Math.min(dayEnd, dayStart + Math.round(norm * viewportSpan)))
     setHoverDay(d)
   }
   const onLeave = () => setHoverDay(null)
+  // Double-click anywhere in the chart resets zoom (brief §7.1).
+  const onDoubleClick = () => setViewport(FULL_YEAR)
 
   // Tooltip data for hover day
   const tipData = hoverDay == null ? null : {
@@ -163,22 +207,99 @@ export default function WeatherSynchronisedProfile({ primary, weather, height = 
     ghi:    ghi[hoverDay],
   }
 
+  // Pane content needs to be clipped when the viewport zooms in so paths
+  // computed from the full 365-point series don't bleed outside the chart.
+  // Single clipPath covers all four panes' data area horizontally; vertical
+  // extent is the full stack of panes (excluding the bottom brush track).
+  const clipBottom = brushTop - BRUSH_GAP / 2
+  const clipId = `profile-pane-clip-${stacks.length}-${lines.length}`
+
   return (
     <div className="w-full h-full overflow-auto p-4" ref={containerRef}>
       {primary?.title && (
         <p className="text-caption font-semibold text-navy">{primary.title} · {primary.unit}</p>
       )}
-      {caption && <p className="text-xxs text-mid-grey mb-3">{caption}</p>}
+      {caption && <p className="text-xxs text-mid-grey mb-2">{caption}</p>}
+
+      {/* Brief POL-M3 §7.1: range preset toolbar — Year · Q1-Q4 · Jan-Dec.
+          Hand-rolled SVG component, so Recharts <Brush> is N/A; this is the
+          documented fallback ("Range preset buttons only, no drag-to-zoom").
+          Brush track inside the SVG shows viewport position; double-click
+          on the chart resets. */}
+      <div className="flex items-center gap-1 mb-2 text-xxs flex-wrap" style={{ maxWidth: 1100 }}>
+        <button
+          onClick={() => setViewport(FULL_YEAR)}
+          className={`px-2 py-0.5 rounded border transition-colors ${
+            !isZoomed
+              ? 'bg-navy text-white border-navy'
+              : 'bg-white text-mid-grey border-light-grey hover:border-navy hover:text-navy'
+          }`}
+        >Year</button>
+        <span className="text-light-grey mx-1">·</span>
+        {QUARTER_RANGES.map(q => {
+          const active = viewport[0] === q.range[0] && viewport[1] === q.range[1]
+          return (
+            <button
+              key={q.label}
+              onClick={() => setViewport(q.range)}
+              className={`px-1.5 py-0.5 rounded border transition-colors ${
+                active
+                  ? 'bg-navy text-white border-navy'
+                  : 'bg-white text-mid-grey border-light-grey hover:border-navy hover:text-navy'
+              }`}
+            >{q.label}</button>
+          )
+        })}
+        <span className="text-light-grey mx-1">·</span>
+        {MONTH_RANGES.map(m => {
+          const active = viewport[0] === m.range[0] && viewport[1] === m.range[1]
+          return (
+            <button
+              key={m.label}
+              onClick={() => setViewport(m.range)}
+              className={`px-1.5 py-0.5 rounded border transition-colors ${
+                active
+                  ? 'bg-navy text-white border-navy'
+                  : 'bg-white text-mid-grey border-light-grey hover:border-navy hover:text-navy'
+              }`}
+            >{m.label}</button>
+          )
+        })}
+        <span className="ml-auto text-mid-grey tabular-nums">
+          {_dayToLabel(dayStart)} – {_dayToLabel(dayEnd)}
+          {isZoomed && <span className="ml-2 text-mid-grey/70">(double-click chart to reset)</span>}
+        </span>
+      </div>
 
       <div className="relative" style={{ width: '100%', maxWidth: 1100 }}>
-        <svg viewBox={`0 0 ${W} ${height}`} className="w-full border border-light-grey rounded bg-white" onMouseMove={onMove} onMouseLeave={onLeave}>
-          {/* Month tick marks across all panes */}
-          {MONTH_DAYS.map((d, i) => (
-            <g key={`m${i}`}>
-              <line x1={xs(d)} x2={xs(d)} y1={padT} y2={height - padB} stroke="#F3F4F6" strokeWidth="0.5" />
-              <text x={xs(d)} y={height - 6} textAnchor="start" fontSize="9" fill="#9CA3AF">{MONTH_LABELS[i]}</text>
-            </g>
-          ))}
+        <svg
+          viewBox={`0 0 ${W} ${height}`}
+          className="w-full border border-light-grey rounded bg-white"
+          onMouseMove={onMove}
+          onMouseLeave={onLeave}
+          onDoubleClick={onDoubleClick}
+        >
+          {/* Clip pane data to chart area so zoomed-in paths don't bleed
+              into the y-axis label gutter or the brush track. */}
+          <defs>
+            <clipPath id={clipId}>
+              <rect x={padL} y={padT - 2} width={W - padL - padR} height={clipBottom - padT + 2} />
+            </clipPath>
+          </defs>
+
+          {/* Month tick marks across all panes — clip the vertical grid to
+              the pane area, but float the month label above the brush
+              track (brushTop - 3) so the labels stay readable. */}
+          {MONTH_DAYS.map((d, i) => {
+            const inView = d >= dayStart && d <= dayEnd
+            if (!inView) return null
+            return (
+              <g key={`m${i}`}>
+                <line x1={xs(d)} x2={xs(d)} y1={padT} y2={clipBottom} stroke="#F3F4F6" strokeWidth="0.5" />
+                <text x={xs(d)} y={brushTop - 3} textAnchor="start" fontSize="9" fill="#9CA3AF">{MONTH_LABELS[i]}</text>
+              </g>
+            )
+          })}
 
           {/* ── Pane 1: stacked area (heat loss) + line overlays (solar) ───
               Brief 28-IM-Polish Bug 2.3 / 2.12: unit label sits ABOVE the
@@ -191,45 +312,50 @@ export default function WeatherSynchronisedProfile({ primary, weather, height = 
           {[0.25, 0.5, 0.75].map(f => (
             <line key={f} x1={padL} x2={W - padR} y1={ysPrim(primaryMax * f)} y2={ysPrim(primaryMax * f)} stroke="#F3F4F6" strokeWidth="0.5" />
           ))}
-          {/* Stacked area paths */}
-          {stackPaths.map(p => (
-            <path key={p.key} d={p.d} fill={p.color} fillOpacity="0.7" stroke="none" />
-          ))}
-          {/* Line overlays */}
-          {lines.map(l => (
-            <path
-              key={l.key}
-              d={_linePath(l.values, xs, ysPrim)}
-              fill="none"
-              stroke={l.color}
-              strokeWidth="1"
-              strokeDasharray={l.dashed ? '3,2' : undefined}
-            />
-          ))}
+
+          {/* All data-bearing geometry lives inside the clip so off-viewport
+              days don't bleed past the chart edges. */}
+          <g clipPath={`url(#${clipId})`}>
+            {/* Stacked area paths */}
+            {stackPaths.map(p => (
+              <path key={p.key} d={p.d} fill={p.color} fillOpacity="0.7" stroke="none" />
+            ))}
+            {/* Line overlays */}
+            {lines.map(l => (
+              <path
+                key={l.key}
+                d={_linePath(l.values, xs, ysPrim)}
+                fill="none"
+                stroke={l.color}
+                strokeWidth="1"
+                strokeDasharray={l.dashed ? '3,2' : undefined}
+              />
+            ))}
+            <path d={_linePath(Array.from(tOut), xs, ysT)} fill="none" stroke="#DC2626" strokeWidth="1.2" />
+            <path d={_linePath(Array.from(wind), xs, ysW)} fill="none" stroke="#0891B2" strokeWidth="1.2" />
+            <path d={_linePath(Array.from(ghi), xs, ysG)} fill="none" stroke="#F59E0B" strokeWidth="1.2" />
+          </g>
 
           {/* ── Pane 2: outdoor temperature ─────────────────────────────── */}
           <text x={padL - 6} y={paneYs[1] - 4} textAnchor="end" fontSize="9" fill="#475569" fontWeight="600">°C</text>
           <text x={padL - 6} y={paneYs[1] + panes[1] - 2} textAnchor="end" fontSize="9" fill="#9CA3AF">{tMin}</text>
           <text x={padL - 6} y={paneYs[1] + 10} textAnchor="end" fontSize="9" fill="#9CA3AF">{tMax}</text>
           <line x1={padL} x2={W - padR} y1={ysT(0)} y2={ysT(0)} stroke="#E5E7EB" strokeWidth="0.5" />
-          <path d={_linePath(Array.from(tOut), xs, ysT)} fill="none" stroke="#DC2626" strokeWidth="1.2" />
 
           {/* ── Pane 3: wind ──────────────────────────────────────────── */}
           <text x={padL - 6} y={paneYs[2] - 4} textAnchor="end" fontSize="9" fill="#475569" fontWeight="600">m/s</text>
           <text x={padL - 6} y={paneYs[2] + panes[2] - 2} textAnchor="end" fontSize="9" fill="#9CA3AF">0</text>
           <text x={padL - 6} y={paneYs[2] + 10} textAnchor="end" fontSize="9" fill="#9CA3AF">{windMax}</text>
-          <path d={_linePath(Array.from(wind), xs, ysW)} fill="none" stroke="#0891B2" strokeWidth="1.2" />
 
           {/* ── Pane 4: GHI ───────────────────────────────────────────── */}
           <text x={padL - 6} y={paneYs[3] - 4} textAnchor="end" fontSize="9" fill="#475569" fontWeight="600">W/m²</text>
           <text x={padL - 6} y={paneYs[3] + panes[3] - 2} textAnchor="end" fontSize="9" fill="#9CA3AF">0</text>
           <text x={padL - 6} y={paneYs[3] + 10} textAnchor="end" fontSize="9" fill="#9CA3AF">{ghiMax}</text>
-          <path d={_linePath(Array.from(ghi), xs, ysG)} fill="none" stroke="#F59E0B" strokeWidth="1.2" />
 
           {/* ── Synchronised crosshair on hover ──────────────────────── */}
-          {hoverDay != null && (
+          {hoverDay != null && hoverDay >= dayStart && hoverDay <= dayEnd && (
             <g>
-              <line x1={xs(hoverDay)} x2={xs(hoverDay)} y1={padT} y2={height - padB} stroke="#0F172A" strokeOpacity="0.35" strokeWidth="0.8" strokeDasharray="2,2" />
+              <line x1={xs(hoverDay)} x2={xs(hoverDay)} y1={padT} y2={clipBottom} stroke="#0F172A" strokeOpacity="0.35" strokeWidth="0.8" strokeDasharray="2,2" />
               {/* Pane 1 dot for stacked-top */}
               {stackPaths.length > 0 && (
                 <circle cx={xs(hoverDay)} cy={ysPrim(stackPaths[stackPaths.length - 1].topVals[hoverDay] ?? 0)} r="2.5" fill="#0F172A" />
@@ -242,6 +368,22 @@ export default function WeatherSynchronisedProfile({ primary, weather, height = 
               <circle cx={xs(hoverDay)} cy={ysG(ghi[hoverDay] ?? 0)} r="2.5" fill="#F59E0B" />
             </g>
           )}
+
+          {/* ── Brush track (POL-M3 §7.1) ──────────────────────────────
+              Full-year overview with the current viewport highlighted; no
+              drag-to-resize in V1 (range buttons + double-click are the
+              interaction model). Helps the user orient when zoomed in. */}
+          <g>
+            <rect x={padL} y={brushTop} width={W - padL - padR} height={BRUSH_H} fill="#F9FAFB" stroke="#E5E7EB" strokeWidth="0.5" />
+            {MONTH_DAYS.map((d, i) => (
+              <line key={`b${i}`} x1={xs_full(d)} x2={xs_full(d)} y1={brushTop} y2={brushTop + BRUSH_H / 2} stroke="#CBD5E1" strokeWidth="0.4" />
+            ))}
+            <rect
+              x={xs_full(dayStart)} y={brushTop}
+              width={Math.max(2, xs_full(dayEnd) - xs_full(dayStart))} height={BRUSH_H}
+              fill="#0F172A" fillOpacity="0.18" stroke="#0F172A" strokeWidth="0.8"
+            />
+          </g>
 
           {/* Inline legend (top-right of pane 1) */}
           <g transform={`translate(${W - padR + 4}, ${paneYs[0]})`}>
