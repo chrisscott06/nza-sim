@@ -1296,12 +1296,20 @@ function BuildingSummaryView({ instantResult, simBalance }) {
         </table>
 
         {/* Brief 28-IM-Polish POL-M3 §7.2: cross-chart reconciliation.
-            Same total via two different upstream paths — annual scalar vs
-            12-month sum. Agreement (≤0.5%) ⇒ engine consistent. Mismatch ⇒
-            engine bug surfaced visually. */}
+            Brief 29 Commit B (cleanup): renamed and reframed. This row
+            only checks DISPLAY-TO-DISPLAY consistency — the same total
+            computed via the per-element annual scalar (used by the table
+            above) vs the 12-month sum (used by the Monthly view). It does
+            NOT verify integrand-vs-display: the door bug (commit 39a828c)
+            slipped through this exact check because both displays were
+            iterating the same incomplete element list. The audit (Brief 29
+            Part 1) installs the proper integrand-vs-display invariant. */}
         <div className="mt-4 max-w-3xl">
           <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1.5">
-            Cross-chart reconciliation
+            Display-to-display consistency
+            <span className="ml-2 normal-case text-mid-grey/70 italic">
+              (does NOT verify integrand-vs-display — see Brief 29 audit)
+            </span>
           </p>
           <ReconciliationRow rows={reconciliationRows} />
         </div>
@@ -1332,40 +1340,25 @@ function BuildingSummaryView({ instantResult, simBalance }) {
           )}
         </div>
 
-        {/* Brief 28-IM-Polish Bug 2.8: fabric-gap magnitude diagnostic.
-            Cumulative magnitude only — per-component attribution (sky LW,
-            T_ground, BS 5925, TB, glazing) is queued for Brief 28-DynamicParity. */}
-        <div className="text-xxs text-mid-grey/80 italic mt-4 max-w-3xl space-y-1">
-          <p><span className="font-medium not-italic text-amber-700">Convention notes (Static vs Dynamic):</span></p>
-          {fabricGapPct != null && (
-            <p>• <span className="font-medium not-italic">Cumulative effect on Bridgewater</span>: Dynamic
-              heating demand is {fabricGapPct > 0 ? `${fabricGapPct}% higher` : `${Math.abs(fabricGapPct)}% lower`} than
-              Static fabric loss ({simHeatingMwh.toFixed(1)} vs {staticFabricMwh.toFixed(1)} MWh/yr). Decomposition
-              across sky long-wave, T_ground, glazing angle, TB, etc. queued for Brief 28-DynamicParity.</p>
-          )}
-          <p>• <span className="font-medium not-italic">Sky long-wave radiation</span>: Dynamic uses
-            EnergyPlus's full sky-temperature model (Berdahl–Martin) per simulation hour;
-            Static uses an approximation against the dry-bulb temperature trace. Roof loss
-            will be slightly higher in Dynamic.</p>
-          <p>• <span className="font-medium not-italic">T_ground</span>: Static assumes a fixed
-            monthly ground temperature; Dynamic uses the EPW <code>GroundTemperatures</code>
-            if present, else the same default. Ground-floor loss can differ by 5-10%.</p>
-          <p>• <span className="font-medium not-italic">Permanent vents (BS 5925)</span>: Static
-            applies the BS 5925 wind-stack flow formula directly; Dynamic emits
-            <code>ZoneVentilation:WindandStackOpenArea</code> which EP integrates per timestep.
-            Both reflect physics; numerical agreement is typically ±5%.</p>
-          <p>• <span className="font-medium not-italic">Thermal bridging (TB)</span>: Static
-            applies ISO 14683 <code>H_TB × ΔT</code> as an explicit extra loss; Dynamic
-            (Brief 28-DynamicParity TODO) doesn't represent TB at all, so Dynamic will
-            systematically under-report fabric loss by ~{Math.round((los.thermal_bridging?.heating_loss_kwh ?? 0) / 1000)}{' '}
-            MWh/yr at this configuration.</p>
-          <p>• <span className="font-medium not-italic">Glazing</span>: Static treats glazing
-            U as a single value × area; Dynamic uses the WindowMaterial layer model with
-            per-hour incidence-angle adjustment for solar gain.</p>
-          <p className="pt-1 not-italic text-mid-grey">Comfort hours (Static): {demand.comfort_hours?.toLocaleString() ?? '—'} hrs
-            · under-heated {demand.underheating_hours?.toLocaleString() ?? '—'}
-            · over-heated {demand.overheating_hours?.toLocaleString() ?? '—'}</p>
-        </div>
+        {/* Brief 29 Commit B (cleanup): the per-component "Convention notes
+            (Static vs Dynamic)" block that lived here made magnitude claims
+            (sky LW raises roof loss "slightly", T_ground differs "5–10%",
+            BS 5925 vents agree "±5%", TB under-reports by ~11 MWh) without
+            textbook citations or numerical defence on Bridgewater specifically.
+            The "Cumulative effect: Dynamic 21% lower than Static fabric loss"
+            line was a particular casualty — it derived its 21% from the buggy
+            pre-door-fix 200 vs 252 MWh ratio. Post Commit A the ratio is
+            210 vs 252 (~17%) and even that is undefended until Brief 29 Part 3
+            (cross-engine reconciliation) lands. Removed; the audit
+            (docs/audit/29_first_principles_audit_FINDINGS.md) is the place
+            for defended numbers. */}
+        <p className="text-xxs italic text-mid-grey/70 mt-4 max-w-3xl">
+          Static vs Dynamic decomposition is under audit (Brief 29 Part 3) —
+          see <code>docs/audit/29_first_principles_audit_FINDINGS.md</code>.
+          Comfort hours (Static): {demand.comfort_hours?.toLocaleString() ?? '—'} hrs
+          · under-heated {demand.underheating_hours?.toLocaleString() ?? '—'}
+          · over-heated {demand.overheating_hours?.toLocaleString() ?? '—'}
+        </p>
       </div>
     </div>
   )

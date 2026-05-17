@@ -546,15 +546,19 @@ export default function LoadShapeView() {
       </div>
 
       {/* ── Footnote ────────────────────────────────────────────────── */}
+      {/* Brief 29 Commit B (cleanup): removed the "Static summer max sits
+          ~8.8°C above Dynamic on Bridgewater — lumped two-node mass model"
+          claim. The 8.8K number is undefended per Brief 29 Hard Rule 2 and
+          the lumped-2-node attribution is on the banned-mechanisms list
+          until the audit lands the heat-balance derivation. Brief 28b Part 3
+          ("multi-layer CTF fix") was a planned remedy for the assumed
+          mechanism; with the door bug just having shown that one such
+          assumed mechanism (lumped 2-node for the 384 vs 252 gap) was
+          actually a 202 MWh hidden integrand term, the Brief 28b plan is
+          itself under review pending Brief 29. */}
       <p className="text-xxs text-mid-grey/70 italic flex-shrink-0">
-        Static engine numbers. Static summer max sits ~8.8°C above Dynamic on
-        Bridgewater — lumped two-node mass model (Brief 28b Part 3 lands the
-        multi-layer CTF fix). The Annual breakdown lens that lived in the
-        interim 3-sub-view toggle (Brief 28a Part 3c) is dropped here — per-gain
-        attribution is already in the Summary tab; "Profiles" is the time-
-        varying-signals tab. The new total-energy bar in the stats column
-        addresses much of what the Annual breakdown lens used to show
-        (magnitude anchor segmented by gain).
+        Static engine numbers. The "Profiles" tab shows the time-varying
+        signals; per-gain attribution lives in the Summary tab.
       </p>
     </div>
   )

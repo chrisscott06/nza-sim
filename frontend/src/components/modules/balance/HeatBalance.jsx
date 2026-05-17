@@ -20,7 +20,7 @@
  */
 
 import { useMemo, useState, useEffect } from 'react'
-import { ArrowRight, AlertCircle, Info, ChevronDown } from 'lucide-react'
+import { ArrowRight, Info, ChevronDown } from 'lucide-react'
 import {
   SOLAR_COLOURS, INTERNAL_COLOURS, HEATING_COLOUR, COOLING_COLOUR,
   FABRIC_COLOURS, LABELS, colourForElement,
@@ -542,171 +542,19 @@ function EnvelopeOnlyBadge({ mode, onDisclosureToggle, showDisclosure }) {
   )
 }
 
-function ComfortBandEditor({ comfortBand, onChange }) {
-  // Local mirror so typing doesn't fire a PUT on every keystroke;
-  // commits on blur or on Enter, validated client-side per contract bounds.
-  const [lower, setLower] = useState(comfortBand?.lower_c ?? 20)
-  const [upper, setUpper] = useState(comfortBand?.upper_c ?? 26)
-  useEffect(() => { setLower(comfortBand?.lower_c ?? 20); setUpper(comfortBand?.upper_c ?? 26) },
-    [comfortBand?.lower_c, comfortBand?.upper_c])
-
-  const commit = () => {
-    const lo = Number(lower), up = Number(upper)
-    if (Number.isFinite(lo) && Number.isFinite(up) && lo < up && lo >= 8 && up <= 32) {
-      onChange?.({ lower_c: lo, upper_c: up })
-    } else {
-      // reset to props if invalid
-      setLower(comfortBand?.lower_c ?? 20); setUpper(comfortBand?.upper_c ?? 26)
-    }
-  }
-  const onKeyDown = (e) => { if (e.key === 'Enter') e.currentTarget.blur() }
-  const inputCls = 'w-12 px-1 py-0.5 text-xxs text-navy border border-light-grey rounded text-center tabular-nums focus:outline-none focus:border-teal bg-white'
-  return (
-    <div className="flex items-center gap-2 text-xxs text-mid-grey">
-      <span>Comfort band:</span>
-      <input type="number" min={8} max={32} step={1}
-        value={lower} onChange={e => setLower(e.target.value)}
-        onBlur={commit} onKeyDown={onKeyDown}
-        className={inputCls} title="Heating threshold — lower comfort bound (°C)" />
-      <span>°C</span>
-      <span className="text-light-grey">⋯</span>
-      <input type="number" min={8} max={32} step={1}
-        value={upper} onChange={e => setUpper(e.target.value)}
-        onBlur={commit} onKeyDown={onKeyDown}
-        className={inputCls} title="Cooling threshold — upper comfort bound (°C)" />
-      <span>°C</span>
-    </div>
-  )
-}
-
-function StateOneDemandPanel({ data, comfortBand, onComfortBandChange, unit, engineMode }) {
-  // Reads `demand`, `free_running`, `comfort_band_used` injected at the top
-  // of the heat_balance object by _calculateEnvelopeOnly (instantCalc.js).
-  const demand = data?.demand
-  const fr     = data?.free_running
-  if (!demand || !fr) return null
-
-  const gia = data?.metadata?.gia_m2 ?? 0
-  const heatKWh = demand.heating_demand_mwh * 1000
-  const coolKWh = demand.cooling_demand_mwh * 1000
-  const heatVal = unit === 'kwh_per_m2'
-    ? (gia > 0 ? heatKWh / gia : 0)
-    : heatKWh
-  const coolVal = unit === 'kwh_per_m2'
-    ? (gia > 0 ? coolKWh / gia : 0)
-    : coolKWh
-  const heatLabel = unit === 'kwh_per_m2'
-    ? `${heatVal.toFixed(1)} kWh/m²·a`
-    : `${Math.round(demand.heating_demand_mwh)} MWh`
-  const coolLabel = unit === 'kwh_per_m2'
-    ? `${coolVal.toFixed(1)} kWh/m²·a`
-    : `${Math.round(demand.cooling_demand_mwh)} MWh`
-
-  const totalHours = demand.underheating_hours + demand.overheating_hours + demand.comfort_hours
-  const pct = (h) => totalHours ? Math.round((h / totalHours) * 100) : 0
-
-  return (
-    <div className="flex-shrink-0 px-5 py-4 border-t border-light-grey bg-off-white/60">
-      {/* Comfort band editor — inline */}
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <ComfortBandEditor comfortBand={comfortBand} onChange={onComfortBandChange} />
-        <div className="text-xxs text-mid-grey">
-          The energy a system would need to provide to hold the zone in this band.
-        </div>
-      </div>
-
-      {/* Derived demand row — heating + cooling */}
-      <div className="grid grid-cols-2 gap-3 mb-3">
-        <div className="bg-white rounded border border-light-grey px-3 py-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xxs text-mid-grey">Heating demand</span>
-            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: HEATING_COLOUR }} />
-          </div>
-          <p className="text-caption font-semibold text-navy mt-0.5 tabular-nums">{heatLabel}</p>
-          <p className="text-xxs text-mid-grey mt-0.5">below {comfortBand?.lower_c ?? 20}°C — derived</p>
-        </div>
-        <div className="bg-white rounded border border-light-grey px-3 py-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xxs text-mid-grey">Cooling demand</span>
-            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: COOLING_COLOUR }} />
-          </div>
-          <p className="text-caption font-semibold text-navy mt-0.5 tabular-nums">{coolLabel}</p>
-          <p className="text-xxs text-mid-grey mt-0.5">above {comfortBand?.upper_c ?? 26}°C — derived</p>
-        </div>
-      </div>
-
-      {/* Methodology footnote (Chris asked 2026-05-17 why heating demand can
-          exceed total fabric loss). Two different integrals — fabric loss
-          is constant-setpoint, demand is hour-by-hour against the free-
-          running zone temperature. The lumped 2-node mass model allows
-          T_zone to swing below T_out on cold nights (radiative loss to
-          sky), which inflates the demand integral above the fabric-loss
-          integral. The Brief 28b Part 3 multi-layer CTF fix is queued. */}
-      <div className="mb-3 text-xxs text-mid-grey/85 leading-snug bg-white/50 border border-light-grey rounded px-3 py-2">
-        <span className="font-medium text-dark-grey">Why heating demand can exceed total fabric loss:</span>{' '}
-        fabric loss integrates <code>(T_set − T_out) × U·A</code> at a
-        constant setpoint, while heating demand integrates
-        <code> max(0, T_set − T_zone) × H</code> hour-by-hour. With the
-        Static engine's lumped 2-node mass model, the free-running T_zone
-        can swing below T_out on cold nights (radiative loss to sky), so
-        the demand integral over-shoots the fabric-loss integral by 30–60%
-        on a typical run. Dynamic (EnergyPlus) uses a full conduction
-        transfer function and produces lower numbers — see Static vs Dynamic
-        in the Summary tab.
-      </div>
-
-      {/* Comfort hours strip — under / in / over */}
-      <div className="mb-3">
-        <div className="flex items-center justify-between text-xxs text-mid-grey mb-1">
-          <span>Comfort hours (free-running, no system)</span>
-          <span className="tabular-nums">
-            {demand.comfort_hours.toLocaleString()} of {totalHours.toLocaleString()} hours in band ({pct(demand.comfort_hours)}%)
-          </span>
-        </div>
-        <div className="flex h-3 rounded overflow-hidden bg-light-grey/30">
-          {demand.underheating_hours > 0 && (
-            <div title={`Underheating: ${demand.underheating_hours.toLocaleString()} h (${pct(demand.underheating_hours)}%)`}
-              style={{ width: `${pct(demand.underheating_hours)}%`, backgroundColor: HEATING_COLOUR, opacity: 0.7 }} />
-          )}
-          {demand.comfort_hours > 0 && (
-            <div title={`Comfort: ${demand.comfort_hours.toLocaleString()} h (${pct(demand.comfort_hours)}%)`}
-              style={{ width: `${pct(demand.comfort_hours)}%`, backgroundColor: '#16A34A', opacity: 0.7 }} />
-          )}
-          {demand.overheating_hours > 0 && (
-            <div title={`Overheating: ${demand.overheating_hours.toLocaleString()} h (${pct(demand.overheating_hours)}%)`}
-              style={{ width: `${pct(demand.overheating_hours)}%`, backgroundColor: COOLING_COLOUR, opacity: 0.7 }} />
-          )}
-        </div>
-        <div className="grid grid-cols-3 gap-1 text-xxs text-mid-grey mt-1">
-          <span className="tabular-nums">Under: {demand.underheating_hours.toLocaleString()} h</span>
-          <span className="text-center text-green-700 tabular-nums">In: {demand.comfort_hours.toLocaleString()} h</span>
-          <span className="text-right tabular-nums">Over: {demand.overheating_hours.toLocaleString()} h</span>
-        </div>
-      </div>
-
-      {/* Free-running mini-stats */}
-      <div className="grid grid-cols-3 gap-3 text-xxs">
-        <div>
-          <p className="text-mid-grey">Annual mean</p>
-          <p className="text-caption font-medium text-navy tabular-nums">{fr.annual_mean_c?.toFixed(1) ?? '—'}°C</p>
-        </div>
-        <div>
-          <p className="text-mid-grey">Winter min</p>
-          <p className="text-caption font-medium text-navy tabular-nums">{fr.winter_min_c?.toFixed(1) ?? '—'}°C</p>
-        </div>
-        <div>
-          <p className="text-mid-grey">Summer max</p>
-          <p className="text-caption font-medium text-navy tabular-nums">{fr.summer_max_c?.toFixed(1) ?? '—'}°C</p>
-        </div>
-      </div>
-
-      {/* Brief 28-IM §2.3 narrative paragraph removed from the chart area.
-          The Brief 28b Part 3 v3 Static-vs-Dynamic agreement narrative now
-          lives in docs/validation/ only. A (i) Diagnostics popover with
-          the same content is queued for a follow-up gate. */}
-    </div>
-  )
-}
+// Brief 29 Commit B (cleanup): ComfortBandEditor, StateOneDemandPanel,
+// UnitToggle, relativeTime, EngineToggle were orphaned by the UX overhaul
+// (commit 159de5b) that moved engine + unit toggles to the global top-bar
+// UISettingsContext and moved the comfort+demand surface to ComfortDemandCard
+// beneath the 3D viewer. The brief's "clean up before you build" rule (§29
+// Hard Rule 5) requires removal so old aggregation paths can't be a hidden
+// source of further integrand terms during the audit instrumentation.
+//
+// StateOneDemandPanel also carried a methodology footnote invoking the
+// lumped 2-node mass model and radiative-to-sky as the explanation for the
+// 384-vs-252 MWh gap. That was an invented mechanism — the actual cause was
+// a 202 MWh operable-door natvent term in the demand integrand (fixed in
+// commit 39a828c, Brief 29 Commit A). Removed with the function body.
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
@@ -909,35 +757,6 @@ export default function HeatBalance({
   )
 }
 
-// ── Unit toggle ──────────────────────────────────────────────────────────────
-
-function UnitToggle({ unit, onChange }) {
-  return (
-    <div className="flex items-center bg-off-white rounded-lg p-0.5 text-xxs">
-      <button
-        onClick={() => onChange('kwh_per_m2')}
-        className={`px-2.5 py-1 rounded transition-colors ${
-          unit === 'kwh_per_m2'
-            ? 'bg-white text-navy font-medium shadow-sm'
-            : 'text-mid-grey hover:text-navy'
-        }`}
-      >
-        kWh/m²·a
-      </button>
-      <button
-        onClick={() => onChange('kwh')}
-        className={`px-2.5 py-1 rounded transition-colors ${
-          unit === 'kwh'
-            ? 'bg-white text-navy font-medium shadow-sm'
-            : 'text-mid-grey hover:text-navy'
-        }`}
-      >
-        kWh
-      </button>
-    </div>
-  )
-}
-
 // ── Layout toggle ────────────────────────────────────────────────────────────
 
 function LayoutToggle({ layout, onChange }) {
@@ -966,62 +785,3 @@ function LayoutToggle({ layout, onChange }) {
   )
 }
 
-// ── Engine toggle ────────────────────────────────────────────────────────────
-
-function relativeTime(iso) {
-  if (!iso) return ''
-  const t = new Date(iso).getTime()
-  if (isNaN(t)) return ''
-  const ms = Date.now() - t
-  const min = Math.floor(ms / 60000)
-  if (min < 1) return 'just now'
-  if (min < 60) return `${min} min ago`
-  const hr = Math.floor(min / 60)
-  if (hr < 24) return `${hr} hr ago`
-  const d = Math.floor(hr / 24)
-  return `${d} day${d > 1 ? 's' : ''} ago`
-}
-
-function EngineToggle({ engineMode, onChange, hasLive, hasSimulation, simulationInfo }) {
-  const isStale = !!simulationInfo?.isStale
-  return (
-    <div className="flex items-center bg-off-white rounded-lg p-0.5 text-xxs">
-      <button
-        onClick={() => onChange('live')}
-        disabled={!hasLive}
-        className={`flex items-center gap-1 px-2.5 py-1 rounded transition-colors ${
-          engineMode === 'live'
-            ? 'bg-white text-navy font-medium shadow-sm'
-            : 'text-mid-grey hover:text-navy disabled:opacity-40'
-        }`}
-        title="Static engine — instant calculation, updates as you edit inputs"
-      >
-        <Zap size={10} />
-        Static
-      </button>
-      <button
-        onClick={() => onChange('simulation')}
-        disabled={!hasSimulation}
-        className={`flex items-center gap-1 px-2.5 py-1 rounded transition-colors ${
-          engineMode === 'simulation'
-            ? 'bg-white text-navy font-medium shadow-sm'
-            : 'text-mid-grey hover:text-navy disabled:opacity-40'
-        }`}
-        title={hasSimulation
-          ? `Last EnergyPlus run${simulationInfo?.ranAt ? ` ${relativeTime(simulationInfo.ranAt)}` : ''}`
-          : 'No Dynamic run yet'}
-      >
-        <Activity size={10} />
-        Dynamic
-        {simulationInfo?.ranAt && (
-          <span className="text-mid-grey font-normal ml-0.5">
-            · {relativeTime(simulationInfo.ranAt)}
-          </span>
-        )}
-        {isStale && (
-          <AlertCircle size={10} className="text-amber-500 ml-0.5" />
-        )}
-      </button>
-    </div>
-  )
-}

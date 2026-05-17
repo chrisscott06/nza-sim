@@ -450,15 +450,17 @@ export default function SummaryView() {
       </div>
 
       {/* ── Footnote ────────────────────────────────────────────────── */}
+      {/* Brief 29 Commit B (cleanup): previous footnote attributed Static's
+          summer-max over-prediction to "the lumped two-node mass model" with
+          a specific 8.8K magnitude claim on Bridgewater. That attribution
+          predates Brief 29's audit and is treated as undefended until the
+          audit's Part 4 (Internal Gains) cross-engine reconciliation lands
+          and either defends the 8.8K number with a heat-balance derivation
+          (per Hard Rule 2) or identifies a hidden integrand term. Footnote
+          stripped to a neutral engine-source label until then. */}
       <p className="text-xxs italic text-mid-grey/70">
-        Numbers from the <strong>Static engine</strong> — in-browser lumped-capacitance
-        two-node model + multi-profile gain summing. The Dynamic toggle (EnergyPlus)
-        lands when State 2 EP results plumbing wires through (Brief 28a Part 5).
-        Static vs Dynamic State 1 divergences are documented in
-        {' '}<code>docs/state_1_engine_divergence_investigation.md</code> (updated
-        2026-05-14); the dominant driver of Static's summer-max over-prediction is
-        the lumped two-node mass model (~8.8K gap on Bridgewater), not the sky
-        model — Brief 28b Part 3 lands the multi-layer CTF fix.
+        Numbers from the <strong>Static engine</strong> (in-browser physics).
+        The top-bar Static / Dynamic toggle is the single switch.
       </p>
       </div>
     </div>

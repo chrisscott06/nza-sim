@@ -196,24 +196,16 @@ export default function ComfortDemandCard({ instantResult, comfortBand, onComfor
         </div>
       )}
 
-      {/* 6. Methodology footnote — why heating demand can exceed fabric loss.
-          Lives here (next to the demand numbers themselves) rather than in
-          the Heat Balance bottom, so the explanation sits right where the
-          question naturally surfaces. */}
-      <details className="text-xxs text-mid-grey/85 leading-snug">
-        <summary className="cursor-pointer hover:text-navy">
-          Why heating demand can exceed fabric loss
-        </summary>
-        <div className="mt-1 pl-2 border-l-2 border-light-grey">
-          Fabric loss integrates <code>(T_set − T_out) × U·A</code> at a
-          constant setpoint. Heating demand integrates
-          <code> max(0, T_set − T_zone) × H</code> hour by hour. The Static
-          engine's lumped 2-node mass model lets T_zone swing below T_out
-          on cold nights (radiative loss to sky), inflating demand by
-          30–60% over fabric loss. Dynamic (EnergyPlus, full CTF) is closer
-          to truth — switch the top-bar engine toggle to compare.
-        </div>
-      </details>
+      {/* Brief 29 Commit B: the "Why heating demand can exceed fabric loss"
+          disclosure that previously lived here invoked the lumped 2-node
+          mass model and radiative-to-sky as the explanation for the 384 vs
+          252 MWh gap. That explanation was an invented mechanism — the
+          actual cause was a hidden 202 MWh operable-door natvent term in
+          the demand integrand (fixed in Commit A, 39a828c). With the door
+          fix landed, heating demand sits inside the physical envelope
+          [loss − solar, loss] and the question doesn't arise. Disclosure
+          removed; Part 1 of the audit will install the integrand-vs-display
+          invariant that would have caught the original bug. */}
     </div>
   )
 }
