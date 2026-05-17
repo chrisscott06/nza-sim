@@ -1365,7 +1365,15 @@ def assemble_epjson(
     # ZoneVentilation:WindandStackOpenArea, keyed by object name. Operable
     # openings get the stack term enabled (height_difference > 0), unlike
     # louvres which suppress stack.
-    operable_opening_objects = _build_operable_openings_objects(zones, building_params)
+    #
+    # Brief 29 Commit A (door-fix precondition): mirror the State 1/State 2
+    # suppression that _build_openings_objects already has. Per the state
+    # contract, operable openings are State 2.5 territory; emitting them
+    # under State 1 added a "New door (north)" ZoneVentilation flow to
+    # Bridgewater that EnergyPlus integrated, producing 359 MWh heating
+    # demand against a true envelope-only ~150 MWh. Same root cause as
+    # the Static-side fix above.
+    operable_opening_objects = {} if (state1 or state2) else _build_operable_openings_objects(zones, building_params)
     natural_vent_objects = {**natural_vent_objects, **operable_opening_objects}
 
     # Always-on schedule referenced by louvres + 'always' window mode.

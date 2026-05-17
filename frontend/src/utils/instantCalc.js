@@ -724,7 +724,15 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   // Brief 28e Gate E1+E2: resolve operable openings (native schema OR
   // synthesise from legacy openable_fraction). Gate E2 consumes via the
   // natural ventilation accumulators built below.
-  const operableOpenings = synthesiseOperableOpeningsFromLegacy(building)
+  //
+  // Brief 29 Commit A (door-fix precondition): State 1 envelope-only must
+  // not include operable openings (state contract: "no operable windows —
+  // State 2.5 territory"). The Brief 28e Gate E4 path was emitting them
+  // unconditionally, which silently added 202 MWh of "New door (north)"
+  // natvent loss to the demand integral on Bridgewater (diagnostic 2026-
+  // 05-17). Empty the list at source — keeps nv_heat_h_total at 0, leaves
+  // losses_at_setpoint.natural_ventilation empty, no display ghost.
+  const operableOpenings = []
 
   // ── Library U / g values (used for glazing only post Brief 28b Part 3) ────
   const u_glaz  = getUValue(constructions, 'glazing', libraryData)
@@ -1335,6 +1343,11 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
       + (UA_leakage + UA_permanent) * dT_heat_out
       + TB_heat_h           // Brief 28k Gate 3+: thermal bridging
       + nv_heat_h_total     // Brief 28e Gate E2: operable-opening natural ventilation
+      //                       Brief 29 Commit A: operableOpenings is forced []
+      //                       at top of _calculateEnvelopeOnly so this term is
+      //                       always 0 in State 1. Belt-and-braces — if a future
+      //                       change re-enables the loop, nv_heat_h_total must
+      //                       still be guarded against State 1.
 
     const hourly_cool_gain_Wh =
       wholeWallU_ext  * (wallOpaqueByFace.north * Math.max(0, T_sa_wall_n_h - T_cool)
