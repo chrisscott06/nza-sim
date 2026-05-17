@@ -1,8 +1,75 @@
 import { useContext, useEffect, useRef, useState } from 'react'
-import { Play, Loader2, CheckCircle2, AlertCircle, ChevronDown, ExternalLink } from 'lucide-react'
+import { Play, Loader2, CheckCircle2, AlertCircle, ChevronDown, ExternalLink, Zap, Activity } from 'lucide-react'
 import { SimulationContext } from '../../context/SimulationContext.jsx'
 import { ProjectContext } from '../../context/ProjectContext.jsx'
+import { useUISettings } from '../../context/UISettingsContext.jsx'
 import ProjectPicker from './ProjectPicker.jsx'
+
+// Chris UX overhaul (2026-05-17) — app-global engine + unit toggles in the
+// top bar. Replaces per-view toggles in HeatBalance / SummaryView / etc.
+// Flipping either here flips it across every chart and Σ badge in the app.
+function GlobalToggles({ hasSimulation }) {
+  const { engineMode, setEngineMode, unit, setUnit } = useUISettings()
+  const segCls = (active) =>
+    `flex items-center gap-1 px-2 py-1 text-xxs transition-colors ${
+      active ? 'bg-white text-navy font-medium shadow-sm' : 'text-mid-grey hover:text-navy'
+    }`
+  const dynDisabled = !hasSimulation
+  return (
+    <div className="flex items-center gap-2">
+      {/* Engine mode — Static / Dynamic / Both */}
+      <div
+        className="flex items-center bg-off-white rounded-md p-0.5 border border-light-grey"
+        title="Engine source — applies to all charts"
+      >
+        <button
+          onClick={() => setEngineMode('static')}
+          className={`${segCls(engineMode === 'static')} rounded`}
+          title="Static — instant in-browser calculation"
+        >
+          <Zap size={10} />
+          Static
+        </button>
+        <button
+          onClick={() => dynDisabled ? null : setEngineMode('dynamic')}
+          disabled={dynDisabled}
+          className={`${segCls(engineMode === 'dynamic')} rounded disabled:opacity-40 disabled:cursor-not-allowed`}
+          title={dynDisabled ? 'No Dynamic run yet — click Run Dynamic first' : 'Dynamic — last EnergyPlus run'}
+        >
+          <Activity size={10} />
+          Dynamic
+        </button>
+        <button
+          onClick={() => dynDisabled ? null : setEngineMode('both')}
+          disabled={dynDisabled}
+          className={`${segCls(engineMode === 'both')} rounded disabled:opacity-40 disabled:cursor-not-allowed`}
+          title={dynDisabled ? 'No Dynamic run yet' : 'Show both engines side by side'}
+        >
+          Both
+        </button>
+      </div>
+
+      {/* Unit — kWh/m²·a / kWh */}
+      <div
+        className="flex items-center bg-off-white rounded-md p-0.5 border border-light-grey"
+        title="Display unit — applies to all numbers"
+      >
+        <button
+          onClick={() => setUnit('kwh_per_m2')}
+          className={`${segCls(unit === 'kwh_per_m2')} rounded`}
+        >
+          kWh/m²·a
+        </button>
+        <button
+          onClick={() => setUnit('kwh')}
+          className={`${segCls(unit === 'kwh')} rounded`}
+        >
+          kWh
+        </button>
+      </div>
+    </div>
+  )
+}
 
 /* Toast notification shown after simulation completes or errors */
 function Toast({ message, type, onDismiss }) {
@@ -51,7 +118,7 @@ function SaveIndicator({ status }) {
 }
 
 export default function TopBar() {
-  const { status, results, error, runSimulation, autoSimulate, setAutoSimulate, detectedMode } = useContext(SimulationContext)
+  const { status, results, error, runSimulation, detectedMode } = useContext(SimulationContext)
   const projectCtx = useContext(ProjectContext)
   const buildingName = projectCtx?.params?.name || 'NZA Simulate'
   const saveStatus = projectCtx?.saveStatus ?? 'idle'
@@ -139,6 +206,10 @@ export default function TopBar() {
 
         <div className="flex-1" />
 
+        {/* Global engine + unit toggles — Chris UX overhaul (2026-05-17).
+            App-wide; replaces per-view toggles in each module's header. */}
+        <GlobalToggles hasSimulation={status === 'complete' && !!results} />
+
         {/* Pop-out results window */}
         <button
           onClick={handleOpenPopOut}
@@ -149,19 +220,11 @@ export default function TopBar() {
           Pop Out
         </button>
 
-        {/* Auto-simulate toggle */}
-        <button
-          onClick={() => setAutoSimulate(v => !v)}
-          title={autoSimulate ? 'Auto-simulate: On — click to disable' : 'Auto-simulate: Off — click to enable'}
-          className={`flex items-center gap-1 px-2 py-1 rounded text-xxs border transition-colors ${
-            autoSimulate
-              ? 'bg-teal/10 text-teal border-teal/30 hover:bg-teal/20'
-              : 'bg-white text-mid-grey border-light-grey hover:border-teal'
-          }`}
-        >
-          <span className={`w-2 h-2 rounded-full ${autoSimulate ? 'bg-teal' : 'bg-mid-grey'}`} />
-          Auto-simulate
-        </button>
+        {/* Auto-simulate removed (Chris UX overhaul 2026-05-17). The toggle
+            existed in SimulationContext as autoSimulate / setAutoSimulate
+            but was visually noisy in the top bar. Re-run Dynamic is the
+            single explicit run trigger; auto on every change was too eager
+            on a real Dynamic run (EnergyPlus seconds, not browser ms). */}
 
         {/* Run Dynamic button — Brief 28a Part 8: tooltip shows the state-
             aware mode that will actually trigger (envelope-only / envelope-

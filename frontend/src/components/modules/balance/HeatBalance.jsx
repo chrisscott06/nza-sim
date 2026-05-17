@@ -19,19 +19,22 @@
  * between live and simulation animates the divergence.
  */
 
-import { useMemo, useState, useEffect, useContext } from 'react'
-import { ArrowRight, Zap, Activity, AlertCircle, Info, ChevronDown } from 'lucide-react'
+import { useMemo, useState, useEffect } from 'react'
+import { ArrowRight, AlertCircle, Info, ChevronDown } from 'lucide-react'
 import {
   SOLAR_COLOURS, INTERNAL_COLOURS, HEATING_COLOUR, COOLING_COLOUR,
   FABRIC_COLOURS, LABELS, colourForElement,
 } from '../../../data/balanceColours.js'
 import { solarLabel } from '../../../utils/facadeLabel.js'
 import { MODES, DEFAULT_MODE, isEnvelopeOnly, modeBadgeText, loadOrderFor, gainOrderFor } from '../../../utils/stateMode.js'
-import { ProjectContext } from '../../../context/ProjectContext.jsx'
+import { useUISettings } from '../../../context/UISettingsContext.jsx'
 import BalanceSankey from './BalanceSankey.jsx'
 
-const UNIT_KEY   = 'nza-balance-unit'
-const LAYOUT_KEY = 'nza-balance-layout'   // 'rows' | 'stacked'
+// Chris UX overhaul (2026-05-17): engine + unit toggles lifted to the global
+// top-bar UISettingsContext, so the local UNIT_KEY / EngineToggle / UnitToggle
+// are gone. Layout (Rows/Stacked/Sankey) stays local — it's a chart-presentation
+// choice, not a data-source one.
+const LAYOUT_KEY = 'nza-balance-layout'   // 'rows' | 'stacked' | 'sankey'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -722,22 +725,13 @@ export default function HeatBalance({
   //   Systems:         + 'mechanical_ventilation'
   modules = null,
 }) {
-  // State 1 envelope-only mode pulls comfortBand + the updater from project
-  // context so the inline editor on the Heat Balance commits straight back
-  // to project state (Brief 26 Part 1 wired comfortBand into context).
-  const projectCtx = useContext(ProjectContext)
-  const comfortBand    = projectCtx?.comfortBand
-  const setComfortBand = projectCtx?.setComfortBand
-
   const [showStateOneDisclosure, setShowStateOneDisclosure] = useState(false)
 
-  const [unit, setUnit] = useState(() => {
-    try { return localStorage.getItem(UNIT_KEY) || 'kwh_per_m2' }
-    catch { return 'kwh_per_m2' }
-  })
-  useEffect(() => {
-    try { localStorage.setItem(UNIT_KEY, unit) } catch {}
-  }, [unit])
+  // Chris UX overhaul (2026-05-17): engine + unit toggles are now global
+  // via UISettingsContext. Local layout (Rows/Stacked/Sankey) stays per-
+  // component because it's a per-chart presentation choice, not a data
+  // source choice.
+  const { engineMode: uiEngineMode, unit } = useUISettings()
 
   const [layout, setLayout] = useState(() => {
     try { return localStorage.getItem(LAYOUT_KEY) || 'rows' }
@@ -747,14 +741,15 @@ export default function HeatBalance({
     try { localStorage.setItem(LAYOUT_KEY, layout) } catch {}
   }, [layout])
 
-  // Engine: prefer live by default. If only simulation is available, switch to it.
-  const [engineMode, setEngineMode] = useState('live')
-  useEffect(() => {
-    if (!liveData && simulationData) setEngineMode('simulation')
-    if (!simulationData && !liveData) setEngineMode('live')
-  }, [liveData, simulationData])
-
-  const data = engineMode === 'live' ? liveData : simulationData
+  // Map the global engine setting ('static' / 'dynamic' / 'both') to a
+  // single data source for the chart. 'both' shows Dynamic when available
+  // (overlay-on-Static is a future enhancement). Falls back gracefully
+  // when only one engine has data.
+  const data = (() => {
+    if (uiEngineMode === 'dynamic' && simulationData) return simulationData
+    if (uiEngineMode === 'both'    && simulationData) return simulationData
+    return liveData ?? simulationData
+  })()
 
   const { losses, gains, scale, totalLosses, totalGains, gia } = useMemo(() => {
     const lossItems = flattenLosses(data, unit, mode, modules)
@@ -788,8 +783,8 @@ export default function HeatBalance({
   if (!data || !data.annual) {
     return (
       <div className="h-full flex items-center justify-center text-mid-grey text-xxs">
-        {engineMode === 'simulation'
-          ? 'No simulation results yet — click Run Simulation in the top bar.'
+        {uiEngineMode === 'dynamic'
+          ? 'No Dynamic results yet — click Run Dynamic in the top bar.'
           : 'No heat balance data available — load a project.'}
       </div>
     )
@@ -807,7 +802,11 @@ export default function HeatBalance({
         onDisclosureToggle={() => setShowStateOneDisclosure(v => !v)}
       />
 
-      {/* Header bar — title + engine + unit toggle */}
+      {/* Header bar — title + layout toggle.
+          Chris UX overhaul (2026-05-17): engine + unit toggles removed from
+          here; they live in the top bar now (global, app-wide). Only the
+          per-chart Layout toggle (Rows/Stacked/Sankey) stays local — that's
+          a chart-presentation choice, not a data-source one. */}
       <div className="flex-shrink-0 px-5 py-3 border-b border-light-grey flex items-center justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-caption font-semibold text-navy">Heat Balance</h2>
@@ -818,15 +817,7 @@ export default function HeatBalance({
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <EngineToggle
-            engineMode={engineMode}
-            onChange={setEngineMode}
-            hasLive={!!liveData}
-            hasSimulation={!!simulationData}
-            simulationInfo={simulationInfo}
-          />
           <LayoutToggle layout={layout} onChange={setLayout} />
-          <UnitToggle unit={unit} onChange={setUnit} />
         </div>
       </div>
 
@@ -907,18 +898,13 @@ export default function HeatBalance({
         </div>
       </div>
 
-      {/* State 1 derived-demand panel — heating/cooling MWh, comfort hours,
-          free-running temperature stats. Per state contract: heating and
-          cooling appear here, NOT as flows on the gains side above. */}
-      {isEnvelopeOnly(mode) && (
-        <StateOneDemandPanel
-          data={data}
-          comfortBand={comfortBand}
-          onComfortBandChange={setComfortBand}
-          unit={unit}
-          engineMode={engineMode}
-        />
-      )}
+      {/* Chris UX overhaul (2026-05-17): the StateOneDemandPanel that lived
+          here (comfort band editor + heating/cooling demand cards + comfort
+          hours strip + free-running stats) is moved to the right column
+          beneath the 3D viewer (BuildingRightColumn → ComfortDemandCard).
+          Frees up vertical space on the Heat Balance and removes the
+          duplicate heating/cooling demand numbers that already showed in
+          the live strip. */}
     </div>
   )
 }

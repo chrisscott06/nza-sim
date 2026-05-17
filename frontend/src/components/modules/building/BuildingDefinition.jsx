@@ -27,6 +27,10 @@ import LiveResultsStrip from '../../shared/LiveResultsStrip.jsx'
 import EnginePill from '../../shared/EnginePill.jsx'
 import ChartTotalsBadge from '../../shared/ChartTotalsBadge.jsx'
 import ReconciliationRow from '../../shared/ReconciliationRow.jsx'
+// Chris UX overhaul (2026-05-17): right-column ComfortDemandCard replaces
+// the LiveResultsStrip and absorbs the comfort-band editor + comfort-hours
+// strip + free-running stats that used to sit at the bottom of HeatBalance.
+import ComfortDemandCard from '../../shared/ComfortDemandCard.jsx'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { SimulationContext } from '../../../context/SimulationContext.jsx'
 import { useWeather } from '../../../context/WeatherContext.jsx'
@@ -1374,33 +1378,32 @@ function BuildingSummaryView({ instantResult, simBalance }) {
    previous `BuildingLiveResultsPanel` (which burned ~400 px of width to
    show 4 KPIs in lots of whitespace) is removed in favour of the shared
    `LiveResultsStrip` component. */
-function BuildingRightColumn({ params, instantResult }) {
-  const demand = instantResult?.demand
-  const fr     = instantResult?.free_running
-  const gia    = instantResult?.heat_balance?.metadata?.gia_m2
-            ?? instantResult?.metadata?.gia_m2 ?? 0
-  const heating = demand?.heating_demand_mwh
-  const cooling = demand?.cooling_demand_mwh
-  const eui     = (gia > 0 && (Number.isFinite(heating) || Number.isFinite(cooling)))
-    ? Math.round(((Number(heating ?? 0) + Number(cooling ?? 0)) * 1000 / gia) * 10) / 10
-    : null
-  const meanT   = fr?.annual_mean_c
-  const items = [
-    { label: 'Heating demand', value: Number.isFinite(heating) ? heating.toFixed(1) : '—', unit: 'MWh/yr', accent: '#DC2626' },
-    { label: 'Cooling demand', value: Number.isFinite(cooling) ? cooling.toFixed(1) : '—', unit: 'MWh/yr', accent: '#3B82F6' },
-    { label: 'EUI (static)',   value: eui != null ? eui.toFixed(1) : '—', unit: 'kWh/m²·yr', accent: '#0F766E' },
-    { label: 'Annual mean T',  value: Number.isFinite(meanT) ? meanT.toFixed(1) : '—', unit: '°C (free-running)', accent: '#A1887F' },
-  ]
+function BuildingRightColumn({ params, instantResult, comfortBand, setComfortBand }) {
+  // Chris UX overhaul (2026-05-17): the four-KPI LiveResultsStrip was
+  // replaced by ComfortDemandCard — same heating/cooling/EUI/mean-T plus
+  // the comfort-band editor + comfort-hours strip + free-running min/max
+  // that previously lived at the bottom of the HeatBalance view (and were
+  // visually duplicating the strip).
+  //
+  // The EnginePill in the 3D viewer header is also gone — engine source
+  // is a top-bar global now, so labelling the 3D viewer "Static" was
+  // misleading (a Dynamic toggle in the top bar would still show this as
+  // Static, because the 3D viewer is a geometry render, not an engine
+  // output).
   return (
     <div className="w-full h-full flex flex-col">
       <div className="flex-shrink-0 flex items-center justify-between border-b border-light-grey px-3 py-1.5">
         <p className="text-xxs uppercase tracking-wider text-mid-grey">3D model</p>
-        <EnginePill mode="static" />
       </div>
       <div className="flex-1 min-h-0">
         <BuildingViewer3D params={params ?? {}} />
       </div>
-      <LiveResultsStrip items={items} loading={!instantResult} />
+      <ComfortDemandCard
+        instantResult={instantResult}
+        comfortBand={comfortBand}
+        onComfortBandChange={setComfortBand}
+        loading={!instantResult}
+      />
     </div>
   )
 }
@@ -1408,7 +1411,7 @@ function BuildingRightColumn({ params, instantResult }) {
 // ── Main three-column layout ──────────────────────────────────────────────────
 
 export default function BuildingDefinition() {
-  const { params, constructions, systems, currentProjectId, saveStatus, comfortBand } = useContext(ProjectContext)
+  const { params, constructions, systems, currentProjectId, saveStatus, comfortBand, setComfortBand } = useContext(ProjectContext)
   const simCtx = useContext(SimulationContext)
   const [library, setLibrary] = useState([])
   const [libraryData, setLibraryData] = useState({})
@@ -1510,7 +1513,12 @@ export default function BuildingDefinition() {
           Live Results strip (replaced the 3D / Live Results tab toggle —
           Brief 28-IM-Polish Bug 2.6 / IA 3.2). */}
       <div className="flex-shrink-0 bg-white border-l border-light-grey" style={{ width: layout.right }}>
-        <BuildingRightColumn params={params} instantResult={instantResult} />
+        <BuildingRightColumn
+          params={params}
+          instantResult={instantResult}
+          comfortBand={comfortBand}
+          setComfortBand={setComfortBand}
+        />
       </div>
 
       {/* Expanded Sankey overlay — covers centre + right columns */}
