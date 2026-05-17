@@ -95,13 +95,17 @@ export default function WeatherSynchronisedProfile({ primary, weather, height = 
   const ghi  = weather?.ghi_mean_w_per_m2 ?? _z365()
 
   // Layout constants
+  // Brief 28-IM-Polish Bug 2.3 / 2.12: bumped padL 50 → 62 to leave room
+  // for the y-axis tick number + unit label without overlap. Pane heights
+  // rebalanced (Bug 2.12) so the primary kW pane is ~40% rather than
+  // dominating; the three weather panes get equal share.
   const W = 900
-  const padL = 50
+  const padL = 62
   const padR = 100  // room for line-overlay legend on right
-  const padT = 16
+  const padT = 22   // extra room at top of pane 1 for the unit label
   const padB = 22
-  // Pane heights — primary is bigger
-  const paneHeights = [0.42, 0.18, 0.18, 0.18]   // sum 1.0
+  // Pane heights — primary slightly larger but not dominant
+  const paneHeights = [0.40, 0.20, 0.20, 0.20]   // sum 1.0
   const paneGap = 8
   const usableH = height - padT - padB - paneGap * 3
   const panes = paneHeights.map(h => Math.max(40, h * usableH))
@@ -176,10 +180,13 @@ export default function WeatherSynchronisedProfile({ primary, weather, height = 
             </g>
           ))}
 
-          {/* ── Pane 1: stacked area (heat loss) + line overlays (solar) ─── */}
-          <text x={padL - 4} y={paneYs[0] + 8} textAnchor="end" fontSize="9" fill="#6B7280">{primary?.unit ?? 'kW'}</text>
-          <text x={padL - 4} y={paneYs[0] + panes[0] - 2} textAnchor="end" fontSize="9" fill="#6B7280">0</text>
-          <text x={padL - 4} y={paneYs[0] + 8} textAnchor="end" fontSize="9" fill="#9CA3AF">{primaryMax.toFixed(0)}</text>
+          {/* ── Pane 1: stacked area (heat loss) + line overlays (solar) ───
+              Brief 28-IM-Polish Bug 2.3 / 2.12: unit label sits ABOVE the
+              tick column (paneYs - 6) so max-value text at paneYs + 8 no
+              longer overlaps it. */}
+          <text x={padL - 6} y={paneYs[0] - 4} textAnchor="end" fontSize="9" fill="#475569" fontWeight="600">{primary?.unit ?? 'kW'}</text>
+          <text x={padL - 6} y={paneYs[0] + panes[0] - 2} textAnchor="end" fontSize="9" fill="#9CA3AF">0</text>
+          <text x={padL - 6} y={paneYs[0] + 10} textAnchor="end" fontSize="9" fill="#9CA3AF">{primaryMax.toFixed(0)}</text>
           {/* Y grid */}
           {[0.25, 0.5, 0.75].map(f => (
             <line key={f} x1={padL} x2={W - padR} y1={ysPrim(primaryMax * f)} y2={ysPrim(primaryMax * f)} stroke="#F3F4F6" strokeWidth="0.5" />
@@ -201,22 +208,22 @@ export default function WeatherSynchronisedProfile({ primary, weather, height = 
           ))}
 
           {/* ── Pane 2: outdoor temperature ─────────────────────────────── */}
-          <text x={padL - 4} y={paneYs[1] + 8} textAnchor="end" fontSize="9" fill="#6B7280">°C</text>
-          <text x={padL - 4} y={paneYs[1] + panes[1] - 2} textAnchor="end" fontSize="9" fill="#9CA3AF">{tMin}</text>
-          <text x={padL - 4} y={paneYs[1] + 8} textAnchor="end" fontSize="9" fill="#9CA3AF">{tMax}</text>
+          <text x={padL - 6} y={paneYs[1] - 4} textAnchor="end" fontSize="9" fill="#475569" fontWeight="600">°C</text>
+          <text x={padL - 6} y={paneYs[1] + panes[1] - 2} textAnchor="end" fontSize="9" fill="#9CA3AF">{tMin}</text>
+          <text x={padL - 6} y={paneYs[1] + 10} textAnchor="end" fontSize="9" fill="#9CA3AF">{tMax}</text>
           <line x1={padL} x2={W - padR} y1={ysT(0)} y2={ysT(0)} stroke="#E5E7EB" strokeWidth="0.5" />
           <path d={_linePath(Array.from(tOut), xs, ysT)} fill="none" stroke="#DC2626" strokeWidth="1.2" />
 
           {/* ── Pane 3: wind ──────────────────────────────────────────── */}
-          <text x={padL - 4} y={paneYs[2] + 8} textAnchor="end" fontSize="9" fill="#6B7280">m/s</text>
-          <text x={padL - 4} y={paneYs[2] + panes[2] - 2} textAnchor="end" fontSize="9" fill="#9CA3AF">0</text>
-          <text x={padL - 4} y={paneYs[2] + 8} textAnchor="end" fontSize="9" fill="#9CA3AF">{windMax}</text>
+          <text x={padL - 6} y={paneYs[2] - 4} textAnchor="end" fontSize="9" fill="#475569" fontWeight="600">m/s</text>
+          <text x={padL - 6} y={paneYs[2] + panes[2] - 2} textAnchor="end" fontSize="9" fill="#9CA3AF">0</text>
+          <text x={padL - 6} y={paneYs[2] + 10} textAnchor="end" fontSize="9" fill="#9CA3AF">{windMax}</text>
           <path d={_linePath(Array.from(wind), xs, ysW)} fill="none" stroke="#0891B2" strokeWidth="1.2" />
 
           {/* ── Pane 4: GHI ───────────────────────────────────────────── */}
-          <text x={padL - 4} y={paneYs[3] + 8} textAnchor="end" fontSize="9" fill="#6B7280">W/m²</text>
-          <text x={padL - 4} y={paneYs[3] + panes[3] - 2} textAnchor="end" fontSize="9" fill="#9CA3AF">0</text>
-          <text x={padL - 4} y={paneYs[3] + 8} textAnchor="end" fontSize="9" fill="#9CA3AF">{ghiMax}</text>
+          <text x={padL - 6} y={paneYs[3] - 4} textAnchor="end" fontSize="9" fill="#475569" fontWeight="600">W/m²</text>
+          <text x={padL - 6} y={paneYs[3] + panes[3] - 2} textAnchor="end" fontSize="9" fill="#9CA3AF">0</text>
+          <text x={padL - 6} y={paneYs[3] + 10} textAnchor="end" fontSize="9" fill="#9CA3AF">{ghiMax}</text>
           <path d={_linePath(Array.from(ghi), xs, ysG)} fill="none" stroke="#F59E0B" strokeWidth="1.2" />
 
           {/* ── Synchronised crosshair on hover ──────────────────────── */}

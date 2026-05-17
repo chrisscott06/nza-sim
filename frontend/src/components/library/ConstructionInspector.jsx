@@ -221,10 +221,15 @@ export default function ConstructionInspector({
     try {
       // Reconstruct the definition from current layer list
       const newDefinition = buildDefinition(constructionName, layers, calc)
+      // Brief 28-IM-Polish IA 3.4: y_factor pinned to 1.0 — thermal bridging
+      // is now a BUILDING-LEVEL concept (ISO 14683 H_TB in
+      // building.thermal_bridges). The popout no longer offers a y-factor
+      // input, so a saved construction always reports an unmodified U-value
+      // and any TB uplift comes from the building's H_TB.
       const payload = {
         u_value_W_per_m2K: round3(calc.u),
-        y_factor: round3(yFactor),
-        u_value_effective_W_per_m2K: round3(calc.u_eff),
+        y_factor: 1.0,
+        u_value_effective_W_per_m2K: round3(calc.u),
         thermal_mass: data?.summary?.thermal_mass ?? 'medium',
         type: data?.summary?.type ?? 'wall',
         description: data?.summary?.description ?? displayName,
@@ -345,19 +350,18 @@ export default function ConstructionInspector({
 
         {!loading && !error && data && (
           <>
-            {/* U-value summary */}
+            {/* U-value summary
+                Brief 28-IM-Polish Bug 2.1 / IA 3.4: the Y-factor / "Effective
+                U-value" tile was removed from this popout. Thermal bridging
+                is a BUILDING-LEVEL concept owned by the Thermal Bridges
+                section in the Building module's left column (ISO 14683
+                junction-based H_TB). Construction editors only show layer
+                stack + total R + 1-D U-value. */}
             <div className="px-5 py-4 border-b border-light-grey bg-off-white">
               <div className="grid grid-cols-3 gap-3">
                 <Stat label="Layer R" value={`${calc.r_layers.toFixed(2)} m²K/W`} />
                 <Stat label="Total R (incl. surface)" value={`${calc.r_total.toFixed(2)} m²K/W`} />
                 <Stat label="U-value (1-D)" value={`${calc.u.toFixed(2)} W/m²K`} bold />
-                <Stat label="Thermal-bridging Y-factor" value={`× ${yFactor.toFixed(2)}`} />
-                <div className="col-span-2 text-right">
-                  <p className="text-xxs uppercase tracking-wider text-mid-grey">Effective U-value (used in sim)</p>
-                  <p className="text-heading font-bold text-navy tabular-nums">
-                    {calc.u_eff.toFixed(2)} W/m²K
-                  </p>
-                </div>
               </div>
 
               {/* Derived thermal mass — sum of (thickness × density × specific
@@ -384,58 +388,14 @@ export default function ConstructionInspector({
               )}
             </div>
 
-            {/* Thermal bridging selector */}
-            <div className="px-5 py-4 border-b border-light-grey">
-              <p className="text-xxs uppercase tracking-wider text-mid-grey mb-2">Thermal bridging</p>
-              <p className="text-xxs text-dark-grey mb-2 leading-relaxed">
-                EnergyPlus models 1-D conduction through the layer stack and ignores 2-D
-                heat flow at corners and junctions. The Y-factor multiplies the U-value
-                to account for thermal bridging at the junctions you don't model
-                explicitly. Same convention as BR443 / SAP / Passivhaus.
-              </p>
-              <div className="space-y-1">
-                {Y_FACTOR_PRESETS.map(p => (
-                  <label
-                    key={p.value}
-                    className={`flex items-center gap-2 px-2 py-1.5 rounded text-xxs cursor-pointer ${
-                      yFactorMode === 'preset' && Math.abs(yFactor - p.value) < 0.001
-                        ? 'bg-navy/8 border border-navy/30'
-                        : 'border border-transparent hover:bg-off-white'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      checked={yFactorMode === 'preset' && Math.abs(yFactor - p.value) < 0.001}
-                      onChange={() => { setYFactor(p.value); setYFactorMode('preset') }}
-                      className="accent-navy"
-                      disabled={mode === 'view'}
-                    />
-                    <span className="font-medium text-navy w-12 tabular-nums">{p.value.toFixed(2)}×</span>
-                    <span className="text-dark-grey">{p.label}</span>
-                  </label>
-                ))}
-                {/* Custom */}
-                <label className={`flex items-center gap-2 px-2 py-1.5 rounded text-xxs ${
-                  yFactorMode === 'custom' ? 'bg-navy/8 border border-navy/30' : 'border border-transparent'
-                }`}>
-                  <input
-                    type="radio"
-                    checked={yFactorMode === 'custom'}
-                    onChange={() => setYFactorMode('custom')}
-                    className="accent-navy"
-                    disabled={mode === 'view'}
-                  />
-                  <span className="text-dark-grey">Custom</span>
-                  <input
-                    type="number" min={1.0} max={1.5} step={0.01}
-                    value={yFactor}
-                    onChange={e => { setYFactor(Number(e.target.value)); setYFactorMode('custom') }}
-                    disabled={mode === 'view' || yFactorMode !== 'custom'}
-                    className="w-16 px-2 py-0.5 text-xxs border border-light-grey rounded focus:outline-none focus:border-teal disabled:opacity-50"
-                  />
-                </label>
-              </div>
-            </div>
+            {/* Brief 28-IM-Polish Bug 2.1 / IA 3.4: the Thermal Bridging
+                selector that previously rendered here was DEAD CODE on
+                project use — it wrote y_factor to the library item, not
+                to the project. Bridgewater (and every reseeded post-
+                Brief-28k project) uses u_value_override + the building-
+                level thermal_bridges block. The popout now only shows
+                layer stack + total R + U-value. Building-level TB lives
+                in BuildingDefinition.jsx's ThermalBridgesPanel. */}
 
             {/* Layer table */}
             <div className="px-5 py-4">

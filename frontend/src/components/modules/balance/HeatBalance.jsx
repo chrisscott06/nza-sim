@@ -425,9 +425,25 @@ function StackedColumns({ gains, losses, unit, onClick }) {
                   minHeight: 1,
                 }}
               >
-                {/* In-bar label if segment is tall enough */}
-                {(it.value / total) > 0.07 && (
+                {/* Brief 28-IM-Polish Bug 2.4: in-bar label when segment ≥10% of
+                    column total (clearly readable). Below 10%, render an
+                    outside callout to the right with a leader line, so small
+                    segments aren't silently dropped. Below 2% the segment is
+                    too tiny to point at — hover-only via the existing tooltip. */}
+                {(it.value / total) >= 0.10 && (
                   <span className="absolute inset-0 flex items-center justify-center text-xxs font-medium text-white/95 px-1 truncate pointer-events-none">
+                    {it.label.replace(/^Solar — /, '')}
+                  </span>
+                )}
+                {(it.value / total) >= 0.02 && (it.value / total) < 0.10 && (
+                  <span
+                    className="absolute left-full top-1/2 -translate-y-1/2 ml-1 flex items-center text-xxs text-dark-grey pointer-events-none whitespace-nowrap"
+                    style={{ paddingLeft: 4 }}
+                  >
+                    <span
+                      className="inline-block h-[1px] mr-1"
+                      style={{ width: 8, backgroundColor: it.colour, opacity: 0.6 }}
+                    />
                     {it.label.replace(/^Solar — /, '')}
                   </span>
                 )}

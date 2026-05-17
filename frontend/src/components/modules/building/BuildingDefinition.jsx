@@ -17,6 +17,15 @@ import ExpandedSankeyOverlay from './ExpandedSankeyOverlay.jsx'
 import HeatBalance from '../balance/HeatBalance.jsx'
 import WeatherSynchronisedProfile from '../../profiles/WeatherSynchronisedProfile.jsx'
 import ConstructionInspector from '../../library/ConstructionInspector.jsx'
+// Brief 28-IM-Polish (Bug 2.1, Bug 2.6, §4.1, §4.2, IA 3.1, IA 3.2):
+//   - ThermalBridgesPanel: building-level TB section in left column
+//   - LiveResultsStrip: always-visible KPI strip below 3D viewer
+//   - EnginePill / ChartTotalsBadge: chart consistency rules
+//   - ComfortBandLeftPanel: setpoint sliders live in left column (IA 3.1)
+import ThermalBridgesPanel from './ThermalBridgesPanel.jsx'
+import LiveResultsStrip from '../../shared/LiveResultsStrip.jsx'
+import EnginePill from '../../shared/EnginePill.jsx'
+import ChartTotalsBadge from '../../shared/ChartTotalsBadge.jsx'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { SimulationContext } from '../../../context/SimulationContext.jsx'
 import { useWeather } from '../../../context/WeatherContext.jsx'
@@ -28,11 +37,11 @@ import { calculateInstant } from '../../../utils/instantCalc.js'
 // Persisted column widths so users can size to their screen / focus area.
 const LAYOUT_STORAGE_KEY = 'nza-building-layout'
 const LEFT_DEFAULT  = 288   // px (was w-72)
-const RIGHT_DEFAULT = 320   // px (was w-80)
+const RIGHT_DEFAULT = 420   // px — matches the 380-480 band in Brief 28-IM §2.1
 const LEFT_MIN  = 220
 const LEFT_MAX  = 520
-const RIGHT_MIN = 240
-const RIGHT_MAX = 600
+const RIGHT_MIN = 320
+const RIGHT_MAX = 560
 
 function loadLayoutPrefs() {
   try {
@@ -478,11 +487,22 @@ function Airtightness({ q50, derivedN50, derivedOperational, onChange }) {
             : `= ${q50.toFixed(2)} m³/h·m² @ 50 Pa`}
         </span>
       </div>
-      {/* Zone labels under the slider — units agnostic */}
+      {/* Brief 28-IM-Polish Bug 2.2: zone labels scale with unit toggle.
+          Thresholds are equivalent — l/(s·m²) values are m³/(h·m²) ÷ 3.6. */}
       <div className="flex justify-between text-xxs text-mid-grey/80 mb-2 px-1">
-        <span title="Passive House / well-detailed">≤3 best</span>
-        <span title="Compliance baseline">3–10 typical</span>
-        <span title="Untested / poor detail">&gt;10 leaky</span>
+        {unit === 'm3_h_m2' ? (
+          <>
+            <span title="Passive House / well-detailed">≤3 best</span>
+            <span title="Compliance baseline">3–10 typical</span>
+            <span title="Untested / poor detail">&gt;10 leaky</span>
+          </>
+        ) : (
+          <>
+            <span title="Passive House / well-detailed (≡ ≤3 m³/h·m²)">≤0.83 best</span>
+            <span title="Compliance baseline (≡ 3–10 m³/h·m²)">0.83–2.78 typical</span>
+            <span title="Untested / poor detail (≡ &gt;10 m³/h·m²)">&gt;2.78 leaky</span>
+          </>
+        )}
       </div>
       {/* Derived values (engine output) */}
       <div className="space-y-0.5 mb-1">
@@ -843,6 +863,13 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
           ))}
         </CollapsibleSection>
 
+        {/* ── Thermal Bridges (Brief 28-IM-Polish Bug 2.1) ──
+            Building-level TB configuration (mode + multiplier + read-only
+            engine H_TB + collapsible per-junction breakdown). Replaces the
+            dead y-factor selector that previously lived inside each
+            construction-editor popout. */}
+        <ThermalBridgesPanel engineResult={liveResult} />
+
         {/* ── Airtightness (Brief 28-IM Bug 2 + add 3 unit toggle) ── */}
         <Airtightness
           q50={q50}
@@ -851,8 +878,58 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
           onChange={(v) => updateParam('fabric', { air_permeability_q50: v })}
         />
 
+        {/* ── Comfort band (Brief 28-IM-Polish IA 3.1) ──
+            Setpoint is an INPUT (affects the calculation). It lives in the
+            left column, not below the chart. The Heat Balance tab's old
+            inline `ComfortBandEditor` stays in place for now as a redundant
+            secondary editor; this one is the canonical input. */}
+        <ComfortBandLeftPanel />
+
       </div>
     </div>
+  )
+}
+
+/* Brief 28-IM-Polish IA 3.1: comfort band sliders in the left column.
+   Writes via the existing ProjectContext.setComfortBand which persists to
+   the project record (comfort_band_lower_c / comfort_band_upper_c). */
+function ComfortBandLeftPanel() {
+  const { comfortBand, setComfortBand } = useContext(ProjectContext)
+  const lo = Number(comfortBand?.lower_c ?? 20)
+  const hi = Number(comfortBand?.upper_c ?? 26)
+  return (
+    <CollapsibleSection title="Comfort band (setpoints)">
+      <div className="space-y-1.5">
+        <div>
+          <div className="flex items-center justify-between mb-0.5">
+            <label className="text-xxs text-mid-grey">Heating setpoint</label>
+            <span className="text-xxs text-navy tabular-nums">{lo.toFixed(1)} °C</span>
+          </div>
+          <input
+            type="range" min={12} max={26} step={0.5}
+            value={lo}
+            onChange={e => setComfortBand({ lower_c: parseFloat(e.target.value) })}
+            className="w-full h-[3px] accent-navy"
+          />
+        </div>
+        <div>
+          <div className="flex items-center justify-between mb-0.5">
+            <label className="text-xxs text-mid-grey">Cooling setpoint</label>
+            <span className="text-xxs text-navy tabular-nums">{hi.toFixed(1)} °C</span>
+          </div>
+          <input
+            type="range" min={20} max={32} step={0.5}
+            value={hi}
+            onChange={e => setComfortBand({ upper_c: parseFloat(e.target.value) })}
+            className="w-full h-[3px] accent-navy"
+          />
+        </div>
+        <p className="text-xxs text-mid-grey/80 italic pt-1">
+          Drives heating/cooling demand against the setpoint convention (Brief 28k).
+          Wide bands (12 → 32) yield free-running behaviour; tight bands force more system work.
+        </p>
+      </div>
+    </CollapsibleSection>
   )
 }
 
@@ -935,14 +1012,11 @@ function BuildingCentreTabs({ view, onChange, instantResult, simBalance, simulat
 function BuildingProfilesView({ instantResult }) {
   // Brief 28-IM IM-M2 (Profiles upgrade): swap the previous free-running
   // zone temperature trace for the WeatherSynchronisedProfile chart strip.
-  // Reasons captured in the prior commit discussion:
-  //   - free-running T_zone uses a different convention from the setpoint-
-  //     anchored Heat Balance; mixing both was confusing
-  //   - building services audience cares about HEAT LOSS profile, not
-  //     zone-temp trace
-  //   - weather context (T_out, wind, GHI) explains the load profile —
-  //     stacking these vertically with a shared x-axis is the standard
-  //     IES / PHPP profile-view convention
+  // Brief 28-IM-Polish Bug 2.7 / Bug 2.9 / Bug 2.10 / §4.1 / §4.2:
+  //   - Static/Dynamic pill top-left of the chart area
+  //   - Σ totals badge top-right (sum of loss + sum of solar)
+  //   - Chart fills full available height (no fixed 520 px)
+  //   - Caption stays as fine-print under the chart, not as chrome above
   const dp = instantResult?.daily_profiles
   if (!dp) {
     return (
@@ -959,6 +1033,17 @@ function BuildingProfilesView({ instantResult }) {
   const t_out_mean_c    = (w?.t_out_sum_c ?? []).map(v => v / 24)
   const wind_mean_ms    = (w?.wind_sum_ms ?? []).map(v => v / 24)
   const ghi_mean_w_m2   = (w?.ghi_sum_w_per_m2 ?? []).map(v => v / 24)
+
+  // Totals for the badge: sum of all per-element daily losses, and sum of
+  // solar transmission across facades. Match the Heat Balance figures.
+  const sumArr = (a) => Array.isArray(a) ? a.reduce((s, v) => s + (v ?? 0), 0) : 0
+  const totalLossKwh =
+      sumArr(losses?.external_wall) + sumArr(losses?.roof) + sumArr(losses?.ground_floor)
+    + sumArr(losses?.glazing) + sumArr(losses?.thermal_bridging)
+    + sumArr(losses?.fabric_leakage) + sumArr(losses?.permanent_vents)
+  const totalSolarKwh =
+      sumArr(solar?.north) + sumArr(solar?.east) + sumArr(solar?.south) + sumArr(solar?.west)
+  const gia = instantResult?.heat_balance?.metadata?.gia_m2 ?? instantResult?.metadata?.gia_m2 ?? 0
 
   // Primary pane: stacked area of fabric + ventilation + thermal-bridging
   // heat losses, with solar transmission per facade as line overlays
@@ -985,16 +1070,34 @@ function BuildingProfilesView({ instantResult }) {
   }
 
   return (
-    <WeatherSynchronisedProfile
-      primary={primary}
-      weather={{ t_out_mean_c, wind_mean_ms, ghi_mean_w_per_m2: ghi_mean_w_m2 }}
-      height={520}
-      caption={'Daily mean of the 8760-hour engine trace. Hover for synchronised values across all four panes. Heat loss stacked by element (positive = loss to outside); solar transmission per facade overlaid as lines (line height = mean kW into zone). Outdoor weather context below: dry-bulb °C, wind m/s, global horizontal solar W/m².'}
-    />
+    <div className="w-full h-full flex flex-col">
+      <div className="flex-shrink-0 flex items-center justify-between gap-2 px-4 pt-2 pb-1">
+        <EnginePill mode="static" />
+        <div className="flex items-center gap-2">
+          <ChartTotalsBadge label="Σ losses" value_kwh={totalLossKwh} gia_m2={gia} />
+          <ChartTotalsBadge label="Σ solar"  value_kwh={totalSolarKwh} gia_m2={gia} />
+        </div>
+      </div>
+      <div className="flex-1 min-h-0">
+        <WeatherSynchronisedProfile
+          primary={primary}
+          weather={{ t_out_mean_c, wind_mean_ms, ghi_mean_w_per_m2: ghi_mean_w_m2 }}
+          height={520}
+          caption={'Daily mean of the 8760-hour engine trace. Hover for synchronised values across all four panes. Heat loss stacked by element (positive = loss to outside); solar transmission per facade overlaid as lines (line height = mean kW into zone). Outdoor weather context below: dry-bulb °C, wind m/s, global horizontal solar W/m².'}
+        />
+      </div>
+    </div>
   )
 }
 
 function BuildingMonthlyView({ instantResult }) {
+  // Brief 28-IM-Polish Bug 2.7 / Bug 2.9 / Bug 2.10 / §4.1 / §4.2:
+  //   - Engine pill top-left of the chart area
+  //   - Σ totals badge top-right (Σ losses + Σ solar — same numbers the
+  //     Heat Balance view shows, proving cross-view reconciliation per §4.4)
+  //   - Bars fill the full available vertical space (was a fixed 280 px
+  //     container with 120 px max-height segments)
+  //   - Caption stays small under the chart, not as chrome above
   const los = instantResult?.losses_at_setpoint
   const gia = instantResult?.heat_balance?.metadata?.gia_m2 ?? 0
   if (!los || gia === 0) {
@@ -1005,9 +1108,6 @@ function BuildingMonthlyView({ instantResult }) {
     )
   }
   // Brief 28-IM IM-M2 add 2: true per-month engine aggregation.
-  // Engine emits monthly_heating_loss_kwh[12] per element + glazing has
-  // monthly_solar_transmission_kwh[12]. Sum per-element loss arrays
-  // component-wise to get the per-month total fabric loss.
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
   const _z = () => new Array(12).fill(0)
   const _add = (out, arr) => { if (Array.isArray(arr)) for (let i = 0; i < 12; i++) out[i] += (arr[i] ?? 0) }
@@ -1021,43 +1121,66 @@ function BuildingMonthlyView({ instantResult }) {
   _add(lossMonthly, los.thermal_bridging?.monthly_heating_loss_kwh)
   const solarMonthly = los.glazing?.monthly_solar_transmission_kwh ?? _z()
   const data = months.map((m, i) => ({
-    month: m,
-    loss:  Math.round(lossMonthly[i]),
-    solar: Math.round(solarMonthly[i] ?? 0),
+    month: m, loss: Math.round(lossMonthly[i]), solar: Math.round(solarMonthly[i] ?? 0),
   }))
   const maxBar = Math.max(...data.map(d => Math.max(d.loss, d.solar)), 1)
+  const totalLossKwh  = lossMonthly.reduce((s, v) => s + v, 0)
+  const totalSolarKwh = solarMonthly.reduce((s, v) => s + (v ?? 0), 0)
 
   return (
-    <div className="w-full h-full overflow-auto p-4">
-      <p className="text-caption font-semibold text-navy">Monthly heat loss vs solar gain · kWh</p>
-      <p className="text-xxs text-mid-grey mb-3">
-        Per-month aggregation of the 8760-hour engine trace. Loss = fabric +
-        leakage + permanent vents + thermal bridging. Solar = transmitted
-        through glazing (all facades, no util factor).
-      </p>
-      <div className="flex items-end gap-2 max-w-4xl mt-4" style={{ height: 280 }}>
-        {data.map(d => (
-          <div key={d.month} className="flex-1 flex flex-col items-center gap-1">
-            <div className="text-xxs text-amber-700 tabular-nums">{d.solar > 1000 ? (d.solar/1000).toFixed(1)+'k' : d.solar}</div>
-            <div className="w-full bg-amber-500/70 rounded-sm" style={{ height: `${(d.solar / maxBar) * 120}px` }} title={`${d.solar} kWh solar`} />
-            <div className="text-xxs text-mid-grey">{d.month}</div>
-            <div className="w-full bg-slate-500/70 rounded-sm" style={{ height: `${(d.loss / maxBar) * 120}px` }} title={`${d.loss} kWh loss`} />
-            <div className="text-xxs text-slate-700 tabular-nums">{d.loss > 1000 ? (d.loss/1000).toFixed(1)+'k' : d.loss}</div>
-          </div>
-        ))}
+    <div className="w-full h-full flex flex-col">
+      <div className="flex-shrink-0 flex items-center justify-between gap-2 px-4 pt-2 pb-1">
+        <div className="flex items-center gap-2">
+          <EnginePill mode="static" />
+          <span className="text-caption font-semibold text-navy">Monthly heat loss vs solar gain</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <ChartTotalsBadge label="Σ losses" value_kwh={totalLossKwh}  gia_m2={gia} />
+          <ChartTotalsBadge label="Σ solar"  value_kwh={totalSolarKwh} gia_m2={gia} />
+        </div>
       </div>
-      <div className="flex items-center gap-4 mt-4 text-xxs text-mid-grey">
-        <div className="flex items-center gap-1"><div className="w-3 h-3 bg-amber-500/70 rounded-sm" /> Solar transmission (above)</div>
-        <div className="flex items-center gap-1"><div className="w-3 h-3 bg-slate-500/70 rounded-sm" /> Fabric heat loss (below)</div>
+
+      {/* Chart fills the remaining centre-column height. Bars scale to ~45%
+          of the available container so the per-month numeric labels stay
+          legible above + below each pair. */}
+      <div className="flex-1 min-h-0 px-4 pb-2 flex flex-col">
+        <div className="flex-1 min-h-0 flex items-end gap-2 max-w-5xl mx-auto w-full">
+          {data.map(d => {
+            const solarH = (d.solar / maxBar) * 100
+            const lossH  = (d.loss  / maxBar) * 100
+            return (
+              <div key={d.month} className="flex-1 h-full flex flex-col items-center justify-end gap-1">
+                <div className="text-xxs text-amber-700 tabular-nums">{d.solar > 1000 ? (d.solar/1000).toFixed(1)+'k' : d.solar}</div>
+                <div className="w-full bg-amber-500/70 rounded-sm" style={{ height: `${solarH * 0.40}%` }} title={`${d.solar} kWh solar`} />
+                <div className="text-xxs text-mid-grey">{d.month}</div>
+                <div className="w-full bg-slate-500/70 rounded-sm" style={{ height: `${lossH * 0.40}%` }} title={`${d.loss} kWh loss`} />
+                <div className="text-xxs text-slate-700 tabular-nums">{d.loss > 1000 ? (d.loss/1000).toFixed(1)+'k' : d.loss}</div>
+              </div>
+            )
+          })}
+        </div>
+        <div className="flex items-center gap-4 mt-2 text-xxs text-mid-grey flex-shrink-0">
+          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-amber-500/70 rounded-sm" /> Solar transmission (above)</div>
+          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-slate-500/70 rounded-sm" /> Fabric heat loss (below)</div>
+          <span className="text-mid-grey/80 italic ml-auto">12 bars sum to the Σ totals above (reconciles with Heat Balance figures)</span>
+        </div>
       </div>
     </div>
   )
 }
 
 function BuildingSummaryView({ instantResult, simBalance }) {
+  // Brief 28-IM-Polish:
+  //   - IA 3.3: drop the Heating / Cooling / Free-running / Comfort-hours
+  //     cards from the right side of this view — they now live in the
+  //     LiveResultsStrip below the 3D viewer. Summary keeps the diagnostic
+  //     per-element table + comfort-hours micro-row + convention notes.
+  //   - Bug 2.7: Static/Dynamic pill in the header
+  //   - Bug 2.10: Σ totals badge in the header (matches Heat Balance figure)
+  //   - Bug 2.11: refined Δ% empty state when no Dynamic run is available
+  //   - Bug 2.8: fabric-gap magnitude diagnostic in the convention notes
   const los = instantResult?.losses_at_setpoint
   const demand = instantResult?.demand
-  const fr = instantResult?.free_running
   if (!los || !demand) {
     return (
       <div className="h-full flex items-center justify-center text-mid-grey text-xxs">
@@ -1068,176 +1191,180 @@ function BuildingSummaryView({ instantResult, simBalance }) {
   const tb = los.thermal_bridging ?? {}
   const fl = los.fabric_leakage ?? {}
   const rows = [
-    ['External wall', los.external_wall?.heating_loss_kwh, los.external_wall?.area_m2, 'm²'],
-    ['Roof',          los.roof?.heating_loss_kwh,          los.roof?.area_m2,          'm²'],
-    ['Ground floor',  los.ground_floor?.heating_loss_kwh,  los.ground_floor?.area_m2,  'm²'],
-    ['Glazing',       los.glazing?.heating_loss_kwh,       los.glazing?.area_m2,       'm²'],
-    ['Fabric leakage', fl.heating_loss_kwh,                fl.operational_ach,         'ACH'],
-    ['Permanent vents', los.permanent_vents?.heating_loss_kwh, null, ''],
-    ['Thermal bridging', tb.heating_loss_kwh,              tb.total_H_TB_W_per_K,      'W/K'],
+    ['External wall',    los.external_wall?.heating_loss_kwh, los.external_wall?.area_m2, 'm²'],
+    ['Roof',             los.roof?.heating_loss_kwh,          los.roof?.area_m2,          'm²'],
+    ['Ground floor',     los.ground_floor?.heating_loss_kwh,  los.ground_floor?.area_m2,  'm²'],
+    ['Glazing',          los.glazing?.heating_loss_kwh,       los.glazing?.area_m2,       'm²'],
+    ['Fabric leakage',   fl.heating_loss_kwh,                 fl.operational_ach,         'ACH'],
+    ['Permanent vents',  los.permanent_vents?.heating_loss_kwh, null,                     ''],
+    ['Thermal bridging', tb.heating_loss_kwh,                 tb.total_H_TB_W_per_K,      'W/K'],
   ]
   const totalLoss = rows.reduce((s, r) => s + (r[1] ?? 0), 0)
+  const gia = instantResult?.heat_balance?.metadata?.gia_m2 ?? 0
+
+  // Brief 28-IM-Polish Bug 2.8: cumulative Static-vs-Dynamic fabric gap.
+  // simBalance carries the Dynamic heating demand (envelope-only mode).
+  // Building's STATIC `totalLoss` is the sum of `heating_loss_kwh` across
+  // envelope elements (kWh). Dynamic-equivalent fabric loss isn't a
+  // single field in simBalance — we use heating_demand_mwh as the closest
+  // observable proxy. If Dynamic isn't run, the diagnostic stays neutral.
   const simHeatingMwh = simBalance?.demand?.heating_demand_mwh ?? null
+  const staticFabricMwh = totalLoss / 1000
+  const dynamicAvailable = simHeatingMwh != null
+  const fabricGapPct = dynamicAvailable && staticFabricMwh > 0
+    ? Math.round(((simHeatingMwh - staticFabricMwh) / staticFabricMwh) * 100)
+    : null
 
   return (
-    <div className="w-full h-full overflow-auto p-4">
-      <p className="text-caption font-semibold text-navy">Building summary · envelope</p>
-      <p className="text-xxs text-mid-grey mb-3">
-        Per-element annual heat loss · setpoint convention (Brief 28k) · Bridgewater post-BRUKL inputs.
-      </p>
+    <div className="w-full h-full overflow-auto">
+      <div className="px-4 pt-2 pb-1 flex items-center justify-between gap-2 sticky top-0 bg-white border-b border-light-grey">
+        <div className="flex items-center gap-2">
+          <EnginePill mode={dynamicAvailable ? 'both' : 'static'} dynamicReady={dynamicAvailable} />
+          <span className="text-caption font-semibold text-navy">Building summary · envelope</span>
+        </div>
+        <ChartTotalsBadge label="Σ fabric loss" value_kwh={totalLoss} gia_m2={gia} />
+      </div>
 
-      <table className="w-full max-w-3xl text-xxs border-collapse">
-        <thead>
-          <tr className="border-b border-light-grey text-mid-grey uppercase tracking-wider">
-            <th className="text-left py-2 pr-3 font-medium">Element</th>
-            <th className="text-right py-2 pr-3 font-medium">Heat loss (kWh/yr)</th>
-            <th className="text-right py-2 pr-3 font-medium">% of total</th>
-            <th className="text-right py-2 font-medium">Characteristic</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(([label, kwh, char, unit]) => (
-            <tr key={label} className="border-b border-light-grey/50">
-              <td className="py-1.5 pr-3 text-navy">{label}</td>
-              <td className="py-1.5 pr-3 text-right tabular-nums text-navy">
-                {kwh != null ? Math.round(kwh).toLocaleString() : '—'}
-              </td>
-              <td className="py-1.5 pr-3 text-right tabular-nums text-mid-grey">
-                {kwh != null && totalLoss > 0 ? ((kwh / totalLoss) * 100).toFixed(1) + '%' : '—'}
-              </td>
-              <td className="py-1.5 text-right tabular-nums text-mid-grey">
-                {char != null ? `${typeof char === 'number' ? (char < 1 ? char.toFixed(3) : Math.round(char).toLocaleString()) : char} ${unit}` : '—'}
-              </td>
+      <div className="p-4">
+        <p className="text-xxs text-mid-grey mb-3">
+          Per-element annual heat loss · setpoint convention (Brief 28k) · Bridgewater
+          post-BRUKL inputs. Headline demand + EUI + comfort numbers are in the Live
+          Results strip below the 3D viewer (Brief 28-IM-Polish IA 3.3) — this view is
+          the diagnostic.
+        </p>
+
+        <table className="w-full max-w-3xl text-xxs border-collapse">
+          <thead>
+            <tr className="border-b border-light-grey text-mid-grey uppercase tracking-wider">
+              <th className="text-left py-2 pr-3 font-medium">Element</th>
+              <th className="text-right py-2 pr-3 font-medium">Heat loss (kWh/yr)</th>
+              <th className="text-right py-2 pr-3 font-medium">% of total</th>
+              <th className="text-right py-2 font-medium">Characteristic</th>
             </tr>
-          ))}
-          <tr className="border-t-2 border-navy/30 font-semibold">
-            <td className="py-2 pr-3 text-navy">Total fabric heat loss</td>
-            <td className="py-2 pr-3 text-right tabular-nums text-navy">{Math.round(totalLoss).toLocaleString()}</td>
-            <td className="py-2 pr-3 text-right tabular-nums text-mid-grey">100%</td>
-            <td className="py-2 text-right" />
-          </tr>
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map(([label, kwh, char, unit]) => (
+              <tr key={label} className="border-b border-light-grey/50">
+                <td className="py-1.5 pr-3 text-navy">{label}</td>
+                <td className="py-1.5 pr-3 text-right tabular-nums text-navy">
+                  {kwh != null ? Math.round(kwh).toLocaleString() : '—'}
+                </td>
+                <td className="py-1.5 pr-3 text-right tabular-nums text-mid-grey">
+                  {kwh != null && totalLoss > 0 ? ((kwh / totalLoss) * 100).toFixed(1) + '%' : '—'}
+                </td>
+                <td className="py-1.5 text-right tabular-nums text-mid-grey">
+                  {char != null ? `${typeof char === 'number' ? (char < 1 ? char.toFixed(3) : Math.round(char).toLocaleString()) : char} ${unit}` : '—'}
+                </td>
+              </tr>
+            ))}
+            <tr className="border-t-2 border-navy/30 font-semibold">
+              <td className="py-2 pr-3 text-navy">Total fabric heat loss</td>
+              <td className="py-2 pr-3 text-right tabular-nums text-navy">{Math.round(totalLoss).toLocaleString()}</td>
+              <td className="py-2 pr-3 text-right tabular-nums text-mid-grey">100%</td>
+              <td className="py-2 text-right" />
+            </tr>
+          </tbody>
+        </table>
 
-      <div className="mt-6 grid grid-cols-2 gap-4 max-w-3xl">
-        <div className="bg-white border border-light-grey rounded p-3">
-          <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1">Heating demand</p>
-          <p className="text-caption text-navy font-semibold">
-            Static: <span className="tabular-nums">{demand.heating_demand_mwh?.toFixed(1)} MWh/yr</span>
-          </p>
-          {simHeatingMwh != null && (
-            <p className="text-xxs text-mid-grey">
-              Dynamic: <span className="tabular-nums">{simHeatingMwh.toFixed(1)} MWh/yr</span>
+        {/* Brief 28-IM-Polish Bug 2.11: Δ% empty state — when no Dynamic
+            run is available, prompt to run rather than spam amber per-row
+            warnings. When Dynamic is fresh, show the cumulative magnitude. */}
+        <div className="mt-4 max-w-3xl rounded border border-light-grey p-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-xxs uppercase tracking-wider text-mid-grey">Static vs Dynamic</p>
+            <EnginePill mode={dynamicAvailable ? 'both' : 'static'} dynamicReady={dynamicAvailable} />
+          </div>
+          {dynamicAvailable ? (
+            <p className="text-caption text-navy mt-1">
+              Dynamic heating demand: <span className="font-semibold tabular-nums">{simHeatingMwh.toFixed(1)}</span> MWh/yr
+              {' '}vs Static fabric loss <span className="font-semibold tabular-nums">{staticFabricMwh.toFixed(1)}</span> MWh/yr
+              {fabricGapPct != null && (
+                <span className={`ml-2 ${Math.abs(fabricGapPct) <= 15 ? 'text-green-700' : Math.abs(fabricGapPct) <= 35 ? 'text-amber-700' : 'text-red-600'}`}>
+                  ({fabricGapPct > 0 ? '+' : ''}{fabricGapPct}%)
+                </span>
+              )}
+            </p>
+          ) : (
+            <p className="text-xxs text-mid-grey mt-1">
+              Δ% requires a Dynamic run. Click <span className="font-medium text-navy">Run Dynamic</span> in the toolbar
+              to populate the comparison; rows above stay Static-only until then.
             </p>
           )}
         </div>
-        <div className="bg-white border border-light-grey rounded p-3">
-          <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1">Cooling demand</p>
-          <p className="text-caption text-navy font-semibold">
-            Static: <span className="tabular-nums">{demand.cooling_demand_mwh?.toFixed(1)} MWh/yr</span>
-          </p>
-        </div>
-        <div className="bg-white border border-light-grey rounded p-3">
-          <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1">Free-running zone temp</p>
-          <p className="text-caption text-navy font-semibold tabular-nums">
-            mean {fr?.annual_mean_c?.toFixed(1)} °C
-          </p>
-          <p className="text-xxs text-mid-grey tabular-nums">
-            min {fr?.winter_min_c?.toFixed(1)} · max {fr?.summer_max_c?.toFixed(1)} °C
-          </p>
-        </div>
-        <div className="bg-white border border-light-grey rounded p-3">
-          <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1">Comfort hours</p>
-          <p className="text-caption text-navy font-semibold tabular-nums">
-            {demand.comfort_hours?.toLocaleString() ?? '—'} hrs
-          </p>
-          <p className="text-xxs text-mid-grey tabular-nums">
-            under {demand.underheating_hours?.toLocaleString() ?? '—'} · over {demand.overheating_hours?.toLocaleString() ?? '—'}
-          </p>
-        </div>
-      </div>
 
-      <div className="text-xxs text-mid-grey/80 italic mt-4 max-w-3xl space-y-1">
-        <p><span className="font-medium not-italic text-amber-700">Convention notes (Static vs Dynamic):</span></p>
-        <p>• <span className="font-medium not-italic">Sky long-wave radiation</span>: Dynamic uses
-          EnergyPlus's full sky-temperature model (Berdahl–Martin) per simulation hour;
-          Static uses an approximation against the dry-bulb temperature trace. Roof loss
-          will be slightly higher in Dynamic.</p>
-        <p>• <span className="font-medium not-italic">T_ground</span>: Static assumes a fixed
-          monthly ground temperature; Dynamic uses the EPW <code>GroundTemperatures</code>
-          if present, else the same default. Ground-floor loss can differ by 5-10%.</p>
-        <p>• <span className="font-medium not-italic">Permanent vents (BS 5925)</span>: Static
-          applies the BS 5925 wind-stack flow formula directly; Dynamic emits
-          <code>ZoneVentilation:WindandStackOpenArea</code> which EP integrates per timestep.
-          Both reflect physics; numerical agreement is typically ±5%.</p>
-        <p>• <span className="font-medium not-italic">Thermal bridging (TB)</span>: Static
-          applies ISO 14683 <code>H_TB × ΔT</code> as an explicit extra loss; Dynamic
-          (Brief 28-DynamicParity TODO) doesn't represent TB at all, so Dynamic will
-          systematically under-report fabric loss by ~{Math.round((los.thermal_bridging?.heating_loss_kwh ?? 0) / 1000)}{' '}
-          MWh/yr at this configuration.</p>
-        <p>• <span className="font-medium not-italic">Glazing</span>: Static treats glazing
-          U as a single value × area; Dynamic uses the WindowMaterial layer model with
-          per-hour incidence-angle adjustment for solar gain. Solar transmission in
-          Dynamic is angle-aware; Static uses a flat g-value × radiation.</p>
-        <p className="pt-1">Phase 2 of Brief 28-IM Gate IM-M4.5 brought Dynamic up to crash-free + IM-M4
-          <code>consumption.*</code> parity; the per-element Δ overlay is queued for Brief 28-DynamicParity.</p>
+        {/* Brief 28-IM-Polish Bug 2.8: fabric-gap magnitude diagnostic.
+            Cumulative magnitude only — per-component attribution (sky LW,
+            T_ground, BS 5925, TB, glazing) is queued for Brief 28-DynamicParity. */}
+        <div className="text-xxs text-mid-grey/80 italic mt-4 max-w-3xl space-y-1">
+          <p><span className="font-medium not-italic text-amber-700">Convention notes (Static vs Dynamic):</span></p>
+          {fabricGapPct != null && (
+            <p>• <span className="font-medium not-italic">Cumulative effect on Bridgewater</span>: Dynamic
+              heating demand is {fabricGapPct > 0 ? `${fabricGapPct}% higher` : `${Math.abs(fabricGapPct)}% lower`} than
+              Static fabric loss ({simHeatingMwh.toFixed(1)} vs {staticFabricMwh.toFixed(1)} MWh/yr). Decomposition
+              across sky long-wave, T_ground, glazing angle, TB, etc. queued for Brief 28-DynamicParity.</p>
+          )}
+          <p>• <span className="font-medium not-italic">Sky long-wave radiation</span>: Dynamic uses
+            EnergyPlus's full sky-temperature model (Berdahl–Martin) per simulation hour;
+            Static uses an approximation against the dry-bulb temperature trace. Roof loss
+            will be slightly higher in Dynamic.</p>
+          <p>• <span className="font-medium not-italic">T_ground</span>: Static assumes a fixed
+            monthly ground temperature; Dynamic uses the EPW <code>GroundTemperatures</code>
+            if present, else the same default. Ground-floor loss can differ by 5-10%.</p>
+          <p>• <span className="font-medium not-italic">Permanent vents (BS 5925)</span>: Static
+            applies the BS 5925 wind-stack flow formula directly; Dynamic emits
+            <code>ZoneVentilation:WindandStackOpenArea</code> which EP integrates per timestep.
+            Both reflect physics; numerical agreement is typically ±5%.</p>
+          <p>• <span className="font-medium not-italic">Thermal bridging (TB)</span>: Static
+            applies ISO 14683 <code>H_TB × ΔT</code> as an explicit extra loss; Dynamic
+            (Brief 28-DynamicParity TODO) doesn't represent TB at all, so Dynamic will
+            systematically under-report fabric loss by ~{Math.round((los.thermal_bridging?.heating_loss_kwh ?? 0) / 1000)}{' '}
+            MWh/yr at this configuration.</p>
+          <p>• <span className="font-medium not-italic">Glazing</span>: Static treats glazing
+            U as a single value × area; Dynamic uses the WindowMaterial layer model with
+            per-hour incidence-angle adjustment for solar gain.</p>
+          <p className="pt-1 not-italic text-mid-grey">Comfort hours (Static): {demand.comfort_hours?.toLocaleString() ?? '—'} hrs
+            · under-heated {demand.underheating_hours?.toLocaleString() ?? '—'}
+            · over-heated {demand.overheating_hours?.toLocaleString() ?? '—'}</p>
+        </div>
       </div>
     </div>
   )
 }
 
+/* Brief 28-IM-Polish Bug 2.6 / IA 3.2: BuildingRightColumn replaces the
+   3D / Live Results TAB toggle with an always-visible 3D viewer on top
+   plus a compact Live Results strip below. The strip is the four IA-3.2
+   KPIs (Heating demand · Cooling demand · EUI · Annual mean T). The
+   previous `BuildingLiveResultsPanel` (which burned ~400 px of width to
+   show 4 KPIs in lots of whitespace) is removed in favour of the shared
+   `LiveResultsStrip` component. */
 function BuildingRightColumn({ params, instantResult }) {
-  const [view, setView] = useState('3d')   // '3d' | 'live'
+  const demand = instantResult?.demand
+  const fr     = instantResult?.free_running
+  const gia    = instantResult?.heat_balance?.metadata?.gia_m2
+            ?? instantResult?.metadata?.gia_m2 ?? 0
+  const heating = demand?.heating_demand_mwh
+  const cooling = demand?.cooling_demand_mwh
+  const eui     = (gia > 0 && (Number.isFinite(heating) || Number.isFinite(cooling)))
+    ? Math.round(((Number(heating ?? 0) + Number(cooling ?? 0)) * 1000 / gia) * 10) / 10
+    : null
+  const meanT   = fr?.annual_mean_c
+  const items = [
+    { label: 'Heating demand', value: Number.isFinite(heating) ? heating.toFixed(1) : '—', unit: 'MWh/yr', accent: '#DC2626' },
+    { label: 'Cooling demand', value: Number.isFinite(cooling) ? cooling.toFixed(1) : '—', unit: 'MWh/yr', accent: '#3B82F6' },
+    { label: 'EUI (static)',   value: eui != null ? eui.toFixed(1) : '—', unit: 'kWh/m²·yr', accent: '#0F766E' },
+    { label: 'Annual mean T',  value: Number.isFinite(meanT) ? meanT.toFixed(1) : '—', unit: '°C (free-running)', accent: '#A1887F' },
+  ]
   return (
     <div className="w-full h-full flex flex-col">
-      <div className="flex-shrink-0 flex items-center justify-between border-b border-light-grey px-2 pt-2 pb-1">
-        <div className="flex bg-off-white rounded text-xxs">
-          <button
-            onClick={() => setView('3d')}
-            className={`px-2.5 py-1 rounded-l transition-colors ${view === '3d' ? 'bg-white text-navy font-medium shadow-sm' : 'text-mid-grey'}`}
-          >3D Model</button>
-          <button
-            onClick={() => setView('live')}
-            className={`px-2.5 py-1 rounded-r transition-colors ${view === 'live' ? 'bg-white text-navy font-medium shadow-sm' : 'text-mid-grey'}`}
-          >Live Results</button>
-        </div>
+      <div className="flex-shrink-0 flex items-center justify-between border-b border-light-grey px-3 py-1.5">
+        <p className="text-xxs uppercase tracking-wider text-mid-grey">3D model</p>
+        <EnginePill mode="static" />
       </div>
       <div className="flex-1 min-h-0">
-        {view === '3d'
-          ? <BuildingViewer3D params={params ?? {}} />
-          : <BuildingLiveResultsPanel instantResult={instantResult} />}
+        <BuildingViewer3D params={params ?? {}} />
       </div>
-    </div>
-  )
-}
-
-function BuildingLiveResultsPanel({ instantResult }) {
-  const demand = instantResult?.demand
-  const los = instantResult?.losses_at_setpoint
-  if (!demand || !los) {
-    return <div className="p-4 text-xxs text-mid-grey">Load weather to see live results.</div>
-  }
-  const fabricUA = (los.external_wall?.area_m2 ?? 0) * 0  // placeholder
-  const totalHTB = los.thermal_bridging?.total_H_TB_W_per_K ?? 0
-  const fabricLeakageACH = los.fabric_leakage?.operational_ach ?? 0
-  return (
-    <div className="p-4 space-y-3 overflow-auto">
-      <div>
-        <p className="text-xxs uppercase tracking-wider text-mid-grey">Heating demand</p>
-        <p className="text-2xl text-navy font-semibold tabular-nums">{demand.heating_demand_mwh?.toFixed(1)} <span className="text-xxs text-mid-grey">MWh/yr</span></p>
-      </div>
-      <div>
-        <p className="text-xxs uppercase tracking-wider text-mid-grey">Cooling demand</p>
-        <p className="text-2xl text-navy font-semibold tabular-nums">{demand.cooling_demand_mwh?.toFixed(1)} <span className="text-xxs text-mid-grey">MWh/yr</span></p>
-      </div>
-      <div>
-        <p className="text-xxs uppercase tracking-wider text-mid-grey">Thermal bridging</p>
-        <p className="text-caption text-navy tabular-nums">H_TB = {totalHTB.toFixed(2)} <span className="text-xxs text-mid-grey">W/K</span></p>
-      </div>
-      <div>
-        <p className="text-xxs uppercase tracking-wider text-mid-grey">Operational ACH</p>
-        <p className="text-caption text-navy tabular-nums">{fabricLeakageACH.toFixed(3)} <span className="text-xxs text-mid-grey">{los.fabric_leakage?.source ?? ''}</span></p>
-      </div>
+      <LiveResultsStrip items={items} loading={!instantResult} />
     </div>
   )
 }
@@ -1307,7 +1434,10 @@ export default function BuildingDefinition() {
   }, [layout])
 
   const setLeft       = (dx) => setLayout(l => ({ ...l, left:  clamp(l.left  + dx, LEFT_MIN,  LEFT_MAX) }))
-  // setRight + toggleRight removed with the Live Results Panel.
+  // Brief 28-IM-Polish Bug 2.5: restore right-column resize. Handle sits
+  // between centre and right, drags ←/→. Inverted dx (drag right shrinks
+  // the right column) since handle is at the centre-side edge of right.
+  const setRight      = (dx) => setLayout(l => ({ ...l, right: clamp(l.right - dx, RIGHT_MIN, RIGHT_MAX) }))
   const setCentreView = (v) => setLayout(l => ({ ...l, centre: v }))
 
   return (
@@ -1336,8 +1466,14 @@ export default function BuildingDefinition() {
         />
       </div>
 
-      {/* Right column — Brief 28-IM §2.1 right (380-480 px): 3D / Live Results */}
-      <div className="flex-shrink-0 bg-white border-l border-light-grey" style={{ width: 420 }}>
+      {/* Brief 28-IM-Polish Bug 2.5: right column now resizable, mirroring
+          the left handle. Drag the handle ←/→ to grow/shrink. */}
+      <ResizeHandle onResize={setRight} />
+
+      {/* Right column — Brief 28-IM §2.1 right (380-480 px): 3D + always-on
+          Live Results strip (replaced the 3D / Live Results tab toggle —
+          Brief 28-IM-Polish Bug 2.6 / IA 3.2). */}
+      <div className="flex-shrink-0 bg-white border-l border-light-grey" style={{ width: layout.right }}>
         <BuildingRightColumn params={params} instantResult={instantResult} />
       </div>
 
