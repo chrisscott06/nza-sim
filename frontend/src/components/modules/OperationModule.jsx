@@ -42,6 +42,10 @@ import BuildingViewer3D from './building/BuildingViewer3D.jsx'
 import HeatBalance from './balance/HeatBalance.jsx'
 import WeatherSynchronisedProfile from '../profiles/WeatherSynchronisedProfile.jsx'
 import ScheduleEditor from './profiles/ScheduleEditor.jsx'
+// Brief 28-IM-Polish POL-M2: shared cross-module strip + chart components.
+import LiveResultsStrip from '../shared/LiveResultsStrip.jsx'
+import EnginePill from '../shared/EnginePill.jsx'
+import ChartTotalsBadge from '../shared/ChartTotalsBadge.jsx'
 
 const ACCENT = '#0E7490'  // operation theme — cyan-700
 
@@ -448,20 +452,25 @@ export default function OperationModule() {
           </div>
         </div>
 
-        {/* RIGHT: 3D viewer ────────────────────────────────────────────── */}
+        {/* RIGHT: 3D viewer + always-visible Live Results strip below
+            (Brief 28-IM-Polish POL-M2 IA 3.2 — same pattern as Building).
+            Strip KPIs per the brief mapping for Operation: Heating demand
+            · Cooling demand · Total operable loss/gain · Avg open hours. */}
         <div className="flex-shrink-0 w-[420px] bg-white border-l border-light-grey flex flex-col">
-          <div className="flex-shrink-0 px-3 py-2 border-b border-light-grey">
+          <div className="flex-shrink-0 px-3 py-2 border-b border-light-grey flex items-center justify-between">
             <p className="text-xxs uppercase tracking-wider text-mid-grey">3D viewer</p>
+            <EnginePill mode="static" />
           </div>
           <div className="flex-1 min-h-0">
             <BuildingViewer3D params={params ?? {}} />
           </div>
-          <div className="flex-shrink-0 px-3 py-2 border-t border-light-grey">
+          <div className="flex-shrink-0 px-3 py-1 border-t border-light-grey">
             <p className="text-xxs text-mid-grey">
               Per-facade hover / per-opening rectangles queued (Brief 28-IM §15.2
               fallback active: facade chip-select on +Door/+Window/+Vent above).
             </p>
           </div>
+          <OperationLiveResultsStrip instantResult={instantResult} openings={openings} />
         </div>
       </div>
 
@@ -538,17 +547,37 @@ function OperationProfilesView({ instantResult, openings, selectedOpeningId }) {
     lines: [],
   }
 
+  // Brief 28-IM-Polish POL-M2: chart consistency rules — pill + totals.
+  const sumArr = (a) => Array.isArray(a) ? a.reduce((s, v) => s + (v ?? 0), 0) : 0
+  const totalLossKwh =
+      sumArr(losses?.external_wall) + sumArr(losses?.roof) + sumArr(losses?.ground_floor)
+    + sumArr(losses?.glazing) + sumArr(losses?.thermal_bridging)
+    + sumArr(losses?.fabric_leakage) + sumArr(losses?.permanent_vents)
+  const totalNvKwh = nv.reduce((s, n) => s + (n.heat_loss_kwh ?? 0), 0)
+  const gia = instantResult?.heat_balance?.metadata?.gia_m2 ?? instantResult?.metadata?.gia_m2 ?? 0
+
   return (
-    <WeatherSynchronisedProfile
-      primary={primary}
-      weather={{ t_out_mean_c, wind_mean_ms, ghi_mean_w_per_m2: ghi_mean_w_m2 }}
-      height={540}
-      caption={
-        focusEngine
-          ? `Daily mean of the 8760-hour State 2 trace. The red layer is the per-opening natural-ventilation loss from ${focusEngine.name || focusEngine.id} (mode: ${focusEngine.mode}, ${focusEngine.open_hours} open-hours/yr, avg flow ${focusEngine.avg_flow_when_open_l_s} L/s when open, avg ΔT ${focusEngine.avg_dT_when_open_k} K). Click an opening in the left panel to overlay a different one.`
-          : 'Add an operable opening to see its hourly contribution overlaid on the fabric stack.'
-      }
-    />
+    <div className="w-full h-full flex flex-col">
+      <div className="flex-shrink-0 flex items-center justify-between gap-2 px-4 pt-2 pb-1">
+        <EnginePill mode="static" />
+        <div className="flex items-center gap-2">
+          <ChartTotalsBadge label="Σ fabric loss" value_kwh={totalLossKwh} gia_m2={gia} />
+          <ChartTotalsBadge label="Σ natvent"     value_kwh={totalNvKwh}   gia_m2={gia} />
+        </div>
+      </div>
+      <div className="flex-1 min-h-0">
+        <WeatherSynchronisedProfile
+          primary={primary}
+          weather={{ t_out_mean_c, wind_mean_ms, ghi_mean_w_per_m2: ghi_mean_w_m2 }}
+          height={540}
+          caption={
+            focusEngine
+              ? `Daily mean of the 8760-hour State 2 trace. The red layer is the per-opening natural-ventilation loss from ${focusEngine.name || focusEngine.id} (mode: ${focusEngine.mode}, ${focusEngine.open_hours} open-hours/yr, avg flow ${focusEngine.avg_flow_when_open_l_s} L/s when open, avg ΔT ${focusEngine.avg_dT_when_open_k} K). Click an opening in the left panel to overlay a different one.`
+              : 'Add an operable opening to see its hourly contribution overlaid on the fabric stack.'
+          }
+        />
+      </div>
+    </div>
   )
 }
 
@@ -561,17 +590,31 @@ function OperationScheduleView({ openings }) {
       </div>
     )
   }
+  // Brief 28-IM-Polish POL-M2: chart consistency rules.
+  const totalOpenHours = openings.reduce((s, o) => {
+    const sched = SCHEDULES[o.control?.schedule_ref ?? 'always_on']
+    const wkdy = sched?.day_types?.weekday ?? []
+    return s + Math.round(wkdy.reduce((a, x) => a + x, 0) * 261)  // 261 weekdays
+  }, 0)
   return (
     <div className="w-full h-full overflow-auto p-4 space-y-4">
-      <div>
-        <p className="text-caption font-semibold text-navy">Operable opening schedules</p>
-        <p className="text-xxs text-mid-grey">
-          Per-opening control mode visualised as an hour-of-day grid. Scheduled
-          openings show the underlying fraction (0–1) for weekday / Saturday /
-          Sunday; permanent openings show 1.0 always; temperature-triggered
-          openings show the schedule that gates the temperature check (AND-combined
-          with T_zone vs setpoint).
-        </p>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div>
+          <div className="flex items-center gap-2">
+            <p className="text-caption font-semibold text-navy">Operable opening schedules</p>
+            <EnginePill mode="static" />
+          </div>
+          <p className="text-xxs text-mid-grey mt-0.5">
+            Per-opening control mode visualised as an hour-of-day grid. Scheduled
+            openings show the underlying fraction (0–1) for weekday / Saturday /
+            Sunday; permanent openings show 1.0 always; temperature-triggered
+            openings show the schedule that gates the temperature check (AND-combined
+            with T_zone vs setpoint).
+          </p>
+        </div>
+        <div className="text-xxs tabular-nums text-mid-grey">
+          {openings.length} opening{openings.length === 1 ? '' : 's'} · ~{totalOpenHours.toLocaleString()} weekday open-hours/yr
+        </div>
       </div>
       {openings.map(o => (
         <ScheduleCard key={o.id} opening={o} />
@@ -666,9 +709,18 @@ function OperationMonthlyView({ instantResult, openings }) {
   }
   const maxBar = Math.max(...totalsM, 1)
 
+  // Brief 28-IM-Polish POL-M2.
+  const gia = instantResult?.heat_balance?.metadata?.gia_m2 ?? 0
+  const totalNvKwh = totalsM.reduce((s, v) => s + v, 0)
   return (
     <div className="w-full h-full overflow-auto p-4">
-      <p className="text-caption font-semibold text-navy">Per-opening monthly natural-ventilation heat loss · kWh</p>
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+        <div className="flex items-center gap-2">
+          <EnginePill mode="static" />
+          <p className="text-caption font-semibold text-navy">Per-opening monthly natural-ventilation heat loss</p>
+        </div>
+        <ChartTotalsBadge label="Σ natvent" value_kwh={totalNvKwh} gia_m2={gia} />
+      </div>
       <p className="text-xxs text-mid-grey mb-4">
         Per-month aggregation of the 8760-hour State 2 trace. Stacked by
         opening (one colour per entry); height = sum of per-month kWh across
@@ -743,9 +795,17 @@ function OperationSummaryView({ instantResult, openings, orientation }) {
   }
   const totalNVKwh = nv.reduce((s, o) => s + (o.heat_loss_kwh ?? 0), 0)
 
+  // Brief 28-IM-Polish POL-M2.
+  const gia = instantResult?.heat_balance?.metadata?.gia_m2 ?? 0
   return (
     <div className="w-full h-full overflow-auto p-4">
-      <p className="text-caption font-semibold text-navy">Operable openings · summary</p>
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+        <div className="flex items-center gap-2">
+          <EnginePill mode="static" />
+          <p className="text-caption font-semibold text-navy">Operable openings · summary</p>
+        </div>
+        <ChartTotalsBadge label="Σ natvent" value_kwh={totalNVKwh} gia_m2={gia} />
+      </div>
       <p className="text-xxs text-mid-grey mb-3">
         Per-opening annual natural-ventilation heat loss · setpoint convention
         (Brief 28k) · Bridgewater post-BRUKL inputs.
@@ -1103,4 +1163,43 @@ function deepMergeOpening(current, partial) {
     out.control = { ...(current.control ?? {}), ...partial.control }
   }
   return out
+}
+
+/* Brief 28-IM-Polish POL-M2 IA 3.2: Operation Live Results strip.
+   Four KPIs per the brief mapping for Operation: Heating demand · Cooling
+   demand · Total operable loss/gain · Avg open hours across openings. */
+function OperationLiveResultsStrip({ instantResult, openings }) {
+  if (!instantResult) return <LiveResultsStrip loading />
+  const demand = instantResult.demand
+  const nv = instantResult.losses_at_setpoint?.natural_ventilation ?? []
+  const totalNvKwh = nv.reduce((s, n) => s + (n.heat_loss_kwh ?? 0), 0)
+  const totalOpenHrs = nv.reduce((s, n) => s + (n.open_hours ?? 0), 0)
+  const avgOpenHrs = nv.length > 0 ? Math.round(totalOpenHrs / nv.length) : 0
+  const items = [
+    {
+      label: 'Heating demand', accent: '#DC2626',
+      value: demand?.heating_demand_mwh != null ? demand.heating_demand_mwh.toFixed(1) : '—',
+      unit: 'MWh/yr',
+      sub: 'State 2 (envelope + gains + operable)',
+    },
+    {
+      label: 'Cooling demand', accent: '#3B82F6',
+      value: demand?.cooling_demand_mwh != null ? demand.cooling_demand_mwh.toFixed(1) : '—',
+      unit: 'MWh/yr',
+      sub: 'with internal gains',
+    },
+    {
+      label: 'Operable loss', accent: '#0E7490',
+      value: totalNvKwh > 1000 ? (totalNvKwh / 1000).toFixed(1) : Math.round(totalNvKwh).toString(),
+      unit: totalNvKwh > 1000 ? 'MWh/yr' : 'kWh/yr',
+      sub: `${nv.length} opening${nv.length === 1 ? '' : 's'} (natural ventilation)`,
+    },
+    {
+      label: 'Avg open hours', accent: '#0891B2',
+      value: avgOpenHrs > 0 ? avgOpenHrs.toLocaleString() : '—',
+      unit: 'h/yr',
+      sub: `${Math.round(totalOpenHrs).toLocaleString()} h total across ${openings.length} entries`,
+    },
+  ]
+  return <LiveResultsStrip items={items} />
 }

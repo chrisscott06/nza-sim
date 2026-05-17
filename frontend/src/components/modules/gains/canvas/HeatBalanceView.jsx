@@ -10,7 +10,11 @@
 import { useContext } from 'react'
 import { useStateComparison } from './useStateComparison.js'
 import HeatBalance from '../../balance/HeatBalance.jsx'
-import EngineBadge from './EngineBadge.jsx'
+// Brief 28-IM-Polish POL-M2: shared cross-module chart-consistency
+// components. Local EngineBadge replaced with shared EnginePill so the
+// pattern matches Building / Operation / Systems / Results.
+import EnginePill from '../../../shared/EnginePill.jsx'
+import ChartTotalsBadge from '../../../shared/ChartTotalsBadge.jsx'
 import { ProjectContext } from '../../../../context/ProjectContext.jsx'
 
 export default function HeatBalanceView() {
@@ -47,9 +51,24 @@ export default function HeatBalanceView() {
     <div className="h-full overflow-y-auto">
     <div className="mx-auto px-6 py-5 max-w-[1100px]">
       <div className="pb-3 border-b border-light-grey mb-4">
-        <div className="flex items-center gap-2 flex-wrap">
-          <h2 className="text-base font-semibold text-navy">Heat balance</h2>
-          <EngineBadge />
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-base font-semibold text-navy">Heat balance</h2>
+            <EnginePill mode="static" />
+          </div>
+          {/* Brief 28-IM-Polish POL-M2 §4.1: chart totals badge in the
+              header so the user can verify cross-view consistency with
+              Summary + Monthly. Σ shown is annual gain TOTAL (people +
+              lighting + equipment) since this is the gains-side hero. */}
+          <ChartTotalsBadge
+            label="Σ gains"
+            value_kwh={
+              ((state2?.heat_balance?.annual?.gains?.internal?.people?.kwh ?? 0)
+              + (state2?.heat_balance?.annual?.gains?.internal?.lighting?.kwh ?? 0)
+              + (state2?.heat_balance?.annual?.gains?.internal?.equipment?.kwh ?? 0))
+            }
+            gia_m2={state2?.heat_balance?.metadata?.gia_m2 ?? 0}
+          />
         </div>
         <p className="text-xxs text-mid-grey mt-0.5">
           Annual gains and losses through the State 2 (envelope + internal gains)

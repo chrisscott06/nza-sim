@@ -64,7 +64,8 @@ import { ProjectContext } from '../../../../context/ProjectContext.jsx'
 import { WeatherContext } from '../../../../context/WeatherContext.jsx'
 import { computeHourlyGains } from '../../../../utils/instantCalc.js'
 import { GAIN_COLOURS } from '../gainColours.js'
-import EngineBadge from './EngineBadge.jsx'
+// Brief 28-IM-Polish POL-M2: shared pill.
+import EnginePill from '../../../shared/EnginePill.jsx'
 import ChartContainer  from '../../../chart/ChartContainer.jsx'
 import DataCard        from '../../../chart/DataCard.jsx'
 import ZoomNav         from '../../../chart/ZoomNav.jsx'
@@ -365,7 +366,7 @@ export default function LoadShapeView() {
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-section font-semibold text-navy">Profiles</h2>
-            <EngineBadge />
+            <EnginePill mode="static" />
           </div>
           <p className="text-xxs text-mid-grey mt-0.5">
             Hourly time-varying signals. Use the lens selector to switch between

@@ -24,7 +24,9 @@ import { useState } from 'react'
 import { ArrowDown, ArrowUp, Minus } from 'lucide-react'
 import { useStateComparison } from './useStateComparison.js'
 import { GAIN_COLOURS } from '../gainColours.js'
-import EngineBadge from './EngineBadge.jsx'
+// Brief 28-IM-Polish POL-M2: shared cross-module pill + totals badge.
+import EnginePill from '../../../shared/EnginePill.jsx'
+import ChartTotalsBadge from '../../../shared/ChartTotalsBadge.jsx'
 
 const HEATING_COLOUR = '#DC2626'
 const COOLING_COLOUR = '#00AEEF'
@@ -263,9 +265,12 @@ export default function SummaryView() {
       <div className="mx-auto px-6 py-5 max-w-[1000px] space-y-5">
       {/* ── Title ────────────────────────────────────────────────────── */}
       <div className="pb-3 border-b border-light-grey">
-        <div className="flex items-center gap-2 flex-wrap">
-          <h2 className="text-base font-semibold text-navy">Summary</h2>
-          <EngineBadge />
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-base font-semibold text-navy">Summary</h2>
+            <EnginePill mode="static" />
+          </div>
+          <ChartTotalsBadge label="Σ gains" value_kwh={gains_total_kwh} gia_m2={gia} />
         </div>
         <p className="text-xxs text-mid-grey mt-0.5">
           Internal gains shift the envelope's energy balance. State 1 = envelope alone

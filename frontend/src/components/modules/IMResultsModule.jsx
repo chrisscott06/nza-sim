@@ -26,6 +26,9 @@ import { useHourlySolar } from '../../hooks/useHourlySolar.js'
 import { calculateInstant } from '../../utils/instantCalc.js'
 import { SYSTEM_TEMPLATES_LIBRARY } from '../../data/systemTemplatesLibrary.js'
 import { CRREM_HOTEL_KGCO2_PER_M2_YR } from '../../data/crremTargets.js'
+// Brief 28-IM-Polish POL-M2: shared chart-consistency components.
+import EnginePill from '../shared/EnginePill.jsx'
+import ChartTotalsBadge from '../shared/ChartTotalsBadge.jsx'
 
 const ACCENT = '#0F766E'   // results theme — teal-700
 const FUEL_COLOURS = {
@@ -267,7 +270,14 @@ function EnergyView({ r, c }) {
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       {/* Energy by category */}
       <div className="bg-white border border-light-grey rounded p-4">
-        <p className="text-caption font-semibold text-navy mb-1">Energy delivered by category · MWh/yr</p>
+        {/* Brief 28-IM-Polish POL-M2 */}
+        <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+          <div className="flex items-center gap-2">
+            <EnginePill mode="static" />
+            <p className="text-caption font-semibold text-navy">Energy delivered by category</p>
+          </div>
+          <ChartTotalsBadge label="Σ delivered" value_kwh={cats.reduce((s, c) => s + c.mwh, 0) * 1000} />
+        </div>
         <p className="text-xxs text-mid-grey mb-3">
           Annual delivered energy that each demand category required from its assigned
           system (after the SCOP/SEER/efficiency cascade). Lighting + small power are
@@ -406,7 +416,14 @@ function CarbonView({ r }) {
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-4">
       <div className="bg-white border border-light-grey rounded p-4">
-        <p className="text-caption font-semibold text-navy mb-1">Annual carbon trajectory · 2024 – 2050</p>
+        {/* Brief 28-IM-Polish POL-M2 */}
+        <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+          <div className="flex items-center gap-2">
+            <EnginePill mode="static" />
+            <p className="text-caption font-semibold text-navy">Annual carbon trajectory · 2024 – 2050</p>
+          </div>
+          <ChartTotalsBadge label="Today" value_kwh={r.carbon.today.total_tCO2 * 1000} />
+        </div>
         <p className="text-xxs text-mid-grey mb-3">
           Building carbon intensity projected forward with UK grid decarbonisation
           (DESNZ / National Grid ESO FES) and stable 184 gCO₂/kWh gas. CRREM Hotel
@@ -591,7 +608,17 @@ function MonthlyView({ staticResult, weatherData }) {
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="bg-white border border-light-grey rounded p-4">
-        <p className="text-caption font-semibold text-navy mb-1">Monthly site energy + outdoor temperature · kWh / °C</p>
+        {/* Brief 28-IM-Polish POL-M2 */}
+        <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+          <div className="flex items-center gap-2">
+            <EnginePill mode="static" />
+            <p className="text-caption font-semibold text-navy">Monthly site energy + outdoor temperature</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <ChartTotalsBadge label="Σ elec" value_kwh={elecM.reduce((s,v)=>s+v,0)} />
+            <ChartTotalsBadge label="Σ gas"  value_kwh={gasM.reduce((s,v)=>s+v,0)} />
+          </div>
+        </div>
         <p className="text-xxs text-mid-grey mb-3">
           Per-month aggregation of the engine's daily fuel arrays. Bars stack
           {' '}<span style={{ color: FUEL_COLOURS.electricity }}>electricity</span> + <span style={{ color: FUEL_COLOURS.gas }}>gas</span>;
@@ -682,7 +709,17 @@ function SummaryView({ r, c, staticResult, simResults }) {
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       <div className="bg-white border border-light-grey rounded p-4">
-        <p className="text-caption font-semibold text-navy mb-1">Annual summary — Static vs Dynamic</p>
+        {/* Brief 28-IM-Polish POL-M2 */}
+        <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+          <div className="flex items-center gap-2">
+            <EnginePill mode={dynC ? 'both' : 'static'} dynamicReady={!!dynC} />
+            <p className="text-caption font-semibold text-navy">Annual summary — Static vs Dynamic</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <ChartTotalsBadge label="Σ elec" value_kwh={(c?.total?.electricity_mwh ?? 0) * 1000} engineMode="static" />
+            <ChartTotalsBadge label="Σ gas"  value_kwh={(c?.total?.gas_mwh         ?? 0) * 1000} engineMode="static" />
+          </div>
+        </div>
         <p className="text-xxs text-mid-grey mb-3">
           IM-M4.5 Phase 2 brought Dynamic up to the same <code>consumption.*</code> shape
           as Static, so this side-by-side comparison is now meaningful per category.

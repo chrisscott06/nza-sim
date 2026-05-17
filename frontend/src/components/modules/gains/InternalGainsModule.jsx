@@ -55,6 +55,12 @@ import MonthlyView         from './canvas/MonthlyView.jsx'
 // content yet; placeholder removed until that brief lands).
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { useContext } from 'react'
+// Brief 28-IM-Polish POL-M2: shared cross-module strip + chart-consistency
+// components from POL-M1. Used here to align Internal Gains with Building's
+// reference pattern (always-visible KPI strip + Static/Dynamic pill +
+// totals badge on every chart).
+import LiveResultsStrip from '../../shared/LiveResultsStrip.jsx'
+import { useStateComparison } from './canvas/useStateComparison.js'
 
 const GAINS_ACCENT = '#EA580C'
 
@@ -496,8 +502,70 @@ export default function InternalGainsModule() {
               onActiveEquipmentChange={setActiveEquipmentId}
             />
           </div>
+
+          {/* Brief 28-IM-Polish POL-M2 IA 3.2: always-visible KPI strip.
+              Internal Gains has no 3D viewer in a right column, so the
+              strip sits at the BOTTOM of the centre canvas — visible
+              regardless of which view tab is active. Four KPIs per the
+              brief's mapping: Heating demand (with gains) · Cooling demand
+              (with gains) · Annual gains total · Net offset (State 1 → 2
+              heating reduction). */}
+          <InternalGainsStrip annual={annual} />
         </div>
       </div>
     </div>
   )
+}
+
+/* Brief 28-IM-Polish POL-M2 IA 3.2: 4-KPI strip for Internal Gains.
+   Uses useStateComparison (already used by SummaryView) so the React
+   render path can dedupe the engine pass — no extra cost beyond what
+   SummaryView already triggers. Falls back to a loading skeleton until
+   weather + library load. */
+function InternalGainsStrip({ annual }) {
+  const { state1, state2, ready } = useStateComparison()
+  if (!ready || !annual?.ready) {
+    return <LiveResultsStrip loading />
+  }
+  const gia = annual.gia_m2 || 0
+  const gainsTotalKwh = (annual.people?.kwh ?? 0)
+                       + (annual.lighting?.kwh ?? 0)
+                       + (annual.equipment?.kwh ?? 0)
+  const heatingS1 = state1?.demand?.heating_demand_mwh ?? null
+  const heatingS2 = state2?.demand?.heating_demand_mwh ?? null
+  const coolingS2 = state2?.demand?.cooling_demand_mwh ?? null
+  // Net offset: how much internal gains reduced heating demand (S1 - S2).
+  // Positive = gains helped heating (typical winter behaviour).
+  const heatingOffset = (heatingS1 != null && heatingS2 != null)
+    ? Math.round((heatingS1 - heatingS2) * 10) / 10
+    : null
+  const items = [
+    {
+      label: 'Heating demand', accent: '#DC2626',
+      value: heatingS2 != null ? heatingS2.toFixed(1) : '—',
+      unit: 'MWh/yr',
+      sub: heatingS1 != null ? `State 1 (no gains): ${heatingS1.toFixed(1)} MWh/yr` : 'with internal gains',
+    },
+    {
+      label: 'Cooling demand', accent: '#00AEEF',
+      value: coolingS2 != null ? coolingS2.toFixed(1) : '—',
+      unit: 'MWh/yr',
+      sub: 'with internal gains',
+    },
+    {
+      label: 'Annual gains', accent: '#EA580C',
+      value: (gainsTotalKwh / 1000).toFixed(1),
+      unit: 'MWh/yr',
+      sub: gia > 0 ? `${Math.round(gainsTotalKwh / gia)} kWh/m²·yr` : '',
+    },
+    {
+      label: 'Net heating offset', accent: '#16A34A',
+      value: heatingOffset != null ? (heatingOffset > 0 ? '−' : '+') + Math.abs(heatingOffset).toFixed(1) : '—',
+      unit: 'MWh/yr',
+      sub: heatingOffset != null && heatingS1 > 0
+        ? `${Math.round(heatingOffset / heatingS1 * 100)}% reduction from State 1`
+        : '',
+    },
+  ]
+  return <LiveResultsStrip items={items} />
 }

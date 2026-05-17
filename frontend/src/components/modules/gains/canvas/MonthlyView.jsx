@@ -8,7 +8,9 @@
  */
 
 import { useStateComparison } from './useStateComparison.js'
-import EngineBadge from './EngineBadge.jsx'
+// Brief 28-IM-Polish POL-M2: shared pill + totals badge.
+import EnginePill from '../../../shared/EnginePill.jsx'
+import ChartTotalsBadge from '../../../shared/ChartTotalsBadge.jsx'
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -82,9 +84,15 @@ export default function MonthlyView() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto px-6 py-5 max-w-[1100px]">
         <div className="pb-3 border-b border-light-grey mb-4">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-base font-semibold text-navy">Monthly</h2>
-            <EngineBadge />
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-base font-semibold text-navy">Monthly</h2>
+              <EnginePill mode="static" />
+            </div>
+            <div className="flex items-center gap-2">
+              <ChartTotalsBadge label="Σ gains"   value_kwh={totalGain(peopleM) + totalGain(lightingM) + totalGain(equipmentM)} gia_m2={state2?.heat_balance?.metadata?.gia_m2 ?? 0} />
+              <ChartTotalsBadge label="Σ losses"  value_kwh={grandLoss}                                                          gia_m2={state2?.heat_balance?.metadata?.gia_m2 ?? 0} />
+            </div>
           </div>
           <p className="text-xxs text-mid-grey mt-0.5">
             Per-month aggregation of the 8760-hour engine trace. Internal gains

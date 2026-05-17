@@ -38,6 +38,10 @@ import { SCHEDULES, allScheduleNames } from '../../utils/scheduleLibrary.js'
 import { SYSTEM_TEMPLATES_LIBRARY } from '../../data/systemTemplatesLibrary.js'
 import WeatherSynchronisedProfile from '../profiles/WeatherSynchronisedProfile.jsx'
 import ScheduleEditor from './profiles/ScheduleEditor.jsx'
+// Brief 28-IM-Polish POL-M2: shared chart-consistency components.
+import EnginePill from '../shared/EnginePill.jsx'
+import ChartTotalsBadge from '../shared/ChartTotalsBadge.jsx'
+import LiveResultsStrip from '../shared/LiveResultsStrip.jsx'
 
 const ACCENT = '#00AEEF'   // systems theme — cyan-bright
 
@@ -235,8 +239,12 @@ export default function SystemsModule() {
           </div>
         </div>
 
-        {/* RIGHT: Live Results ────────────────────────────────────── */}
-        <div className="flex-shrink-0 w-[340px] bg-white border-l border-light-grey overflow-y-auto">
+        {/* RIGHT: Live Results — Brief 28-IM-Polish POL-M2 IA 3.2.
+            Canonical 4-KPI strip at the TOP (matches Building / Operation
+            pattern); the existing detail panel below acts as the fuel-
+            split + per-system mini-diagnostic. */}
+        <div className="flex-shrink-0 w-[340px] bg-white border-l border-light-grey overflow-y-auto flex flex-col">
+          <SystemsLiveResultsStrip consumption={consumption} />
           <LiveResultsPanel consumption={consumption} />
         </div>
       </div>
@@ -626,9 +634,19 @@ function SystemsSankey({ consumption, sysCfg }) {
   const carrierMax = Math.max(totalElec, totalGas, 1)
   const carrierH = (mwh) => Math.max(8, (mwh / carrierMax) * 180)
 
+  // Brief 28-IM-Polish POL-M2.
   return (
     <div className="w-full h-full overflow-auto p-4">
-      <p className="text-caption font-semibold text-navy">Energy flow — demand to system to fuel · MWh/yr</p>
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+        <div className="flex items-center gap-2">
+          <EnginePill mode="static" />
+          <p className="text-caption font-semibold text-navy">Energy flow — demand to system to fuel</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <ChartTotalsBadge label="Σ elec" value_kwh={(consumption.total?.electricity_mwh ?? 0) * 1000} />
+          <ChartTotalsBadge label="Σ gas"  value_kwh={(consumption.total?.gas_mwh         ?? 0) * 1000} />
+        </div>
+      </div>
       <p className="text-xxs text-mid-grey mb-3">
         Left → middle → right: building demand, served by named systems,
         consuming energy carriers. Width of each flow is proportional to
@@ -785,13 +803,29 @@ function SystemsProfiles({ result }) {
     lines,
   }
 
+  // Brief 28-IM-Polish POL-M2.
+  const sumArr = (a) => Array.isArray(a) ? a.reduce((s, v) => s + (v ?? 0), 0) : 0
+  const totalElecKwh = sumArr(dpEng.fuel_kwh_per_day?.electricity)
+  const totalGasKwh  = sumArr(dpEng.fuel_kwh_per_day?.gas)
+  const gia = result?.metadata?.gia_m2 ?? result?.heat_balance?.metadata?.gia_m2 ?? 0
   return (
-    <WeatherSynchronisedProfile
-      primary={primary}
-      weather={{ t_out_mean_c, wind_mean_ms, ghi_mean_w_per_m2: ghi_mean_w_m2 }}
-      height={540}
-      caption={'Daily mean of the 8760-hour engine pass. Stacked area = per-service DELIVERED output (kW); line overlays = fuel CONSUMED per carrier (kW, dashed for gas). Heating + cooling traces follow the weather; DHW + fans + lighting + small power are V1 flat daily-shares pending hourly profile capture. Outdoor weather context below.'}
-    />
+    <div className="w-full h-full flex flex-col">
+      <div className="flex-shrink-0 flex items-center justify-between gap-2 px-4 pt-2 pb-1">
+        <EnginePill mode="static" />
+        <div className="flex items-center gap-2">
+          <ChartTotalsBadge label="Σ elec" value_kwh={totalElecKwh} gia_m2={gia} />
+          <ChartTotalsBadge label="Σ gas"  value_kwh={totalGasKwh}  gia_m2={gia} />
+        </div>
+      </div>
+      <div className="flex-1 min-h-0">
+        <WeatherSynchronisedProfile
+          primary={primary}
+          weather={{ t_out_mean_c, wind_mean_ms, ghi_mean_w_per_m2: ghi_mean_w_m2 }}
+          height={540}
+          caption={'Daily mean of the 8760-hour engine pass. Stacked area = per-service DELIVERED output (kW); line overlays = fuel CONSUMED per carrier (kW, dashed for gas). Heating + cooling traces follow the weather; DHW + fans + lighting + small power are V1 flat daily-shares pending hourly profile capture. Outdoor weather context below.'}
+        />
+      </div>
+    </div>
   )
 }
 
@@ -814,17 +848,24 @@ function SystemsSchedule({ sysCfg, params, openScheduleEditor }) {
     return SCHEDULES[name] ?? { day_types: { weekday: Array(24).fill(0), saturday: Array(24).fill(0), sunday: Array(24).fill(0) } }
   }
 
+  // Brief 28-IM-Polish POL-M2.
   return (
     <div className="w-full h-full overflow-auto p-4 space-y-3">
-      <div>
-        <p className="text-caption font-semibold text-navy">System on-time schedules</p>
-        <p className="text-xxs text-mid-grey">
-          Per-system schedule visualisation. Each row shows Mon–Fri / Sat / Sun
-          hour-of-day fractions for the assigned schedule. The "✏️ Edit" button
-          opens the shared schedule editor; saving updates the project's
-          schedule library and any other system referencing that schedule
-          will recompute immediately.
-        </p>
+      <div className="flex items-start justify-between gap-2 flex-wrap">
+        <div>
+          <div className="flex items-center gap-2">
+            <EnginePill mode="static" />
+            <p className="text-caption font-semibold text-navy">System on-time schedules</p>
+          </div>
+          <p className="text-xxs text-mid-grey mt-0.5">
+            Per-system schedule visualisation. Each row shows Mon–Fri / Sat / Sun
+            hour-of-day fractions for the assigned schedule. The "✏️ Edit" button
+            opens the shared schedule editor; saving updates the project's
+            schedule library and any other system referencing that schedule
+            will recompute immediately.
+          </p>
+        </div>
+        <div className="text-xxs text-mid-grey tabular-nums flex-shrink-0">{rows.length} systems</div>
       </div>
       {rows.map(r => {
         const sched = resolveSched(r.schedule_ref)
@@ -910,7 +951,17 @@ function SystemsMonthly({ consumption, result }) {
 
   return (
     <div className="w-full h-full overflow-auto p-4">
-      <p className="text-caption font-semibold text-navy">Monthly energy + demand · kWh</p>
+      {/* Brief 28-IM-Polish POL-M2 */}
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+        <div className="flex items-center gap-2">
+          <EnginePill mode="static" />
+          <p className="text-caption font-semibold text-navy">Monthly energy + demand</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <ChartTotalsBadge label="Σ elec" value_kwh={elecM.reduce((s,v)=>s+v,0)} />
+          <ChartTotalsBadge label="Σ gas"  value_kwh={gasM.reduce((s,v)=>s+v,0)} />
+        </div>
+      </div>
       <p className="text-xxs text-mid-grey mb-3">
         Per-month aggregation of the engine's daily delivered + fuel arrays.
         Stacked bars: <span style={{ color: FUEL_COLOURS.electricity }}>electricity</span>{' '}
@@ -970,7 +1021,17 @@ function SystemsSummary({ consumption }) {
 
   return (
     <div className="w-full h-full overflow-auto p-4">
-      <p className="text-caption font-semibold text-navy">Systems summary · annual</p>
+      {/* Brief 28-IM-Polish POL-M2 */}
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+        <div className="flex items-center gap-2">
+          <EnginePill mode="static" />
+          <p className="text-caption font-semibold text-navy">Systems summary · annual</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <ChartTotalsBadge label="Σ elec" value_kwh={totalElec * 1000} />
+          <ChartTotalsBadge label="Σ gas"  value_kwh={totalGas  * 1000} />
+        </div>
+      </div>
       <p className="text-xxs text-mid-grey mb-3">
         Per-category demand → delivered → carrier breakdown. SCOP/SEER columns
         show the effective seasonal performance the engine derived from the
@@ -1147,6 +1208,68 @@ function FuelBar({ label, mwh, total, color }) {
       <div className="h-2 bg-light-grey/50 rounded-sm overflow-hidden">
         <div className="h-full rounded-sm" style={{ width: `${pct}%`, backgroundColor: color }} />
       </div>
+    </div>
+  )
+}
+
+/* Brief 28-IM-Polish POL-M2 IA 3.2: Systems Live Results strip — the
+   canonical 4-KPI strip sits at the TOP of the right column above the
+   existing detail panel (EUI gauge / per-category demand bars / fuel
+   split). KPIs per the brief mapping for Systems: EUI · Total
+   electricity · Total gas · Carbon today (via grid intensity 190 g/kWh
+   + flat 184 g/kWh gas — same convention as IM-M5 carbon today). */
+function SystemsLiveResultsStrip({ consumption }) {
+  if (!consumption) return <LiveResultsStrip loading />
+  const eui = consumption.total?.kwh_per_m2_yr ?? 0
+  const totalElec = consumption.total?.electricity_mwh ?? 0
+  const totalGas  = consumption.total?.gas_mwh ?? 0
+  // Carbon today (rough): elec × 190 + gas × 184, ÷ GIA. Mirror the
+  // simpler version of IM-M5 results.carbon.today without re-importing
+  // the trajectory helpers (which would pull in the full data files).
+  const giaM2 = (consumption.total && consumption.total.kwh_per_m2_yr > 0)
+    ? ((totalElec + totalGas) * 1000) / consumption.total.kwh_per_m2_yr
+    : 0
+  const carbonKgM2 = giaM2 > 0
+    ? Math.round(((totalElec * 190) + (totalGas * 184)) / giaM2 * 100) / 100
+    : 0
+  const items = [
+    {
+      label: 'EUI (instant)', accent: '#0F766E',
+      value: eui.toFixed(1), unit: 'kWh/m²·yr',
+      sub: 'CRREM 1.5°C target 184',
+    },
+    {
+      label: 'Electricity', accent: '#ECB01F',
+      value: totalElec.toFixed(1), unit: 'MWh/yr',
+      sub: `${Math.round(totalElec / Math.max(totalElec + totalGas, 0.001) * 100)}% of total`,
+    },
+    {
+      label: 'Gas', accent: '#DC2626',
+      value: totalGas.toFixed(1), unit: 'MWh/yr',
+      sub: `${Math.round(totalGas / Math.max(totalElec + totalGas, 0.001) * 100)}% of total`,
+    },
+    {
+      label: 'Carbon today', accent: '#9333EA',
+      value: carbonKgM2.toFixed(1), unit: 'kgCO₂/m²·yr',
+      sub: 'grid 190 g/kWh · gas 184 g/kWh',
+    },
+  ]
+  // Stacked vertical layout inside the 340 px column — items wrap 2×2.
+  return (
+    <div className="grid grid-cols-2 border-b border-light-grey bg-off-white">
+      {items.map((it, i) => (
+        <div
+          key={it.label ?? i}
+          className="px-3 py-2 border-r border-b border-light-grey last:border-r-0"
+          style={it.accent ? { borderTop: `2px solid ${it.accent}` } : undefined}
+        >
+          <p className="text-xxs uppercase tracking-wider text-mid-grey leading-tight">{it.label}</p>
+          <p className="text-base text-navy font-bold tabular-nums leading-tight mt-0.5">
+            {it.value} <span className="text-xxs text-mid-grey font-normal">{it.unit}</span>
+          </p>
+          <p className="text-xxs text-mid-grey/80 leading-tight mt-0.5 truncate" title={it.sub}>{it.sub}</p>
+        </div>
+      ))}
     </div>
   )
 }
