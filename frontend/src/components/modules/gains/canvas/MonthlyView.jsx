@@ -11,8 +11,9 @@ import { useStateComparison } from './useStateComparison.js'
 // Brief 28-IM-Polish POL-M2: shared pill + totals badge.
 import EnginePill from '../../../shared/EnginePill.jsx'
 import ChartTotalsBadge from '../../../shared/ChartTotalsBadge.jsx'
-
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+// Chris UX request (2026-05-17): diverging-bars chart — fixed middle axis
+// with gains UP and losses DOWN. Same component as Building / Operation.
+import DivergingMonthlyChart from '../../../shared/DivergingMonthlyChart.jsx'
 
 function _z() { return new Array(12).fill(0) }
 function _add(out, arr) {
@@ -64,21 +65,14 @@ export default function MonthlyView() {
   const peopleM    = gainsMonthly.people_kwh ?? _z()
   const lightingM  = gainsMonthly.lighting_kwh ?? _z()
   const equipmentM = gainsMonthly.equipment_kwh ?? _z()
-
-  // Net demand approximation (loss minus internal gains; ignores solar so
-  // user reads it as "what fabric+ventilation needed before mechanical
-  // heating + before solar offsets"). Engine's setpoint demand is the
-  // authoritative number; this is a per-month visual.
-  const netDemand = lossMonthly.map((l, i) => Math.max(0, l - peopleM[i] - lightingM[i] - equipmentM[i]))
+  // Chris UX request (2026-05-17): also show solar gains here. Same source
+  // as Building Monthly view — losses_at_setpoint.glazing.monthly_solar_transmission_kwh.
+  const solarM     = los.glazing?.monthly_solar_transmission_kwh ?? _z()
 
   const totalGain = (gain) => Math.round(gain.reduce((s, v) => s + v, 0))
   const grandLoss = Math.round(lossMonthly.reduce((s, v) => s + v, 0))
-
-  const maxBar = Math.max(
-    ...lossMonthly,
-    ...peopleM.map((p, i) => p + lightingM[i] + equipmentM[i]),
-    1,
-  )
+  const grandSolar = totalGain(solarM)
+  const grandInternal = totalGain(peopleM) + totalGain(lightingM) + totalGain(equipmentM)
 
   return (
     <div className="h-full overflow-y-auto">
@@ -90,57 +84,33 @@ export default function MonthlyView() {
               <EnginePill mode="static" />
             </div>
             <div className="flex items-center gap-2">
-              <ChartTotalsBadge label="Σ gains"   value_kwh={totalGain(peopleM) + totalGain(lightingM) + totalGain(equipmentM)} gia_m2={state2?.heat_balance?.metadata?.gia_m2 ?? 0} />
-              <ChartTotalsBadge label="Σ losses"  value_kwh={grandLoss}                                                          gia_m2={state2?.heat_balance?.metadata?.gia_m2 ?? 0} />
+              <ChartTotalsBadge label="Σ gains"   value_kwh={grandInternal + grandSolar} gia_m2={state2?.heat_balance?.metadata?.gia_m2 ?? 0} />
+              <ChartTotalsBadge label="Σ losses"  value_kwh={grandLoss}                  gia_m2={state2?.heat_balance?.metadata?.gia_m2 ?? 0} />
             </div>
           </div>
           <p className="text-xxs text-mid-grey mt-0.5">
-            Per-month aggregation of the 8760-hour engine trace. Internal gains
-            (people / lighting / equipment) stacked above; fabric heat loss
-            stacked below. Net heating-demand-before-systems indicated by a
-            line overlay (loss minus internal gains, before solar).
+            Per-month aggregation of the 8760-hour engine trace. Months sit on
+            a fixed horizontal axis through the middle; gains (solar + people +
+            lighting + equipment) grow upward, fabric heat loss grows downward.
           </p>
         </div>
 
-        <div className="flex items-end gap-2 mt-4" style={{ height: 320 }}>
-          {MONTHS.map((m, i) => {
-            const totalGain_i = peopleM[i] + lightingM[i] + equipmentM[i]
-            return (
-              <div key={m} className="flex-1 flex flex-col items-center gap-1">
-                <div className="text-xxs text-mid-grey tabular-nums">
-                  {totalGain_i > 1000 ? (totalGain_i/1000).toFixed(1)+'k' : Math.round(totalGain_i)}
-                </div>
-                {/* Stacked gains: equipment / lighting / people, biggest at bottom */}
-                <div className="w-full flex flex-col items-stretch">
-                  {equipmentM[i] > 0.01 && (
-                    <div className="bg-violet-400" style={{ height: `${(equipmentM[i] / maxBar) * 130}px` }} title={`Equipment ${Math.round(equipmentM[i])} kWh`} />
-                  )}
-                  {lightingM[i] > 0.01 && (
-                    <div className="bg-violet-300" style={{ height: `${(lightingM[i] / maxBar) * 130}px` }} title={`Lighting ${Math.round(lightingM[i])} kWh`} />
-                  )}
-                  {peopleM[i] > 0.01 && (
-                    <div className="bg-violet-600" style={{ height: `${(peopleM[i] / maxBar) * 130}px` }} title={`People ${Math.round(peopleM[i])} kWh`} />
-                  )}
-                </div>
-                <div className="text-xxs text-mid-grey font-medium">{m}</div>
-                <div className="w-full bg-slate-500/70 rounded-sm" style={{ height: `${(lossMonthly[i] / maxBar) * 130}px` }} title={`Loss ${Math.round(lossMonthly[i])} kWh`} />
-                <div className="text-xxs text-slate-700 tabular-nums">
-                  {lossMonthly[i] > 1000 ? (lossMonthly[i]/1000).toFixed(1)+'k' : Math.round(lossMonthly[i])}
-                </div>
-                <div className="text-xxs text-amber-700 italic tabular-nums">
-                  {netDemand[i] > 100 ? '↓'+Math.round(netDemand[i]) : ''}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-
-        <div className="flex items-center gap-4 mt-4 text-xxs text-mid-grey">
-          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-violet-600 rounded-sm" /> People ({totalGain(peopleM).toLocaleString()} kWh)</div>
-          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-violet-300 rounded-sm" /> Lighting ({totalGain(lightingM).toLocaleString()} kWh)</div>
-          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-violet-400 rounded-sm" /> Equipment ({totalGain(equipmentM).toLocaleString()} kWh)</div>
-          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-slate-500/70 rounded-sm" /> Fabric loss ({grandLoss.toLocaleString()} kWh)</div>
-          <div className="flex items-center gap-1 text-amber-700"><span>↓</span> Net heating demand (loss − gains)</div>
+        {/* Chris UX request (2026-05-17): diverging-bars chart with solar
+            now included (was missing in the previous Monthly view). */}
+        <div className="mt-4">
+          <DivergingMonthlyChart
+            gainsStacks={[
+              { key: 'solar',     label: `Solar (${grandSolar.toLocaleString()} kWh)`,           color: '#F59E0B', values: solarM },
+              { key: 'people',    label: `People (${totalGain(peopleM).toLocaleString()} kWh)`, color: '#7C3AED', values: peopleM },
+              { key: 'lighting',  label: `Lighting (${totalGain(lightingM).toLocaleString()} kWh)`, color: '#C4B5FD', values: lightingM },
+              { key: 'equipment', label: `Equipment (${totalGain(equipmentM).toLocaleString()} kWh)`, color: '#A78BFA', values: equipmentM },
+            ]}
+            lossesStacks={[
+              { key: 'fabric',    label: `Fabric loss (${grandLoss.toLocaleString()} kWh)`,    color: '#475569', values: lossMonthly },
+            ]}
+            height={320}
+            unit="kWh"
+          />
         </div>
       </div>
     </div>

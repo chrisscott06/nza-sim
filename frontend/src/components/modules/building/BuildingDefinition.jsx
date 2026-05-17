@@ -31,6 +31,9 @@ import ReconciliationRow from '../../shared/ReconciliationRow.jsx'
 // the LiveResultsStrip and absorbs the comfort-band editor + comfort-hours
 // strip + free-running stats that used to sit at the bottom of HeatBalance.
 import ComfortDemandCard from '../../shared/ComfortDemandCard.jsx'
+// Chris UX request (2026-05-17): diverging monthly bars — fixed middle
+// axis with gains UP and losses DOWN. Replaces the bottom-anchored stack.
+import DivergingMonthlyChart from '../../shared/DivergingMonthlyChart.jsx'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { SimulationContext } from '../../../context/SimulationContext.jsx'
 import { useWeather } from '../../../context/WeatherContext.jsx'
@@ -1125,10 +1128,8 @@ function BuildingMonthlyView({ instantResult }) {
   _add(lossMonthly, los.permanent_vents?.monthly_heating_loss_kwh)
   _add(lossMonthly, los.thermal_bridging?.monthly_heating_loss_kwh)
   const solarMonthly = los.glazing?.monthly_solar_transmission_kwh ?? _z()
-  const data = months.map((m, i) => ({
-    month: m, loss: Math.round(lossMonthly[i]), solar: Math.round(solarMonthly[i] ?? 0),
-  }))
-  const maxBar = Math.max(...data.map(d => Math.max(d.loss, d.solar)), 1)
+  // `months` array still used by DivergingMonthlyChart's default; kept above
+  // for the future case where a project wants to localise month labels.
   const totalLossKwh  = lossMonthly.reduce((s, v) => s + v, 0)
   const totalSolarKwh = solarMonthly.reduce((s, v) => s + (v ?? 0), 0)
 
@@ -1145,30 +1146,25 @@ function BuildingMonthlyView({ instantResult }) {
         </div>
       </div>
 
-      {/* Chart fills the remaining centre-column height. Bars scale to ~45%
-          of the available container so the per-month numeric labels stay
-          legible above + below each pair. */}
+      {/* Chris UX request (2026-05-17): diverging-bars chart. Months on a
+          fixed horizontal axis through the middle; solar (gains) grows UP,
+          fabric loss grows DOWN. Reads as two opposing seasonal curves. */}
       <div className="flex-1 min-h-0 px-4 pb-2 flex flex-col">
-        <div className="flex-1 min-h-0 flex items-end gap-2 max-w-5xl mx-auto w-full">
-          {data.map(d => {
-            const solarH = (d.solar / maxBar) * 100
-            const lossH  = (d.loss  / maxBar) * 100
-            return (
-              <div key={d.month} className="flex-1 h-full flex flex-col items-center justify-end gap-1">
-                <div className="text-xxs text-amber-700 tabular-nums">{d.solar > 1000 ? (d.solar/1000).toFixed(1)+'k' : d.solar}</div>
-                <div className="w-full bg-amber-500/70 rounded-sm" style={{ height: `${solarH * 0.40}%` }} title={`${d.solar} kWh solar`} />
-                <div className="text-xxs text-mid-grey">{d.month}</div>
-                <div className="w-full bg-slate-500/70 rounded-sm" style={{ height: `${lossH * 0.40}%` }} title={`${d.loss} kWh loss`} />
-                <div className="text-xxs text-slate-700 tabular-nums">{d.loss > 1000 ? (d.loss/1000).toFixed(1)+'k' : d.loss}</div>
-              </div>
-            )
-          })}
+        <div className="flex-1 min-h-0 max-w-5xl mx-auto w-full flex flex-col">
+          <DivergingMonthlyChart
+            gainsStacks={[
+              { key: 'solar',  label: 'Solar transmission', color: '#F59E0B', values: solarMonthly },
+            ]}
+            lossesStacks={[
+              { key: 'fabric', label: 'Fabric heat loss',   color: '#475569', values: lossMonthly },
+            ]}
+            height={320}
+            unit="kWh"
+          />
         </div>
-        <div className="flex items-center gap-4 mt-2 text-xxs text-mid-grey flex-shrink-0">
-          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-amber-500/70 rounded-sm" /> Solar transmission (above)</div>
-          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-slate-500/70 rounded-sm" /> Fabric heat loss (below)</div>
-          <span className="text-mid-grey/80 italic ml-auto">12 bars sum to the Σ totals above (reconciles with Heat Balance figures)</span>
-        </div>
+        <p className="text-xxs text-mid-grey/80 italic flex-shrink-0 mt-1">
+          12 bars sum to the Σ totals above (reconciles with Heat Balance figures).
+        </p>
       </div>
     </div>
   )

@@ -46,6 +46,10 @@ import ScheduleEditor from './profiles/ScheduleEditor.jsx'
 import LiveResultsStrip from '../shared/LiveResultsStrip.jsx'
 import EnginePill from '../shared/EnginePill.jsx'
 import ChartTotalsBadge from '../shared/ChartTotalsBadge.jsx'
+// Chris UX request (2026-05-17): diverging-bars chart shared with Building
+// + Internal Gains. Operable openings now stacked on fabric loss so the
+// magnitude is visible in context, not in isolation.
+import DivergingMonthlyChart from '../shared/DivergingMonthlyChart.jsx'
 
 const ACCENT = '#0E7490'  // operation theme — cyan-700
 
@@ -691,85 +695,99 @@ function ScheduleGrid({ label, hours }) {
 
 /* ── Monthly: 12 bars of per-opening + total fabric loss ───────────── */
 function OperationMonthlyView({ instantResult, openings }) {
-  const nv = instantResult?.losses_at_setpoint?.natural_ventilation ?? []
-  if (nv.length === 0) {
+  const los = instantResult?.losses_at_setpoint
+  const nv = los?.natural_ventilation ?? []
+  // Chris UX request (2026-05-17): show natvent alongside fabric losses
+  // (and solar gains above) so the user reads the relative magnitudes,
+  // not just the operable openings in isolation. Uses the same shared
+  // DivergingMonthlyChart as Building / Internal Gains.
+  if (!los) {
     return (
       <div className="h-full flex items-center justify-center text-mid-grey text-xxs">
-        Add an operable opening to see its monthly heat loss breakdown.
+        Monthly aggregation requires engine output — load weather data.
       </div>
     )
   }
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
-  // Per-month total summed across all openings + per-opening bars.
-  const totalsM = new Array(12).fill(0)
-  for (const o of nv) {
-    const m = o.monthly_heating_loss_kwh ?? new Array(12).fill(0)
-    for (let i = 0; i < 12; i++) totalsM[i] += (m[i] ?? 0)
-  }
-  const maxBar = Math.max(...totalsM, 1)
+  const _z = () => new Array(12).fill(0)
+  const _add = (out, arr) => { if (Array.isArray(arr)) for (let i = 0; i < 12; i++) out[i] += (arr[i] ?? 0) }
 
-  // Brief 28-IM-Polish POL-M2.
+  // Fabric loss = same 7 envelope elements as Building Monthly view.
+  const fabricM = _z()
+  _add(fabricM, los.external_wall?.monthly_heating_loss_kwh)
+  _add(fabricM, los.roof?.monthly_heating_loss_kwh)
+  _add(fabricM, los.ground_floor?.monthly_heating_loss_kwh)
+  _add(fabricM, los.glazing?.monthly_heating_loss_kwh)
+  _add(fabricM, los.fabric_leakage?.monthly_heating_loss_kwh)
+  _add(fabricM, los.permanent_vents?.monthly_heating_loss_kwh)
+  _add(fabricM, los.thermal_bridging?.monthly_heating_loss_kwh)
+
+  // Solar gain monthly — same source as Building Monthly.
+  const solarM = los.glazing?.monthly_solar_transmission_kwh ?? _z()
+
+  // Nat-vent total per month (sum across all operable openings).
+  const nvTotalM = _z()
+  for (const o of nv) _add(nvTotalM, o.monthly_heating_loss_kwh)
+
   const gia = instantResult?.heat_balance?.metadata?.gia_m2 ?? 0
-  const totalNvKwh = totalsM.reduce((s, v) => s + v, 0)
+  const totalFabricKwh = fabricM.reduce((s, v) => s + v, 0)
+  const totalSolarKwh  = solarM.reduce((s, v) => s + (v ?? 0), 0)
+  const totalNvKwh     = nvTotalM.reduce((s, v) => s + v, 0)
+
+  // Per-opening colour palette — kept consistent with the per-opening
+  // legend so the user can identify which slice belongs to which entry.
+  const NV_COLOURS = ['#0E7490','#0891B2','#06B6D4','#22D3EE','#67E8F9','#A5F3FC']
+  // Build one losses stack for fabric + one per operable opening, so the
+  // user can see (a) how big nat-vent is vs fabric, (b) which opening
+  // contributes how much.
+  const lossesStacks = [
+    { key: 'fabric', label: `Fabric loss (${Math.round(totalFabricKwh).toLocaleString()} kWh)`, color: '#475569', values: fabricM },
+    ...nv
+      .filter(o => (o.heat_loss_kwh ?? 0) > 0.01)
+      .map((o, oi) => ({
+        key: `nv_${o.id}`,
+        label: `${o.name || o.id} (${Math.round(o.heat_loss_kwh ?? 0).toLocaleString()} kWh)`,
+        color: NV_COLOURS[oi % NV_COLOURS.length],
+        values: o.monthly_heating_loss_kwh ?? _z(),
+      })),
+  ]
+
   return (
     <div className="w-full h-full overflow-auto p-4">
       <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
         <div className="flex items-center gap-2">
           <EnginePill mode="static" />
-          <p className="text-caption font-semibold text-navy">Per-opening monthly natural-ventilation heat loss</p>
+          <p className="text-caption font-semibold text-navy">Monthly heat balance — operable openings in context</p>
         </div>
-        <ChartTotalsBadge label="Σ natvent" value_kwh={totalNvKwh} gia_m2={gia} />
+        <div className="flex items-center gap-2">
+          <ChartTotalsBadge label="Σ solar"   value_kwh={totalSolarKwh}  gia_m2={gia} />
+          <ChartTotalsBadge label="Σ fabric"  value_kwh={totalFabricKwh} gia_m2={gia} />
+          <ChartTotalsBadge label="Σ natvent" value_kwh={totalNvKwh}     gia_m2={gia} />
+        </div>
       </div>
       <p className="text-xxs text-mid-grey mb-4">
-        Per-month aggregation of the 8760-hour State 2 trace. Stacked by
-        opening (one colour per entry); height = sum of per-month kWh across
-        all operable openings on the envelope.
+        Per-month aggregation of the 8760-hour State 2 trace. Months sit on a
+        fixed horizontal axis; solar gain grows upward, fabric loss + per-opening
+        natural ventilation grow downward — nat-vent stacks above fabric so its
+        contribution to total envelope loss is visible at a glance.
       </p>
 
-      {/* Stacked bars — one bar per month, segments per opening */}
-      <div className="flex items-end gap-2 max-w-4xl" style={{ height: 280 }}>
-        {months.map((m, i) => (
-          <div key={m} className="flex-1 flex flex-col items-center gap-1">
-            <div className="text-xxs text-cyan-800 tabular-nums">
-              {totalsM[i] > 1000 ? (totalsM[i]/1000).toFixed(1)+'k' : Math.round(totalsM[i])}
-            </div>
-            <div className="w-full flex flex-col-reverse" style={{ height: 200 }}>
-              {nv.map((o, oi) => {
-                const v = o.monthly_heating_loss_kwh?.[i] ?? 0
-                if (v < 0.01) return null
-                const h = (v / maxBar) * 200
-                const color = ['#0E7490','#0891B2','#06B6D4','#22D3EE','#67E8F9','#A5F3FC'][oi % 6]
-                return (
-                  <div
-                    key={o.id}
-                    className="w-full"
-                    style={{ height: `${h}px`, backgroundColor: color }}
-                    title={`${o.name || o.id}: ${Math.round(v)} kWh in ${m}`}
-                  />
-                )
-              })}
-            </div>
-            <div className="text-xxs text-mid-grey">{m}</div>
-          </div>
-        ))}
-      </div>
+      <DivergingMonthlyChart
+        gainsStacks={totalSolarKwh > 0 ? [
+          { key: 'solar', label: `Solar (${Math.round(totalSolarKwh).toLocaleString()} kWh)`, color: '#F59E0B', values: solarM },
+        ] : []}
+        lossesStacks={lossesStacks}
+        height={320}
+        unit="kWh"
+      />
 
-      {/* Legend */}
-      <div className="flex flex-wrap items-center gap-3 mt-4 text-xxs text-mid-grey">
-        {nv.map((o, oi) => {
-          const color = ['#0E7490','#0891B2','#06B6D4','#22D3EE','#67E8F9','#A5F3FC'][oi % 6]
-          return (
-            <div key={o.id} className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: color }} />
-              <span>{o.name || o.id}</span>
-              <span className="tabular-nums text-navy">
-                ({Math.round(o.heat_loss_kwh ?? 0).toLocaleString()} kWh/yr)
-              </span>
-            </div>
-          )
-        })}
-      </div>
+      {nv.length === 0 && (
+        <p className="text-xxs italic text-mid-grey/70 mt-3">
+          No operable openings on this project — the chart shows envelope-only
+          context (solar gain + fabric loss). Add an opening above to see its
+          monthly contribution stacked on the loss side.
+        </p>
+      )}
     </div>
   )
 }
