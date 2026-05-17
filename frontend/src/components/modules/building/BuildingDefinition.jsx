@@ -1157,10 +1157,31 @@ function BuildingSummaryView({ instantResult, simBalance }) {
         </div>
       </div>
 
-      <p className="text-xxs text-mid-grey/80 italic mt-4 max-w-3xl">
-        Static-vs-Dynamic per-element comparison + BRUKL diagnostic annotation queued
-        for follow-up (Brief 28-IM §11.3, §15.2). Engine output values verbatim.
-      </p>
+      <div className="text-xxs text-mid-grey/80 italic mt-4 max-w-3xl space-y-1">
+        <p><span className="font-medium not-italic text-amber-700">Convention notes (Static vs Dynamic):</span></p>
+        <p>• <span className="font-medium not-italic">Sky long-wave radiation</span>: Dynamic uses
+          EnergyPlus's full sky-temperature model (Berdahl–Martin) per simulation hour;
+          Static uses an approximation against the dry-bulb temperature trace. Roof loss
+          will be slightly higher in Dynamic.</p>
+        <p>• <span className="font-medium not-italic">T_ground</span>: Static assumes a fixed
+          monthly ground temperature; Dynamic uses the EPW <code>GroundTemperatures</code>
+          if present, else the same default. Ground-floor loss can differ by 5-10%.</p>
+        <p>• <span className="font-medium not-italic">Permanent vents (BS 5925)</span>: Static
+          applies the BS 5925 wind-stack flow formula directly; Dynamic emits
+          <code>ZoneVentilation:WindandStackOpenArea</code> which EP integrates per timestep.
+          Both reflect physics; numerical agreement is typically ±5%.</p>
+        <p>• <span className="font-medium not-italic">Thermal bridging (TB)</span>: Static
+          applies ISO 14683 <code>H_TB × ΔT</code> as an explicit extra loss; Dynamic
+          (Brief 28-DynamicParity TODO) doesn't represent TB at all, so Dynamic will
+          systematically under-report fabric loss by ~{Math.round((los.thermal_bridging?.heating_loss_kwh ?? 0) / 1000)}{' '}
+          MWh/yr at this configuration.</p>
+        <p>• <span className="font-medium not-italic">Glazing</span>: Static treats glazing
+          U as a single value × area; Dynamic uses the WindowMaterial layer model with
+          per-hour incidence-angle adjustment for solar gain. Solar transmission in
+          Dynamic is angle-aware; Static uses a flat g-value × radiation.</p>
+        <p className="pt-1">Phase 2 of Brief 28-IM Gate IM-M4.5 brought Dynamic up to crash-free + IM-M4
+          <code>consumption.*</code> parity; the per-element Δ overlay is queued for Brief 28-DynamicParity.</p>
+      </div>
     </div>
   )
 }

@@ -2284,6 +2284,13 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     sfp:        Number(v.sfp_w_per_l_s ?? v.sfp ?? 0),
     hours:      Number(v.hours ?? 8760),
     schedule_ref: v.schedule_ref ?? 'always_on',
+    // Brief 28-IM IM-M4.5 Phase 2: carry `enabled` through so the State 2
+    // mech vent loss loop (line ~2566) AND computeVentilationEnergy (called
+    // from State 3 with the same projected ventSystems shape) can both
+    // honour the per-system disable flag. Pre-fix this was projected out
+    // and the engine saw `undefined`, defeating every `if (vs.enabled ===
+    // false) continue` guard downstream.
+    enabled:    v.enabled !== false,
   }))
   // Per-system UA (W/K). Schedule_factor = hours/8760 (proportional approx;
   // schedule-profile-aware integration is a future refinement).
@@ -2554,9 +2561,17 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
 
     // Brief 28k Gate 3+: per-system mechanical ventilation. Each system
     // contributes flow × ρCp × (1 − HRE) × ΔT independently.
+    //
+    // Brief 28-IM IM-M4.5 Phase 2 (item 2 / Bug B): per-system `enabled`
+    // flag now gates the loss-side accounting. Pre-fix the per-system
+    // accumulators ignored the flag, so toggling a vent OFF in the UI did
+    // nothing to the engine output. The `enabled` flag is sourced from
+    // `building.systems_config_v25.ventilation[vi].enabled` and defaulted
+    // to true when absent for back-compat with pre-IM-M4 seeds.
     let mech_vent_heat_h = 0
     let mech_vent_cool_h = 0
     for (let vi = 0; vi < ventSystems.length; vi++) {
+      if (ventSystems[vi]?.enabled === false) continue
       const heat_h = ventUA[vi] * dT_heat_out
       const cool_h = ventUA[vi] * dT_cool_out
       mech_vent_heat_h += heat_h
@@ -3597,6 +3612,24 @@ function computeVentilationEnergy(ventSystems, weatherData, T_setpoint_c, buildi
   for (let i = 0; i < ventSystems.length; i++) {
     const vs = ventSystems[i]
     const id = vs.id ?? `vent_${i}`
+    // Brief 28-IM IM-M4.5 Phase 2 (item 2 / Bugs A + B): per-system `enabled`
+    // flag now gates fan electricity AND HRE recovery. Pre-fix, `enabled:
+    // false` was reflected in the consumption.ventilation[].enabled metadata
+    // field but the underlying fan_kwh / recovery_mwh were always computed,
+    // so toggling a vent OFF in the UI produced byte-identical output.
+    // When disabled we emit a zeroed perSystem entry so downstream consumers
+    // (`losses_at_setpoint.ventilation[]`, `consumption.ventilation[]`)
+    // line up positionally with the input array.
+    if (vs.enabled === false) {
+      perSystem.push({
+        id, fan_kwh: 0,
+        recovery_mwh: 0,
+        theoretical_recovery_mwh: 0,
+        hours_active: 0,
+        schedule_source: 'disabled',
+      })
+      continue
+    }
     const { hours: hours_active, source: schedule_source } = hoursActiveForSchedule(vs.schedule_ref, building)
     const fan_kwh = (vs.flow_l_s * vs.sfp_w_per_l_s * hours_active) / 1000
 

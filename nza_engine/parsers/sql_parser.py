@@ -491,6 +491,139 @@ def get_energy_by_fuel(sql_path: str | Path) -> dict:
         conn.close()
 
 
+def get_consumption_block(sql_path: str | Path, building_config: dict | None = None) -> dict:
+    """
+    Brief 28-IM IM-M4.5 Phase 2 (item 4): Dynamic-side `consumption.*` block
+    matching the Static-engine shape emitted at IM-M4 §8.1.
+
+    Per-category breakdown of demand → delivered → electricity / gas with
+    effective SCOP/SEER. The shape mirrors
+    ``frontend/src/utils/instantCalc.js`` _calculateState3's `consumption`
+    return value, so the Systems-tab Live Results panel and the IM-M5
+    Results-tab carrier split read the same keys regardless of engine.
+
+    Conventions (documented for the Summary-view annotation):
+      * `demand_mwh` here is what EnergyPlus actually supplied to the zones
+        (``Heating:EnergyTransfer`` / ``Cooling:EnergyTransfer``). When a
+        service is disabled this is ~0; EP's unmet-hours counter tracks the
+        shortfall. Static's `demand_mwh` is a setpoint-convention property
+        that exists independent of the system — Static can still report
+        445 MWh demand when the heating is OFF. The two engines therefore
+        give different `demand_mwh` numbers when a service is disabled.
+        Both reflect physics; neither is wrong.
+      * `delivered_mwh` is identical to `demand_mwh` here (EP doesn't
+        distinguish "wanted" from "supplied" — when the autosized system
+        meets the load, demand == delivered by construction).
+      * `scop_effective` = delivered_mwh / electricity_mwh for electric
+        heating (matches Static's effective-SCOP formula).
+      * `enabled` is sourced from `building_config.systems_config_v25` so
+        the UI gating semantics agree with the assembler's IM-M4.5 §5 gate.
+      * Per-system ventilation breakdown is NOT split in Dynamic V1 — the
+        EP parser sums all fans into one ``Fans:Electricity`` meter. The
+        returned `ventilation` list is a single synthetic entry with the
+        aggregate. Per-system parity is queued for Brief 28-DynamicParity.
+      * DHW `fuel_mix_applied` is NOT honoured in Dynamic V1 — the
+        assembler uses the legacy primary/secondary path; what comes back
+        on `dhw.gas_mwh` + `dhw.electricity_mwh` reflects whatever the EP
+        water heater consumed under the assembler's current DHW path,
+        not the Static `fuel_mix` vector. Convention difference recorded.
+    """
+    v25 = (building_config or {}).get("systems_config_v25") or {}
+    heating_enabled = (v25.get("heating") or {}).get("enabled", True) is not False
+    cooling_enabled = (v25.get("cooling") or {}).get("enabled", True) is not False
+    dhw_enabled     = (v25.get("dhw")     or {}).get("enabled", True) is not False
+
+    conn = _connect(sql_path)
+    try:
+        # Demand-side (thermal energy transferred to / from zones)
+        heating_demand_kwh = _sum_annual(conn, "Heating:EnergyTransfer")
+        cooling_demand_kwh = _sum_annual(conn, "Cooling:EnergyTransfer")
+        # Fuel-side (actual site consumption)
+        heating_elec_kwh   = _sum_annual(conn, "Heating:Electricity")
+        heating_gas_kwh    = _sum_annual(conn, "Heating:NaturalGas")
+        cooling_elec_kwh   = _sum_annual(conn, "Cooling:Electricity")
+        # DHW: WaterSystems meters cover water-heater consumption regardless
+        # of fuel. Demand side maps to "Water Heater Heating Rate × 3600"
+        # but reading the WaterSystems meter is the canonical EP path.
+        dhw_elec_kwh       = _sum_annual(conn, "WaterSystems:Electricity")
+        dhw_gas_kwh        = _sum_annual(conn, "WaterSystems:NaturalGas")
+        # Ancillaries
+        fans_kwh           = _sum_annual(conn, "Fans:Electricity")
+        lighting_kwh       = _sum_annual(conn, "InteriorLights:Electricity")
+        equipment_kwh      = _sum_annual(conn, "InteriorEquipment:Electricity")
+        # Totals
+        total_elec_kwh     = _sum_annual(conn, "Electricity:Facility")
+        total_gas_kwh      = _sum_annual(conn, "NaturalGas:Facility")
+    finally:
+        conn.close()
+
+    # Floor area for EUI
+    gia = 0.0
+    try:
+        gia = float((building_config or {}).get("length", 0)) * float((building_config or {}).get("width", 0)) * int((building_config or {}).get("num_floors", 0) or 0)
+    except Exception:
+        gia = 0.0
+
+    def _mwh(x: float) -> float:
+        return round((x or 0.0) / 1000.0, 3)
+
+    def _scop(delivered_kwh: float, fuel_kwh: float):
+        if fuel_kwh <= 0.001:
+            return None
+        return round(delivered_kwh / fuel_kwh, 2)
+
+    # DHW demand isn't directly metered in EP without a Water Heater object;
+    # for the consumption-block contract use delivered (fuel-side energy
+    # accounting for heater efficiency would over-engineer Phase 2).
+    dhw_delivered_kwh = dhw_elec_kwh + dhw_gas_kwh
+
+    eui_kwh_per_m2 = (total_elec_kwh + total_gas_kwh) / gia if gia > 0 else 0.0
+
+    return {
+        "engine": "dynamic",
+        "space_heating": {
+            "enabled":         heating_enabled,
+            "demand_mwh":      _mwh(heating_demand_kwh),
+            "delivered_mwh":   _mwh(heating_demand_kwh),   # see convention note above
+            "electricity_mwh": _mwh(heating_elec_kwh),
+            "gas_mwh":         _mwh(heating_gas_kwh),
+            "scop_effective":  _scop(heating_demand_kwh, heating_elec_kwh + heating_gas_kwh),
+        },
+        "space_cooling": {
+            "enabled":         cooling_enabled,
+            "demand_mwh":      _mwh(cooling_demand_kwh),
+            "delivered_mwh":   _mwh(cooling_demand_kwh),
+            "electricity_mwh": _mwh(cooling_elec_kwh),
+            "seer_effective":  _scop(cooling_demand_kwh, cooling_elec_kwh),
+        },
+        "dhw": {
+            "enabled":          dhw_enabled,
+            "demand_mwh":       _mwh(dhw_delivered_kwh),
+            "delivered_mwh":    _mwh(dhw_delivered_kwh),
+            "electricity_mwh":  _mwh(dhw_elec_kwh),
+            "gas_mwh":          _mwh(dhw_gas_kwh),
+            "fuel_mix_applied": None,   # convention note: not honoured in V1
+        },
+        # V1 single aggregate vent entry — see docstring note for per-system parity gap.
+        "ventilation": [{
+            "id":                  "aggregate_fans",
+            "name":                "All ventilation fans (aggregate)",
+            "enabled":             True,
+            "fan_electricity_mwh": _mwh(fans_kwh),
+            "hre_recovery_mwh":    0.0,   # not directly metered; queued for parity
+            "exhaust_loss_mwh":    0.0,
+        }],
+        "lighting":    {"electricity_mwh": _mwh(lighting_kwh)},
+        "small_power": {"electricity_mwh": _mwh(equipment_kwh)},
+        "total": {
+            "electricity_mwh":   _mwh(total_elec_kwh),
+            "gas_mwh":           _mwh(total_gas_kwh),
+            "district_heat_mwh": 0.0,
+            "kwh_per_m2_yr":     round(eui_kwh_per_m2, 1),
+        },
+    }
+
+
 def get_envelope_heat_flow(sql_path: str | Path) -> dict[str, float]:
     """
     Return annual heat flow through envelope components in kWh.

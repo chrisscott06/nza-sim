@@ -120,24 +120,52 @@ def _parse_epw_location(epw_path: Path) -> dict:
     }
 
 
+def _resolve_choice(entry, default: str) -> str:
+    """
+    Brief 28-IM Gate IM-M4.5 Phase 2 (item 1): unwrap the Brief 28k Gate 3+
+    construction_choices shape. Each value may be either a plain string id
+    (legacy) or a dict ``{library_id, u_value_override, g_value_override}``
+    (post-28k, what Bridgewater + every reseeded project uses today).
+
+    For Dynamic we honour only the ``library_id`` part. The per-project
+    u_value_override / g_value_override fields are a Static-engine BRUKL/
+    as-built bypass that doesn't have a clean EnergyPlus analogue without
+    minting a per-project Construction object — that's queued for Brief
+    28-DynamicParity. The audit notes this convention difference between
+    Static (overrides honoured) and Dynamic (library U-values only).
+
+    Mirrors the JS-side ``resolveChoice()`` helper in
+    ``frontend/src/utils/instantCalc.js``.
+    """
+    if entry is None:
+        return default
+    if isinstance(entry, str):
+        return entry
+    if isinstance(entry, dict):
+        return entry.get("library_id") or entry.get("name") or default
+    return default
+
+
 def _substitute_constructions(
     surfaces: dict,
     windows: dict,
-    choices: dict[str, str],
+    choices: dict,
 ) -> None:
     """
     Replace placeholder construction names in surfaces and windows in-place.
 
-    choices maps: "external_wall" → "cavity_wall_standard" etc.
+    choices maps: "external_wall" → "cavity_wall_standard" (legacy)
+                  OR              → {"library_id": "...", "u_value_override": …}
+                                    (Brief 28k Gate 3+). Both shapes accepted.
     Interior floor/ceiling uses the fixed _INTERIOR_CONSTRUCTION name.
     """
     placeholder_map: dict[str, str] = {
-        PLACEHOLDER_EXT_WALL:      choices.get("external_wall",  "cavity_wall_standard"),
-        PLACEHOLDER_ROOF:          choices.get("roof",           "flat_roof_standard"),
-        PLACEHOLDER_GROUND_FLOOR:  choices.get("ground_floor",   "ground_floor_slab"),
+        PLACEHOLDER_EXT_WALL:      _resolve_choice(choices.get("external_wall"), "cavity_wall_standard"),
+        PLACEHOLDER_ROOF:          _resolve_choice(choices.get("roof"),          "flat_roof_standard"),
+        PLACEHOLDER_GROUND_FLOOR:  _resolve_choice(choices.get("ground_floor"),  "ground_floor_slab"),
         PLACEHOLDER_INT_FLOOR_CEIL: _INTERIOR_CONSTRUCTION,
     }
-    glazing_name = choices.get("glazing", "double_low_e")
+    glazing_name = _resolve_choice(choices.get("glazing"), "double_low_e")
 
     for surface in surfaces.values():
         ph = surface.get("construction_name", "")
@@ -1180,7 +1208,14 @@ def assemble_epjson(
     _substitute_constructions(surfaces, windows, construction_choices)
 
     # ── 3. Collect all required construction epJSON objects ───────────────────
-    used_constructions = set(construction_choices.values()) | {_INTERIOR_CONSTRUCTION}
+    # Brief 28-IM Gate IM-M4.5 Phase 2: unwrap the Brief 28k Gate 3+
+    # construction_choices shape ({library_id, u_value_override}) before
+    # building the lookup set. See _resolve_choice for the convention note.
+    used_constructions = {
+        _resolve_choice(v, "")
+        for v in construction_choices.values()
+    } | {_INTERIOR_CONSTRUCTION}
+    used_constructions.discard("")
     construction_epjson = _collect_construction_epjson(used_constructions)
 
     # ── 4. Site location from EPW ─────────────────────────────────────────────
@@ -1365,6 +1400,23 @@ def assemble_epjson(
         # ── Parse demand-based system assignments (with flat-key fallbacks) ──
         systems_cfg = sc.get("systems", {})
 
+        # Brief 28-IM IM-M4.5 Phase 2 (item 5): per-service `enabled` flag
+        # from `building_config.systems_config_v25`. When disabled, the
+        # service contributes no HVAC objects → EP shows the demand as
+        # unmet heating/cooling-setpoint-not-met hours. Per-service
+        # gating only; per-ventilation-system gating is queued for
+        # Brief 28-DynamicParity (assembler currently emits one collapsed
+        # vent block per zone, not one per system).
+        v25 = building_params.get("systems_config_v25") or {}
+        heating_enabled = (v25.get("heating") or {}).get("enabled", True) is not False
+        cooling_enabled = (v25.get("cooling") or {}).get("enabled", True) is not False
+        dhw_enabled     = (v25.get("dhw")     or {}).get("enabled", True) is not False
+        # Surface the resolved gates so the runner can include them in the
+        # parsed response for downstream UI verification.
+        _im_m4_5_enabled_resolved = {
+            "heating": heating_enabled, "cooling": cooling_enabled, "dhw": dhw_enabled,
+        }
+
         # Space heating
         sh_prim    = systems_cfg.get("space_heating", {}).get("primary", {})
         sh_sys_key = sh_prim.get("system") or sc.get("hvac_type", "vrf_standard")
@@ -1378,15 +1430,24 @@ def assemble_epjson(
         # Gas-fired heating systems modelled as ZoneHVAC:Baseboard:Convective:Gas
         _GAS_HEATING_KEYS = {"gas_boiler_heating", "gas_boiler_combi"}
         sh_is_gas  = sh_sys_key in _GAS_HEATING_KEYS
-        sc_is_none = sc_sys_key in {"none_cooling"}
+        # Brief 28-IM IM-M4.5: heating.enabled=false folds into the "no
+        # cooling either" path so the zone is left to drift.
+        sc_is_none = (sc_sys_key in {"none_cooling"}) or (not cooling_enabled)
 
+        # Brief 28-IM IM-M4.5 Phase 2 (item 5): per-service `enabled` gating
+        # is done UNIFORMLY via availability schedules on the coils (see
+        # post-process block below). The VRF object stays in place even when
+        # both heating and cooling are disabled — the coils just never fire.
+        # EP runs to completion in that "system available but always off"
+        # configuration; the zone temperature reflects whatever drift the
+        # building experiences.
         if sh_is_gas:
             # Gas baseboard heating; VRF added on top if cooling is required
             bb_objects = generate_gas_baseboard_system(
                 zone_names=list(zones.keys()),
                 efficiency=sh_eff,
             )
-            if sc_is_none:
+            if sc_is_none or not cooling_enabled:
                 # Heating only — no active cooling system
                 hvac_objects = bb_objects
             else:
@@ -1405,13 +1466,35 @@ def assemble_epjson(
                 zone_names=list(zones.keys()),
                 heating_cop=sh_eff,
                 cooling_eer=sc_eer,
-                provide_heating=True,
-                provide_cooling=not sc_is_none,
+                provide_heating=heating_enabled,
+                provide_cooling=(cooling_enabled and not sc_is_none),
             )
 
         # Zone sizing objects are required for Fan:SystemModel and VRF coil autosizing
         sizing_objects = _build_sizing_objects(zones)
         hvac_objects.update(sizing_objects)
+
+        # Brief 28-IM IM-M4.5 Phase 2 (item 5 cont.): when only ONE of
+        # heating / cooling is disabled (so we kept the VRF instead of
+        # falling into the IdealLoads stub branch above), swap the coil's
+        # availability_schedule to a zero-value Schedule:Constant. EP keeps
+        # the coil object (autosizing still works against design days) but
+        # never lets it run — the zone heating load is reported as
+        # "unmet hours" while Heating:EnergyTransfer + Heating:Electricity
+        # come out at ~0. Zero-capacity would be cleaner but EP rejects it
+        # with a schema-validation severe (`Expected number greater than 0`).
+        _OFF_SCHED = "_im_m4_5_service_off_sched"
+        if (not heating_enabled) or (not cooling_enabled):
+            hvac_objects.setdefault("Schedule:Constant", {})[_OFF_SCHED] = {
+                "schedule_type_limits_name": "Fraction",
+                "hourly_value": 0.0,
+            }
+        if not heating_enabled:
+            for coil in hvac_objects.get("Coil:Heating:DX:VariableRefrigerantFlow", {}).values():
+                coil["availability_schedule"] = _OFF_SCHED
+        if not cooling_enabled:
+            for coil in hvac_objects.get("Coil:Cooling:DX:VariableRefrigerantFlow", {}).values():
+                coil["availability_schedule_name"] = _OFF_SCHED
 
         # Ventilation — MEV (exhaust only) or MVHR (balanced ERV with heat recovery)
         # Must merge at the object-type level (setdefault+update) so that VRF Fan:SystemModel
@@ -1447,21 +1530,25 @@ def assemble_epjson(
             dhw_sec_cfg.get("efficiency_override") or sc.get("ashp_cop_dhw", 2.8)
         )
 
-        # Pass actual bedroom count + occupancy so peak flow scales with real demand
-        dhw_objects = generate_dhw_system(
-            zone_floor_area_m2=zone_floor_area,
-            num_zones=len(zones),
-            num_bedrooms=_num_bedrooms if _num_bedrooms > 0 else None,
-            occupancy_rate=_occupancy_rate,
-            dhw_primary=dhw_primary,
-            dhw_preheat=dhw_preheat,
-            boiler_efficiency=dhw_efficiency,
-            dhw_setpoint=float(sc.get("dhw_setpoint", 60.0)),
-            dhw_preheat_setpoint=float(sc.get("dhw_preheat_setpoint", 45.0)),
-            ashp_cop=ashp_cop,
-        )
-        for obj_type, items in dhw_objects.items():
-            hvac_objects.setdefault(obj_type, {}).update(items)
+        # Brief 28-IM IM-M4.5 Phase 2 (item 5): skip DHW emission entirely
+        # when dhw.enabled=false. EP shows zero water heater electricity/gas;
+        # demand is implicit in the occupancy schedule (no service to fail).
+        if dhw_enabled:
+            # Pass actual bedroom count + occupancy so peak flow scales with real demand
+            dhw_objects = generate_dhw_system(
+                zone_floor_area_m2=zone_floor_area,
+                num_zones=len(zones),
+                num_bedrooms=_num_bedrooms if _num_bedrooms > 0 else None,
+                occupancy_rate=_occupancy_rate,
+                dhw_primary=dhw_primary,
+                dhw_preheat=dhw_preheat,
+                boiler_efficiency=dhw_efficiency,
+                dhw_setpoint=float(sc.get("dhw_setpoint", 60.0)),
+                dhw_preheat_setpoint=float(sc.get("dhw_preheat_setpoint", 45.0)),
+                ashp_cop=ashp_cop,
+            )
+            for obj_type, items in dhw_objects.items():
+                hvac_objects.setdefault(obj_type, {}).update(items)
         # Inject always-on schedule for openings (must coexist with DHW constants)
         if openings_const_schedules:
             hvac_objects.setdefault("Schedule:Constant", {}).update(openings_const_schedules)

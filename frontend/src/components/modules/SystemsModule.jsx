@@ -1032,6 +1032,33 @@ function SystemsSummary({ consumption }) {
           </p>
         </div>
       </div>
+
+      <div className="text-xxs text-mid-grey/80 italic mt-4 max-w-3xl space-y-1">
+        <p><span className="font-medium not-italic text-amber-700">Convention notes (Static vs Dynamic):</span></p>
+        <p>• <span className="font-medium not-italic">Demand definition</span>: Static computes
+          <code>demand_mwh</code> as a setpoint-convention property of the building (the
+          heat load to hold 21 °C against the gain-warmed zone temperature), so it
+          stays positive even when heating is disabled. Dynamic's <code>demand_mwh</code>
+          is what EnergyPlus actually supplied (<code>Heating:EnergyTransfer</code>), so
+          disabled services show ~0 demand and the shortfall surfaces as unmet-setpoint
+          hours instead.</p>
+        <p>• <span className="font-medium not-italic">Effective SCOP/SEER</span>: identical
+          formula on both engines (delivered / fuel), but per-system COP curves in
+          Dynamic vary with outdoor temperature while Static uses the seasonal
+          rating directly. Static SCOP/SEER is typically optimistic by 5-15%.</p>
+        <p>• <span className="font-medium not-italic">DHW fuel mix</span>: Static apportions
+          DHW demand across <code>fuel_mix.{'{'}gas, electric_resistance, heat_pump{'}'}</code>;
+          Dynamic V1 still uses the legacy primary/secondary path (Brief 28-DynamicParity).
+          Flipping the sliders in the Systems left column changes Static numbers
+          instantly; Dynamic re-runs reflect only the legacy DHW config.</p>
+        <p>• <span className="font-medium not-italic">Per-vent on/off</span>: Static gates
+          per-vent <code>enabled</code> in the engine (IM-M4.5 §5.4 fix); Dynamic V1 has
+          per-service gating only (heating/cooling/dhw). Per-vent-system Dynamic
+          gating queues for Brief 28-DynamicParity.</p>
+        <p>• <span className="font-medium not-italic">Per-system fan breakdown</span>: Static
+          surfaces <code>ventilation[].fan_electricity_mwh</code> per system; Dynamic
+          aggregates all fans into <code>Fans:Electricity</code> (single combined entry).</p>
+      </div>
     </div>
   )
 }

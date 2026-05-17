@@ -464,11 +464,16 @@ export default function InternalGainsModule() {
               </div>
             </div>
 
-            {activeTab.hasEngineToggle && (
-              <div className="absolute right-4 top-2 text-xxs text-mid-grey italic">
-                Engine toggle inline (Part 11)
-              </div>
-            )}
+            {/* Brief 28-IM IM-M4.5 Phase 2 (item 3 / UI honesty): the
+                pre-existing "Engine toggle inline (Part 11)" placeholder
+                was promising functionality that never landed — Internal
+                Gains' canvas views are Static-only by design (gains profile
+                evaluation is a Static-engine concept; Dynamic gets the
+                gains via emitted Schedule:Compact and reports them as
+                annual InteriorLights:Electricity / InteriorEquipment:
+                Electricity meters, not as a per-profile breakdown).
+                Removed the placeholder rather than ship a toggle that
+                would silently render Static under "Dynamic". */}
           </div>
 
           {/* Tab content. Brief 28a Part 5 walkthrough finding (2026-05-14):

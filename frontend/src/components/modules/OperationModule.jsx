@@ -722,7 +722,15 @@ function OperationMonthlyView({ instantResult, openings }) {
   )
 }
 
-/* ── Summary: per-opening table + Static-vs-Dynamic Δ ─────────────── */
+/* ── Summary: per-opening table (Static engine) ─────────────────────
+   Brief 28-IM IM-M4.5 Phase 2 (item 3 / UI honesty): renamed from the
+   earlier "Static-vs-Dynamic Δ" promise. The implementation only ever
+   read from Static (`instantResult.losses_at_setpoint.natural_ventilation`);
+   the Δ comparison column never existed. Side-by-side comparison lands
+   in Brief 28-DynamicParity once the Dynamic parser emits per-opening
+   natvent (input-side already present in epjson_assembler.py
+   _build_operable_openings_objects, output-side collapses to aggregate
+   under Zone Ventilation Sensible Heat Loss). */
 function OperationSummaryView({ instantResult, openings, orientation }) {
   const nv = instantResult?.losses_at_setpoint?.natural_ventilation ?? []
   const demand = instantResult?.demand
@@ -799,12 +807,20 @@ function OperationSummaryView({ instantResult, openings, orientation }) {
         </div>
       </div>
 
-      <p className="text-xxs text-mid-grey/80 italic mt-4 max-w-3xl">
-        5th convention difference (Brief 28-IM §11.3): the Static engine uses
-        BS 5925 wind-angle decomposition for stack-vs-wind flow; EnergyPlus
-        autocalcs F_w internally per its DesignFlowRate object. Static vs
-        Dynamic Δ overlay queued for a follow-up gate.
-      </p>
+      <div className="text-xxs text-mid-grey/80 italic mt-4 max-w-3xl space-y-1">
+        <p><span className="font-medium not-italic text-amber-700">Convention notes (Static vs Dynamic):</span></p>
+        <p>• <span className="font-medium not-italic">Wind / stack split</span> (Brief 28-IM §11.3): Static uses BS 5925
+          wind-angle decomposition; EnergyPlus autocalcs <code>F_w</code> per its
+          <code>ZoneVentilation:WindandStackOpenArea</code> object. Static numbers
+          here will diverge from a Dynamic run; both are physics-valid.</p>
+        <p>• <span className="font-medium not-italic">Per-opening attribution</span>: Dynamic's
+          EnergyPlus run emits one <code>ZoneVentilation</code> object per opening (input
+          side parity, see <code>nza_engine/generators/epjson_assembler.py</code>
+          <code>_build_operable_openings_objects</code>), but the SQL parser
+          currently collapses all openings into one
+          <code>Zone Ventilation Sensible Heat Loss Energy</code> aggregate. The
+          per-opening Δ column for this table lands in Brief 28-DynamicParity.</p>
+      </div>
     </div>
   )
 }

@@ -38,6 +38,7 @@ from nza_engine.parsers.sql_parser import (
     get_heat_balance,
     get_hourly_profiles,
     get_typical_day_profiles,
+    get_consumption_block,
 )
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -538,6 +539,12 @@ async def simulate_project(project_id: str, scenario_name: str = "Baseline", mod
     envelope_detail = get_envelope_heat_flow_detailed(sql)
     hourly_profiles = get_typical_day_profiles(sql)
 
+    # Brief 28-IM IM-M4.5 Phase 2 (item 4): expose a `consumption.*` block
+    # matching the Static engine's IM-M4 §8.1 shape so the UI's Results tab
+    # and the Systems Live Results panel can switch engines without
+    # restructuring the consumer.
+    consumption = get_consumption_block(sql, building_params)
+
     results = {
         "run_id":            run_id,
         "project_id":        project_id,
@@ -556,6 +563,7 @@ async def simulate_project(project_id: str, scenario_name: str = "Baseline", mod
         "envelope":          envelope,
         "envelope_detailed": envelope_detail,
         "hourly_profiles":   hourly_profiles,
+        "consumption":       consumption,   # IM-M4.5 parity surface
     }
 
     # Cache results to file
