@@ -118,15 +118,118 @@ Status:
 
 ---
 
-## Total: 7 issues found in Part 1 (Building Static)
+---
 
-By severity (after Chris 2026-05-17 review):
-- **S3:** 3 (#1 fixed, #2 open, #6 open)
-- **S2:** 2 (#3 open, #4 open)
-- **S1:** 2 (#5 cosmetic, #7 defer)
+## #8 — Dynamic State 1 parser ignores EP's own loss meters; recomputes in Python
 
-Brief 29 escalation threshold (>5 issues at S2+ in a single module) is **NOT** triggered: 4 issues at S2+ in this module.
+| Field | Value |
+|---|---|
+| Module | Building (envelope-only) |
+| Engine | Dynamic |
+| Severity | **S2** |
+| Status | **OPEN** |
+| Current value | Parser reads only 3 of ~25 EP Output:Variables (`Zone Mean Air Temperature`, `Zone Operative Temperature`, `Surface Outside Face Incident Solar Radiation Rate per Area`). All other emitted variables (`Zone Infiltration Sensible Heat Loss/Gain Energy`, `Zone Ventilation Sensible Heat Loss/Gain Energy`, `Surface Inside Face Conduction Heat Transfer Energy`, `Zone Windows Total Transmitted Solar Radiation Energy`) are emitted to SQL and never consumed. |
+| Expected value | EP's own per-element accounting (sol-air boundary conditions, surface convection coefficients h_int/h_ext, sky long-wave per Berdahl-Martin, multi-pane glazing with incidence-angle) should be the authoritative loss decomposition. The current path uses EP as a T_zone solver, then re-does the per-element arithmetic in Python — losing most of EP's accuracy. |
+| Root cause | Historical: State 1 was the first parser path written, the convention copied from Static for consistency. Brief 28b Part 3 originally planned the EP-native parse but it didn't ship. |
+| Consequence | "Dynamic" is currently Static-with-EP-T_zone, not full-EP. Cross-engine reconciliation is therefore measuring T_zone divergence, not engine-method divergence. |
+| Fix scope | Rewrite `_get_heat_balance_state1` to consume EP's per-element variables directly. Cross-references #12 (uniform losses_at_setpoint emission needed). |
 
-**Fix-brief grouping decision (Chris 2026-05-17):** Issues #2, #3, #4 are three facets of the same data-model + methodology gap in `_calculateEnvelopeOnly`'s permanent-vent block. The post-audit fix brief will rework them as a single coherent commit (new `flow_mode` field + per-opening `C_d` + topology-branched correlation + EP object selection). Do not fix piecemeal — one fix exposing another is the risk.
+---
+
+## #9 — `ZoneInfiltration:DesignFlowRate` uses occupancy-keyed schedule in State 1
+
+| Field | Value |
+|---|---|
+| Module | Building (envelope-only) |
+| Engine | Dynamic |
+| Severity | **S1** |
+| Status | **OPEN — verify behaviour first** |
+| Current value | `schedule_name = "hotel_ventilation_continuous"` at `epjson_assembler.py:297` |
+| Expected value | `always_on` (fraction 1.0 all hours) for fabric leakage in State 1. Leakage is uncontrolled envelope porosity; it doesn't change with occupancy. |
+| Verification needed | Look up `hotel_ventilation_continuous` in `nza_engine/library/schedules.py`. If hourly_value is always 1.0, this is purely a naming smell (cosmetic). If it has a non-1.0 variation, fabric leakage drops at off-hours — incorrect for State 1. |
+| Fix scope | Either rename the schedule to `always_on` for clarity, or replace the reference with the existing `openings_always_on` schedule. Trivial if confirmed always-on. |
+
+---
+
+## #10 — HVAC plant emitted-but-muted in State 1 (contract violation)
+
+| Field | Value |
+|---|---|
+| Module | Building (envelope-only) |
+| Engine | Dynamic |
+| Severity | **S1** |
+| Status | **OPEN** |
+| Current value | Docstring at `epjson_assembler.py:1187`: *"All HVAC plant beyond Ideal Loads (DHW, VRF, MVHR, gas boilers) is still emitted but the Ideal-Loads-driven zone temperatures mean it produces near-zero output during the run."* |
+| Expected value | State 1 contract per `docs/state_contracts.md` is envelope-only: no mechanical systems emitted at all. |
+| Consequence | (a) longer EP runtime — more objects, more sizing iterations. (b) spurious meter values may show up on the dashboard. (c) accidental engagement risk if a future change touches the muting setpoints (Issue #13 is partly evidence this has happened). |
+| Fix scope | Add a `if state1: return ...` early-out around DHW / VRF / MVHR / gas-boiler emission paths. |
+
+---
+
+## #11 — Dynamic-parser thermal bridging emits 0.0 MWh
+
+| Field | Value |
+|---|---|
+| Module | Building (envelope-only) |
+| Engine | Dynamic |
+| Severity | **S2** |
+| Status | **OPEN — needs library check** |
+| Current value | `annual.losses.thermal_bridging.kwh = 0.0` on Bridgewater Dynamic baseline. Static reports 10.4 MWh from the same `H_TB × ΔT` formula via ISO 14683. |
+| Expected value | Similar magnitude to Static. The parser code at `sql_parser.py:1490-1495` derives `UA_bridging = max(0, (u_envelope - u_clear_edge) × area)` per element. If U_envelope == U_clear_edge in the construction library, UA_bridging is 0. |
+| Root cause hypothesis | The construction library entries don't carry a separate `u_clear_edge` field, so Static and Dynamic disagree on whether TB is included at all. Static uses an explicit `H_TB` accumulator from ISO 14683 junction tables; Dynamic-parser tries to back it out of construction U-values. Brief 28-TB-Simple's whole purpose was to land Static's explicit TB — Dynamic was queued and never landed. |
+| Consequence | Dynamic systematically under-reports envelope loss by ~10–12 MWh (TB amount) on every project. Reinforces Issue #8. |
+| Fix scope | Resolved together with #8 — rewrite the Dynamic parser to consume EP's per-element output and add an explicit `H_TB × ΔT` post-process term (since EP doesn't natively represent TB). |
+
+---
+
+## #12 — Dynamic State 1 does NOT emit `losses_at_setpoint`
+
+| Field | Value |
+|---|---|
+| Module | Building (envelope-only) |
+| Engine | Dynamic |
+| Severity | **S2** |
+| Status | **OPEN — blocks Issue #6 uniform invariant** |
+| Current value | Dynamic parser emits `annual.losses` (free-running convention) only. `losses_at_setpoint` is missing from the Dynamic result. |
+| Expected value | Same shape as Static: `losses_at_setpoint.{element}.heating_loss_kwh` per envelope element + sibling arrays (`natural_ventilation[]`, `ventilation[]`). |
+| Consequence | (a) Sankey / Rows / Stacked / Summary table fall back to `annual.losses` (free-running) when engine toggle is Dynamic, silently changing the loss convention. (b) Integrand-vs-display invariant (Issue #6) cannot be applied uniformly across engines. (c) Cross-engine reconciliation comparing 251.5 (Static setpoint) vs 344.1 (Dynamic free-running) is comparing different physical quantities. |
+| Fix scope | Add setpoint-convention accumulators to the Dynamic parser loop. Trivial — same formula as Static (`max(0, T_set − T_driving) × U × A`), independent of T_zone trace. |
+
+---
+
+## #13 — Dynamic State 1 T_air shows clamping at 21.0 °C across many hours (suspected measurement artefact)
+
+| Field | Value |
+|---|---|
+| Module | Building (envelope-only) |
+| Engine | Dynamic |
+| Severity | **S3** |
+| Status | **OPEN — investigate before Part 3 begins** |
+| Current value | Bridgewater Dynamic baseline reports mean `T_air = 21.1 °C` with hourly trace showing extended runs of exactly `21.0` (e.g. h7–h17 all read 21.0; many similar runs across the year). |
+| Expected value | A free-running zone (no internal gains, IdealLoads muted by ±setpoints) with mean UK weather should track somewhere between T_out_mean (~11 °C) and T_out_mean + solar/(UA·hours) (~16–18 °C). Static reports 16.1 °C mean and a continuously varying trace. Dynamic's clamping at exactly 21°C is not consistent with free-running behaviour. |
+| Possible causes (to investigate in order of likelihood) | (a) `ZoneHVAC:IdealLoadsAirSystem` provides outdoor-air ventilation at design rate regardless of muted setpoints; the supply-air-temperature limits (50°C heating, ~14°C cooling) may be conditioning OA toward a default temperature. (b) Sizing-phase initialisation (`do_zone_sizing_calculation: Yes` at `:1627`) writes 21°C as the design indoor temperature and the Output:Variable trace includes it. (c) EP warmup days (6–25) bleed through the SQL output if the post-processor doesn't filter to RunPeriod. (d) A Schedule:Compact referencing 21°C constant is being mis-applied. |
+| Consequence if real | Every Dynamic-side number in Part 2's defended-numbers table is suspect: heating demand, cooling demand, free-running mean/min/max, fabric_leakage, permanent_vents — all derived from this T_zone trace. The +8% Static-vs-Dynamic heating-demand Δ may not be a real physics difference; it may be the comparison reading an artificial T_zone. |
+| Why Static doesn't share this | Static has no IdealLoads, no OA system, no sizing-phase initialisation, no warmup. Its T_air is solved entirely from the heat balance equation. |
+| Fix scope | Diagnostic-first per Brief 29 Hard Rule 4. Possible actions: (a) inspect raw eplusout.sql to confirm the T_zone trace contains the clamped values (rules out parser bug). (b) Run a minimal EP envelope-only case with NO IdealLoads at all and check if T_zone matches Static. (c) If IdealLoads is the cause, remove it from State 1 entirely. |
+| **Blocks** | Part 3 cross-engine reconciliation — no defensible mechanism for Static-vs-Dynamic Δ can be claimed while T_zone may be artefacted. |
+
+---
+
+## Total: 13 issues found in Parts 1 + 2 (Building both engines)
+
+By severity (after Chris 2026-05-17 review + Part 2 additions):
+- **S3:** 4 (#1 fixed, #2 open, #6 open, #13 open)
+- **S2:** 6 (#3 open, #4 open, #8 open, #11 open, #12 open) — and the grouping note still applies to #2/#3/#4
+- **S1:** 3 (#5 cosmetic, #7 defer, #9 verify, #10 cleanup) — actually 4
+
+Recount: **S3 = 4, S2 = 5 (#3, #4, #8, #11, #12), S1 = 4 (#5, #7, #9, #10).**
+
+**Brief 29 escalation threshold triggered** (>5 issues at S2+ in a single module: Building has 9 S2+ issues split across Static and Dynamic — 4 in Static counting #6, 5 in Dynamic counting #13). Escalation: notify Chris on sign-off, hold Part 3 until #13 is resolved.
+
+**Fix-brief grouping decisions:**
+- Issues #2, #3, #4 — single rework of `_calculateEnvelopeOnly`'s permanent-vent block (Chris call 2026-05-17, both engines).
+- Issues #8, #11, #12 — single rework of `_get_heat_balance_state1` to consume EP's per-element variables AND emit `losses_at_setpoint`. The two read-side and one write-side fixes touch the same function; doing them together is cheaper than three commits.
+- Issue #13 must be resolved standalone first — it may invalidate any reconciliation built on top.
+- Issue #6 (integrand-vs-display invariant) is a cross-cutting infrastructure fix, separate brief, precondition for any new module.
 
 **Standing by for Chris's sign-off on Part 1 before beginning Part 2 (Building Dynamic).**
