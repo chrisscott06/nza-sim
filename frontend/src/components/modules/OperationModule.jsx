@@ -1,35 +1,46 @@
 /**
  * OperationModule.jsx — /operation
  *
- * Brief 28e Gate E5a: operable openings as first-class envelope features.
- * Replaces the per-facade `openable_fraction` sliders with a list UI over
- * `building_config.operable_openings`. Each entry is a door / window bank /
- * vent with three control modes (permanent / scheduled / temperature) and
- * its own per-opening physics (area, height, Cd, Cw — see Brief 28e §A.1).
+ * Brief 28-IM Gate IM-M3: full three-column rewrite matching the Building
+ * tab reference layout (BuildingDefinition.jsx).
  *
- * Selection state is held in UIContext (selectedOpeningId / selectedFacade)
- * — Gate E5a wires panel → selection; Gate E5b will wire selection → 3D
- * highlight + reverse-direction click-from-3D.
+ *   Left   — operable-openings list (add buttons + per-opening editor)
+ *   Centre — view switcher: Heat Balance | Profiles | Schedule | Monthly | Summary
+ *   Right  — 3D viewer (reuses BuildingViewer3D)
+ *
+ * Module ownership (Brief 28-IM §3): Operation owns natural ventilation. The
+ * Heat Balance tab passes modules including 'natural_ventilation' so the
+ * shared HeatBalance component renders only the categories this tab is
+ * responsible for (fabric + leakage + permanent vents + thermal bridging +
+ * internal gains + natural-vent per-opening lines).
+ *
+ * 3D viewer extension (Brief 28-IM §15.2 fallback): per-facade hover/click
+ * raycast is queued; for IM-M3 the "+ Door / + Window / + Vent" buttons
+ * trigger an inline F1/F2/F3/F4 facade-select chip strip (covers the spec
+ * intent — user picks where the opening attaches — without the deep Three.js
+ * raycast wiring that's blocked here). The 3D viewer itself is unmodified.
+ *
+ * Brief 28e Gate E5a (preserved): operable openings as first-class envelope
+ * features. Each entry is a door / window bank / vent with three control
+ * modes (permanent / scheduled / temperature) and its own physics (area,
+ * height, Cd, Cw — see Brief 28e §A.1).
  *
  * Reads / writes:
- *   params.operable_openings         (Brief 28e native array; this module
- *                                     replaces it wholesale via updateParam)
- *   params.openings.*                (LEGACY — read for one-click conversion,
- *                                     never written here; engine still falls
- *                                     back to synthesiseOperableOpeningsFromLegacy
- *                                     if operable_openings is empty)
- *
- * Permanent envelope openings (louvres) and site exposure stay in
- * Building → Permanent openings — they're always-open geometry, distinct
- * from operable.
+ *   params.operable_openings         (Brief 28e native array)
+ *   params.openings.*                (LEGACY — synthesise→convert flow only)
  */
 
-import { useContext, useMemo, useState } from 'react'
+import { useContext, useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { ProjectContext } from '../../context/ProjectContext.jsx'
 import { useUI } from '../../context/UIContext.jsx'
-import { synthesiseOperableOpeningsFromLegacy } from '../../utils/instantCalc.js'
+import { WeatherContext } from '../../context/WeatherContext.jsx'
+import { useHourlySolar } from '../../hooks/useHourlySolar.js'
+import { calculateInstant, synthesiseOperableOpeningsFromLegacy } from '../../utils/instantCalc.js'
+import { SCHEDULES } from '../../utils/scheduleLibrary.js'
 import BuildingViewer3D from './building/BuildingViewer3D.jsx'
+import HeatBalance from './balance/HeatBalance.jsx'
+import WeatherSynchronisedProfile from '../profiles/WeatherSynchronisedProfile.jsx'
 
 const ACCENT = '#0E7490'  // operation theme — cyan-700
 
@@ -52,7 +63,6 @@ function facadeLabelByKey(key, orientationDeg) {
 }
 
 // Schedules registered in scheduleLibrary.js (frontend) + schedules.py (backend).
-// Names must agree across both sides — see Brief 28e Gate E2 §scheduleLibrary.
 const SCHEDULE_OPTIONS = [
   { value: 'always_on',                     label: 'Always open (24/7)' },
   { value: 'business_hours_09_18_weekdays', label: 'Business hours (Mon–Fri 09–18)' },
@@ -64,6 +74,21 @@ const OPENING_TYPE_OPTIONS = [
   { value: 'door',   label: 'Door',   defaultArea: 4.0,  defaultHeight: 2.0, defaultCw: 0.25 },
   { value: 'window', label: 'Window', defaultArea: 1.5,  defaultHeight: 1.2, defaultCw: 0.40 },
   { value: 'vent',   label: 'Vent',   defaultArea: 0.5,  defaultHeight: 0.5, defaultCw: 0.25 },
+]
+
+// Module ownership filter — see HeatBalance.MODULE_CATEGORY_KEYS.
+const MODULES_OPERATION = [
+  'fabric', 'thermal_bridging', 'fabric_leakage', 'permanent_vents',
+  'internal_gains', 'natural_ventilation',
+]
+
+// Centre-column tabs — Brief 28-IM §3.2 (five views).
+const CENTRE_TABS = [
+  { id: 'heat-balance', label: 'Heat Balance' },
+  { id: 'profiles',     label: 'Profiles' },
+  { id: 'schedule',     label: 'Schedule' },
+  { id: 'monthly',      label: 'Monthly' },
+  { id: 'summary',      label: 'Summary' },
 ]
 
 // Generate a stable, human-readable id for a new opening.
@@ -100,8 +125,30 @@ function newOpening(type, facade) {
   }
 }
 
+/* ── Constructions library fetch (mirrors useStateComparison pattern) ──── */
+let _libraryDataPromise = null
+function fetchLibraryData() {
+  if (_libraryDataPromise) return _libraryDataPromise
+  _libraryDataPromise = fetch('/api/library/constructions')
+    .then(r => r.ok ? r.json() : { constructions: [] })
+    .then(data => {
+      const arr = data?.constructions ?? []
+      return {
+        constructions: arr.map(c => ({
+          name: c.name,
+          u_value_W_per_m2K: c.config_json?.u_value_W_per_m2K ?? c.u_value_W_per_m2K,
+          y_factor: c.config_json?.y_factor ?? c.y_factor ?? 1.0,
+          config_json: c.config_json ?? c,
+        })),
+      }
+    })
+    .catch(() => ({ constructions: [] }))
+  return _libraryDataPromise
+}
+
 export default function OperationModule() {
-  const { params, updateParam } = useContext(ProjectContext)
+  const { params, constructions, systems, comfortBand, updateParam } = useContext(ProjectContext)
+  const { weatherData } = useContext(WeatherContext)
   const { selectedOpeningId, setSelectedOpeningId, clearSelection } = useUI()
 
   const orientation = Number(params?.orientation ?? 0)
@@ -110,10 +157,46 @@ export default function OperationModule() {
     [params?.operable_openings],
   )
 
-  // Detect legacy state that would synthesise something useful — used to
-  // surface the "Convert legacy → native" CTA. Native takes precedence;
-  // we only show the CTA when operable_openings is empty AND the legacy
-  // schedule + at least one openable_fraction would synthesise rows.
+  // Centre view switcher state (persists per-session in localStorage)
+  const [centreView, setCentreView] = useState(() => {
+    try {
+      const saved = localStorage.getItem('nza-operation-centre')
+      if (CENTRE_TABS.some(t => t.id === saved)) return saved
+    } catch {}
+    return 'heat-balance'
+  })
+  useEffect(() => {
+    try { localStorage.setItem('nza-operation-centre', centreView) } catch {}
+  }, [centreView])
+
+  // Facade-select state for "+ Door / + Window / + Vent" buttons. When
+  // `pendingType` is non-null, the chip row appears asking the user to
+  // choose a facade. (Brief 28-IM §15.2 fallback for the 3D raycast.)
+  const [pendingType, setPendingType] = useState(null)
+
+  // Constructions library (for live engine call)
+  const [libraryData, setLibraryData] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    fetchLibraryData().then(d => { if (!cancelled) setLibraryData(d) })
+    return () => { cancelled = true }
+  }, [])
+
+  // Live engine result — Operation tab is State 2 (envelope-gains). The
+  // engine returns the per-opening natural-ventilation breakdown +
+  // daily_profiles inside losses_at_setpoint.
+  const hourlySolar = useHourlySolar(weatherData, orientation)
+  const instantResult = useMemo(() => {
+    if (!params || !weatherData || !hourlySolar || !libraryData) return null
+    const cb = comfortBand ?? { lower_c: 20, upper_c: 26 }
+    return calculateInstant(
+      { ...params, comfort_band: cb }, constructions ?? {}, systems ?? {},
+      libraryData, weatherData, hourlySolar, null,
+      { mode: 'envelope-gains', comfortBand: cb },
+    )
+  }, [params, constructions, systems, libraryData, weatherData, hourlySolar, comfortBand])
+
+  // Detect legacy state that would synthesise something useful.
   const legacyPreview = useMemo(() => {
     if (openings.length > 0) return []
     return synthesiseOperableOpeningsFromLegacy(params ?? {})
@@ -127,6 +210,7 @@ export default function OperationModule() {
     const next = [...openings, entry]
     writeList(next)
     setSelectedOpeningId(entry.id)
+    setPendingType(null)
   }
 
   const updateOpening = (id, partial) => {
@@ -142,17 +226,15 @@ export default function OperationModule() {
 
   const convertLegacy = () => {
     if (legacyPreview.length === 0) return
-    // Strip the `_synthesised_from_legacy` marker before persisting — these
-    // are now first-class native entries.
     const cleaned = legacyPreview.map(({ _synthesised_from_legacy, ...rest }) => rest)
     writeList(cleaned)
   }
 
   return (
-    <div className="h-full overflow-y-auto bg-off-white">
-      {/* Module header with operation accent */}
+    <div className="flex flex-col h-[calc(100vh-3rem)] relative">
+      {/* ── Module header with operation accent ── */}
       <div
-        className="bg-white border-b border-light-grey px-6 pt-3 pb-3"
+        className="flex-shrink-0 bg-white border-b border-light-grey px-6 pt-3 pb-3"
         style={{ borderTopWidth: '3px', borderTopColor: ACCENT, borderTopStyle: 'solid' }}
       >
         <NavLink to="/project" className="text-xxs text-mid-grey hover:text-navy transition-colors">
@@ -160,127 +242,542 @@ export default function OperationModule() {
         </NavLink>
         <p className="text-caption font-medium mt-0.5" style={{ color: ACCENT }}>Operation</p>
         <p className="text-xxs text-mid-grey">
-          Operable openings — doors, windows, vents — defined per opening with
-          their own control mode (always / scheduled / temperature-triggered).
+          Operable openings — doors, windows, vents — each with its own
+          control mode (always / scheduled / temperature) and physics. The
+          centre view switcher shows heat balance, profiles, schedule, monthly
+          aggregation and a summary table; the 3D viewer on the right gives
+          context.
         </p>
       </div>
 
-      {/* Two-column layout: list panel on left, 3D viewer on right ──────── */}
-      <div className="flex gap-6 px-6 py-6 max-w-[1400px] mx-auto items-start">
-        {/* Panel column ─────────────────────────────────────────────────── */}
-        <div className="flex-1 min-w-0 space-y-4">
+      {/* ── Three-column workspace ── */}
+      <div className="flex-1 min-h-0 flex">
 
-          {/* Legacy conversion CTA (only when operable_openings empty + legacy
-              would synthesise something) ─────────────────────────────────── */}
-          {openings.length === 0 && legacyPreview.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-              <p className="text-caption font-medium text-amber-900 mb-1">
-                Legacy operable-window settings detected
-              </p>
-              <p className="text-xxs text-amber-800 mb-3">
-                This project uses the pre-Brief 28e per-facade <code>openable_fraction</code> +
-                building-wide schedule. The engine still reads these correctly via
-                compute-time synthesis, but to edit individual openings (different
-                schedules per facade, doors, temperature triggers) convert them to
-                first-class entries here. The {legacyPreview.length} synthesised{' '}
-                {legacyPreview.length === 1 ? 'entry' : 'entries'} will be persisted:
-              </p>
-              <ul className="text-xxs text-amber-800 mb-3 space-y-0.5 ml-4 list-disc">
-                {legacyPreview.map(p => (
-                  <li key={p.id}>
-                    <span className="font-medium">{p.name}</span>
-                    {' '}— {p.area_m2.toFixed(2)} m² on {facadeLabelByKey(p.facade, orientation)},
-                    schedule <code>{p.control.schedule_ref}</code>
-                  </li>
-                ))}
-              </ul>
-              <button
-                onClick={convertLegacy}
-                className="text-xs px-3 py-1.5 rounded bg-amber-700 text-white hover:bg-amber-800 transition-colors"
-              >
-                Convert {legacyPreview.length} legacy{' '}
-                {legacyPreview.length === 1 ? 'entry' : 'entries'} to native
-              </button>
-            </div>
-          )}
+        {/* LEFT: openings list ────────────────────────────────────────── */}
+        <div className="flex-shrink-0 w-[300px] bg-white border-r border-light-grey overflow-y-auto">
+          <div className="p-3 space-y-3">
 
-          {/* Operable openings list ────────────────────────────────────── */}
-          <div className="bg-white rounded-xl border border-light-grey p-5">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <p className="text-caption font-semibold text-navy">Operable openings</p>
-                <p className="text-xxs text-mid-grey">
-                  {openings.length === 0
-                    ? 'No operable openings yet — add a door, window bank, or vent below.'
-                    : `${openings.length} ${openings.length === 1 ? 'entry' : 'entries'}.`}
+            {/* Legacy conversion CTA (operable_openings empty + legacy present) */}
+            {openings.length === 0 && legacyPreview.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="text-xxs font-medium text-amber-900 mb-1">
+                  Legacy operable-window settings detected
                 </p>
+                <p className="text-xxs text-amber-800 mb-2">
+                  {legacyPreview.length} synthesised{' '}
+                  {legacyPreview.length === 1 ? 'entry' : 'entries'} from the
+                  pre-Brief 28e per-facade <code>openable_fraction</code>:
+                </p>
+                <ul className="text-xxs text-amber-800 mb-2 space-y-0.5 ml-3 list-disc">
+                  {legacyPreview.map(p => (
+                    <li key={p.id}>
+                      <span className="font-medium">{p.name}</span> — {p.area_m2.toFixed(1)} m²,
+                      <code className="ml-1">{p.control.schedule_ref}</code>
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  onClick={convertLegacy}
+                  className="text-xxs px-2.5 py-1 rounded bg-amber-700 text-white hover:bg-amber-800 transition-colors"
+                >
+                  Convert to native
+                </button>
               </div>
-              <div className="flex gap-1.5">
+            )}
+
+            {/* Add buttons + facade-select chip row ─────────────────── */}
+            <div className="space-y-1.5">
+              <p className="text-xxs uppercase tracking-wider text-mid-grey">Add opening</p>
+              <div className="flex gap-1">
                 {OPENING_TYPE_OPTIONS.map(t => (
                   <button
                     key={t.value}
-                    onClick={() => addOpening(t.value, 'south')}
-                    className="text-xxs px-2.5 py-1 rounded border border-cyan-700 text-cyan-700 hover:bg-cyan-50 transition-colors"
-                    title={`Add a new ${t.label.toLowerCase()} (default south facade — change in editor)`}
+                    onClick={() => setPendingType(p => p === t.value ? null : t.value)}
+                    className={`flex-1 text-xxs px-2 py-1.5 rounded border transition-colors ${
+                      pendingType === t.value
+                        ? 'border-cyan-700 bg-cyan-700 text-white'
+                        : 'border-cyan-700 text-cyan-700 hover:bg-cyan-50'
+                    }`}
+                    title={`Add a new ${t.label.toLowerCase()} — then pick a facade`}
                   >
                     + {t.label}
                   </button>
                 ))}
               </div>
+              {pendingType && (
+                <div className="bg-cyan-50 border border-cyan-200 rounded p-2 space-y-1.5">
+                  <p className="text-xxs text-cyan-900">
+                    Pick the facade for the new <span className="font-medium">{pendingType}</span>:
+                  </p>
+                  <div className="flex gap-1">
+                    {FACADES.map(f => (
+                      <button
+                        key={f.key}
+                        onClick={() => addOpening(pendingType, f.key)}
+                        className="flex-1 text-xxs px-2 py-1.5 rounded bg-white border border-cyan-700 text-cyan-700 hover:bg-cyan-100 transition-colors"
+                        title={`Attach to ${facadeLabel(f.num, orientation)}`}
+                      >
+                        {facadeLabel(f.num, orientation)}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setPendingType(null)}
+                    className="text-xxs text-mid-grey hover:text-navy underline w-full text-left"
+                  >
+                    cancel
+                  </button>
+                </div>
+              )}
             </div>
 
-            {openings.length === 0 && legacyPreview.length === 0 && (
-              <div className="text-xxs text-mid-grey text-center py-8 border border-dashed border-light-grey rounded-lg">
-                Use the buttons above to add your first opening.
+            {/* Operable openings list ─────────────────────────────── */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-xxs uppercase tracking-wider text-mid-grey">Openings</p>
+                <span className="text-xxs text-mid-grey">
+                  {openings.length === 0 ? 'none' : `${openings.length}`}
+                </span>
               </div>
-            )}
-
-            <div className="space-y-2">
-              {openings.map(opening => (
-                <OpeningRow
-                  key={opening.id}
-                  opening={opening}
-                  selected={selectedOpeningId === opening.id}
-                  orientation={orientation}
-                  onSelect={() => setSelectedOpeningId(opening.id)}
-                  onUpdate={partial => updateOpening(opening.id, partial)}
-                  onDelete={() => deleteOpening(opening.id)}
-                />
-              ))}
+              {openings.length === 0 && legacyPreview.length === 0 && (
+                <div className="text-xxs text-mid-grey text-center py-6 border border-dashed border-light-grey rounded-lg">
+                  No openings yet — use the buttons above to add one.
+                </div>
+              )}
+              <div className="space-y-1.5">
+                {openings.map(opening => (
+                  <OpeningRow
+                    key={opening.id}
+                    opening={opening}
+                    selected={selectedOpeningId === opening.id}
+                    orientation={orientation}
+                    onSelect={() => setSelectedOpeningId(opening.id)}
+                    onUpdate={partial => updateOpening(opening.id, partial)}
+                    onDelete={() => deleteOpening(opening.id)}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
 
-          {/* Footer note ─────────────────────────────────────────────────── */}
-          <div className="bg-white rounded-xl border border-light-grey p-5">
-            <p className="text-xxs text-mid-grey">
-              <span className="font-medium text-dark-grey">Where things live:</span> Permanent
-              envelope openings (louvres, trickle vents) and site exposure stay in{' '}
-              <NavLink to="/building" className="text-navy underline">Building → Permanent openings</NavLink>
-              {' '}— they're always-open geometry, distinct from operable. Occupancy schedules sit in{' '}
-              <NavLink to="/gains" className="text-navy underline">Internal Gains</NavLink>.
-              Mechanical ventilation (MEV / MVHR) lives in{' '}
+            {/* Footer cross-reference ─────────────────────────────── */}
+            <div className="text-xxs text-mid-grey/90 leading-snug pt-2 border-t border-light-grey">
+              <span className="font-medium text-dark-grey">Related:</span>{' '}
+              Permanent louvres + site exposure in{' '}
+              <NavLink to="/building" className="text-navy underline">Building</NavLink>.
+              MEV / MVHR in{' '}
               <NavLink to="/systems" className="text-navy underline">Systems</NavLink>.
-            </p>
+            </div>
           </div>
         </div>
 
-        {/* 3D viewer column ─────────────────────────────────────────────── */}
-        <div className="hidden lg:block w-[480px] flex-shrink-0 sticky top-6">
-          <div className="bg-white rounded-xl border border-light-grey overflow-hidden"
-               style={{ height: '560px' }}>
+        {/* CENTRE: view switcher ───────────────────────────────────────── */}
+        <div className="flex-1 min-w-0 flex flex-col bg-off-white">
+          {/* Tab bar */}
+          <div className="flex-shrink-0 flex items-center gap-0 border-b border-light-grey bg-white px-2 pt-2">
+            {CENTRE_TABS.map(t => {
+              const active = t.id === centreView
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setCentreView(t.id)}
+                  className={`px-3 py-1.5 text-caption transition-colors border-b-2 -mb-px ${
+                    active
+                      ? 'border-navy text-navy font-medium'
+                      : 'border-transparent text-mid-grey hover:text-navy'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              )
+            })}
+          </div>
+          {/* Tab content */}
+          <div className="flex-1 min-h-0 overflow-hidden">
+            {centreView === 'heat-balance' && (
+              <HeatBalance
+                liveData={instantResult?.heat_balance}
+                simulationData={null}
+                simulationInfo={null}
+                orientationDeg={orientation}
+                onElementClick={() => {}}
+                mode="envelope-gains"
+                modules={MODULES_OPERATION}
+              />
+            )}
+            {centreView === 'profiles' && (
+              <OperationProfilesView
+                instantResult={instantResult}
+                openings={openings}
+                selectedOpeningId={selectedOpeningId}
+              />
+            )}
+            {centreView === 'schedule' && (
+              <OperationScheduleView openings={openings} />
+            )}
+            {centreView === 'monthly' && (
+              <OperationMonthlyView
+                instantResult={instantResult}
+                openings={openings}
+              />
+            )}
+            {centreView === 'summary' && (
+              <OperationSummaryView
+                instantResult={instantResult}
+                openings={openings}
+                orientation={orientation}
+              />
+            )}
+          </div>
+        </div>
+
+        {/* RIGHT: 3D viewer ────────────────────────────────────────────── */}
+        <div className="flex-shrink-0 w-[420px] bg-white border-l border-light-grey flex flex-col">
+          <div className="flex-shrink-0 px-3 py-2 border-b border-light-grey">
+            <p className="text-xxs uppercase tracking-wider text-mid-grey">3D viewer</p>
+          </div>
+          <div className="flex-1 min-h-0">
             <BuildingViewer3D params={params ?? {}} />
           </div>
-          <p className="text-xxs text-mid-grey mt-2 px-1">
-            3D preview. Per-opening highlighting + bidirectional click selection
-            comes in Brief 28e Gate E5b.
-          </p>
+          <div className="flex-shrink-0 px-3 py-2 border-t border-light-grey">
+            <p className="text-xxs text-mid-grey">
+              Per-facade hover / per-opening rectangles queued (Brief 28-IM §15.2
+              fallback active: facade chip-select on +Door/+Window/+Vent above).
+            </p>
+          </div>
         </div>
       </div>
     </div>
   )
 }
 
-/* ── Per-opening collapsible row ────────────────────────────────────────── */
+/* ───────────────────────────────────────────────────────────────────────────
+   CENTRE PANES — Profiles / Schedule / Monthly / Summary
+   ─────────────────────────────────────────────────────────────────────── */
+
+function OperationProfilesView({ instantResult, openings, selectedOpeningId }) {
+  const dp = instantResult?.daily_profiles
+  const nv = instantResult?.losses_at_setpoint?.natural_ventilation ?? []
+
+  if (!dp) {
+    return (
+      <div className="h-full flex items-center justify-center text-mid-grey text-xxs">
+        Profiles require engine output — load weather data.
+      </div>
+    )
+  }
+  // Pick which opening's daily loss to overlay as a line. Default to the
+  // selected opening; fall back to the first one with any open-hours.
+  const focusOpeningId = selectedOpeningId
+    ?? (openings.find(o => (nv.find(n => n.id === o.id)?.open_hours ?? 0) > 0)?.id)
+    ?? openings[0]?.id
+  const focusEngine = nv.find(n => n.id === focusOpeningId)
+
+  const losses = dp.heat_loss_kwh
+  const w      = dp.weather
+  const t_out_mean_c    = (w?.t_out_sum_c ?? []).map(v => v / 24)
+  const wind_mean_ms    = (w?.wind_sum_ms ?? []).map(v => v / 24)
+  const ghi_mean_w_m2   = (w?.ghi_sum_w_per_m2 ?? []).map(v => v / 24)
+
+  // Stack: same fabric stack as Building Profiles, with the FOCUS opening
+  // added as its own coloured stack on top (so the user can see the door
+  // contribution to total daily loss).
+  const stacks = [
+    { key: 'wall',  label: 'External wall',    color: '#6B7280', daily_kwh: losses?.external_wall },
+    { key: 'roof',  label: 'Roof',             color: '#9CA3AF', daily_kwh: losses?.roof },
+    { key: 'floor', label: 'Ground floor',     color: '#D1D5DB', daily_kwh: losses?.ground_floor },
+    { key: 'glaz',  label: 'Glazing',          color: '#4B5563', daily_kwh: losses?.glazing },
+    { key: 'tb',    label: 'Thermal bridging', color: '#475569', daily_kwh: losses?.thermal_bridging },
+    { key: 'leak',  label: 'Fabric leakage',   color: '#94A3B8', daily_kwh: losses?.fabric_leakage },
+    { key: 'pvent', label: 'Permanent vents',  color: '#0891B2', daily_kwh: losses?.permanent_vents },
+  ]
+  if (focusEngine?.daily_heat_loss_kwh) {
+    stacks.push({
+      key: `nv_${focusEngine.id}`,
+      label: `${focusEngine.name || focusEngine.id} (natvent)`,
+      color: '#DC2626',
+      daily_kwh: focusEngine.daily_heat_loss_kwh,
+    })
+  }
+
+  const primary = {
+    title: 'Hourly heat loss at setpoint (with operable openings)',
+    unit:  'kW',
+    stacks,
+    lines: [],
+  }
+
+  return (
+    <WeatherSynchronisedProfile
+      primary={primary}
+      weather={{ t_out_mean_c, wind_mean_ms, ghi_mean_w_per_m2: ghi_mean_w_m2 }}
+      height={540}
+      caption={
+        focusEngine
+          ? `Daily mean of the 8760-hour State 2 trace. The red layer is the per-opening natural-ventilation loss from ${focusEngine.name || focusEngine.id} (mode: ${focusEngine.mode}, ${focusEngine.open_hours} open-hours/yr, avg flow ${focusEngine.avg_flow_when_open_l_s} L/s when open, avg ΔT ${focusEngine.avg_dT_when_open_k} K). Click an opening in the left panel to overlay a different one.`
+          : 'Add an operable opening to see its hourly contribution overlaid on the fabric stack.'
+      }
+    />
+  )
+}
+
+/* ── Schedule view: weekday / saturday / sunday grids for each opening ── */
+function OperationScheduleView({ openings }) {
+  if (openings.length === 0) {
+    return (
+      <div className="h-full flex items-center justify-center text-mid-grey text-xxs">
+        Add an operable opening to see its control schedule.
+      </div>
+    )
+  }
+  return (
+    <div className="w-full h-full overflow-auto p-4 space-y-4">
+      <div>
+        <p className="text-caption font-semibold text-navy">Operable opening schedules</p>
+        <p className="text-xxs text-mid-grey">
+          Per-opening control mode visualised as an hour-of-day grid. Scheduled
+          openings show the underlying fraction (0–1) for weekday / Saturday /
+          Sunday; permanent openings show 1.0 always; temperature-triggered
+          openings show the schedule that gates the temperature check (AND-combined
+          with T_zone vs setpoint).
+        </p>
+      </div>
+      {openings.map(o => (
+        <ScheduleCard key={o.id} opening={o} />
+      ))}
+    </div>
+  )
+}
+
+function ScheduleCard({ opening }) {
+  const mode = opening.control?.mode ?? 'permanent'
+  const sched_name = opening.control?.schedule_ref ?? 'always_on'
+
+  // Pull the actual day-types from scheduleLibrary so the grid matches the
+  // engine's behaviour byte-for-byte.
+  const sched = mode === 'permanent'
+    ? SCHEDULES.always_on
+    : (SCHEDULES[sched_name] ?? SCHEDULES.always_on)
+  const weekday = sched?.day_types?.weekday ?? new Array(24).fill(0)
+  const saturday = sched?.day_types?.saturday ?? new Array(24).fill(0)
+  const sunday = sched?.day_types?.sunday ?? new Array(24).fill(0)
+
+  return (
+    <div className="bg-white border border-light-grey rounded p-3 max-w-3xl">
+      <div className="flex items-baseline justify-between mb-2">
+        <p className="text-caption font-medium text-navy">{opening.name || opening.id}</p>
+        <span className="text-xxs text-mid-grey">
+          mode: <span className="text-navy">{mode}</span>
+          {' · '}schedule: <span className="text-navy">{sched_name}</span>
+        </span>
+      </div>
+      <ScheduleGrid label="Mon–Fri" hours={weekday} />
+      <ScheduleGrid label="Sat"     hours={saturday} />
+      <ScheduleGrid label="Sun"     hours={sunday} />
+      {mode === 'temperature' && (
+        <p className="text-xxs text-amber-700 mt-2">
+          Temperature gate: opens when T_zone &gt; {opening.control?.open_above_zone_c ?? 22} °C
+          (hysteresis {opening.control?.hysteresis_c ?? 1} K
+          {opening.control?.require_outside_cooler ? ', only if T_out cooler' : ''})
+          AND the schedule fraction above is &gt; 0.
+        </p>
+      )}
+    </div>
+  )
+}
+
+function ScheduleGrid({ label, hours }) {
+  return (
+    <div className="flex items-center gap-2 mb-1">
+      <div className="text-xxs text-mid-grey w-12 flex-shrink-0">{label}</div>
+      <div className="flex-1 grid grid-cols-24 gap-px" style={{ gridTemplateColumns: 'repeat(24, minmax(0, 1fr))' }}>
+        {hours.map((v, i) => {
+          // Heat-map colour: 0 = pale grey, 1 = full cyan-700
+          const alpha = Math.max(0, Math.min(1, v))
+          return (
+            <div
+              key={i}
+              className="h-5 rounded-sm"
+              style={{
+                backgroundColor: alpha > 0.01
+                  ? `rgba(14, 116, 144, ${0.25 + alpha * 0.75})`
+                  : '#F3F4F6',
+              }}
+              title={`${i.toString().padStart(2, '0')}:00 — ${(v * 100).toFixed(0)}%`}
+            />
+          )
+        })}
+      </div>
+      <div className="text-xxs text-mid-grey w-8 text-right tabular-nums">
+        {Math.round(hours.reduce((s, x) => s + x, 0))}h
+      </div>
+    </div>
+  )
+}
+
+/* ── Monthly: 12 bars of per-opening + total fabric loss ───────────── */
+function OperationMonthlyView({ instantResult, openings }) {
+  const nv = instantResult?.losses_at_setpoint?.natural_ventilation ?? []
+  if (nv.length === 0) {
+    return (
+      <div className="h-full flex items-center justify-center text-mid-grey text-xxs">
+        Add an operable opening to see its monthly heat loss breakdown.
+      </div>
+    )
+  }
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
+  // Per-month total summed across all openings + per-opening bars.
+  const totalsM = new Array(12).fill(0)
+  for (const o of nv) {
+    const m = o.monthly_heating_loss_kwh ?? new Array(12).fill(0)
+    for (let i = 0; i < 12; i++) totalsM[i] += (m[i] ?? 0)
+  }
+  const maxBar = Math.max(...totalsM, 1)
+
+  return (
+    <div className="w-full h-full overflow-auto p-4">
+      <p className="text-caption font-semibold text-navy">Per-opening monthly natural-ventilation heat loss · kWh</p>
+      <p className="text-xxs text-mid-grey mb-4">
+        Per-month aggregation of the 8760-hour State 2 trace. Stacked by
+        opening (one colour per entry); height = sum of per-month kWh across
+        all operable openings on the envelope.
+      </p>
+
+      {/* Stacked bars — one bar per month, segments per opening */}
+      <div className="flex items-end gap-2 max-w-4xl" style={{ height: 280 }}>
+        {months.map((m, i) => (
+          <div key={m} className="flex-1 flex flex-col items-center gap-1">
+            <div className="text-xxs text-cyan-800 tabular-nums">
+              {totalsM[i] > 1000 ? (totalsM[i]/1000).toFixed(1)+'k' : Math.round(totalsM[i])}
+            </div>
+            <div className="w-full flex flex-col-reverse" style={{ height: 200 }}>
+              {nv.map((o, oi) => {
+                const v = o.monthly_heating_loss_kwh?.[i] ?? 0
+                if (v < 0.01) return null
+                const h = (v / maxBar) * 200
+                const color = ['#0E7490','#0891B2','#06B6D4','#22D3EE','#67E8F9','#A5F3FC'][oi % 6]
+                return (
+                  <div
+                    key={o.id}
+                    className="w-full"
+                    style={{ height: `${h}px`, backgroundColor: color }}
+                    title={`${o.name || o.id}: ${Math.round(v)} kWh in ${m}`}
+                  />
+                )
+              })}
+            </div>
+            <div className="text-xxs text-mid-grey">{m}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Legend */}
+      <div className="flex flex-wrap items-center gap-3 mt-4 text-xxs text-mid-grey">
+        {nv.map((o, oi) => {
+          const color = ['#0E7490','#0891B2','#06B6D4','#22D3EE','#67E8F9','#A5F3FC'][oi % 6]
+          return (
+            <div key={o.id} className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: color }} />
+              <span>{o.name || o.id}</span>
+              <span className="tabular-nums text-navy">
+                ({Math.round(o.heat_loss_kwh ?? 0).toLocaleString()} kWh/yr)
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/* ── Summary: per-opening table + Static-vs-Dynamic Δ ─────────────── */
+function OperationSummaryView({ instantResult, openings, orientation }) {
+  const nv = instantResult?.losses_at_setpoint?.natural_ventilation ?? []
+  const demand = instantResult?.demand
+  if (openings.length === 0) {
+    return (
+      <div className="h-full flex items-center justify-center text-mid-grey text-xxs">
+        Add an operable opening to populate the summary.
+      </div>
+    )
+  }
+  const totalNVKwh = nv.reduce((s, o) => s + (o.heat_loss_kwh ?? 0), 0)
+
+  return (
+    <div className="w-full h-full overflow-auto p-4">
+      <p className="text-caption font-semibold text-navy">Operable openings · summary</p>
+      <p className="text-xxs text-mid-grey mb-3">
+        Per-opening annual natural-ventilation heat loss · setpoint convention
+        (Brief 28k) · Bridgewater post-BRUKL inputs.
+      </p>
+
+      <table className="w-full max-w-4xl text-xxs border-collapse">
+        <thead>
+          <tr className="border-b border-light-grey text-mid-grey uppercase tracking-wider">
+            <th className="text-left py-2 pr-3 font-medium">Opening</th>
+            <th className="text-left py-2 pr-3 font-medium">Facade</th>
+            <th className="text-left py-2 pr-3 font-medium">Mode</th>
+            <th className="text-right py-2 pr-3 font-medium">Area (m²)</th>
+            <th className="text-right py-2 pr-3 font-medium">Open hrs</th>
+            <th className="text-right py-2 pr-3 font-medium">Avg flow (L/s)</th>
+            <th className="text-right py-2 pr-3 font-medium">Avg ΔT (K)</th>
+            <th className="text-right py-2 font-medium">Heat loss (kWh/yr)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {openings.map(o => {
+            const eng = nv.find(n => n.id === o.id)
+            return (
+              <tr key={o.id} className="border-b border-light-grey/50">
+                <td className="py-1.5 pr-3 text-navy">{o.name || o.id}</td>
+                <td className="py-1.5 pr-3 text-mid-grey">{facadeLabelByKey(o.facade, orientation)}</td>
+                <td className="py-1.5 pr-3 text-mid-grey">{o.control?.mode ?? '—'}</td>
+                <td className="py-1.5 pr-3 text-right tabular-nums text-navy">{Number(o.area_m2 ?? 0).toFixed(2)}</td>
+                <td className="py-1.5 pr-3 text-right tabular-nums text-navy">{eng?.open_hours ?? '—'}</td>
+                <td className="py-1.5 pr-3 text-right tabular-nums text-navy">{eng?.avg_flow_when_open_l_s ?? '—'}</td>
+                <td className="py-1.5 pr-3 text-right tabular-nums text-navy">{eng?.avg_dT_when_open_k ?? '—'}</td>
+                <td className="py-1.5 text-right tabular-nums text-navy">
+                  {eng ? Math.round(eng.heat_loss_kwh).toLocaleString() : '—'}
+                </td>
+              </tr>
+            )
+          })}
+          <tr className="border-t-2 border-navy/30 font-semibold">
+            <td className="py-2 pr-3 text-navy" colSpan={7}>Total natural ventilation loss</td>
+            <td className="py-2 text-right tabular-nums text-navy">{Math.round(totalNVKwh).toLocaleString()}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div className="mt-6 grid grid-cols-2 gap-4 max-w-3xl">
+        <div className="bg-white border border-light-grey rounded p-3">
+          <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1">State 2 heating demand</p>
+          <p className="text-caption text-navy font-semibold tabular-nums">
+            {demand?.heating_demand_mwh?.toFixed(1) ?? '—'} MWh/yr
+          </p>
+          <p className="text-xxs text-mid-grey">
+            (envelope + gains, includes operable losses above)
+          </p>
+        </div>
+        <div className="bg-white border border-light-grey rounded p-3">
+          <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1">State 2 cooling demand</p>
+          <p className="text-caption text-navy font-semibold tabular-nums">
+            {demand?.cooling_demand_mwh?.toFixed(1) ?? '—'} MWh/yr
+          </p>
+        </div>
+      </div>
+
+      <p className="text-xxs text-mid-grey/80 italic mt-4 max-w-3xl">
+        5th convention difference (Brief 28-IM §11.3): the Static engine uses
+        BS 5925 wind-angle decomposition for stack-vs-wind flow; EnergyPlus
+        autocalcs F_w internally per its DesignFlowRate object. Static vs
+        Dynamic Δ overlay queued for a follow-up gate.
+      </p>
+    </div>
+  )
+}
+
+/* ── Per-opening collapsible row (preserved from Gate E5a) ───────────── */
 function OpeningRow({ opening, selected, orientation, onSelect, onUpdate, onDelete }) {
   const [expanded, setExpanded] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -296,7 +793,7 @@ function OpeningRow({ opening, selected, orientation, onSelect, onUpdate, onDele
   const summary = useMemo(() => {
     const a = opening.area_m2 ?? 0
     const h = opening.height_m ?? 0
-    return `${a.toFixed(2)} m² × ${h.toFixed(2)} m tall on ${facadeLabelByKey(opening.facade, orientation)}`
+    return `${a.toFixed(2)} m² × ${h.toFixed(2)} m on ${facadeLabelByKey(opening.facade, orientation)}`
   }, [opening.area_m2, opening.height_m, opening.facade, orientation])
 
   return (
@@ -307,21 +804,20 @@ function OpeningRow({ opening, selected, orientation, onSelect, onUpdate, onDele
           : 'border-light-grey bg-white hover:border-mid-grey'
       }`}
     >
-      {/* Header row — clickable to select + expand toggle ──────────────── */}
-      <div className="flex items-center gap-2 px-3 py-2">
+      {/* Header row */}
+      <div className="flex items-center gap-1.5 px-2 py-1.5">
         <button
           onClick={() => { onSelect(); setExpanded(e => !e) }}
-          className="flex-1 flex items-center gap-2 text-left min-w-0"
+          className="flex-1 flex items-center gap-1.5 text-left min-w-0"
         >
-          <span className={`text-xxs px-1.5 py-0.5 rounded ${modeBadgeClass} flex-shrink-0 capitalize`}>
+          <span className={`text-xxs px-1 py-0.5 rounded ${modeBadgeClass} flex-shrink-0 capitalize`}>
             {mode}
           </span>
-          <span className="text-caption text-navy font-medium truncate">{opening.name || opening.id}</span>
-          <span className="text-xxs text-mid-grey truncate hidden sm:inline">— {summary}</span>
+          <span className="text-xxs text-navy font-medium truncate">{opening.name || opening.id}</span>
         </button>
         <button
           onClick={() => { onSelect(); setExpanded(e => !e) }}
-          className="text-xxs text-mid-grey hover:text-navy px-1.5 py-0.5"
+          className="text-xxs text-mid-grey hover:text-navy px-1"
           title={expanded ? 'Collapse' : 'Expand'}
         >
           {expanded ? '▴' : '▾'}
@@ -330,24 +826,24 @@ function OpeningRow({ opening, selected, orientation, onSelect, onUpdate, onDele
           onClick={() => {
             if (window.confirm(`Delete "${opening.name || opening.id}"?`)) onDelete()
           }}
-          className="text-xxs text-error hover:underline px-1.5 py-0.5"
+          className="text-xxs text-error hover:underline px-1"
           title="Delete this opening"
         >
           ✕
         </button>
       </div>
+      <div className="px-2 pb-1 text-xxs text-mid-grey truncate -mt-1">{summary}</div>
 
-      {/* Expanded editor ─────────────────────────────────────────────────── */}
+      {/* Expanded editor */}
       {expanded && (
-        <div className="px-3 pb-3 pt-1 space-y-3 border-t border-light-grey">
-          {/* Name + facade + opening type ─────────────────────────────── */}
-          <div className="grid grid-cols-2 gap-3">
-            <LabeledInput
-              label="Name"
-              value={opening.name ?? ''}
-              onChange={v => onUpdate({ name: v })}
-              placeholder="Main entrance door"
-            />
+        <div className="px-2 pb-2 pt-1 space-y-2 border-t border-light-grey text-xxs">
+          <LabeledInput
+            label="Name"
+            value={opening.name ?? ''}
+            onChange={v => onUpdate({ name: v })}
+            placeholder="Main entrance door"
+          />
+          <div className="grid grid-cols-2 gap-2">
             <LabeledSelect
               label="Facade"
               value={opening.facade ?? 'south'}
@@ -357,8 +853,6 @@ function OpeningRow({ opening, selected, orientation, onSelect, onUpdate, onDele
               })}
               options={FACADES.map(f => ({ value: f.key, label: facadeLabel(f.num, orientation) }))}
             />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
             <LabeledSelect
               label="Opening type"
               value={opening.opening_type ?? 'window'}
@@ -368,90 +862,79 @@ function OpeningRow({ opening, selected, orientation, onSelect, onUpdate, onDele
               })}
               options={OPENING_TYPE_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
             />
-            <LabeledCheckbox
-              label="Consumes glazing on parent facade"
-              checked={opening.parent_glazing_face != null}
-              onChange={c => onUpdate({ parent_glazing_face: c ? (opening.facade ?? 'south') : null })}
-              hint="Doors leave this off (they add envelope area). Operable window banks on top of an existing glazed facade leave this on."
-            />
           </div>
-
-          {/* Geometry — area + height ───────────────────────────────────── */}
-          <div className="grid grid-cols-2 gap-3">
+          <LabeledCheckbox
+            label="Consumes glazing on parent facade"
+            checked={opening.parent_glazing_face != null}
+            onChange={c => onUpdate({ parent_glazing_face: c ? (opening.facade ?? 'south') : null })}
+            hint="Doors leave this off (they add envelope area). Operable window banks on top of an existing glazed facade leave this on."
+          />
+          <div className="grid grid-cols-2 gap-2">
             <LabeledNumber
               label="Area (m²)"
               value={opening.area_m2 ?? 0}
               onChange={v => onUpdate({ area_m2: v })}
               min={0} step={0.1}
-              hint="Total open area when this opening is open."
             />
             <LabeledNumber
               label="Height (m)"
               value={opening.height_m ?? 0}
               onChange={v => onUpdate({ height_m: v })}
               min={0} step={0.1}
-              hint="Stack-effect lever arm — top of opening minus bottom."
             />
           </div>
 
-          {/* Advanced — Cd + Cw ─────────────────────────────────────────── */}
-          <div>
-            <button
-              onClick={() => setShowAdvanced(s => !s)}
-              className="text-xxs text-mid-grey hover:text-navy underline"
-            >
-              {showAdvanced ? 'Hide' : 'Show'} advanced coefficients
-            </button>
-            {showAdvanced && (
-              <div className="grid grid-cols-2 gap-3 mt-2">
-                <LabeledNumber
-                  label="Discharge coefficient Cd"
-                  value={opening.discharge_coefficient ?? 0.6}
-                  onChange={v => onUpdate({ discharge_coefficient: v })}
-                  min={0} max={1} step={0.05}
-                  hint="Typically 0.6 for sharp-edged openings."
-                />
-                <LabeledNumber
-                  label="Wind coefficient Cw"
-                  value={opening.wind_coefficient ?? 0.25}
-                  onChange={v => onUpdate({ wind_coefficient: v })}
-                  min={0} max={1} step={0.05}
-                  hint="BS 5925 typical: 0.25 for sheltered/door, 0.40 for openable window."
-                />
-              </div>
-            )}
-          </div>
+          <button
+            onClick={() => setShowAdvanced(s => !s)}
+            className="text-xxs text-mid-grey hover:text-navy underline"
+          >
+            {showAdvanced ? 'Hide' : 'Show'} Cd / Cw
+          </button>
+          {showAdvanced && (
+            <div className="grid grid-cols-2 gap-2">
+              <LabeledNumber
+                label="Cd"
+                value={opening.discharge_coefficient ?? 0.6}
+                onChange={v => onUpdate({ discharge_coefficient: v })}
+                min={0} max={1} step={0.05}
+              />
+              <LabeledNumber
+                label="Cw"
+                value={opening.wind_coefficient ?? 0.25}
+                onChange={v => onUpdate({ wind_coefficient: v })}
+                min={0} max={1} step={0.05}
+              />
+            </div>
+          )}
 
-          {/* Control mode ──────────────────────────────────────────────── */}
+          {/* Control mode */}
           <div className="pt-2 border-t border-light-grey">
-            <p className="text-xxs uppercase tracking-wider text-mid-grey mb-2">Control</p>
+            <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1.5">Control</p>
             <LabeledSelect
               label="Mode"
               value={mode}
               onChange={v => onUpdate({ control: { ...ctl, mode: v } })}
               options={[
-                { value: 'permanent',   label: 'Permanent — always open' },
-                { value: 'scheduled',   label: 'Scheduled — opens per schedule' },
-                { value: 'temperature', label: 'Temperature-triggered — opens when zone too warm' },
+                { value: 'permanent',   label: 'Permanent (always open)' },
+                { value: 'scheduled',   label: 'Scheduled' },
+                { value: 'temperature', label: 'Temperature-triggered' },
               ]}
             />
-
             {(mode === 'scheduled' || mode === 'temperature') && (
-              <div className="mt-2">
+              <div className="mt-1.5">
                 <LabeledSelect
-                  label={mode === 'temperature' ? 'Schedule (AND-combined with temperature gate)' : 'Schedule'}
+                  label={mode === 'temperature' ? 'Schedule (AND temperature)' : 'Schedule'}
                   value={ctl.schedule_ref ?? 'always_on'}
                   onChange={v => onUpdate({ control: { ...ctl, schedule_ref: v } })}
                   options={SCHEDULE_OPTIONS}
                 />
               </div>
             )}
-
             {mode === 'temperature' && (
-              <div className="space-y-2 mt-2">
-                <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5 mt-1.5">
+                <div className="grid grid-cols-2 gap-2">
                   <LabeledNumber
-                    label="Open above zone T (°C)"
+                    label="Open above T_zone (°C)"
                     value={ctl.open_above_zone_c ?? 22}
                     onChange={v => onUpdate({ control: { ...ctl, open_above_zone_c: v } })}
                     min={10} max={30} step={0.5}
@@ -461,22 +944,13 @@ function OpeningRow({ opening, selected, orientation, onSelect, onUpdate, onDele
                     value={ctl.hysteresis_c ?? 1.0}
                     onChange={v => onUpdate({ control: { ...ctl, hysteresis_c: v } })}
                     min={0} max={5} step={0.5}
-                    hint="Re-closes when zone drops below (open − hysteresis)."
                   />
                 </div>
                 <LabeledCheckbox
-                  label="Only open if outside air is cooler than the zone"
+                  label="Only if outside air is cooler"
                   checked={!!ctl.require_outside_cooler}
                   onChange={c => onUpdate({ control: { ...ctl, require_outside_cooler: c } })}
-                  hint="Prevents opening when outdoor air would heat the zone further."
                 />
-                <p className="text-xxs text-mid-grey italic pt-1">
-                  Note: EnergyPlus has no hysteresis on its temperature gate (each
-                  timestep is independent) and approximates <code>require_outside_cooler</code>
-                  via <code>maximum_outdoor_temperature</code>. Bridgewater uses scheduled
-                  mode so this is moot; matters for projects actively using
-                  temperature-mode interventions. See <code>docs/validation/brief_28e_validation.md</code>.
-                </p>
               </div>
             )}
           </div>
@@ -486,17 +960,17 @@ function OpeningRow({ opening, selected, orientation, onSelect, onUpdate, onDele
   )
 }
 
-/* ── Small labelled-input primitives ────────────────────────────────────── */
+/* ── Small labelled-input primitives (compact for left column) ───────── */
 function LabeledInput({ label, value, onChange, placeholder }) {
   return (
     <div>
-      <label className="block text-xxs text-mid-grey mb-1">{label}</label>
+      <label className="block text-xxs text-mid-grey mb-0.5">{label}</label>
       <input
         type="text"
         value={value}
         placeholder={placeholder}
         onChange={e => onChange(e.target.value)}
-        className="w-full px-2 py-1.5 text-caption text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-cyan-700"
+        className="w-full px-2 py-1 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-cyan-700"
       />
     </div>
   )
@@ -505,7 +979,7 @@ function LabeledInput({ label, value, onChange, placeholder }) {
 function LabeledNumber({ label, value, onChange, min, max, step, hint }) {
   return (
     <div>
-      <label className="block text-xxs text-mid-grey mb-1">{label}</label>
+      <label className="block text-xxs text-mid-grey mb-0.5">{label}</label>
       <input
         type="number"
         value={value}
@@ -514,9 +988,9 @@ function LabeledNumber({ label, value, onChange, min, max, step, hint }) {
           const v = Number(e.target.value)
           if (Number.isFinite(v)) onChange(v)
         }}
-        className="w-full px-2 py-1.5 text-caption text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-cyan-700 tabular-nums"
+        className="w-full px-2 py-1 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-cyan-700 tabular-nums"
       />
-      {hint && <p className="text-xxs text-mid-grey/80 mt-1">{hint}</p>}
+      {hint && <p className="text-xxs text-mid-grey/80 mt-0.5">{hint}</p>}
     </div>
   )
 }
@@ -524,11 +998,11 @@ function LabeledNumber({ label, value, onChange, min, max, step, hint }) {
 function LabeledSelect({ label, value, onChange, options }) {
   return (
     <div>
-      <label className="block text-xxs text-mid-grey mb-1">{label}</label>
+      <label className="block text-xxs text-mid-grey mb-0.5">{label}</label>
       <select
         value={value}
         onChange={e => onChange(e.target.value)}
-        className="w-full px-2 py-1.5 text-caption text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-cyan-700 cursor-pointer"
+        className="w-full px-2 py-1 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-cyan-700 cursor-pointer"
       >
         {options.map(o => (
           <option key={o.value} value={o.value}>{o.label}</option>
@@ -541,16 +1015,16 @@ function LabeledSelect({ label, value, onChange, options }) {
 function LabeledCheckbox({ label, checked, onChange, hint }) {
   return (
     <div>
-      <label className="flex items-start gap-2 cursor-pointer">
+      <label className="flex items-start gap-1.5 cursor-pointer">
         <input
           type="checkbox"
           checked={checked}
           onChange={e => onChange(e.target.checked)}
-          className="accent-cyan-700 w-3.5 h-3.5 mt-0.5 flex-shrink-0"
+          className="accent-cyan-700 w-3 h-3 mt-0.5 flex-shrink-0"
         />
         <span className="text-xxs text-navy">{label}</span>
       </label>
-      {hint && <p className="text-xxs text-mid-grey/80 mt-0.5 ml-5">{hint}</p>}
+      {hint && <p className="text-xxs text-mid-grey/80 mt-0.5 ml-4">{hint}</p>}
     </div>
   )
 }

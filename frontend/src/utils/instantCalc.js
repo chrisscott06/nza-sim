@@ -2232,6 +2232,26 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   const monthly_solar_n = _mkM2(), monthly_solar_e = _mkM2(), monthly_solar_s = _mkM2(), monthly_solar_w = _mkM2()
   const monthly_people = _mkM2(), monthly_lighting = _mkM2(), monthly_equipment = _mkM2()
 
+  // Brief 28-IM IM-M3 (State 2 daily aggregation): mirror of State 1.
+  // Adds per-opening natural-ventilation daily heat-loss + open-hours for
+  // the Operation Profiles tab's WeatherSynchronisedProfile + Monthly bars.
+  const _mkD2 = () => new Float32Array(365)
+  const daily_wall_s2 = _mkD2(), daily_roof_s2 = _mkD2(), daily_floor_s2 = _mkD2(), daily_glaz_s2 = _mkD2()
+  const daily_leakage_s2 = _mkD2(), daily_permanent_s2 = _mkD2(), daily_tb_s2 = _mkD2()
+  const daily_solar_n_s2 = _mkD2(), daily_solar_e_s2 = _mkD2(), daily_solar_s_s2 = _mkD2(), daily_solar_w_s2 = _mkD2()
+  const daily_t_out_s2 = _mkD2(), daily_wind_s2 = _mkD2(), daily_ghi_s2 = _mkD2()
+  // Per-opening daily natvent: Map<id, { heat_loss_kwh: Float32Array(365),
+  //                                       open_hours: Float32Array(365) }>
+  const _natvent_daily = new Map()
+  for (const o of operableOpenings) {
+    _natvent_daily.set(o.id, {
+      heat_loss_Wh: _mkD2(),
+      open_hours:   _mkD2(),
+    })
+  }
+  // Note: per-system mech vent daily + monthly arrays are declared further
+  // down once ventSystems exists (avoids TDZ).
+
   // Brief 28-TB-Simple (supersedes Brief 28k Gate 3+): ISO 14683
   // junction-based thermal bridging. State 2 mirror of State 1.
   // See frontend/src/utils/thermalBridges.js for the helper, and
@@ -2271,6 +2291,11 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   const ventTotalUA = ventUA.reduce((s, x) => s + x, 0)
   const acc_mech_vent_heat_per_system = new Float64Array(ventSystems.length)
   const acc_mech_vent_cool_per_system = new Float64Array(ventSystems.length)
+  // Brief 28-IM IM-M3 (per-system mech vent daily + monthly): now safe to
+  // size because ventSystems exists. Used by Systems Profiles + Systems
+  // Monthly (IM-M4 reuse from this engine pass).
+  const daily_mech_vent_per_system   = ventSystems.map(() => _mkD2())
+  const monthly_mech_vent_per_system = ventSystems.map(() => _mkM2())
 
   // ── Brief 28e Gate E2: per-operable-opening natural ventilation (State 2) ─
   // Mirror of State 1. Same Map-based accumulators, same hysteresis state,
@@ -2506,6 +2531,23 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     monthly_solar_s[_m]   += sol_s
     monthly_solar_w[_m]   += sol_w
 
+    // Brief 28-IM IM-M3 (State 2 daily): mirror of State 1 daily aggregation.
+    const _d = Math.min(364, Math.floor(h / 24))
+    daily_wall_s2[_d]      += wall_n_h + wall_e_h + wall_s_h + wall_w_h
+    daily_roof_s2[_d]      += roof_h
+    daily_floor_s2[_d]     += floor_h
+    daily_glaz_s2[_d]      += glaz_n_h + glaz_e_h + glaz_s_h + glaz_w_h
+    daily_leakage_s2[_d]   += leakage_h
+    daily_permanent_s2[_d] += permanent_h
+    daily_tb_s2[_d]        += TB_heat_h
+    daily_solar_n_s2[_d]   += sol_n
+    daily_solar_e_s2[_d]   += sol_e
+    daily_solar_s_s2[_d]   += sol_s
+    daily_solar_w_s2[_d]   += sol_w
+    daily_t_out_s2[_d]     += T_out
+    daily_wind_s2[_d]      += v_wind
+    daily_ghi_s2[_d]       += (hourlySolar?.roof?.[h] ?? 0)
+
     // Brief 28k Gate 3+: per-system mechanical ventilation. Each system
     // contributes flow × ρCp × (1 − HRE) × ΔT independently.
     let mech_vent_heat_h = 0
@@ -2517,6 +2559,14 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       mech_vent_cool_h += cool_h
       acc_mech_vent_heat_per_system[vi] += heat_h
       acc_mech_vent_cool_per_system[vi] += cool_h
+      // Brief 28-IM IM-M3 (Systems Profiles future use): per-system daily +
+      // monthly mech vent. Cheap to add here.
+      {
+        const _md = (weatherData?.month?.[h] ?? 1) - 1
+        const _dd = Math.min(364, Math.floor(h / 24))
+        daily_mech_vent_per_system[vi][_dd]   += heat_h
+        monthly_mech_vent_per_system[vi][_md] += heat_h
+      }
     }
 
     // ── Brief 28e Gate E2: per-operable-opening natural ventilation (State 2) ─
@@ -2553,6 +2603,16 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       acc.dT_sum_K += dT_abs
       nv_heat_h_total += heat_h
       nv_cool_h_total += cool_h
+      // Brief 28-IM IM-M3 (State 2 per-opening daily): feeds Operation
+      // Profiles WeatherSynchronisedProfile + Monthly view.
+      {
+        const _dd = Math.min(364, Math.floor(h / 24))
+        const dailyAcc = _natvent_daily.get(o.id)
+        if (dailyAcc) {
+          dailyAcc.heat_loss_Wh[_dd] += heat_h
+          dailyAcc.open_hours[_dd]   += 1
+        }
+      }
     }
 
     // Comfort hours + T extremes
@@ -2884,6 +2944,8 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
         },
         // Brief 28k Gate 3+: per-system mechanical ventilation (each entry
         // contributes its own heat loss / cool gain / fan electricity line).
+        // Brief 28-IM IM-M3: per-system daily + monthly arrays for Systems
+        // Profiles + Systems Monthly (IM-M4 reuse from this engine pass).
         ventilation: ventSystems.map((v, vi) => ({
           name:             v.name,
           flow_l_s:         v.flow_l_s,
@@ -2893,12 +2955,32 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
           heat_loss_kwh:    r1k(acc_mech_vent_heat_per_system[vi]),
           cooling_gain_kwh: r1k(acc_mech_vent_cool_per_system[vi]),
           fan_kwh:          Math.round(v.flow_l_s * v.sfp * v.hours / 1000 * 10) / 10,
+          daily_heat_loss_kwh:   Array.from(daily_mech_vent_per_system[vi],   w => w / 1000),
+          monthly_heating_loss_kwh: Array.from(monthly_mech_vent_per_system[vi], w => r1k(w)),
         })),
         // Brief 28e Gate E2: per-operable-opening natural ventilation
         // (State 2 mirror — same shape as State 1).
+        // Brief 28-IM IM-M3: per-opening daily_heat_loss_kwh + daily_open_hours
+        // arrays fed to Operation Profiles (WeatherSynchronisedProfile) and
+        // Operation Monthly (12-bar per-opening view, derived from daily).
         natural_ventilation: operableOpenings.map(o => {
           const acc = _natvent_acc.get(o.id)
           const oh = acc.open_hours
+          const dailyAcc = _natvent_daily.get(o.id)
+          // Per-month aggregation derived from per-day (uses weatherData.month
+          // for proper calendar boundaries; falls back to Jan-Dec split if
+          // weather metadata missing).
+          const monthly_heating_loss_kwh = new Array(12).fill(0)
+          if (dailyAcc) {
+            for (let d = 0; d < 365; d++) {
+              const _h = d * 24
+              const _m = (weatherData?.month?.[_h] ?? 1) - 1
+              monthly_heating_loss_kwh[_m] += dailyAcc.heat_loss_Wh[d] / 1000
+            }
+            for (let m = 0; m < 12; m++) {
+              monthly_heating_loss_kwh[m] = Math.round(monthly_heating_loss_kwh[m] * 10) / 10
+            }
+          }
           return {
             id:                       o.id,
             name:                     o.name,
@@ -2912,6 +2994,9 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
             open_hours:               oh,
             avg_flow_when_open_l_s:   oh > 0 ? Math.round(acc.flow_sum_m3s * 1000 / oh) : 0,
             avg_dT_when_open_k:       oh > 0 ? Math.round(acc.dT_sum_K / oh * 10) / 10 : 0,
+            daily_heat_loss_kwh:      dailyAcc ? Array.from(dailyAcc.heat_loss_Wh, w => w / 1000) : new Array(365).fill(0),
+            daily_open_hours:         dailyAcc ? Array.from(dailyAcc.open_hours) : new Array(365).fill(0),
+            monthly_heating_loss_kwh,
           }
         }),
         // Brief 28k Gate 3: internal-gain bucketing (informational)
@@ -2948,6 +3033,35 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
         setpoints_used: { heating_c: comfortBand.lower_c, cooling_c: comfortBand.upper_c },
       }
     })(),
+    // Brief 28-IM IM-M3 (Operation Profiles): State 2 mirror of State 1's
+    // daily_profiles. Shape is identical so the WeatherSynchronisedProfile
+    // component can consume either state with the same key paths. Operation
+    // tab Profiles view passes State 2; Building Profiles continues with
+    // State 1 (envelope-only physics) — both visualise heat-loss-by-element
+    // stack against the shared weather signal trace.
+    daily_profiles: {
+      length: 365,
+      heat_loss_kwh: {
+        external_wall:    Array.from(daily_wall_s2,      v => v / 1000),
+        roof:             Array.from(daily_roof_s2,      v => v / 1000),
+        ground_floor:     Array.from(daily_floor_s2,     v => v / 1000),
+        glazing:          Array.from(daily_glaz_s2,      v => v / 1000),
+        fabric_leakage:   Array.from(daily_leakage_s2,   v => v / 1000),
+        permanent_vents:  Array.from(daily_permanent_s2, v => v / 1000),
+        thermal_bridging: Array.from(daily_tb_s2,        v => v / 1000),
+      },
+      solar_transmission_kwh_per_facade: {
+        north: Array.from(daily_solar_n_s2, v => v / 1000),
+        east:  Array.from(daily_solar_e_s2, v => v / 1000),
+        south: Array.from(daily_solar_s_s2, v => v / 1000),
+        west:  Array.from(daily_solar_w_s2, v => v / 1000),
+      },
+      weather: {
+        t_out_sum_c:      Array.from(daily_t_out_s2),
+        wind_sum_ms:      Array.from(daily_wind_s2),
+        ghi_sum_w_per_m2: Array.from(daily_ghi_s2),
+      },
+    },
     free_running: {
       annual_mean_c: Math.round(T_mean * 10) / 10,
       winter_min_c:  isFinite(T_winter_min) ? Math.round(T_winter_min * 10) / 10 : null,
