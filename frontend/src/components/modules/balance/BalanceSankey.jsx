@@ -43,11 +43,46 @@ function readValue(node, unit) {
   return unit === 'kwh_per_m2' ? (node.kwh_per_m2 ?? 0) : (node.kwh ?? 0)
 }
 
+// Bug fix (Chris reported 2026-05-17):
+// _normaliseSetpointNode mirrors HeatBalance.flattenLosses' logic so the
+// Sankey reads the same Brief 28k setpoint-convention losses block as the
+// Rows / Stacked layouts. Without this, the Sankey was reading the legacy
+// free-running `data.annual.losses` accumulator, which is comfort-band
+// INSENSITIVE — so changing the heating setpoint visibly moved Rows / Stacked
+// numbers but the Sankey diagram stayed put. Both layouts now consume the
+// same losses_at_setpoint block, so all three views agree.
+function _normaliseSetpointNode(node, gia) {
+  if (!node) return null
+  const kwh = node.heating_loss_kwh ?? 0
+  if (!(kwh > 0.01)) return null
+  const kwh_per_m2 = (node.kwh_per_m2 != null && Number.isFinite(node.kwh_per_m2))
+    ? node.kwh_per_m2
+    : (gia > 0 ? kwh / gia : 0)
+  return { kwh, kwh_per_m2 }
+}
+
 // ── Build Sankey graph from heat_balance ─────────────────────────────────────
 
 function buildGraph(data, unit, orientationDeg = 0, mode = DEFAULT_MODE) {
   if (!data?.annual) return null
-  const { gains, losses } = data.annual
+  const { gains } = data.annual
+  const gia = data?.metadata?.gia_m2 ?? 0
+  const setpoint = data?.losses_at_setpoint
+  const legacyLosses = data?.annual?.losses ?? {}
+
+  // Build the loss map the same way HeatBalance.flattenLosses does — prefer
+  // setpoint values where available, fall back to legacy for anything the
+  // new shape doesn't carry.
+  const losses = { ...legacyLosses }
+  if (setpoint) {
+    for (const k of [
+      'external_wall', 'roof', 'ground_floor', 'glazing',
+      'fabric_leakage', 'permanent_vents', 'thermal_bridging',
+    ]) {
+      const sp = _normaliseSetpointNode(setpoint[k], gia)
+      if (sp) losses[k] = sp
+    }
+  }
 
   const nodes = []
   const links = []
@@ -95,7 +130,8 @@ function buildGraph(data, unit, orientationDeg = 0, mode = DEFAULT_MODE) {
   // ── Losses out (right) ───────────────────────────────────────────────────
   // State-aware loss order: State 1 excludes cooling + openings_window; future
   // states extend the list. New loss elements appear automatically when added
-  // to LOSS_ORDERS in stateMode.js.
+  // to LOSS_ORDERS in stateMode.js. `losses[k]` is now the merged setpoint /
+  // legacy map built above.
   for (const k of loadOrderFor(mode)) {
     const v = readValue(losses?.[k], unit)
     if (v > 0) {
@@ -235,15 +271,11 @@ export default function BalanceSankey({ data, unit, orientationDeg = 0, onElemen
           })}
         </g>
 
-        {/* IN / OUT headers */}
-        <g pointerEvents="none">
-          <text x={20} y={20} fontSize="10" fontWeight={600} fill="#1F2937" letterSpacing="0.5">
-            ↦ IN — Gains
-          </text>
-          <text x={dims.width - 20} y={20} textAnchor="end" fontSize="10" fontWeight={600} fill="#1F2937" letterSpacing="0.5">
-            OUT — Losses ↦
-          </text>
-        </g>
+        {/* IN / OUT headers removed — Bug fix (Chris reported 2026-05-17):
+            these duplicated the HTML headers in HeatBalance.jsx's IN/OUT row
+            (which is shared across Rows / Stacked / Sankey layouts). The
+            shared header row carries the Σ totals badges per the same fix,
+            so the Sankey body should be free of header chrome. */}
       </svg>
       {tip && <TooltipPill {...tip} />}
     </div>

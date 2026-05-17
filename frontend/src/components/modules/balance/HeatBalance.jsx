@@ -632,6 +632,26 @@ function StateOneDemandPanel({ data, comfortBand, onComfortBandChange, unit, eng
         </div>
       </div>
 
+      {/* Methodology footnote (Chris asked 2026-05-17 why heating demand can
+          exceed total fabric loss). Two different integrals — fabric loss
+          is constant-setpoint, demand is hour-by-hour against the free-
+          running zone temperature. The lumped 2-node mass model allows
+          T_zone to swing below T_out on cold nights (radiative loss to
+          sky), which inflates the demand integral above the fabric-loss
+          integral. The Brief 28b Part 3 multi-layer CTF fix is queued. */}
+      <div className="mb-3 text-xxs text-mid-grey/85 leading-snug bg-white/50 border border-light-grey rounded px-3 py-2">
+        <span className="font-medium text-dark-grey">Why heating demand can exceed total fabric loss:</span>{' '}
+        fabric loss integrates <code>(T_set − T_out) × U·A</code> at a
+        constant setpoint, while heating demand integrates
+        <code> max(0, T_set − T_zone) × H</code> hour-by-hour. With the
+        Static engine's lumped 2-node mass model, the free-running T_zone
+        can swing below T_out on cold nights (radiative loss to sky), so
+        the demand integral over-shoots the fabric-loss integral by 30–60%
+        on a typical run. Dynamic (EnergyPlus) uses a full conduction
+        transfer function and produces lower numbers — see Static vs Dynamic
+        in the Summary tab.
+      </div>
+
       {/* Comfort hours strip — under / in / over */}
       <div className="mb-3">
         <div className="flex items-center justify-between text-xxs text-mid-grey mb-1">
@@ -741,21 +761,20 @@ export default function HeatBalance({
     const gainItems = flattenGains(data, unit, orientationDeg, mode)
     const allValues = [...lossItems.map(i => i.value), ...gainItems.map(i => i.value)]
     const scale = Math.max(...allValues, 0.1)
-    // Engine-emitted totals (fabric + solar only at State 2; engine omits
-    // mechanical demand from totals).
-    let totalLosses = data?.annual?.totals?.[unit === 'kwh_per_m2' ? 'losses_kwh_per_m2' : 'losses_kwh'] ?? 0
-    let totalGains  = data?.annual?.totals?.[unit === 'kwh_per_m2' ? 'gains_kwh_per_m2'  : 'gains_kwh']  ?? 0
-    // Brief 28a Part 5 walkthrough Finding HB3 (2026-05-14): the
-    // flattened breakdown surfaces mechanical heating + cooling demand
-    // as synthetic items at State 2+; the totals must include them too
-    // or the "Net (gains - losses)" residual won't close. Add the
-    // synthetic items (identified by `meta.synthetic === true`).
-    for (const item of lossItems) {
-      if (item.meta?.synthetic) totalLosses += item.value
-    }
-    for (const item of gainItems) {
-      if (item.meta?.synthetic) totalGains += item.value
-    }
+    // Bug fix (Chris reported 2026-05-17): Σ totals were read from
+    // `data.annual.totals.{gains,losses}_kwh` (free-running convention) while
+    // the Rows / Stacked / Sankey rendered items came from `losses_at_setpoint`
+    // (Brief 28k convention). The two conventions disagree by the ventilation
+    // term — free-running zone tracks outdoor temp so vent losses ≈ 0, while
+    // the setpoint convention holds zone at 21°C and counts (T_set − T_out)
+    // × m_dot × cp. Result on Bridgewater: Σ losses read 128 MWh in the
+    // header while the Summary table read 252 MWh. Now we sum from the
+    // rendered items array directly, so the header total is guaranteed to
+    // match what the bars / sankey actually show. Synthetic mechanical
+    // heating / cooling are already in lossItems / gainItems for State 2+
+    // (they were appended via meta.synthetic), so they're included by sum.
+    const totalLosses = lossItems.reduce((s, i) => s + (i.value ?? 0), 0)
+    const totalGains  = gainItems.reduce((s, i) => s + (i.value ?? 0), 0)
     return {
       losses: lossItems,
       gains:  gainItems,
@@ -811,20 +830,35 @@ export default function HeatBalance({
         </div>
       </div>
 
-      {/* IN / OUT side labels */}
+      {/* IN / OUT side labels + Σ totals badge
+          Bug fix (Chris reported 2026-05-17): Σ gains and Σ losses are now
+          surfaced inline in the header row so they're visible across all
+          three layouts (Rows / Stacked / Sankey). Previously the totals row
+          sat below the chart inside an overflow-hidden region and was
+          clipped off-screen on tall layouts. */}
       <div className="flex-shrink-0 px-5 pt-4 pb-2 grid grid-cols-2 gap-8">
-        <div className="flex items-center gap-2 text-caption font-semibold text-navy">
-          <ArrowRight size={14} className="text-mid-grey" />
-          <span>IN — Gains</span>
+        <div className="flex items-baseline justify-between gap-3 text-caption font-semibold text-navy">
+          <span className="flex items-center gap-2">
+            <ArrowRight size={14} className="text-mid-grey" />
+            IN — Gains
+          </span>
+          <span className="text-xs tabular-nums text-navy/80">
+            Σ <span className="font-bold text-navy">{fmt(totalGains, unit)}</span>
+          </span>
         </div>
-        <div className="flex items-center gap-2 text-caption font-semibold text-navy justify-end">
-          <span>OUT — Losses</span>
-          <ArrowRight size={14} className="text-mid-grey" />
+        <div className="flex items-baseline justify-between gap-3 text-caption font-semibold text-navy">
+          <span className="text-xs tabular-nums text-navy/80">
+            Σ <span className="font-bold text-navy">{fmt(totalLosses, unit)}</span>
+          </span>
+          <span className="flex items-center gap-2">
+            OUT — Losses
+            <ArrowRight size={14} className="text-mid-grey" />
+          </span>
         </div>
       </div>
 
       {/* Bars: rows / stacked / sankey */}
-      <div className="flex-1 overflow-hidden px-5 pb-5">
+      <div className="flex-1 overflow-hidden px-5 pb-2">
         {layout === 'rows' && (
           <div className="grid grid-cols-2 gap-8 h-full overflow-y-auto">
             <StackColumn items={gains}  scale={scale} unit={unit} side="gains"  onClick={onElementClick} />
@@ -845,24 +879,19 @@ export default function HeatBalance({
             mode={mode}
           />
         )}
+      </div>
 
-        {/* Totals row */}
-        <div className="grid grid-cols-2 gap-8 mt-4 pt-3 border-t border-light-grey">
-          <div className="text-right">
-            <p className="text-xxs text-mid-grey">Total gains</p>
-            <p className="text-caption font-bold text-navy tabular-nums">{fmt(totalGains, unit)}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-xxs text-mid-grey">Total losses</p>
-            <p className="text-caption font-bold text-navy tabular-nums">{fmt(totalLosses, unit)}</p>
-          </div>
-        </div>
-
-        {/* Net balance check */}
-        <div className="mt-3 px-3 py-2 rounded-lg text-xxs flex items-center justify-between"
+      {/* Net balance check — pulled OUT of the flex-1 overflow region so it
+          always renders at the bottom of the chart area regardless of
+          layout height. Previously this sat inside the overflow-hidden
+          chart container and got clipped off-screen. */}
+      <div className="flex-shrink-0 px-5 pb-3">
+        <div className="px-3 py-2 rounded-lg text-xxs flex items-center justify-between border"
           style={{
             backgroundColor: Math.abs(netResidual) < (unit === 'kwh_per_m2' ? 5 : totalLosses * 0.05)
               ? '#F0FDF4' : '#FFFBEB',
+            borderColor: Math.abs(netResidual) < (unit === 'kwh_per_m2' ? 5 : totalLosses * 0.05)
+              ? '#BBF7D0' : '#FDE68A',
           }}
         >
           <span className="text-mid-grey">
