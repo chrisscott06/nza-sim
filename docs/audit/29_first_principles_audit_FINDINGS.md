@@ -181,6 +181,17 @@ Bridgewater audit baseline (post Commit A):
 
 **The cross-engine Δ on heating demand is +8% post Commit A vs +6% pre-fix (small change because the door bug affected both engines roughly equally). Tolerable in direction; magnitude not yet defended per Hard Rule 2.**
 
+### Acceptable-defence rubric for cross-engine Δ (Chris call 2026-05-17, standing rule for Part 3)
+
+Any claim that a Δ between Static and Dynamic is "defensible" must satisfy ALL FOUR:
+
+1. **Named** — the mechanism is a specific identifiable physics difference (e.g. "EP Berdahl-Martin sky long-wave vs Static dry-bulb approximation"), not a vague class ("Static is just less accurate" — explicitly banned per Hard Rule 2).
+2. **Quantified** — the mechanism contributes X MWh annually on the audit baseline config, computed not asserted. If X < 2% of demand it's a rounding contributor; aggregate small contributions separately and label as "noise floor."
+3. **Cited** — textbook source + page per Hard Rule 2 (CIBSE Guide A, ASHRAE Fundamentals, BS EN ISO 13790, Hens, or equivalent).
+4. **Reproducible** — changing a known input (e.g. roof U-value, glazing g-value, ground temp) predicts in advance which engine moves and by how much. Test runs both engines; assertion passes if measured Δ matches prediction within 10%.
+
+**If Part 3 cannot produce all four for any single mechanism that explains the +8% gap, the gap stays undefended.** Decision queued for the post-audit ship brief: ship both engines as-is, downgrade Static to "indicative only," or fix Static. Brief 29 will not invent a mechanism to close the gap.
+
 ---
 
 ## Notes for Part 2 (Building Dynamic)

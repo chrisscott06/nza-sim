@@ -39,7 +39,7 @@ Status:
 | Expected value | ~24–85 MWh depending on integration method; ~24 MWh is the defensible audit number for Bridgewater (balanced mechanical, 134 rooms × 8 l/s extract, EPW-integrated ΔT) |
 | Root cause | No `flow_mode` field on `building.openings[*]`. Static engine hardcodes cross-flow wind-only correlation at `instantCalc.js:1003-1004`. Dynamic engine emits `ZoneVentilation:WindandStackOpenArea` (cross-flow). Bridgewater's actual topology is **balanced mechanical** (cellular hotel with continuous bathroom extract; trickle vents are the makeup path, not the driver). |
 | Worked-example reference | `docs/audit/29_permanent_vent_methodology.md` — Cases A / B / C reproduced with live engine inputs. |
-| Fix scope | Data-model: add `flow_mode: 'cross' \| 'single_sided' \| 'balanced_mechanical'` field; default cross. Per-opening `C_d` field. Static: branch on `flow_mode`. Dynamic: emit `ZoneVentilation:DesignFlowRate` for balanced_mechanical, `WindandStackOpenArea` otherwise. **Cross-references #3.** |
+| Fix scope | **Group with #3 and #4 — single coherent rework of `_calculateEnvelopeOnly`'s permanent-vent block (Chris call 2026-05-17). Do NOT fix piecemeal.** Data-model: add `flow_mode: 'cross' \| 'single_sided' \| 'balanced_mechanical'` field; default cross. Per-opening `C_d` field. Static: branch on `flow_mode`, add stack term to cross-flow path (#4), use slot-corrected C_d (#3). Dynamic: emit `ZoneVentilation:DesignFlowRate` for balanced_mechanical, `WindandStackOpenArea` otherwise. Single commit, single regression sweep. |
 
 ---
 
@@ -94,8 +94,8 @@ Status:
 |---|---|
 | Module | All modules |
 | Engine | All engines |
-| Severity | **S2** |
-| Status | **OPEN — Brief 29 deliverable #4** |
+| Severity | **S3** (Chris call 2026-05-17 — bumped from S2; this is the structural reason #1 shipped undetected) |
+| Status | **OPEN — Brief 29 deliverable #4; precondition for shipping any new module** |
 | Current value | Display-to-display reconciliation (POL-M3 `ReconciliationRow`) checks `annual sum = monthly sum`. Does NOT catch a term that's in the integrand but not in any display. |
 | Expected value | A test that at every save / run, `Σ losses_at_setpoint.{element}.heating_loss_kwh + Σ losses_at_setpoint.natural_ventilation[*].heat_loss_kwh + Σ losses_at_setpoint.ventilation[*].heat_loss_kwh + … = Σ terms entering the demand integrand` within 1%. Fail loudly. |
 | Root cause | The codebase currently has no test or runtime assertion that the displayed loss breakdown is complete. The door bug (#1) slipped through because both Sankey and Summary iterated a hardcoded 7-element key list, and `natural_ventilation` was a sibling array nobody iterated. |
@@ -120,11 +120,13 @@ Status:
 
 ## Total: 7 issues found in Part 1 (Building Static)
 
-By severity:
-- **S3:** 2 (#1 fixed, #2 open)
-- **S2:** 3 (#3 open, #4 open, #6 open)
+By severity (after Chris 2026-05-17 review):
+- **S3:** 3 (#1 fixed, #2 open, #6 open)
+- **S2:** 2 (#3 open, #4 open)
 - **S1:** 2 (#5 cosmetic, #7 defer)
 
 Brief 29 escalation threshold (>5 issues at S2+ in a single module) is **NOT** triggered: 4 issues at S2+ in this module.
+
+**Fix-brief grouping decision (Chris 2026-05-17):** Issues #2, #3, #4 are three facets of the same data-model + methodology gap in `_calculateEnvelopeOnly`'s permanent-vent block. The post-audit fix brief will rework them as a single coherent commit (new `flow_mode` field + per-opening `C_d` + topology-branched correlation + EP object selection). Do not fix piecemeal — one fix exposing another is the risk.
 
 **Standing by for Chris's sign-off on Part 1 before beginning Part 2 (Building Dynamic).**
