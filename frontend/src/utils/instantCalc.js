@@ -891,6 +891,17 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   const monthly_leakage = _mkM(), monthly_permanent = _mkM(), monthly_tb = _mkM()
   const monthly_solar_n = _mkM(), monthly_solar_e = _mkM(), monthly_solar_s = _mkM(), monthly_solar_w = _mkM()
 
+  // ── Brief 28-IM IM-M2 (Profiles upgrade): daily aggregation ──────────────
+  // Float32Array(365) per category + per-facade solar + 3 weather signals.
+  // Feeds the new WeatherSynchronisedProfile chart strip on the Building
+  // Profiles tab; reused on Operation + Systems Profiles tabs in later gates.
+  // Day index = floor(h / 24) for 8760-hour weather.
+  const _mkD = () => new Float32Array(365)
+  const daily_wall = _mkD(), daily_roof = _mkD(), daily_floor = _mkD(), daily_glaz = _mkD()
+  const daily_leakage = _mkD(), daily_permanent = _mkD(), daily_tb = _mkD()
+  const daily_solar_n = _mkD(), daily_solar_e = _mkD(), daily_solar_s = _mkD(), daily_solar_w = _mkD()
+  const daily_t_out = _mkD(), daily_wind = _mkD(), daily_ghi = _mkD()
+
   // ── Thermal bridging (Brief 28-TB-Simple, supersedes Brief 28k Gate 3+) ──
   // ISO 14683 junction-based physics: H_TB = Σ(ψ × L) over the building's
   // envelope junctions, with ψ defaults from ISO 14683 Table A.2 and lengths
@@ -1198,6 +1209,28 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
     monthly_solar_e[_m]   += sol_e
     monthly_solar_s[_m]   += sol_s
     monthly_solar_w[_m]   += sol_w
+
+    // Brief 28-IM IM-M2 (Profiles upgrade): daily aggregation. h ranges
+    // 0-8759 for 365-day non-leap weather; clamp to 364 to be safe.
+    const _d = Math.min(364, Math.floor(h / 24))
+    daily_wall[_d]      += wall_n_h + wall_e_h + wall_s_h + wall_w_h
+    daily_roof[_d]      += roof_h
+    daily_floor[_d]     += floor_h
+    daily_glaz[_d]      += glaz_n_h + glaz_e_h + glaz_s_h + glaz_w_h
+    daily_leakage[_d]   += leakage_h
+    daily_permanent[_d] += permanent_h
+    daily_tb[_d]        += TB_heat_h
+    daily_solar_n[_d]   += sol_n
+    daily_solar_e[_d]   += sol_e
+    daily_solar_s[_d]   += sol_s
+    daily_solar_w[_d]   += sol_w
+    // Weather signals (sum per day; convert to mean / 24 at output)
+    daily_t_out[_d] += T_out
+    daily_wind[_d]  += v_wind
+    // GHI proxy: hourlySolar.roof is per-m² solar on horizontal surface,
+    // which IS GHI by definition (W/m² on horizontal). Aggregate by sum,
+    // convert to mean at output time.
+    daily_ghi[_d] += (hourlySolar?.roof?.[h] ?? 0)
 
     // ── Brief 28e Gate E2: per-operable-opening natural ventilation ──────
     // For each operable opening, evaluate the control mode (using T_op from
@@ -1643,6 +1676,40 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
         total_solar_transmission_kwh: r1(acc_solar_n + acc_solar_e + acc_solar_s + acc_solar_w),
       },
       setpoints_used: { heating_c: comfortBand.lower_c, cooling_c: comfortBand.upper_c },
+    },
+    // Brief 28-IM IM-M2 (Profiles upgrade): daily-aggregated arrays fed to
+    // the WeatherSynchronisedProfile chart strip on the Building Profiles
+    // tab. Each loss element is per-day kWh; weather signals are sum-of-hour
+    // values (caller divides by 24 for mean kW / mean °C / mean m/s /
+    // mean W/m²). Engine-side this is grouping of values already computed
+    // in the hour loop — not new physics.
+    daily_profiles: {
+      length: 365,
+      // Wh → kWh per day (engine accumulators are in Wh). Caller divides by
+      // 24 if a daily-mean kW is needed for the chart.
+      heat_loss_kwh: {
+        external_wall:    Array.from(daily_wall,      v => v / 1000),
+        roof:             Array.from(daily_roof,      v => v / 1000),
+        ground_floor:     Array.from(daily_floor,     v => v / 1000),
+        glazing:          Array.from(daily_glaz,      v => v / 1000),
+        fabric_leakage:   Array.from(daily_leakage,   v => v / 1000),
+        permanent_vents:  Array.from(daily_permanent, v => v / 1000),
+        thermal_bridging: Array.from(daily_tb,        v => v / 1000),
+      },
+      solar_transmission_kwh_per_facade: {
+        north: Array.from(daily_solar_n, v => v / 1000),
+        east:  Array.from(daily_solar_e, v => v / 1000),
+        south: Array.from(daily_solar_s, v => v / 1000),
+        west:  Array.from(daily_solar_w, v => v / 1000),
+      },
+      weather: {
+        // Weather sums are NOT in Wh — they're sum of 24 hourly °C / m/s /
+        // W/m² readings. Divide by 24 for mean. Caller (chart) does that
+        // conversion since the units are presentation-clearer that way.
+        t_out_sum_c:      Array.from(daily_t_out),
+        wind_sum_ms:      Array.from(daily_wind),
+        ghi_sum_w_per_m2: Array.from(daily_ghi),
+      },
     },
     free_running: {
       annual_mean_c: Math.round(T_mean * 10) / 10,

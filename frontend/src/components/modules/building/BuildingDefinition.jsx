@@ -15,6 +15,7 @@ import BuildingViewer3D from './BuildingViewer3D.jsx'
 // a simulation has actually been run. See docs/briefs/Brief_24_Building_Module.md.
 import ExpandedSankeyOverlay from './ExpandedSankeyOverlay.jsx'
 import HeatBalance from '../balance/HeatBalance.jsx'
+import WeatherSynchronisedProfile from '../../profiles/WeatherSynchronisedProfile.jsx'
 import ConstructionInspector from '../../library/ConstructionInspector.jsx'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { SimulationContext } from '../../../context/SimulationContext.jsx'
@@ -932,67 +933,64 @@ function BuildingCentreTabs({ view, onChange, instantResult, simBalance, simulat
 }
 
 function BuildingProfilesView({ instantResult }) {
-  const trace = instantResult?.free_running?.hourly_temperature_c
-  if (!trace || trace.length === 0) {
+  // Brief 28-IM IM-M2 (Profiles upgrade): swap the previous free-running
+  // zone temperature trace for the WeatherSynchronisedProfile chart strip.
+  // Reasons captured in the prior commit discussion:
+  //   - free-running T_zone uses a different convention from the setpoint-
+  //     anchored Heat Balance; mixing both was confusing
+  //   - building services audience cares about HEAT LOSS profile, not
+  //     zone-temp trace
+  //   - weather context (T_out, wind, GHI) explains the load profile —
+  //     stacking these vertically with a shared x-axis is the standard
+  //     IES / PHPP profile-view convention
+  const dp = instantResult?.daily_profiles
+  if (!dp) {
     return (
       <div className="h-full flex items-center justify-center text-mid-grey text-xxs">
-        Hourly trace not available — load weather data.
+        Profiles require engine output — load weather data.
       </div>
     )
   }
-  // Downsample 8760 hourly → 365 daily means for a readable chart.
-  const daily = []
-  for (let d = 0; d < 365; d++) {
-    let sum = 0, n = 0
-    for (let h = 0; h < 24; h++) {
-      const i = d * 24 + h
-      if (i < trace.length) { sum += trace[i]; n++ }
-    }
-    daily.push({ day: d + 1, t: n > 0 ? Math.round((sum / n) * 10) / 10 : null })
+  const losses = dp.heat_loss_kwh
+  const solar  = dp.solar_transmission_kwh_per_facade
+  const w      = dp.weather
+  // Weather signals: engine emits sums per day; convert to means here so
+  // the chart unit (°C / m/s / W/m²) is right.
+  const t_out_mean_c    = (w?.t_out_sum_c ?? []).map(v => v / 24)
+  const wind_mean_ms    = (w?.wind_sum_ms ?? []).map(v => v / 24)
+  const ghi_mean_w_m2   = (w?.ghi_sum_w_per_m2 ?? []).map(v => v / 24)
+
+  // Primary pane: stacked area of fabric + ventilation + thermal-bridging
+  // heat losses, with solar transmission per facade as line overlays
+  // (NOT stacked — these are gains, shown to give visual context for the
+  // gain/loss daily balance).
+  const primary = {
+    title: 'Hourly heat loss at setpoint',
+    unit:  'kW',
+    stacks: [
+      { key: 'wall',  label: 'External wall',    color: '#6B7280', daily_kwh: losses?.external_wall },
+      { key: 'roof',  label: 'Roof',             color: '#9CA3AF', daily_kwh: losses?.roof },
+      { key: 'floor', label: 'Ground floor',     color: '#D1D5DB', daily_kwh: losses?.ground_floor },
+      { key: 'glaz',  label: 'Glazing',          color: '#4B5563', daily_kwh: losses?.glazing },
+      { key: 'tb',    label: 'Thermal bridging', color: '#475569', daily_kwh: losses?.thermal_bridging },
+      { key: 'leak',  label: 'Fabric leakage',   color: '#94A3B8', daily_kwh: losses?.fabric_leakage },
+      { key: 'pvent', label: 'Permanent vents',  color: '#0891B2', daily_kwh: losses?.permanent_vents },
+    ],
+    lines: [
+      { key: 'sol_n', label: 'Solar N',  color: '#FCD34D', daily_kwh: solar?.north },
+      { key: 'sol_e', label: 'Solar E',  color: '#F59E0B', daily_kwh: solar?.east },
+      { key: 'sol_s', label: 'Solar S',  color: '#D97706', daily_kwh: solar?.south },
+      { key: 'sol_w', label: 'Solar W',  color: '#F59E0B', daily_kwh: solar?.west, dashed: true },
+    ],
   }
-  // Inline SVG line plot — keeps the dependency surface light and avoids
-  // recharts importer bloat at the building tab level.
-  const W = 900, H = 320, pad = 36
-  const tMin = -5, tMax = 35
-  const xs = (i) => pad + (i / 364) * (W - pad * 2)
-  const ys = (v) => H - pad - ((v - tMin) / (tMax - tMin)) * (H - pad * 2)
-  const path = daily.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xs(i)} ${ys(p.t)}`).join(' ')
-  const monthMarkers = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334].map((d, i) =>
-    ({ d, label: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i] }))
+
   return (
-    <div className="w-full h-full overflow-auto p-4">
-      <p className="text-caption font-semibold text-navy">Zone temperature trace · free-running · °C</p>
-      <p className="text-xxs text-mid-grey mb-3">
-        Free-running zone temperature, no heating or cooling. Initial T_zone = T_out
-        at hour 0. Trace shows building's thermal response to weather, no
-        setpoint-convergence transient. Daily mean of the 8760-hour series.
-      </p>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-4xl border border-light-grey rounded bg-white">
-        {/* Comfort band shading 20-26°C */}
-        <rect x={pad} y={ys(26)} width={W - pad * 2} height={ys(20) - ys(26)} fill="#16A34A" fillOpacity="0.06" />
-        {/* Y axis ticks */}
-        {[-5, 0, 5, 10, 15, 20, 25, 30, 35].map(v => (
-          <g key={v}>
-            <line x1={pad} x2={W - pad} y1={ys(v)} y2={ys(v)} stroke="#E5E7EB" strokeWidth="0.5" />
-            <text x={pad - 6} y={ys(v) + 3} textAnchor="end" fontSize="9" fill="#6B7280">{v}</text>
-          </g>
-        ))}
-        {/* Month markers */}
-        {monthMarkers.map(m => (
-          <text key={m.d} x={xs(m.d)} y={H - 12} textAnchor="start" fontSize="9" fill="#6B7280">{m.label}</text>
-        ))}
-        {/* Trace */}
-        <path d={path} fill="none" stroke="#0F172A" strokeWidth="1.2" />
-        {/* Axis labels */}
-        <text x={W / 2} y={H - 2} textAnchor="middle" fontSize="10" fill="#6B7280">Day of year</text>
-        <text x={10} y={20} fontSize="10" fill="#6B7280">°C</text>
-      </svg>
-      <p className="text-xxs text-mid-grey italic mt-3">
-        Static engine, free-running zone temperature. Dynamic-vs-Static overlay
-        + per-element loss profile queued for follow-up (Brief 28-IM §15.2
-        stuck-point fallback acknowledged).
-      </p>
-    </div>
+    <WeatherSynchronisedProfile
+      primary={primary}
+      weather={{ t_out_mean_c, wind_mean_ms, ghi_mean_w_per_m2: ghi_mean_w_m2 }}
+      height={520}
+      caption={'Daily mean of the 8760-hour engine trace. Hover for synchronised values across all four panes. Heat loss stacked by element (positive = loss to outside); solar transmission per facade overlaid as lines (line height = mean kW into zone). Outdoor weather context below: dry-bulb °C, wind m/s, global horizontal solar W/m².'}
+    />
   )
 }
 
