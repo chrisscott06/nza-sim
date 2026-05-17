@@ -7,7 +7,13 @@
  * - 12 monthly multiplier sliders
  * - Quick-set tools: Flat, Copy Weekday to Weekend, Invert, Shift ±1h
  * - Live heatmap preview (updates as you drag)
- * - Save to Library / Assign to Project
+ * - Save target (Brief 28-IM IM-M4 Addition 1):
+ *     target='project' → writes to building.schedules[] via updateParam
+ *                        (visible across all modules immediately;
+ *                        the canonical home for project-scoped schedules)
+ *     target='library' → POST /api/library with library_type='schedule'
+ *                        (legacy global-library save; kept for the
+ *                        Internal Gains library-browser flow)
  */
 
 import { useState, useRef, useEffect, useCallback, useContext } from 'react'
@@ -135,16 +141,20 @@ function MonthlySliders({ values, onChange }) {
 
 // ── Main ScheduleEditor ────────────────────────────────────────────────────────
 
-export default function ScheduleEditor({ initialSchedule, onSaved, onCancel }) {
-  const { currentProjectId } = useContext(ProjectContext)
+export default function ScheduleEditor({ initialSchedule, onSaved, onCancel, target = 'library' }) {
+  const { currentProjectId, params, updateParam } = useContext(ProjectContext)
 
-  // Editable state — deep copy of initial
-  const [name,       setName]       = useState(initialSchedule.display_name ?? initialSchedule.name ?? 'New Schedule')
-  const [schedType,  setSchedType]  = useState((initialSchedule.config_json ?? {}).schedule_type  ?? 'occupancy')
-  const [zoneType,   setZoneType]   = useState((initialSchedule.config_json ?? {}).zone_type       ?? 'bedroom')
+  // Editable state — deep copy of initial. Accepts either the library
+  // wrapper shape ({ config_json: { ... } }) or the flat project-schedule
+  // shape ({ day_types, monthly_multipliers, ... }). The project-schedule
+  // shape is preferred since IM-M4 Addition 1.
+  const _cfg = initialSchedule.config_json ?? initialSchedule ?? {}
+  const [name,       setName]       = useState(initialSchedule.display_name ?? initialSchedule.name ?? _cfg.display_name ?? 'New Schedule')
+  const [schedType,  setSchedType]  = useState(_cfg.schedule_type ?? 'occupancy')
+  const [zoneType,   setZoneType]   = useState(_cfg.zone_type     ?? 'bedroom')
   const [activeDay,  setActiveDay]  = useState('weekday')
   const [dayTypes,   setDayTypes]   = useState(() => {
-    const dt = (initialSchedule.config_json ?? {}).day_types ?? {}
+    const dt = _cfg.day_types ?? {}
     return {
       weekday:  [...(dt.weekday  ?? Array(24).fill(0.5))],
       saturday: [...(dt.saturday ?? Array(24).fill(0.5))],
@@ -152,7 +162,7 @@ export default function ScheduleEditor({ initialSchedule, onSaved, onCancel }) {
     }
   })
   const [multipliers, setMultipliers] = useState(
-    [...((initialSchedule.config_json ?? {}).monthly_multipliers ?? Array(12).fill(1))]
+    [...(_cfg.monthly_multipliers ?? Array(12).fill(1))]
   )
 
   const [saving,    setSaving]    = useState(false)
@@ -211,9 +221,35 @@ export default function ScheduleEditor({ initialSchedule, onSaved, onCancel }) {
     setSaving(true)
     setSaveError(null)
     try {
+      const slugName = name.toLowerCase().replace(/\s+/g, '_')
+      // ── Brief 28-IM IM-M4 Addition 1: project-scoped save ───────────────
+      // Writes to building.schedules[] (deep-merge via updateParam). The
+      // engine resolver's project-first lookup picks it up immediately
+      // on the next instant-calc pass.
+      if (target === 'project') {
+        const entry = {
+          id:                  slugName,
+          name:                slugName,
+          display_name:        name,
+          schedule_type:       schedType,
+          zone_type:           zoneType,
+          day_types:           dayTypes,
+          monthly_multipliers: multipliers,
+        }
+        const existing = Array.isArray(params?.schedules) ? params.schedules : []
+        const idx = existing.findIndex(s => s?.id === slugName || s?.name === slugName)
+        const next = idx >= 0
+          ? existing.map((s, i) => i === idx ? entry : s)
+          : [...existing, entry]
+        updateParam('schedules', next)
+        setSavedId(slugName)
+        if (onSaved) onSaved({ id: slugName, ...entry })
+        return
+      }
+      // ── Legacy library save ──────────────────────────────────────────────
       const payload = {
         library_type: 'schedule',
-        name:         name.toLowerCase().replace(/\s+/g, '_'),
+        name:         slugName,
         display_name: name,
         description:  `Custom ${schedType} schedule — ${zoneType}`,
         config_json: {

@@ -118,15 +118,56 @@ function _decomposeHourForSchedule(h, weatherData) {
 // ── Resolver ──────────────────────────────────────────────────────────────────
 
 /**
+ * Brief 28-IM IM-M4 Addition 1: project-scoped shared schedules.
+ *
+ * Each project may carry `building.schedules[]` — a first-class array of
+ * editable schedule entries with the same shape as the hardcoded SCHEDULES
+ * dict above:
+ *
+ *   {
+ *     id:          'office_extended_hours',
+ *     name:        'Office extended hours (07-20 weekdays)',
+ *     day_types:   { weekday: number[24], saturday?: number[24], sunday?: number[24] },
+ *     monthly_multipliers?: number[12],
+ *   }
+ *
+ * The resolver prefers project schedules when the same name exists in both
+ * places. This lets users override `business_hours_09_18_weekdays` for their
+ * own project without changing the hardcoded library (which other projects
+ * may still depend on).
+ *
+ * Schedules created via the Operation / Systems "✏️ Edit schedule" flow
+ * land here. The Internal Gains module currently keeps its own per-section
+ * profiles in `building.gains.{occupancy,lighting,equipment}.profiles[]` —
+ * those are NOT unified with project.schedules yet (queued for a follow-up
+ * refactor; out of IM-M4 scope to keep this gate's blast radius contained).
+ */
+function _projectScheduleByName(name, building) {
+  const list = building?.schedules
+  if (!Array.isArray(list)) return null
+  return list.find(s => s?.name === name || s?.id === name) ?? null
+}
+
+/**
  * Resolve a schedule name to its fraction value (0-1) at hour `h`.
  * weatherData provides month/day/hour arrays (length 8760) for accurate
  * day-of-year mapping; if absent, derivation falls back to non-leap-year.
  *
- * Returns 0 if the schedule name is unknown (safer than throwing — silent
- * failure surfaces as zero-flow at Gate E2 verification rather than crash).
+ * Lookup order (Brief 28-IM IM-M4 Addition 1):
+ *   1. `building.schedules[]` — project-scoped, user-editable
+ *   2. hardcoded `SCHEDULES` dict — engine baseline (always_on, business_hours_*, etc.)
+ *
+ * Returns 0 if the name resolves nowhere (safer than throwing — silent
+ * failure surfaces at the Gate verification step, not as a crash).
+ *
+ * `building` is optional; callers pre-IM-M4 omitted it and the resolver
+ * still works (falls straight through to the hardcoded library). The two
+ * call sites that thread building through are the State 2 natvent loop and
+ * the temperature-mode opening-control evaluator.
  */
-export function resolveScheduleAtHour(name, h, weatherData) {
-  const sched = SCHEDULES[name]
+export function resolveScheduleAtHour(name, h, weatherData, building = null) {
+  let sched = _projectScheduleByName(name, building)
+  if (!sched) sched = SCHEDULES[name]
   if (!sched) return 0
   const { dayType, hourOfDay, monthIdx0 } = _decomposeHourForSchedule(h, weatherData)
   const daily = sched.day_types?.[dayType] ?? sched.day_types?.weekday
@@ -137,8 +178,26 @@ export function resolveScheduleAtHour(name, h, weatherData) {
 }
 
 /**
- * Return true if the named schedule exists in the library.
+ * Return true if the named schedule exists in EITHER the project's shared
+ * schedules or the hardcoded library.
  */
-export function hasSchedule(name) {
+export function hasSchedule(name, building = null) {
+  if (_projectScheduleByName(name, building)) return true
   return SCHEDULES.hasOwnProperty(name)
+}
+
+/**
+ * Get the union of project-scoped + hardcoded schedule names — used by the
+ * Operation / Systems schedule dropdowns to surface both lists.
+ */
+export function allScheduleNames(building = null) {
+  const names = new Set(Object.keys(SCHEDULES))
+  const list = building?.schedules
+  if (Array.isArray(list)) {
+    for (const s of list) {
+      if (s?.name) names.add(s.name)
+      else if (s?.id) names.add(s.id)
+    }
+  }
+  return Array.from(names).sort()
 }

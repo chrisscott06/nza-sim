@@ -37,10 +37,11 @@ import { useUI } from '../../context/UIContext.jsx'
 import { WeatherContext } from '../../context/WeatherContext.jsx'
 import { useHourlySolar } from '../../hooks/useHourlySolar.js'
 import { calculateInstant, synthesiseOperableOpeningsFromLegacy } from '../../utils/instantCalc.js'
-import { SCHEDULES } from '../../utils/scheduleLibrary.js'
+import { SCHEDULES, allScheduleNames } from '../../utils/scheduleLibrary.js'
 import BuildingViewer3D from './building/BuildingViewer3D.jsx'
 import HeatBalance from './balance/HeatBalance.jsx'
 import WeatherSynchronisedProfile from '../profiles/WeatherSynchronisedProfile.jsx'
+import ScheduleEditor from './profiles/ScheduleEditor.jsx'
 
 const ACCENT = '#0E7490'  // operation theme — cyan-700
 
@@ -156,6 +157,21 @@ export default function OperationModule() {
     () => Array.isArray(params?.operable_openings) ? params.operable_openings : [],
     [params?.operable_openings],
   )
+
+  // Brief 28-IM IM-M4 Addition 1: schedule editor modal state.
+  const [editingSchedule, setEditingSchedule] = useState(null)
+  const openScheduleEditor = (scheduleName) => {
+    const existing = (params?.schedules ?? []).find(s => s?.name === scheduleName || s?.id === scheduleName)
+    const hardcoded = SCHEDULES[scheduleName]
+    const seed = existing ?? (hardcoded
+      ? {
+          id: scheduleName, name: scheduleName, display_name: scheduleName,
+          day_types: hardcoded.day_types,
+          monthly_multipliers: hardcoded.monthly_multipliers ?? Array(12).fill(1),
+        }
+      : { name: scheduleName, day_types: { weekday: Array(24).fill(0.5), saturday: Array(24).fill(0.5), sunday: Array(24).fill(0.5) }, monthly_multipliers: Array(12).fill(1) })
+    setEditingSchedule(seed)
+  }
 
   // Centre view switcher state (persists per-session in localStorage)
   const [centreView, setCentreView] = useState(() => {
@@ -354,6 +370,8 @@ export default function OperationModule() {
                     onSelect={() => setSelectedOpeningId(opening.id)}
                     onUpdate={partial => updateOpening(opening.id, partial)}
                     onDelete={() => deleteOpening(opening.id)}
+                    openScheduleEditor={openScheduleEditor}
+                    allSched={allScheduleNames(params)}
                   />
                 ))}
               </div>
@@ -446,6 +464,20 @@ export default function OperationModule() {
           </div>
         </div>
       </div>
+
+      {/* Brief 28-IM IM-M4 Addition 1: shared ScheduleEditor modal */}
+      {editingSchedule && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center overflow-auto p-4">
+          <div className="bg-white rounded-xl shadow-2xl my-4 w-full max-w-4xl">
+            <ScheduleEditor
+              initialSchedule={editingSchedule}
+              target="project"
+              onSaved={() => setTimeout(() => setEditingSchedule(null), 800)}
+              onCancel={() => setEditingSchedule(null)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -778,7 +810,7 @@ function OperationSummaryView({ instantResult, openings, orientation }) {
 }
 
 /* ── Per-opening collapsible row (preserved from Gate E5a) ───────────── */
-function OpeningRow({ opening, selected, orientation, onSelect, onUpdate, onDelete }) {
+function OpeningRow({ opening, selected, orientation, onSelect, onUpdate, onDelete, openScheduleEditor, allSched }) {
   const [expanded, setExpanded] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
 
@@ -922,12 +954,30 @@ function OpeningRow({ opening, selected, orientation, onSelect, onUpdate, onDele
             />
             {(mode === 'scheduled' || mode === 'temperature') && (
               <div className="mt-1.5">
-                <LabeledSelect
-                  label={mode === 'temperature' ? 'Schedule (AND temperature)' : 'Schedule'}
-                  value={ctl.schedule_ref ?? 'always_on'}
-                  onChange={v => onUpdate({ control: { ...ctl, schedule_ref: v } })}
-                  options={SCHEDULE_OPTIONS}
-                />
+                <label className="block text-xxs text-mid-grey mb-0.5">
+                  {mode === 'temperature' ? 'Schedule (AND temperature)' : 'Schedule'}
+                </label>
+                <div className="flex items-center gap-1">
+                  <select
+                    value={ctl.schedule_ref ?? 'always_on'}
+                    onChange={e => onUpdate({ control: { ...ctl, schedule_ref: e.target.value } })}
+                    className="flex-1 px-2 py-1 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-cyan-700 cursor-pointer"
+                  >
+                    {/* Union: project-scoped schedules + hardcoded library presets */}
+                    {(allSched && allSched.length > 0 ? allSched : SCHEDULE_OPTIONS.map(o => o.value)).map(n => (
+                      <option key={n} value={n}>{n}</option>
+                    ))}
+                  </select>
+                  {openScheduleEditor && (
+                    <button
+                      onClick={() => openScheduleEditor(ctl.schedule_ref ?? 'always_on')}
+                      className="text-xxs px-1.5 py-1 rounded border border-light-grey text-mid-grey hover:text-cyan-700 hover:border-cyan-700"
+                      title="Edit this schedule (saves to project)"
+                    >
+                      ✏️
+                    </button>
+                  )}
+                </div>
               </div>
             )}
             {mode === 'temperature' && (

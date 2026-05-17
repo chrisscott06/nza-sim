@@ -13,7 +13,10 @@ import BuildingDefinition from './components/modules/building/BuildingDefinition
 import OperationModule    from './components/modules/OperationModule.jsx'
 import InformationModule  from './components/modules/InformationModule.jsx'
 import ResultsDashboard from './components/modules/results/ResultsDashboard.jsx'
-import SystemsZones from './components/modules/SystemsZones.jsx'
+// Brief 28-IM IM-M4: legacy SystemsZones replaced by the three-column rewrite.
+// SystemsZones.jsx remains in tree for now in case any test references it,
+// but the /systems route now mounts the IM-M4 module.
+import SystemsModule from './components/modules/SystemsModule.jsx'
 import LibraryBrowser  from './components/modules/LibraryBrowser.jsx'
 // ProfilesEditor / /profiles deleted in Brief 27 Revised Part 11 — superseded
 // by the multi-profile Internal Gains module. Schedule presets remain in
@@ -44,7 +47,7 @@ export default function App() {
                 <Route path="/information" element={<ErrorBoundary moduleName="Information"><InformationModule /></ErrorBoundary>} />
                 <Route path="/building"    element={<ErrorBoundary moduleName="Building Definition"><BuildingDefinition /></ErrorBoundary>} />
                 <Route path="/operation"   element={<ErrorBoundary moduleName="Operation"><OperationModule /></ErrorBoundary>} />
-                <Route path="/systems"   element={<ErrorBoundary moduleName="Systems & Zones"><SystemsZones /></ErrorBoundary>} />
+                <Route path="/systems"   element={<ErrorBoundary moduleName="Systems"><SystemsModule /></ErrorBoundary>} />
                 <Route path="/gains"     element={<ErrorBoundary moduleName="Internal Gains"><InternalGainsModule /></ErrorBoundary>} />
                 <Route path="/consumption" element={<ErrorBoundary moduleName="Consumption"><ConsumptionManager /></ErrorBoundary>} />
                 <Route path="/results"   element={<ErrorBoundary moduleName="Results Dashboard"><ResultsDashboard /></ErrorBoundary>} />

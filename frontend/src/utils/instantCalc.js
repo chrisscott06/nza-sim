@@ -614,13 +614,17 @@ export function synthesiseOperableOpeningsFromLegacy(building) {
 // morning is closed regardless of opening type").
 //
 // Returns { is_open: bool, regime: 'permanent'|'scheduled'|'temperature' }.
-function evaluateOpeningControl(control, hour, weatherData, zone_state, prev_open_state) {
+//
+// Brief 28-IM IM-M4 Addition 1: `building` is now threaded through so
+// resolveScheduleAtHour can prefer project-scoped shared schedules
+// (building.schedules[]) over the hardcoded library.
+function evaluateOpeningControl(control, hour, weatherData, zone_state, prev_open_state, building = null) {
   const mode = control?.mode ?? 'permanent'
   if (mode === 'permanent') {
     return { is_open: true, regime: 'permanent' }
   }
   if (mode === 'scheduled') {
-    const frac = resolveScheduleAtHour(control.schedule_ref, hour, weatherData)
+    const frac = resolveScheduleAtHour(control.schedule_ref, hour, weatherData, building)
     return { is_open: frac > 0.5, regime: 'scheduled' }
   }
   if (mode === 'temperature') {
@@ -631,7 +635,7 @@ function evaluateOpeningControl(control, hour, weatherData, zone_state, prev_ope
     const reclose_below  = threshold - Math.max(0, hysteresis)
     // Optional combined schedule gate
     if (control.schedule_ref) {
-      const frac = resolveScheduleAtHour(control.schedule_ref, hour, weatherData)
+      const frac = resolveScheduleAtHour(control.schedule_ref, hour, weatherData, building)
       if (frac <= 0.5) return { is_open: false, regime: 'temperature' }
     }
     // Outside-cooler physical-sanity gate (temperature mode only)
@@ -1254,7 +1258,7 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
     for (const o of operableOpenings) {
       const prev = _natvent_state.get(o.id)
       const decision = evaluateOpeningControl(
-        o.control, h, weatherData, { T_zone: T_op_prev, T_out }, prev,
+        o.control, h, weatherData, { T_zone: T_op_prev, T_out }, prev, building,
       )
       _natvent_state.set(o.id, { wasOpen: decision.is_open })
       if (!decision.is_open) continue
@@ -2579,7 +2583,7 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     for (const o of operableOpenings) {
       const prev = _natvent_state.get(o.id)
       const decision = evaluateOpeningControl(
-        o.control, h, weatherData, { T_zone: T_op_prev, T_out }, prev,
+        o.control, h, weatherData, { T_zone: T_op_prev, T_out }, prev, building,
       )
       _natvent_state.set(o.id, { wasOpen: decision.is_open })
       if (!decision.is_open) continue
@@ -3329,6 +3333,12 @@ function computeServiceEnergy(serviceCfg, service, demand_mwh, resolved) {
   const empty = { primary_perf: null, secondary_perf: null, total_perf: { delivered_mwh: 0, fuel_mwh: 0 }, fuel_split: {} }
   if (serviceCfg == null || serviceCfg.primary == null) return empty
 
+  // Brief 28-IM IM-M4: `enabled: false` → demand still calculated (so the
+  // Sankey can show "unserved demand"), but no energy is attributed to any
+  // system. Default behaviour when `enabled` is missing is "on" — matches
+  // legacy projects that pre-date IM-M4.
+  if (serviceCfg.enabled === false) return empty
+
   const primaryPct   = Number(serviceCfg.primary_pct ?? 100)
   const secondaryPct = serviceCfg.secondary == null ? 0 : Math.max(0, 100 - primaryPct)
   const primaryRec   = resolved.get(`systems.${service}.primary`)
@@ -3349,6 +3359,78 @@ function computeServiceEnergy(serviceCfg, service, demand_mwh, resolved) {
   }
   attribute(primaryRec,   primaryPct,   'primary')
   attribute(secondaryRec, secondaryPct, 'secondary')
+  return out
+}
+
+/**
+ * Brief 28-IM IM-M4 §8.1: DHW with explicit fuel_mix.
+ *
+ *   dhw_electricity_kwh = dhw_demand_kwh × fuel_mix.heat_pump / SCOP_ashp
+ *                       + dhw_demand_kwh × fuel_mix.electric_resistance / 1
+ *   dhw_gas_kwh         = dhw_demand_kwh × fuel_mix.gas / efficiency_gas
+ *
+ * The three fractions must sum to 1.0; the engine normalises just-in-case.
+ * SCOP for heat-pump path is resolved from `systems.dhw.primary` (when it
+ * resolves to an electricity-fuelled system); SCOP for gas path comes from
+ * `systems.dhw.secondary` if its fuel is gas (otherwise falls back to
+ * efficiency 0.85 — typical condensing-boiler V1 default).
+ *
+ * Returns a {primary_perf, secondary_perf, total_perf, fuel_split} object
+ * matching computeServiceEnergy's shape so the rest of _calculateState3
+ * doesn't need to special-case DHW. `primary_perf` is the heat-pump path
+ * (electricity), `secondary_perf` is the gas path; electric-resistance is
+ * folded into primary's fuel total since it's the same carrier.
+ */
+function computeDhwFuelMix(serviceCfg, demand_mwh, resolved) {
+  const empty = { primary_perf: null, secondary_perf: null, total_perf: { delivered_mwh: 0, fuel_mwh: 0 }, fuel_split: {} }
+  if (serviceCfg == null) return empty
+  if (serviceCfg.enabled === false) return empty
+  const mix_raw = serviceCfg.fuel_mix
+  if (!mix_raw) return null   // signals caller to use legacy computeServiceEnergy path
+  const total = Number(mix_raw.gas ?? 0) + Number(mix_raw.electric_resistance ?? 0) + Number(mix_raw.heat_pump ?? 0)
+  if (!(total > 0)) return empty
+  const mix = {
+    gas:                 Number(mix_raw.gas ?? 0)                 / total,
+    electric_resistance: Number(mix_raw.electric_resistance ?? 0) / total,
+    heat_pump:           Number(mix_raw.heat_pump ?? 0)           / total,
+  }
+  // Resolve heat-pump SCOP from primary (if present); fall back to seed
+  // default 3.0 (Brief 28f Bridgewater ashp_dhw_preheat value).
+  const primaryRec   = resolved.get('systems.dhw.primary')
+  const secondaryRec = resolved.get('systems.dhw.secondary')
+  const scop_hp  = (primaryRec   && primaryRec.fuel   === 'electricity') ? primaryRec.efficiency   : 3.0
+  const eff_gas  = (secondaryRec && secondaryRec.fuel === 'gas')         ? secondaryRec.efficiency : 0.85
+
+  const delivered_hp   = demand_mwh * mix.heat_pump
+  const delivered_er   = demand_mwh * mix.electric_resistance
+  const delivered_gas  = demand_mwh * mix.gas
+  const elec_mwh = (scop_hp > 0 ? delivered_hp / scop_hp : 0) + delivered_er / 1
+  const gas_mwh  =  eff_gas > 0 ? delivered_gas / eff_gas  : 0
+  const total_delivered = delivered_hp + delivered_er + delivered_gas
+  const total_fuel      = elec_mwh + gas_mwh
+
+  const out = {
+    primary_perf: (delivered_hp + delivered_er) > 0 ? {
+      delivered_mwh:  delivered_hp + delivered_er,
+      fuel_mwh:       elec_mwh,
+      avg_cop_or_eff: (delivered_hp + delivered_er) > 0
+        ? (delivered_hp + delivered_er) / Math.max(elec_mwh, 1e-9)
+        : 0,
+      fuel:           'electricity',
+    } : null,
+    secondary_perf: delivered_gas > 0 ? {
+      delivered_mwh:  delivered_gas,
+      fuel_mwh:       gas_mwh,
+      avg_cop_or_eff: eff_gas,
+      fuel:           'gas',
+    } : null,
+    total_perf:  { delivered_mwh: total_delivered, fuel_mwh: total_fuel },
+    fuel_split:  {
+      electricity: { primary_mwh: elec_mwh, secondary_mwh: 0 },
+      gas:         { primary_mwh: 0,        secondary_mwh: gas_mwh },
+    },
+    fuel_mix_applied: mix,
+  }
   return out
 }
 
@@ -3659,7 +3741,11 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
   // ── Service energy math (heating, cooling, DHW) ───────────────────────────
   const heating = computeServiceEnergy(sys.heating, 'heating', heating_demand_mwh, resolved)
   const cooling = computeServiceEnergy(sys.cooling, 'cooling', cooling_demand_mwh, resolved)
-  const dhw     = computeServiceEnergy(sys.dhw,     'dhw',     dhw_demand_mwh,     resolved)
+  // Brief 28-IM IM-M4 §8.1: DHW prefers fuel_mix when present. Falls back to
+  // the legacy primary/secondary computeServiceEnergy path when not.
+  const dhw_mix_result = computeDhwFuelMix(sys.dhw, dhw_demand_mwh, resolved)
+  const dhw     = dhw_mix_result ?? computeServiceEnergy(sys.dhw, 'dhw', dhw_demand_mwh, resolved)
+  const dhw_fuel_mix_applied = dhw_mix_result?.fuel_mix_applied ?? null
 
   // DHW circulation pump (Part 4): continuous electrical baseload.
   // V1: schedule_ref hookup deferred — 8760 h hardcoded.
@@ -3790,9 +3876,159 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
         },
       },
     },
+    // ── Brief 28-IM IM-M4 §8.1: demand → delivered → carrier breakdown ──
+    //
+    // Mirrors the brief's specified shape exactly so Systems UI / assertion
+    // script / Results module all read the same keys. Numbers are sourced
+    // from the existing computeServiceEnergy + computeDhwFuelMix +
+    // computeVentilationEnergy passes — no new physics, just a re-shaped
+    // surface for the Systems tab's Live Results + Sankey + Summary views.
+    // When a service is `enabled: false`, demand_mwh stays the State-2
+    // value (the building still has the demand) but delivered_mwh = 0 —
+    // the Sankey renders this as an "unserved" flow.
+    consumption: {
+      space_heating: {
+        enabled:        sys.heating?.enabled !== false,
+        demand_mwh:     r_mwh(heating_demand_state2_mwh),
+        delivered_mwh:  r_mwh(heating.total_perf.delivered_mwh),
+        electricity_mwh: r_mwh((heating.fuel_split.electricity?.primary_mwh ?? 0)
+                              + (heating.fuel_split.electricity?.secondary_mwh ?? 0)),
+        gas_mwh:        r_mwh((heating.fuel_split.gas?.primary_mwh ?? 0)
+                              + (heating.fuel_split.gas?.secondary_mwh ?? 0)),
+        scop_effective: heating.total_perf.delivered_mwh > 0
+          ? Math.round(heating.total_perf.delivered_mwh / Math.max(heating.total_perf.fuel_mwh, 1e-9) * 100) / 100
+          : null,
+        recovery_offset_mwh: r_mwh(effective_recovery_mwh),
+      },
+      space_cooling: {
+        enabled:        sys.cooling?.enabled !== false,
+        demand_mwh:     r_mwh(cooling_demand_mwh),
+        delivered_mwh:  r_mwh(cooling.total_perf.delivered_mwh),
+        electricity_mwh: r_mwh((cooling.fuel_split.electricity?.primary_mwh ?? 0)
+                              + (cooling.fuel_split.electricity?.secondary_mwh ?? 0)),
+        seer_effective: cooling.total_perf.delivered_mwh > 0
+          ? Math.round(cooling.total_perf.delivered_mwh / Math.max(cooling.total_perf.fuel_mwh, 1e-9) * 100) / 100
+          : null,
+      },
+      dhw: {
+        enabled:          sys.dhw?.enabled !== false,
+        demand_mwh:       r_mwh(dhw_demand_mwh),
+        delivered_mwh:    r_mwh(dhw.total_perf.delivered_mwh),
+        electricity_mwh:  r_mwh(elec_dhw_total / 1000),
+        gas_mwh:          r_mwh(gas_dhw_total / 1000),
+        fuel_mix_applied: dhw_fuel_mix_applied,
+        circulation_pump_mwh: r_mwh(circulation_pump_kwh / 1000),
+      },
+      ventilation: ventResult.perSystem.map((v, vi) => {
+        const cfgEntry = Array.isArray(sys.ventilation) ? sys.ventilation[vi] : null
+        return {
+          id:                  v.id,
+          name:                cfgEntry?.name ?? v.id,
+          enabled:             cfgEntry?.enabled !== false,
+          fan_electricity_mwh: r_mwh(v.fan_kwh / 1000),
+          hre_recovery_mwh:    r_mwh(v.recovery_mwh),
+          // Exhaust loss = the heating-equivalent ΔT energy the system
+          // pumps outside via stale-air extract (the State-2 mech vent
+          // line). Use the State-2 setpoint loss value already exposed
+          // on losses_at_setpoint.ventilation[vi].
+          exhaust_loss_mwh: r_mwh(
+            (state2Result.losses_at_setpoint?.ventilation?.[vi]?.heat_loss_kwh ?? 0) / 1000
+          ),
+        }
+      }),
+      lighting:    { electricity_mwh: r_mwh(lighting_kwh / 1000) },
+      small_power: { electricity_mwh: r_mwh(equipment_kwh / 1000) },
+      total: {
+        electricity_mwh:  r_mwh(electricity_total_kwh / 1000),
+        gas_mwh:          r_mwh(gas_total_kwh / 1000),
+        district_heat_mwh: 0,  // V1: no district heat yet
+        kwh_per_m2_yr:    Math.round(eui_kwh_per_m2 * 10) / 10,
+      },
+      // Brief 28-IM IM-M4 §8 Addition 2: daily delivered + fuel arrays for
+      // Systems Profiles (WeatherSynchronisedProfile) + Monthly view.
+      //
+      // Per-day delivered = sum of hourly heating/cooling demand (already on
+      // state2Result.demand.heating_demand_hourly_kwh) shaped by the system
+      // efficiency. For DHW + lighting + sp we use a flat-rate approximation
+      // — annual ÷ 365 — since per-hour profiles haven't been captured here
+      // yet (queued for a follow-up; the Sankey + Live Results don't need
+      // them and the Monthly chart still reads true per-element fabric
+      // monthlies from State 2's losses_at_setpoint.
+      daily_profiles: (() => {
+        const _z = () => new Array(365).fill(0)
+        const heat_h = state2Result.demand?.heating_demand_hourly_kwh ?? null
+        const cool_h = state2Result.demand?.cooling_demand_hourly_kwh ?? null
+
+        const heating_daily_delivered = _z()
+        const cooling_daily_delivered = _z()
+        if (heat_h) {
+          const scop = heating.total_perf.delivered_mwh > 0 && heating.total_perf.fuel_mwh > 0
+            ? heating.total_perf.delivered_mwh / heating.total_perf.fuel_mwh : 1
+          for (let h = 0; h < Math.min(8760, heat_h.length); h++) {
+            const d = Math.min(364, Math.floor(h / 24))
+            heating_daily_delivered[d] += (sys.heating?.enabled === false ? 0 : heat_h[h])
+          }
+          void scop  // not used in delivered (delivered === demand when enabled); SCOP only changes the fuel side
+        }
+        if (cool_h) {
+          for (let h = 0; h < Math.min(8760, cool_h.length); h++) {
+            const d = Math.min(364, Math.floor(h / 24))
+            cooling_daily_delivered[d] += (sys.cooling?.enabled === false ? 0 : cool_h[h])
+          }
+        }
+        // DHW: flat daily share (sum across year ÷ 365). Fan: same flat
+        // approximation. Lighting + small_power: same.
+        const dhw_daily = _z().map(() => dhw.total_perf.delivered_mwh * 1000 / 365)
+        const fan_daily = _z().map(() => total_fan_kwh / 365)
+        const light_daily = _z().map(() => lighting_kwh / 365)
+        const sp_daily    = _z().map(() => equipment_kwh / 365)
+        // Per-carrier daily totals (kWh). Heating + cooling shape comes
+        // from the per-hour demand series; gas + DHW + fan + lighting +
+        // sp use flat daily shares.
+        const heat_scop_eff = heating.total_perf.fuel_mwh > 0
+          ? heating.total_perf.delivered_mwh / heating.total_perf.fuel_mwh : 1
+        const cool_seer_eff = cooling.total_perf.fuel_mwh > 0
+          ? cooling.total_perf.delivered_mwh / cooling.total_perf.fuel_mwh : 1
+        const heat_elec_share = heating.total_perf.fuel_mwh > 0
+          ? ((heating.fuel_split.electricity?.primary_mwh ?? 0) + (heating.fuel_split.electricity?.secondary_mwh ?? 0))
+            / heating.total_perf.fuel_mwh
+          : 0
+        const heat_gas_share  = 1 - heat_elec_share
+        const elec_daily = heating_daily_delivered.map((d, i) =>
+          (d / heat_scop_eff) * heat_elec_share
+          + cooling_daily_delivered[i] / cooling_seer_eff_safe(cool_seer_eff)
+          + (dhw.fuel_split.electricity ? (dhw.fuel_split.electricity.primary_mwh + dhw.fuel_split.electricity.secondary_mwh) * 1000 / 365 : 0)
+          + fan_daily[i] + light_daily[i] + sp_daily[i],
+        )
+        const gas_daily = heating_daily_delivered.map((d, _i) =>
+          (d / heat_scop_eff) * heat_gas_share
+          + (dhw.fuel_split.gas ? (dhw.fuel_split.gas.primary_mwh + dhw.fuel_split.gas.secondary_mwh) * 1000 / 365 : 0),
+        )
+
+        return {
+          length: 365,
+          delivered_kwh_per_day: {
+            heating: heating_daily_delivered,
+            cooling: cooling_daily_delivered,
+            dhw:     dhw_daily,
+            fans:    fan_daily,
+            lighting: light_daily,
+            small_power: sp_daily,
+          },
+          fuel_kwh_per_day: {
+            electricity: elec_daily,
+            gas:         gas_daily,
+          },
+        }
+      })(),
+    },
     carbon_kg_co2_per_m2: r_co2(carbon_kg_co2_per_m2),
   }
 }
+
+// Helper for daily arrays: SEER can be zero when cooling disabled — keep
+// the divisor at 1 so we don't NaN out the per-day electricity sum.
+function cooling_seer_eff_safe(s) { return s > 0 ? s : 1 }
 
 // ── U-value lookup ────────────────────────────────────────────────────────────
 

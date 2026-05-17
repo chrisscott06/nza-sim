@@ -50,27 +50,46 @@ async function fj(url, opts = {}) {
 // ── Bridgewater v2.5 systems config (canonical) ─────────────────────────────
 const BRIDGEWATER_V25 = {
   heating: {
+    // Brief 28-IM IM-M4 §8.1: enabled toggle. Defaults to true; toggling
+    // false in the UI keeps demand calculated but zero-attributes energy
+    // (Sankey shows the demand as "unserved").
+    enabled:     true,
     primary:     { library_id: 'vrf_heat_recovery_dual_function' },
     secondary:   { library_id: 'electric_panel_heater' },
     primary_pct: 95,
     setpoint_c:  21,
+    schedule_ref: 'business_hours_09_18_weekdays',
   },
   cooling: {
+    enabled:     true,
     primary:     { library_id: 'vrf_heat_recovery_dual_function' },
     secondary:   { library_id: 'dx_split_cooling' },
     primary_pct: 95,
     setpoint_c:  25,
+    schedule_ref: 'business_hours_09_18_weekdays',
   },
   dhw: {
+    enabled:           true,
     primary:           { library_id: 'ashp_dhw_preheat' },
     secondary:         { library_id: 'gas_boiler_calorifier' },
     primary_pct:       60,
+    // Brief 28-IM IM-M4 §8.1: explicit fuel mix replaces primary/secondary
+    // pct for DHW. Current BRUKL is gas-fired with ASHP preheat: the
+    // ASHP carries roughly 60% of the demand (electricity via SCOP 3.0)
+    // and gas the remaining 40% (efficiency 0.90). Sum must be 1.0; the
+    // engine normalises just in case.
+    fuel_mix: {
+      gas:                 0.40,
+      electric_resistance: 0.00,
+      heat_pump:           0.60,
+    },
     circulation_pump_w: 120,
     // V1 defaults for DHW formula -- explicit for clarity (omitting these
     // would yield identical engine output via default constants).
     litres_per_person_per_day: 80,
     store_temperature_c:       60,
     cold_mains_temperature_c:  10,
+    schedule_ref:              'always_on',
   },
   // Brief 28k Gate 3+ (2026-05-16): per-BRUKL/as-built schedule
   // (26002-NZA-XX-XX-SC-X-0010 v2), Bridgewater has THREE distinct mechanical
@@ -87,12 +106,53 @@ const BRIDGEWATER_V25 = {
   //                            is the single biggest under-counted heat loss
   //                            mechanism (~230 MWh/yr at 2208 L/s).
   //   - public_toilet_extract: 210 L/s small extract for public WCs.
+  // Brief 28-IM IM-M4 §8.1: per-system `enabled` + `hre_enabled` toggle so
+  // the UI's per-system on/off + heat-recovery on/off can flip values without
+  // deleting entries. Defaults true / true for parity with prior behaviour.
   ventilation: [
-    { name: 'mvhr_gf_public',       library_id: 'mvhr_with_hr',     flow_l_s: 1425, sfp_w_per_l_s: 1.4, hre: 0.80, hours: 8760, schedule_ref: 'always_on' },
-    { name: 'bedroom_extract',      library_id: 'wc_extract_no_hr', flow_l_s: 2208, sfp_w_per_l_s: 0.4, hre: 0.0,  hours: 8760, schedule_ref: 'always_on' },
-    { name: 'public_toilet_extract',library_id: 'wc_extract_no_hr', flow_l_s:  210, sfp_w_per_l_s: 0.4, hre: 0.0,  hours: 8760, schedule_ref: 'always_on' },
+    { id: 'vent_mvhr_gf_public',       name: 'mvhr_gf_public',       enabled: true, hre_enabled: true,  library_id: 'mvhr_with_hr',     flow_l_s: 1425, sfp_w_per_l_s: 1.4, hre: 0.80, hours: 8760, schedule_ref: 'always_on' },
+    { id: 'vent_bedroom_extract',      name: 'bedroom_extract',      enabled: true, hre_enabled: false, library_id: 'wc_extract_no_hr', flow_l_s: 2208, sfp_w_per_l_s: 0.4, hre: 0.0,  hours: 8760, schedule_ref: 'always_on' },
+    { id: 'vent_public_toilet_extract',name: 'public_toilet_extract',enabled: true, hre_enabled: false, library_id: 'wc_extract_no_hr', flow_l_s:  210, sfp_w_per_l_s: 0.4, hre: 0.0,  hours: 8760, schedule_ref: 'always_on' },
   ],
 }
+
+// Brief 28-IM IM-M4 Addition 1: project-scoped shared schedules.
+//
+// These are SAVED to the project (building.schedules[]) so the Operation
+// and Systems modules can edit them via the canonical ScheduleEditor. They
+// shadow the hardcoded scheduleLibrary.js entries of the same name —
+// useful when a project wants a tweaked variant ("Bridgewater extended
+// hours") without altering the global library. The engine resolver checks
+// project schedules first; absent name → falls through to scheduleLibrary.
+const BRIDGEWATER_SCHEDULES = [
+  // Same shape as scheduleLibrary.js SCHEDULES — surfaces the editable
+  // version of the canonical Bridgewater entrance-door schedule in the
+  // Operation tab's "✏️ Edit" flow.
+  {
+    id:   'business_hours_09_18_weekdays',
+    name: 'business_hours_09_18_weekdays',
+    day_types: {
+      weekday:  Array.from({ length: 24 }, (_, h) => (h >= 9 && h < 18 ? 1.0 : 0.0)),
+      saturday: Array(24).fill(0.0),
+      sunday:   Array(24).fill(0.0),
+    },
+  },
+  // Systems heating schedule — hotel hours 06-23 weekdays + lighter
+  // weekend rate (06-22 weekend; service still runs at reduced
+  // occupancy). Seeded so the Systems Schedule tab has something
+  // realistic to render against Bridgewater (BRUKL has the asset on
+  // continuous operation but the per-day breakdown is a sensible
+  // V1 default the user can edit immediately).
+  {
+    id:   'hotel_systems_24x7',
+    name: 'hotel_systems_24x7',
+    day_types: {
+      weekday:  Array(24).fill(1.0),
+      saturday: Array(24).fill(1.0),
+      sunday:   Array(24).fill(1.0),
+    },
+  },
+]
 
 // ── Bridgewater per-project construction overrides (Brief 28k Gate 3+) ─────
 //
@@ -229,6 +289,8 @@ const BUILDING_CORRECTIONS = {
   // Brief 28e: operable openings (entrance door scheduled during business hours).
   // Engine math lands at Gate E2; Gate E1 just persists the schema.
   operable_openings: BRIDGEWATER_OPERABLE_OPENINGS,
+  // Brief 28-IM IM-M4 Addition 1: project-scoped shared schedules.
+  schedules: BRIDGEWATER_SCHEDULES,
 }
 
 /**

@@ -571,6 +571,11 @@ export function ProjectProvider({ children }) {
       // (confirmed via 4-tab baseline 43a35ea: Operation tab shows "No
       // operable openings yet" despite seed-persisted entry).
       operable_openings:  bc.operable_openings  ?? null,
+      // Brief 28-IM IM-M4 Addition 1: project-scoped shared schedules.
+      // Resolved first by scheduleLibrary.resolveScheduleAtHour, ahead of
+      // the hardcoded baseline dict; editable via the ScheduleEditor's
+      // target='project' mode (called from Operation + Systems Schedule).
+      schedules:          bc.schedules          ?? [],
       // Brief 27 Part 1 — occupancy + gains migration. Persisted projects
       // pre-26.2 don't have these fields; build from legacy num_bedrooms /
       // occupancy_rate / people_per_room and the seeded hotel-bedroom
