@@ -12,6 +12,7 @@ import {
   GitCompare,
   BookOpen,
   Cloud,
+  Route as RouteIcon,
 } from 'lucide-react'
 import { accentForPath } from '../../data/moduleThemes.js'
 
@@ -35,6 +36,9 @@ const TOP_ITEMS = [
   { to: '/operation',   icon: Wind,            label: 'Operation' },
   { to: '/systems',     icon: Thermometer,     label: 'Systems' },
   { to: '/results',     icon: BarChart3,       label: 'Results' },
+  // Brief 28-IM IM-M6: Retrofit Roadmap — sequenced interventions against
+  // CRREM 1.5°C target with per-year leave-one-out marginal attribution.
+  { to: '/roadmap',     icon: RouteIcon,       label: 'Roadmap' },
 ]
 
 const BOTTOM_ITEMS = [

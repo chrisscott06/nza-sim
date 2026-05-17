@@ -291,6 +291,57 @@ const BUILDING_CORRECTIONS = {
   operable_openings: BRIDGEWATER_OPERABLE_OPENINGS,
   // Brief 28-IM IM-M4 Addition 1: project-scoped shared schedules.
   schedules: BRIDGEWATER_SCHEDULES,
+  // Brief 28-IM IM-M6: walked-example retrofit roadmap (per §10.7 PASS
+  // criteria). Four interventions sized to close the 2050 CRREM gap
+  // identified in IM-M5 (Bridgewater plateaus at ~4.4 kg/m²·yr without
+  // retrofit; CRREM 2050 target is 2.8 kg/m²·yr → need ~1.6 kg/m²·yr).
+  //
+  //   I1 (2027): Improve airtightness q50 4.64 → 2.0 m³/(h·m²)
+  //              Pushes fabric_leakage operational ACH down ~57%.
+  //   I2 (2030, seq 1): Move DHW to fully heat-pump (gas → ASHP SCOP 3.0)
+  //              Kills the 97 MWh gas line entirely.
+  //   I3 (2030, seq 2): Add HRE to the two extract-only vent systems
+  //              (bedroom_extract + public_toilet_extract). Recovery + a
+  //              small SFP penalty from the added supply fan.
+  //   I4 (2034): Reduce installed lighting power density by 30%
+  //              (LED+controls retrofit). Less lighting energy +
+  //              slightly more heating demand (less internal gain).
+  roadmap: {
+    interventions: [
+      {
+        id: 'i1_airtightness_2027',
+        year: 2027,
+        sequence_in_year: 1,
+        type: 'fabric_airtightness',
+        name: 'Airtightness retrofit (q50 4.64 → 2.0)',
+        overrides: { q50: 2.0 },
+      },
+      {
+        id: 'i2_dhw_full_ashp_2030',
+        year: 2030,
+        sequence_in_year: 1,
+        type: 'systems_dhw_swap',
+        name: 'DHW: gas → full ASHP (SCOP 3.0)',
+        overrides: { fuel_mix: { gas: 0.0, electric_resistance: 0.0, heat_pump: 1.0 } },
+      },
+      {
+        id: 'i3_extract_add_hre_2030',
+        year: 2030,
+        sequence_in_year: 2,
+        type: 'ventilation_add_hre',
+        name: 'Add HRE to bedroom extract (η 0.75, +SFP)',
+        overrides: { vent_index: 1, hre: 0.75, sfp_w_per_l_s: 1.4 },
+      },
+      {
+        id: 'i4_lpd_minus30_2034',
+        year: 2034,
+        sequence_in_year: 1,
+        type: 'operation_lpd',
+        name: 'Reduce installed LPD by 30% (LED + controls)',
+        overrides: { reduction_pct: -30 },
+      },
+    ],
+  },
 }
 
 /**

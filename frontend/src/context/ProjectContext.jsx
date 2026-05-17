@@ -576,6 +576,10 @@ export function ProjectProvider({ children }) {
       // the hardcoded baseline dict; editable via the ScheduleEditor's
       // target='project' mode (called from Operation + Systems Schedule).
       schedules:          bc.schedules          ?? [],
+      // Brief 28-IM IM-M6: retrofit roadmap — ordered intervention list
+      // consumed by roadmapEngine.computeRoadmap. Each entry carries
+      // {id, year, sequence_in_year, type, name, overrides}.
+      roadmap:            bc.roadmap            ?? { interventions: [] },
       // Brief 27 Part 1 — occupancy + gains migration. Persisted projects
       // pre-26.2 don't have these fields; build from legacy num_bedrooms /
       // occupancy_rate / people_per_room and the seeded hotel-bedroom

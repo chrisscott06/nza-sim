@@ -17,6 +17,9 @@ import ResultsDashboard from './components/modules/results/ResultsDashboard.jsx'
 // new `results.*` engine block. Legacy ResultsDashboard kept in tree for
 // scenario-comparison routes that still depend on its tab list.
 import IMResultsModule from './components/modules/IMResultsModule.jsx'
+// Brief 28-IM IM-M6: Retrofit Roadmap — sequenced intervention surface
+// with per-year per-intervention leave-one-out marginal attribution.
+import RoadmapModule from './components/modules/RoadmapModule.jsx'
 // Brief 28-IM IM-M4: legacy SystemsZones replaced by the three-column rewrite.
 // SystemsZones.jsx remains in tree for now in case any test references it,
 // but the /systems route now mounts the IM-M4 module.
@@ -55,6 +58,7 @@ export default function App() {
                 <Route path="/gains"     element={<ErrorBoundary moduleName="Internal Gains"><InternalGainsModule /></ErrorBoundary>} />
                 <Route path="/consumption" element={<ErrorBoundary moduleName="Consumption"><ConsumptionManager /></ErrorBoundary>} />
                 <Route path="/results"   element={<ErrorBoundary moduleName="Results"><IMResultsModule /></ErrorBoundary>} />
+                <Route path="/roadmap"   element={<ErrorBoundary moduleName="Retrofit Roadmap"><RoadmapModule /></ErrorBoundary>} />
                 <Route path="/results-legacy" element={<ErrorBoundary moduleName="Results Dashboard"><ResultsDashboard /></ErrorBoundary>} />
                 <Route path="/crrem"     element={<ErrorBoundary moduleName="CRREM"><CRREMModule /></ErrorBoundary>} />
                 <Route path="/weather"   element={<ErrorBoundary moduleName="Weather"><WeatherModule /></ErrorBoundary>} />
