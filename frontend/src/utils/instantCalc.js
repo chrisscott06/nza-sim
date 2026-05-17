@@ -15,6 +15,12 @@ import { resolveCmass } from './thermalMass.js'
 import { resolveScheduleAtHour } from './scheduleLibrary.js'
 import { computeThermalBridges } from './thermalBridges.js'
 import {
+  buildUkGridYearlyTrajectory,
+  ukGridIntensityForYear,
+  GAS_CARBON_FACTOR_gCO2_per_kWh,
+} from '../data/ukGridCarbonTrajectory.js'
+import { buildCrremYearlyTargets, crremTargetForYear } from '../data/crremTargets.js'
+import {
   buildWallModel,
   stepWallLinearized,
   combineLinearizedStep,
@@ -4055,6 +4061,139 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
         }
       })(),
     },
+    // ── Brief 28-IM IM-M5 §9.1: results aggregation block ────────────────
+    //
+    // Engine-side aggregation that powers the Results module's four view
+    // tabs (Energy / Carbon / Monthly / Summary). Pure derivation from the
+    // consumption.* block + the UK grid trajectory + CRREM target lines —
+    // no new physics, just the shape the Results tab needs to read.
+    //
+    // year_of_exceedance: the FIRST year where the building's projected
+    // carbon intensity (electricity_mwh × that year's grid intensity + gas
+    // × stable 184 gCO2/kWh) DROPS BELOW the CRREM 1.5°C target line. For
+    // Bridgewater this is expected to land 2028-2033 from grid
+    // decarbonisation alone (before any roadmap intervention) — that's the
+    // §9.4 PASS criterion the Carbon tab visualises.
+    results: (() => {
+      const TARGET_YEAR_FOR_HEADLINE = 2038
+      const elec_mwh = electricity_total_kwh / 1000
+      const gas_mwh  = gas_total_kwh / 1000
+      const grid_yearly = buildUkGridYearlyTrajectory(2024, 2050)
+      const crrem_yearly = buildCrremYearlyTargets(2024, 2050)
+      // Per-year trajectory: each entry's kgCO2/m²/yr is the building's
+      // current electricity × that year's grid intensity + flat gas.
+      // gCO2/kWh × MWh × 1000 / 1000 = kgCO2; ÷ GIA = kgCO2/m².
+      const trajectory = grid_yearly.map(g => {
+        const kgCO2 = (elec_mwh * g.gCO2_per_kWh) + (gas_mwh * GAS_CARBON_FACTOR_gCO2_per_kWh)
+        return {
+          year: g.year,
+          grid_intensity: g.gCO2_per_kWh,
+          kgCO2_per_m2_yr: gia > 0 ? Math.round(kgCO2 / gia * 100) / 100 : 0,
+        }
+      })
+      // Year-of-exceedance: scan trajectory + targets in lockstep; return
+      // the first year where building carbon ≤ CRREM target. Null if the
+      // building never gets under the line within the 2024-2050 horizon.
+      let year_of_exceedance = null
+      for (let i = 0; i < trajectory.length; i++) {
+        if (trajectory[i].kgCO2_per_m2_yr <= crrem_yearly[i].target) {
+          year_of_exceedance = trajectory[i].year
+          break
+        }
+      }
+      // Today + horizon-marker headline numbers.
+      const today_kg_per_m2 = trajectory[0].kgCO2_per_m2_yr
+      const idx_2038 = trajectory.findIndex(t => t.year === TARGET_YEAR_FOR_HEADLINE)
+      const kg_2038 = idx_2038 >= 0 ? trajectory[idx_2038].kgCO2_per_m2_yr : null
+      const carbon_today_total_tCO2 = gia > 0 ? Math.round(today_kg_per_m2 * gia / 1000 * 10) / 10 : 0
+
+      return {
+        energy: {
+          total_mwh:       r_mwh((electricity_total_kwh + gas_total_kwh) / 1000),
+          kwh_per_m2_yr:   Math.round(eui_kwh_per_m2 * 10) / 10,
+          by_category: {
+            heating:     r_mwh(heating.total_perf.delivered_mwh),
+            cooling:     r_mwh(cooling.total_perf.delivered_mwh),
+            dhw:         r_mwh(dhw.total_perf.delivered_mwh),
+            ventilation: r_mwh(total_fan_kwh / 1000),
+            lighting:    r_mwh(lighting_kwh / 1000),
+            small_power: r_mwh(equipment_kwh / 1000),
+          },
+          by_carrier: {
+            electricity:    r_mwh(elec_mwh),
+            gas:            r_mwh(gas_mwh),
+            district_heat:  0,   // V1: not modelled
+          },
+        },
+        carbon: {
+          today: {
+            kgCO2_per_m2_yr: today_kg_per_m2,
+            total_tCO2:      carbon_today_total_tCO2,
+          },
+          by_carrier: {
+            electricity_kgCO2_per_m2_yr: gia > 0
+              ? Math.round(elec_mwh * trajectory[0].grid_intensity / gia * 100) / 100
+              : 0,
+            gas_kgCO2_per_m2_yr: gia > 0
+              ? Math.round(gas_mwh * GAS_CARBON_FACTOR_gCO2_per_kWh / gia * 100) / 100
+              : 0,
+          },
+          grid_intensity_today_gCO2_per_kWh: trajectory[0].grid_intensity,
+          gas_intensity_gCO2_per_kWh:        GAS_CARBON_FACTOR_gCO2_per_kWh,
+          trajectory,                                 // 27 entries 2024-2050
+          horizon_2038_kgCO2_per_m2_yr:      kg_2038,
+        },
+        crrem: (() => {
+          // Brief 28-IM IM-M5 PASS criterion 1 expected year_of_exceedance
+          // 2028-2033 from grid decarbonisation alone for Bridgewater. The
+          // BRUKL-design Bridgewater is actually CRREM-2030-aligned TODAY
+          // (EUI 72 kWh/m²·yr × 190 g/kWh grid → 13.6 kgCO2/m² vs 2030
+          // target 17.5). The interesting gap therefore shifts from "when
+          // does it become compliant" to "does it stay compliant against
+          // tightening targets through to 2050". We surface:
+          //   year_of_exceedance — first year building ≤ target (often
+          //                        2024 for good buildings; null for
+          //                        non-compliant assets)
+          //   year_of_stranding  — first year building > target after a
+          //                        run of compliant years (the OPPOSITE
+          //                        signal — when does tightening overtake
+          //                        the grid-driven gain). Null when the
+          //                        building stays compliant or never gets
+          //                        compliant in the window.
+          //   year_2050_met      — first year building ≤ 2050 final target
+          //                        (the deepest commitment line)
+          let year_of_stranding = null
+          let in_compliance_run = false
+          for (let i = 0; i < trajectory.length; i++) {
+            const compliant = trajectory[i].kgCO2_per_m2_yr <= crrem_yearly[i].target
+            if (compliant) in_compliance_run = true
+            else if (in_compliance_run) { year_of_stranding = trajectory[i].year; break }
+          }
+          const target_2050 = crremTargetForYear(2050)
+          let year_2050_met = null
+          for (const e of trajectory) {
+            if (e.kgCO2_per_m2_yr <= target_2050) { year_2050_met = e.year; break }
+          }
+          return {
+            asset_class:                       'hotel_international',
+            targets:                           crrem_yearly,
+            target_2030:                       crremTargetForYear(2030),
+            target_2050,
+            current_kgCO2_per_m2:              today_kg_per_m2,
+            year_of_exceedance,
+            year_of_stranding,
+            year_2050_met,
+            gap_to_2030_kgCO2_per_m2:          Math.round((today_kg_per_m2 - crremTargetForYear(2030)) * 100) / 100,
+            gap_to_2050_kgCO2_per_m2:          Math.round((today_kg_per_m2 - target_2050) * 100) / 100,
+            // "Headline gap" — which CRREM milestone is the binding constraint
+            // for this building? For a high-EUI asset → 2030. For a BRUKL-
+            // design asset already past 2030 → 2050. Helps the UI pick which
+            // gap to display prominently.
+            binding_milestone: today_kg_per_m2 > crremTargetForYear(2030) ? '2030' : (year_2050_met == null ? '2050' : 'compliant'),
+          }
+        })(),
+      }
+    })(),
     carbon_kg_co2_per_m2: r_co2(carbon_kg_co2_per_m2),
   }
 }
