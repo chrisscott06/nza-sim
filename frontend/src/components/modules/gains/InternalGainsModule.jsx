@@ -49,6 +49,7 @@ import LoadShapeView       from './canvas/LoadShapeView.jsx'
 // toggle. The three files stay on disk for now (LoadShapeView imports them);
 // Parts 4-5 will replace them with a unified Pablo-pattern time-series view.
 import HeatBalanceView     from './canvas/HeatBalanceView.jsx'
+import MonthlyView         from './canvas/MonthlyView.jsx'
 // Brief 28a Part 3d (2026-05-14): ThreeDView import removed — '3d' tab
 // dropped from the tab strip. ThreeDView.jsx kept on disk (no multi-zone
 // content yet; placeholder removed until that brief lands).
@@ -174,6 +175,10 @@ const TABS = [
   { key: 'summary',     label: 'Summary',      fullWidth: false, hasEngineToggle: true,  headline: true                    },
   { key: 'balance',     label: 'Heat balance', fullWidth: false, hasEngineToggle: true                                     },
   { key: 'loadshape',   label: 'Profiles',     fullWidth: true,  hasEngineToggle: true                                     },
+  // Brief 28-IM IM-M2: Monthly view added — per-month engine aggregation
+  // of internal gains + fabric loss for monthly read-out comparable to
+  // Building's Monthly view.
+  { key: 'monthly',     label: 'Monthly',      fullWidth: true,  hasEngineToggle: true                                     },
 ]
 const TAB_KEYS = TABS.map(t => t.key)
 
@@ -291,6 +296,7 @@ function TabContent({
     case 'summary':   return <SummaryView />
     case 'loadshape': return <LoadShapeView />
     case 'balance':   return <HeatBalanceView />
+    case 'monthly':   return <MonthlyView />
     default:          return null
   }
 }

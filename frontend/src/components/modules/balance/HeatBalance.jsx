@@ -661,26 +661,10 @@ function StateOneDemandPanel({ data, comfortBand, onComfortBandChange, unit, eng
         </div>
       </div>
 
-      {/* Engine-disclosure note. Post Brief 28b Part 3 v3 (2026-05-14):
-          summer max + mean T + cooling demand all within ±15% of Dynamic.
-          Three smaller limitations remain — documented in
-          docs/validation/bridgewater_state1_engine_outputs_2026_05_post_part3_v3.md.
-          Brief 28b Part 4 (multi-construction validation) is the queued
-          follow-up before declaring State 1 fully validated. */}
-      {engineMode === 'live' && (
-        <p className="text-xxs text-mid-grey mt-2 italic leading-tight">
-          <strong>Static engine — agreement with Dynamic (Brief 28b Part 3 v3, Bridgewater):</strong>
-          <br />
-          • <strong>Summer max:</strong> within 0.3 K of Dynamic — credible for peak comfort.
-          <br />
-          • <strong>Mean T trace:</strong> within 0.5 K of Dynamic.
-          <br />
-          • <strong>Cooling demand:</strong> within 10% of Dynamic.
-          <br />
-          <strong>Smaller known limitations:</strong> winter min ~2 K cooler than Dynamic; external wall loss reads ~40% low (library-vs-layer U-value discrepancy); F1 / F2 per-facade solar 17–18% off (Brief 28b Part 2 territory — HDKR/Perez sky model upgrade queued).
-          {' '}For absolute peak comfort + design-day cooling sizing the Dynamic engine remains canonical, but the Static engine is now a credible first-pass approximation.
-        </p>
-      )}
+      {/* Brief 28-IM §2.3 narrative paragraph removed from the chart area.
+          The Brief 28b Part 3 v3 Static-vs-Dynamic agreement narrative now
+          lives in docs/validation/ only. A (i) Diagnostics popover with
+          the same content is queued for a follow-up gate. */}
     </div>
   )
 }

@@ -433,6 +433,74 @@ function LouvreAreaInput({ value, onCommit, disabled, title }) {
   )
 }
 
+// Brief 28-IM IM-M2 add 3: q50 unit toggle. Engine stores in canonical
+// m³/(h·m²). UI display toggles between m³/(h·m²) and l/(s·m²) (factor of
+// 1/3.6). Both are valid pressurisation-test conventions; some BRUKL
+// reports list q50 in l/(s·m²) (often labelled q₅₀_l).
+function Airtightness({ q50, derivedN50, derivedOperational, onChange }) {
+  const [unit, setUnit] = useState('m3_h_m2')  // 'm3_h_m2' | 'l_s_m2'
+  const q50_ls = q50 / 3.6
+  return (
+    <CollapsibleSection title="Airtightness">
+      <div className="flex items-center justify-between mb-1">
+        <label className="text-xxs text-mid-grey">
+          Air permeability q₅₀
+        </label>
+        <div className="flex bg-off-white rounded text-xxs">
+          <button
+            onClick={() => setUnit('m3_h_m2')}
+            className={`px-1.5 py-0.5 rounded-l transition-colors ${unit === 'm3_h_m2' ? 'bg-white text-navy font-medium shadow-sm' : 'text-mid-grey'}`}
+            title="m³/(h·m²) @ 50 Pa"
+          >m³/h·m²</button>
+          <button
+            onClick={() => setUnit('l_s_m2')}
+            className={`px-1.5 py-0.5 rounded-r transition-colors ${unit === 'l_s_m2' ? 'bg-white text-navy font-medium shadow-sm' : 'text-mid-grey'}`}
+            title="l/(s·m²) @ 50 Pa — equivalent (×1/3.6)"
+          >l/s·m²</button>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 mb-1">
+        <input
+          type="range" min={1} max={25} step={0.1}
+          value={q50}
+          onChange={e => onChange(parseFloat(e.target.value))}
+          className="flex-1 h-[3px] accent-navy"
+        />
+        <span className="text-caption font-semibold text-navy w-16 text-right tabular-nums">
+          {unit === 'm3_h_m2' ? q50.toFixed(2) : q50_ls.toFixed(2)}
+        </span>
+      </div>
+      <div className="flex items-center justify-end mb-1">
+        <span className="text-xxs text-mid-grey/80 tabular-nums">
+          {unit === 'm3_h_m2'
+            ? `= ${q50_ls.toFixed(2)} l/s·m² @ 50 Pa`
+            : `= ${q50.toFixed(2)} m³/h·m² @ 50 Pa`}
+        </span>
+      </div>
+      {/* Zone labels under the slider — units agnostic */}
+      <div className="flex justify-between text-xxs text-mid-grey/80 mb-2 px-1">
+        <span title="Passive House / well-detailed">≤3 best</span>
+        <span title="Compliance baseline">3–10 typical</span>
+        <span title="Untested / poor detail">&gt;10 leaky</span>
+      </div>
+      {/* Derived values (engine output) */}
+      <div className="space-y-0.5 mb-1">
+        <div className="flex items-center justify-between text-xxs">
+          <span className="text-mid-grey">→ n₅₀ (ACH @ 50 Pa)</span>
+          <span className="text-navy tabular-nums">{derivedN50?.toFixed(2) ?? '—'}</span>
+        </div>
+        <div className="flex items-center justify-between text-xxs">
+          <span className="text-mid-grey">→ operational ACH</span>
+          <span className="text-navy tabular-nums font-semibold">{derivedOperational?.toFixed(3) ?? '—'}</span>
+        </div>
+      </div>
+      <p className="text-xxs text-mid-grey/80 italic">
+        n₅₀ = q₅₀ × envelope area / volume · operational ≈ n₅₀ / 20 (ATTMA TSL1)
+      </p>
+    </CollapsibleSection>
+  )
+}
+
 function InputsColumn({ library, onInspectConstruction, liveResult }) {
   const { params, updateParam, constructions, updateConstruction } = useContext(ProjectContext)
   const { length, width, num_floors, floor_height, orientation, wwr, name, infiltration_ach, window_count } = params
@@ -774,43 +842,13 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
           ))}
         </CollapsibleSection>
 
-        {/* ── Airtightness (Brief 28-IM Bug 2) ── */}
-        <CollapsibleSection title="Airtightness">
-          <label className="text-xxs text-mid-grey block mb-1">
-            Air permeability q₅₀ (m³/h·m² @ 50 Pa)
-          </label>
-          <div className="flex items-center gap-2 mb-1">
-            <input
-              type="range" min={1} max={25} step={0.1}
-              value={q50}
-              onChange={e => updateParam('fabric', { air_permeability_q50: parseFloat(e.target.value) })}
-              className="flex-1 h-[3px] accent-navy"
-            />
-            <span className="text-caption font-semibold text-navy w-14 text-right tabular-nums">
-              {q50.toFixed(2)}
-            </span>
-          </div>
-          {/* Zone labels under the slider */}
-          <div className="flex justify-between text-xxs text-mid-grey/80 mb-2 px-1">
-            <span title="Passive House / well-detailed">≤3 best</span>
-            <span title="Compliance baseline">3–10 typical</span>
-            <span title="Untested / poor detail">&gt;10 leaky</span>
-          </div>
-          {/* Derived values (engine output) */}
-          <div className="space-y-0.5 mb-1">
-            <div className="flex items-center justify-between text-xxs">
-              <span className="text-mid-grey">→ n₅₀ (ACH @ 50 Pa)</span>
-              <span className="text-navy tabular-nums">{derivedN50?.toFixed(2) ?? '—'}</span>
-            </div>
-            <div className="flex items-center justify-between text-xxs">
-              <span className="text-mid-grey">→ operational ACH</span>
-              <span className="text-navy tabular-nums font-semibold">{derivedOperational?.toFixed(3) ?? '—'}</span>
-            </div>
-          </div>
-          <p className="text-xxs text-mid-grey/80 italic">
-            n₅₀ = q₅₀ × envelope area / volume · operational ≈ n₅₀ / 20 (ATTMA TSL1)
-          </p>
-        </CollapsibleSection>
+        {/* ── Airtightness (Brief 28-IM Bug 2 + add 3 unit toggle) ── */}
+        <Airtightness
+          q50={q50}
+          derivedN50={derivedN50}
+          derivedOperational={derivedOperational}
+          onChange={(v) => updateParam('fabric', { air_permeability_q50: v })}
+        />
 
       </div>
     </div>
@@ -925,9 +963,9 @@ function BuildingProfilesView({ instantResult }) {
     <div className="w-full h-full overflow-auto p-4">
       <p className="text-caption font-semibold text-navy">Zone temperature trace · free-running · °C</p>
       <p className="text-xxs text-mid-grey mb-3">
-        Daily mean of the 8760-hour zone temperature. Free-running envelope only —
-        no heating, cooling or gains applied. Use the comfort band on the
-        Heat Balance view to see hours under/over setpoints.
+        Free-running zone temperature, no heating or cooling. Initial T_zone = T_out
+        at hour 0. Trace shows building's thermal response to weather, no
+        setpoint-convergence transient. Daily mean of the 8760-hour series.
       </p>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-4xl border border-light-grey rounded bg-white">
         {/* Comfort band shading 20-26°C */}
@@ -968,25 +1006,26 @@ function BuildingMonthlyView({ instantResult }) {
       </div>
     )
   }
-  // Crude monthly distribution using UK monthly heating-degree-day weights
-  // (relative to 21°C). Real per-month engine aggregation queued for follow-up.
-  // Weights from CIBSE Guide A monthly mean ambient at Yeovilton, normalised.
-  const HEATING_WEIGHTS = [0.14, 0.13, 0.11, 0.08, 0.05, 0.02, 0.01, 0.01, 0.03, 0.07, 0.12, 0.13]
-  // (Cooling and solar weights symmetric / inverted — kept simple here.)
-  const SOLAR_WEIGHTS   = [0.03, 0.05, 0.08, 0.10, 0.12, 0.13, 0.13, 0.12, 0.10, 0.07, 0.04, 0.03]
+  // Brief 28-IM IM-M2 add 2: true per-month engine aggregation.
+  // Engine emits monthly_heating_loss_kwh[12] per element + glazing has
+  // monthly_solar_transmission_kwh[12]. Sum per-element loss arrays
+  // component-wise to get the per-month total fabric loss.
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-  const annualLoss = (los.external_wall?.heating_loss_kwh ?? 0)
-                   + (los.roof?.heating_loss_kwh ?? 0)
-                   + (los.ground_floor?.heating_loss_kwh ?? 0)
-                   + (los.glazing?.heating_loss_kwh ?? 0)
-                   + (los.fabric_leakage?.heating_loss_kwh ?? 0)
-                   + (los.permanent_vents?.heating_loss_kwh ?? 0)
-                   + (los.thermal_bridging?.heating_loss_kwh ?? 0)
-  const annualSolar = los.glazing?.solar_transmission_kwh ?? 0
+  const _z = () => new Array(12).fill(0)
+  const _add = (out, arr) => { if (Array.isArray(arr)) for (let i = 0; i < 12; i++) out[i] += (arr[i] ?? 0) }
+  const lossMonthly = _z()
+  _add(lossMonthly, los.external_wall?.monthly_heating_loss_kwh)
+  _add(lossMonthly, los.roof?.monthly_heating_loss_kwh)
+  _add(lossMonthly, los.ground_floor?.monthly_heating_loss_kwh)
+  _add(lossMonthly, los.glazing?.monthly_heating_loss_kwh)
+  _add(lossMonthly, los.fabric_leakage?.monthly_heating_loss_kwh)
+  _add(lossMonthly, los.permanent_vents?.monthly_heating_loss_kwh)
+  _add(lossMonthly, los.thermal_bridging?.monthly_heating_loss_kwh)
+  const solarMonthly = los.glazing?.monthly_solar_transmission_kwh ?? _z()
   const data = months.map((m, i) => ({
     month: m,
-    loss: Math.round(annualLoss * HEATING_WEIGHTS[i]),
-    solar: Math.round(annualSolar * SOLAR_WEIGHTS[i]),
+    loss:  Math.round(lossMonthly[i]),
+    solar: Math.round(solarMonthly[i] ?? 0),
   }))
   const maxBar = Math.max(...data.map(d => Math.max(d.loss, d.solar)), 1)
 
@@ -994,9 +1033,9 @@ function BuildingMonthlyView({ instantResult }) {
     <div className="w-full h-full overflow-auto p-4">
       <p className="text-caption font-semibold text-navy">Monthly heat loss vs solar gain · kWh</p>
       <p className="text-xxs text-mid-grey mb-3">
-        Annual envelope loss + solar transmission distributed across months via
-        CIBSE Guide A weighting (placeholder). True per-month engine
-        aggregation queued for follow-up.
+        Per-month aggregation of the 8760-hour engine trace. Loss = fabric +
+        leakage + permanent vents + thermal bridging. Solar = transmitted
+        through glazing (all facades, no util factor).
       </p>
       <div className="flex items-end gap-2 max-w-4xl mt-4" style={{ height: 280 }}>
         {data.map(d => (

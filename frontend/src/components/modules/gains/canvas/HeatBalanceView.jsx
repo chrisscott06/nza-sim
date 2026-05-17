@@ -70,6 +70,7 @@ export default function HeatBalanceView() {
         liveData={state2?.heat_balance}
         mode="envelope-gains"
         orientationDeg={orientationDeg}
+        modules={['fabric', 'thermal_bridging', 'fabric_leakage', 'permanent_vents', 'internal_gains']}
       />
     </div>
     </div>

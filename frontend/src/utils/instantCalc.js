@@ -822,13 +822,16 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   const T_hourly = new Float32Array(n)
   const dt = 3600  // seconds per timestep
 
-  // Initial state for each wall: uniform at comfortBand.lower_c. With masses
-  // on the order of days, expect ~1-2 days of spin-up before transient
-  // initial conditions are forgotten.
-  let TS_wall  = new Float64Array(extWallModel.type === 'mass' ? extWallModel.n : 0).fill(comfortBand.lower_c)
-  let TS_roof  = new Float64Array(roofModel.type    === 'mass' ? roofModel.n    : 0).fill(comfortBand.lower_c)
-  let TS_floor = new Float64Array(floorModel.type   === 'mass' ? floorModel.n   : 0).fill(comfortBand.lower_c)
-  let T_air = comfortBand.lower_c
+  // Brief 28-IM IM-M2 add 1: initialise zone air + mass nodes to T_out at
+  // hour 0 instead of the heating setpoint. Eliminates the 1-2 week January
+  // convergence transient the setpoint-cold-start assumption produced.
+  // Trace begins from the building's actual outdoor coupling and walks
+  // forward physically.
+  const T_init = (weatherData?.temperature?.[0] != null) ? weatherData.temperature[0] : comfortBand.lower_c
+  let TS_wall  = new Float64Array(extWallModel.type === 'mass' ? extWallModel.n : 0).fill(T_init)
+  let TS_roof  = new Float64Array(roofModel.type    === 'mass' ? roofModel.n    : 0).fill(T_init)
+  let TS_floor = new Float64Array(floorModel.type   === 'mass' ? floorModel.n   : 0).fill(T_init)
+  let T_air = T_init
 
   // Per-facade opaque-wall areas (used to area-weight sol-air G for the
   // collapsed single-state external-wall model; v1 fidelity)
@@ -875,6 +878,18 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   let acc_cool_gain_roof = 0, acc_cool_gain_floor = 0
   let acc_cool_gain_glaz_n = 0, acc_cool_gain_glaz_e = 0, acc_cool_gain_glaz_s = 0, acc_cool_gain_glaz_w = 0
   let acc_cool_gain_leakage = 0, acc_cool_gain_permanent = 0
+
+  // ── Brief 28-IM IM-M2 add 2: monthly aggregation ─────────────────────────
+  // True per-month engine aggregation (replaces CIBSE Guide A weighting
+  // placeholder used by the UI's Monthly view in IM-M1). One Float64Array(12)
+  // per loss category + solar; populated inside the hour loop using the
+  // weather month index. Exposed under each loss element's output (and
+  // top-level monthly_solar_transmission_kwh per facade) for downstream
+  // grouping = engine math, not new physics.
+  const _mkM = () => new Float64Array(12)
+  const monthly_wall  = _mkM(), monthly_roof = _mkM(), monthly_floor = _mkM(), monthly_glaz = _mkM()
+  const monthly_leakage = _mkM(), monthly_permanent = _mkM(), monthly_tb = _mkM()
+  const monthly_solar_n = _mkM(), monthly_solar_e = _mkM(), monthly_solar_s = _mkM(), monthly_solar_w = _mkM()
 
   // ── Thermal bridging (Brief 28-TB-Simple, supersedes Brief 28k Gate 3+) ──
   // ISO 14683 junction-based physics: H_TB = Σ(ψ × L) over the building's
@@ -929,10 +944,13 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
     _natvent_state.set(o.id, { wasOpen: false })
   }
   // T_op_prev: zone temperature from previous hour, used to decide opening
-  // control in the current hour (avoids within-hour coupling). Init at heating
-  // setpoint (sensible cold-start assumption; first-hour decision settles
-  // quickly).
-  let T_op_prev = comfortBand.lower_c
+  // control in the current hour (avoids within-hour coupling).
+  // Brief 28-IM IM-M2 add 1: initialise to T_out at hour 0 instead of the
+  // heating setpoint — eliminates the 1-2 week convergence transient in
+  // January that the setpoint-cold-start assumption produced. The trace
+  // now begins from the building's actual outdoor coupling and walks
+  // forward physically.
+  let T_op_prev = weatherData?.temperature?.[0] ?? comfortBand.lower_c
 
   for (let h = 0; h < n; h++) {
     const T_out = weatherData.temperature[h]
@@ -1118,33 +1136,45 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
     const dT_heat_out = Math.max(0, T_heat - T_out)
     const dT_cool_out = Math.max(0, T_out - T_cool)
     // Walls per facade (sol-air driving T)
-    acc_heat_loss_wall_n += wholeWallU_ext * wallOpaqueByFace.north * Math.max(0, T_heat - T_sa_wall_n_h)
-    acc_heat_loss_wall_e += wholeWallU_ext * wallOpaqueByFace.east  * Math.max(0, T_heat - T_sa_wall_e_h)
-    acc_heat_loss_wall_s += wholeWallU_ext * wallOpaqueByFace.south * Math.max(0, T_heat - T_sa_wall_s_h)
-    acc_heat_loss_wall_w += wholeWallU_ext * wallOpaqueByFace.west  * Math.max(0, T_heat - T_sa_wall_w_h)
+    const wall_n_h = wholeWallU_ext * wallOpaqueByFace.north * Math.max(0, T_heat - T_sa_wall_n_h)
+    const wall_e_h = wholeWallU_ext * wallOpaqueByFace.east  * Math.max(0, T_heat - T_sa_wall_e_h)
+    const wall_s_h = wholeWallU_ext * wallOpaqueByFace.south * Math.max(0, T_heat - T_sa_wall_s_h)
+    const wall_w_h = wholeWallU_ext * wallOpaqueByFace.west  * Math.max(0, T_heat - T_sa_wall_w_h)
+    acc_heat_loss_wall_n += wall_n_h
+    acc_heat_loss_wall_e += wall_e_h
+    acc_heat_loss_wall_s += wall_s_h
+    acc_heat_loss_wall_w += wall_w_h
     acc_cool_gain_wall_n += wholeWallU_ext * wallOpaqueByFace.north * Math.max(0, T_sa_wall_n_h - T_cool)
     acc_cool_gain_wall_e += wholeWallU_ext * wallOpaqueByFace.east  * Math.max(0, T_sa_wall_e_h - T_cool)
     acc_cool_gain_wall_s += wholeWallU_ext * wallOpaqueByFace.south * Math.max(0, T_sa_wall_s_h - T_cool)
     acc_cool_gain_wall_w += wholeWallU_ext * wallOpaqueByFace.west  * Math.max(0, T_sa_wall_w_h - T_cool)
     // Roof (sol-air driving T, single area)
-    acc_heat_loss_roof += wholeWallU_roof * roof_area * Math.max(0, T_heat - T_sa_roof)
+    const roof_h = wholeWallU_roof * roof_area * Math.max(0, T_heat - T_sa_roof)
+    acc_heat_loss_roof += roof_h
     acc_cool_gain_roof += wholeWallU_roof * roof_area * Math.max(0, T_sa_roof - T_cool)
     // Glazing per facade (T_out driving T, no sol-air on glass)
-    acc_heat_loss_glaz_n += glaz_face_UA('north') * dT_heat_out
-    acc_heat_loss_glaz_e += glaz_face_UA('east')  * dT_heat_out
-    acc_heat_loss_glaz_s += glaz_face_UA('south') * dT_heat_out
-    acc_heat_loss_glaz_w += glaz_face_UA('west')  * dT_heat_out
+    const glaz_n_h = glaz_face_UA('north') * dT_heat_out
+    const glaz_e_h = glaz_face_UA('east')  * dT_heat_out
+    const glaz_s_h = glaz_face_UA('south') * dT_heat_out
+    const glaz_w_h = glaz_face_UA('west')  * dT_heat_out
+    acc_heat_loss_glaz_n += glaz_n_h
+    acc_heat_loss_glaz_e += glaz_e_h
+    acc_heat_loss_glaz_s += glaz_s_h
+    acc_heat_loss_glaz_w += glaz_w_h
     acc_cool_gain_glaz_n += glaz_face_UA('north') * dT_cool_out
     acc_cool_gain_glaz_e += glaz_face_UA('east')  * dT_cool_out
     acc_cool_gain_glaz_s += glaz_face_UA('south') * dT_cool_out
     acc_cool_gain_glaz_w += glaz_face_UA('west')  * dT_cool_out
     // Ventilation (T_out)
-    acc_heat_loss_leakage   += UA_leakage   * dT_heat_out
-    acc_heat_loss_permanent += UA_permanent * dT_heat_out
+    const leakage_h   = UA_leakage   * dT_heat_out
+    const permanent_h = UA_permanent * dT_heat_out
+    acc_heat_loss_leakage   += leakage_h
+    acc_heat_loss_permanent += permanent_h
     acc_cool_gain_leakage   += UA_leakage   * dT_cool_out
     acc_cool_gain_permanent += UA_permanent * dT_cool_out
     // Ground floor (T_ground driving T)
-    acc_heat_loss_floor += wholeWallU_floor * ground_area * Math.max(0, T_heat - T_ground)
+    const floor_h = wholeWallU_floor * ground_area * Math.max(0, T_heat - T_ground)
+    acc_heat_loss_floor += floor_h
     acc_cool_gain_floor += wholeWallU_floor * ground_area * Math.max(0, T_ground - T_cool)
 
     // Thermal bridging (Brief 28-TB-Simple): H_TB × ΔT_out (ISO 14683 physics).
@@ -1153,6 +1183,21 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
     const TB_cool_h = total_H_TB_W_per_K * dT_cool_out
     acc_heat_loss_thermal_bridging += TB_heat_h
     acc_cool_gain_thermal_bridging += TB_cool_h
+
+    // Brief 28-IM IM-M2 add 2: monthly aggregation. weather month is 1-12;
+    // index 0-11 here.
+    const _m = (weatherData?.month?.[h] ?? 1) - 1
+    monthly_wall[_m]      += wall_n_h + wall_e_h + wall_s_h + wall_w_h
+    monthly_roof[_m]      += roof_h
+    monthly_floor[_m]     += floor_h
+    monthly_glaz[_m]      += glaz_n_h + glaz_e_h + glaz_s_h + glaz_w_h
+    monthly_leakage[_m]   += leakage_h
+    monthly_permanent[_m] += permanent_h
+    monthly_tb[_m]        += TB_heat_h
+    monthly_solar_n[_m]   += sol_n
+    monthly_solar_e[_m]   += sol_e
+    monthly_solar_s[_m]   += sol_s
+    monthly_solar_w[_m]   += sol_w
 
     // ── Brief 28e Gate E2: per-operable-opening natural ventilation ──────
     // For each operable opening, evaluate the control mode (using T_op from
@@ -1451,6 +1496,8 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
         cooling_gain_kwh: r1(acc_cool_gain_wall_n + acc_cool_gain_wall_e + acc_cool_gain_wall_s + acc_cool_gain_wall_w),
         area_m2:    Math.round(total_wall_opaque),
         kwh_per_m2: perM2(acc_heat_loss_wall_n + acc_heat_loss_wall_e + acc_heat_loss_wall_s + acc_heat_loss_wall_w),
+        // Brief 28-IM IM-M2 add 2: true per-month engine aggregation.
+        monthly_heating_loss_kwh: Array.from(monthly_wall, v => r1(v)),
         by_face: {
           F1: { heating_loss_kwh: r1(acc_heat_loss_wall_n), cooling_gain_kwh: r1(acc_cool_gain_wall_n), area_m2: Math.round(wallOpaqueByFace.north ?? 0) },
           F2: { heating_loss_kwh: r1(acc_heat_loss_wall_e), cooling_gain_kwh: r1(acc_cool_gain_wall_e), area_m2: Math.round(wallOpaqueByFace.east  ?? 0) },
@@ -1463,12 +1510,14 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
         cooling_gain_kwh: r1(acc_cool_gain_roof),
         area_m2:    Math.round(roof_area),
         kwh_per_m2: perM2(acc_heat_loss_roof),
+        monthly_heating_loss_kwh: Array.from(monthly_roof, v => r1(v)),
       },
       ground_floor: {
         heating_loss_kwh: r1(acc_heat_loss_floor),
         cooling_gain_kwh: r1(acc_cool_gain_floor),
         area_m2:    Math.round(ground_area),
         kwh_per_m2: perM2(acc_heat_loss_floor),
+        monthly_heating_loss_kwh: Array.from(monthly_floor, v => r1(v)),
       },
       glazing: {
         heating_loss_kwh:       r1(acc_heat_loss_glaz_n + acc_heat_loss_glaz_e + acc_heat_loss_glaz_s + acc_heat_loss_glaz_w),
@@ -1479,6 +1528,10 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
         solar_contributing_cooling_kwh: r1(acc_solar_cooling_n    + acc_solar_cooling_e    + acc_solar_cooling_s    + acc_solar_cooling_w),
         solar_shoulder_kwh:             r1(acc_solar_shoulder_n   + acc_solar_shoulder_e   + acc_solar_shoulder_s   + acc_solar_shoulder_w),
         area_m2:                Math.round(total_glazing),
+        // Brief 28-IM IM-M2 add 2: monthly aggregates.
+        monthly_heating_loss_kwh:        Array.from(monthly_glaz, v => r1(v)),
+        monthly_solar_transmission_kwh:  Array.from({ length: 12 }, (_, i) =>
+          r1(monthly_solar_n[i] + monthly_solar_e[i] + monthly_solar_s[i] + monthly_solar_w[i])),
         by_face: {
           F1: {
             heating_loss_kwh: r1(acc_heat_loss_glaz_n), cooling_gain_kwh: r1(acc_cool_gain_glaz_n),
@@ -1487,6 +1540,7 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
             solar_contributing_cooling_kwh: r1(acc_solar_cooling_n),
             solar_shoulder_kwh:             r1(acc_solar_shoulder_n),
             area_m2: Math.round(glazing.north ?? 0),
+            monthly_solar_transmission_kwh: Array.from(monthly_solar_n, v => r1(v)),
           },
           F2: {
             heating_loss_kwh: r1(acc_heat_loss_glaz_e), cooling_gain_kwh: r1(acc_cool_gain_glaz_e),
@@ -1495,6 +1549,7 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
             solar_contributing_cooling_kwh: r1(acc_solar_cooling_e),
             solar_shoulder_kwh:             r1(acc_solar_shoulder_e),
             area_m2: Math.round(glazing.east ?? 0),
+            monthly_solar_transmission_kwh: Array.from(monthly_solar_e, v => r1(v)),
           },
           F3: {
             heating_loss_kwh: r1(acc_heat_loss_glaz_s), cooling_gain_kwh: r1(acc_cool_gain_glaz_s),
@@ -1503,6 +1558,7 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
             solar_contributing_cooling_kwh: r1(acc_solar_cooling_s),
             solar_shoulder_kwh:             r1(acc_solar_shoulder_s),
             area_m2: Math.round(glazing.south ?? 0),
+            monthly_solar_transmission_kwh: Array.from(monthly_solar_s, v => r1(v)),
           },
           F4: {
             heating_loss_kwh: r1(acc_heat_loss_glaz_w), cooling_gain_kwh: r1(acc_cool_gain_glaz_w),
@@ -1511,12 +1567,14 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
             solar_contributing_cooling_kwh: r1(acc_solar_cooling_w),
             solar_shoulder_kwh:             r1(acc_solar_shoulder_w),
             area_m2: Math.round(glazing.west ?? 0),
+            monthly_solar_transmission_kwh: Array.from(monthly_solar_w, v => r1(v)),
           },
         },
       },
       fabric_leakage: {
         heating_loss_kwh:        r1(acc_heat_loss_leakage),
         cooling_gain_kwh:        r1(acc_cool_gain_leakage),
+        monthly_heating_loss_kwh: Array.from(monthly_leakage, v => r1(v)),
         // Brief 28-IM Bug 2: surface the operational + n50 + q50 source so
         // the Building tab airtightness input can show derived values
         // under the q50 slider.
@@ -1525,10 +1583,15 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
         q50_m3_per_h_m2:         airtightness.q50,
         source:                  airtightness.source,
       },
-      permanent_vents:  { heating_loss_kwh: r1(acc_heat_loss_permanent), cooling_gain_kwh: r1(acc_cool_gain_permanent) },
+      permanent_vents:  {
+        heating_loss_kwh: r1(acc_heat_loss_permanent),
+        cooling_gain_kwh: r1(acc_cool_gain_permanent),
+        monthly_heating_loss_kwh: Array.from(monthly_permanent, v => r1(v)),
+      },
       thermal_bridging: {
         heating_loss_kwh:           r1(acc_heat_loss_thermal_bridging),
         cooling_gain_kwh:           r1(acc_cool_gain_thermal_bridging),
+        monthly_heating_loss_kwh:   Array.from(monthly_tb, v => r1(v)),
         // Brief 28-TB-Simple: ISO 14683 junction-based shape replaces the
         // SBEM α convention from Brief 28k Gate 3+. Engine consumes
         // total_H_TB_W_per_K; junctions[] is breakdown for display layer +
@@ -2030,10 +2093,12 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   const T_hourly = new Float32Array(n)
   const dt = 3600
 
-  let TS_wall  = new Float64Array(extWallModel.type === 'mass' ? extWallModel.n : 0).fill(comfortBand.lower_c)
-  let TS_roof  = new Float64Array(roofModel.type    === 'mass' ? roofModel.n    : 0).fill(comfortBand.lower_c)
-  let TS_floor = new Float64Array(floorModel.type   === 'mass' ? floorModel.n   : 0).fill(comfortBand.lower_c)
-  let T_air = comfortBand.lower_c
+  // Brief 28-IM IM-M2 add 1: State 2 mirror — initialise from T_out at hour 0.
+  const T_init = (weatherData?.temperature?.[0] != null) ? weatherData.temperature[0] : comfortBand.lower_c
+  let TS_wall  = new Float64Array(extWallModel.type === 'mass' ? extWallModel.n : 0).fill(T_init)
+  let TS_roof  = new Float64Array(roofModel.type    === 'mass' ? roofModel.n    : 0).fill(T_init)
+  let TS_floor = new Float64Array(floorModel.type   === 'mass' ? floorModel.n   : 0).fill(T_init)
+  let T_air = T_init
 
   const wallOpaqueByFace = wall_opaque
   const _safe_wall_opaque_total = Math.max(total_wall_opaque, 1e-9)
@@ -2092,6 +2157,13 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   let acc_gains_offset_heating_Wh = 0
   let acc_gains_added_cooling_Wh  = 0
   let acc_gains_shoulder_Wh       = 0
+
+  // Brief 28-IM IM-M2 add 2: State 2 monthly aggregation (mirror of State 1).
+  const _mkM2 = () => new Float64Array(12)
+  const monthly_wall  = _mkM2(), monthly_roof = _mkM2(), monthly_floor = _mkM2(), monthly_glaz = _mkM2()
+  const monthly_leakage = _mkM2(), monthly_permanent = _mkM2(), monthly_tb = _mkM2()
+  const monthly_solar_n = _mkM2(), monthly_solar_e = _mkM2(), monthly_solar_s = _mkM2(), monthly_solar_w = _mkM2()
+  const monthly_people = _mkM2(), monthly_lighting = _mkM2(), monthly_equipment = _mkM2()
 
   // Brief 28-TB-Simple (supersedes Brief 28k Gate 3+): ISO 14683
   // junction-based thermal bridging. State 2 mirror of State 1.
@@ -2155,7 +2227,8 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     })
     _natvent_state.set(o.id, { wasOpen: false })
   }
-  let T_op_prev = comfortBand.lower_c
+  // Brief 28-IM IM-M2 add 1: same initial-T_zone fix as State 1.
+  let T_op_prev = weatherData?.temperature?.[0] ?? comfortBand.lower_c
 
   // Brief 28j: per-hour demand series for State 3 hour-by-hour MVHR recovery
   // cap. State 3's computeVentilationEnergy iterates per-hour to apply the
@@ -2182,6 +2255,13 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     const gains = computeHourlyGains(building, h, weatherData, gia)
     acc_people += gains.people; acc_lighting += gains.lighting
     acc_equip_baseload += gains.equipment_baseload; acc_equip_active += gains.equipment_active
+    // Brief 28-IM IM-M2 add 2: monthly internal gain aggregation.
+    {
+      const _mi = (weatherData?.month?.[h] ?? 1) - 1
+      monthly_people[_mi]    += gains.people
+      monthly_lighting[_mi]  += gains.lighting
+      monthly_equipment[_mi] += (gains.equipment_baseload + gains.equipment_active)
+    }
     if (gains.people > peak_people) peak_people = gains.people
     if (gains.lighting > peak_lighting) peak_lighting = gains.lighting
     if (gains.equipment > peak_equipment) peak_equipment = gains.equipment
@@ -2301,29 +2381,41 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     const T_sa_wall_w_h = solAirT(T_out, hourlySolar.f4[h], extWallModel.solar_abs ?? 0.6, extWallModel.h_out ?? 25)
     const dT_heat_out = Math.max(0, T_heat - T_out)
     const dT_cool_out = Math.max(0, T_out - T_cool)
-    acc_heat_loss_wall_n += wholeWallU_ext * wallOpaqueByFace.north * Math.max(0, T_heat - T_sa_wall_n_h)
-    acc_heat_loss_wall_e += wholeWallU_ext * wallOpaqueByFace.east  * Math.max(0, T_heat - T_sa_wall_e_h)
-    acc_heat_loss_wall_s += wholeWallU_ext * wallOpaqueByFace.south * Math.max(0, T_heat - T_sa_wall_s_h)
-    acc_heat_loss_wall_w += wholeWallU_ext * wallOpaqueByFace.west  * Math.max(0, T_heat - T_sa_wall_w_h)
+    const wall_n_h = wholeWallU_ext * wallOpaqueByFace.north * Math.max(0, T_heat - T_sa_wall_n_h)
+    const wall_e_h = wholeWallU_ext * wallOpaqueByFace.east  * Math.max(0, T_heat - T_sa_wall_e_h)
+    const wall_s_h = wholeWallU_ext * wallOpaqueByFace.south * Math.max(0, T_heat - T_sa_wall_s_h)
+    const wall_w_h = wholeWallU_ext * wallOpaqueByFace.west  * Math.max(0, T_heat - T_sa_wall_w_h)
+    acc_heat_loss_wall_n += wall_n_h
+    acc_heat_loss_wall_e += wall_e_h
+    acc_heat_loss_wall_s += wall_s_h
+    acc_heat_loss_wall_w += wall_w_h
     acc_cool_gain_wall_n += wholeWallU_ext * wallOpaqueByFace.north * Math.max(0, T_sa_wall_n_h - T_cool)
     acc_cool_gain_wall_e += wholeWallU_ext * wallOpaqueByFace.east  * Math.max(0, T_sa_wall_e_h - T_cool)
     acc_cool_gain_wall_s += wholeWallU_ext * wallOpaqueByFace.south * Math.max(0, T_sa_wall_s_h - T_cool)
     acc_cool_gain_wall_w += wholeWallU_ext * wallOpaqueByFace.west  * Math.max(0, T_sa_wall_w_h - T_cool)
-    acc_heat_loss_roof += wholeWallU_roof * roof_area * Math.max(0, T_heat - T_sa_roof)
+    const roof_h = wholeWallU_roof * roof_area * Math.max(0, T_heat - T_sa_roof)
+    acc_heat_loss_roof += roof_h
     acc_cool_gain_roof += wholeWallU_roof * roof_area * Math.max(0, T_sa_roof - T_cool)
-    acc_heat_loss_glaz_n += glaz_face_UA('north') * dT_heat_out
-    acc_heat_loss_glaz_e += glaz_face_UA('east')  * dT_heat_out
-    acc_heat_loss_glaz_s += glaz_face_UA('south') * dT_heat_out
-    acc_heat_loss_glaz_w += glaz_face_UA('west')  * dT_heat_out
+    const glaz_n_h = glaz_face_UA('north') * dT_heat_out
+    const glaz_e_h = glaz_face_UA('east')  * dT_heat_out
+    const glaz_s_h = glaz_face_UA('south') * dT_heat_out
+    const glaz_w_h = glaz_face_UA('west')  * dT_heat_out
+    acc_heat_loss_glaz_n += glaz_n_h
+    acc_heat_loss_glaz_e += glaz_e_h
+    acc_heat_loss_glaz_s += glaz_s_h
+    acc_heat_loss_glaz_w += glaz_w_h
     acc_cool_gain_glaz_n += glaz_face_UA('north') * dT_cool_out
     acc_cool_gain_glaz_e += glaz_face_UA('east')  * dT_cool_out
     acc_cool_gain_glaz_s += glaz_face_UA('south') * dT_cool_out
     acc_cool_gain_glaz_w += glaz_face_UA('west')  * dT_cool_out
-    acc_heat_loss_leakage   += UA_leakage   * dT_heat_out
-    acc_heat_loss_permanent += UA_permanent * dT_heat_out
+    const leakage_h   = UA_leakage   * dT_heat_out
+    const permanent_h = UA_permanent * dT_heat_out
+    acc_heat_loss_leakage   += leakage_h
+    acc_heat_loss_permanent += permanent_h
     acc_cool_gain_leakage   += UA_leakage   * dT_cool_out
     acc_cool_gain_permanent += UA_permanent * dT_cool_out
-    acc_heat_loss_floor += wholeWallU_floor * ground_area * Math.max(0, T_heat - T_ground)
+    const floor_h = wholeWallU_floor * ground_area * Math.max(0, T_heat - T_ground)
+    acc_heat_loss_floor += floor_h
     acc_cool_gain_floor += wholeWallU_floor * ground_area * Math.max(0, T_ground - T_cool)
 
     // Brief 28-TB-Simple: thermal bridging via ISO 14683 H_TB × ΔT_out
@@ -2332,6 +2424,20 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     const TB_cool_h = total_H_TB_W_per_K * dT_cool_out
     acc_heat_loss_thermal_bridging += TB_heat_h
     acc_cool_gain_thermal_bridging += TB_cool_h
+
+    // Brief 28-IM IM-M2 add 2: monthly aggregation (State 2 mirror).
+    const _m = (weatherData?.month?.[h] ?? 1) - 1
+    monthly_wall[_m]      += wall_n_h + wall_e_h + wall_s_h + wall_w_h
+    monthly_roof[_m]      += roof_h
+    monthly_floor[_m]     += floor_h
+    monthly_glaz[_m]      += glaz_n_h + glaz_e_h + glaz_s_h + glaz_w_h
+    monthly_leakage[_m]   += leakage_h
+    monthly_permanent[_m] += permanent_h
+    monthly_tb[_m]        += TB_heat_h
+    monthly_solar_n[_m]   += sol_n
+    monthly_solar_e[_m]   += sol_e
+    monthly_solar_s[_m]   += sol_s
+    monthly_solar_w[_m]   += sol_w
 
     // Brief 28k Gate 3+: per-system mechanical ventilation. Each system
     // contributes flow × ρCp × (1 − HRE) × ΔT independently.
@@ -2652,6 +2758,8 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
         external_wall: {
           heating_loss_kwh: r1k(wallH), cooling_gain_kwh: r1k(wallC),
           area_m2: Math.round(total_wall_opaque), kwh_per_m2: perM2k(wallH),
+          // Brief 28-IM IM-M2 add 2: monthly aggregation (State 2 mirror)
+          monthly_heating_loss_kwh: Array.from(monthly_wall, v => r1k(v)),
           by_face: {
             F1: { heating_loss_kwh: r1k(acc_heat_loss_wall_n), cooling_gain_kwh: r1k(acc_cool_gain_wall_n), area_m2: Math.round(wallOpaqueByFace.north ?? 0) },
             F2: { heating_loss_kwh: r1k(acc_heat_loss_wall_e), cooling_gain_kwh: r1k(acc_cool_gain_wall_e), area_m2: Math.round(wallOpaqueByFace.east  ?? 0) },
@@ -2659,8 +2767,8 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
             F4: { heating_loss_kwh: r1k(acc_heat_loss_wall_w), cooling_gain_kwh: r1k(acc_cool_gain_wall_w), area_m2: Math.round(wallOpaqueByFace.west  ?? 0) },
           },
         },
-        roof:         { heating_loss_kwh: r1k(acc_heat_loss_roof),  cooling_gain_kwh: r1k(acc_cool_gain_roof),  area_m2: Math.round(roof_area),    kwh_per_m2: perM2k(acc_heat_loss_roof) },
-        ground_floor: { heating_loss_kwh: r1k(acc_heat_loss_floor), cooling_gain_kwh: r1k(acc_cool_gain_floor), area_m2: Math.round(ground_area),  kwh_per_m2: perM2k(acc_heat_loss_floor) },
+        roof:         { heating_loss_kwh: r1k(acc_heat_loss_roof),  cooling_gain_kwh: r1k(acc_cool_gain_roof),  area_m2: Math.round(roof_area),    kwh_per_m2: perM2k(acc_heat_loss_roof),    monthly_heating_loss_kwh: Array.from(monthly_roof, v => r1k(v)) },
+        ground_floor: { heating_loss_kwh: r1k(acc_heat_loss_floor), cooling_gain_kwh: r1k(acc_cool_gain_floor), area_m2: Math.round(ground_area),  kwh_per_m2: perM2k(acc_heat_loss_floor),  monthly_heating_loss_kwh: Array.from(monthly_floor, v => r1k(v)) },
         glazing: {
           heating_loss_kwh:               r1k(glazH),
           cooling_gain_kwh:               r1k(glazC),
@@ -2669,6 +2777,9 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
           solar_contributing_cooling_kwh: r1k(solarCool),
           solar_shoulder_kwh:             r1k(solarShoulder),
           area_m2: Math.round(total_glazing),
+          monthly_heating_loss_kwh:       Array.from(monthly_glaz, v => r1k(v)),
+          monthly_solar_transmission_kwh: Array.from({ length: 12 }, (_, i) =>
+            r1k(monthly_solar_n[i] + monthly_solar_e[i] + monthly_solar_s[i] + monthly_solar_w[i])),
           by_face: {
             F1: { heating_loss_kwh: r1k(acc_heat_loss_glaz_n), cooling_gain_kwh: r1k(acc_cool_gain_glaz_n), solar_transmission_kwh: r1k(acc_solar_n), solar_beneficial_heating_kwh: r1k(acc_solar_beneficial_n), solar_contributing_cooling_kwh: r1k(acc_solar_cooling_n), solar_shoulder_kwh: r1k(acc_solar_shoulder_n), area_m2: Math.round(glazing.north ?? 0) },
             F2: { heating_loss_kwh: r1k(acc_heat_loss_glaz_e), cooling_gain_kwh: r1k(acc_cool_gain_glaz_e), solar_transmission_kwh: r1k(acc_solar_e), solar_beneficial_heating_kwh: r1k(acc_solar_beneficial_e), solar_contributing_cooling_kwh: r1k(acc_solar_cooling_e), solar_shoulder_kwh: r1k(acc_solar_shoulder_e), area_m2: Math.round(glazing.east ?? 0) },
@@ -2679,16 +2790,22 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
         fabric_leakage: {
           heating_loss_kwh:        r1k(acc_heat_loss_leakage),
           cooling_gain_kwh:        r1k(acc_cool_gain_leakage),
+          monthly_heating_loss_kwh: Array.from(monthly_leakage, v => r1k(v)),
           // Brief 28-IM Bug 2 (State 2 mirror): q50-derived airtightness.
           operational_ach:         Math.round(airtightness.n_op * 1000) / 1000,
           n50_ach:                 Math.round(airtightness.n50 * 100) / 100,
           q50_m3_per_h_m2:         airtightness.q50,
           source:                  airtightness.source,
         },
-        permanent_vents:  { heating_loss_kwh: r1k(acc_heat_loss_permanent), cooling_gain_kwh: r1k(acc_cool_gain_permanent) },
+        permanent_vents:  {
+          heating_loss_kwh: r1k(acc_heat_loss_permanent),
+          cooling_gain_kwh: r1k(acc_cool_gain_permanent),
+          monthly_heating_loss_kwh: Array.from(monthly_permanent, v => r1k(v)),
+        },
         thermal_bridging: {
           heating_loss_kwh:           r1k(acc_heat_loss_thermal_bridging),
           cooling_gain_kwh:           r1k(acc_cool_gain_thermal_bridging),
+          monthly_heating_loss_kwh:   Array.from(monthly_tb, v => r1k(v)),
           // Brief 28-TB-Simple State 2 mirror — same shape as State 1.
           mode:                       tb_result.mode,
           multiplier:                 tb_result.multiplier,
@@ -2736,6 +2853,13 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
           added_cooling_kwh:   r1k(acc_gains_added_cooling_Wh),
           shoulder_kwh:        r1k(acc_gains_shoulder_Wh),
           total_kwh:           r1k(acc_people + acc_lighting + (acc_equip_baseload + acc_equip_active)),
+        },
+        // Brief 28-IM IM-M2 add 2: monthly internal gains (Internal Gains tab
+        // Monthly view consumes these).
+        internal_gains_monthly: {
+          people_kwh:    Array.from(monthly_people, v => r1k(v)),
+          lighting_kwh:  Array.from(monthly_lighting, v => r1k(v)),
+          equipment_kwh: Array.from(monthly_equipment, v => r1k(v)),
         },
         totals: {
           total_heating_loss_kwh: r1k(
