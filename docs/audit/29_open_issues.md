@@ -293,3 +293,40 @@ By severity (after Brief 30 Phase 1.0 re-diagnosis 2026-05-18):
 - Issue #6 (integrand-vs-display invariant) is a cross-cutting infrastructure fix, separate brief, precondition for any new module.
 
 **Standing by for Chris's sign-off on Part 1 before beginning Part 2 (Building Dynamic).**
+
+---
+
+## #14 — Internal Gains reads `systems_config_v25.ventilation` (scope contamination)
+
+| Field | Value |
+|---|---|
+| Module | Internal Gains (envelope-gains / State 2) |
+| Engine | Static (`_calculateState2`) |
+| Severity | **S2** |
+| Status | **OPEN** — fix deferred to Systems-module rework |
+| Discovered | Brief 36 Part 1 audit (2026-05-18) |
+| Location | `frontend/src/utils/instantCalc.js:2371` — `building.systems_config_v25.ventilation` read at the top of `_calculateState2`. Surfaces in `state2.losses_at_setpoint.ventilation[]` (line 3060), `acc_mech_vent_heat_per_system`, `acc_mech_vent_cool_per_system`, `daily_mech_vent_per_system`, `monthly_mech_vent_per_system`. |
+| Scope violation | Per CLAUDE.md "Module scopes": mechanical ventilation (MVHR, MEV, fan power, heat-recovery effectiveness) is owned by the Systems module. The Internal Gains module computes occupancy / lighting / equipment heat gains; it should not read systems concepts. |
+| Why this is currently tolerable | The Internal Gains UI filters mech-vent out of the displayed Heat Balance: `HeatBalanceView` passes `modules: ['fabric', 'thermal_bridging', 'fabric_leakage', 'permanent_vents', 'internal_gains']` to the shared HeatBalance component — `ventilation` is not in the allowlist. The gain integrand itself (people / lighting / equipment) is clean. The only contamination is in the engine read + State 2 result object's `losses_at_setpoint.ventilation` block. |
+| Fix scope (when Systems is reworked) | Move the per-system mechanical ventilation computation into the Systems engine path. State 2 should only see envelope + internal gains. State 3 (Systems-on) would then own the mech-vent term and feed back as an upstream change to the zone heat balance, not as a direct read inside Internal Gains. |
+| Cross-references | CLAUDE.md "Module scopes" Internal Gains / Operation / Systems stubs (Brief 33 Part 3). |
+
+---
+
+## #15 — Lighting `independent` mode applies `occupancy_rate` scaling inconsistently with equipment `independent` mode
+
+| Field | Value |
+|---|---|
+| Module | Internal Gains (Static) |
+| Engine | Static (`computeHourlyGains` + `lightingFractionForHour`) |
+| Severity | **S2** |
+| Status | **OPEN** |
+| Discovered | Brief 36 Part 1 audit (2026-05-18) |
+| Location | `frontend/src/utils/instantCalc.js`:`lightingFractionForHour` (line 1974) — unconditionally multiplies by `occupancy_rate`. Called from `computeHourlyGains` line 2073/2076 even when `profile.relationship_to_occupancy === 'independent'` (and no active exception). |
+| Current value | An `independent` lighting profile (e.g. emergency lighting, always-on egress) with `occupancy_rate = 0.75` outputs **75%** of its scheduled power — the engine applies the building-wide occupancy_rate even though the profile's relationship is meant to be independent of occupancy. |
+| Expected value | `independent` mode should produce `pFrac = schedule × monthly_multiplier` with no occupancy_rate scaling — matching equipment's `independent` branch at `equipmentFractionForHour` line 1989-1994 which correctly does `return v * mm` without occupancy_rate. |
+| Root cause | `lightingFractionForHour` has a single code path that always multiplies by `occupancy_rate`. There is no `if (relationship === 'independent')` branch to suppress that scaling. The branching at `computeHourlyGains` line 2063 only picks which schedule to look up; the per-hour multiplier path is the same. |
+| Asymmetry with equipment | `equipmentFractionForHour` (line 1987) has the correct branching: `independent` returns `v · mm` (no occupancy_rate), `proportional` returns `max(standby, v · mm · occupancy_rate)`. Lighting should mirror this. |
+| Why not caught by reconciliation row | The Heat Balance ↔ Monthly reconciliation in SummaryView compares two *display* paths of the same engine output. Both paths sum the same buggy integrand. Display-vs-display consistency holds; integrand-vs-physical-intent does not. Same shape as the Brief 29 Issue #1 door bug at the integrand-defining layer — except here the consequence is a wrong scaling factor on a real term, not a hidden ghost term. |
+| Fix scope | Branch on `relationship_to_occupancy` inside `lightingFractionForHour`. When `'independent'`, skip the `occupancy_rate` multiply (mirroring equipment's branch). When `'proportional'` / `'proportional_with_spill'`, retain it. The exception-override branch at line 2066-2071 already skips occupancy_rate scaling (correctly); this fix aligns the no-exception path. Single-file fix in `instantCalc.js`; verify Bridgewater's headline lighting kWh moves only if it has an `independent` profile (default profile is `proportional_with_spill`, so default Bridgewater is unaffected — fix is for users who configure independent emergency lighting). |
+| Cross-references | Brief 36 Part 1 §"Sanity-check hand-calcs" (`docs/audit/32_static_audit_FINDINGS.md`). |

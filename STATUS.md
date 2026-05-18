@@ -1,6 +1,21 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-18 — Brief 33 Part 3 (close): CLAUDE.md Module Scopes (in flight)
+## 🚧 Session 2026-05-18 — Brief 36 Part 1: Internal Gains Static audit (in flight)
+
+**State:** `single_commit_in_flight` — audit-only commit. Brief 29's three-lists method applied to `_calculateState2`. Findings doc + two new open issues (#14 + #15).
+
+**What's landing in this commit:**
+- `docs/audit/32_static_audit_FINDINGS.md` (new) — Internal Gains Static section. Three-lists matrix for people / lighting / equipment (no integrand-vs-display mismatches found on the gain side). Multi-profile audit (area-share-weighted sum, Σ permitted to exceed 1.0, area_share=0 → 0 — all as documented). Hand-calc sanity check (engine consistent with v2.4 contract; brief's "schedule = 1.0 → density × area × 8760" framing understates the engine's intentional occupancy_rate / daylight_factor multipliers). Scope contamination check (gain integrand is clean; `_calculateState2` reads `systems_config_v25.ventilation` → Issue #14). Sensible/latent split (sensible-only integrand AND display — no silent disagreement). State 1 → State 2 delta (sound by construction).
+- `docs/audit/29_open_issues.md` — appended Issue #14 (S2 scope contamination, deferred to Systems-module rework) and Issue #15 (S2 lighting `independent` mode applies occupancy_rate scaling inconsistently with equipment's `independent` branch).
+- STATUS.md (this file) — Brief 36 Part 1 entry prepended; Brief 33 Part 3 marked closed at `d814973`.
+
+**Headline:** no Severity 3 findings on Internal Gains. No hidden-integrand-term bugs (Brief 29 Issue #1 class). Two S2 findings logged, both deferred — Issue #14 awaits Systems-module rework; Issue #15 is a single-file fix queued for a follow-up brief (default Bridgewater config is unaffected; only matters for users who configure `independent` lighting profiles such as emergency lighting).
+
+**Next:** Brief 36 Part 2 — Internal Gains colour discipline (three shades of purple matching Sankey).
+
+---
+
+## ✅ Session 2026-05-18 — Brief 33 Part 3 (close): CLAUDE.md Module Scopes (closed `d814973`)
 
 **State:** `single_commit_in_flight` — documentation-only. Closes Brief 33 fully (Parts 1, 2, and 3 all complete).
 
