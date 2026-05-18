@@ -130,7 +130,9 @@ The exact engine output depends on hour-by-hour wind speed and outdoor temperatu
 
 ## C_d derivation and the single-sided restriction factor
 
-The Static engine derives C_d per opening from geometry and resistance features, then either feeds it directly into the cross-flow formula or applies it as a restriction factor on the single-sided empirical correlation. The derivation lives in `frontend/src/utils/openingCoefficients.js`.
+> **UI note (Brief 34, 2026-05-18):** the tool's UI exposes a single user-input C_d slider per building (range 0.15–0.65, default 0.25). The geometry-based lookup tables below remain as a reference for users choosing an appropriate slider value. Anchor labels on the slider correspond to canonical opening types from this table. The `computeCd` helper in `frontend/src/utils/openingCoefficients.js` stays as a code utility but is no longer wired to the engine — the engine reads the slider value directly.
+
+The lookup tables and worked example below describe how a user can choose an appropriate slider value. They also remain the documented basis if geometry-aware per-opening derivation is reinstated.
 
 ### Base C_d by opening type
 

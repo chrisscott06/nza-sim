@@ -1,27 +1,34 @@
 /**
  * openingCoefficients.js — Brief 33 Part 2 (2026-05-18).
  *
- * C_d derivation for passive envelope openings used by the Static engine's
- * permanent-vent flow correlations. Per-opening, geometry-aware.
+ * Discharge coefficient lookup tables and resistance multipliers for
+ * passive envelope openings.
  *
  * Sources:
  *   - CIBSE Guide A §4.6 and Table 4.20 (sharp-edge orifice / slot / louvre)
  *   - AIVC Technical Note 32 (Liddament 1996) — slot aspect-ratio coefficients
  *   - BS EN 16798-7 §6.4 (single-sided correlation context)
  *
- * Replaces the hard-coded Cd = 0.6 that lived in _calculateEnvelopeOnly
- * (instantCalc.js). The new dispatch is per-opening:
+ * NOTE: As of Brief 34 (2026-05-18), the UI exposes a single user-input
+ * C_d slider (in the Permanent Openings panel of the Building module)
+ * instead of deriving C_d per opening from geometry. This file remains
+ * as a utility — the methodology doc continues to reference these lookup
+ * tables for users who want to choose an appropriate slider value
+ * manually. If geometry-aware derivation is reinstated in future, the
+ * hooks below are intact.
  *
- *   cross-flow:    Q = computeCd(opening) · A · sqrt(Cw) · v_wind
- *   single-sided:  Q = 0.025 · A · v_wind · min(1.0, computeCd(opening) / 0.6)
+ * The engine reads the slider value (`openings.cd`) directly. The
+ * cross-flow correlation:        Q = cd · A · sqrt(Cw) · v_wind
+ * The single-sided correlation:  Q = 0.025 · A · v_wind · min(1.0, cd / 0.6)
  *
- * The single-sided restriction factor is an engineering correction documented
- * verbatim in docs/audit/29_permanent_vent_methodology.md §"C_d derivation and
- * the single-sided restriction factor". The empirical 0.025 coefficient from
- * BS EN 16798-7 is calibrated for typical-window-grade openings (effective
- * C_d 0.5–0.65); applying it unscaled to slot trickle vents with mesh and flap
- * (C_d ≈ 0.25) would overstate flow. The min(1.0, …) cap means openings as
- * permissive as the reference do not scale up.
+ * The single-sided restriction factor is an engineering correction
+ * documented verbatim in docs/audit/29_permanent_vent_methodology.md
+ * §"C_d derivation and the single-sided restriction factor". The
+ * empirical 0.025 coefficient from BS EN 16798-7 is calibrated for
+ * typical-window-grade openings (effective C_d 0.5–0.65); applying it
+ * unscaled to high-restriction trickle vents (C_d ≈ 0.25) overstates
+ * flow. The min(1.0, …) cap means openings as permissive as the
+ * reference do not scale up.
  */
 
 // ── Base C_d by opening type ─────────────────────────────────────────────────

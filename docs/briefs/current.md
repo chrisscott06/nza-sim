@@ -1,8 +1,8 @@
 # Current brief
 
-**Active:** [`active/33_building_envelope.md`](active/33_building_envelope.md) — Revert `balanced_mechanical` from the Building module, fix the trickle-vent C_d, lock the Building module's scope in CLAUDE.md. Closes Brief 32.
+**Active:** [`active/34_simplify_permanent_openings_ui.md`](active/34_simplify_permanent_openings_ui.md) — Simplify the Permanent Openings UI to a single building-wide C_d slider. UI-only; no physics changes. Brief 33's Parts 1 + 2 + Finding 1 fix already landed.
 
-**Status:** Part 1 closed `195a87b`. Finding 1 fix closed `b53b163` (flow_mode now passes through `withMode`'s State 1 allowlist). Finding 2 deferred per Chris (likely input-state drift between screenshots, not a real bug — revisit if it recurs cleanly). Part 2 — Geometry-aware C_d — in flight this commit. Part 3 (CLAUDE.md "Module scopes" lock) is next.
+**Status:** Brief 34 Part 1 in flight (this commit). Brief 33 Part 1 closed `195a87b`, Finding 1 fix closed `b53b163`, Part 2 closed `c6a415b`. Brief 33 Part 3 (CLAUDE.md "Module scopes" lock) remains queued.
 
 **Paused (in active/ for traceability):** [`active/30_dynamic_engine_rebuild.md`](active/30_dynamic_engine_rebuild.md) — Phase 0 + Phase 1.0 complete (commits `8003577` + `cc96815`). Phase 1.1 onwards PAUSED. Dynamic backend code frozen at HEAD `54407e3` (post Brief 31), not deleted. Resume after Brief 33 closes.
 

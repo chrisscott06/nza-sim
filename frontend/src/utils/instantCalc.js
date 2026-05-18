@@ -31,7 +31,8 @@ import {
   R_SI_FLOOR,
   SOLAR_ABS_DEFAULT,
 } from './wallModel.js'
-import { computeCd } from './openingCoefficients.js'
+// openingCoefficients.js retained as a utility per Brief 34; not imported here
+// any longer because the engine reads the user-input openings.cd directly.
 
 // ── System efficiency defaults (by library key) ───────────────────────────────
 // Used for instant calc lookups without needing the full library API response.
@@ -416,20 +417,18 @@ function withMode(building, mode) {
   // resolveFlowMode's default. Same shape of bug as Brief 29 Issue #1
   // (operable doors emitted to the integrand but missing from the display
   // iteration list — two parallel lists out of sync).
-  // Brief 33 Part 2 (2026-05-18): per-facade opening geometry fields
-  // (type / internal_resistance / width_mm / height_mm) added below per the
-  // ALLOWLIST DRIFT discipline. computeCd reads these via building.openings.
+  // Brief 34 (2026-05-18): per-facade geometry fields (type / dimensions /
+  // resistance) removed in favour of a single building-wide `cd` field. The
+  // computeCd helper in openingCoefficients.js remains as a utility but is
+  // no longer wired to the engine. ALLOWLIST DRIFT discipline maintained.
   const passFace = (face) => ({
-    louvre_area_m2:      ops?.[face]?.louvre_area_m2 ?? 0,
-    openable_fraction:   ops?.[face]?.openable_fraction ?? 0,
-    type:                ops?.[face]?.type ?? 'louvre',
-    internal_resistance: Array.isArray(ops?.[face]?.internal_resistance) ? ops[face].internal_resistance : [],
-    width_mm:            ops?.[face]?.width_mm ?? null,
-    height_mm:           ops?.[face]?.height_mm ?? null,
+    louvre_area_m2:    ops?.[face]?.louvre_area_m2 ?? 0,
+    openable_fraction: ops?.[face]?.openable_fraction ?? 0,
   })
   const passThroughOpenings = {
     site_exposure: ops.site_exposure ?? 'normal',
     flow_mode:     ops.flow_mode     ?? 'single_sided',  // Brief 33 Finding 1 fix
+    cd:            typeof ops.cd === 'number' ? ops.cd : 0.25,  // Brief 34 single C_d slider
     north:    passFace('north'),
     south:    passFace('south'),
     east:     passFace('east'),
@@ -848,19 +847,21 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
 
   // Permanent openings (louvres only — operable windows are State 2.5)
   //
-  // Brief 33 Part 2 (2026-05-18): per-facade geometry-aware C_d via
-  // computeCd(opening). The hour loop dispatches on flow_mode (two
-  // branches: cross / single_sided) using two pre-computed weighted-area
-  // sums to keep the hot loop branch-free per facade:
+  // Brief 34 (2026-05-18): single building-wide C_d slider. The Brief 33
+  // Part 2 per-facade geometry calculator (computeCd) was simplified out
+  // of the engine in favour of a user-selectable `openings.cd` value.
+  // The calculator remains in openingCoefficients.js as a utility for
+  // anyone wanting to look up an appropriate slider value manually.
   //
-  //   cross_Cd_A_sum         = Σ_face (C_d_face · A_face)
-  //   single_sided_eff_A_sum = Σ_face (min(1, C_d_face / 0.6) · A_face)
+  // Hour-loop dispatch on flow_mode:
+  //   cross         — Q = cd · A_total · sqrt(Cw) · v_wind             (CIBSE Guide A §4.6)
+  //   single_sided  — Q = 0.025 · min(1, cd/0.6) · A_total · v_wind     (BS EN 16798-7 §6.4 + engineering correction)
   //
   // The single-sided restriction factor is an engineering correction —
   // BS EN 16798-7 §6.4's empirical 0.025 coefficient is calibrated for
   // typical-window-grade openings (effective C_d 0.5–0.65); applying it
-  // unscaled to high-restriction trickle vents (C_d ≈ 0.25) overstates
-  // flow. See docs/audit/29_permanent_vent_methodology.md §"C_d derivation
+  // unscaled to high-restriction openings (C_d ≈ 0.25) overstates flow.
+  // See docs/audit/29_permanent_vent_methodology.md §"C_d derivation
   // and the single-sided restriction factor" for the verbatim rationale.
   //
   // Stack term still absent in the cross branch (deferred — Issue #4).
@@ -870,16 +871,8 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   const louvre_area_total = ['north','south','east','west']
     .reduce((s, f) => s + Number(openings?.[f]?.louvre_area_m2 ?? 0), 0)
   const flow_mode = resolveFlowMode(openings)
-  let cross_Cd_A_sum = 0
-  let single_sided_eff_A_sum = 0
-  for (const face of ['north','south','east','west']) {
-    const o = openings?.[face] ?? {}
-    const A = Number(o.louvre_area_m2 ?? 0)
-    if (A <= 0) continue
-    const cd = computeCd(o)
-    cross_Cd_A_sum         += cd * A
-    single_sided_eff_A_sum += Math.min(1.0, cd / 0.6) * A
-  }
+  const cd                     = typeof openings.cd === 'number' ? openings.cd : 0.25
+  const single_sided_factor    = Math.min(1.0, cd / 0.6)
 
   // ── Zone-air effective thermal capacitance (Brief 28b Part 3) ────────────
   // Represents zone air + internal mass (furniture, partitions, content)
@@ -1071,18 +1064,19 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
     // deep-ground temperature ~12.6 °C; we use Yeovilton annual mean).
 
     // Permanent-vent UA this hour — two-branch wind-driven dispatch
-    // (Brief 33 Part 1 + Part 2). Both correlations are pure envelope
-    // physics; the Building module does not see mechanical systems.
-    //   cross         — Q = Σ(C_d_face · A_face) · sqrt(C_w) · v_wind                 (CIBSE Guide A §4.6)
-    //   single_sided  — Q = 0.025 · Σ(min(1, C_d_face/0.6) · A_face) · v_wind         (BS EN 16798-7 §6.4 + engineering correction)
+    // (Brief 33 Part 1 / 34). Both correlations are pure envelope physics;
+    // the Building module does not see mechanical systems.
+    //   cross         — Q = cd · A_total · sqrt(C_w) · v_wind                 (CIBSE Guide A §4.6)
+    //   single_sided  — Q = 0.025 · min(1, cd/0.6) · A_total · v_wind          (BS EN 16798-7 §6.4 + engineering correction)
     //
-    // Pre-computed sums (cross_Cd_A_sum / single_sided_eff_A_sum) above the
-    // hour loop. Stack term still absent in 'cross' (Issue #4 — deferred).
+    // cd / single_sided_factor / louvre_area_total / sqrtCw all resolved
+    // once above the hour loop. Stack term still absent in 'cross'
+    // (Issue #4 — deferred).
     let Q_louvre_m3s
     if (flow_mode === 'single_sided') {
-      Q_louvre_m3s = 0.025 * single_sided_eff_A_sum * v_wind
+      Q_louvre_m3s = 0.025 * single_sided_factor * louvre_area_total * v_wind
     } else { // 'cross'
-      Q_louvre_m3s = cross_Cd_A_sum * sqrtCw * v_wind
+      Q_louvre_m3s = cd * louvre_area_total * sqrtCw * v_wind
     }
     const UA_permanent = AIR_HEAT_CAPACITY * (Q_louvre_m3s * 3600)
 
@@ -2239,8 +2233,8 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
 
   // Ventilation — Brief 28-IM q50-derived operational ACH (State 2 mirror)
   //
-  // Brief 33 Part 2: State 2's permanent-vent path now reads per-facade C_d
-  // via computeCd (cross-flow only — single_sided dispatch for State 2 is
+  // Brief 34: State 2's permanent-vent path reads the building-wide
+  // openings.cd (cross-flow only — single_sided dispatch for State 2 is
   // a follow-up; the user-facing Building module is State 1).
   const airtightness = deriveOperationalACH(building, geo)
   const ach = airtightness.n_op
@@ -2250,13 +2244,7 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   const sqrtCw = Math.sqrt(Cw)
   const louvre_area_total = ['north','south','east','west']
     .reduce((s, f) => s + Number(openings?.[f]?.louvre_area_m2 ?? 0), 0)
-  let cross_Cd_A_sum_s2 = 0
-  for (const face of ['north','south','east','west']) {
-    const o = openings?.[face] ?? {}
-    const A = Number(o.louvre_area_m2 ?? 0)
-    if (A <= 0) continue
-    cross_Cd_A_sum_s2 += computeCd(o) * A
-  }
+  const cd_s2 = typeof openings.cd === 'number' ? openings.cd : 0.25
 
   // Zone-air effective mass (matches State 1 v3 tuning)
   const C_air_air_J = volume * 1.2 * 1005
@@ -2491,8 +2479,8 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     const T_sa_wall = solAirT(T_out, G_wall_avg, extWallModel.solar_abs ?? 0.6, extWallModel.h_out ?? 25)
     const T_sa_roof = solAirT(T_out, hourlySolar.roof[h], roofModel.solar_abs ?? 0.7, roofModel.h_out ?? 25)
 
-    // Permanent vents UA (State 2, cross-flow only — see Brief 33 Part 2)
-    const Q_louvre_m3s = cross_Cd_A_sum_s2 * sqrtCw * v_wind
+    // Permanent vents UA (State 2, cross-flow only — see Brief 34)
+    const Q_louvre_m3s = cd_s2 * louvre_area_total * sqrtCw * v_wind
     const UA_permanent = AIR_HEAT_CAPACITY * (Q_louvre_m3s * 3600)
 
     // Glazing inside-surface absorption (extra direct-to-air term)
@@ -5134,25 +5122,14 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
   // ── Openings (wind-driven natural ventilation) ────────────────────────────
   // Per-facade always-open louvre area + operable window fraction.
   //
-  // Brief 33 Part 2: per-facade geometry-aware C_d via computeCd. This
-  // degree-day path stays cross-flow only (single_sided dispatch follow-up
-  // tracked with State 2). Operable-window flow inherits the cross-flow
-  // weighted-area sum because operable openings reuse the same per-facade
-  // type/resistance fields when present.
+  // Brief 34: single building-wide C_d. Cross-flow only on this path
+  // (single_sided dispatch follow-up tracked with State 2).
   const openings = building.openings ?? {}
   const Cw = ({ sheltered: 0.05, normal: 0.10, exposed: 0.20 })[openings.site_exposure] ?? 0.10
   const sqrtCw = Math.sqrt(Cw)
   const louvre_area_total = ['north','south','east','west']
     .reduce((s, f) => s + Number(openings?.[f]?.louvre_area_m2 ?? 0), 0)
-  let cross_Cd_A_sum_dd = 0
-  let cross_Cd_A_window_dd = 0
-  for (const face of ['north','south','east','west']) {
-    const o = openings?.[face] ?? {}
-    const A_louvre  = Number(o.louvre_area_m2 ?? 0)
-    const A_window  = Number(o.openable_fraction ?? 0) * (glazing[face] ?? 0)
-    if (A_louvre > 0) cross_Cd_A_sum_dd    += computeCd(o) * A_louvre
-    if (A_window > 0) cross_Cd_A_window_dd += computeCd(o) * A_window
-  }
+  const cd_dd = typeof openings.cd === 'number' ? openings.cd : 0.25
   const openable_area_per_face = (f) => Number(openings?.[f]?.openable_fraction ?? 0) * (glazing[f] ?? 0)
   const openable_area_total = openable_area_per_face('north') + openable_area_per_face('south') +
                               openable_area_per_face('east') + openable_area_per_face('west')
@@ -5202,15 +5179,15 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
     const hour_vent_nohr = UA_vent_no_hr * dT_heat / 1000
 
     // Openings — wind-driven flow (m³/s) → ACH-equivalent → Wh/K → kWh
-    // Brief 33 Part 2: pre-computed per-facade weighted sums above.
+    // Brief 34: single building-wide C_d (cd_dd).
     const v_wind = weatherData.wind_speed?.[h] ?? 0
-    const Q_louvre = cross_Cd_A_sum_dd * sqrtCw * v_wind
+    const Q_louvre = cd_dd * louvre_area_total * sqrtCw * v_wind
     const windowsOpen = (
       openings.schedule === 'always' ||
       (openings.schedule === 'occupied'   && occ_frac > 0.1) ||
       (openings.schedule === 'summer_day' && (mo_idx >= 4 && mo_idx <= 8) && hourOfDay >= 8 && hourOfDay <= 20)
     )
-    const Q_window = windowsOpen ? cross_Cd_A_window_dd * sqrtCw * v_wind : 0
+    const Q_window = windowsOpen ? cd_dd * openable_area_total * sqrtCw * v_wind : 0
     const hour_openings_louvre = AIR_HEAT_CAPACITY * (Q_louvre * 3600) * dT_heat / 1000
     const hour_openings_window = AIR_HEAT_CAPACITY * (Q_window * 3600) * dT_heat / 1000
 

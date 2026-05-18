@@ -144,37 +144,32 @@ const DEFAULT_PARAMS = {
   // Each facade can carry an always-open louvre (m²) and an operable window
   // fraction (% of glazing area). Both default off; user opts in per facade.
   //
-  // Brief 33 (2026-05-18) — Building module is envelope-only. Permanent
+  // Brief 33 / 34 (2026-05-18) — Building module is envelope-only. Permanent
   // vents are passive holes in the envelope (trickle vents, louvres, fixed
   // grilles). They have no relationship to any mechanical system; mechanical
   // ventilation lives in the Systems module. See CLAUDE.md "Module scopes"
-  // (Brief 33 Part 3) and docs/audit/29_permanent_vent_methodology.md.
+  // and docs/audit/29_permanent_vent_methodology.md.
   //
   // flow_mode picks which wind-driven correlation governs Q:
   //   'cross'         — wind between opposite facades
-  //                     Q = computeCd(opening) · A · sqrt(Cw) · v_wind
+  //                     Q = cd · A · sqrt(Cw) · v_wind
   //   'single_sided'  — empirical BS EN 16798-7 §6.4 with engineering correction
-  //                     Q = 0.025 · A · v_wind · min(1.0, computeCd(opening) / 0.6)
+  //                     Q = 0.025 · A · v_wind · min(1.0, cd / 0.6)
   //
   // Default 'single_sided' — the more conservative correlation; the safe
   // assumption for any building whose internal air-path topology hasn't been
   // explicitly classified as cross-flow.
   //
-  // Per-facade C_d is derived by computeCd (frontend/src/utils/openingCoefficients.js)
-  // from geometry + resistance features (Brief 33 Part 2):
-  //   type:                opening geometry class
-  //                        — 'orifice' (sharp edge, ~0.61)
-  //                        — 'slot' / 'trickle_vent' (aspect-ratio interpolated)
-  //                        — 'louvre' / 'fixed_grille' (~0.40)
-  //   internal_resistance: array of resistance features applied as multipliers
-  //                        — 'mesh' (×0.85), 'flap' (×0.70), 'acoustic_baffle' (×0.60)
-  //   width_mm, height_mm: physical opening dimensions; required for slot /
-  //                        trickle_vent so aspect ratio can be computed.
+  // Brief 34 (2026-05-18) simplified the C_d UI: one building-wide slider
+  // replaces the Brief 33 Part 2 per-facade geometry calculator (type /
+  // dimensions / resistance). The calculator (`computeCd` in
+  // `frontend/src/utils/openingCoefficients.js`) remains as a code utility
+  // and the methodology doc continues to reference the lookup tables for
+  // users choosing an appropriate slider value manually.
   //
-  // Defaults below: type 'louvre' (matches the legacy field name) with no
-  // resistance features. Per-facade migration of an existing project may
-  // upgrade these — see scripts/33_bridgewater_opening_geometry_migration.py
-  // for the Bridgewater trickle-vent example.
+  // Default cd = 0.25 — typical trickle vent with mesh + flap. Range 0.15
+  // (very restrictive) to 0.65 (sharp orifice). The slider value applies
+  // to every facade with a non-zero opening area.
   //
   // ⚠ ALLOWLIST DRIFT: any new top-level or per-facade field added below
   // must also be allowlisted in withMode's passThroughOpenings
@@ -185,10 +180,11 @@ const DEFAULT_PARAMS = {
     schedule:      'never',         // 'never' | 'occupied' | 'summer_day' | 'always'
     site_exposure: 'normal',        // 'sheltered' | 'normal' | 'exposed'
     flow_mode:     'single_sided',  // 'cross' | 'single_sided'
-    north: { louvre_area_m2: 0, openable_fraction: 0, type: 'louvre', internal_resistance: [], width_mm: null, height_mm: null },
-    south: { louvre_area_m2: 0, openable_fraction: 0, type: 'louvre', internal_resistance: [], width_mm: null, height_mm: null },
-    east:  { louvre_area_m2: 0, openable_fraction: 0, type: 'louvre', internal_resistance: [], width_mm: null, height_mm: null },
-    west:  { louvre_area_m2: 0, openable_fraction: 0, type: 'louvre', internal_resistance: [], width_mm: null, height_mm: null },
+    cd:            0.25,            // building-wide discharge coefficient (Brief 34)
+    north: { louvre_area_m2: 0, openable_fraction: 0 },
+    south: { louvre_area_m2: 0, openable_fraction: 0 },
+    east:  { louvre_area_m2: 0, openable_fraction: 0 },
+    west:  { louvre_area_m2: 0, openable_fraction: 0 },
   },
   window_count:    { north: 8, south: 8, east: 3, west: 3 },
   // Legacy occupancy fields — kept for backward compat with hvac_dhw.py

@@ -1,8 +1,52 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-18 — Brief 33 Part 2: Geometry-aware C_d for passive envelope openings (in flight)
+## 🚧 Session 2026-05-18 — Brief 34: Simplify Permanent Openings UI to single C_d slider (in flight)
 
-**State:** `single_commit_in_flight` — geometry-aware C_d derivation per opening, replacing the hard-coded global 0.6. Closes Brief 29 Issue #3. Also lands the post-walkthrough additions: visible C_d / C_w with provenance tooltips, "Fabric leakage" → "Infiltration" rename, and softer/lighter blue for infiltration paired with bright blue for permanent vents in Sankey/Stacked.
+**State:** `single_commit_in_flight` — UI simplification, not a physics change. The Brief 33 Part 2 per-facade geometry calculator (type / internal_resistance / width_mm / height_mm) is replaced by one building-wide C_d slider on the Permanent Openings panel. Range 0.15–0.65, default 0.25, anchor labels at 0.25 (Trickle vent) / 0.40 (Louvre) / 0.60 (Open window) with hover tooltips. The geometry calculator (`computeCd` in `openingCoefficients.js`) stays in the codebase as a utility but is no longer wired to the engine or the UI.
+
+**What's landing in this commit:**
+
+- `frontend/src/context/ProjectContext.jsx` — `DEFAULT_PARAMS.openings.cd = 0.25` added at top level; per-facade `type` / `internal_resistance` / `width_mm` / `height_mm` removed. Schema comment block rewritten with the simplified form (still flagging ALLOWLIST DRIFT in `withMode`).
+
+- `frontend/src/utils/instantCalc.js` `withMode` — `passFace` slimmed to `louvre_area_m2` + `openable_fraction` only; `cd` added at the top-level openings allowlist. Three engine call sites (State 1, State 2, DegreeDay) read `openings.cd` directly. The `computeCd` import is removed (not called anywhere in the engine now). Single-sided restriction factor stays: `min(1.0, cd / 0.6)`.
+
+- `frontend/src/components/modules/building/BuildingDefinition.jsx` — per-facade Type dropdown / Dimensions inputs / Resistance checkboxes / Derived C_d display removed. Replaced with a single C_d slider near the top of the Permanent Openings panel (below Flow topology, above Site exposure). Anchor labels at 0.25 / 0.40 / 0.60 with `title=` tooltips. Per-facade area sliders unchanged. The `setOpeningType` / `setOpeningDim` / `toggleOpeningResistance` helpers and the `computeCd` / `cdProvenance` / `OPENING_TYPES` / `INTERNAL_RESISTANCES` imports are gone; only `cwProvenance` remains.
+
+- `frontend/src/utils/openingCoefficients.js` — header comment updated: file stays as a utility; the lookup tables and `computeCd` are no longer wired to the UI, but the methodology doc continues to reference them as a manual lookup. No removals from the file itself.
+
+- `docs/audit/29_permanent_vent_methodology.md` — short UI note added at the head of the "C_d derivation and the single-sided restriction factor" section: the tool exposes a single user-input slider; the tables below are the manual reference; anchor labels on the slider correspond to canonical opening types from this table.
+
+- `scripts/34_simplify_cd_migration.py` (new) — idempotent migration. For each project: read existing per-facade geometry, compute the area-weighted mean derived C_d (mirroring `computeCd` from `openingCoefficients.js` in Python), write to `openings.cd`, strip the obsolete per-facade fields. If no per-facade geometry: use default 0.25. Re-running is a NO-OP.
+
+- `docs/briefs/current.md` — repointed at Brief 34.
+
+**Bridgewater verification (live):**
+
+| Project | Pre-Brief-34 state | Post-Brief-34 state |
+|---|---|---|
+| HIX Bridgewater | per-facade trickle_vent geometry on N (1.0 m²) and S (0.76 m²); 15 × 1300 mm, mesh + flap; derived C_d ≈ 0.23 per facade | `openings.cd = 0.2324` (area-weighted mean of two identical per-facade derivations); per-facade geometry stripped |
+| New Project | no per-facade geometry | `openings.cd = 0.25` (default) |
+
+Migration re-run is NO-OP. Both projects on `single_sided` flow_mode (unchanged from Brief 33 Part 1).
+
+**Browser verification expected (Chris, post-commit):**
+
+- Permanent Openings panel shows: Flow topology dropdown, C_d slider (with anchor labels), Site exposure dropdown with C_w provenance, per-facade area sliders. No Type dropdown, no Dimensions inputs, no Resistance checkboxes, no per-facade derived C_d display.
+- Bridgewater's slider reads 0.23; New Project reads 0.25.
+- Dragging the slider changes the permanent vent number on Heat Balance.
+- Flow topology dropdown still drives the number (Brief 33 Finding 1 fix preserved).
+- Site exposure dropdown still drives the number when on `cross` (Brief 33 Finding 1 fix preserved).
+- Setting the slider to 0.60 produces visibly higher vent loss than 0.25.
+
+**Verification grep:** `internal_resistance` and `trickle_vent` return zero matches in `BuildingDefinition.jsx` and `ProjectContext.jsx`. Engine-side `openingCoefficients.js` retains the strings as internal utility code (allowed by Brief 34 §"Verification").
+
+**Next:** the Building module is now structurally complete for Static-only operation per Brief 33's intent. Brief 33 Part 3 (CLAUDE.md "Module scopes" lock) remains queued.
+
+---
+
+## ✅ Session 2026-05-18 — Brief 33 Part 2: Geometry-aware C_d for passive envelope openings (closed `c6a415b`)
+
+**State:** `closed` — single commit at `c6a415b`, pushed `b53b163..c6a415b`. Geometry-aware C_d derivation per opening, replacing the hard-coded global 0.6. Closed Brief 29 Issue #3. Also landed: visible C_d / C_w with provenance tooltips, "Fabric leakage" → "Infiltration" rename, and softer/lighter blue for infiltration paired with bright blue for permanent vents in Sankey/Stacked. Brief 34 (this session) simplified the per-facade UI to a single C_d slider — the geometry calculator stays as a code utility.
 
 **What's landing in this commit:**
 
