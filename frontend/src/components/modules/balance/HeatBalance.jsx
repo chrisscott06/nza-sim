@@ -675,8 +675,13 @@ export default function HeatBalance({
           three layouts (Rows / Stacked / Sankey). Previously the totals row
           sat below the chart inside an overflow-hidden region and was
           clipped off-screen on tall layouts. */}
+      {/* Brief 33 follow-up (UX nit, 2026-05-18): switched from items-baseline
+          to items-center. Baseline alignment with mixed font sizes (caption
+          labels vs xs Σ figures) produced a slight vertical offset between
+          the gains-side and losses-side Σ readouts. items-center aligns the
+          visual midlines symmetrically. */}
       <div className="flex-shrink-0 px-5 pt-4 pb-2 grid grid-cols-2 gap-8">
-        <div className="flex items-baseline justify-between gap-3 text-caption font-semibold text-navy">
+        <div className="flex items-center justify-between gap-3 text-caption font-semibold text-navy">
           <span className="flex items-center gap-2">
             <ArrowRight size={14} className="text-mid-grey" />
             IN — Gains
@@ -685,7 +690,7 @@ export default function HeatBalance({
             Σ <span className="font-bold text-navy">{fmt(totalGains, unit)}</span>
           </span>
         </div>
-        <div className="flex items-baseline justify-between gap-3 text-caption font-semibold text-navy">
+        <div className="flex items-center justify-between gap-3 text-caption font-semibold text-navy">
           <span className="text-xs tabular-nums text-navy/80">
             Σ <span className="font-bold text-navy">{fmt(totalLosses, unit)}</span>
           </span>
