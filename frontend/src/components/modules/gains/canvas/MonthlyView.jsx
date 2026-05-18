@@ -14,6 +14,11 @@ import ChartTotalsBadge from '../../../shared/ChartTotalsBadge.jsx'
 // Chris UX request (2026-05-17): diverging-bars chart — fixed middle axis
 // with gains UP and losses DOWN. Same component as Building / Operation.
 import DivergingMonthlyChart from '../../../shared/DivergingMonthlyChart.jsx'
+// Brief 36 Part 2: pull gain colours from the canonical module palette so
+// People / Lighting / Equipment match the Sankey, Heat Balance, Summary,
+// LoadShape views uniformly. Was hardcoded #7C3AED / #C4B5FD / #A78BFA;
+// #7C3AED was the outlier vs GAIN_COLOURS.occupancy.
+import { GAIN_COLOURS } from '../gainColours.js'
 
 function _z() { return new Array(12).fill(0) }
 function _add(out, arr) {
@@ -101,9 +106,9 @@ export default function MonthlyView() {
           <DivergingMonthlyChart
             gainsStacks={[
               { key: 'solar',     label: `Solar (${grandSolar.toLocaleString()} kWh)`,           color: '#F59E0B', values: solarM },
-              { key: 'people',    label: `People (${totalGain(peopleM).toLocaleString()} kWh)`, color: '#7C3AED', values: peopleM },
-              { key: 'lighting',  label: `Lighting (${totalGain(lightingM).toLocaleString()} kWh)`, color: '#C4B5FD', values: lightingM },
-              { key: 'equipment', label: `Equipment (${totalGain(equipmentM).toLocaleString()} kWh)`, color: '#A78BFA', values: equipmentM },
+              { key: 'people',    label: `People (${totalGain(peopleM).toLocaleString()} kWh)`, color: GAIN_COLOURS.occupancy, values: peopleM },
+              { key: 'lighting',  label: `Lighting (${totalGain(lightingM).toLocaleString()} kWh)`, color: GAIN_COLOURS.lighting, values: lightingM },
+              { key: 'equipment', label: `Equipment (${totalGain(equipmentM).toLocaleString()} kWh)`, color: GAIN_COLOURS.equipment, values: equipmentM },
             ]}
             lossesStacks={[
               { key: 'fabric',    label: `Fabric loss (${grandLoss.toLocaleString()} kWh)`,    color: '#475569', values: lossMonthly },

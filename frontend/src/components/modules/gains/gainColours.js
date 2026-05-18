@@ -1,25 +1,35 @@
 /**
  * gainColours.js — local colour palette for the Internal Gains module.
  *
- * Per docs/ui_principles.md feedback during Brief 27 Part 4: gain colours
- * should be visually distinct (purple/gold/orange) where the user
- * configures and reads each gain category. The existing global palette in
- * `frontend/src/data/balanceColours.js:INTERNAL_COLOURS` ships three
- * shades of violet because they sit inside a heat-balance STACK there —
- * the "internal gains" category needs to read as a single visual group
- * against fabric / solar / mechanical neighbours.
+ * Brief 36 Part 2 (2026-05-18): unified to three shades of purple
+ * matching the Sankey's `INTERNAL_COLOURS` in
+ * `frontend/src/data/balanceColours.js`. The earlier purple/gold/orange
+ * palette made the same gain category read differently across views
+ * (e.g. lighting was gold in the section header but light-violet in
+ * the Sankey). Same gain = same colour everywhere is the discipline.
  *
- * Inside this module, those three categories ARE the three main
- * sections and three first-class outputs. Distinct hues make scanning
- * (which gain am I looking at?) faster. Brief 28 cross-cutting design
- * pass will decide whether to harmonise globally; for now this is a
- * module-local palette that doesn't disturb the Heat Balance views.
+ * Mapping is identical to `INTERNAL_COLOURS`:
+ *   occupancy → violet-500 (deepest)  — matches Sankey People
+ *   equipment → violet-400 (medium)   — matches Sankey Equipment
+ *   lighting  → violet-300 (lightest) — matches Sankey Lighting
+ *
+ * Note: the Sankey orders People (top, deepest) > Equipment (middle) >
+ * Lighting (bottom, lightest) — see `LOSS_ORDER` + `GAIN_ORDER` in
+ * balanceColours.js. The gainColours module mirrors that depth ordering
+ * even though brief §2.2 phrased lighting as the "medium" anchor (a
+ * misstatement against the actual Sankey palette). Truth-of-Sankey wins
+ * because the brief's intent is "same colour everywhere", and the Sankey
+ * is what the user already sees.
+ *
+ * The module's structural accent (GAINS_ACCENT = '#EA580C') stays as the
+ * module identity colour in title bar / tab strip / sidebar active
+ * indicator — that's not a gain category and is not changed here.
  */
 
 export const GAIN_COLOURS = {
-  occupancy: '#8B5CF6',  // violet-500 — people
-  lighting:  '#F59E0B',  // amber-500 — gold
-  equipment: '#FB923C',  // orange-400
+  occupancy: '#8B5CF6',  // violet-500 — people  (deepest)
+  equipment: '#A78BFA',  // violet-400 — equipment (medium)
+  lighting:  '#C4B5FD',  // violet-300 — lighting  (lightest)
 }
 
 export const GAIN_LABELS = {

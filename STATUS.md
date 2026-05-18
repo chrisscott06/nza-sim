@@ -1,6 +1,23 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-18 — Brief 36 Part 1: Internal Gains Static audit (in flight)
+## 🚧 Session 2026-05-18 — Brief 36 Part 2: Internal Gains colour discipline (in flight)
+
+**State:** `single_commit_in_flight` — UI-only. Unifies the gains palette so the same gain category renders the same colour across Sankey, Heat Balance, Summary, LoadShape, Monthly, and the left-panel section headers.
+
+**What's landing in this commit:**
+- `frontend/src/components/modules/gains/gainColours.js` — `GAIN_COLOURS` rewritten from the mixed purple/gold/orange (`#8B5CF6 / #F59E0B / #FB923C`) to three shades of purple matching the Sankey's `INTERNAL_COLOURS` in `frontend/src/data/balanceColours.js`: occupancy `#8B5CF6` (violet-500, deepest, matches Sankey People), equipment `#A78BFA` (violet-400, medium, matches Sankey Equipment), lighting `#C4B5FD` (violet-300, lightest, matches Sankey Lighting). Header comment rewritten to document the unification and the Sankey-truth ordering. Brief §2.2's lighting-equipment labelling was a misstatement vs the actual Sankey palette; followed the Sankey because the brief's intent is "same colour everywhere" and the Sankey is what the user already sees.
+- `frontend/src/components/modules/gains/canvas/MonthlyView.jsx` — replaced four hardcoded gain colours (`#7C3AED` outlier for People; `#C4B5FD` / `#A78BFA` for Lighting / Equipment) with `GAIN_COLOURS` lookups. Solar (`#F59E0B`) kept hardcoded — not a gain category, no canonical lookup yet.
+- Other gains consumers (`SummaryView`, `LoadShapeView`, `OccupancySection`, `LightingSection`, `EquipmentSection`, `InternalGainsModule`'s `CollapsibleSection` accents) already use `GAIN_COLOURS[…]` and automatically pick up the new values.
+- `GAINS_ACCENT = '#EA580C'` preserved as the module identity colour (title bar, tab strip underline, sidebar active indicator, exception-highlight on AnnualHeatmap).
+- STATUS.md (this file) — Brief 36 Part 2 entry prepended; Part 1 marked closed at `2c96896`.
+
+**Verification grep:** zero hardcoded gain-category colour values in gains components outside of (a) module identity / structural overlays and (b) the AnnualHeatmap exception-highlight orange. Build clean, 8.13 s, no errors.
+
+**Next:** Brief 36 Part 3 — shared pop-out schedule editor (biggest piece of the brief).
+
+---
+
+## ✅ Session 2026-05-18 — Brief 36 Part 1: Internal Gains Static audit (closed `2c96896`)
 
 **State:** `single_commit_in_flight` — audit-only commit. Brief 29's three-lists method applied to `_calculateState2`. Findings doc + two new open issues (#14 + #15).
 
