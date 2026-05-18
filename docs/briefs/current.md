@@ -1,12 +1,10 @@
 # Current brief
 
-**Active:** [`active/34_simplify_permanent_openings_ui.md`](active/34_simplify_permanent_openings_ui.md) — Simplify the Permanent Openings UI to a single building-wide C_d slider. UI-only; no physics changes. Brief 33's Parts 1 + 2 + Finding 1 fix already landed.
+**Active:** none. Brief 33 fully closed in this commit (Parts 1, 2, and 3 complete). Brief 34 closed in `f702687`. The Building module is structurally complete for Static-only operation with the scope contract architecturally documented in CLAUDE.md "Module scopes". Awaiting next-brief sequencing per Chris.
 
-**Status:** Brief 34 Part 1 in flight (this commit). Brief 33 Part 1 closed `195a87b`, Finding 1 fix closed `b53b163`, Part 2 closed `c6a415b`. Brief 33 Part 3 (CLAUDE.md "Module scopes" lock) remains queued.
+**Paused (in active/ for traceability):** [`active/30_dynamic_engine_rebuild.md`](active/30_dynamic_engine_rebuild.md) — Phase 0 + Phase 1.0 complete (commits `8003577` + `cc96815`). Phase 1.1 onwards PAUSED. Dynamic backend code frozen at HEAD `54407e3` (post Brief 31), not deleted. Eligible for resumption now that Brief 33 has closed.
 
-**Paused (in active/ for traceability):** [`active/30_dynamic_engine_rebuild.md`](active/30_dynamic_engine_rebuild.md) — Phase 0 + Phase 1.0 complete (commits `8003577` + `cc96815`). Phase 1.1 onwards PAUSED. Dynamic backend code frozen at HEAD `54407e3` (post Brief 31), not deleted. Resume after Brief 33 closes.
-
-**Superseded in active queue:** [`active/32_static_completion.md`](active/32_static_completion.md) — Part 1 (`3a793ce`) closed; Part 2 (`341eeff`) closed-but-superseded by Brief 33 Part 1. Parts 3–7 do not happen as scoped; the Building module work continues under Brief 33.
+**Closed (retained in active/ for cross-reference until cleanup):** [`active/32_static_completion.md`](active/32_static_completion.md) closed-and-superseded at `341eeff`; [`active/34_simplify_permanent_openings_ui.md`](active/34_simplify_permanent_openings_ui.md) closed at `f702687`. Both may be archived in a later documentation-hygiene commit.
 
 This pointer file is updated each time a brief in `active/` closes.
 
@@ -36,8 +34,9 @@ This pointer file is updated each time a brief in `active/` closes.
 | [`active/30_dynamic_engine_rebuild.md`](active/30_dynamic_engine_rebuild.md) | ⏸ paused — superseded by Brief 32 in active queue until Static is client-ready. Phase 0 + Phase 1.0 frozen; Phase 1.1+ resumes after Brief 32 closes | `8003577`, `cc96815` |
 | Brief 31 — Documentation Reconciliation | ✅ closed 2026-05-18 | `54407e3` |
 | [`active/32_static_completion.md`](active/32_static_completion.md) | ⚠ closed in active queue — Part 1 closed `3a793ce`; Part 2 closed-but-superseded `341eeff` (balanced_mechanical was a scope violation). Parts 3-7 do not happen as scoped. | `3a793ce`, `341eeff` |
-| **[`active/33_building_envelope.md`](active/33_building_envelope.md)** | **🟡 active** — Part 1 in flight (this commit): revert `balanced_mechanical` from Building module. Parts 2-3: geometry-aware C_d, then CLAUDE.md "Module scopes" lock. | (this commit) |
+| [`archive/33_building_envelope_COMPLETED.md`](archive/33_building_envelope_COMPLETED.md) + [`archive/33_part_3_module_scopes_COMPLETED.md`](archive/33_part_3_module_scopes_COMPLETED.md) | ✅ closed 2026-05-18 — Part 1 revert `195a87b`; Finding 1 fix `b53b163`; Part 2 geometry-aware C_d `c6a415b`; Part 3 CLAUDE.md "Module scopes" + Process Rules 10–11 (this commit) | `195a87b`, `b53b163`, `c6a415b`, (this commit) |
+| [`active/34_simplify_permanent_openings_ui.md`](active/34_simplify_permanent_openings_ui.md) | ✅ closed `f702687` — UI simplification to single C_d slider; not yet moved to archive | `f702687` |
 
 Brief 31 lands the rules that govern future sessions (CLAUDE.md updates) and the project's self-description (STATUS.md refresh + brief management). Brief 30 Phase 1.1 onwards is then re-authorised against that corrected foundation.
 
-Brief 32 (2026-05-18) pauses Brief 30 in active queue to land a client-ready Bridgewater Static baseline first. Brief 32 Part 2 attempted a topology fix that imported mechanical-systems concepts into the Building module; Brief 33 closes Brief 32 with a corrective scope (revert → C_d → CLAUDE.md scope lock).
+Brief 32 (2026-05-18) pauses Brief 30 in active queue to land a client-ready Bridgewater Static baseline first. Brief 32 Part 2 attempted a topology fix that imported mechanical-systems concepts into the Building module; Brief 33 closed Brief 32 with a corrective scope (revert → geometry-aware C_d → CLAUDE.md scope lock). Brief 34 simplified the Brief 33 Part 2 per-facade UI to a single slider after Chris's over-precision concern at walkthrough.

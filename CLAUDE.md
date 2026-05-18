@@ -55,6 +55,112 @@ These rules were learned the hard way during the May 2026 audit and dynamic-engi
 
 ---
 
+## Module scopes
+
+These statements define what each module computes and what it does not.
+They are the canonical scope contract for the module. A brief or feature
+that asks for behaviour outside the stated scope is asking for the wrong
+module and must be flagged before work begins.
+
+### Building module — State 1 envelope-only
+
+**Computes:**
+- Conduction losses through opaque envelope (walls, roof, ground floor)
+- Conduction losses through glazing
+- Thermal bridging losses (linear and point)
+- Solar gains through glazing
+- Infiltration heat loss through the q50-rated envelope leakage area
+- Permanent vent heat loss through always-open passive openings
+  (trickle vents, louvres, fixed grilles, holes in the envelope)
+- Heating and cooling demand to maintain a user-defined comfort band
+
+**Does not compute and does not contain:**
+- Occupancy, people, occupancy schedules
+- Lighting, equipment, plug loads
+- HVAC of any kind (no IdealLoads, no VRF, no heat pumps, no boilers,
+  no chillers, no fan coils, no terminal units)
+- Mechanical ventilation of any kind (no MVHR, no MEV, no extract fans,
+  no supply fans, no extract rates, no heat recovery)
+- Operable windows or doors (anything with a control schedule or
+  temperature-responsive operation)
+- DHW
+- Controls, thermostats, deadbands, setbacks
+- System efficiencies, COPs, SCOPs, MVHR effectiveness, distribution losses
+- Delivered energy, primary energy, or carbon
+
+**Notes on permanent vents specifically:**
+Permanent vents are passive openings in the envelope. They are always
+open. They are driven by wind (and stack where vertical separation
+exists). They have no schedule. They have no control. They have no
+relationship to any mechanical system in the building. If a building
+has a bathroom extract fan, that fan is modelled in the Systems module
+— not by changing how the trickle vent calculates flow.
+
+**Notes on the comfort band:**
+The setpoint used in heating/cooling demand calculation is a
+user-defined comfort band, not a system setpoint. It is a constraint
+on what the building needs from a hypothetical system, not a property
+of an actual system. The Building module asks: "given this envelope,
+what demand would a system need to satisfy to hold this comfort band?"
+The system itself does not exist in this module.
+
+If a calculation requires any input from the "does not compute and does
+not contain" list, that calculation is in the wrong module. Move it or
+remove it. Do not import non-envelope concepts into the Building
+module's data model, calculations, or UI.
+
+### Operation module — scope (stub, to be expanded when Operation is reworked)
+
+**Computes:**
+- Occupancy schedules (people, sensible/latent gains)
+- Lighting use (gains; electrical end-use accounting is Systems)
+- Equipment use (gains; electrical end-use accounting is Systems)
+- Operable windows and doors (control logic, manual schedules,
+  temperature-responsive operation)
+- Manually operated blinds and shading devices
+
+**Does not contain:**
+- HVAC of any kind
+- Mechanical ventilation, heat recovery
+- Controls that depend on installed equipment (e.g. daylight dimming
+  is Systems because it requires a control system; manual switch use
+  is Operation because it is occupant behaviour)
+- Electrical end-use energy (the kWh delivered; only the heat gains
+  to the zone live here)
+- Envelope physics (conduction, infiltration, permanent vents — all
+  Building)
+
+This stub will be expanded into a full scope statement when the
+Operation module is reworked. Briefs touching Operation must declare
+which of these scope items they affect.
+
+### Systems module — scope (stub, to be expanded when Systems is reworked)
+
+**Computes:**
+- Heating system (boiler, heat pump, district heat, etc.)
+- Cooling system (chiller, heat pump, etc.)
+- Mechanical ventilation (MVHR, MEV, extract fans, supply fans) and
+  associated fan power, heat recovery effectiveness, defrost penalties
+- DHW (storage, distribution, primary fuel)
+- Lighting controls (daylight dimming, occupancy sensors — anything
+  that modifies the lighting use defined in Operation)
+- Electrical end-use accounting (kWh delivered for lights, equipment,
+  fans, pumps, plant)
+- Conversion from envelope demand → delivered energy → primary energy
+  → carbon
+
+**Does not contain:**
+- Envelope physics (Building)
+- Occupancy or manual operation (Operation)
+- Permanent vents — these are passive envelope features in Building,
+  not mechanical ventilation
+
+This stub will be expanded into a full scope statement when the Systems
+module is reworked. Briefs touching Systems must declare which of these
+scope items they affect.
+
+---
+
 ## Process rules
 
 1. **Read before you code.** At the start of every session, read this file, then STATUS.md, then the current task brief (`docs/briefs/current.md`). Confirm what you understand before touching any code.
@@ -74,6 +180,27 @@ These rules were learned the hard way during the May 2026 audit and dynamic-engi
 8. **Verify documentation alignment at the start of every session.** Read STATUS.md and CLAUDE.md against the actual state of `docs/briefs/active/` and recent commits. If they diverge, the first commit of the session is the reconciliation. Do not begin new work against an inaccurate self-description of the project. (Brief 31, May 2026.)
 
 9. **Multi-step work is briefed, not commanded.** Any task that touches more than one file or takes more than one commit is written as a numbered brief in `docs/briefs/active/` before work begins. The brief contains a BEFORE-DOING-ANYTHING checklist, numbered Parts with file paths and verification steps, and a "deliverables" section that includes documentation updates as numbered Parts (not as advisory text). Mid-chat instructions that span multiple files/commits without a brief are incomplete and should be returned to the architect for proper briefing. (Brief 30 / Brief 31, May 2026.)
+
+10. **Briefs touching a module must state the module's scope at the top.**
+    Any brief that modifies a module's data model, engine, or UI must
+    include a scope statement (one paragraph or short list) confirming
+    the brief's work fits within that module's declared scope per the
+    "Module scopes" section. If a brief asks for work outside the stated
+    scope, stop and flag — the brief belongs to a different module or
+    needs to be rescoped.
+
+11. **Stop the dev server before running migration scripts.** Autosave
+    in the running app can produce partially-stripped intermediate
+    states that race against a manual migration, leaving the persisted
+    config in a half-migrated state that the next migration run
+    misreads. The pattern caught in Brief 34: a one-shot migration that
+    stripped the geometry fields ran while the dev server's autosave
+    persisted a config with some fields already gone, causing the
+    migration to read defaults instead of the source values. Standard
+    practice for any migration script: (a) stop the dev server, (b) run
+    the script, (c) verify the result by re-running the script (it
+    should be a no-op on a clean migration), (d) restart the dev
+    server.
 
 ---
 
