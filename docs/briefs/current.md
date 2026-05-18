@@ -1,10 +1,12 @@
 # Current brief
 
-**Active:** [`active/32_static_completion.md`](active/32_static_completion.md) — Pause Dynamic, Complete Static, Audit Across Modules. Replaces Brief 30 Phase 1+ in the active queue until Bridgewater pre-retrofit baseline is shippable as a client deliverable using the Static engine only, with every displayed number defensible from first principles.
+**Active:** [`active/33_building_envelope.md`](active/33_building_envelope.md) — Revert `balanced_mechanical` from the Building module, fix the trickle-vent C_d, lock the Building module's scope in CLAUDE.md. Closes Brief 32.
 
-**Status:** Part 2 in flight (this commit) — permanent vent topology fix (Issue #2). Static engine gains three-branch flow-mode dispatch (cross / single_sided / balanced_mechanical); Bridgewater migrated to balanced_mechanical. Part 1 closed at `3a793ce`.
+**Status:** Part 1 in flight (this commit) — revert. The `balanced_mechanical` flow_mode and `mech_extract_lps_per_room` field that Brief 32 Part 2 added to the Building module were a state-contract violation (systems concepts in the envelope module) and have been removed. Two-branch dispatch (`cross` / `single_sided`) retained; Bridgewater migrated to `single_sided`. Brief 32 closes here — its Parts 3-7 do not happen as originally scoped; the Building-module work continues under Brief 33.
 
-**Paused (in active/ for traceability):** [`active/30_dynamic_engine_rebuild.md`](active/30_dynamic_engine_rebuild.md) — Phase 0 + Phase 1.0 complete (commits `8003577` + `cc96815`). Phase 1.1 onwards PAUSED. Dynamic backend code frozen at HEAD `54407e3` (post Brief 31), not deleted. Resume after Brief 32 closes.
+**Paused (in active/ for traceability):** [`active/30_dynamic_engine_rebuild.md`](active/30_dynamic_engine_rebuild.md) — Phase 0 + Phase 1.0 complete (commits `8003577` + `cc96815`). Phase 1.1 onwards PAUSED. Dynamic backend code frozen at HEAD `54407e3` (post Brief 31), not deleted. Resume after Brief 33 closes.
+
+**Superseded in active queue:** [`active/32_static_completion.md`](active/32_static_completion.md) — Part 1 (`3a793ce`) closed; Part 2 (`341eeff`) closed-but-superseded by Brief 33 Part 1. Parts 3–7 do not happen as scoped; the Building module work continues under Brief 33.
 
 This pointer file is updated each time a brief in `active/` closes.
 
@@ -33,8 +35,9 @@ This pointer file is updated each time a brief in `active/` closes.
 | [`archive/29_Building_Module_Completion_v2_SUPERSEDED.md`](archive/29_Building_Module_Completion_v2_SUPERSEDED.md) | ⚠ Different brief from the audit. Never started; superseded by Brief 30 | — |
 | [`active/30_dynamic_engine_rebuild.md`](active/30_dynamic_engine_rebuild.md) | ⏸ paused — superseded by Brief 32 in active queue until Static is client-ready. Phase 0 + Phase 1.0 frozen; Phase 1.1+ resumes after Brief 32 closes | `8003577`, `cc96815` |
 | Brief 31 — Documentation Reconciliation | ✅ closed 2026-05-18 | `54407e3` |
-| **[`active/32_static_completion.md`](active/32_static_completion.md)** | **🟡 active** — Part 1 closed `3a793ce`; Part 2 in flight (this commit): permanent vent topology fix (Issue #2), Static path. Parts 3-7 to follow. | `3a793ce` + (this commit) |
+| [`active/32_static_completion.md`](active/32_static_completion.md) | ⚠ closed in active queue — Part 1 closed `3a793ce`; Part 2 closed-but-superseded `341eeff` (balanced_mechanical was a scope violation). Parts 3-7 do not happen as scoped. | `3a793ce`, `341eeff` |
+| **[`active/33_building_envelope.md`](active/33_building_envelope.md)** | **🟡 active** — Part 1 in flight (this commit): revert `balanced_mechanical` from Building module. Parts 2-3: geometry-aware C_d, then CLAUDE.md "Module scopes" lock. | (this commit) |
 
 Brief 31 lands the rules that govern future sessions (CLAUDE.md updates) and the project's self-description (STATUS.md refresh + brief management). Brief 30 Phase 1.1 onwards is then re-authorised against that corrected foundation.
 
-Brief 32 (2026-05-18) pauses Brief 30 in active queue to land a client-ready Bridgewater Static baseline first. Brief 30's Dynamic backend code remains in the tree (frozen, not deleted) — Brief 32 hides Dynamic from the user-facing UI but does not touch `sql_parser.py`, `epjson_assembler.py`, or the simulation API endpoints.
+Brief 32 (2026-05-18) pauses Brief 30 in active queue to land a client-ready Bridgewater Static baseline first. Brief 32 Part 2 attempted a topology fix that imported mechanical-systems concepts into the Building module; Brief 33 closes Brief 32 with a corrective scope (revert → C_d → CLAUDE.md scope lock).

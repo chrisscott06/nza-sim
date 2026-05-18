@@ -140,34 +140,29 @@ const DEFAULT_PARAMS = {
   //     pre-26.1 path. For sensitivity studies.
   thermal_mass_mode: 'auto',
   thermal_mass_category: 'light',
-  // Openings — permanent envelope-driven ventilation.
+  // Openings — passive wind-driven envelope openings.
   // Each facade can carry an always-open louvre (m²) and an operable window
   // fraction (% of glazing area). Both default off; user opts in per facade.
   //
-  // Brief 32 Part 2 (2026-05-18) — Issue #2 fix: flow topology dispatch.
-  //   flow_mode picks which physics governs Q through the louvres:
-  //     'cross'                — wind (+ stack, Part 4) between opposite facades
-  //                              Q = Cd · A · sqrt(2·dP/rho)  (current code path)
-  //     'single_sided'         — empirical BS EN 16798-7 §6.4
-  //                              Q ≈ 0.025 · A · v_wind
-  //     'balanced_mechanical'  — continuous mechanical extract sets the room
-  //                              air-change rate; the louvre is the makeup
-  //                              path. Q = num_bedrooms × mech_extract_lps_per_room.
+  // Brief 33 (2026-05-18) — Building module is envelope-only. Permanent
+  // vents are passive holes in the envelope (trickle vents, louvres, fixed
+  // grilles). They have no relationship to any mechanical system; mechanical
+  // ventilation lives in the Systems module. See CLAUDE.md "Module scopes"
+  // (Brief 33 Part 3) and docs/audit/29_permanent_vent_methodology.md.
   //
-  // Default 'cross' preserves legacy behaviour for projects without an
-  // explicit topology. The Static engine inferFlowMode helper (in
-  // instantCalc.js) infers when the field is absent. The UI exposes the
-  // dropdown so users override per-building. Reference:
-  // docs/audit/29_permanent_vent_methodology.md.
+  // flow_mode picks which wind-driven correlation governs Q:
+  //   'cross'         — wind (+ stack, Part 4) between opposite facades
+  //                     Q = Cd · A · sqrt(Cw) · v_wind   (Cd geometry-aware in Brief 33 Part 2)
+  //   'single_sided'  — empirical BS EN 16798-7 §6.4
+  //                     Q ≈ 0.025 · A · v_wind   (with min(1.0, Cd/0.6) restriction factor per Brief 33 Part 2)
   //
-  // mech_extract_lps_per_room is only consulted when flow_mode === 'balanced_mechanical'.
-  // 8 l/s/room is the hotel design value from CIBSE Guide A Table 1.5 and
-  // Approved Document F (continuous bathroom extract).
+  // Default 'single_sided' — the more conservative correlation; the safe
+  // assumption for any building whose internal air-path topology hasn't been
+  // explicitly classified as cross-flow.
   openings: {
-    schedule:                  'never',    // 'never' | 'occupied' | 'summer_day' | 'always'
-    site_exposure:             'normal',   // 'sheltered' | 'normal' | 'exposed'
-    flow_mode:                 'cross',    // 'cross' | 'single_sided' | 'balanced_mechanical'
-    mech_extract_lps_per_room: 8,          // l/s per room — used only when flow_mode='balanced_mechanical'
+    schedule:      'never',         // 'never' | 'occupied' | 'summer_day' | 'always'
+    site_exposure: 'normal',        // 'sheltered' | 'normal' | 'exposed'
+    flow_mode:     'single_sided',  // 'cross' | 'single_sided'
     north: { louvre_area_m2: 0, openable_fraction: 0 },
     south: { louvre_area_m2: 0, openable_fraction: 0 },
     east:  { louvre_area_m2: 0, openable_fraction: 0 },

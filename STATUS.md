@@ -1,32 +1,53 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-18 — Brief 32 Part 2: Permanent vent topology fix (Issue #2) (in flight)
+## 🚧 Session 2026-05-18 — Brief 33 Part 1: Revert `balanced_mechanical` from Building module (in flight)
 
-**State:** `single_commit_in_flight` — Static engine fix for Issue #2 (permanent vent 5× overstated on Bridgewater due to wrong topology assumption). Closes Issue #2 for the Static path; Dynamic path deferred to Brief 30 resumption per Brief 32 §1.5.
+**State:** `single_commit_in_flight` — corrective. Brief 32 Part 2 introduced a `balanced_mechanical` flow_mode and a `mech_extract_lps_per_room` field into the Building module. Those are systems concepts (continuous mechanical extract) — they belong in the Systems module, not in the envelope-only Building module. This commit reverts them. Brief 33 closes Brief 32 in the active queue.
+
+**Brief 32 closes here.** Parts 3–7 of Brief 32 are not happening as originally scoped; the Building-module work continues under Brief 33's three-part structure (revert → geometry-aware C_d → CLAUDE.md scope lock).
 
 **What's landing in this commit:**
-- `frontend/src/context/ProjectContext.jsx` — `DEFAULT_PARAMS.openings` gains `flow_mode` (`'cross' | 'single_sided' | 'balanced_mechanical'`, default `'cross'`) and `mech_extract_lps_per_room` (default 8 l/s, CIBSE Guide A Table 1.5).
-- `frontend/src/utils/instantCalc.js` — `inferFlowMode(openings)` helper at module scope (infers from façade geometry; `balanced_mechanical` not inferable from geometry alone and must be set explicitly). Three-branch dispatch in `_calculateEnvelopeOnly` 8760-hour loop: `cross` uses the legacy `Q = Cd · A · √Cw · v_wind`; `single_sided` uses `Q ≈ 0.025 · A · v_wind` per BS EN 16798-7 §6.4; `balanced_mechanical` uses constant `Q = num_bedrooms × extract_lps / 1000`.
-- `frontend/src/components/modules/building/BuildingDefinition.jsx` — "Flow topology" dropdown with three options and per-option explanatory caption added at the top of the Permanent openings section. Conditional "Extract rate per room (l/s)" field rendered only when `flow_mode === 'balanced_mechanical'`. Site exposure disabled in balanced-mechanical mode (Cw unused there).
-- `scripts/32_bridgewater_balanced_mech_migration.py` — idempotent migration that PUTs `flow_mode: 'balanced_mechanical'` + `mech_extract_lps_per_room: 8` onto HIX Bridgewater via `PUT /api/projects/{id}/building`. Ran cleanly this session: `None → 'balanced_mechanical'`, louvre areas preserved (N=1.0, S=0.76, E=0, W=0).
-- `docs/audit/32_vent_fix_verification.md` — new file. Hand-calc reproduction of methodology Cases A/B/C with Bridgewater inputs; pass/fail rubric for Part 2 alone (expected range 30–100 MWh given that heat recovery + occupancy weighting are downstream, not in Part 2 scope); placeholder table for live engine output to be captured during browser walkthrough.
-- `docs/audit/29_open_issues.md` — Issue #2 status updated to "STATIC FIXED in Brief 32 Part 2 — Dynamic path deferred". Worked-example reference relocated to verification doc.
-- STATUS.md (this file) — Brief 32 Part 2 entry prepended; Part 1 marked closed at `3a793ce`.
+- `frontend/src/context/ProjectContext.jsx` — `DEFAULT_PARAMS.openings.flow_mode` allowed values reduced to `'cross' | 'single_sided'`; default flipped from `'cross'` to `'single_sided'` (more conservative). `mech_extract_lps_per_room` field removed entirely. Scope comment rewritten — points at CLAUDE.md "Module scopes" (Brief 33 Part 3) and the methodology doc.
+- `frontend/src/utils/instantCalc.js` — `inferFlowMode` replaced by `resolveFlowMode(openings)` (strict two-value validator; defaults invalid → `'single_sided'`). The mech-extract constants block at the head of `_calculateEnvelopeOnly` is gone. Hourly dispatch is now two-branch: `cross` (wind-driven, `Q = C_d · A · √C_w · v_wind`) and `single_sided` (BS EN 16798-7 §6.4 empirical, `Q = 0.025 · A · v_wind`). C_d still hard-coded 0.6 in the cross branch — Brief 33 Part 2 closes that.
+- `frontend/src/components/modules/building/BuildingDefinition.jsx` — "Flow topology" dropdown reduced to two options (single-sided default-listed first, cross second). The conditional "Extract rate per room" input field is gone. Site exposure no longer disables on balanced-mechanical (because balanced-mechanical no longer exists). Section comment now references CLAUDE.md "Module scopes" / Brief 33 §"Scope statement".
+- `scripts/33_bridgewater_single_sided_migration.py` (new) — idempotent migration that PUTs `flow_mode: 'single_sided'` onto HIX Bridgewater and strips the now-obsolete `mech_extract_lps_per_room` field. Ran cleanly this session: `'balanced_mechanical' → 'single_sided'`, `mech_extract_lps_per_room 8 → None`, louvre areas preserved.
+- `scripts/32_bridgewater_balanced_mech_migration.py` — **removed (`git rm`)** to prevent regression.
+- `docs/audit/29_permanent_vent_methodology.md` — balanced-mechanical case fully stripped. Intro rewritten using Brief 33's verbatim wording: "This document covers passive envelope openings — trickle vents, louvres, fixed grilles, fixed holes in the envelope. These are wind-driven. Mechanical ventilation is not in scope; it is modelled in the Systems module." Reconciliation table reduced to Cases A (cross-flow) and B (single-sided). Action history updated.
+- `docs/audit/32_vent_fix_verification.md` — Case C stripped; Cases A and B reproduced with current code outputs; live-engine-output table awaits browser walkthrough.
+- `docs/audit/29_open_issues.md` — Issue #2 status updated: "STATIC FIXED by Brief 33 Part 1 (this commit) — two-branch topology dispatch; Bridgewater migrated to single_sided". Fix history captures both attempts (Brief 32 Part 2 + Brief 33 Part 1).
+- STATUS.md (this file) — Brief 33 Part 1 entry prepended; Brief 32 Part 2 marked closed-but-superseded.
+- `docs/briefs/current.md` — repointed to Brief 33.
 
 **Bridgewater verification — to be captured during browser walkthrough on next `go.bat` boot.**
 
-| Quantity | Pre-Part-2 baseline (Chris's reminder) | Post-Part-2 expected range | Post-Part-2 actual |
+| Quantity | Pre-Brief-32 baseline | Post-Brief-33 Part 1 expected | Post-Brief-33 Part 1 actual |
 |---|---|---|---|
-| Permanent vent loss | 120.8 MWh | 30–100 MWh (bare balanced-mech integration) | _TBD_ |
-| Σ losses total | 251.5 MWh | ~150–215 MWh | _TBD_ |
-| Heating demand (Static) | 194.3 MWh | ~100–150 MWh | _TBD_ |
-| Solar gain (gross) | 99.4 MWh | ≈ unchanged | _TBD_ |
+| Permanent vent loss | 120.8 MWh | low-double-digit MWh (sanity range ~5–50 MWh — investigate from inputs/physics if outside) | _TBD_ |
+| Σ losses total | 251.5 MWh | reduced proportionally to vent-loss drop, no other element should move | _TBD_ |
+| Heating demand (Static, setpoint convention) | 194.3 MWh | reduced; magnitude depends on solar utilisation interaction | _TBD_ |
+| Solar gain (gross) | 99.4 MWh | unchanged | _TBD_ |
 
-If actuals fall in the expected range → Part 2 closes Issue #2 and Part 3 (C_d geometry-awareness, Issue #3) authorised. If actuals fall outside → audit finding before Part 3 starts. Per Chris: "If the engine produces numbers in those ranges with the methodology's defensible mechanism, Part 2 is working as designed. If it produces something different, that's an audit finding to investigate, not a number to tune."
+Per Brief 33: we report what the engine produces with full provenance; we do not calibrate to a target. If the actual permanent vent loss falls outside the broad sanity range (e.g. < 5 MWh or > 50 MWh) that's an audit finding to investigate from inputs and physics, not a number to tune.
 
-**Next part:** Brief 32 Part 3 — geometry-aware C_d (Issue #3). Adds `width_mm` / `height_mm` / `type` / `internal_resistance` fields to opening data model; `computeCd(opening)` function with lookup table per methodology doc Step 1; Bridgewater trickle vents (15 × 1300 mm slot + mesh + flap) resolve to C_d ≈ 0.25.
+**Next part:** Brief 33 Part 2 — geometry-aware C_d. New file `frontend/src/utils/openingCoefficients.js` hosts `computeCd(opening)`; opening data model extended with `type` / `internal_resistance` / `width_mm` / `height_mm`; the hard-coded `Cd = 0.6` in `instantCalc.js` is removed. Single-sided correlation gains a geometric-restriction factor `min(1.0, C_d / 0.6)` per Chris's engineering correction (documented verbatim in the methodology doc when it lands). Bridgewater trickle vents (15 × 1300 mm slot, mesh, flap) resolve to C_d ≈ 0.25.
 
-**Known issues:** Issues #3, #4, #5, #6, #8, #9, #10, #11, #12 remain open per `docs/audit/29_open_issues.md`. Brief 32 Parts 3–4 close #3/#4. Part 5 closes #6.
+**Known issues:** Issues #3, #4, #5, #6, #8, #9, #10, #11, #12 remain open per `docs/audit/29_open_issues.md`. Brief 33 Part 2 closes #3. Issue #4 (stack term in cross branch) is deferred — not in any current brief.
+
+---
+
+## ✅ Session 2026-05-18 — Brief 32 Part 2: Permanent vent topology fix (closed `341eeff`, superseded by Brief 33)
+
+**State:** `closed_but_superseded` — single commit at `341eeff` introduced the three-branch flow_mode dispatch (`cross` / `single_sided` / `balanced_mechanical`). The `balanced_mechanical` branch was a Building/Systems scope violation; Brief 33 Part 1 reverts it. The `cross` / `single_sided` two-branch dispatch is retained.
+
+**What landed in `341eeff`:**
+- `DEFAULT_PARAMS.openings` gained `flow_mode` (`'cross' | 'single_sided' | 'balanced_mechanical'`) and `mech_extract_lps_per_room` (default 8 l/s).
+- `instantCalc.js` gained `inferFlowMode` + a three-branch dispatch in the 8760-hour loop.
+- Building UI gained a three-option "Flow topology" dropdown + conditional "Extract rate per room" field + balanced-mech-disabled site-exposure logic.
+- `scripts/32_bridgewater_balanced_mech_migration.py` set Bridgewater to `balanced_mechanical`.
+- `docs/audit/32_vent_fix_verification.md` documented Cases A/B/C.
+- Issue #2 marked STATIC FIXED.
+
+**Why superseded by Brief 33:** the `balanced_mechanical` branch and `mech_extract_lps_per_room` field imported mechanical-systems concepts (continuous bathroom extract) into the Building module, which is envelope-only. Brief 33 Part 1 reverts both. The cross / single_sided two-branch dispatch is retained; Bridgewater migrated to `single_sided`. CLAUDE.md "Module scopes" (Brief 33 Part 3) locks the boundary so this confusion can't recur.
 
 ---
 

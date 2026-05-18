@@ -802,59 +802,32 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
           })}
         </CollapsibleSection>
 
-        {/* ── Permanent openings ── Always-open envelope holes (louvres,
-              trickle vents, similar). Operable windows + schedule live in
-              /operation — they're an operational behaviour, not envelope geometry.
-
-              Brief 32 Part 2 (2026-05-18) — Issue #2 fix: flow topology is
-              now a per-building dropdown. The three correlations live in
-              instantCalc.js around line 1015; see also
-              docs/audit/29_permanent_vent_methodology.md. */}
+        {/* ── Permanent openings ── Always-open passive envelope openings
+              (trickle vents, louvres, fixed grilles, holes in the envelope).
+              Wind-driven only. Operable windows + schedules live in /operation;
+              mechanical ventilation lives in /systems — neither belong here.
+              See CLAUDE.md "Module scopes" + Brief 33 §"Scope statement". */}
         <CollapsibleSection title={`Permanent openings${anyOpenings ? ' · active' : ''}`} defaultOpen={anyOpenings}>
           <div className="mb-2">
             <label className="text-xxs text-mid-grey block mb-0.5">Flow topology</label>
             <select
-              value={openings.flow_mode ?? 'cross'}
+              value={openings.flow_mode ?? 'single_sided'}
               onChange={e => updateParam('openings', { flow_mode: e.target.value })}
               className="w-full px-2 py-1 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-teal cursor-pointer"
-              title="Which physics drives flow through the permanent vents — picks the correlation in the Static engine"
+              title="Which wind-driven correlation the Static engine uses for permanent-vent flow"
             >
+              <option value="single_sided">Single-sided (one façade per room — BS EN 16798-7 §6.4)</option>
               <option value="cross">Cross-flow (wind-driven, openings on opposite façades)</option>
-              <option value="single_sided">Single-sided (one façade only — BS EN 16798-7 §6.4)</option>
-              <option value="balanced_mechanical">Balanced mechanical (continuous extract; vent = makeup)</option>
             </select>
             <p className="text-xxs text-mid-grey/70 mt-1 leading-tight">
-              {(openings.flow_mode ?? 'cross') === 'cross' && (
+              {(openings.flow_mode ?? 'single_sided') === 'single_sided' && (
+                <>Single-sided: <code>Q ≈ 0.025 · A · v<sub>wind</sub></code>. BS EN 16798-7 §6.4 empirical correlation for one-façade openings or cellular layouts with no cross-flow path.</>
+              )}
+              {openings.flow_mode === 'cross' && (
                 <>Cross-flow: <code>Q = C<sub>d</sub> · A · √C<sub>w</sub> · v<sub>wind</sub></code>. Use when openings on opposite façades have an open internal air path (atrium, open plan).</>
-              )}
-              {openings.flow_mode === 'single_sided' && (
-                <>Single-sided: <code>Q ≈ 0.025 · A · v<sub>wind</sub></code>. BS EN 16798-7 §6.4 empirical correlation for one-façade openings.</>
-              )}
-              {openings.flow_mode === 'balanced_mechanical' && (
-                <>Balanced mechanical: extract rate sets flow; louvre is the makeup path. <code>Q = N<sub>rooms</sub> · q<sub>extract</sub></code>.</>
               )}
             </p>
           </div>
-
-          {openings.flow_mode === 'balanced_mechanical' && (
-            <div className="mb-2">
-              <label className="text-xxs text-mid-grey block mb-0.5">Extract rate per room (l/s)</label>
-              <input
-                type="number"
-                min={0}
-                step={0.5}
-                value={Number(openings.mech_extract_lps_per_room ?? 8)}
-                onChange={e => updateParam('openings', { mech_extract_lps_per_room: Number(e.target.value) })}
-                className="w-full px-2 py-1 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-teal"
-                title="Continuous mechanical extract per room — CIBSE Guide A Table 1.5 / Approved Document F default 8 l/s for hotel/residential"
-              />
-              <p className="text-xxs text-mid-grey/70 mt-1 leading-tight">
-                Default 8 l/s/room (CIBSE Guide A Table 1.5 / Approved Document F continuous extract).
-                Total Q = {(Number(params?.num_bedrooms ?? 0) * Number(openings.mech_extract_lps_per_room ?? 8) / 1000).toFixed(3)} m³/s
-                ({Number(params?.num_bedrooms ?? 0)} rooms × {Number(openings.mech_extract_lps_per_room ?? 8)} l/s).
-              </p>
-            </div>
-          )}
 
           <div className="mb-2">
             <label className="text-xxs text-mid-grey block mb-0.5">Site exposure</label>
@@ -862,10 +835,7 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
               value={openings.site_exposure ?? 'normal'}
               onChange={e => updateParam('openings', { site_exposure: e.target.value })}
               className="w-full px-2 py-1 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-teal cursor-pointer"
-              disabled={openings.flow_mode === 'balanced_mechanical'}
-              title={openings.flow_mode === 'balanced_mechanical'
-                ? 'Site exposure unused in balanced-mechanical mode (flow is set by extract rate, not wind)'
-                : 'Wind-pressure coefficient: sheltered = 0.05, normal = 0.10, exposed = 0.20'}
+              title="Wind-pressure coefficient: sheltered = 0.05, normal = 0.10, exposed = 0.20"
             >
               <option value="sheltered">Sheltered</option>
               <option value="normal">Normal</option>
