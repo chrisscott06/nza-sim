@@ -1,13 +1,26 @@
 """
-Brief 29 Issue #13 diagnostic — minimal envelope-only EP run with all HVAC,
-thermostat, sizing, and mechanical ventilation stripped. Compare T_zone trace
-against the baseline run b8db113e to identify the source of the 21.0 °C
-clamping behaviour.
+State 1 strip regression test — Brief 30 Phase 0.4.
 
-Time-box: 90 minutes. One commit. No fixes.
+Originally Brief 29 Issue #13 diagnostic (commit 3f8b1ee). Promoted to
+regression test per Chris call 2026-05-18: post-Brief-30, stripping HVAC
+from State 1 must produce ZERO change in T_zone — because there is no
+HVAC in State 1. If this script produces any delta on a Brief-30-built
+State 1 epJSON, State 1 has regressed to emitting system objects.
+
+Two acceptance modes:
+
+  Pre-Brief-30 (legacy): Stripping HVAC from a State 1 epJSON that
+    contains VRF + DesignFlowRate produces a ~6 K drop in mean T_zone
+    and removes 29.5% clamping at 21.0 °C. This is the original Issue
+    #13 diagnostic result.
+
+  Post-Brief-30 (regression target): Stripping HVAC from a State 1
+    epJSON that's been built per Brief 30 Phase 1 should produce a
+    <0.5 K delta on mean T_zone, because there's no HVAC to strip. If
+    the delta exceeds 0.5 K, State 1 has silently regained system objects.
 
 Usage:
-  python scripts/_issue13_diagnostic.py
+  python scripts/_state1_strip_regression.py
 
 Outputs:
   data/simulations/_diag_issue13_no_hvac/  — minimal EP run
@@ -64,7 +77,7 @@ def patch_building(ep):
 
 
 def main():
-    print("=== Brief 29 Issue #13 diagnostic ===")
+    print("=== Brief 30 State 1 strip regression (orig: Brief 29 Issue #13 diagnostic) ===")
     print(f"baseline: {BASELINE_DIR}")
     print(f"diag dir: {DIAG_DIR}")
     print()

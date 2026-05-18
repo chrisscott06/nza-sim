@@ -20,7 +20,7 @@ This tool is a sibling to Pablo (NZA's electricity cost analytics platform). It 
 4. **Data files are local-only.** The `data/` folder (containing weather files, simulation outputs, and any SQLite databases) is in `.gitignore`. It does not exist on GitHub. If you clone the repo fresh, the backend creates an empty database on startup — but library items (constructions, system templates, profiles, weather files) will need to be re-ingested or copied from a working installation.
 5. **npm install on Windows:** Use `npm install --force` if you get EBADPLATFORM errors on Windows.
 6. **Launcher:** `C:\Dev\nza-simulate\go.bat` starts both servers and opens the browser. Double-click to run. This file is gitignored — it lives only on Chris's machine. Do not delete it. Do not modify it without asking Chris.
-7. **EnergyPlus installation:** EnergyPlus must be installed locally. Default path: `C:\EnergyPlusV25-2-0\` (update if version changes). The backend reads the `ENERGYPLUS_DIR` environment variable, falling back to this default.
+7. **EnergyPlus installation:** EnergyPlus must be installed locally. Default path: `C:\EnergyPlusV26-1-0\` (updated to V26.1.0 per Brief 30 Phase 0.3 schema lock 2026-05-18; previously V25-2-0). The backend reads the `ENERGYPLUS_DIR` environment variable, falling back to this default. Output:Variable names in the assembler + parser are confirmed valid for V26.1.0 — see `docs/audit/30_phase0_schema_lock.md` for the verified list.
 
 ---
 
