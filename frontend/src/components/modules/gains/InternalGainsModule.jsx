@@ -61,6 +61,11 @@ import { useContext } from 'react'
 // totals badge on every chart).
 import LiveResultsStrip from '../../shared/LiveResultsStrip.jsx'
 import { useStateComparison } from './canvas/useStateComparison.js'
+// Brief 36 Part 3 (2026-05-18): shared draggable pop-out chrome. Replaces
+// the centre-canvas "Schedule" tab — the editor now opens as a movable
+// floating panel via the existing Edit-schedule links in the left panel,
+// per the §3.4 alternative. Tab strip drops from 5 tabs to 4.
+import SchedulePopout from '../../shared/SchedulePopout.jsx'
 
 const GAINS_ACCENT = '#EA580C'
 
@@ -176,8 +181,13 @@ function CollapsibleSection({ title, accent, onActivate, children, defaultOpen =
 //   + localStorage keys 'nza-conditions-*' kept stable per Chris's call
 //   on internal-vs-user-facing churn. Internal filename LoadShapeView.jsx
 //   stays for now; cosmetic file rename queued for Part 7 close-out.
+// Brief 36 Part 3 (2026-05-18): 'schedule' tab removed. Schedule editor now
+// lives in a draggable pop-out (SchedulePopout) opened via the left-panel
+// "Edit schedule" affordances. Per the brief §3.4 alternative: tab strip
+// drops from 5 tabs to 4 and the centre canvas stops hosting workspace-
+// activity content (cleaner — main canvas reads results, pop-out edits
+// inputs).
 const TABS = [
-  { key: 'schedule',    label: 'Schedule',     fullWidth: true,  hasEngineToggle: false, isSchedule: true                  },
   { key: 'summary',     label: 'Summary',      fullWidth: false, hasEngineToggle: true,  headline: true                    },
   { key: 'balance',     label: 'Heat balance', fullWidth: false, hasEngineToggle: true                                     },
   { key: 'loadshape',   label: 'Profiles',     fullWidth: true,  hasEngineToggle: true                                     },
@@ -189,115 +199,10 @@ const TABS = [
 const TAB_KEYS = TABS.map(t => t.key)
 
 // ── Tab content dispatcher ──────────────────────────────────────────────────
-function TabContent({
-  tab, activeSection, params, updateParam,
-  editingExceptionId, onEnterEditMode, onExitEditMode,
-  activeLightingId, activeEquipmentId,
-  onActiveLightingChange, onActiveEquipmentChange,
-}) {
-  // Schedule tab — wires to the centre-canvas editor and the v2.4 contract's
-  // section-of-interest data path.
-  if (tab === 'schedule') {
-    const accent = GAIN_COLOURS[activeSection]
-
-    // Read schedule + onChange wiring per the active section. v2.4 multi-
-    // profile arrives in Parts 9/10; for now Lighting + Equipment edit the
-    // (single) gains.lighting.schedule / gains.equipment.schedule which the
-    // current data model still uses.
-    // v2.4 multi-profile (Part 9): Lighting + Equipment now live under
-    // `gains.{category}.profiles[]`. Until Part 10 wires the multi-profile
-    // selector, the Schedule tab routes to profiles[0] — the "active"
-    // profile. Occupancy stays single-object (not multi-profile).
-    let parentSchedule, parentOnChange, label
-    if (activeSection === 'occupancy') {
-      parentSchedule = params?.occupancy?.schedule
-      label = GAIN_LABELS.occupancy
-      parentOnChange = (next) => updateParam('occupancy', { ...(params?.occupancy ?? {}), schedule: next })
-    } else if (activeSection === 'lighting' || activeSection === 'equipment') {
-      const category = activeSection
-      label = GAIN_LABELS[category]
-      const profiles = params?.gains?.[category]?.profiles ?? []
-      const activeProfileId = category === 'lighting' ? activeLightingId : activeEquipmentId
-      // Resolve the active profile by id; fall back to profiles[0] when no
-      // explicit selection (typical first-load case) or when the active id
-      // has been deleted (recovery).
-      const activeIdx = (() => {
-        if (activeProfileId) {
-          const idx = profiles.findIndex(p => p.id === activeProfileId)
-          if (idx >= 0) return idx
-        }
-        return 0
-      })()
-      parentSchedule = profiles[activeIdx]?.schedule
-      // Tag the active profile in the canvas header so the user can see
-      // which profile they're authoring even when the canvas is the only
-      // visible surface.
-      label = `${GAIN_LABELS[category]}${profiles.length > 1 ? ` · ${profiles[activeIdx]?.label ?? ''}` : ''}`
-      parentOnChange = (next) => {
-        const nextProfiles = profiles.slice()
-        if (nextProfiles[activeIdx]) {
-          nextProfiles[activeIdx] = { ...nextProfiles[activeIdx], schedule: next }
-        }
-        updateParam('gains', {
-          ...(params?.gains ?? {}),
-          [category]: { ...(params?.gains?.[category] ?? {}), profiles: nextProfiles },
-        })
-      }
-    }
-
-    // Resolve the currently-edited exception (if any). Stale ID falls
-    // through to default-mode rendering and the next render clears it.
-    const editingException = editingExceptionId
-      ? (parentSchedule?.exceptions ?? []).find(e => e.id === editingExceptionId) ?? null
-      : null
-
-    // Exception writer: replaces the matching exception in
-    // parentSchedule.exceptions[] with patched curve fields.
-    const exceptionOnChange = (curvePatch) => {
-      if (!editingException || !parentOnChange || !parentSchedule) return
-      const nextExceptions = (parentSchedule.exceptions ?? []).map(e =>
-        e.id === editingException.id ? { ...e, ...curvePatch } : e
-      )
-      parentOnChange({ ...parentSchedule, exceptions: nextExceptions })
-    }
-
-    // Part 10 wiring: pass per-section profile selector + area coverage.
-    let profileSelector = null
-    let areaShareTotal  = null
-    if (activeSection === 'lighting' || activeSection === 'equipment') {
-      const category = activeSection
-      const profiles = params?.gains?.[category]?.profiles ?? []
-      const activeId = category === 'lighting' ? activeLightingId : activeEquipmentId
-      const onChange = category === 'lighting' ? onActiveLightingChange : onActiveEquipmentChange
-      profileSelector = {
-        profiles: profiles.map(p => ({ id: p.id, label: p.label })),
-        activeId,
-        onChange,
-      }
-      areaShareTotal = profiles.reduce((s, p) => s + Number(p.area_share ?? 0), 0)
-    }
-
-    return (
-      <ScheduleEditorCanvas
-        gainType={activeSection}
-        gainLabel={label}
-        parentSchedule={parentSchedule}
-        parentOnChange={parentOnChange}
-        editingException={editingException}
-        exceptionOnChange={exceptionOnChange}
-        onEnterEditMode={onEnterEditMode}
-        onExitEditMode={onExitEditMode}
-        accent={accent}
-        profileSelector={profileSelector}
-        areaShareTotal={areaShareTotal}
-      />
-    )
-  }
-
-  // Brief 27 Revised Part 11: real canvas views. Brief 28a Part 3a adds
-  // Summary. Part 3b removes 'delta' (content folded into Summary).
-  // Part 3c collapses 'freerunning' / 'hourly' / 'breakdown' into 'loadshape'.
-  // Part 3d removes '3d' tab (ThreeDView.jsx kept on disk for future revival).
+// Brief 36 Part 3: the 'schedule' tab content is gone — schedule editing now
+// happens in a SchedulePopout (see SchedulePopoutHost below the main module).
+// The centre canvas is purely results / diagnostics now.
+function TabContent({ tab }) {
   switch (tab) {
     case 'summary':   return <SummaryView />
     case 'loadshape': return <LoadShapeView />
@@ -305,6 +210,51 @@ function TabContent({
     case 'monthly':   return <MonthlyView />
     default:          return null
   }
+}
+
+// ── Schedule pop-out resolver ──────────────────────────────────────────────
+// Brief 36 Part 3: pulled out of the old TabContent 'schedule' branch.
+// Resolves the parent schedule + onChange + exception wiring per the
+// active section / profile, then renders ScheduleEditorCanvas inside the
+// SchedulePopout. All the prop-resolution logic that used to live in
+// TabContent moves here unchanged — only the host changed from canvas to
+// pop-out.
+function resolveScheduleSection({
+  activeSection, params, updateParam,
+  activeLightingId, activeEquipmentId,
+}) {
+  let parentSchedule = null
+  let parentOnChange = null
+  let label = '—'
+  if (activeSection === 'occupancy') {
+    parentSchedule = params?.occupancy?.schedule
+    label = GAIN_LABELS.occupancy
+    parentOnChange = (next) => updateParam('occupancy', { ...(params?.occupancy ?? {}), schedule: next })
+  } else if (activeSection === 'lighting' || activeSection === 'equipment') {
+    const category = activeSection
+    const profiles = params?.gains?.[category]?.profiles ?? []
+    const activeProfileId = category === 'lighting' ? activeLightingId : activeEquipmentId
+    const activeIdx = (() => {
+      if (activeProfileId) {
+        const idx = profiles.findIndex(p => p.id === activeProfileId)
+        if (idx >= 0) return idx
+      }
+      return 0
+    })()
+    parentSchedule = profiles[activeIdx]?.schedule
+    label = `${GAIN_LABELS[category]}${profiles.length > 1 ? ` · ${profiles[activeIdx]?.label ?? ''}` : ''}`
+    parentOnChange = (next) => {
+      const nextProfiles = profiles.slice()
+      if (nextProfiles[activeIdx]) {
+        nextProfiles[activeIdx] = { ...nextProfiles[activeIdx], schedule: next }
+      }
+      updateParam('gains', {
+        ...(params?.gains ?? {}),
+        [category]: { ...(params?.gains?.[category] ?? {}), profiles: nextProfiles },
+      })
+    }
+  }
+  return { parentSchedule, parentOnChange, label }
 }
 
 // ── Main module ──────────────────────────────────────────────────────────────
@@ -352,11 +302,21 @@ export default function InternalGainsModule() {
     setPrefs(p => ({ ...p, left: clamp(p.left + dx, LEFT_MIN, LEFT_MAX) }))
   }, [])
 
+  // Brief 36 Part 3: schedule editing migrated to a draggable pop-out.
+  // schedulePopoutOpen tracks open/closed; activeSection determines which
+  // schedule the pop-out edits when open. onEditSchedule sets the section
+  // AND opens the pop-out in one go.
+  const [schedulePopoutOpen, setSchedulePopoutOpen] = useState(false)
+
   // Any tab change or section change exits exception edit mode — keeps the
   // banner from persisting into a context where it no longer makes sense.
+  // Tab guard: legacy persisted prefs may have tab: 'schedule' — coerce to
+  // 'summary' so the no-longer-existing schedule tab key doesn't strand the
+  // canvas on a null view.
   const setTab = useCallback((next) => {
     setEditingExceptionId(null)
-    setPrefs(p => ({ ...p, tab: next }))
+    const safe = TAB_KEYS.includes(next) ? next : 'summary'
+    setPrefs(p => ({ ...p, tab: safe }))
   }, [])
   const setActiveSection = useCallback((next) => {
     setEditingExceptionId(null)
@@ -364,14 +324,17 @@ export default function InternalGainsModule() {
   }, [])
   const onEditSchedule = useCallback((section) => {
     setEditingExceptionId(null)
-    setPrefs(p => ({ ...p, activeSection: section, tab: 'schedule' }))
+    setPrefs(p => ({ ...p, activeSection: section }))
+    setSchedulePopoutOpen(true)
   }, [])
 
   const onEnterEditMode = useCallback((excId) => setEditingExceptionId(excId), [])
   const onExitEditMode  = useCallback(() => setEditingExceptionId(null), [])
 
-  const activeTab = TABS.find(t => t.key === tab) ?? TABS[0]
-  const scheduleTabLabel = `Schedule: ${GAIN_LABELS[activeSection] ?? '—'}`
+  // Coerce legacy 'schedule' tab to a valid view if the persisted pref
+  // survived the Brief 36 Part 3 tab-strip change.
+  const safeTab = TAB_KEYS.includes(tab) ? tab : 'summary'
+  const activeTab = TABS.find(t => t.key === safeTab) ?? TABS[0]
 
   return (
     <div className="h-full flex flex-col">
@@ -446,8 +409,8 @@ export default function InternalGainsModule() {
             <div className="flex justify-center">
               <div className="inline-flex">
                 {TABS.map(t => {
-                  const isActive = t.key === tab
-                  const label = t.isSchedule ? scheduleTabLabel : t.label
+                  const isActive = t.key === safeTab
+                  const label = t.label
                   return (
                     <button
                       key={t.key}
@@ -488,19 +451,7 @@ export default function InternalGainsModule() {
               view's content truly exceeds the canvas, it manages an internal
               scroll region (see SummaryView). */}
           <div className="flex-1 overflow-hidden min-h-0">
-            <TabContent
-              tab={tab}
-              activeSection={activeSection}
-              params={params}
-              updateParam={updateParam}
-              editingExceptionId={editingExceptionId}
-              onEnterEditMode={onEnterEditMode}
-              onExitEditMode={onExitEditMode}
-              activeLightingId={activeLightingId}
-              activeEquipmentId={activeEquipmentId}
-              onActiveLightingChange={setActiveLightingId}
-              onActiveEquipmentChange={setActiveEquipmentId}
-            />
+            <TabContent tab={safeTab} />
           </div>
 
           {/* Brief 28-IM-Polish POL-M2 IA 3.2: always-visible KPI strip.
@@ -513,6 +464,66 @@ export default function InternalGainsModule() {
           <InternalGainsStrip annual={annual} />
         </div>
       </div>
+
+      {/* Brief 36 Part 3: schedule editor lives in a draggable pop-out.
+          Opens via onEditSchedule from the left-panel sections. The
+          ScheduleEditorCanvas body is unchanged — only the host changed
+          from centre canvas to floating panel. Non-blocking backdrop means
+          the main window stays interactive while editing. */}
+      {schedulePopoutOpen && (() => {
+        const accent = GAIN_COLOURS[activeSection] ?? GAINS_ACCENT
+        const { parentSchedule, parentOnChange, label } = resolveScheduleSection({
+          activeSection, params, updateParam,
+          activeLightingId, activeEquipmentId,
+        })
+        const editingException = editingExceptionId
+          ? (parentSchedule?.exceptions ?? []).find(e => e.id === editingExceptionId) ?? null
+          : null
+        const exceptionOnChange = (curvePatch) => {
+          if (!editingException || !parentOnChange || !parentSchedule) return
+          const nextExceptions = (parentSchedule.exceptions ?? []).map(e =>
+            e.id === editingException.id ? { ...e, ...curvePatch } : e
+          )
+          parentOnChange({ ...parentSchedule, exceptions: nextExceptions })
+        }
+        let profileSelector = null
+        let areaShareTotal  = null
+        if (activeSection === 'lighting' || activeSection === 'equipment') {
+          const category = activeSection
+          const profiles = params?.gains?.[category]?.profiles ?? []
+          const activeId = category === 'lighting' ? activeLightingId : activeEquipmentId
+          const onChange = category === 'lighting' ? setActiveLightingId : setActiveEquipmentId
+          profileSelector = {
+            profiles: profiles.map(p => ({ id: p.id, label: p.label })),
+            activeId,
+            onChange,
+          }
+          areaShareTotal = profiles.reduce((s, p) => s + Number(p.area_share ?? 0), 0)
+        }
+        return (
+          <SchedulePopout
+            isOpen
+            onClose={() => setSchedulePopoutOpen(false)}
+            title={`Schedule · ${label}`}
+            accent={accent}
+            persistKey="nza-schedule-popout-position-gains"
+          >
+            <ScheduleEditorCanvas
+              gainType={activeSection}
+              gainLabel={label}
+              parentSchedule={parentSchedule}
+              parentOnChange={parentOnChange}
+              editingException={editingException}
+              exceptionOnChange={exceptionOnChange}
+              onEnterEditMode={onEnterEditMode}
+              onExitEditMode={onExitEditMode}
+              accent={accent}
+              profileSelector={profileSelector}
+              areaShareTotal={areaShareTotal}
+            />
+          </SchedulePopout>
+        )
+      })()}
     </div>
   )
 }

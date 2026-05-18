@@ -41,6 +41,13 @@ import ScheduleEditor from './profiles/ScheduleEditor.jsx'
 // Brief 28-IM-Polish POL-M2: shared chart-consistency components.
 import EnginePill from '../shared/EnginePill.jsx'
 import ChartTotalsBadge from '../shared/ChartTotalsBadge.jsx'
+// Brief 36 Part 3 (2026-05-18): shared draggable pop-out chrome. Replaces
+// the fixed inset-0 modal that locked the schedule editor to centre-screen
+// — Chris's "stuck" complaint. The schedule body content (ScheduleEditor)
+// is unchanged; only the host is replaced.
+import SchedulePopout from '../shared/SchedulePopout.jsx'
+
+const SYSTEMS_ACCENT = '#00AEEF'
 import LiveResultsStrip from '../shared/LiveResultsStrip.jsx'
 
 const ACCENT = '#00AEEF'   // systems theme — cyan-bright
@@ -249,21 +256,30 @@ export default function SystemsModule() {
         </div>
       </div>
 
-      {/* ── Schedule editor modal ────────────────────────────────────── */}
-      {editingSchedule && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center overflow-auto p-4">
-          <div className="bg-white rounded-xl shadow-2xl my-4 w-full max-w-4xl">
-            <ScheduleEditor
-              initialSchedule={editingSchedule}
-              target="project"
-              onSaved={() => {
-                setTimeout(() => setEditingSchedule(null), 800)
-              }}
-              onCancel={() => setEditingSchedule(null)}
-            />
-          </div>
-        </div>
-      )}
+      {/* Brief 36 Part 3: schedule editor in a draggable pop-out.
+          Previously the inset-0 fixed modal that Chris flagged as "stuck" —
+          now SchedulePopout provides draggable / dockable chrome and a
+          non-blocking transparent backdrop, so the user can drag the editor
+          aside and continue interacting with the Systems main view while
+          authoring a schedule. */}
+      <SchedulePopout
+        isOpen={!!editingSchedule}
+        onClose={() => setEditingSchedule(null)}
+        title={editingSchedule ? `Schedule · ${editingSchedule.display_name ?? editingSchedule.name ?? 'untitled'}` : 'Schedule editor'}
+        accent={SYSTEMS_ACCENT}
+        persistKey="nza-schedule-popout-position-systems"
+      >
+        {editingSchedule && (
+          <ScheduleEditor
+            initialSchedule={editingSchedule}
+            target="project"
+            onSaved={() => {
+              setTimeout(() => setEditingSchedule(null), 800)
+            }}
+            onCancel={() => setEditingSchedule(null)}
+          />
+        )}
+      </SchedulePopout>
     </div>
   )
 }

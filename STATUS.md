@@ -1,6 +1,30 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-18 — Brief 36 Part 2: Internal Gains colour discipline (in flight)
+## 🚧 Session 2026-05-18 — Brief 36 Part 3: Shared pop-out schedule editor (in flight)
+
+**State:** `single_commit_in_flight` — UI refactor. Schedule editing moved from in-canvas tab / fixed modal to a shared draggable pop-out.
+
+**What's landing in this commit:**
+
+- `frontend/src/components/shared/SchedulePopout.jsx` (new) — draggable, non-blocking chrome. Header bar is the drag handle (entire bar grabs). Position persists per consumer in localStorage (per-consumer key so Internal Gains and Systems don't fight over the same position). Close button + Esc key. "Reset position" link restores centred default. Transparent backdrop — main window stays interactive while the pop-out is open. Internal vertical scroll when content exceeds `calc(100vh - 4rem)`. Width 1000 px. Position clamped so the header can't escape the viewport.
+
+- `frontend/src/components/modules/gains/InternalGainsModule.jsx` — per the §3.4 alternative: dropped the "Schedule" tab from the tab strip (5 tabs → 4). `onEditSchedule` (already wired through OccupancySection / LightingSection / EquipmentSection) now sets the active section AND opens `SchedulePopout` containing the existing `ScheduleEditorCanvas` — same component, same props, same exception edit-mode behaviour, only the host changed. Centre canvas is now purely results / diagnostics. `safeTab` coerces legacy persisted prefs of `tab: 'schedule'` to `'summary'` so the no-longer-existing tab key doesn't strand the canvas on a null view. `TabContent` simplified (the schedule case branch and its prop-resolution logic moved into a new `resolveScheduleSection` helper that the pop-out callsite consumes).
+
+- `frontend/src/components/modules/SystemsModule.jsx` — replaced the `fixed inset-0 bg-black/40` modal with `SchedulePopout`. Body is the existing `profiles/ScheduleEditor` (unchanged). The "stuck" complaint is resolved — the editor is now draggable, the backdrop doesn't block clicks on the main view, and the user can drag it aside while authoring a schedule. Save/cancel lifecycle preserved (onSaved with the existing 800 ms close delay; onCancel + Esc both call `setEditingSchedule(null)`).
+
+- STATUS.md (this file) — Brief 36 Part 3 entry prepended; Part 2 marked closed at `376ab41`.
+
+**Brief §3.3 partial-deferral note (honest reporting):**
+
+The brief asked to lift exception periods into the shared pop-out so both consumers get them, and to extend Systems' library-schedule data model with an `exceptions[]` array. **Internal Gains keeps its full exception-period UI** (unchanged — `ScheduleEditorCanvas` includes `ExceptionsPanel`, exception edit-mode banner, annual-heatmap highlight). **Systems does NOT yet gain exception-period support** — the two schedule editors use different schemas (`gains/ScheduleEditor.jsx` reads `schedule.weekday/saturday/sunday/exceptions[]`; `profiles/ScheduleEditor.jsx` reads `day_types.weekday/saturday/sunday` with no exceptions[] field). Unifying the schemas requires reworking the schedules-library save path, which is outside the gains/ and systems/ directories per Brief 36 §"When to escalate". Defer to a follow-up brief: "Systems schedule library: exception-periods support + schema unification". Logged here for visibility; not blocking Part 4 close.
+
+What landed for Systems: the draggable / non-blocking chrome (the "stuck" complaint is resolved). The exception UI is the next layer.
+
+**Next:** Brief 36 Part 4 — archive, current.md, final close-out.
+
+---
+
+## ✅ Session 2026-05-18 — Brief 36 Part 2: Internal Gains colour discipline (closed `376ab41`)
 
 **State:** `single_commit_in_flight` — UI-only. Unifies the gains palette so the same gain category renders the same colour across Sankey, Heat Balance, Summary, LoadShape, Monthly, and the left-panel section headers.
 
