@@ -1,6 +1,44 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-18 — Brief 37 Part 2: UnifiedScheduleEditor (component build, isolated) (in flight)
+## 🚧 Session 2026-05-18 — Brief 37 Part 3: Wire consumers + schema migration (in flight)
+
+**State:** `single_commit_in_flight` — three consumer refactors + schema migration + engine reader fallback. Builds on Parts 1 + 2. Once Chris's walkthrough confirms parity, Part 4 deletes the legacy editors.
+
+**What's landing in this commit:**
+
+- `frontend/src/components/shared/scheduleEditor/UnifiedScheduleEditor.jsx` — extended with exception edit-mode (`editingException` / `onExceptionChange` / `onEnterExceptionEdit` / `onExitExceptionEdit` props). Synthetic-schedule routing lifted from `gains/canvas/ScheduleEditorCanvas.jsx`. Edit-mode banner styled per the legacy canvas (orange-bordered, "Return to default" button). ExceptionsPanel disables while edit-mode active. Internal Gains' rich exception-curve editing experience preserved.
+
+- `frontend/src/components/modules/gains/InternalGainsModule.jsx` — `ScheduleEditorCanvas` import + render swapped for `UnifiedScheduleEditor`. Editor props now route through Brief 37's API (`schedule` / `onChange` / `accent` / `mode='live'` / `enableExceptions` / `editingException` / `onExceptionChange`). Profile selector + area-coverage UI are not duplicated inside the pop-out (they live in the left panel via the section components); the `resolveScheduleSection` helper still composes them but the pop-out renders just the unified editor.
+
+- `frontend/src/components/modules/OperationModule.jsx` — legacy `inset-0` modal replaced with `SchedulePopout` + `UnifiedScheduleEditor` (the same swap Brief 36 Part 3 did for Systems but missed for Operation). New `saveScheduleToProject` helper inlines the legacy `target='project'` library save path. Accent is the Operation module accent (teal-700 from Brief 37 Part 1). Library mode with full `libraryMeta` row + Save/Cancel footer.
+
+- `frontend/src/components/modules/SystemsModule.jsx` — `SchedulePopout` body flipped from `profiles/ScheduleEditor` to `UnifiedScheduleEditor`. New `saveScheduleToProject` helper. **Accent is per-service** (computed in `scheduleEditorAccent` from the schedule's `schedule_type` field) — heating red, cooling cyan-bright, DHW pink, ventilation teal-500, lighting amber, small power violet per the Brief 37 Part 1 canonical table.
+
+- `frontend/src/utils/scheduleLibrary.js` `resolveScheduleAtHour` — reader-side schema fallback. Reads top-level `sched[dayType]` (Brief 37 flat shape) first, then falls through to `sched.day_types?.[dayType]` (legacy nested shape). Engine tolerates both shapes during transition; no engine math changes.
+
+- `scripts/37_schedule_schema_migration.py` (new) — flattens persisted `params.schedules[]` entries from the legacy `day_types: {…}` nested shape to top-level `weekday/saturday/sunday` + adds `exceptions: []` default. Idempotent. Per CLAUDE.md Process Rule 11, the dev server must be stopped before running. Ran clean this session: Bridgewater 2/2 schedules migrated; New Project skipped (no project-scoped schedules); NO-OP on re-run.
+
+**Bridgewater post-migration:**
+- `business_hours_09_18_weekdays` (schedule_type: occupancy): flat shape, 0 exceptions.
+- `hotel_systems_24x7` (no schedule_type set yet — defaults to occupancy): flat shape, 0 exceptions.
+
+**What still uses the legacy components on disk (deleted in Part 4):**
+- `frontend/src/components/modules/gains/canvas/ScheduleEditorCanvas.jsx` — no longer imported anywhere (tree-shaken from the build); kept on disk for the Part 4 deletion sweep.
+- `frontend/src/components/modules/gains/ScheduleEditor.jsx` — likewise unimported.
+- `frontend/src/components/modules/profiles/ScheduleEditor.jsx` — likewise unimported.
+
+**Build:** clean, 8.01 s, 2.49 MB JS (gzip 692 kB) — **dropped ~14 KB** as Vite tree-shakes the now-orphaned legacy editors. Zero errors.
+
+**PAUSE BEFORE PART 4** — Chris's walkthrough confirms parity in all three consumers before legacy code is deleted. Browser sanity-check:
+- Internal Gains: open each section's Edit schedule. Editor opens in pop-out with correct purple accent. Bar drag-paint works. Monthly dials work. Annual heatmap renders. Exceptions: add / edit / drill into hourly curves / return to default — all should work.
+- Operation: open an opening's control schedule. Editor opens in pop-out with **teal accent**. Library meta row + Save/Cancel visible. Drag works.
+- Systems: open heating / cooling / DHW / ventilation schedules. Each pop-out accent matches the service colour. Library save flow works.
+
+**Next:** Part 4 (after walkthrough sign-off) — delete the three legacy editors + close Brief 37.
+
+---
+
+## ✅ Session 2026-05-18 — Brief 37 Part 2: UnifiedScheduleEditor (component build, isolated) (closed `f60535d`)
 
 **State:** `single_commit_in_flight` — new shared component lives in `frontend/src/components/shared/scheduleEditor/`; no consumer wired yet (Part 3 does that).
 

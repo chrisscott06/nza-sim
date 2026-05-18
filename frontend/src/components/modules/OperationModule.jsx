@@ -41,7 +41,14 @@ import { SCHEDULES, allScheduleNames } from '../../utils/scheduleLibrary.js'
 import BuildingViewer3D from './building/BuildingViewer3D.jsx'
 import HeatBalance from './balance/HeatBalance.jsx'
 import WeatherSynchronisedProfile from '../profiles/WeatherSynchronisedProfile.jsx'
-import ScheduleEditor from './profiles/ScheduleEditor.jsx'
+// Brief 37 Part 3 (2026-05-18): the legacy profiles/ScheduleEditor was
+// previously hosted inside an inset-0 fixed modal — Operation's "stuck"
+// editor (Brief 36 Part 3 fixed Systems' equivalent but missed this one).
+// Replaced here with SchedulePopout + UnifiedScheduleEditor. Library save
+// flow lifted from the legacy editor and inlined as `saveScheduleToProject`
+// in this module.
+import SchedulePopout from '../shared/SchedulePopout.jsx'
+import UnifiedScheduleEditor from '../shared/scheduleEditor/UnifiedScheduleEditor.jsx'
 // Brief 28-IM-Polish POL-M2: shared cross-module strip + chart components.
 import LiveResultsStrip from '../shared/LiveResultsStrip.jsx'
 import EnginePill from '../shared/EnginePill.jsx'
@@ -166,7 +173,11 @@ export default function OperationModule() {
     [params?.operable_openings],
   )
 
-  // Brief 28-IM IM-M4 Addition 1: schedule editor modal state.
+  // Brief 28-IM IM-M4 Addition 1 / Brief 37 Part 3: schedule editor state.
+  // editingSchedule is the library schedule object being edited; the
+  // SchedulePopout + UnifiedScheduleEditor host it as a draggable pop-out.
+  // Seed accepts both flat (Brief 37 schema) and legacy day_types shapes —
+  // UnifiedScheduleEditor's ensureSchedule helper unwraps either.
   const [editingSchedule, setEditingSchedule] = useState(null)
   const openScheduleEditor = (scheduleName) => {
     const existing = (params?.schedules ?? []).find(s => s?.name === scheduleName || s?.id === scheduleName)
@@ -174,11 +185,48 @@ export default function OperationModule() {
     const seed = existing ?? (hardcoded
       ? {
           id: scheduleName, name: scheduleName, display_name: scheduleName,
+          schedule_type: 'occupancy',
+          zone_type: 'bedroom',
           day_types: hardcoded.day_types,
           monthly_multipliers: hardcoded.monthly_multipliers ?? Array(12).fill(1),
+          exceptions: [],
         }
-      : { name: scheduleName, day_types: { weekday: Array(24).fill(0.5), saturday: Array(24).fill(0.5), sunday: Array(24).fill(0.5) }, monthly_multipliers: Array(12).fill(1) })
+      : {
+          name: scheduleName,
+          schedule_type: 'occupancy',
+          zone_type: 'bedroom',
+          weekday: Array(24).fill(0.5), saturday: Array(24).fill(0.5), sunday: Array(24).fill(0.5),
+          monthly_multipliers: Array(12).fill(1),
+          exceptions: [],
+        })
     setEditingSchedule(seed)
+  }
+
+  // Brief 37 Part 3: save the buffered library schedule into params.schedules[]
+  // (project-target — same destination as the legacy ScheduleEditor's
+  // target='project' handleSave path). UnifiedScheduleEditor calls this via
+  // libraryMeta.onSave; we close the pop-out after a short ack delay.
+  const [savingSchedule, setSavingSchedule] = useState(false)
+  const saveScheduleToProject = (draft) => {
+    setSavingSchedule(true)
+    const slugName = (draft.name ?? draft.id ?? 'schedule').toLowerCase().replace(/\s+/g, '_')
+    const entry = {
+      id:                  slugName,
+      name:                slugName,
+      display_name:        draft.display_name ?? draft.name ?? slugName,
+      schedule_type:       draft.schedule_type ?? 'occupancy',
+      zone_type:           draft.zone_type ?? 'bedroom',
+      weekday:             draft.weekday  ?? [],
+      saturday:            draft.saturday ?? [],
+      sunday:              draft.sunday   ?? [],
+      monthly_multipliers: draft.monthly_multipliers ?? Array(12).fill(1),
+      exceptions:          Array.isArray(draft.exceptions) ? draft.exceptions : [],
+    }
+    const existingList = Array.isArray(params?.schedules) ? params.schedules : []
+    const idx = existingList.findIndex(s => s?.id === slugName || s?.name === slugName)
+    const next = idx >= 0 ? existingList.map((s, i) => i === idx ? entry : s) : [...existingList, entry]
+    updateParam('schedules', next)
+    setTimeout(() => { setSavingSchedule(false); setEditingSchedule(null) }, 600)
   }
 
   // Centre view switcher state (persists per-session in localStorage)
@@ -478,19 +526,40 @@ export default function OperationModule() {
         </div>
       </div>
 
-      {/* Brief 28-IM IM-M4 Addition 1: shared ScheduleEditor modal */}
-      {editingSchedule && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center overflow-auto p-4">
-          <div className="bg-white rounded-xl shadow-2xl my-4 w-full max-w-4xl">
-            <ScheduleEditor
-              initialSchedule={editingSchedule}
-              target="project"
-              onSaved={() => setTimeout(() => setEditingSchedule(null), 800)}
-              onCancel={() => setEditingSchedule(null)}
-            />
-          </div>
-        </div>
-      )}
+      {/* Brief 37 Part 3: shared SchedulePopout + UnifiedScheduleEditor.
+          Replaces the legacy inset-0 fixed modal. Same library save flow
+          (writes to params.schedules[] via saveScheduleToProject) but the
+          editor is now draggable and the backdrop doesn't block the main
+          view. */}
+      <SchedulePopout
+        isOpen={!!editingSchedule}
+        onClose={() => setEditingSchedule(null)}
+        title={editingSchedule ? `Schedule · ${editingSchedule.display_name ?? editingSchedule.name ?? 'untitled'}` : 'Schedule editor'}
+        accent={ACCENT}
+        persistKey="nza-schedule-popout-position-operation"
+      >
+        {editingSchedule && (
+          <UnifiedScheduleEditor
+            schedule={editingSchedule}
+            onChange={(next) => setEditingSchedule(prev => ({ ...prev, ...next }))}
+            accent={ACCENT}
+            mode="library"
+            enableExceptions
+            contextLabel={editingSchedule.display_name ?? editingSchedule.name ?? ''}
+            libraryMeta={{
+              name:           editingSchedule.display_name ?? editingSchedule.name ?? '',
+              schedule_type:  editingSchedule.schedule_type ?? 'occupancy',
+              zone_type:      editingSchedule.zone_type ?? 'bedroom',
+              onNameChange:   (v) => setEditingSchedule(prev => ({ ...prev, display_name: v })),
+              onTypeChange:   (v) => setEditingSchedule(prev => ({ ...prev, schedule_type: v })),
+              onZoneChange:   (v) => setEditingSchedule(prev => ({ ...prev, zone_type: v })),
+              onSave:         () => saveScheduleToProject(editingSchedule),
+              onCancel:       () => setEditingSchedule(null),
+              saving:         savingSchedule,
+            }}
+          />
+        )}
+      </SchedulePopout>
     </div>
   )
 }

@@ -37,7 +37,10 @@ import { calculateInstant } from '../../utils/instantCalc.js'
 import { SCHEDULES, allScheduleNames } from '../../utils/scheduleLibrary.js'
 import { SYSTEM_TEMPLATES_LIBRARY } from '../../data/systemTemplatesLibrary.js'
 import WeatherSynchronisedProfile from '../profiles/WeatherSynchronisedProfile.jsx'
-import ScheduleEditor from './profiles/ScheduleEditor.jsx'
+// Brief 37 Part 3 (2026-05-18): legacy profiles/ScheduleEditor replaced
+// by UnifiedScheduleEditor inside the existing SchedulePopout (Brief 36
+// Part 3). Library save flow lifted into saveScheduleToProject below.
+import UnifiedScheduleEditor from '../shared/scheduleEditor/UnifiedScheduleEditor.jsx'
 // Brief 28-IM-Polish POL-M2: shared chart-consistency components.
 import EnginePill from '../shared/EnginePill.jsx'
 import ChartTotalsBadge from '../shared/ChartTotalsBadge.jsx'
@@ -135,7 +138,11 @@ export default function SystemsModule() {
     try { localStorage.setItem('nza-systems-centre', centreView) } catch {}
   }, [centreView])
 
-  // Schedule editor modal state — target system or opening triggers
+  // Brief 37 Part 3: schedule editor state. editingSchedule is the library
+  // schedule object being edited; SchedulePopout (Brief 36 Part 3) +
+  // UnifiedScheduleEditor (Brief 37 Part 2) replace the legacy modal +
+  // editor pair. Seed accepts both flat (Brief 37 schema) and legacy
+  // day_types shapes — UnifiedScheduleEditor's ensureSchedule unwraps either.
   const [editingSchedule, setEditingSchedule] = useState(null)
   const openScheduleEditor = (scheduleName) => {
     const existing = (params?.schedules ?? []).find(s => s?.name === scheduleName || s?.id === scheduleName)
@@ -143,12 +150,63 @@ export default function SystemsModule() {
     const seed = existing ?? (hardcoded
       ? {
           id: scheduleName, name: scheduleName, display_name: scheduleName,
+          schedule_type: 'occupancy',
+          zone_type: 'bedroom',
           day_types: hardcoded.day_types,
           monthly_multipliers: hardcoded.monthly_multipliers ?? Array(12).fill(1),
+          exceptions: [],
         }
-      : { name: scheduleName, day_types: { weekday: Array(24).fill(0.5), saturday: Array(24).fill(0.5), sunday: Array(24).fill(0.5) }, monthly_multipliers: Array(12).fill(1) })
+      : {
+          name: scheduleName,
+          schedule_type: 'occupancy',
+          zone_type: 'bedroom',
+          weekday: Array(24).fill(0.5), saturday: Array(24).fill(0.5), sunday: Array(24).fill(0.5),
+          monthly_multipliers: Array(12).fill(1),
+          exceptions: [],
+        })
     setEditingSchedule(seed)
   }
+
+  // Brief 37 Part 3: library save flow — writes to params.schedules[]
+  // (project-target, same destination as the legacy ScheduleEditor's
+  // target='project' handleSave). Accent for the editor derives from the
+  // schedule's `schedule_type` per SYSTEMS_SERVICE_COLOURS (heating red,
+  // cooling cyan-bright, etc.).
+  const [savingSchedule, setSavingSchedule] = useState(false)
+  const saveScheduleToProject = (draft) => {
+    setSavingSchedule(true)
+    const slugName = (draft.name ?? draft.id ?? 'schedule').toLowerCase().replace(/\s+/g, '_')
+    const entry = {
+      id:                  slugName,
+      name:                slugName,
+      display_name:        draft.display_name ?? draft.name ?? slugName,
+      schedule_type:       draft.schedule_type ?? 'occupancy',
+      zone_type:           draft.zone_type ?? 'bedroom',
+      weekday:             draft.weekday  ?? [],
+      saturday:            draft.saturday ?? [],
+      sunday:              draft.sunday   ?? [],
+      monthly_multipliers: draft.monthly_multipliers ?? Array(12).fill(1),
+      exceptions:          Array.isArray(draft.exceptions) ? draft.exceptions : [],
+    }
+    const existingList = Array.isArray(params?.schedules) ? params.schedules : []
+    const idx = existingList.findIndex(s => s?.id === slugName || s?.name === slugName)
+    const next = idx >= 0 ? existingList.map((s, i) => i === idx ? entry : s) : [...existingList, entry]
+    updateParam('schedules', next)
+    setTimeout(() => { setSavingSchedule(false); setEditingSchedule(null) }, 600)
+  }
+  // Service-coloured accent for the editor — uses the canonical
+  // SYSTEMS_SERVICE_COLOURS table. Schedules carry a schedule_type which
+  // maps to red/cyan/pink/teal/amber/violet per Brief 37 Part 1.
+  const scheduleEditorAccent = (() => {
+    const t = editingSchedule?.schedule_type ?? 'occupancy'
+    const map = {
+      heating: '#DC2626', cooling: '#00AEEF', dhw: '#EC4899',
+      ventilation: '#14B8A6', fans: '#14B8A6',
+      lighting: '#F59E0B', small_power: '#8B5CF6',
+      occupancy: '#8B5CF6', equipment: '#8B5CF6',
+    }
+    return map[t] ?? '#00AEEF'
+  })()
 
   const sysCfg = params?.systems_config_v25 ?? {}
   const consumption = result?.consumption ?? null
@@ -257,27 +315,37 @@ export default function SystemsModule() {
         </div>
       </div>
 
-      {/* Brief 36 Part 3: schedule editor in a draggable pop-out.
-          Previously the inset-0 fixed modal that Chris flagged as "stuck" —
-          now SchedulePopout provides draggable / dockable chrome and a
-          non-blocking transparent backdrop, so the user can drag the editor
-          aside and continue interacting with the Systems main view while
-          authoring a schedule. */}
+      {/* Brief 36 Part 3 (chrome) + Brief 37 Part 3 (body): SchedulePopout
+          replaces the legacy inset-0 modal; UnifiedScheduleEditor replaces
+          the legacy profiles/ScheduleEditor body. Accent is service-coloured
+          per the schedule's schedule_type (heating red / cooling cyan /
+          DHW pink / ventilation teal / lighting amber / small power violet). */}
       <SchedulePopout
         isOpen={!!editingSchedule}
         onClose={() => setEditingSchedule(null)}
         title={editingSchedule ? `Schedule · ${editingSchedule.display_name ?? editingSchedule.name ?? 'untitled'}` : 'Schedule editor'}
-        accent={SYSTEMS_ACCENT}
+        accent={scheduleEditorAccent}
         persistKey="nza-schedule-popout-position-systems"
       >
         {editingSchedule && (
-          <ScheduleEditor
-            initialSchedule={editingSchedule}
-            target="project"
-            onSaved={() => {
-              setTimeout(() => setEditingSchedule(null), 800)
+          <UnifiedScheduleEditor
+            schedule={editingSchedule}
+            onChange={(next) => setEditingSchedule(prev => ({ ...prev, ...next }))}
+            accent={scheduleEditorAccent}
+            mode="library"
+            enableExceptions
+            contextLabel={editingSchedule.display_name ?? editingSchedule.name ?? ''}
+            libraryMeta={{
+              name:           editingSchedule.display_name ?? editingSchedule.name ?? '',
+              schedule_type:  editingSchedule.schedule_type ?? 'occupancy',
+              zone_type:      editingSchedule.zone_type ?? 'bedroom',
+              onNameChange:   (v) => setEditingSchedule(prev => ({ ...prev, display_name: v })),
+              onTypeChange:   (v) => setEditingSchedule(prev => ({ ...prev, schedule_type: v })),
+              onZoneChange:   (v) => setEditingSchedule(prev => ({ ...prev, zone_type: v })),
+              onSave:         () => saveScheduleToProject(editingSchedule),
+              onCancel:       () => setEditingSchedule(null),
+              saving:         savingSchedule,
             }}
-            onCancel={() => setEditingSchedule(null)}
           />
         )}
       </SchedulePopout>

@@ -38,7 +38,11 @@ import LightingSection  from './LightingSection.jsx'
 import EquipmentSection from './EquipmentSection.jsx'
 import { GAIN_COLOURS, GAIN_LABELS } from './gainColours.js'
 import { useAnnualGains } from './useAnnualGains.js'
-import ScheduleEditorCanvas from './canvas/ScheduleEditorCanvas.jsx'
+// Brief 37 Part 3 (2026-05-18): ScheduleEditorCanvas swapped for the
+// shared UnifiedScheduleEditor. ScheduleEditorCanvas + its tab-host
+// helpers are slated for deletion in Brief 37 Part 4 once Chris's
+// walkthrough confirms parity.
+import UnifiedScheduleEditor from '../../shared/scheduleEditor/UnifiedScheduleEditor.jsx'
 import SummaryView         from './canvas/SummaryView.jsx'
 // DeltaView removed from imports — its content lives in SummaryView as of
 // Brief 28a Part 3b (2026-05-14). File kept on disk as deprecated; will be
@@ -508,19 +512,24 @@ export default function InternalGainsModule() {
             accent={accent}
             persistKey="nza-schedule-popout-position-gains"
           >
-            <ScheduleEditorCanvas
-              gainType={activeSection}
-              gainLabel={label}
-              parentSchedule={parentSchedule}
-              parentOnChange={parentOnChange}
-              editingException={editingException}
-              exceptionOnChange={exceptionOnChange}
-              onEnterEditMode={onEnterEditMode}
-              onExitEditMode={onExitEditMode}
+            <UnifiedScheduleEditor
+              schedule={parentSchedule}
+              onChange={parentOnChange}
               accent={accent}
-              profileSelector={profileSelector}
-              areaShareTotal={areaShareTotal}
+              mode="live"
+              enableExceptions
+              contextLabel={label}
+              editingException={editingException}
+              onExceptionChange={exceptionOnChange}
+              onEnterExceptionEdit={onEnterEditMode}
+              onExitExceptionEdit={onExitEditMode}
             />
+            {/* Profile selector / area coverage (lighting + equipment only)
+                are surfaced in the left-panel sections now that the canvas
+                tab is gone; not duplicated inside the pop-out. _profileSelector
+                + _areaShareTotal kept resolved above for the dev-mode
+                inspector + restoration in a follow-up if needed. */}
+            {void [profileSelector, areaShareTotal]}
           </SchedulePopout>
         )
       })()}

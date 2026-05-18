@@ -331,28 +331,82 @@ export default function UnifiedScheduleEditor({
   enableExceptions = true,
   libraryMeta     = null,
   contextLabel    = '',
+  // Brief 37 Part 3: exception edit-mode — when set, the bar editor + monthly
+  // dials drive the EXCEPTION's curves (synthetic schedule), but the annual
+  // heatmap + ExceptionsPanel keep operating on the parent schedule. Lifted
+  // from the legacy ScheduleEditorCanvas pattern so Internal Gains' per-
+  // exception hourly-curve drill-down survives the unification.
+  editingException     = null,         // null | the exception object being edited
+  onExceptionChange    = null,         // (curvePatch) => void — receives {weekday?, saturday?, sunday?}
+  onEnterExceptionEdit = null,         // (excId) => void
+  onExitExceptionEdit  = null,         // () => void
 }) {
   const s = ensureSchedule(schedule)
   const [activeDay, setActiveDay] = useState('weekday')
 
+  // ── Exception edit-mode routing ──────────────────────────────────────────
+  // Lifted from gains/canvas/ScheduleEditorCanvas.jsx:198-222. When in
+  // edit-mode the bar editor + monthly dials see a SYNTHETIC schedule whose
+  // weekday/saturday/sunday ARE the exception's curves; monthly_multipliers
+  // come from the parent (unless the exception ignores them). The
+  // ExceptionsPanel + AnnualHeatmap always render against the parent.
+  const isEditingException = !!editingException
+
+  const editorSchedule = isEditingException
+    ? ensureSchedule({
+        weekday:             editingException.weekday  ?? new Array(24).fill(0),
+        saturday:            editingException.saturday ?? new Array(24).fill(0),
+        sunday:              editingException.sunday   ?? new Array(24).fill(0),
+        monthly_multipliers: editingException.ignore_monthly_multipliers
+          ? new Array(12).fill(1)
+          : (s.monthly_multipliers ?? new Array(12).fill(1)),
+        exceptions: [],
+      })
+    : s
+
   const writeSchedule = useCallback((patch) => {
-    onChange?.({ ...s, ...patch })
-  }, [s, onChange])
+    if (isEditingException) {
+      // Curve writes during edit-mode route to the exception, not the parent.
+      // Monthly multipliers + exceptions[] are NEVER edited via the exception
+      // path (the synthetic monthly_multipliers + empty exceptions are display-
+      // only context for the bar editor).
+      const curvePatch = {}
+      if ('weekday'  in patch) curvePatch.weekday  = patch.weekday
+      if ('saturday' in patch) curvePatch.saturday = patch.saturday
+      if ('sunday'   in patch) curvePatch.sunday   = patch.sunday
+      if (Object.keys(curvePatch).length > 0) onExceptionChange?.(curvePatch)
+      // monthly_multipliers + exceptions changes during edit-mode are dropped
+      // (the editor's only sensible target is the exception's curves).
+    } else {
+      onChange?.({ ...s, ...patch })
+    }
+  }, [s, onChange, isEditingException, onExceptionChange])
 
   const setDayValues = useCallback((day, values) => {
     writeSchedule({ [day]: values })
   }, [writeSchedule])
 
-  const activeValues = s[activeDay] ?? new Array(24).fill(0)
+  const activeValues = editorSchedule[activeDay] ?? new Array(24).fill(0)
   const setActiveDayValues = (next) => setDayValues(activeDay, next)
   const setAllDays = (updater) => {
-    const draft = { weekday: s.weekday, saturday: s.saturday, sunday: s.sunday }
+    const draft = { weekday: editorSchedule.weekday, saturday: editorSchedule.saturday, sunday: editorSchedule.sunday }
     const next = typeof updater === 'function' ? updater(draft) : updater
-    onChange?.({ ...s, ...next })
+    if (isEditingException) {
+      onExceptionChange?.({
+        weekday:  next.weekday,
+        saturday: next.saturday,
+        sunday:   next.sunday,
+      })
+    } else {
+      onChange?.({ ...s, ...next })
+    }
   }
 
-  const setMonthly = (values) => writeSchedule({ monthly_multipliers: values })
-  const setExceptions = (next) => writeSchedule({ exceptions: next })
+  const setMonthly = (values) => {
+    if (isEditingException) return  // monthly multipliers are parent-only
+    onChange?.({ ...s, monthly_multipliers: values })
+  }
+  const setExceptions = (next) => onChange?.({ ...s, exceptions: next })
 
   return (
     <div className="p-4 bg-white">
@@ -370,6 +424,37 @@ export default function UnifiedScheduleEditor({
 
       {mode === 'library' && (
         <LibraryMetaRow meta={libraryMeta} accent={accent} />
+      )}
+
+      {/* Brief 37 Part 3: exception edit-mode banner (lifted from
+          ScheduleEditorCanvas). Distinct colour signals "you are not editing
+          the default schedule right now". */}
+      {isEditingException && (
+        <div
+          className="mb-3 px-3 py-2.5 rounded border-l-4 flex items-center gap-3"
+          style={{
+            backgroundColor: 'rgba(234, 88, 12, 0.08)',
+            borderLeftColor: '#EA580C',
+          }}
+        >
+          <div className="text-base">{editingException.icon || '✏️'}</div>
+          <div className="flex-1">
+            <div className="text-caption font-semibold text-navy">
+              Editing exception: {editingException.name || '(unnamed)'}
+            </div>
+            <div className="text-xxs text-mid-grey">
+              {editingException.start_date} → {editingException.end_date}
+              {editingException.ignore_monthly_multipliers && <span className="ml-2">· monthly multipliers bypassed</span>}
+            </div>
+          </div>
+          <button
+            onClick={() => onExitExceptionEdit?.()}
+            className="flex items-center gap-1 px-2.5 py-1 text-caption text-white rounded transition-opacity hover:opacity-90"
+            style={{ backgroundColor: '#EA580C' }}
+          >
+            <ArrowLeft size={11} /> Return to default
+          </button>
+        </div>
       )}
 
       {/* Two-column body */}
@@ -416,17 +501,20 @@ export default function UnifiedScheduleEditor({
         </div>
       </div>
 
-      {/* Exception periods — full width, bottom row */}
+      {/* Exception periods — full width, bottom row. Always operates on the
+          PARENT schedule's exceptions[] (independent of any active exception
+          edit-mode); the panel itself disables while edit-mode is active so
+          add/remove can't race with curve editing. */}
       {enableExceptions && (
         <div className="mt-5 bg-white border border-light-grey rounded p-4">
           <ExceptionsPanel
             exceptions={s.exceptions ?? []}
             parentSchedule={s}
             onChange={setExceptions}
-            onEditException={() => { /* edit mode handled by consumer; this surface adds/removes only */ }}
-            highlightExceptionId={null}
+            onEditException={(excId) => onEnterExceptionEdit?.(excId)}
+            highlightExceptionId={editingException?.id ?? null}
             onHighlight={() => {}}
-            disabled={false}
+            disabled={isEditingException}
           />
         </div>
       )}

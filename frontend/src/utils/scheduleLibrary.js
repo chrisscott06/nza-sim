@@ -170,7 +170,16 @@ export function resolveScheduleAtHour(name, h, weatherData, building = null) {
   if (!sched) sched = SCHEDULES[name]
   if (!sched) return 0
   const { dayType, hourOfDay, monthIdx0 } = _decomposeHourForSchedule(h, weatherData)
-  const daily = sched.day_types?.[dayType] ?? sched.day_types?.weekday
+  // Brief 37 Part 3 (2026-05-18): schema fallback. The flat shape
+  // (sched.weekday / saturday / sunday) is the canonical form post-Brief-37;
+  // sched.day_types.{day} is the legacy nested shape. Schedules persisted
+  // before the migration may still carry day_types; this reader tolerates
+  // both. The migration script (scripts/37_schedule_schema_migration.py)
+  // flattens persisted state on-disk; this fallback covers the transition.
+  const daily = sched[dayType]
+              ?? sched.weekday
+              ?? sched.day_types?.[dayType]
+              ?? sched.day_types?.weekday
   if (!daily) return 0
   const fraction = daily[hourOfDay] ?? 0
   const monthly = sched.monthly_multipliers?.[monthIdx0] ?? 1.0
