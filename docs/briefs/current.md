@@ -2,7 +2,7 @@
 
 **Active:** [`active/32_static_completion.md`](active/32_static_completion.md) — Pause Dynamic, Complete Static, Audit Across Modules. Replaces Brief 30 Phase 1+ in the active queue until Bridgewater pre-retrofit baseline is shippable as a client deliverable using the Static engine only, with every displayed number defensible from first principles.
 
-**Status:** Part 1 in flight (this commit) — Dynamic engine paused in UI, "Engine status" notice added to Information module.
+**Status:** Part 2 in flight (this commit) — permanent vent topology fix (Issue #2). Static engine gains three-branch flow-mode dispatch (cross / single_sided / balanced_mechanical); Bridgewater migrated to balanced_mechanical. Part 1 closed at `3a793ce`.
 
 **Paused (in active/ for traceability):** [`active/30_dynamic_engine_rebuild.md`](active/30_dynamic_engine_rebuild.md) — Phase 0 + Phase 1.0 complete (commits `8003577` + `cc96815`). Phase 1.1 onwards PAUSED. Dynamic backend code frozen at HEAD `54407e3` (post Brief 31), not deleted. Resume after Brief 32 closes.
 
@@ -33,7 +33,7 @@ This pointer file is updated each time a brief in `active/` closes.
 | [`archive/29_Building_Module_Completion_v2_SUPERSEDED.md`](archive/29_Building_Module_Completion_v2_SUPERSEDED.md) | ⚠ Different brief from the audit. Never started; superseded by Brief 30 | — |
 | [`active/30_dynamic_engine_rebuild.md`](active/30_dynamic_engine_rebuild.md) | ⏸ paused — superseded by Brief 32 in active queue until Static is client-ready. Phase 0 + Phase 1.0 frozen; Phase 1.1+ resumes after Brief 32 closes | `8003577`, `cc96815` |
 | Brief 31 — Documentation Reconciliation | ✅ closed 2026-05-18 | `54407e3` |
-| **[`active/32_static_completion.md`](active/32_static_completion.md)** | **🟡 active** — Part 1 in flight (this commit): pause Dynamic in UI; Parts 2-7 land Static fixes + cross-module audit + client-ready Bridgewater baseline | (this commit) |
+| **[`active/32_static_completion.md`](active/32_static_completion.md)** | **🟡 active** — Part 1 closed `3a793ce`; Part 2 in flight (this commit): permanent vent topology fix (Issue #2), Static path. Parts 3-7 to follow. | `3a793ce` + (this commit) |
 
 Brief 31 lands the rules that govern future sessions (CLAUDE.md updates) and the project's self-description (STATUS.md refresh + brief management). Brief 30 Phase 1.1 onwards is then re-authorised against that corrected foundation.
 

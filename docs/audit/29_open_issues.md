@@ -34,12 +34,13 @@ Status:
 | Module | Building (envelope-only) |
 | Engine | Static + Dynamic (both) |
 | Severity | **S3** |
-| Status | **OPEN** |
-| Current value | 120.8 MWh (Static); EP `WindandStackOpenArea` emits cross-flow with comparable magnitude on Dynamic |
-| Expected value | ~24–85 MWh depending on integration method; ~24 MWh is the defensible audit number for Bridgewater (balanced mechanical, 134 rooms × 8 l/s extract, EPW-integrated ΔT) |
-| Root cause | No `flow_mode` field on `building.openings[*]`. Static engine hardcodes cross-flow wind-only correlation at `instantCalc.js:1003-1004`. Dynamic engine emits `ZoneVentilation:WindandStackOpenArea` (cross-flow). Bridgewater's actual topology is **balanced mechanical** (cellular hotel with continuous bathroom extract; trickle vents are the makeup path, not the driver). |
+| Status | **STATIC FIXED** in Brief 32 Part 2 (this commit) — Dynamic path deferred to Brief 30 resumption. Live engine verification pending Bridgewater walkthrough; see `docs/audit/32_vent_fix_verification.md`. |
+| Current value (pre-fix) | 120.8 MWh (Static, cross-flow with default C_d on a cellular hotel topology) |
+| Expected value (post-fix) | Bare balanced-mechanical extract integrated across the EPW lands in ~30–100 MWh range. Methodology's ~24 MWh lower bound assumes heat recovery + occupancy weighting, which are downstream and not in Part 2 scope. |
+| Root cause | No `flow_mode` field on `building.openings[*]`. Static engine hardcoded cross-flow wind-only correlation at `instantCalc.js:1011`. Dynamic engine emits `ZoneVentilation:WindandStackOpenArea` (cross-flow). Bridgewater's actual topology is **balanced mechanical** (cellular hotel with continuous bathroom extract; trickle vents are the makeup path, not the driver). |
 | Worked-example reference | `docs/audit/29_permanent_vent_methodology.md` — Cases A / B / C reproduced with live engine inputs. |
-| Fix scope | **Group with #3 and #4 — single coherent rework of `_calculateEnvelopeOnly`'s permanent-vent block (Chris call 2026-05-17). Do NOT fix piecemeal.** Data-model: add `flow_mode: 'cross' \| 'single_sided' \| 'balanced_mechanical'` field; default cross. Per-opening `C_d` field. Static: branch on `flow_mode`, add stack term to cross-flow path (#4), use slot-corrected C_d (#3). Dynamic: emit `ZoneVentilation:DesignFlowRate` for balanced_mechanical, `WindandStackOpenArea` otherwise. Single commit, single regression sweep. |
+| Fix applied (Static, Brief 32 Part 2) | (1) Schema: `openings.flow_mode` (`'cross' \| 'single_sided' \| 'balanced_mechanical'`, default `'cross'`) + `openings.mech_extract_lps_per_room` (default 8) added to `DEFAULT_PARAMS.openings`. (2) Three-branch dispatch in `instantCalc.js` `_calculateEnvelopeOnly` 8760-hour loop. (3) `inferFlowMode` helper infers `cross` / `single_sided` from façade geometry; `balanced_mechanical` must be set explicitly. (4) UI dropdown in Building → Permanent openings panel. (5) Bridgewater migrated to `balanced_mechanical` via `scripts/32_bridgewater_balanced_mech_migration.py` (idempotent). C_d still hard-coded 0.6 in the `cross` branch — Issue #3 (Part 3). Stack term still absent in the `cross` branch — Issue #4 (Part 4). |
+| Fix deferred (Dynamic) | `epjson_assembler.py` still emits `ZoneVentilation:WindandStackOpenArea` for all louvres. Frozen at HEAD `54407e3` pending Brief 30 resumption (per Brief 32 §1.5). Brief 30 Phase 1.x will emit `ZoneVentilation:DesignFlowRate` for `balanced_mechanical` openings. |
 
 ---
 

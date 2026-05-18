@@ -120,6 +120,37 @@ const DEFAULT_G_VALUE = 0.4
 // Air properties
 const AIR_HEAT_CAPACITY = 0.33  // kWh/m³/K (ρ × Cp for air)
 
+// ── Permanent-vent topology (Brief 32 Part 2 / Issue #2) ─────────────────────
+//
+// inferFlowMode resolves a permanent-vent flow topology from the openings
+// config. If the user has set `openings.flow_mode` explicitly, that wins.
+// Otherwise we apply the methodology doc's migration heuristic:
+//   - no louvres on any façade           → 'cross' (irrelevant; Q=0 anyway)
+//   - louvres on exactly one façade      → 'single_sided'  (BS EN 16798-7 §6.4)
+//   - louvres on opposite façades        → 'cross'         (wind-driven)
+//   - other multi-façade arrangements    → 'cross'         (legacy default)
+//
+// Balanced-mechanical is intentionally NOT inferable from openings geometry
+// alone — it depends on the building's ventilation system, which the
+// openings block doesn't see. Projects with balanced extract must set
+// flow_mode explicitly (e.g. via the UI dropdown or via Brief 32 Part 2's
+// Bridgewater migration script). Reference:
+// docs/audit/29_permanent_vent_methodology.md.
+function inferFlowMode(openings) {
+  const explicit = openings?.flow_mode
+  if (explicit === 'cross' || explicit === 'single_sided' || explicit === 'balanced_mechanical') {
+    return explicit
+  }
+  const facesWithLouvres = ['north','south','east','west']
+    .filter(f => Number(openings?.[f]?.louvre_area_m2 ?? 0) > 0)
+  if (facesWithLouvres.length === 0) return 'cross'   // Q=0 either way
+  if (facesWithLouvres.length === 1) return 'single_sided'
+  const oppositePairs =
+       (facesWithLouvres.includes('north') && facesWithLouvres.includes('south'))
+    || (facesWithLouvres.includes('east')  && facesWithLouvres.includes('west'))
+  return oppositePairs ? 'cross' : 'cross'  // explicit, mostly for grep
+}
+
 // Brief 28e Gate E2 (2026-05-16): explicit ρ + Cp constants for the
 // wind+stack natural ventilation physics. AIR_RHO × AIR_CP = 1206
 // W/(m³/s·K), which differs by ~1.5% from AIR_HEAT_CAPACITY × 3600 = 1188
@@ -811,12 +842,29 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   const UA_leakage = AIR_HEAT_CAPACITY * ach * volume   // W/K (Wh/K per hour)
 
   // Permanent openings (louvres only — operable windows are State 2.5)
+  //
+  // Brief 32 Part 2 (Issue #2): topology-aware flow correlation. The hourly
+  // dispatch lives inside the 8760-hour loop; here we resolve the static
+  // inputs and the balanced-mechanical extract constant.
+  //
+  // Reference: docs/audit/29_permanent_vent_methodology.md (the methodology
+  // doc this dispatch implements). Bridgewater's pre-fix engine output of
+  // 120.8 MWh is Case A applied to a Case C building; the fix surfaces all
+  // three cases and lets the user pick the right one. C_d remains hard-coded
+  // 0.6 here pending Part 3 (geometry-aware C_d) — the stack term is Part 4.
   const openings = building.openings ?? {}
   const Cd = 0.6
   const Cw = ({ sheltered: 0.05, normal: 0.10, exposed: 0.20 })[openings.site_exposure] ?? 0.10
   const sqrtCw = Math.sqrt(Cw)
   const louvre_area_total = ['north','south','east','west']
     .reduce((s, f) => s + Number(openings?.[f]?.louvre_area_m2 ?? 0), 0)
+  const flow_mode = inferFlowMode(openings)
+  // num_bedrooms is a building-level field (cellular topology indicator);
+  // 0 collapses balanced_mechanical to zero flow, which is the right
+  // failure mode for a non-cellular building accidentally marked balanced.
+  const mech_extract_lps_per_room = Number(openings.mech_extract_lps_per_room ?? 8)
+  const num_bedrooms_for_extract = Number(building.num_bedrooms ?? 0)
+  const mech_extract_m3s_const   = (num_bedrooms_for_extract * mech_extract_lps_per_room) / 1000
 
   // ── Zone-air effective thermal capacitance (Brief 28b Part 3) ────────────
   // Represents zone air + internal mass (furniture, partitions, content)
@@ -1007,8 +1055,23 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
     // Floor outside BC = T_ground (constant simplification — EP default
     // deep-ground temperature ~12.6 °C; we use Yeovilton annual mean).
 
-    // Permanent-vent UA this hour (wind-driven)
-    const Q_louvre_m3s = Cd * louvre_area_total * sqrtCw * v_wind
+    // Permanent-vent UA this hour — topology-aware dispatch
+    // (Brief 32 Part 2 / Issue #2). The three branches implement the
+    // correlations from docs/audit/29_permanent_vent_methodology.md:
+    //   cross               — Q = Cd · A · sqrt(Cw) · v_wind (current model)
+    //   single_sided        — Q = 0.025 · A · v_wind         (BS EN 16798-7 §6.4)
+    //   balanced_mechanical — Q = num_bedrooms × extract_lps  (constant)
+    //
+    // C_d here stays at the hard-coded 0.6 until Part 3 (geometry-aware).
+    // Stack term is not in any branch yet — Part 4 adds it to 'cross'.
+    let Q_louvre_m3s
+    if (flow_mode === 'balanced_mechanical') {
+      Q_louvre_m3s = mech_extract_m3s_const
+    } else if (flow_mode === 'single_sided') {
+      Q_louvre_m3s = 0.025 * louvre_area_total * v_wind
+    } else { // 'cross' — default / legacy
+      Q_louvre_m3s = Cd * louvre_area_total * sqrtCw * v_wind
+    }
     const UA_permanent = AIR_HEAT_CAPACITY * (Q_louvre_m3s * 3600)
 
     // ── Glazing-transmitted solar split: radiative + convective ──────────

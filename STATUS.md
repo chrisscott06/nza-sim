@@ -1,8 +1,38 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-18 — Brief 32 Part 1: Pause Dynamic engine in UI (in flight)
+## 🚧 Session 2026-05-18 — Brief 32 Part 2: Permanent vent topology fix (Issue #2) (in flight)
 
-**State:** `single_commit_in_flight` — pauses Dynamic engine visibility in the user-facing surface. Backend Dynamic code (`sql_parser.py`, `epjson_assembler.py`, simulation API endpoints, `scripts/test_api_simulate_mode.py`, `scripts/_state1_strip_regression.py`) is FROZEN at HEAD `54407e3` (post Brief 31), not deleted. Brief 30 Phase 1.1+ resumes after Brief 32 closes.
+**State:** `single_commit_in_flight` — Static engine fix for Issue #2 (permanent vent 5× overstated on Bridgewater due to wrong topology assumption). Closes Issue #2 for the Static path; Dynamic path deferred to Brief 30 resumption per Brief 32 §1.5.
+
+**What's landing in this commit:**
+- `frontend/src/context/ProjectContext.jsx` — `DEFAULT_PARAMS.openings` gains `flow_mode` (`'cross' | 'single_sided' | 'balanced_mechanical'`, default `'cross'`) and `mech_extract_lps_per_room` (default 8 l/s, CIBSE Guide A Table 1.5).
+- `frontend/src/utils/instantCalc.js` — `inferFlowMode(openings)` helper at module scope (infers from façade geometry; `balanced_mechanical` not inferable from geometry alone and must be set explicitly). Three-branch dispatch in `_calculateEnvelopeOnly` 8760-hour loop: `cross` uses the legacy `Q = Cd · A · √Cw · v_wind`; `single_sided` uses `Q ≈ 0.025 · A · v_wind` per BS EN 16798-7 §6.4; `balanced_mechanical` uses constant `Q = num_bedrooms × extract_lps / 1000`.
+- `frontend/src/components/modules/building/BuildingDefinition.jsx` — "Flow topology" dropdown with three options and per-option explanatory caption added at the top of the Permanent openings section. Conditional "Extract rate per room (l/s)" field rendered only when `flow_mode === 'balanced_mechanical'`. Site exposure disabled in balanced-mechanical mode (Cw unused there).
+- `scripts/32_bridgewater_balanced_mech_migration.py` — idempotent migration that PUTs `flow_mode: 'balanced_mechanical'` + `mech_extract_lps_per_room: 8` onto HIX Bridgewater via `PUT /api/projects/{id}/building`. Ran cleanly this session: `None → 'balanced_mechanical'`, louvre areas preserved (N=1.0, S=0.76, E=0, W=0).
+- `docs/audit/32_vent_fix_verification.md` — new file. Hand-calc reproduction of methodology Cases A/B/C with Bridgewater inputs; pass/fail rubric for Part 2 alone (expected range 30–100 MWh given that heat recovery + occupancy weighting are downstream, not in Part 2 scope); placeholder table for live engine output to be captured during browser walkthrough.
+- `docs/audit/29_open_issues.md` — Issue #2 status updated to "STATIC FIXED in Brief 32 Part 2 — Dynamic path deferred". Worked-example reference relocated to verification doc.
+- STATUS.md (this file) — Brief 32 Part 2 entry prepended; Part 1 marked closed at `3a793ce`.
+
+**Bridgewater verification — to be captured during browser walkthrough on next `go.bat` boot.**
+
+| Quantity | Pre-Part-2 baseline (Chris's reminder) | Post-Part-2 expected range | Post-Part-2 actual |
+|---|---|---|---|
+| Permanent vent loss | 120.8 MWh | 30–100 MWh (bare balanced-mech integration) | _TBD_ |
+| Σ losses total | 251.5 MWh | ~150–215 MWh | _TBD_ |
+| Heating demand (Static) | 194.3 MWh | ~100–150 MWh | _TBD_ |
+| Solar gain (gross) | 99.4 MWh | ≈ unchanged | _TBD_ |
+
+If actuals fall in the expected range → Part 2 closes Issue #2 and Part 3 (C_d geometry-awareness, Issue #3) authorised. If actuals fall outside → audit finding before Part 3 starts. Per Chris: "If the engine produces numbers in those ranges with the methodology's defensible mechanism, Part 2 is working as designed. If it produces something different, that's an audit finding to investigate, not a number to tune."
+
+**Next part:** Brief 32 Part 3 — geometry-aware C_d (Issue #3). Adds `width_mm` / `height_mm` / `type` / `internal_resistance` fields to opening data model; `computeCd(opening)` function with lookup table per methodology doc Step 1; Bridgewater trickle vents (15 × 1300 mm slot + mesh + flap) resolve to C_d ≈ 0.25.
+
+**Known issues:** Issues #3, #4, #5, #6, #8, #9, #10, #11, #12 remain open per `docs/audit/29_open_issues.md`. Brief 32 Parts 3–4 close #3/#4. Part 5 closes #6.
+
+---
+
+## ✅ Session 2026-05-18 — Brief 32 Part 1: Pause Dynamic engine in UI (closed `3a793ce`)
+
+**State:** `closed` — single commit at `3a793ce`, pushed `54407e3..3a793ce`. Paused Dynamic engine visibility in the user-facing surface. Backend Dynamic code (`sql_parser.py`, `epjson_assembler.py`, simulation API endpoints, `scripts/test_api_simulate_mode.py`, `scripts/_state1_strip_regression.py`) is FROZEN at HEAD `54407e3` (post Brief 31), not deleted. Brief 30 Phase 1.1+ resumes after Brief 32 closes.
 
 **What's landing in this commit:**
 - Brief 32 (`docs/briefs/active/32_static_completion.md`) copied into active queue with progress front matter.

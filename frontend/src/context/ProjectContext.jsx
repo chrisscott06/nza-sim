@@ -140,12 +140,34 @@ const DEFAULT_PARAMS = {
   //     pre-26.1 path. For sensitivity studies.
   thermal_mass_mode: 'auto',
   thermal_mass_category: 'light',
-  // Openings — wind-driven natural ventilation through windows and louvres.
+  // Openings — permanent envelope-driven ventilation.
   // Each facade can carry an always-open louvre (m²) and an operable window
   // fraction (% of glazing area). Both default off; user opts in per facade.
+  //
+  // Brief 32 Part 2 (2026-05-18) — Issue #2 fix: flow topology dispatch.
+  //   flow_mode picks which physics governs Q through the louvres:
+  //     'cross'                — wind (+ stack, Part 4) between opposite facades
+  //                              Q = Cd · A · sqrt(2·dP/rho)  (current code path)
+  //     'single_sided'         — empirical BS EN 16798-7 §6.4
+  //                              Q ≈ 0.025 · A · v_wind
+  //     'balanced_mechanical'  — continuous mechanical extract sets the room
+  //                              air-change rate; the louvre is the makeup
+  //                              path. Q = num_bedrooms × mech_extract_lps_per_room.
+  //
+  // Default 'cross' preserves legacy behaviour for projects without an
+  // explicit topology. The Static engine inferFlowMode helper (in
+  // instantCalc.js) infers when the field is absent. The UI exposes the
+  // dropdown so users override per-building. Reference:
+  // docs/audit/29_permanent_vent_methodology.md.
+  //
+  // mech_extract_lps_per_room is only consulted when flow_mode === 'balanced_mechanical'.
+  // 8 l/s/room is the hotel design value from CIBSE Guide A Table 1.5 and
+  // Approved Document F (continuous bathroom extract).
   openings: {
-    schedule:      'never',   // 'never' | 'occupied' | 'summer_day' | 'always'
-    site_exposure: 'normal',  // 'sheltered' | 'normal' | 'exposed'
+    schedule:                  'never',    // 'never' | 'occupied' | 'summer_day' | 'always'
+    site_exposure:             'normal',   // 'sheltered' | 'normal' | 'exposed'
+    flow_mode:                 'cross',    // 'cross' | 'single_sided' | 'balanced_mechanical'
+    mech_extract_lps_per_room: 8,          // l/s per room — used only when flow_mode='balanced_mechanical'
     north: { louvre_area_m2: 0, openable_fraction: 0 },
     south: { louvre_area_m2: 0, openable_fraction: 0 },
     east:  { louvre_area_m2: 0, openable_fraction: 0 },
