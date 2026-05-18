@@ -405,8 +405,19 @@ function withMode(building, mode) {
   // synthesiseOperableOpeningsFromLegacy() helper can read them at engine
   // entry. Permanent louvres (BuildingDefinition) keep their own dedicated
   // path and are unchanged.
+  //
+  // ⚠ ALLOWLIST DRIFT WARNING — any new top-level field added to the
+  // openings schema in DEFAULT_PARAMS.openings (ProjectContext.jsx) must
+  // also be added below, or the field will be silently dropped on the way
+  // into the engine. Brief 33 follow-up (Finding 1, 2026-05-18): flow_mode
+  // was added to the schema in Brief 32 Part 2 but missed here; the
+  // engine never saw the user's dropdown selection and fell through to
+  // resolveFlowMode's default. Same shape of bug as Brief 29 Issue #1
+  // (operable doors emitted to the integrand but missing from the display
+  // iteration list — two parallel lists out of sync).
   const passThroughOpenings = {
     site_exposure: ops.site_exposure ?? 'normal',
+    flow_mode:     ops.flow_mode     ?? 'single_sided',  // Brief 33 Finding 1 fix
     north: {
       louvre_area_m2:    ops?.north?.louvre_area_m2 ?? 0,
       openable_fraction: ops?.north?.openable_fraction ?? 0,

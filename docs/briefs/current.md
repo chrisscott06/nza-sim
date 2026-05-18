@@ -2,7 +2,7 @@
 
 **Active:** [`active/33_building_envelope.md`](active/33_building_envelope.md) — Revert `balanced_mechanical` from the Building module, fix the trickle-vent C_d, lock the Building module's scope in CLAUDE.md. Closes Brief 32.
 
-**Status:** Part 1 in flight (this commit) — revert. The `balanced_mechanical` flow_mode and `mech_extract_lps_per_room` field that Brief 32 Part 2 added to the Building module were a state-contract violation (systems concepts in the envelope module) and have been removed. Two-branch dispatch (`cross` / `single_sided`) retained; Bridgewater migrated to `single_sided`. Brief 32 closes here — its Parts 3-7 do not happen as originally scoped; the Building-module work continues under Brief 33.
+**Status:** Part 1 closed `195a87b`. Walkthrough surfaced Finding 1 (flow_mode missing from `withMode` State 1 allowlist — engine never saw the dropdown selection); fix in flight as a standalone commit between Parts 1 and 2. Finding 2 (Sankey/Stacked/Rows totals disagree on the same config) is next. Then Part 2 — geometry-aware C_d.
 
 **Paused (in active/ for traceability):** [`active/30_dynamic_engine_rebuild.md`](active/30_dynamic_engine_rebuild.md) — Phase 0 + Phase 1.0 complete (commits `8003577` + `cc96815`). Phase 1.1 onwards PAUSED. Dynamic backend code frozen at HEAD `54407e3` (post Brief 31), not deleted. Resume after Brief 33 closes.
 

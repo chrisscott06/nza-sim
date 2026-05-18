@@ -1,8 +1,32 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-18 — Brief 33 Part 1: Revert `balanced_mechanical` from Building module (in flight)
+## 🐛 Session 2026-05-18 — Brief 33 Finding 1 fix: `flow_mode` not passed through `withMode` State 1 contract (in flight)
 
-**State:** `single_commit_in_flight` — corrective. Brief 32 Part 2 introduced a `balanced_mechanical` flow_mode and a `mech_extract_lps_per_room` field into the Building module. Those are systems concepts (continuous mechanical extract) — they belong in the Systems module, not in the envelope-only Building module. This commit reverts them. Brief 33 closes Brief 32 in the active queue.
+**State:** `single_commit_in_flight` — bug fix between Brief 33 Part 1 and Part 2. Walkthrough (Chris, 2026-05-18) surfaced that the Permanent openings "Flow topology" dropdown and the "Site exposure" select had no observable effect on the Bridgewater permanent vent loss number, which was pinned at ~15.9 MWh regardless of input.
+
+**Diagnosis (Hypothesis A):** the `withMode(building, 'envelope-only')` allowlist filter in `frontend/src/utils/instantCalc.js:397-460` rebuilds the `openings` block field-by-field (`passThroughOpenings` at lines 408-427). When Brief 32 Part 2 added `flow_mode` to `DEFAULT_PARAMS.openings`, the allowlist was not updated to copy it. The engine therefore always received `openings.flow_mode === undefined`, `resolveFlowMode` fell through to its default (`'single_sided'`), and the dispatch never reached the `'cross'` branch — so Site exposure's `Cw` was dead code too (single_sided doesn't reference Cw).
+
+**Same class of bug as Brief 29 Issue #1** (operable doors emitted to the demand integral but missing from the display iteration list — two parallel lists out of sync). Here: schema's openings shape vs `withMode` allowlist. The bible lesson is already covered by CLAUDE.md Rule 9 (state suppression by removal not muting — the principle that the canonical filter must enumerate what's in, not what's out) and Rule 10 (integrand-vs-display invariant — same shape, different direction). No new rule needed; this is the pattern recurring.
+
+**Fix:** one-line addition to `passThroughOpenings` to copy `flow_mode` through, plus an `⚠ ALLOWLIST DRIFT WARNING` comment block at the head of `passThroughOpenings` flagging the parallel-list maintenance obligation for future schema additions.
+
+**Browser verification expected (Chris, post-commit):**
+
+| Scenario | Expected behaviour | Captured |
+|---|---|---|
+| `single_sided` (Bridgewater default) | ~15.9 MWh, unchanged from pre-fix | _TBD — browser walkthrough_ |
+| `cross` | Higher than single_sided; cross-flow correlation with hard-coded C_d=0.6, Bridgewater Cw, mean wind. Hand-calc: Q ≈ 0.6 × 1.76 × √0.10 × ⟨v⟩ ≈ 1.34 m³/s mean → annual loss ≈ 105–120 MWh range | _TBD_ |
+| `cross` + Sheltered (Cw=0.05) | Lower than `cross` + Normal | _TBD_ |
+| `cross` + Exposed (Cw=0.20) | Higher than `cross` + Normal | _TBD_ |
+| Back to `single_sided` | Returns to ~15.9 MWh; site exposure has no effect (correct — single_sided doesn't use Cw) | _TBD_ |
+
+**Next:** Finding 2 diagnosis (Σ losses + heating demand differ between Sankey, Stacked, and Rows views of the same Bridgewater config — 146.6/153.9 MWh on losses, 107.4/112.5 MWh on heating demand). Pattern hypothesis: one view iterates a fixed key list, another reads the integrand directly — display-side analogue of the original door bug. Then Brief 33 Part 2.
+
+---
+
+## ✅ Session 2026-05-18 — Brief 33 Part 1: Revert `balanced_mechanical` from Building module (closed `195a87b`)
+
+**State:** `closed` — corrective single commit at `195a87b`. Brief 32 Part 2 introduced a `balanced_mechanical` flow_mode and a `mech_extract_lps_per_room` field into the Building module. Those are systems concepts (continuous mechanical extract) — they belong in the Systems module, not in the envelope-only Building module. Reverted. Brief 32 closed in active queue. Note: the walkthrough surfaced a latent bug from Brief 32 Part 2 (`flow_mode` missing from the `withMode` allowlist) — see the entry above for the fix.
 
 **Brief 32 closes here.** Parts 3–7 of Brief 32 are not happening as originally scoped; the Building-module work continues under Brief 33's three-part structure (revert → geometry-aware C_d → CLAUDE.md scope lock).
 
