@@ -1,5 +1,202 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-18 — Brief 31 Documentation Reconciliation (in flight)
+
+**State:** `single_commit_in_flight` — this commit reconciles documentation drift across Briefs 26–30. No code changes.
+
+**What's landing in this commit:**
+- Brief 29 (First-Principles Audit) copied into `docs/briefs/archive/29_first_principles_audit_COMPLETED.md`.
+- Brief 30 (Dynamic Engine Rebuild) copied into `docs/briefs/active/30_dynamic_engine_rebuild.md` with progress front matter.
+- 12 closed briefs moved from `docs/briefs/active/` → `docs/briefs/archive/` (see Part 3 of Brief 31 for full list). `active/` now contains only Brief 30.
+- `docs/briefs/current.md` rewritten to point at Brief 30 + a chronological table of recent brief closures.
+- STATUS.md (this file) brought forward from "Brief 28a Part 8 / 2026-05-14" to current state.
+- CLAUDE.md updated with six new non-negotiable technical rules (rules 8–13) from Brief 29/30 lessons, plus three new process rules (7–9) on documentation hygiene + brief-first multi-step work.
+
+**Why this brief exists:** STATUS.md, CLAUDE.md, and brief management drifted from reality across Briefs 26–30. Multiple commits promised "STATUS.md refresh" / "Bible lessons" without landing them. The drift was caught by Chris during a verification pass post Brief 30 Phase 1.0; this commit reconciles before any further architectural work.
+
+**After this commit lands:** Brief 30 Phase 1.1 (State 1 strip) and onwards is paused pending Chris re-authorisation against the corrected documentation foundation.
+
+---
+
+## 🚧 Session 2026-05-18 — Brief 30 Dynamic Engine Rebuild — Phase 0 + Phase 1.0 (paused before Phase 1.1)
+
+**State:** `paused_for_brief_31_then_reauth`
+
+**Latest commits (pushed to origin/main at HEAD `cc96815`):**
+- `cc96815` Brief 30 Phase 1.0: fix API mode-binding silent drop, re-diagnose Issue #13, capture State 1 checkpoint (a)
+- `8003577` Brief 30 Phase 0: EP output audit + required-variables list + schema lock + test rig
+
+**Phase 0 deliverables (all committed):**
+- `docs/audit/30_ep_outputs_baseline.md` — 26 Output:Variables + 12 Output:Meters currently emitted; the State 1 parser consumes 3 of 26 variables (confirms Brief 29 Issue #8).
+- `docs/audit/30_ep_outputs_required.md` — required EP variables per state (State 1 / 2 / 2.5 / 3). Recommendation to extend `should_emit_for_state` to gate output requests as well as object emission.
+- `docs/audit/30_phase0_schema_lock.md` — V26.1.0 confirmed via `eplusout.rdd` cross-reference for 12 of 12 flagged variables. No V25→V26 name changes encountered. Boiler / MVHR / Pump / DHW deferred to Phase 4 first-emission confirmation.
+- `docs/audit/30_phase0_test_rig.md` — Bridgewater config snapshot + Static reference values quoted from `29_FINDINGS.md`; single-building-validation flag.
+- CLAUDE.md V25-2-0 → V26-1-0 (one-line update).
+
+**Phase 1.0 deliverables (all committed):**
+- `api/routers/projects.py` — POST `.../simulate` now accepts `mode` from EITHER query string OR JSON body (new `SimulateProjectBody` Pydantic model + `Body(default_factory=...)`). Frontend uses query string (unaffected); curl/JSON-body callers now honoured.
+- `scripts/test_api_simulate_mode.py` — regression test. Three cases (query, body, default). All pass.
+- `docs/audit/30_state1_corrected_baseline.md` — checkpoint (a) for the rebuild: heating demand 266.7 MWh, mean T_air 15.51 °C, fabric losses 145.8 MWh (free-running), thermal_bridging 0.0 MWh (Issue #11 confirmed).
+- `docs/audit/29_open_issues.md` Issue #13 re-diagnosed and marked FIXED.
+- `docs/audit/29_strategic_implications.md` — correction header appended. Issue #8 unchanged.
+- `docs/audit/29_bible_lesson_to_append.md` — two new lessons (API binding silent failure; multi-layer diagnostics).
+
+**Next sub-phases (paused):**
+- Phase 1.1 — State 1 strip per Principle 4: 52 objects to delete (5 × IdealLoads + 5 × EquipList + 5 × EquipConns + 5 × ZoneControl:Thermostat + 5 × ThermostatSetpoint:DualSetpoint + 2 × Schedule:Constant state1 setpoints + 5 × People + 5 × Lights + 5 × ElectricEquipment + 5 × ZoneVentilation:WindandStackOpenArea louvres). New `should_emit_for_state(object_type, state)` helper as the canonical state-suppression gate.
+- Phase 1.2 — parser rewrite. Delete `_get_heat_balance_state1` entirely. New `_parse_state1_results` reads EP per-element variables directly (Surface Inside Face Conduction Heat Transfer Energy, Zone Infiltration Sensible Heat Loss/Gain Energy, Surface Window Transmitted Solar Radiation Energy). No Python re-derivation.
+- Phase 1.3–1.6 — UI changes (State 1 hides demand panels, T_zone summary headline), integrand-vs-display invariant for Dynamic, verification, FINDINGS document.
+- Phases 2–4 — State 2 / 2.5 / 3 rebuilds.
+
+---
+
+## 🚧 Session 2026-05-17/18 — Brief 29 First-Principles Audit (Parts 1 & 2; escalation; Issue #13 re-diagnosis)
+
+**State:** Parts 1 & 2 complete. Parts 3–8 superseded by Brief 30 (escalation triggered: 9 S2+ issues across Building module's two engines required structural rework, not per-module audit).
+
+**Latest commits (pushed to origin/main):**
+- `cc96815` Brief 30 Phase 1.0: ... re-diagnose Issue #13 (also closes #13 with the API binding fix)
+- `3f8b1ee` Brief 29: Issue #13 diagnosed + strategic implications + Bible lesson
+- `7073908` Brief 29 Commit D: Part 2 audit — Building Dynamic — FINDINGS + 6 new issues, HALT signal flagged
+- `2be42fe` Brief 29 Part 1 sign-off updates: bump #6 to S3, group #2/#3/#4 fix scope, add cross-engine defence rubric
+- `587f4c0` Brief 29 Commit C: Part 1 audit — Building Static — FINDINGS + open_issues + vent methodology
+- `6bd46b3` Brief 29 Commit B: cleanup pass — strip invented-mechanism passages, prune dead bodies, relabel POL-M3 reconciliation as display-only
+- `39a828c` Fix: suppress operable openings in State 1 — corrects 202 MWh ghost integrand term — audit baseline for Brief 29
+
+**Door bug (Issue #1, FIXED `39a828c`):** Bridgewater envelope-only was reporting heating demand 384 MWh (Static) / 359 MWh (Dynamic) against 252 MWh fabric loss and 99 MWh solar gain — outside the physical envelope. Root cause: a single "New door (north)" entry in `building_config.operable_openings` (6 m² × 2 m, scheduled 09-18 weekdays, 2349 open hours/yr) was being integrated by both engines under State 1, contributing 202 MWh natvent loss to the demand integrand but not displayed anywhere. Post-fix: Static heating demand 194.3 MWh, Dynamic 209.8 MWh (the latter still contaminated by Issue #13 — see below).
+
+**Part 1 (Building Static) — closed `587f4c0`:** 7 numbered open issues, severity-ranked. Integrand-vs-display invariant closed at Σ 251.5 MWh. Permanent vent loss diagnosed as 5× overstated on Bridgewater (wrong topology: engine assumes cross-flow + sharp-edge `C_d = 0.6`; Bridgewater is balanced-mechanical extract → correct value ~24–85 MWh). Issues #2 (topology), #3 (C_d hardcoded), #4 (stack term missing) grouped as a single coherent rework for the post-audit fix brief.
+
+**Part 2 (Building Dynamic) — closed `7073908`:** 6 new issues (#8–#13). Headline finding: Dynamic State 1 parser consumes only 3 of 26 emitted EP Output:Variables; the rest are emitted to SQL and ignored. The "Dynamic" engine has been a Python re-implementation of the Static heat balance with EP's T_zone trace substituted in — not EP's per-element heat balance. Confirmed Issue #8 in tabular form. Escalation criterion (>5 S2+ in a single module) triggered.
+
+**Issue #13 — re-diagnosed `cc96815`:** Originally diagnosed as "VRF terminal units delivering tempered OA via DesignFlowRate, not muted by widened thermostat setpoints". One layer too shallow. **Actual root cause:** `POST /api/projects/{id}/simulate` declared `mode: str = "full"` as a simple-typed parameter, which FastAPI treats as query-string-only. JSON body `{"mode":"envelope-only"}` was silently dropped; every JSON-body caller got `mode="full"` and a parser that mis-interpreted the resulting SQL as State 1. Fixed in Phase 1.0 (Pydantic body model accepts both query + body). Regression test at `scripts/test_api_simulate_mode.py`. The State 1 assembler path was never structurally broken — it was never invoked.
+
+**Strategic implications (`docs/audit/29_strategic_implications.md`):** Path D (rewrite Dynamic to genuinely consume EP per-element outputs) recommended; that recommendation became Brief 30. Brief 28b Part 3 (Static CTF upgrade) marked PAUSED — its validation target (matching Dynamic's CTF) doesn't exist until Brief 30 closes.
+
+**Bible lessons captured (paste-ready in `docs/audit/29_bible_lesson_to_append.md`):** (1) engine name must match what the engine actually computes; (2) API parameter binding can silently disable a feature; (3) when "the real root cause" keeps being one level deeper, more layers remain. **Brief 31 integrates these as in-repo rules in CLAUDE.md.**
+
+**Open issues (full list in `docs/audit/29_open_issues.md`):**
+- #1 [S3] FIXED `39a828c` — operable openings in State 1 integrand without display.
+- #2 [S3] OPEN — permanent vent 5× overstated; wrong topology default.
+- #3 [S2] OPEN — `C_d` hardcoded 0.6, no geometry awareness (group with #2).
+- #4 [S2] OPEN — stack term missing in Static permanent-vent flow (group with #2).
+- #5 [S1] OPEN — `AIR_HEAT_CAPACITY` constant mis-labelled `kWh/m³/K` (cosmetic).
+- #6 [S3] OPEN — no integrand-vs-display invariant in code (Brief 30 deliverable).
+- #7 [S1] DEFER — operable-opening `area_m2` input/emission mismatch (Brief 30 Phase 5 territory).
+- #8 [S2] OPEN — Dynamic parser ignores EP per-element variables (Brief 30 Phase 1.2 rewrites).
+- #9 [S1] OPEN — `ZoneInfiltration:DesignFlowRate` uses occupancy-keyed schedule (verify).
+- #10 [S1] OPEN — HVAC plant emitted-but-muted in State 1 (Brief 30 Phase 1.1 removes).
+- #11 [S2] OPEN — Dynamic `thermal_bridging` emits 0.0 (group with #8/#12).
+- #12 [S2] OPEN — Dynamic doesn't emit `losses_at_setpoint` (group with #8/#11).
+- #13 [S3] FIXED `cc96815` — API mode parameter silent drop.
+
+---
+
+## ✅ Brief 28-IM-Polish closed — UX polish across the Building module (POL-M1/M2/M3)
+
+**State:** All three gates landed 2026-05-17.
+
+**Commits:**
+- `7c8cb4c` Brief 28-IM-Polish Gate POL-M1: Building module reference rebuild — bugs + IA + cross-chart consistency
+- `cdb919f` Brief 28-IM-Polish Gate POL-M2: cross-module rollout of the shared chart-consistency pattern from POL-M1
+- `7206c0a` Brief 28-IM-Polish Gate POL-M3: polish — Profile zoom/pan, Summary reconciliation, Roadmap sparkline upgrade
+
+**Highlights:**
+- Shared `EnginePill` / `ChartTotalsBadge` / `LiveResultsStrip` / `ReconciliationRow` components introduced; cross-module consistency rules locked.
+- Building Heat Balance / Sankey / Stacked / Summary unified under one IA. Σ gains / Σ losses badges always visible.
+- POL-M3: Profile zoom controls + brush track; cross-chart reconciliation row (the now-renamed "display-to-display consistency" check — Brief 29 Cleanup commit `6bd46b3` made the limitation honest); Roadmap sparkline polish (year markers, install dot, trend colour, hover tooltip).
+- Comfort band sliders moved to global UI settings (top-bar Static/Dynamic + kWh/m²·a toggles per UX overhaul). `ComfortDemandCard` introduced beneath the 3D viewer.
+
+**Subsequent UX work (not under Brief 28-IM-Polish but pre-Brief-29):**
+- `25602f8` Heat Balance: Sankey duplicate header fix, comfort-band insensitivity fix, missing Σ + permanent_vents fix, methodology footnote
+- `159de5b` UX overhaul: global engine + unit toggles in top bar, build `ComfortDemandCard`, slim Heat Balance
+- `83ac2d7` UX: monthly views switch to diverging-bars chart — fixed axis, gains UP, losses DOWN
+
+---
+
+## ✅ Brief 28-IM closed — Intervention Model (IM-M1 through M6 + M4.5)
+
+**State:** All six milestones + the IM-M4.5 mid-brief dynamic-engine audit landed 2026-05-15 → 2026-05-17.
+
+**Commits:**
+- `6be3b42` Brief 28-IM Gate IM-M1: Building tab — fabric, q50 airtightness, module-filtered Heat Balance, 4 view tabs
+- `7f4d4f6` Brief 28-IM Gate IM-M2: Internal Gains audit + 3 IM-M1 follow-ups (initial T_zone, monthly engine aggregation, q50 unit toggle)
+- `713e818` Brief 28-IM IM-M2 follow-up: Profiles tab — WeatherSynchronisedProfile reusable component
+- `ed78554` Brief 28-IM Gate IM-M3: Operation tab — three-column rewrite + 5 view tabs + per-opening engine output
+- `f13c28d` Brief 28-IM Gate IM-M4: Systems tab — full rewrite + consumption block + shared project schedules
+- `2967014` Brief 28-IM Gate IM-M4.5 Phase 2 (Option B+): Dynamic crash fix + Static vent fix + consumption.* parity + per-service enabled gating + UI honesty
+- `279ee78` Brief 28-IM Gate IM-M5: Results module — full-width single-column with 4 view tabs + results.* engine block + UK grid carbon trajectory + CRREM 1.5°C overlay
+- `0f4d9f7` Brief 28-IM Gate IM-M6: Retrofit Roadmap — sequenced intervention engine + full-width UI
+
+**Highlights:** Module-by-module rebuild driven by §3 "module ownership" filter in `HeatBalance.jsx::flattenLosses`. Static/Dynamic side-by-side wiring at every gate. IM-M4.5 was a mid-brief audit + Phase 2 fixes when the Dynamic side was caught crashing on construction choices (`_resolve_choice` unwrap fix) and the Static-side vent on/off was found to not affect EUI. Bridgewater results.* block (carbon trajectory + CRREM Hotel International overlay) closes the loop. IM-M6 Roadmap implements per-year per-intervention leave-one-out marginal attribution — design EUI 72 → 0.27 kg CO₂/m² by 2050 with the walked-example roadmap.
+
+---
+
+## ✅ Brief 28L closed — BRUKL ingestion + dual-engine validation (Gates L3-L5)
+
+**State:** Closed 2026-05-16. BRUKL design + as-built XML ingest landed plus dual-engine envelope-only validation that motivated the heat-loss-setpoint convention rework.
+
+**Commits:**
+- `ed4b494` Brief 28L Gate L3 (v1, sub-halt): Dynamic envelope-only scaffolding
+- `689f2b2` Brief 28L Gate L3 (v2 + v3 combined): three convergence fixes + fair-comparison gating
+- `84bb346` Brief 28L Gate L4 v1: Dynamic State 2 (envelope-gains) with BRUKL parity
+- `56273e7` Brief 28L Gate L5: validation docs for Brief 28k + Brief 28L
+
+---
+
+## ✅ Brief 28-TB-Simple closed — ISO 14683 thermal bridging (TB-V1 + V1b)
+
+**State:** Closed 2026-05-16. ISO 14683 engine math + Heat Balance rewire (TB-V1), then Operation orphan finding + display anomaly + Systems read-only (TB-V1b).
+
+**Commits:**
+- `f4e6406` Brief 28-TB-Simple Gate TB-V1: ISO 14683 engine math + HeatBalance rewire
+- `5c3da03` Brief 28-TB-Simple TB-V1b: B (Operation orphan) + A (display anomaly) + C (Systems read-only)
+
+---
+
+## ✅ Brief 28e closed — Operable openings + natural ventilation (Gates E1–E5a)
+
+**State:** Closed 2026-05-16. Operable openings schema, wind+stack physics, per-opening output, hand-calc validation, Dynamic engine validation, temperature-mode functional test, UI panel rewrite.
+
+**Commits:** `8abd997`, `8474ad9`, `6ee7d13`, `f125b4d`, `7f3ba5c`, `4152e92`, plus Phase 1 validation doc `b9187c9`.
+
+---
+
+## ⚠ Brief 28b Part 3 shipped — Physics overhaul (Parts 2/4/5 deferred; SUPERSEDED)
+
+**State:** Part 3 v3 shipped 2026-05-14/15 (`5342090`). Parts 2/4/5 deferred per the brief's own queue. Brief 29 strategic implications doc subsequently noted that Part 3's validation target (matching Dynamic CTF accuracy) does not exist until Brief 30 lands. Brief filed as SUPERSEDED in archive.
+
+**Part 3 v3 commits:** `1d6fc79` (v1 multi-node CTF), `46b6e84` (v1 validation), `d7c7aad`, `18e262f`, `5342090` (v3 ship — glazing inside-surface solar absorption).
+
+---
+
+## ✅ Brief 28j closed — Hour-by-hour MVHR recovery cap
+
+**State:** Closed 2026-05-15 (`80183db`). Replaced annual aggregate MVHR recovery calc with hour-by-hour cap.
+
+---
+
+## ✅ Brief 28f Parts 1-4 closed — State 3 systems (Parts 5+ deferred per brief)
+
+**State:** Parts 1-4 COMPLETE 2026-05-15 (engine validated, 142/142 tests). Part 5 onward deferred to measured-data ingest brief per the brief's own scope decision.
+
+**Commits:** `b69f092` (Part 1 contract v2.4 → v2.5), `4cab01d` (Part 2 engine skeleton + library-strict halt), `518a6f7` (Part 3 heating + cooling energy math), `79dfebc` (Part 4 DHW + ventilation + lighting/equipment + carbon), `09881f4` (validation doc).
+
+---
+
+## ✅ Brief 28c closed — State 2 loss recompute on zone-T trace
+
+**State:** Closed 2026-05-15 (`5d36391`). State 2 recomputes losses on its own zone-T trace rather than inheriting State 1's.
+
+---
+
+## ✅ Brief 28k closed — Heat loss setpoint convention (Gates 1-3+)
+
+**State:** Closed 2026-05-15. Brief 28k re-anchored the loss calculation against fixed indoor setpoints (T_heat = `comfort_band.lower_c`, T_cool = `comfort_band.upper_c`) using ISO 52016 / CIBSE / ASHRAE convention. T_driving = sol-air for opaque, T_out for glazing/vents, T_ground for floor.
+
+**Commits:** `3a4611b` (file the brief + canonical hand-calc spreadsheet), `6d0e5c2` (Gates 1-3 engine refactor), `bc36878` (Gate 3+ BRUKL ingestion for Bridgewater).
+
+---
+
 ## 🚧 Session 2026-05-14 — paused at Brief 28a Part 5 + Part 8 done; 3e still waiting on Conditions-tab walkthrough
 
 **State:** `paused_for_walkthrough` (Part 5 walkthrough still pending; Part 8 done in parallel since it's independent of Part 5/3e)
@@ -1246,7 +1443,37 @@ All checklist items:
 
 ## Current state
 
-### What's working
+### What's working (2026-05-18, post Brief 30 Phase 1.0)
+
+**Engine architecture:**
+- **Dual-engine** — Static (in-browser JavaScript, `frontend/src/utils/instantCalc.js`) and Dynamic (EnergyPlus V26.1.0 via `nza_engine/generators/epjson_assembler.py` + `nza_engine/parsers/sql_parser.py`). Both run under a state contract (State 1 envelope-only / State 2 envelope-gains / State 2.5 envelope-gains-operation / State 3 full). Dynamic is currently being rebuilt under Brief 30 — the parser re-derives physics from EP's T_zone trace rather than consuming EP per-element outputs; Phase 1.2 of Brief 30 replaces that.
+- **State contract** — `frontend/src/utils/stateMode.js`. `detectProjectState(building, systems)` predicate maps project config to one of four states. Top-bar "Run Dynamic" button threads detected mode into `?mode=<detected>` query param. API endpoint now accepts mode from EITHER query string OR JSON body (fixed in `cc96815`).
+- **State 1 envelope-only** — both engines run. Static post-door-fix: heating demand 194.3 MWh, cooling 44.0 MWh, fabric losses 251.5 MWh (setpoint convention), solar gain 99.4 MWh on Bridgewater. Dynamic currently re-derives heat balance in Python from EP's T_zone trace: heating demand 266.7 MWh, mean T_air 15.51 °C, fabric losses 145.8 MWh (free-running convention) on Bridgewater. The 72-MWh delta is undefended pending Brief 30 Phase 1.2.
+- **State 2 envelope-gains** — Static via `_calculateState2` (own zone-T trace per Brief 28c); Dynamic via `_get_heat_balance_state2` (same Static-with-EP-T_zone pattern).
+- **State 3 full** — engine validated under Brief 28f Parts 1-4 (142/142 tests). Heating/cooling demand, DHW, mechanical ventilation, lighting/equipment, carbon.
+
+**UI shell:**
+- **Top bar** — global Static/Dynamic engine pill + kWh / kWh/m²·a unit toggle (Brief 28-IM-Polish UX overhaul). State-aware "Run Dynamic" button. Auto-simulate toggle removed.
+- **Building module** — Heat Balance + Profiles + Monthly + Summary tabs. Sankey, Stacked, Rows layouts in Heat Balance all show identical Σ totals from the same `losses_at_setpoint` source post Brief 29 cleanup commit `6bd46b3`. `ReconciliationRow` shared component renders the display-to-display consistency check (renamed honestly — the integrand-vs-display invariant is a Brief 30 Phase 1.4 deliverable).
+- **Internal Gains module** — multi-profile schedule editor, mini-profiles, Heat Balance / Monthly / Summary tabs.
+- **Operation module** — operable openings inspector with `flow_mode` field deferred to Brief 30 Phase 3 (data model change).
+- **Systems module** — three-column rewrite (Brief 28-IM IM-M4); shared project schedules; per-service `enabled` gating; consumption.* parity.
+- **Results module** — full-width single-column with 4 view tabs + results.* engine block + UK grid carbon trajectory + CRREM 1.5°C overlay (Brief 28-IM IM-M5).
+- **Roadmap module** — sequenced intervention engine + full-width UI; per-year per-intervention leave-one-out marginal attribution (Brief 28-IM IM-M6).
+- **Diverging-bars Monthly views** across Building / Internal Gains / Operation — fixed axis, gains UP, losses DOWN.
+- **ComfortDemandCard** beneath 3D viewer in Building module (Brief 28-IM-Polish UX overhaul).
+
+**Audit infrastructure:**
+- `docs/audit/29_first_principles_audit_FINDINGS.md` — template-conforming Section for Building/Static + Building/Dynamic. Open issues #1-#13 documented.
+- `docs/audit/29_open_issues.md` — severity-ranked, fix-scope-grouped issue list.
+- `docs/audit/29_strategic_implications.md` — Path A/B/C/D recommendation document.
+- `docs/audit/29_permanent_vent_methodology.md` — locked methodology with Cases A/B/C hand-calc for Bridgewater.
+- `docs/audit/30_ep_outputs_baseline.md`, `30_ep_outputs_required.md`, `30_phase0_schema_lock.md`, `30_phase0_test_rig.md` — Brief 30 Phase 0 deliverables.
+- `docs/audit/30_state1_corrected_baseline.md` — checkpoint (a) for Brief 30 Phase 1.
+- `scripts/test_api_simulate_mode.py` — regression test that would have caught Brief 29 Issue #13 (silent JSON-body parameter drop).
+- `scripts/_state1_strip_regression.py` (formerly `_issue13_diagnostic.py`) — minimal-EP comparator; post-Brief-30 acceptance: stripping HVAC produces <0.5 K delta on T_zone.
+
+**Earlier infrastructure (pre-Brief-29, still in service):**
 
 - **Consumption module** — `/consumption` route with FileSpreadsheet sidebar icon (#2D6A7A). Three-column layout: dataset list + upload (left), visualisation tabs (centre), metrics panel (right).
 - **Consumption upload** — Drag-and-drop or file picker. Accepts CSV/XLSX. Uploads to API, shows parse summary with provenance stacked bar. Fuel type override (electricity/gas). Confirm import button.
@@ -1272,20 +1499,41 @@ All checklist items:
 
 ## Known issues
 
-- Building hardcoded as hotel_bedroom zone type — multi-zone not yet supported
-- **uvicorn must be restarted** after backend code changes
-- Full-year hourly data requires EnergyPlus .sql output file on disk
-- MVHR raises cooling demand significantly in summer (physically consistent but counterintuitive)
-- `SolarBars` component in `LiveResultsPanel.jsx` is dead code — harmless
-- Heatmap fetches all records at once (no pagination) — could be slow for large datasets with full year HH data
+**Brief 30 / Brief 29 audit (active):**
+- Brief 30 Phase 1.1 (State 1 strip) and onwards PAUSED pending Brief 31 close and Chris re-authorisation.
+- **Issue #8** [S2] Dynamic State 1 parser re-derives heat balance in Python from EP's T_zone trace instead of consuming EP per-element outputs (`Surface Inside Face Conduction Heat Transfer Energy`, `Zone Infiltration Sensible Heat Loss Energy`, etc.). Scoped fix: Brief 30 Phase 1.2.
+- **Issue #2** [S3] Permanent vent topology defaults to cross-flow regardless of building type. Bridgewater overstated 5× (engine reports 120.8 MWh; defensible value 24–85 MWh for balanced-mechanical extract). Scoped fix grouped with #3 + #4.
+- **Issue #3** [S2] `C_d` hardcoded at 0.6 in Static, no geometry awareness (slot vs orifice vs louvre). Group with #2.
+- **Issue #4** [S2] Stack term missing in Static permanent-vent flow (wind-only formula at `instantCalc.js:1003`). Group with #2.
+- **Issue #6** [S3] No integrand-vs-display invariant in code. The Brief 28-IM-Polish POL-M3 "reconciliation row" was display-to-display consistency only — relabelled in cleanup commit `6bd46b3` to be honest about its scope. Scoped fix: Brief 30 Phase 1.4.
+- **Issue #11** [S2] Dynamic-parser `thermal_bridging` emits 0.0 MWh (back-out formula `(u_envelope − u_clear_edge) × area` always evaluates to 0 because constructions don't carry `u_clear_edge`). Group with #8/#12.
+- **Issue #12** [S2] Dynamic State 1 doesn't emit `losses_at_setpoint` block — Sankey/Rows/Stacked/Summary silently fall back to free-running convention when engine pill is Dynamic. Group with #8/#11.
+- **Issue #5** [S1] `AIR_HEAT_CAPACITY = 0.33` constant labelled `kWh/m³/K` in source comment but used dimensionally as `Wh/m³/K`. Magnitude correct, label wrong. Cosmetic.
+- **Issue #9** [S1] `ZoneInfiltration:DesignFlowRate` uses `hotel_ventilation_continuous` schedule name in State 1; verify always-on. Suspicious naming.
+- **Issue #10** [S1] HVAC plant emitted-but-muted in State 1 (contract violation per Brief 30 Principle 4). Scoped fix: Brief 30 Phase 1.1 strip.
+
+**Operational / housekeeping:**
+- Building hardcoded as `hotel_bedroom` zone type — multi-zone not yet supported.
+- **uvicorn must be restarted** after backend code changes (no `--reload` in `go.bat`).
+- Full-year hourly data requires EnergyPlus `.sql` output file on disk.
+- MVHR raises cooling demand significantly in summer (physically consistent but counterintuitive).
+- Heatmap fetches all records at once (no pagination) — could be slow for large datasets with full year HH data.
+- The `data/validation/sensitivity/*.json` files from Brief 28b validation remain untracked in working tree (harmless; pre-May-14).
+- `scripts/_wallmodel_debug.mjs` untracked debug script (pre-Brief-28 vintage).
+
+**Stale issues resolved earlier in the session:**
+- ~~Door bug — operable openings in State 1 integrand without display~~ (FIXED `39a828c`, Brief 29 Issue #1).
+- ~~API mode parameter silently dropped from JSON body~~ (FIXED `cc96815`, Brief 29 Issue #13).
+- ~~Heat Balance Sankey not responding to comfort band changes~~ (FIXED `25602f8`).
+- ~~Heat Balance Σ totals invisible due to overflow region~~ (FIXED `25602f8`).
+- ~~Invented-mechanism passages in UI (lumped-2-node footnotes)~~ (REMOVED `6bd46b3` per Brief 29 Hard Rule 2).
+- ~~`SolarBars` dead code in `LiveResultsPanel.jsx`~~ (still harmless; flagged for removal in Brief 30 Phase 1 cleanup).
 
 ---
 
-## Brief 28 / 29 scope (queued, NOT in 27)
+## Brief 28 / 29 scope (queued, NOT in 27) — HISTORICAL, MOSTLY DELIVERED OR SUPERSEDED
 
-Split codified at Brief 27 close-out. See top of STATUS.md "Next task"
-section + the brief files themselves for the full part-by-part spec.
-This is the older verbose queue kept for historical context.
+> **2026-05-18 reconciliation note (Brief 31):** Brief 28 was decomposed into many sub-briefs (28a, 28b, 28c, 28e, 28f, 28im, 28im_polish, 28j, 28k, 28L, 28tb) — all closed or superseded per the chronological session entries at the top of this file. The two queued items below ("Brief 28" + "Brief 29 building module completion") are the original queue text; both have been substantially overtaken by the sub-briefs and by Brief 29 First-Principles Audit + Brief 30 Dynamic Engine Rebuild. Kept here for historical traceability only — no part of this section is an active queue.
 
 **Brief 28 — Cross-cutting polish:**
 
@@ -1358,9 +1606,13 @@ This is the older verbose queue kept for historical context.
 
 ## Safety checks
 
+- **2026-05-18 (Brief 31):** working tree clean except 11 pre-existing untracked files in `data/validation/sensitivity/` (Brief 28b validation outputs) + `scripts/_wallmodel_debug.mjs` (pre-Brief-28). Excluded from Brief 31 commit via explicit `git add` paths.
+- Branch: main
+- Pre-Brief-31 HEAD: `cc96815` (Brief 30 Phase 1.0). Local and origin in sync.
+- Brief 31 commit pending push at Part 6.
+- `data/` directory: gitignored, intact, not touched.
+
+**Earlier safety checkpoints (kept for traceability):**
 - Working tree: clean (after Brief 20 commit)
-- Branch: main
 - Brief 20 committed to main; pushed to GitHub ✓ (bad02c7)
-- Branch: main
 - Brief 18b committed to main; pushed to GitHub ✓ (30bfb9d)
-- data/ directory: gitignored, intact, not touched

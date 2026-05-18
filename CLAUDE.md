@@ -35,6 +35,26 @@ This tool is a sibling to Pablo (NZA's electricity cost analytics platform). It 
 
 ---
 
+## Lessons from Brief 29 / Brief 30 (2026-05 audit)
+
+These rules were learned the hard way during the May 2026 audit and dynamic-engine rebuild work. They supersede the earlier rules where they conflict — specifically Rule 1's "no inline physics in JSX" framing is refined by Rule 8 below (Static engines that are explicitly labelled as such may compute physics inline; code paths that claim to be the simulator's output may not).
+
+7. **The Dynamic engine in any tool that wraps a slow authoritative simulator (EnergyPlus, IES, TAS, etc.) must consume that simulator's own outputs as the source of truth for displayed quantities.** If a layer between the simulator and the UI re-implements the calculation, that layer IS the engine, regardless of what the UI calls it. The wrapper's job is to request, read, aggregate, and display — never to compute physical quantities the simulator can produce. (Brief 29 Issue #8 / Bible lesson 1. **This refines Rule 1's intent:** inline physics is permitted in Static engines that are explicitly labelled as such; it is forbidden in code paths that claim to be the simulator's output.)
+
+8. **State suppression in a multi-state model must remove the relevant objects from the simulation, not mute them via parameter widening.** "No systems" means no system objects in the model file. Muted setpoints, zero schedules, and disabled availabilities do not constitute suppression — the simulator's default behaviours in the muted state will contaminate the supposedly-suppressed result. (Brief 30 Principle 4.)
+
+9. **Every term entering a demand integral, energy balance, or aggregate must appear as a line in the displayed breakdown.** Internal display consistency tests (display A = display B) are insufficient; the reconciliation must verify integrand-vs-display, not display-vs-display. Failing this invariant at any save/run point is a blocker bug. (Brief 29 Issue #6, raised to S3 in sign-off review. The Brief 28-IM-Polish POL-M3 `ReconciliationRow` shipped a display-to-display check that did NOT catch the door bug — both displays were missing the term in the same way. The replacement integrand-vs-display invariant is a Brief 30 Phase 1.4 deliverable.)
+
+10. **Do not invoke exotic physical mechanisms (sky radiation, lumped-mass artefacts, CTF differences, "engine accuracy") to explain a number that violates basic building physics.** The gap is almost always a hidden integrand term, a display omission, or a wrong-topology assumption. Diagnose with instrumentation; do not defend with mechanism. Specifics with citation and magnitude, or silence. Banned phrases (extending the Brief 29 list): "radiative loss to sky lowering zone air temperature", "lumped 2-node mass artefact inflating demand by 30–60%", "T_zone swings below T_out on cold nights", "Dynamic uses CTF and Static uses 2-node so they're just different", "Dynamic is more accurate", "Static is more accurate", any unquantified appeal to "engine differences".
+
+11. **Parameter binding at an API boundary can silently disable a feature without raising any error.** Every mode-like parameter in a request handler needs an integration test that verifies the parameter is honoured end-to-end, not just bound. (Brief 29 Issue #13 re-diagnosis / Bible lesson 2. FastAPI POST endpoints with `param: str = "default"` treat the parameter as query-string-only by default; JSON-body callers get the default silently. Mitigation pattern: use a Pydantic body model with `Body(default_factory=...)` plus query-param fallback, or be explicit with `Query(...)` annotation.)
+
+12. **Default to rebuild, not refactor, when foundational assumptions have changed.** AI-built code is amenable to rebuild because the institutional knowledge lives in the briefs and the bible, not the code itself. Refactoring preserves the shape of the original (wrong) assumptions as interface constraints. Decline rebuild only when active dependencies would be broken in flight or when documentation cannot reconstruct what would be deleted.
+
+13. **When a problem keeps having "the real root cause" turn out to be one level deeper than the previous diagnosis, the working assumption should be that more layers remain.** Continue diagnostic discipline; do not accept the latest plausible cause as final until the symptom is fully explained and verifiable from end to end. (Brief 29/30 multi-layer diagnostics / Bible lesson 3. The Issue #13 cascade: "lumped 2-node artefact" → "VRF + DSOA not muted by setpoints" → "API silently drops mode from JSON body" — three diagnoses, each more shallow than the next.)
+
+---
+
 ## Process rules
 
 1. **Read before you code.** At the start of every session, read this file, then STATUS.md, then the current task brief (`docs/briefs/current.md`). Confirm what you understand before touching any code.
@@ -48,6 +68,12 @@ This tool is a sibling to Pablo (NZA's electricity cost analytics platform). It 
 4. **Three strikes then escalate.** If a fix doesn't work, try up to 3 different approaches. If none work, stop. Describe the problem clearly: what you tried, what happened, what you think the options are. Do not keep guessing. The human will decide what to do next.
 5. **No scope creep.** Do not add features, components, or "improvements" that weren't asked for in the brief. If you think something should be added, note it in STATUS.md under "Suggestions" — do not implement it.
 6. **Sanity check your work.** After making changes, open the tool in the browser and interact with it. Do the numbers make sense? Does the 3D viewer match the inputs? Does changing a U-value change the heating demand? This basic check catches most problems.
+
+7. **Documentation hygiene is part of the commit, not after it.** Every commit that closes a brief part, lands a fix, or changes architecture must update STATUS.md as part of the same commit, not as a queued follow-up. If "cleanup + STATUS.md" is in the todo list at the end of a commit, the commit is incomplete. Brief management (rename closed briefs to `*_COMPLETED.md`, move to `archive/`, update `current.md`) is part of the same discipline. (Brief 31 documentation reconciliation, May 2026 — documentation drift across Briefs 26–30 was caught only by post-hoc human verification; this rule exists to prevent recurrence.)
+
+8. **Verify documentation alignment at the start of every session.** Read STATUS.md and CLAUDE.md against the actual state of `docs/briefs/active/` and recent commits. If they diverge, the first commit of the session is the reconciliation. Do not begin new work against an inaccurate self-description of the project. (Brief 31, May 2026.)
+
+9. **Multi-step work is briefed, not commanded.** Any task that touches more than one file or takes more than one commit is written as a numbered brief in `docs/briefs/active/` before work begins. The brief contains a BEFORE-DOING-ANYTHING checklist, numbered Parts with file paths and verification steps, and a "deliverables" section that includes documentation updates as numbered Parts (not as advisory text). Mid-chat instructions that span multiple files/commits without a brief are incomplete and should be returned to the architect for proper briefing. (Brief 30 / Brief 31, May 2026.)
 
 ---
 
