@@ -1,6 +1,31 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-18 — Brief 36 Part 3: Shared pop-out schedule editor (in flight)
+## ✅ Session 2026-05-18 — Brief 36 close: Internal Gains audited and polished, shared pop-out schedule editor live
+
+**State:** `closed` (this commit). Brief 36 Parts 1–4 all complete; brief archived.
+
+**Brief 36 lifecycle:**
+- Part 1 — Internal Gains Static audit: `2c96896`. Findings doc `docs/audit/32_static_audit_FINDINGS.md`. Two S2 issues logged (#14 scope contamination, #15 lighting `independent` mode occupancy_rate scaling). No S3 findings. No hidden-integrand-term bugs.
+- Part 2 — Colour discipline: `376ab41`. `GAIN_COLOURS` unified to three shades of purple matching Sankey's `INTERNAL_COLOURS`. MonthlyView hardcoded gain colours replaced with lookups. Module identity accent `#EA580C` preserved.
+- Part 3 — Shared pop-out schedule editor: `f0b764c`. New `frontend/src/components/shared/SchedulePopout.jsx` provides draggable / persistent-position / non-blocking chrome. Internal Gains drops the `'schedule'` tab (4 tabs now) and opens the editor as a floating panel; Systems' fixed-modal "stuck" complaint resolved by replacing the modal with `SchedulePopout`. Systems exception-period support deferred to a follow-up brief (schema unification between `gains/ScheduleEditor` and `profiles/ScheduleEditor` is outside the brief's gains/ and systems/ directory scope per the "When to escalate" rule).
+- Part 4 — close-out (this commit): brief archived to `docs/briefs/archive/36_internal_gains_audit_polish_COMPLETED.md`. `docs/briefs/current.md` cleared. STATUS.md final entry.
+
+**Architecture state after Brief 36:**
+- Internal Gains module audited end-to-end via the Brief 29 three-lists method. No structural rework needed; two follow-up issues documented for separate briefs.
+- Internal Gains UI consistent with Sankey palette across all views.
+- Schedule editor chrome standardised across Internal Gains + Systems. Same drag interaction, same persistence, same close behaviour.
+- Building module remains structurally complete for Static-only (Brief 33 close).
+- Dynamic engine remains paused (Brief 32 Part 1). Eligible for resumption per current.md.
+
+**Next-brief candidates (Chris's call):**
+- Operation module audit (Brief 37, future) — same three-lists method applied to State 2.5 operable openings.
+- Systems schedule library — exception periods + schema unification (deferred from Brief 36 Part 3).
+- Issue #15 fix — lighting `independent` mode occupancy_rate scaling — single-file fix queued; Bridgewater default unaffected.
+- Dynamic rebuild (Brief 30 Phase 1.1+ resumption).
+
+---
+
+## ✅ Session 2026-05-18 — Brief 36 Part 3: Shared pop-out schedule editor (closed `f0b764c`)
 
 **State:** `single_commit_in_flight` — UI refactor. Schedule editing moved from in-canvas tab / fixed modal to a shared draggable pop-out.
 
