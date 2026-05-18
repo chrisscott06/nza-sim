@@ -1,10 +1,8 @@
 # Current brief
 
-**Active:** none. Brief 33 fully closed in this commit (Parts 1, 2, and 3 complete). Brief 34 closed in `f702687`. The Building module is structurally complete for Static-only operation with the scope contract architecturally documented in CLAUDE.md "Module scopes". Awaiting next-brief sequencing per Chris.
+**Active:** none. Brief 33 closed `d814973`. Brief 34 closed `f702687`. Brief 32 closed-and-superseded by Brief 33 at `341eeff`. The Building module is structurally complete for Static-only operation with the scope contract architecturally documented in CLAUDE.md "Module scopes". Awaiting Brief 35 (Internal Gains audit).
 
-**Paused (in active/ for traceability):** [`active/30_dynamic_engine_rebuild.md`](active/30_dynamic_engine_rebuild.md) — Phase 0 + Phase 1.0 complete (commits `8003577` + `cc96815`). Phase 1.1 onwards PAUSED. Dynamic backend code frozen at HEAD `54407e3` (post Brief 31), not deleted. Eligible for resumption now that Brief 33 has closed.
-
-**Closed (retained in active/ for cross-reference until cleanup):** [`active/32_static_completion.md`](active/32_static_completion.md) closed-and-superseded at `341eeff`; [`active/34_simplify_permanent_openings_ui.md`](active/34_simplify_permanent_openings_ui.md) closed at `f702687`. Both may be archived in a later documentation-hygiene commit.
+**Paused (only remaining entry in active/):** [`active/30_dynamic_engine_rebuild.md`](active/30_dynamic_engine_rebuild.md) — Phase 0 + Phase 1.0 complete (commits `8003577` + `cc96815`). Phase 1.1 onwards PAUSED. Dynamic backend code frozen at HEAD `54407e3` (post Brief 31), not deleted. Eligible for resumption now that Brief 33 has closed.
 
 This pointer file is updated each time a brief in `active/` closes.
 
@@ -33,9 +31,9 @@ This pointer file is updated each time a brief in `active/` closes.
 | [`archive/29_Building_Module_Completion_v2_SUPERSEDED.md`](archive/29_Building_Module_Completion_v2_SUPERSEDED.md) | ⚠ Different brief from the audit. Never started; superseded by Brief 30 | — |
 | [`active/30_dynamic_engine_rebuild.md`](active/30_dynamic_engine_rebuild.md) | ⏸ paused — superseded by Brief 32 in active queue until Static is client-ready. Phase 0 + Phase 1.0 frozen; Phase 1.1+ resumes after Brief 32 closes | `8003577`, `cc96815` |
 | Brief 31 — Documentation Reconciliation | ✅ closed 2026-05-18 | `54407e3` |
-| [`active/32_static_completion.md`](active/32_static_completion.md) | ⚠ closed in active queue — Part 1 closed `3a793ce`; Part 2 closed-but-superseded `341eeff` (balanced_mechanical was a scope violation). Parts 3-7 do not happen as scoped. | `3a793ce`, `341eeff` |
-| [`archive/33_building_envelope_COMPLETED.md`](archive/33_building_envelope_COMPLETED.md) + [`archive/33_part_3_module_scopes_COMPLETED.md`](archive/33_part_3_module_scopes_COMPLETED.md) | ✅ closed 2026-05-18 — Part 1 revert `195a87b`; Finding 1 fix `b53b163`; Part 2 geometry-aware C_d `c6a415b`; Part 3 CLAUDE.md "Module scopes" + Process Rules 10–11 (this commit) | `195a87b`, `b53b163`, `c6a415b`, (this commit) |
-| [`active/34_simplify_permanent_openings_ui.md`](active/34_simplify_permanent_openings_ui.md) | ✅ closed `f702687` — UI simplification to single C_d slider; not yet moved to archive | `f702687` |
+| [`archive/32_static_completion_COMPLETED.md`](archive/32_static_completion_COMPLETED.md) | ⚠ closed-and-superseded by Brief 33 — Part 1 closed `3a793ce`; Part 2 closed-but-superseded `341eeff` (balanced_mechanical was a scope violation). Parts 3-7 did not happen as scoped. | `3a793ce`, `341eeff` |
+| [`archive/33_building_envelope_COMPLETED.md`](archive/33_building_envelope_COMPLETED.md) + [`archive/33_part_3_module_scopes_COMPLETED.md`](archive/33_part_3_module_scopes_COMPLETED.md) | ✅ closed 2026-05-18 — Part 1 revert `195a87b`; Finding 1 fix `b53b163`; Part 2 geometry-aware C_d `c6a415b`; Part 3 CLAUDE.md "Module scopes" + Process Rules 10–11 `d814973` | `195a87b`, `b53b163`, `c6a415b`, `d814973` |
+| [`archive/34_simplify_permanent_openings_ui_COMPLETED.md`](archive/34_simplify_permanent_openings_ui_COMPLETED.md) | ✅ closed 2026-05-18 — UI simplification to single C_d slider | `f702687` |
 
 Brief 31 lands the rules that govern future sessions (CLAUDE.md updates) and the project's self-description (STATUS.md refresh + brief management). Brief 30 Phase 1.1 onwards is then re-authorised against that corrected foundation.
 
