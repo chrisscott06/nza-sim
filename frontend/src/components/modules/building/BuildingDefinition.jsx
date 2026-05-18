@@ -1244,7 +1244,8 @@ function BuildingSummaryView({ instantResult, simBalance }) {
     <div className="w-full h-full overflow-auto">
       <div className="px-4 pt-2 pb-1 flex items-center justify-between gap-2 sticky top-0 bg-white border-b border-light-grey">
         <div className="flex items-center gap-2">
-          <EnginePill mode={dynamicAvailable ? 'both' : 'static'} dynamicReady={dynamicAvailable} />
+          {/* Brief 32 Part 1: pill pinned to 'static'; Dynamic comparison restores when Brief 30 closes. */}
+          <EnginePill mode="static" dynamicReady={false} />
           <span className="text-caption font-semibold text-navy">Building summary · envelope</span>
         </div>
         <ChartTotalsBadge label="Σ fabric loss" value_kwh={totalLoss} gia_m2={gia} />
@@ -1310,31 +1311,12 @@ function BuildingSummaryView({ instantResult, simBalance }) {
           <ReconciliationRow rows={reconciliationRows} />
         </div>
 
-        {/* Brief 28-IM-Polish Bug 2.11: Δ% empty state — when no Dynamic
-            run is available, prompt to run rather than spam amber per-row
-            warnings. When Dynamic is fresh, show the cumulative magnitude. */}
-        <div className="mt-4 max-w-3xl rounded border border-light-grey p-3">
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="text-xxs uppercase tracking-wider text-mid-grey">Static vs Dynamic</p>
-            <EnginePill mode={dynamicAvailable ? 'both' : 'static'} dynamicReady={dynamicAvailable} />
-          </div>
-          {dynamicAvailable ? (
-            <p className="text-caption text-navy mt-1">
-              Dynamic heating demand: <span className="font-semibold tabular-nums">{simHeatingMwh.toFixed(1)}</span> MWh/yr
-              {' '}vs Static fabric loss <span className="font-semibold tabular-nums">{staticFabricMwh.toFixed(1)}</span> MWh/yr
-              {fabricGapPct != null && (
-                <span className={`ml-2 ${Math.abs(fabricGapPct) <= 15 ? 'text-green-700' : Math.abs(fabricGapPct) <= 35 ? 'text-amber-700' : 'text-red-600'}`}>
-                  ({fabricGapPct > 0 ? '+' : ''}{fabricGapPct}%)
-                </span>
-              )}
-            </p>
-          ) : (
-            <p className="text-xxs text-mid-grey mt-1">
-              Δ% requires a Dynamic run. Click <span className="font-medium text-navy">Run Dynamic</span> in the toolbar
-              to populate the comparison; rows above stay Static-only until then.
-            </p>
-          )}
-        </div>
+        {/* Brief 32 Part 1 (2026-05-18): Static-vs-Dynamic fabric-gap
+            diagnostic (Brief 28-IM-Polish Bug 2.11 / POL-M1) hidden while
+            the Dynamic engine is under reconstruction (Brief 30, paused).
+            simHeatingMwh / staticFabricMwh / dynamicAvailable / fabricGapPct
+            are computed above and left in place so this panel restores
+            cleanly when Brief 30 returns. */}
 
         {/* Brief 29 Commit B (cleanup): the per-component "Convention notes
             (Static vs Dynamic)" block that lived here made magnitude claims

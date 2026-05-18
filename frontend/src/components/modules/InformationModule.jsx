@@ -376,6 +376,20 @@ export default function InformationModule() {
           </div>
         </SectionCard>
 
+        {/* Brief 32 Part 1 (2026-05-18): Engine status footnote.
+            Visually quiet — smaller text, no accent — per §1.4. The
+            wording is reproduced verbatim from the brief. Restore /
+            update copy when Brief 30 closes and Dynamic returns. */}
+        <div className="pt-2 pb-4">
+          <p className="text-xxs text-mid-grey italic leading-relaxed max-w-3xl">
+            <span className="not-italic font-medium text-mid-grey">Engine status — </span>
+            Dynamic engine (EnergyPlus-direct) is under reconstruction (Brief 30).
+            Current displayed numbers are from the Static engine. The Dynamic engine
+            will return in a future release with full per-element heat balance read
+            directly from EnergyPlus outputs.
+          </p>
+        </div>
+
       </div>
     </div>
   )

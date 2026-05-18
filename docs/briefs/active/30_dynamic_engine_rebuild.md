@@ -1,11 +1,11 @@
 # Brief 30 — Dynamic Engine Rebuild (Bottom-Up, States 1 → 3)
 
-> **Repo front matter (Brief 31 Documentation Reconciliation 2026-05-18):**
-> **Status:** ACTIVE — Phase 0 complete (commit `8003577`) + Phase 1.0 API fix complete (commit `cc96815`). Phase 1.1 onwards PAUSED pending Brief 31 close.
-> **Progress:**
+> **Repo front matter — superseded in active queue by Brief 32 (2026-05-18):**
+> **Status:** ACTIVE BUT PAUSED — superseded by Brief 32 (Pause Dynamic, Complete Static, Audit Across Modules) in the active queue until Static is client-ready. Phase 1.1 onwards will resume after Brief 32 closes. Dynamic backend code (`sql_parser.py`, `epjson_assembler.py`, `api/routers/projects.py`, `scripts/test_api_simulate_mode.py`, `scripts/_state1_strip_regression.py`) is FROZEN at HEAD `54407e3` (post Brief 31), not deleted. Brief 32 Part 1 hides Dynamic from the user-facing UI; this brief resumes once Static is shippable.
+> **Progress (frozen state):**
 > - Phase 0 audit documents committed: `docs/audit/30_ep_outputs_baseline.md`, `30_ep_outputs_required.md`, `30_phase0_schema_lock.md`, `30_phase0_test_rig.md`.
 > - Phase 1.0 (precondition): API `mode` parameter binding fix in `api/routers/projects.py` + regression test `scripts/test_api_simulate_mode.py` + checkpoint (a) `docs/audit/30_state1_corrected_baseline.md`.
-> - Phase 1.1 (strip) and Phase 1.2 (parser rewrite) NOT YET STARTED. Will not begin until Chris re-authorises post-Brief-31.
+> - Phase 1.1 (strip) and Phase 1.2 (parser rewrite) NOT STARTED. To be re-authorised after Brief 32 closes.
 
 ---
 

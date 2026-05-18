@@ -1,8 +1,41 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-18 — Brief 31 Documentation Reconciliation (in flight)
+## 🚧 Session 2026-05-18 — Brief 32 Part 1: Pause Dynamic engine in UI (in flight)
 
-**State:** `single_commit_in_flight` — this commit reconciles documentation drift across Briefs 26–30. No code changes.
+**State:** `single_commit_in_flight` — pauses Dynamic engine visibility in the user-facing surface. Backend Dynamic code (`sql_parser.py`, `epjson_assembler.py`, simulation API endpoints, `scripts/test_api_simulate_mode.py`, `scripts/_state1_strip_regression.py`) is FROZEN at HEAD `54407e3` (post Brief 31), not deleted. Brief 30 Phase 1.1+ resumes after Brief 32 closes.
+
+**What's landing in this commit:**
+- Brief 32 (`docs/briefs/active/32_static_completion.md`) copied into active queue with progress front matter.
+- Brief 30 (`docs/briefs/active/30_dynamic_engine_rebuild.md`) front matter updated to PAUSED — superseded by Brief 32 in active queue.
+- `docs/briefs/current.md` rewritten to point at Brief 32 + add Brief 32 row to recent-brief table.
+- `frontend/src/components/layout/TopBar.jsx` — engine-mode segmented control hidden (Static / Dynamic / Both buttons commented out); force-static `useEffect` added to override any stale localStorage value; "Run Dynamic" button JSX commented out (handler + state detection kept in place for Brief 30 restoration).
+- `frontend/src/components/modules/building/BuildingDefinition.jsx` — POL-M1 "Static vs Dynamic" fabric-gap diagnostic panel removed from Building Summary view (Brief 28-IM-Polish Bug 2.11 / `fabricGapPct` calculation kept in code for restoration). Header `EnginePill` pinned to `mode="static"`.
+- `frontend/src/components/modules/IMResultsModule.jsx` — `SummaryView` table reduced from Static + Dynamic side-by-side to Static-only. Dynamic columns, Δ% helpers, and "Convention notes (Static vs Dynamic)" block removed (locals `dynC` / `delta` / `cellDelta` kept in code for restoration).
+- `frontend/src/components/modules/InformationModule.jsx` — Engine status footnote added at the bottom (after "Ready to simulate?" SectionCard). §1.4 wording verbatim, footnote-style: smaller text, no accent, italic muted.
+- STATUS.md (this file) — Brief 32 Part 1 entry prepended.
+
+**Current state after Part 1:**
+- Static engine is the sole engine visibly producing user-facing numbers.
+- Engine pill toggle hidden from TopBar; `engineMode` force-pinned to `'static'`.
+- "Run Dynamic" button no longer rendered; no Dynamic simulations can be triggered from the UI.
+- Single "Engine status" notice in Information module explains what's paused and why.
+- Build clean: `npm run build` produces `dist/assets/index-*.js` 2.50 MB (gzip 693 kB) with zero errors.
+- Backend Dynamic code untouched. EP epJSON assembler, SQL parser, simulate API endpoint all still callable via curl / scripted tests if needed for Brief 30 prep.
+
+**Verification (Part 1):**
+- Build clean ✓
+- Information module footnote present, single location ✓
+- Browser walkthrough at 1440×900 — deferred to next session boot via `go.bat` (UK weather index now generated and on disk, so the weather UI populates as well).
+
+**Next part:** Brief 32 Part 2 — fix permanent vent topology (Issue #2). Adds `flow_mode` field to opening data model, three correlations (cross / single-sided / balanced-mechanical), defaults Bridgewater to balanced-mechanical. Expected Bridgewater headline movement: vent loss 120.8 → 24 MWh.
+
+**Known issues unchanged from Brief 31:** Issues #2, #3, #4, #5, #6, #8, #9, #10, #11, #12 remain open per `docs/audit/29_open_issues.md`. Brief 32 Parts 2–4 close #2/#3/#4. Part 5 closes #6.
+
+---
+
+## ✅ Session 2026-05-18 — Brief 31 Documentation Reconciliation (closed `54407e3`)
+
+**State:** `closed` — single-commit reconciliation of documentation drift across Briefs 26–30 landed at HEAD `54407e3`. No code changes in this commit.
 
 **What's landing in this commit:**
 - Brief 29 (First-Principles Audit) copied into `docs/briefs/archive/29_first_principles_audit_COMPLETED.md`.
@@ -18,9 +51,9 @@
 
 ---
 
-## 🚧 Session 2026-05-18 — Brief 30 Dynamic Engine Rebuild — Phase 0 + Phase 1.0 (paused before Phase 1.1)
+## ⏸ Session 2026-05-18 — Brief 30 Dynamic Engine Rebuild — Phase 0 + Phase 1.0 (paused; superseded in queue by Brief 32)
 
-**State:** `paused_for_brief_31_then_reauth`
+**State:** `paused_by_brief_32` — Phase 0 + Phase 1.0 frozen at HEAD `cc96815`. Phase 1.1+ resumes after Brief 32 closes (client-ready Static baseline first). Dynamic backend code is invisible to the UI per Brief 32 Part 1 but not deleted; resumption is a UI un-hide plus the Phase 1.1+ work as originally scoped.
 
 **Latest commits (pushed to origin/main at HEAD `cc96815`):**
 - `cc96815` Brief 30 Phase 1.0: fix API mode-binding silent drop, re-diagnose Issue #13, capture State 1 checkpoint (a)

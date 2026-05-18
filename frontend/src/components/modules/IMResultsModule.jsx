@@ -709,11 +709,16 @@ function SummaryView({ r, c, staticResult, simResults }) {
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       <div className="bg-white border border-light-grey rounded p-4">
-        {/* Brief 28-IM-Polish POL-M2 */}
+        {/* Brief 32 Part 1 (2026-05-18): Static-only annual summary. The
+            previous side-by-side Static vs Dynamic table (Brief 28-IM-Polish
+            POL-M2) is paused while the Dynamic engine is under reconstruction
+            (Brief 30). `dynC`, `cellDelta`, and the convention-notes block are
+            left in place above so the side-by-side restores cleanly when
+            Brief 30 closes. */}
         <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
           <div className="flex items-center gap-2">
-            <EnginePill mode={dynC ? 'both' : 'static'} dynamicReady={!!dynC} />
-            <p className="text-caption font-semibold text-navy">Annual summary — Static vs Dynamic</p>
+            <EnginePill mode="static" dynamicReady={false} />
+            <p className="text-caption font-semibold text-navy">Annual summary</p>
           </div>
           <div className="flex items-center gap-2">
             <ChartTotalsBadge label="Σ elec" value_kwh={(c?.total?.electricity_mwh ?? 0) * 1000} engineMode="static" />
@@ -721,21 +726,17 @@ function SummaryView({ r, c, staticResult, simResults }) {
           </div>
         </div>
         <p className="text-xxs text-mid-grey mb-3">
-          IM-M4.5 Phase 2 brought Dynamic up to the same <code>consumption.*</code> shape
-          as Static, so this side-by-side comparison is now meaningful per category.
-          {dynC == null && <span className="text-amber-700"> No Dynamic run available — run the simulation from the toolbar to populate the Dynamic column.</span>}
+          Setpoint-convention demand and apportioned fuel by end-use, computed by the
+          Static engine. Side-by-side Dynamic comparison returns when Brief 30 closes.
         </p>
         <table className="w-full text-xxs border-collapse">
           <thead>
             <tr className="border-b border-light-grey text-mid-grey uppercase tracking-wider">
               <th className="text-left  py-2 pr-3 font-medium">Category</th>
-              <th className="text-right py-2 pr-3 font-medium">Static demand</th>
-              <th className="text-right py-2 pr-3 font-medium">Static delivered</th>
-              <th className="text-right py-2 pr-3 font-medium">Static elec</th>
-              <th className="text-right py-2 pr-3 font-medium">Static gas</th>
-              <th className="text-right py-2 pr-3 font-medium">Dynamic demand</th>
-              <th className="text-right py-2 pr-3 font-medium">Dynamic elec</th>
-              <th className="text-right py-2 pr-3 font-medium">Dynamic gas</th>
+              <th className="text-right py-2 pr-3 font-medium">Demand</th>
+              <th className="text-right py-2 pr-3 font-medium">Delivered</th>
+              <th className="text-right py-2 pr-3 font-medium">Electricity</th>
+              <th className="text-right py-2 pr-3 font-medium">Gas</th>
             </tr>
           </thead>
           <tbody>
@@ -746,18 +747,6 @@ function SummaryView({ r, c, staticResult, simResults }) {
                 <td className="py-1.5 pr-3 text-right tabular-nums">{row.staticNode?.delivered_mwh != null ? row.staticNode.delivered_mwh.toFixed(1) : '—'}</td>
                 <td className="py-1.5 pr-3 text-right tabular-nums">{row.staticNode?.electricity_mwh != null ? row.staticNode.electricity_mwh.toFixed(1) : '—'}</td>
                 <td className="py-1.5 pr-3 text-right tabular-nums">{row.staticNode?.gas_mwh != null         ? row.staticNode.gas_mwh.toFixed(1) : '—'}</td>
-                <td className="py-1.5 pr-3 text-right tabular-nums">
-                  {row.dynNode?.demand_mwh != null ? row.dynNode.demand_mwh.toFixed(1) : '—'}
-                  {' '}{cellDelta(row.staticNode?.demand_mwh, row.dynNode?.demand_mwh)}
-                </td>
-                <td className="py-1.5 pr-3 text-right tabular-nums">
-                  {row.dynNode?.electricity_mwh != null ? row.dynNode.electricity_mwh.toFixed(1) : '—'}
-                  {' '}{cellDelta(row.staticNode?.electricity_mwh, row.dynNode?.electricity_mwh)}
-                </td>
-                <td className="py-1.5 pr-3 text-right tabular-nums">
-                  {row.dynNode?.gas_mwh != null ? row.dynNode.gas_mwh.toFixed(1) : '—'}
-                  {' '}{cellDelta(row.staticNode?.gas_mwh, row.dynNode?.gas_mwh)}
-                </td>
               </tr>
             ))}
             <tr className="border-t-2 border-navy/30 font-semibold">
@@ -765,43 +754,16 @@ function SummaryView({ r, c, staticResult, simResults }) {
               <td colSpan={2} />
               <td className="py-2 pr-3 text-right tabular-nums">{c?.total?.electricity_mwh?.toFixed(1)}</td>
               <td className="py-2 pr-3 text-right tabular-nums">{c?.total?.gas_mwh?.toFixed(1)}</td>
-              <td />
-              <td className="py-2 pr-3 text-right tabular-nums">
-                {dynC?.total?.electricity_mwh != null ? dynC.total.electricity_mwh.toFixed(1) : '—'}
-                {' '}{cellDelta(c?.total?.electricity_mwh, dynC?.total?.electricity_mwh)}
-              </td>
-              <td className="py-2 pr-3 text-right tabular-nums">
-                {dynC?.total?.gas_mwh != null ? dynC.total.gas_mwh.toFixed(1) : '—'}
-                {' '}{cellDelta(c?.total?.gas_mwh, dynC?.total?.gas_mwh)}
-              </td>
             </tr>
             <tr>
               <td className="py-2 pr-3 text-navy font-semibold">EUI (kWh/m²·yr)</td>
-              <td colSpan={3} />
-              <td className="py-2 pr-3 text-right tabular-nums text-navy font-bold">{c?.total?.kwh_per_m2_yr?.toFixed(1)}</td>
-              <td />
+              <td colSpan={2} />
               <td colSpan={2} className="py-2 pr-3 text-right tabular-nums text-navy font-bold">
-                {dynC?.total?.kwh_per_m2_yr != null ? dynC.total.kwh_per_m2_yr.toFixed(1) : '—'}
-                {' '}{cellDelta(c?.total?.kwh_per_m2_yr, dynC?.total?.kwh_per_m2_yr)}
+                {c?.total?.kwh_per_m2_yr?.toFixed(1)}
               </td>
             </tr>
           </tbody>
         </table>
-
-        <div className="mt-4 text-xxs text-mid-grey/80 italic max-w-4xl space-y-1">
-          <p><span className="font-medium not-italic text-amber-700">Convention notes (Static vs Dynamic):</span></p>
-          <p>• Static <code>demand_mwh</code> is setpoint-convention (heat load to hold 21 °C against the gain-warmed zone);
-            Dynamic <code>demand_mwh</code> is EnergyPlus's <code>Heating:EnergyTransfer</code> (what the autosized
-            system supplied). When a service is disabled, Static still reports demand; Dynamic reports ~0 + unmet hours.</p>
-          <p>• Ventilation: Static splits per-system (mvhr_gf_public + bedroom_extract + public_toilet_extract); Dynamic
-            V1 aggregates all fans into one <code>Fans:Electricity</code> meter. Row above shows the totals only.</p>
-          <p>• DHW: Static apportions across the <code>fuel_mix</code> sliders; Dynamic V1 uses the legacy primary/secondary
-            path (queued for Brief 28-DynamicParity). Large Δ on DHW is the expected V1 gap, not a bug.</p>
-          <p>• Lighting + small power: Static reads <code>building.gains.*.profiles</code> directly; Dynamic uses the
-            assembler's V2.3 template densities. Profile-vs-template mismatch produces the bigger Δ on these rows.</p>
-          <p className="pt-1">See <code>docs/validation/brief_28im_M4_5_dynamic_audit_phase2_pass.md</code> for the full
-            list of deferred parity items.</p>
-        </div>
       </div>
 
       {/* CRREM headline numbers as a footer block */}

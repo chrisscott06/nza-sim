@@ -1,8 +1,10 @@
 # Current brief
 
-**Active:** [`active/30_dynamic_engine_rebuild.md`](active/30_dynamic_engine_rebuild.md) — Dynamic Engine Rebuild (bottom-up, States 1 → 3). Make the Dynamic engine actually Dynamic: parser consumes EnergyPlus per-element outputs directly instead of re-deriving in Python with EP's T_zone trace substituted in.
+**Active:** [`active/32_static_completion.md`](active/32_static_completion.md) — Pause Dynamic, Complete Static, Audit Across Modules. Replaces Brief 30 Phase 1+ in the active queue until Bridgewater pre-retrofit baseline is shippable as a client deliverable using the Static engine only, with every displayed number defensible from first principles.
 
-**Status:** Phase 0 complete (commits `8003577` + `cc96815` for Phase 1.0 API binding fix). Phase 1.1 onwards PAUSED pending Brief 31 close. Resume Phase 1.1 when Chris re-authorises against the corrected documentation foundation.
+**Status:** Part 1 in flight (this commit) — Dynamic engine paused in UI, "Engine status" notice added to Information module.
+
+**Paused (in active/ for traceability):** [`active/30_dynamic_engine_rebuild.md`](active/30_dynamic_engine_rebuild.md) — Phase 0 + Phase 1.0 complete (commits `8003577` + `cc96815`). Phase 1.1 onwards PAUSED. Dynamic backend code frozen at HEAD `54407e3` (post Brief 31), not deleted. Resume after Brief 32 closes.
 
 This pointer file is updated each time a brief in `active/` closes.
 
@@ -29,7 +31,10 @@ This pointer file is updated each time a brief in `active/` closes.
 | [`archive/28im_polish_COMPLETED.md`](archive/28im_polish_COMPLETED.md) | ✅ POL-M1, M2, M3 shipped 2026-05-17 | `7c8cb4c`, `cdb919f`, `7206c0a` |
 | [`archive/29_first_principles_audit_COMPLETED.md`](archive/29_first_principles_audit_COMPLETED.md) | ✅ Parts 1 & 2 complete 2026-05-17; escalation triggered; Issue #13 re-diagnosed 2026-05-18; Parts 3-8 superseded by Brief 30 | `39a828c`, `587f4c0`, `2be42fe`, `7073908`, `6bd46b3`, `3f8b1ee`, `cc96815` |
 | [`archive/29_Building_Module_Completion_v2_SUPERSEDED.md`](archive/29_Building_Module_Completion_v2_SUPERSEDED.md) | ⚠ Different brief from the audit. Never started; superseded by Brief 30 | — |
-| **[`active/30_dynamic_engine_rebuild.md`](active/30_dynamic_engine_rebuild.md)** | **🟡 active** — Phase 0 + Phase 1.0 done; Phase 1.1+ paused pending Brief 31 close | `8003577`, `cc96815` |
-| Brief 31 — Documentation Reconciliation | 🟡 in flight (this commit) | (this commit) |
+| [`active/30_dynamic_engine_rebuild.md`](active/30_dynamic_engine_rebuild.md) | ⏸ paused — superseded by Brief 32 in active queue until Static is client-ready. Phase 0 + Phase 1.0 frozen; Phase 1.1+ resumes after Brief 32 closes | `8003577`, `cc96815` |
+| Brief 31 — Documentation Reconciliation | ✅ closed 2026-05-18 | `54407e3` |
+| **[`active/32_static_completion.md`](active/32_static_completion.md)** | **🟡 active** — Part 1 in flight (this commit): pause Dynamic in UI; Parts 2-7 land Static fixes + cross-module audit + client-ready Bridgewater baseline | (this commit) |
 
 Brief 31 lands the rules that govern future sessions (CLAUDE.md updates) and the project's self-description (STATUS.md refresh + brief management). Brief 30 Phase 1.1 onwards is then re-authorised against that corrected foundation.
+
+Brief 32 (2026-05-18) pauses Brief 30 in active queue to land a client-ready Bridgewater Static baseline first. Brief 30's Dynamic backend code remains in the tree (frozen, not deleted) — Brief 32 hides Dynamic from the user-facing UI but does not touch `sql_parser.py`, `epjson_assembler.py`, or the simulation API endpoints.

@@ -8,48 +8,33 @@ import ProjectPicker from './ProjectPicker.jsx'
 // Chris UX overhaul (2026-05-17) — app-global engine + unit toggles in the
 // top bar. Replaces per-view toggles in HeatBalance / SummaryView / etc.
 // Flipping either here flips it across every chart and Σ badge in the app.
+//
+// Brief 32 Part 1 (2026-05-18): Dynamic + Both segments hidden from the UI
+// while the Dynamic engine is under reconstruction (Brief 30, paused). The
+// Dynamic backend code (sql_parser.py, epjson_assembler.py, simulation
+// API endpoints) remains in place per Brief 32 §1.5 — only the UI surface
+// changes. The useUISettings engineMode value is still 'static' by default
+// and force-set to 'static' below until the Dynamic engine returns. The
+// commented-out segments restore as-is when Brief 30 resumes.
 function GlobalToggles({ hasSimulation }) {
   const { engineMode, setEngineMode, unit, setUnit } = useUISettings()
+  // Force Static while Dynamic is hidden (Brief 32 Part 1). Without this,
+  // a stale localStorage value of 'dynamic' or 'both' from before the brief
+  // would leak through.
+  useEffect(() => {
+    if (engineMode !== 'static') setEngineMode('static')
+  }, [engineMode, setEngineMode])
   const segCls = (active) =>
     `flex items-center gap-1 px-2 py-1 text-xxs transition-colors ${
       active ? 'bg-white text-navy font-medium shadow-sm' : 'text-mid-grey hover:text-navy'
     }`
-  const dynDisabled = !hasSimulation
   return (
     <div className="flex items-center gap-2">
-      {/* Engine mode — Static / Dynamic / Both */}
-      <div
-        className="flex items-center bg-off-white rounded-md p-0.5 border border-light-grey"
-        title="Engine source — applies to all charts"
-      >
-        <button
-          onClick={() => setEngineMode('static')}
-          className={`${segCls(engineMode === 'static')} rounded`}
-          title="Static — instant in-browser calculation"
-        >
-          <Zap size={10} />
-          Static
-        </button>
-        <button
-          onClick={() => dynDisabled ? null : setEngineMode('dynamic')}
-          disabled={dynDisabled}
-          className={`${segCls(engineMode === 'dynamic')} rounded disabled:opacity-40 disabled:cursor-not-allowed`}
-          title={dynDisabled ? 'No Dynamic run yet — click Run Dynamic first' : 'Dynamic — last EnergyPlus run'}
-        >
-          <Activity size={10} />
-          Dynamic
-        </button>
-        <button
-          onClick={() => dynDisabled ? null : setEngineMode('both')}
-          disabled={dynDisabled}
-          className={`${segCls(engineMode === 'both')} rounded disabled:opacity-40 disabled:cursor-not-allowed`}
-          title={dynDisabled ? 'No Dynamic run yet' : 'Show both engines side by side'}
-        >
-          Both
-        </button>
-      </div>
+      {/* Brief 32 Part 1: engine-mode segmented control hidden. The
+          Static / Dynamic / Both buttons return when Brief 30 closes.
+          See docs/briefs/active/32_static_completion.md §1. */}
 
-      {/* Unit — kWh/m²·a / kWh */}
+      {/* Unit — kWh/m²·a / kWh — remains visible (no Dynamic dependency). */}
       <div
         className="flex items-center bg-off-white rounded-md p-0.5 border border-light-grey"
         title="Display unit — applies to all numbers"
@@ -226,34 +211,37 @@ export default function TopBar() {
             single explicit run trigger; auto on every change was too eager
             on a real Dynamic run (EnergyPlus seconds, not browser ms). */}
 
-        {/* Run Dynamic button — Brief 28a Part 8: tooltip shows the state-
-            aware mode that will actually trigger (envelope-only / envelope-
-            gains / envelope-gains-operation / full), based on which config
-            sections are populated on the current project. */}
-        <button
-          onClick={handleRun}
-          disabled={status === 'running'}
-          title={
-            status === 'running'
-              ? 'EnergyPlus is running…'
-              : `Run EnergyPlus in ${detectedMode ?? 'full'} mode\n` +
-                (detectedMode === 'envelope-only'
-                  ? '— State 1, fastest run; no internal gains, no systems'
-                  : detectedMode === 'envelope-gains'
-                    ? '— State 2; envelope + internal gains, no real systems, no operable windows'
-                    : detectedMode === 'envelope-gains-operation'
-                      ? '— State 2.5; adds operable windows. Falls through to envelope-gains until Brief 30 lands the assembler support.'
-                      : '— State 3; full model: envelope + gains + operation + real systems')
-          }
-          className={`
-            flex items-center gap-1.5 px-3 py-1.5 rounded
-            text-white text-caption font-medium
-            transition-all duration-200 select-none
-            ${buttonClass}
-          `}
-        >
-          {buttonContent}
-        </button>
+        {/* Brief 32 Part 1 (2026-05-18): "Run Dynamic" button hidden while
+            the Dynamic engine is under reconstruction (Brief 30, paused).
+            handleRun / detectedMode / buttonClass / buttonContent stay
+            wired so the button restores cleanly when Brief 30 resumes.
+            Original JSX:
+
+            <button
+              onClick={handleRun}
+              disabled={status === 'running'}
+              title={
+                status === 'running'
+                  ? 'EnergyPlus is running…'
+                  : `Run EnergyPlus in ${detectedMode ?? 'full'} mode\n` +
+                    (detectedMode === 'envelope-only'
+                      ? '— State 1, fastest run; no internal gains, no systems'
+                      : detectedMode === 'envelope-gains'
+                        ? '— State 2; envelope + internal gains, no real systems, no operable windows'
+                        : detectedMode === 'envelope-gains-operation'
+                          ? '— State 2.5; adds operable windows. Falls through to envelope-gains until Brief 30 lands the assembler support.'
+                          : '— State 3; full model: envelope + gains + operation + real systems')
+              }
+              className={`
+                flex items-center gap-1.5 px-3 py-1.5 rounded
+                text-white text-caption font-medium
+                transition-all duration-200 select-none
+                ${buttonClass}
+              `}
+            >
+              {buttonContent}
+            </button>
+        */}
       </header>
 
       {toast && (
