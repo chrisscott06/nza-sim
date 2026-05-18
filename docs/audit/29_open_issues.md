@@ -197,14 +197,65 @@ Status:
 
 ---
 
-## #13 — Dynamic State 1 T_air clamping at 21.0 °C — DIAGNOSED 2026-05-17
+## #13 — Dynamic State 1 T_air clamping at 21.0 °C — FIXED 2026-05-18 (re-diagnosed root cause)
 
 | Field | Value |
 |---|---|
 | Module | Building (envelope-only) |
-| Engine | Dynamic |
+| Engine | Dynamic (via API) |
 | Severity | **S3** |
-| Status | **DIAGNOSED — root cause identified, fix scope below, awaiting decision** |
+| Status | **FIXED** (Brief 30 Phase 1.0 commit) — re-diagnosed root cause, see "Re-diagnosis 2026-05-18" section below. Regression test at `scripts/test_api_simulate_mode.py`. |
+
+### Re-diagnosis 2026-05-18 (Brief 30 Phase 1.0)
+
+The original 2026-05-17 diagnosis below said the cause was "VRF terminal units delivering tempered outdoor air via `ZoneVentilation:DesignFlowRate` even with the thermostat widened to ±60°C / ±100°C." That diagnosis was **one layer too shallow** — the VRF and DesignFlowRate objects were not supposed to be in the State 1 epJSON at all. They appeared because:
+
+**Root cause (corrected):** `POST /api/projects/{id}/simulate` declared its `mode` parameter as `mode: str = "full"`. FastAPI's default for simple-typed parameters with defaults on POST endpoints treats them as **query-string-only**. The JSON body `{"mode":"envelope-only"}` from yesterday's curl was silently dropped, and the endpoint ran with the default `mode="full"`. The resulting simulation emitted the full State 3 epJSON (VRF + DSOA + thermostat at 21°C / 24°C + full occupancy + lights + equipment). The parser then took that SQL and ran `_get_heat_balance_state1` on it, mis-interpreting a full-system simulation as State 1.
+
+**Evidence:** When the API is called with `mode` as a query parameter — `POST .../simulate?mode=envelope-only` — the State 1 assembler path executes correctly and produces:
+
+| Quantity | mode-as-body (silently dropped → mode=full) | mode-as-query (Phase 1.0 fix honoured) |
+|---|---|---|
+| `ZoneHVAC:TerminalUnit:VariableRefrigerantFlow` | 5 | 0 |
+| `ZoneVentilation:DesignFlowRate` | 5 | 0 |
+| `DesignSpecification:OutdoorAir` | 5 | 0 |
+| `Sizing:Zone` | 5 | 0 |
+| Schedule:Constant `state1_heating_setpoint` (−60 °C) | absent | present |
+| Mean T_air | **21.11 °C** (clamped) | **15.51 °C** (free-running) |
+| % hours near 21.0 ± 0.05 K | **29.5%** | **0.4%** (noise floor) |
+| Stdev T_air | 1.87 K | 5.32 K |
+
+### Four-candidate assessment, corrected
+
+| Candidate | Original verdict | Corrected verdict |
+|---|---|---|
+| (a) IdealLoads OA conditioning | "ELIMINATED — actual HVAC is VRF, not IdealLoads" | **NEW NOTE:** the State 1 path actually DOES emit IdealLoads (with state1 ±60/±100 setpoints). The pre-Phase-1.0 baseline had VRF only because mode=full was running, not because the State 1 path emits VRF. |
+| (b) Sizing-phase initialisation | "Partial contribution at most" | Confirmed: with mode=envelope-only correctly invoked, Sizing:Zone is not emitted (assembler skips it). Not the cause. |
+| (c) Warmup days bleed-through | "Eliminated — 43,800 rows clean" | Unchanged. Not the cause. |
+| (d) Schedule:Compact 21°C | "Eliminated — no such schedule" | Unchanged. Not the cause. |
+| (e) VRF + DesignFlowRate not muted | "MOST LIKELY CAUSE" | **WRONG**. VRF and DesignFlowRate were emitted because mode=full ran, not because State 1 mode failed to suppress them. Phase 1.0 corrects the API; State 1 mode WAS already capable of suppressing them. |
+| **(f) NEW — API endpoint silently drops mode parameter from JSON body** | not in original list | **ACTUAL ROOT CAUSE.** Confirmed by query-vs-body test in `scripts/test_api_simulate_mode.py`. |
+
+### Fix shape
+
+`api/routers/projects.py:428` — `simulate_project` endpoint now accepts `mode` from BOTH query string and JSON body via a `SimulateProjectBody` Pydantic model + `Body(default_factory=...)`. Body fields override query defaults when explicitly set. The frontend (which has always used query string, `SimulationContext.jsx:165`) is unaffected. Curl callers using JSON body are now honoured.
+
+### Regression test
+
+`scripts/test_api_simulate_mode.py` exercises three forms:
+1. `POST .../simulate?mode=envelope-only` (query string) → asserts no `ZoneHVAC:*` etc. in epJSON
+2. `POST .../simulate` with body `{"mode":"envelope-only"}` → same assertions
+3. `POST .../simulate` with no mode → asserts default `mode="full"` produces a full-system epJSON
+
+Test passes against the Phase 1.0 backend. Would have caught the original bug.
+
+### Lessons captured
+
+Two Bible lessons added (see `29_bible_lesson_to_append.md`):
+1. API parameter binding can silently disable a feature — only end-to-end tests catch it.
+2. When "the real root cause" keeps being one layer deeper, more layers remain — keep diagnosing.
+
+### Original 2026-05-17 diagnostic (kept for traceability — partially incorrect, see Re-diagnosis above)
 | Diagnostic | `scripts/_state1_strip_regression.py` (renamed from `_issue13_diagnostic.py` in Brief 30 Phase 0) ran a minimal envelope-only EP build with all HVAC, thermostat, sizing, mechanical-vent, and zero-density gain objects stripped. Baseline (with everything) mean T_air = 21.11 °C, 29.5% of all 43,800 rows pinned within ±0.05 K of 21.0; stripped run mean T_air = 14.74 °C, 0.6% near 21.0 (noise floor), stdev jumped 1.87 K → 5.25 K. The clamping was caused by something in the stripped object set. |
 | Wrong initial guess | Issue #13's candidate (a) named `ZoneHVAC:IdealLoadsAirSystem`. The actual epJSON for this project emits `ZoneHVAC:TerminalUnit:VariableRefrigerantFlow` (5 entries) + `ZoneVentilation:DesignFlowRate` (5 entries, balanced-mechanical OA) — not IdealLoads. My pre-diagnostic guess was based on the assembler code path I'd read; the actual epJSON differs because Bridgewater's `systems_config.hvac_type` selects VRF, not the ideal-loads branch. |
 | Eliminated by evidence | (a) IdealLoads — not present in epJSON. (b) Sizing-phase initialisation — partial contribution at most; stripping `Sizing:Zone` alone would have been a much smaller mean shift than the observed 6.4 K. (c) Warmup bleed-through — eliminated: 43,800 rows = 5 zones × 8,760 h cleanly, no warmup contamination. (d) Schedule:Compact 21°C mis-application — no such schedule exists in the model. |
@@ -227,14 +278,12 @@ Status:
 
 ## Total: 13 issues found in Parts 1 + 2 (Building both engines)
 
-By severity (after Chris 2026-05-17 review + Part 2 additions):
-- **S3:** 4 (#1 fixed, #2 open, #6 open, #13 open)
-- **S2:** 6 (#3 open, #4 open, #8 open, #11 open, #12 open) — and the grouping note still applies to #2/#3/#4
-- **S1:** 3 (#5 cosmetic, #7 defer, #9 verify, #10 cleanup) — actually 4
+By severity (after Brief 30 Phase 1.0 re-diagnosis 2026-05-18):
+- **S3:** 4 total — #1 FIXED (commit 39a828c), #13 FIXED (Brief 30 Phase 1.0), #2 open, #6 open
+- **S2:** 5 open — #3, #4, #8, #11, #12 — and the grouping note still applies to #2/#3/#4
+- **S1:** 4 — #5 cosmetic, #7 defer, #9 verify, #10 cleanup
 
-Recount: **S3 = 4, S2 = 5 (#3, #4, #8, #11, #12), S1 = 4 (#5, #7, #9, #10).**
-
-**Brief 29 escalation threshold triggered** (>5 issues at S2+ in a single module: Building has 9 S2+ issues split across Static and Dynamic — 4 in Static counting #6, 5 in Dynamic counting #13). Escalation: notify Chris on sign-off, hold Part 3 until #13 is resolved.
+**Brief 29 escalation threshold (>5 S2+ in a single module)** was triggered pre-Phase-1.0. Now: 4 S2+ open (Building module, both engines). Threshold still on the line; remains a watch-list item for Brief 30 phases.
 
 **Fix-brief grouping decisions:**
 - Issues #2, #3, #4 — single rework of `_calculateEnvelopeOnly`'s permanent-vent block (Chris call 2026-05-17, both engines).

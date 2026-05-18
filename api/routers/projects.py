@@ -20,7 +20,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Body
 from pydantic import BaseModel
 
 from api.db.database import get_db, DEFAULT_BUILDING_CONFIG, DEFAULT_CONSTRUCTION_CHOICES, DEFAULT_SYSTEMS_CONFIG
@@ -424,8 +424,31 @@ async def update_systems(project_id: str, body: dict):
 
 # ── Project simulation ─────────────────────────────────────────────────────────
 
+class SimulateProjectBody(BaseModel):
+    """
+    Optional JSON body for `POST /{project_id}/simulate`.
+
+    Brief 30 Phase 1.0 (2026-05-18) — added to fix the silent parameter-
+    dropping bug behind Brief 29 Issue #13. Previously the endpoint
+    accepted `mode` and `scenario_name` only as query parameters (FastAPI
+    default for simple-typed defaults), so JSON-body callers like the
+    `curl -d '{"mode":"envelope-only"}'` pattern silently got `mode="full"`
+    and a parser that mis-interpreted the resulting SQL as State 1.
+
+    Body fields override query parameters when explicitly set. Either form
+    is honoured; both are tested in scripts/test_api_simulate_mode.py.
+    """
+    scenario_name: str | None = None
+    mode: str | None = None
+
+
 @router.post("/{project_id}/simulate")
-async def simulate_project(project_id: str, scenario_name: str = "Baseline", mode: str = "full"):
+async def simulate_project(
+    project_id: str,
+    body: SimulateProjectBody = Body(default_factory=SimulateProjectBody),
+    scenario_name: str = "Baseline",
+    mode: str = "full",
+):
     """
     Run a simulation for the given project.
 
@@ -441,7 +464,18 @@ async def simulate_project(project_id: str, scenario_name: str = "Baseline", mod
                           systems and no operable windows. Densities + derived
                           schedules emitted from `building_config.occupancy.*`
                           + `building_config.gains.*` (v2.3). Brief 27 Part 3.
+
+    Brief 30 Phase 1.0 (2026-05-18): `mode` and `scenario_name` are
+    accepted from EITHER query string OR JSON body. Body values override
+    query defaults when explicitly set. The frontend uses query string
+    (SimulationContext.jsx:165); curl callers can use either form.
     """
+    # Body fields override query params when set. The Pydantic model uses
+    # None as "not provided" so we can distinguish from explicit empty.
+    if body.scenario_name is not None:
+        scenario_name = body.scenario_name
+    if body.mode is not None:
+        mode = body.mode
     # Load project from DB
     async with get_db() as db:
         cursor = await db.execute(

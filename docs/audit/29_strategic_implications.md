@@ -3,6 +3,8 @@
 **Status:** Decision document. Chris decides. No fixes, no fix-brief.
 **Date:** 2026-05-17. Author: Claude.
 
+> **Correction appended 2026-05-18 (Brief 30 Phase 1.0).** The narrative in §1 of this document said the top-bar "Dynamic" toggle's State 1 path was structurally broken because muted setpoints failed to mute VRF + DesignSpecOutdoorAir. That diagnosis was one layer too shallow. The actual root cause: the `POST /api/projects/{id}/simulate` endpoint silently dropped the `mode` parameter when supplied in a JSON body (FastAPI default for simple-typed parameters is query-string-only). Every JSON-body caller — including yesterday's Brief 29 Part 2 diagnostic baseline `b8db113e` — got `mode="full"` and a parser that mis-interpreted the resulting SQL as State 1. **When the API endpoint correctly receives `mode=envelope-only`, the assembler's State 1 path DOES strip VRF, DesignFlowRate, DSOA, and Sizing:Zone correctly.** T_air runs free at 15.5 °C mean with 0.4% clamping at 21.0 (noise floor). See `30_state1_corrected_baseline.md` and `29_open_issues.md #13` for the corrected diagnostic. The Brief 30 Phase 1.1 strip (removing the still-muted IdealLoads + thermostat + state1 setpoints + zero-density People/Lights/Equipment + louvres) remains required. Issue #8 (parser re-derives heat balance terms in Python instead of consuming EP per-element outputs) is **unchanged** by this correction — that finding holds independent of how the simulation was invoked.
+
 ---
 
 ## 1. What the architecture actually does, vs what the briefs claim
