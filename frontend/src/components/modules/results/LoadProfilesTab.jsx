@@ -18,7 +18,7 @@ const HOUR_LABELS = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2
 
 const DAY_TYPES = [
   { key: 'peak_heating',   label: 'Peak Heating Day',      accent: '#DC2626' },
-  { key: 'peak_cooling',   label: 'Peak Cooling Day',      accent: '#3B82F6' },
+  { key: 'peak_cooling',   label: 'Peak Cooling Day',      accent: '#00AEEF' },
   { key: 'typical_winter', label: 'Typical Winter',        accent: '#8B5CF6' },
   { key: 'typical_summer', label: 'Typical Summer',        accent: '#ECB01F' },
 ]
@@ -26,12 +26,12 @@ const DAY_TYPES = [
 // All series with fuel type tags
 const ALL_SERIES = [
   { key: 'heating_kWh',   label: 'Heating',          color: '#DC2626', fuel: 'electricity' },
-  { key: 'cooling_kWh',   label: 'Cooling',          color: '#3B82F6', fuel: 'electricity' },
+  { key: 'cooling_kWh',   label: 'Cooling',          color: '#00AEEF', fuel: 'electricity' },
   { key: 'lighting_kWh',  label: 'Lighting',         color: '#ECB01F', fuel: 'electricity' },
   { key: 'equipment_kWh', label: 'Equipment',        color: '#8B5CF6', fuel: 'electricity' },
-  { key: 'dhw_kWh',       label: 'DHW',              color: '#F97316', fuel: 'gas'         },
+  { key: 'dhw_kWh',       label: 'DHW',              color: '#EC4899', fuel: 'gas'         },
   { key: 'fan_kWh',       label: 'Fans',             color: '#7C3AED', fuel: 'electricity' },
-  { key: 'vent_loss_kWh', label: 'Ventilation loss', color: '#06B6D4', fuel: 'electricity' },
+  { key: 'vent_loss_kWh', label: 'Ventilation loss', color: '#14B8A6', fuel: 'electricity' },
 ]
 
 const FUEL_FILTERS = [

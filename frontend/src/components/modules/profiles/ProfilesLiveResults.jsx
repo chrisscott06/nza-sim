@@ -7,13 +7,17 @@
 
 import { useState, useMemo } from 'react'
 
+// Brief 37 Part 1: cooling_setpoint and DHW aligned to the new service
+// tokens. occupancy stays blue-500 — it's a Profiles-tab-local convention
+// (not a Systems service token); the hex collision with the legacy cooling
+// token is no longer meaningful because cooling moved to cyan-bright.
 const TYPE_COLOR = {
-  occupancy:         '#3B82F6',
+  occupancy:         '#3B82F6', // blue-500 — Profiles-local convention
   lighting:          '#F59E0B',
   equipment:         '#8B5CF6',
   heating_setpoint:  '#DC2626',
-  cooling_setpoint:  '#06B6D4',
-  dhw:               '#F97316',
+  cooling_setpoint:  '#00AEEF', // was '#06B6D4' cyan-500
+  dhw:               '#EC4899', // was '#F97316' orange-500
 }
 
 const DAY_TABS = [

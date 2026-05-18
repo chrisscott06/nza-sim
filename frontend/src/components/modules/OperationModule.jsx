@@ -51,7 +51,7 @@ import ChartTotalsBadge from '../shared/ChartTotalsBadge.jsx'
 // magnitude is visible in context, not in isolation.
 import DivergingMonthlyChart from '../shared/DivergingMonthlyChart.jsx'
 
-const ACCENT = '#0E7490'  // operation theme — cyan-700
+const ACCENT = '#0F766E'  // operation theme — teal-700 (Brief 37 Part 1: was '#0E7490' cyan-700)
 
 const FACADES = [
   { num: 1, key: 'north' },
@@ -736,7 +736,12 @@ function OperationMonthlyView({ instantResult, openings }) {
 
   // Per-opening colour palette — kept consistent with the per-opening
   // legend so the user can identify which slice belongs to which entry.
-  const NV_COLOURS = ['#0E7490','#0891B2','#06B6D4','#22D3EE','#67E8F9','#A5F3FC']
+  // Brief 37 Part 1: first entry mirrors the Operation accent (now teal-700).
+  // The remaining shades stay cyan-progression — natural ventilation is
+  // conceptually distinct from mechanical ventilation (which is Systems
+  // module teal-500), so a cyan stack for NV openings is fine and keeps
+  // the per-opening palette differentiated from Systems' ventilation row.
+  const NV_COLOURS = ['#0F766E','#0891B2','#06B6D4','#22D3EE','#67E8F9','#A5F3FC']
   // Build one losses stack for fabric + one per operable opening, so the
   // user can see (a) how big nat-vent is vs fabric, (b) which opening
   // contributes how much.
@@ -1201,13 +1206,13 @@ function OperationLiveResultsStrip({ instantResult, openings }) {
       sub: 'State 2 (envelope + gains + operable)',
     },
     {
-      label: 'Cooling demand', accent: '#3B82F6',
+      label: 'Cooling demand', accent: '#00AEEF',
       value: demand?.cooling_demand_mwh != null ? demand.cooling_demand_mwh.toFixed(1) : '—',
       unit: 'MWh/yr',
       sub: 'with internal gains',
     },
     {
-      label: 'Operable loss', accent: '#0E7490',
+      label: 'Operable loss', accent: '#0F766E',
       value: totalNvKwh > 1000 ? (totalNvKwh / 1000).toFixed(1) : Math.round(totalNvKwh).toString(),
       unit: totalNvKwh > 1000 ? 'MWh/yr' : 'kWh/yr',
       sub: `${nv.length} opening${nv.length === 1 ? '' : 's'} (natural ventilation)`,

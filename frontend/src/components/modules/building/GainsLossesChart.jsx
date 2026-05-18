@@ -40,7 +40,7 @@ const HEADER  = 18
 const C = {
   infiltration: '#9E9E9E',
   wall:         '#A1887F',
-  ventilation:  '#06B6D4',
+  ventilation:  '#14B8A6',
   glazing:      '#4FC3F7',
   roof:         '#8D6E63',
   floor:        '#6D4C41',
@@ -108,14 +108,14 @@ function SolarTooltip({ pos, breakdownH, breakdownC, totalH, totalC }) {
         </div>
         {totalC > 0.1 && (
           <>
-            <p className="text-xxs font-semibold text-navy mb-1" style={{ color: '#3B82F6' }}>
+            <p className="text-xxs font-semibold text-navy mb-1" style={{ color: '#00AEEF' }}>
               Cooling driver — {totalC.toFixed(1)} MWh
             </p>
             <div className="space-y-0.5">
               {breakdownC.map(b => (
                 <div key={b.label} className="flex items-center justify-between gap-3">
                   <span className="text-xxs text-mid-grey">{b.label}</span>
-                  <span className="text-xxs font-medium" style={{ color: '#3B82F6' }}>{b.val.toFixed(1)}</span>
+                  <span className="text-xxs font-medium" style={{ color: '#00AEEF' }}>{b.val.toFixed(1)}</span>
                 </div>
               ))}
             </div>

@@ -21,7 +21,7 @@ const ACCENT_COLORS = {
   coral:          '#F48379',
   navy:           '#2B2A4C',
   'heating-red':  '#DC2626',
-  'cooling-blue': '#3B82F6',
+  'cooling-blue': '#00AEEF', // Brief 37 Part 1: unified to COOLING_COLOUR cyan-bright (was '#3B82F6' blue-500)
   amber:          '#F59E0B',
   slate:          '#64748B',
 }

@@ -12,7 +12,7 @@ const NODE_COLORS = {
   internal_gains:'#FB923C',
   // Systems
   heating_sys:   '#DC2626',
-  cooling_sys:   '#3B82F6',
+  cooling_sys:   '#00AEEF',
   lighting_sys:  '#ECB01F',
   equipment_sys: '#8B5CF6',
   // Losses
@@ -21,7 +21,7 @@ const NODE_COLORS = {
   roof:          '#6B7280',
   ground_floor:  '#78350F',
   infiltration:  '#9CA3AF',
-  ventilation:   '#06B6D4',
+  ventilation:   '#14B8A6',
   // Delivered
   heating_del:   '#FCA5A5',
   cooling_del:   '#BAE6FD',

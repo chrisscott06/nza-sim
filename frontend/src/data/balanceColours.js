@@ -21,6 +21,48 @@ export const INTERNAL_COLOURS = {
 export const HEATING_COLOUR = '#DC2626' // red-600
 export const COOLING_COLOUR = '#00AEEF' // Systems theme cyan
 
+// Brief 37 Part 1 (2026-05-18): canonical Systems service-colour table.
+// Single source of truth for the per-service accents used by the unified
+// schedule editor, Systems daily-stacks, Systems Sankey, Results tabs,
+// and any other consumer rendering per-service breakdowns.
+//
+// Decisions (Chris, chat-form authorisation 2026-05-18):
+//   heating    #DC2626  red-600       (unchanged)
+//   cooling    #00AEEF  cyan-bright   (unified — was mixed #3B82F6 in
+//                                       Systems daily-stacks vs #00AEEF
+//                                       in the global COOLING_COLOUR)
+//   dhw        #EC4899  pink-500      (was #F97316 orange-500)
+//   fans       #14B8A6  teal-500      (was #06B6D4 cyan-500 — conflicted
+//                                       with Systems module identity cyan)
+//   lighting   #F59E0B  amber-500     (unchanged; electricity end-use,
+//                                       NOT to be confused with Internal
+//                                       Gains' lighting-as-heat-gain,
+//                                       which is violet-300)
+//   small_pwr  #8B5CF6  violet-500    (unchanged)
+//
+// Module-wide identity accents (separate from service accents — these
+// drive the module top stripe / sidebar active indicator / tab strip):
+//   building    not exported here (lives in moduleThemes.js)
+//   operation   '#0F766E' teal-700  (was '#0E7490' cyan-700 — "dark teal"
+//                                     per chat-form authorisation)
+//   systems     '#00AEEF' cyan-bright  (unchanged; same as cooling
+//                                       service — intentional)
+//   internal_gains  '#EA580C' orange  (unchanged; gain categories
+//                                      themselves are the three purples)
+export const SYSTEMS_SERVICE_COLOURS = {
+  heating:     '#DC2626', // red-600
+  cooling:     '#00AEEF', // cyan-bright (= COOLING_COLOUR)
+  dhw:         '#EC4899', // pink-500
+  fans:        '#14B8A6', // teal-500
+  ventilation: '#14B8A6', // alias for fans (mech-vent / extract / supply)
+  lighting:    '#F59E0B', // amber-500 (Systems electricity end-use)
+  small_power: '#8B5CF6', // violet-500
+}
+
+export const OPERATION_ACCENT      = '#0F766E' // teal-700
+export const SYSTEMS_ACCENT        = '#00AEEF' // cyan-bright
+export const INTERNAL_GAINS_ACCENT = '#EA580C' // orange-600
+
 // Fabric losses — grey family for conductive elements;
 // air-flow losses (infiltration + permanent vents) paired in a blue family
 // per Brief 33 Part 2 (2026-05-18) so the eye groups them as "air-flow"

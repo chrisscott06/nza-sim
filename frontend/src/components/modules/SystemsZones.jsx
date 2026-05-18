@@ -120,13 +120,15 @@ function AccordionSection({ id, title, summary, isOpen, onToggle, children, acce
 
 // ── Mini schedule sparkline (shown at bottom of each open accordion section) ──
 
+// Brief 37 Part 1: cooling_setpoint cyan-bright, dhw pink-500. occupancy
+// stays blue-500 (Profiles-local convention; not a Systems service token).
 const SCHED_COLOURS = {
   heating_setpoint: '#DC2626',
-  cooling_setpoint: '#06B6D4',
+  cooling_setpoint: '#00AEEF',
   lighting:         '#F59E0B',
   equipment:        '#8B5CF6',
   occupancy:        '#3B82F6',
-  dhw:              '#F97316',
+  dhw:              '#EC4899',
 }
 
 function MiniScheduleSparkline({ schedule, onClick }) {

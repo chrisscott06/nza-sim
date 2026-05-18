@@ -26,12 +26,12 @@ const MONTH_NAMES  = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'S
 
 const ALL_SERIES = [
   { key: 'heating_kWh',   label: 'Heating',          color: '#DC2626', fuel: 'electricity' },
-  { key: 'cooling_kWh',   label: 'Cooling',          color: '#3B82F6', fuel: 'electricity' },
+  { key: 'cooling_kWh',   label: 'Cooling',          color: '#00AEEF', fuel: 'electricity' },
   { key: 'lighting_kWh',  label: 'Lighting',         color: '#ECB01F', fuel: 'electricity' },
   { key: 'equipment_kWh', label: 'Equipment',        color: '#8B5CF6', fuel: 'electricity' },
-  { key: 'dhw_kWh',       label: 'DHW',              color: '#F97316', fuel: 'gas'         },
+  { key: 'dhw_kWh',       label: 'DHW',              color: '#EC4899', fuel: 'gas'         },
   { key: 'fan_kWh',       label: 'Fans',             color: '#7C3AED', fuel: 'electricity' },
-  { key: 'vent_loss_kWh', label: 'Ventilation loss', color: '#06B6D4', fuel: 'electricity' },
+  { key: 'vent_loss_kWh', label: 'Ventilation loss', color: '#14B8A6', fuel: 'electricity' },
 ]
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

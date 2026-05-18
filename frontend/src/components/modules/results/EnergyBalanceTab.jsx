@@ -15,12 +15,12 @@ const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct
 
 const SERIES = [
   { key: 'heating_kWh',     label: 'Heating',     color: '#DC2626' },
-  { key: 'cooling_kWh',     label: 'Cooling',     color: '#3B82F6' },
+  { key: 'cooling_kWh',     label: 'Cooling',     color: '#00AEEF' },
   { key: 'fans_kWh',        label: 'Fans',        color: '#8B5CF6' },
   { key: 'lighting_kWh',    label: 'Lighting',    color: '#F59E0B' },
   { key: 'equipment_kWh',   label: 'Equipment',   color: '#64748B' },
-  { key: 'dhw_kWh',         label: 'DHW',         color: '#F97316' },
-  { key: 'ventilation_kWh', label: 'Ventilation', color: '#06B6D4' },
+  { key: 'dhw_kWh',         label: 'DHW',         color: '#EC4899' },
+  { key: 'ventilation_kWh', label: 'Ventilation', color: '#14B8A6' },
 ]
 
 function CustomTooltip({ active, payload, label }) {

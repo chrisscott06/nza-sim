@@ -65,11 +65,12 @@ const FUEL_COLOURS = {
   gas:         '#DC2626',
   district:    '#8B5CF6',
 }
+// Brief 37 Part 1: aligned to SYSTEMS_SERVICE_COLOURS in balanceColours.js.
 const DEMAND_COLOURS = {
   space_heating: '#DC2626',
-  space_cooling: '#3B82F6',
-  dhw:           '#F97316',
-  fans:          '#06B6D4',
+  space_cooling: '#00AEEF',
+  dhw:           '#EC4899',
+  fans:          '#14B8A6',
   lighting:      '#F59E0B',
   small_power:   '#8B5CF6',
 }
@@ -729,7 +730,7 @@ function SystemsSankey({ consumption, sysCfg }) {
               {/* System node */}
               {!isUnserved && (
                 <>
-                  <rect x={col1X - nodeW} y={cy - 14} width={nodeW} height={28} rx={4} fill="white" stroke="#0E7490" />
+                  <rect x={col1X - nodeW} y={cy - 14} width={nodeW} height={28} rx={4} fill="white" stroke="#0F766E" />
                   <text x={col1X - nodeW / 2} y={cy + 4} fontSize="11" fill="#0C4A6E" textAnchor="middle">{systemLabel(it, sysCfg)}</text>
 
                   {/* System → carrier(s) */}
@@ -802,9 +803,9 @@ function SystemsProfiles({ result }) {
 
   const stacks = [
     { key: 'heating',  label: 'Heating delivered',     color: '#DC2626', daily_kwh: dpEng.delivered_kwh_per_day?.heating },
-    { key: 'cooling',  label: 'Cooling delivered',     color: '#3B82F6', daily_kwh: dpEng.delivered_kwh_per_day?.cooling },
-    { key: 'dhw',      label: 'DHW delivered',         color: '#F97316', daily_kwh: dpEng.delivered_kwh_per_day?.dhw },
-    { key: 'fans',     label: 'Fan power',             color: '#06B6D4', daily_kwh: dpEng.delivered_kwh_per_day?.fans },
+    { key: 'cooling',  label: 'Cooling delivered',     color: '#00AEEF', daily_kwh: dpEng.delivered_kwh_per_day?.cooling },
+    { key: 'dhw',      label: 'DHW delivered',         color: '#EC4899', daily_kwh: dpEng.delivered_kwh_per_day?.dhw },
+    { key: 'fans',     label: 'Fan power',             color: '#14B8A6', daily_kwh: dpEng.delivered_kwh_per_day?.fans },
     { key: 'lighting', label: 'Lighting',              color: '#F59E0B', daily_kwh: dpEng.delivered_kwh_per_day?.lighting },
     { key: 'sp',       label: 'Small power',           color: '#8B5CF6', daily_kwh: dpEng.delivered_kwh_per_day?.small_power },
   ]
@@ -998,10 +999,10 @@ function SystemsMonthly({ consumption, result }) {
             </div>
             <div className="text-xxs text-mid-grey">{m}</div>
             {/* Demand line indicators below */}
-            <div className="text-xxs tabular-nums" style={{ color: '#DC2626' }}>
+            <div className="text-xxs tabular-nums" style={{ color: '#DC2626' /* heating red */ }}>
               {heatDemandM[i] > 100 ? `↓${Math.round(heatDemandM[i])}` : ''}
             </div>
-            <div className="text-xxs tabular-nums" style={{ color: '#3B82F6' }}>
+            <div className="text-xxs tabular-nums" style={{ color: '#00AEEF' /* cooling cyan */ }}>
               {coolDemandM[i] > 100 ? `↑${Math.round(coolDemandM[i])}` : ''}
             </div>
           </div>

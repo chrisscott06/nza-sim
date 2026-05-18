@@ -478,9 +478,9 @@ export default function SystemsLiveResults({ libraryData = {}, scheduleProfiles 
             <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1.5">Energy by end use</p>
             {[
               { label: 'Heating',     val: result.annual_heating_kWh,   color: '#DC2626' },
-              { label: 'Cooling',     val: result.annual_cooling_kWh,   color: '#3B82F6' },
-              { label: 'DHW',         val: result.annual_dhw_kWh,       color: '#F97316' },
-              { label: 'Fans',        val: result.annual_fans_kWh,      color: '#06B6D4' },
+              { label: 'Cooling',     val: result.annual_cooling_kWh,   color: '#00AEEF' },
+              { label: 'DHW',         val: result.annual_dhw_kWh,       color: '#EC4899' },
+              { label: 'Fans',        val: result.annual_fans_kWh,      color: '#14B8A6' },
               { label: 'Lighting',    val: result.annual_lighting_kWh,  color: '#F59E0B' },
               { label: 'Small power', val: result.annual_equipment_kWh, color: '#64748B' },
             ].map(u => {

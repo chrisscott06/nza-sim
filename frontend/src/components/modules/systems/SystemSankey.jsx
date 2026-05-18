@@ -25,9 +25,9 @@ const LINK_COLORS = {
   electricity: '#ECB01F',   // gold        — grid electricity
   gas:         '#E74C3C',   // orange-red  — gas
   heating:     '#DC2626',   // dark red    — space heating delivered
-  cooling:     '#3B82F6',   // blue        — space cooling delivered
-  dhw:         '#F97316',   // orange      — DHW delivered
-  air:         '#06B6D4',   // cyan        — ventilation air
+  cooling:     '#00AEEF',   // cyan-bright — space cooling delivered (Brief 37 Part 1: was '#3B82F6' blue-500)
+  dhw:         '#EC4899',   // pink-500    — DHW delivered (Brief 37 Part 1: was '#F97316' orange-500)
+  air:         '#14B8A6',   // teal-500    — ventilation air (Brief 37 Part 1: was '#06B6D4' cyan-500)
   waste:       '#D4D4D4',   // light grey  — heat rejection / flue loss (solid)
   recovered:   '#16A34A',   // green       — recovered / cascaded heat (dashed)
   default:     '#CCCCCC',

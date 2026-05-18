@@ -193,7 +193,7 @@ function MonthlyChart({ monthly }) {
               {/* Cooling bar (upward) */}
               <div style={{ height: BAR_H, display: 'flex', alignItems: 'flex-end' }}>
                 <div
-                  style={{ height: cH, background: '#3B82F6', width: '100%', borderRadius: '1px 1px 0 0', minWidth: 4 }}
+                  style={{ height: cH, background: '#00AEEF', width: '100%', borderRadius: '1px 1px 0 0', minWidth: 4 }}
                   title={`${MONTH_ABBR[i]}: cooling ${Math.round(cKwh)} kWh`}
                 />
               </div>
@@ -294,13 +294,13 @@ export default function LiveResultsPanel({ libraryData = {}, onSankeyExpand }) {
               label="Annual cooling"
               value={fmtMWh(result.annual_cooling_kWh)}
               unit="MWh"
-              color="#3B82F6"
+              color="#00AEEF"
             />
             <Metric
               label="Annual DHW"
               value={fmtMWh(result.annual_dhw_kWh)}
               unit="MWh"
-              color="#F97316"
+              color="#EC4899"
             />
             <Metric
               label="Carbon intensity"

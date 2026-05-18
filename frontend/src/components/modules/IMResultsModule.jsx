@@ -36,11 +36,13 @@ const FUEL_COLOURS = {
   gas:         '#DC2626',
   district:    '#8B5CF6',
 }
+// Brief 37 Part 1: aligned to SYSTEMS_SERVICE_COLOURS in balanceColours.js.
+// cooling cyan-bright, dhw pink-500, ventilation teal-500.
 const CATEGORY_COLOURS = {
   heating:     '#DC2626',
-  cooling:     '#3B82F6',
-  dhw:         '#F97316',
-  ventilation: '#06B6D4',
+  cooling:     '#00AEEF',
+  dhw:         '#EC4899',
+  ventilation: '#14B8A6',
   lighting:    '#F59E0B',
   small_power: '#8B5CF6',
 }

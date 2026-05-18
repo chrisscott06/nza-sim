@@ -11,7 +11,7 @@ import { BarChart3, AlertTriangle, CheckCircle2, GitCompareArrows } from 'lucide
 /* ── Donut chart colours (end-use breakdown) ──────────────────────────────── */
 const END_USE_COLORS = {
   Heating:   '#DC2626',
-  Cooling:   '#3B82F6',
+  Cooling:   '#00AEEF',
   Lighting:  '#ECB01F',
   Equipment: '#8B5CF6',
   Other:     '#95A5A6',

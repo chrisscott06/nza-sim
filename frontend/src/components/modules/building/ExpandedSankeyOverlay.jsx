@@ -25,8 +25,8 @@ const C = {
   roof:        '#8D6E63',
   floor:       '#6D4C41',
   infil:       '#9E9E9E',
-  vent:        '#06B6D4',
-  cooling:     '#3B82F6',
+  vent:        '#14B8A6',
+  cooling:     '#00AEEF',
 }
 
 // ── Build Sankey graph data from instant-calc result ──────────────────────────

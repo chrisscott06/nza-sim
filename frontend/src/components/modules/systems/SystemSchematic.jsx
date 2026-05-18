@@ -131,7 +131,7 @@ export default function SystemSchematic() {
             x={150} y={130} w={120} h={50}
             label={ventLabel}
             sublabel={hreLabel}
-            color="#06B6D4"
+            color="#14B8A6"
             icon=""
           />
 
@@ -140,7 +140,7 @@ export default function SystemSchematic() {
             x={150} y={200} w={120} h={50}
             label={dhwLabel}
             sublabel={hasASHP ? '+ ASHP preheat' : null}
-            color="#F97316"
+            color="#EC4899"
             icon=""
           />
 
@@ -172,19 +172,19 @@ export default function SystemSchematic() {
 
           {/* ── Delivered energy (right) ── */}
           <OutputNode x={450} y={80}  label="Space heating" color="#DC2626" />
-          <OutputNode x={450} y={115} label="Space cooling"  color="#3B82F6" />
-          <OutputNode x={450} y={155} label="Fresh air"      color="#06B6D4" />
-          <OutputNode x={450} y={225} label="Hot water"      color="#F97316" />
+          <OutputNode x={450} y={115} label="Space cooling"  color="#00AEEF" />
+          <OutputNode x={450} y={155} label="Fresh air"      color="#14B8A6" />
+          <OutputNode x={450} y={225} label="Hot water"      color="#EC4899" />
           <OutputNode x={450} y={279} label="Illumination"   color="#F59E0B" />
 
           {/* HVAC → Heating */}
           <Arrow x1={270} y1={75}  x2={422} y2={80}  color="#DC2626" width={2} />
           {/* HVAC → Cooling */}
-          <Arrow x1={270} y1={90}  x2={422} y2={115} color="#3B82F6" width={1.5} />
+          <Arrow x1={270} y1={90}  x2={422} y2={115} color="#00AEEF" width={1.5} />
           {/* Vent → Fresh air */}
-          <Arrow x1={270} y1={155} x2={422} y2={155} color="#06B6D4" width={1.5} />
+          <Arrow x1={270} y1={155} x2={422} y2={155} color="#14B8A6" width={1.5} />
           {/* DHW → Hot water */}
-          <Arrow x1={270} y1={225} x2={422} y2={225} color="#F97316" width={2} />
+          <Arrow x1={270} y1={225} x2={422} y2={225} color="#EC4899" width={2} />
           {/* Lighting → Illumination */}
           <Arrow x1={270} y1={279} x2={422} y2={279} color="#F59E0B" width={1.5} />
 
@@ -193,9 +193,9 @@ export default function SystemSchematic() {
             <g>
               <path
                 d="M 270 145 Q 330 120 270 80"
-                fill="none" stroke="#06B6D4" strokeWidth="1.5" strokeDasharray="4 2"
+                fill="none" stroke="#14B8A6" strokeWidth="1.5" strokeDasharray="4 2"
               />
-              <text x={335} y={115} fontSize="7" fill="#06B6D4">heat recovery</text>
+              <text x={335} y={115} fontSize="7" fill="#14B8A6">heat recovery</text>
             </g>
           )}
 

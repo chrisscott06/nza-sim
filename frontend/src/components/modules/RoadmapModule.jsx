@@ -52,9 +52,9 @@ const TYPE_COLOURS = {
   fabric_walls:        '#A1887F',
   fabric_roof:         '#A1887F',
   fabric_glazing:      '#A1887F',
-  systems_dhw_swap:    '#F97316',
+  systems_dhw_swap:    '#EC4899',
   systems_heating_swap:'#DC2626',
-  ventilation_add_hre: '#06B6D4',
+  ventilation_add_hre: '#14B8A6',
   operation_lpd:       '#F59E0B',
   operation_setpoint:  '#8B5CF6',
 }

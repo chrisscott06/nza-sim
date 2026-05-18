@@ -1,5 +1,49 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-18 — Brief 37 Part 1: Colour token sweep (in flight)
+
+**State:** `single_commit_in_flight` — colour-token foundation for Brief 37's unified schedule editor. No editor work or schema work in this Part; that's Parts 2 + 3.
+
+**Brief 37 spec** lands as `docs/briefs/active/37_unified_schedule_editor.md` in this commit (chat-form authorisation; brief-file-into-repo folded into Part 1 per the Brief 32/33 pattern).
+
+**Decided palette (Chris, chat-form authorisation 2026-05-18):**
+- Operation module-wide accent: `#0E7490` cyan-700 → `#0F766E` teal-700 ("dark teal")
+- Systems cooling: unified to `#00AEEF` cyan-bright (was mixed — `#3B82F6` in daily-stacks vs `#00AEEF` in `COOLING_COLOUR`)
+- Systems DHW: `#F97316` orange-500 → `#EC4899` pink-500
+- Systems ventilation (fans): `#06B6D4` cyan-500 → `#14B8A6` teal-500
+- Heating, lighting, small power unchanged
+
+**What's landing in this commit:**
+- `frontend/src/data/balanceColours.js` — new canonical `SYSTEMS_SERVICE_COLOURS` table + `OPERATION_ACCENT`, `SYSTEMS_ACCENT`, `INTERNAL_GAINS_ACCENT` exports. Documented per-token decision rationale in the header comments.
+- `frontend/src/data/chartTokens.js` — `ENDUSE_COLORS` + `FABRIC_COLORS.ventilation` updated to match.
+- `frontend/src/components/modules/OperationModule.jsx` — `ACCENT` flipped; `NV_COLOURS[0]` flipped to match (rest of cyan progression kept — NV is conceptually distinct from Systems mech vent); cooling demand + operable loss strip accents updated.
+- `frontend/src/components/modules/SystemsModule.jsx` — `DEMAND_COLOURS` + daily-stack arrays + cooling-demand readout in the monthly stack + one Sankey node stroke (was Operation cyan-700, now teal-700).
+- `frontend/src/components/modules/IMResultsModule.jsx` — `CATEGORY_COLOURS`.
+- `frontend/src/components/modules/systems/SystemSankey.jsx` — `LINK_COLORS` cooling/dhw/air. `NODE_COLORS.building` left as warm-orange (not a DHW token).
+- `frontend/src/components/modules/systems/SystemsLiveResults.jsx` — end-use breakdown rows.
+- `frontend/src/components/modules/systems/SystemSchematic.jsx` — DHW box, Space cooling / Fresh air / Hot water output nodes, arrows, MVHR heat-recovery dashes.
+- `frontend/src/components/modules/SystemsZones.jsx` — `SCHED_COLOURS`.
+- `frontend/src/components/modules/RoadmapModule.jsx` — intervention colour tokens for DHW swap + ventilation HRE add.
+- `frontend/src/components/modules/results/{EnergyBalanceTab,EnergyFlowsTab,FullYearView,LoadProfilesTab,OverviewTab,FabricAnalysisTab}.jsx` — per-tab service colour rows.
+- `frontend/src/components/modules/building/{ExpandedSankeyOverlay,GainsLossesChart,LiveResultsPanel}.jsx` — building-view service colour tokens.
+- `frontend/src/components/modules/profiles/ProfilesLiveResults.jsx` — cooling_setpoint + dhw (occupancy kept blue-500 as Profiles-local convention).
+- `frontend/src/components/chart/DataCard.jsx` — `cooling-blue` palette token unified to cyan-bright.
+
+**Deliberately NOT touched (semantic preservation):**
+- `WeatherModule.jsx` wind KPI `#06B6D4` — that's wind/sky, not ventilation.
+- `SystemSankey.jsx` `NODE_COLORS.building` `#F97316` — labelled "warm orange — building thermal node", not a DHW token.
+- `balanceColours.js` `SOLAR_COLOURS.east` `#F97316` — that's the east-facade solar gain, not DHW.
+- `OperationModule.jsx` `NV_COLOURS[2…5]` — natural-ventilation gradient stack, conceptually distinct from Systems mech vent.
+- "Fans" row in `EnergyBalanceTab.jsx` + `FullYearView.jsx` + `LoadProfilesTab.jsx` — kept as the original violet/violet-600 colour. "Fans" in those tables is a separate row from "Ventilation"; collapsing them into one teal would lose the visual distinction.
+
+**Build:** clean, 7.86 s, 2.51 MB JS (gzip 695 kB), zero errors.
+
+**Verification:** browser walkthrough by Chris on the next `go.bat` boot — Operation header reads dark teal, Systems DHW reads pink, Systems fan rows read teal-500, cooling everywhere reads cyan-bright. Spot-check that no regression in chart legibility (the brief's "When to escalate" condition).
+
+**Next:** Brief 37 Part 2 — build `UnifiedScheduleEditor` component (in isolation; no consumer wiring yet).
+
+---
+
 ## ✅ Session 2026-05-18 — Brief 36 close: Internal Gains audited and polished, shared pop-out schedule editor live
 
 **State:** `closed` (this commit). Brief 36 Parts 1–4 all complete; brief archived.

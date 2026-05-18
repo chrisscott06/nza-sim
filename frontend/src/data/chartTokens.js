@@ -53,15 +53,17 @@ export const SCENARIO_COLORS = [
   '#8B5CF6', // purple
 ]
 
-/** End-use energy colours — keyed by end use */
+/** End-use energy colours — keyed by end use
+ *  Brief 37 Part 1: cooling cyan-bright, dhw pink-500, ventilation teal-500
+ *  (aligned with SYSTEMS_SERVICE_COLOURS in balanceColours.js). */
 export const ENDUSE_COLORS = {
   heating:      '#DC2626',
-  cooling:      '#3B82F6',
+  cooling:      '#00AEEF',
   lighting:     '#ECB01F',
   equipment:    '#8B5CF6',
   fans:         '#7C3AED',
-  dhw:          '#F97316',
-  ventilation:  '#06B6D4',
+  dhw:          '#EC4899',
+  ventilation:  '#14B8A6',
   infiltration: '#9E9E9E',
 }
 
@@ -72,7 +74,7 @@ export const FABRIC_COLORS = {
   roof:         '#78909C',
   floor:        '#795548',
   infiltration: '#9E9E9E',
-  ventilation:  '#06B6D4',
+  ventilation:  '#14B8A6', // Brief 37 Part 1: was '#06B6D4'
 }
 
 // ── Pablo-port tokens (Brief 28a Part 4, 2026-05-14) ────────────────────────

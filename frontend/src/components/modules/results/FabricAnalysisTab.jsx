@@ -22,7 +22,7 @@ function HeatLossTooltip({ active, payload, label }) {
   return (
     <div style={TOOLTIP_STYLE}>
       <p className="font-medium">{label}</p>
-      <p style={{ color: v >= 0 ? '#DC2626' : '#3B82F6' }}>
+      <p style={{ color: v >= 0 ? '#DC2626' : '#00AEEF' }}>
         {v >= 0 ? 'Net gain' : 'Net loss'}: {Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh/yr
       </p>
     </div>
