@@ -40,6 +40,12 @@ const MODE_OPTIONS = [
 export default function ThermalBridgesPanel({ engineResult }) {
   const { params, updateParam } = useContext(ProjectContext)
   const [expanded, setExpanded] = useState(false)
+  // Brief 33 follow-up (UX nit, 2026-05-18): section header is now a
+  // click target that collapses/expands the body, matching every other
+  // input section in the Building module (Airtightness, Geometry,
+  // Glazing, Shading, Permanent openings, Fabric — all wrapped in
+  // CollapsibleSection from BuildingDefinition.jsx). Default open.
+  const [open, setOpen] = useState(true)
 
   // Read the engine output for the live H_TB + per-junction breakdown.
   const tb = engineResult?.losses_at_setpoint?.thermal_bridging
@@ -66,15 +72,22 @@ export default function ThermalBridgesPanel({ engineResult }) {
 
   return (
     <div className="mb-2">
-      {/* Section header — same look as other CollapsibleSections */}
-      <div
-        className="w-full px-2.5 py-1.5 rounded text-left"
+      {/* Section header — collapsible like every other input section in the
+          Building module. H_TB readout stays in the header so the headline
+          number remains visible when collapsed. */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-2.5 py-1.5 rounded text-left transition-opacity"
         style={{ backgroundColor: BUILDING_ACCENT }}
       >
-        <span className="text-white text-xxs font-semibold uppercase tracking-wider">Thermal bridges</span>
-        <span className="text-white/70 text-xxs ml-2 tabular-nums">→ H_TB = {engineHTB.toFixed(2)} W/K</span>
-      </div>
+        <span>
+          <span className="text-white text-xxs font-semibold uppercase tracking-wider">Thermal bridges</span>
+          <span className="text-white/70 text-xxs ml-2 tabular-nums">→ H_TB = {engineHTB.toFixed(2)} W/K</span>
+        </span>
+        <span className="text-white/70 text-xs leading-none">{open ? '▾' : '▸'}</span>
+      </button>
 
+      {open && (
       <div className="pt-2 pb-1 space-y-2">
         {/* Mode dropdown */}
         <div>
@@ -186,6 +199,7 @@ export default function ThermalBridgesPanel({ engineResult }) {
           </div>
         )}
       </div>
+      )}
     </div>
   )
 }
