@@ -1,8 +1,60 @@
 # NZA SIMULATE — Status
 
-## 🐛 Session 2026-05-18 — Brief 33 Finding 1 fix: `flow_mode` not passed through `withMode` State 1 contract (in flight)
+## 🚧 Session 2026-05-18 — Brief 33 Part 2: Geometry-aware C_d for passive envelope openings (in flight)
 
-**State:** `single_commit_in_flight` — bug fix between Brief 33 Part 1 and Part 2. Walkthrough (Chris, 2026-05-18) surfaced that the Permanent openings "Flow topology" dropdown and the "Site exposure" select had no observable effect on the Bridgewater permanent vent loss number, which was pinned at ~15.9 MWh regardless of input.
+**State:** `single_commit_in_flight` — geometry-aware C_d derivation per opening, replacing the hard-coded global 0.6. Closes Brief 29 Issue #3. Also lands the post-walkthrough additions: visible C_d / C_w with provenance tooltips, "Fabric leakage" → "Infiltration" rename, and softer/lighter blue for infiltration paired with bright blue for permanent vents in Sankey/Stacked.
+
+**What's landing in this commit:**
+
+- `frontend/src/utils/openingCoefficients.js` (new) — `computeCd(opening)` + `cdProvenance(opening)` + `cwProvenance(siteExposure)` helpers. Lookup tables: base C_d by type (`orifice` 0.61, `louvre` / `fixed_grille` 0.40, `slot` / `trickle_vent` AR-interpolated between 0.61 @ AR≤1 and 0.38 @ AR≥100 per CIBSE Guide A Table 4.20 + AIVC TN32) and resistance multipliers (`mesh` ×0.85, `flap` ×0.70, `acoustic_baffle` ×0.60). Plus the `CW_BY_SITE_EXPOSURE` map (sheltered 0.05 / normal 0.10 / exposed 0.20) as single source of truth for the UI provenance text + the engine.
+
+- `frontend/src/utils/instantCalc.js` — three call sites updated. State 1 (`_calculateEnvelopeOnly`): full dispatch with pre-computed per-facade weighted sums `cross_Cd_A_sum` = Σ(C_d · A) and `single_sided_eff_A_sum` = Σ(min(1, C_d/0.6) · A). Cross branch: `Q = cross_Cd_A_sum · √Cw · v_wind`. Single-sided branch: `Q = 0.025 · single_sided_eff_A_sum · v_wind`. State 2 (`_calculateState2`) and DegreeDay fallback (`calculateInstantDegreeDay`) get per-facade C_d as drop-in replacements for the hard-coded 0.6 (cross-flow-only — single_sided dispatch for those paths is a follow-up, not Part 2 scope).
+
+- `frontend/src/context/ProjectContext.jsx` — `DEFAULT_PARAMS.openings.{face}` extended with `type` (default `'louvre'`), `internal_resistance` (default `[]`), `width_mm` / `height_mm` (default `null`). Schema comment block includes the engine formulas and an ALLOWLIST DRIFT reminder pointing at `withMode`.
+
+- `frontend/src/utils/instantCalc.js` `withMode` — `passThroughOpenings` now allowlists the new per-facade fields via a `passFace` helper, per the ALLOWLIST DRIFT discipline established by the Finding 1 fix.
+
+- `frontend/src/components/modules/building/BuildingDefinition.jsx` — Permanent openings panel gains: C_w readout next to Site exposure with provenance tooltip; per-facade detail rows (visible only when the facade has a non-zero louvre area) with Type dropdown, Width × Height mm inputs (shown only when type is `slot` / `trickle_vent`), Resistance checkboxes (mesh / flap / acoustic baffle), and a derived C_d display with full provenance ("base 0.39 from trickle vent AR 87:1 · × 0.85 mesh · × 0.70 flap → 0.23").
+
+- `frontend/src/data/balanceColours.js` — `LABELS.fabric_leakage` flipped from `'Fabric leakage'` to `'Infiltration'`. Colour for `infiltration` / `fabric_leakage` changed from grey-600 (#4B5563) to sky-300 (#7DD3FC) so it pairs visually with `permanent_vents` (sky-500 #0EA5E9) — both blue family, infiltration softer/lighter, permanent vents bright, eye groups them as "air-flow losses". Same change applied to local colour overrides in `OperationModule.jsx` and `BuildingDefinition.jsx` daily-stack arrays.
+
+- `scripts/33_bridgewater_opening_geometry_migration.py` (new) — idempotent migration setting Bridgewater's N and S trickle vents to `type: 'trickle_vent'`, `internal_resistance: ['mesh', 'flap']`, `width_mm: 15`, `height_mm: 1300`. Ran cleanly this session; NO-OP on re-run.
+
+- `docs/audit/29_permanent_vent_methodology.md` — new section "C_d derivation and the single-sided restriction factor" with the base-C_d table, slot AR interpolation table, resistance multipliers, Bridgewater worked example, and the engineering-correction note verbatim per Chris's authorisation message.
+
+- `docs/briefs/current.md` — repointed at Brief 33 Part 2.
+
+**Bridgewater C_d derivation (audit-baseline inputs):**
+
+- Type: `trickle_vent`
+- Dimensions: 15 mm × 1300 mm → aspect ratio 86.67 → base C_d (interpolated between AR-50 0.42 and AR-100 0.38) ≈ **0.39**
+- Resistance: `['mesh', 'flap']` → 0.85 × 0.70 = **0.595**
+- Final C_d ≈ **0.23**
+- Single-sided restriction factor: min(1.0, 0.23 / 0.6) ≈ **0.387**
+
+**Browser verification expected (Chris, post-commit):** Bridgewater stays on `single_sided`; permanent vent loss drops from ~16 MWh (Part 1 with hard-coded C_d 0.6) by roughly the restriction factor ≈ 0.387 → expected single-digit MWh range. Sanity check: anything outside ~3–15 MWh = audit finding, not target tuning.
+
+| Quantity | Pre-Part-2 (Finding 1 verified) | Post-Part-2 expected | Post-Part-2 actual |
+|---|---|---|---|
+| Bridgewater C_d (derived, per facade) | n/a (hard-coded 0.6) | 0.23 (trickle vent + mesh + flap) | _TBD — browser_ |
+| Permanent vent loss | ~16 MWh | single-digit MWh (~3–8 MWh expected from `0.025·A·v_wind·0.387` integral) | _TBD_ |
+| Σ losses total | 153.9 MWh (Stacked view, last walkthrough) | proportionally lower (vent loss is the only term moving) | _TBD_ |
+| Heating demand (Static) | ~107–112 MWh range | proportionally lower | _TBD_ |
+| Solar gain (gross) | 99.4 MWh | unchanged | _TBD_ |
+
+**Provenance UI surfaces:**
+- Per-facade C_d on the Permanent Openings panel: shown as `C_d = 0.23` with hover-tooltip showing the full derivation chain (`base 0.39 from trickle vent AR 87:1 · × 0.85 mesh · × 0.70 flap → 0.23`).
+- Building-wide C_w next to Site exposure: shown as `C_w = 0.10` with hover-tooltip citing CIBSE Guide A.
+
+**Verification grep:** `Fabric leakage` returns zero matches in `frontend/src/` after this commit.
+
+**Next:** Brief 33 Part 3 — lock the Building module scope in CLAUDE.md ("Module scopes" section + Process Rule 10).
+
+---
+
+## ✅ Session 2026-05-18 — Brief 33 Finding 1 fix: `flow_mode` not passed through `withMode` State 1 contract (closed `b53b163`)
+
+**State:** `closed` — single commit at `b53b163`, pushed `668b162..b53b163`. Walkthrough (Chris, 2026-05-18) surfaced that the Permanent openings "Flow topology" dropdown and the "Site exposure" select had no observable effect on the Bridgewater permanent vent loss number, which was pinned at ~15.9 MWh regardless of input.
 
 **Diagnosis (Hypothesis A):** the `withMode(building, 'envelope-only')` allowlist filter in `frontend/src/utils/instantCalc.js:397-460` rebuilds the `openings` block field-by-field (`passThroughOpenings` at lines 408-427). When Brief 32 Part 2 added `flow_mode` to `DEFAULT_PARAMS.openings`, the allowlist was not updated to copy it. The engine therefore always received `openings.flow_mode === undefined`, `resolveFlowMode` fell through to its default (`'single_sided'`), and the dispatch never reached the `'cross'` branch — so Site exposure's `Cw` was dead code too (single_sided doesn't reference Cw).
 

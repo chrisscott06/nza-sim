@@ -40,6 +40,13 @@ import { useWeather } from '../../../context/WeatherContext.jsx'
 import { useHourlySolar } from '../../../hooks/useHourlySolar.js'
 import { useSimulationBalance } from '../../../hooks/useSimulationBalance.js'
 import { calculateInstant } from '../../../utils/instantCalc.js'
+import {
+  computeCd,
+  cdProvenance,
+  cwProvenance,
+  OPENING_TYPES,
+  INTERNAL_RESISTANCES,
+} from '../../../utils/openingCoefficients.js'
 
 // ── Layout: resizable columns ────────────────────────────────────────────────
 // Persisted column widths so users can size to their screen / focus area.
@@ -638,6 +645,19 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
       setLouvreFor(face, 0)
     }
   }
+  // Brief 33 Part 2 (2026-05-18): per-facade opening geometry helpers.
+  // Two-level openings merge in ProjectContext deep-merges {face: {…}}
+  // so each setter only needs to send the changed field.
+  const setOpeningType = (face, v) => updateParam('openings', { [face]: { type: v } })
+  const setOpeningDim  = (face, key, v) => updateParam('openings', { [face]: { [key]: v } })
+  const toggleOpeningResistance = (face, feature, on) => {
+    const current = Array.isArray(openings?.[face]?.internal_resistance)
+      ? openings[face].internal_resistance : []
+    const next = on
+      ? Array.from(new Set([...current, feature]))
+      : current.filter(f => f !== feature)
+    updateParam('openings', { [face]: { internal_resistance: next } })
+  }
 
   const anyOpenings = ['north','south','east','west'].some(f =>
     (openings?.[f]?.louvre_area_m2 ?? 0) > 0
@@ -830,7 +850,22 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
           </div>
 
           <div className="mb-2">
-            <label className="text-xxs text-mid-grey block mb-0.5">Site exposure</label>
+            <div className="flex items-baseline justify-between gap-2 mb-0.5">
+              <label className="text-xxs text-mid-grey">Site exposure</label>
+              {/* Brief 33 Part 2: surface C_w with provenance — was previously
+                  a black-box input. The tooltip cites CIBSE Guide A. */}
+              {(() => {
+                const cwp = cwProvenance(openings.site_exposure ?? 'normal')
+                return (
+                  <span
+                    className="text-xxs text-navy/70 tabular-nums cursor-help"
+                    title={`C_w = ${cwp.text}`}
+                  >
+                    C<sub>w</sub> = <span className="font-semibold text-navy">{cwp.cw.toFixed(2)}</span>
+                  </span>
+                )
+              })()}
+            </div>
             <select
               value={openings.site_exposure ?? 'normal'}
               onChange={e => updateParam('openings', { site_exposure: e.target.value })}
@@ -845,34 +880,132 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
 
           <p className="text-xxs text-mid-grey mt-2 mb-1">Louvres (always open, m² per facade)</p>
           {FACADES.map(fac => {
-            const area = Number(openings?.[fac.key]?.louvre_area_m2 ?? 0)
+            const openingForFace = openings?.[fac.key] ?? {}
+            const area = Number(openingForFace.louvre_area_m2 ?? 0)
             const included = area > 0
+            const openingType   = openingForFace.type ?? 'louvre'
+            const resistance    = Array.isArray(openingForFace.internal_resistance) ? openingForFace.internal_resistance : []
+            const widthMm       = openingForFace.width_mm ?? ''
+            const heightMm      = openingForFace.height_mm ?? ''
+            const showsDims     = openingType === 'slot' || openingType === 'trickle_vent'
+            const cdProvenanceText = cdProvenance({
+              type: openingType,
+              internal_resistance: resistance,
+              width_mm: Number(widthMm) || null,
+              height_mm: Number(heightMm) || null,
+            })
+            const cdValue = computeCd({
+              type: openingType,
+              internal_resistance: resistance,
+              width_mm: Number(widthMm) || null,
+              height_mm: Number(heightMm) || null,
+            })
             return (
-              <div key={`louvre-${fac.key}`} className="flex items-center gap-1 mb-1">
-                <input
-                  type="checkbox"
-                  checked={included}
-                  onChange={e => toggleLouvreInclude(fac.key, e.target.checked)}
-                  className="accent-navy w-3 h-3 flex-shrink-0"
-                  title={`Include louvre on ${facadeLabel(fac.num, orientation)}`}
-                />
-                <span className={`text-xxs w-14 flex-shrink-0 ${included ? 'text-navy' : 'text-light-grey'}`}>
-                  {facadeLabel(fac.num, orientation)}
-                </span>
-                <input
-                  type="range" min={0} max={5} step={0.1}
-                  value={area}
-                  onChange={e => setLouvreFor(fac.key, Number(e.target.value))}
-                  disabled={!included}
-                  className="flex-1 h-[3px] accent-navy disabled:opacity-30"
-                />
-                <LouvreAreaInput
-                  value={area}
-                  disabled={!included}
-                  onCommit={v => setLouvreFor(fac.key, v)}
-                  title={`${facadeLabel(fac.num, orientation)} louvre area (m²)`}
-                />
-                <span className={`text-xxs w-4 ${included ? 'text-mid-grey' : 'text-light-grey'}`}>m²</span>
+              <div key={`louvre-${fac.key}`} className="mb-1">
+                <div className="flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={included}
+                    onChange={e => toggleLouvreInclude(fac.key, e.target.checked)}
+                    className="accent-navy w-3 h-3 flex-shrink-0"
+                    title={`Include louvre on ${facadeLabel(fac.num, orientation)}`}
+                  />
+                  <span className={`text-xxs w-14 flex-shrink-0 ${included ? 'text-navy' : 'text-light-grey'}`}>
+                    {facadeLabel(fac.num, orientation)}
+                  </span>
+                  <input
+                    type="range" min={0} max={5} step={0.1}
+                    value={area}
+                    onChange={e => setLouvreFor(fac.key, Number(e.target.value))}
+                    disabled={!included}
+                    className="flex-1 h-[3px] accent-navy disabled:opacity-30"
+                  />
+                  <LouvreAreaInput
+                    value={area}
+                    disabled={!included}
+                    onCommit={v => setLouvreFor(fac.key, v)}
+                    title={`${facadeLabel(fac.num, orientation)} louvre area (m²)`}
+                  />
+                  <span className={`text-xxs w-4 ${included ? 'text-mid-grey' : 'text-light-grey'}`}>m²</span>
+                </div>
+
+                {/* Brief 33 Part 2: per-opening geometry + resistance details.
+                    Visible only when the facade has a non-zero opening area;
+                    drives the per-opening computeCd that's surfaced below. */}
+                {included && (
+                  <div className="ml-4 pl-2 mt-1 mb-2 border-l border-light-grey/60 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <label className="text-xxs text-mid-grey w-14 flex-shrink-0">Type</label>
+                      <select
+                        value={openingType}
+                        onChange={e => setOpeningType(fac.key, e.target.value)}
+                        className="flex-1 px-2 py-0.5 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-teal cursor-pointer"
+                        title="Opening geometry — sets the base C_d via CIBSE Guide A Table 4.20"
+                      >
+                        {OPENING_TYPES.map(t => (
+                          <option key={t} value={t}>
+                            {t === 'orifice' ? 'Orifice (sharp edge)'
+                              : t === 'slot' ? 'Slot'
+                              : t === 'louvre' ? 'Louvre (45° blades)'
+                              : t === 'trickle_vent' ? 'Trickle vent'
+                              : t === 'fixed_grille' ? 'Fixed grille'
+                              : t}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {showsDims && (
+                      <div className="flex items-center gap-2">
+                        <label className="text-xxs text-mid-grey w-14 flex-shrink-0">Dimensions</label>
+                        <input
+                          type="number" min={1} step={1}
+                          value={widthMm}
+                          placeholder="W"
+                          onChange={e => setOpeningDim(fac.key, 'width_mm', e.target.value === '' ? null : Number(e.target.value))}
+                          className="w-16 px-1 py-0.5 text-xxs text-navy border border-light-grey rounded tabular-nums"
+                          title="Opening width in mm"
+                        />
+                        <span className="text-xxs text-mid-grey">×</span>
+                        <input
+                          type="number" min={1} step={1}
+                          value={heightMm}
+                          placeholder="H"
+                          onChange={e => setOpeningDim(fac.key, 'height_mm', e.target.value === '' ? null : Number(e.target.value))}
+                          className="w-16 px-1 py-0.5 text-xxs text-navy border border-light-grey rounded tabular-nums"
+                          title="Opening height in mm"
+                        />
+                        <span className="text-xxs text-mid-grey">mm</span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xxs text-mid-grey w-14 flex-shrink-0">Resistance</span>
+                      {INTERNAL_RESISTANCES.map(feature => (
+                        <label key={feature} className="flex items-center gap-1 text-xxs text-navy">
+                          <input
+                            type="checkbox"
+                            checked={resistance.includes(feature)}
+                            onChange={e => toggleOpeningResistance(fac.key, feature, e.target.checked)}
+                            className="accent-navy w-3 h-3"
+                          />
+                          {feature === 'acoustic_baffle' ? 'Acoustic baffle' : feature.charAt(0).toUpperCase() + feature.slice(1)}
+                        </label>
+                      ))}
+                    </div>
+
+                    <div className="flex items-baseline gap-2 pt-0.5">
+                      <span className="text-xxs text-mid-grey w-14 flex-shrink-0">Derived</span>
+                      <span
+                        className="text-xxs text-navy/70 tabular-nums cursor-help"
+                        title={cdProvenanceText}
+                      >
+                        C<sub>d</sub> = <span className="font-semibold text-navy">{cdValue.toFixed(2)}</span>
+                      </span>
+                      <span className="text-xxs text-mid-grey/70 italic truncate">{cdProvenanceText}</span>
+                    </div>
+                  </div>
+                )}
               </div>
             )
           })}
@@ -1089,8 +1222,8 @@ function BuildingProfilesView({ instantResult }) {
       { key: 'floor', label: 'Ground floor',     color: '#D1D5DB', daily_kwh: losses?.ground_floor },
       { key: 'glaz',  label: 'Glazing',          color: '#4B5563', daily_kwh: losses?.glazing },
       { key: 'tb',    label: 'Thermal bridging', color: '#475569', daily_kwh: losses?.thermal_bridging },
-      { key: 'leak',  label: 'Fabric leakage',   color: '#94A3B8', daily_kwh: losses?.fabric_leakage },
-      { key: 'pvent', label: 'Permanent vents',  color: '#0891B2', daily_kwh: losses?.permanent_vents },
+      { key: 'leak',  label: 'Infiltration',     color: '#7DD3FC', daily_kwh: losses?.fabric_leakage },
+      { key: 'pvent', label: 'Permanent vents',  color: '#0EA5E9', daily_kwh: losses?.permanent_vents },
     ],
     lines: [
       { key: 'sol_n', label: 'Solar N',  color: '#FCD34D', daily_kwh: solar?.north },
@@ -1219,7 +1352,7 @@ function BuildingSummaryView({ instantResult, simBalance }) {
     ['Roof',             los.roof?.heating_loss_kwh,          los.roof?.area_m2,          'm²'],
     ['Ground floor',     los.ground_floor?.heating_loss_kwh,  los.ground_floor?.area_m2,  'm²'],
     ['Glazing',          los.glazing?.heating_loss_kwh,       los.glazing?.area_m2,       'm²'],
-    ['Fabric leakage',   fl.heating_loss_kwh,                 fl.operational_ach,         'ACH'],
+    ['Infiltration',     fl.heating_loss_kwh,                 fl.operational_ach,         'ACH'],
     ['Permanent vents',  los.permanent_vents?.heating_loss_kwh, null,                     ''],
     ['Thermal bridging', tb.heating_loss_kwh,                 tb.total_H_TB_W_per_K,      'W/K'],
   ]

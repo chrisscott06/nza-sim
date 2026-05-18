@@ -151,22 +151,44 @@ const DEFAULT_PARAMS = {
   // (Brief 33 Part 3) and docs/audit/29_permanent_vent_methodology.md.
   //
   // flow_mode picks which wind-driven correlation governs Q:
-  //   'cross'         — wind (+ stack, Part 4) between opposite facades
-  //                     Q = Cd · A · sqrt(Cw) · v_wind   (Cd geometry-aware in Brief 33 Part 2)
-  //   'single_sided'  — empirical BS EN 16798-7 §6.4
-  //                     Q ≈ 0.025 · A · v_wind   (with min(1.0, Cd/0.6) restriction factor per Brief 33 Part 2)
+  //   'cross'         — wind between opposite facades
+  //                     Q = computeCd(opening) · A · sqrt(Cw) · v_wind
+  //   'single_sided'  — empirical BS EN 16798-7 §6.4 with engineering correction
+  //                     Q = 0.025 · A · v_wind · min(1.0, computeCd(opening) / 0.6)
   //
   // Default 'single_sided' — the more conservative correlation; the safe
   // assumption for any building whose internal air-path topology hasn't been
   // explicitly classified as cross-flow.
+  //
+  // Per-facade C_d is derived by computeCd (frontend/src/utils/openingCoefficients.js)
+  // from geometry + resistance features (Brief 33 Part 2):
+  //   type:                opening geometry class
+  //                        — 'orifice' (sharp edge, ~0.61)
+  //                        — 'slot' / 'trickle_vent' (aspect-ratio interpolated)
+  //                        — 'louvre' / 'fixed_grille' (~0.40)
+  //   internal_resistance: array of resistance features applied as multipliers
+  //                        — 'mesh' (×0.85), 'flap' (×0.70), 'acoustic_baffle' (×0.60)
+  //   width_mm, height_mm: physical opening dimensions; required for slot /
+  //                        trickle_vent so aspect ratio can be computed.
+  //
+  // Defaults below: type 'louvre' (matches the legacy field name) with no
+  // resistance features. Per-facade migration of an existing project may
+  // upgrade these — see scripts/33_bridgewater_opening_geometry_migration.py
+  // for the Bridgewater trickle-vent example.
+  //
+  // ⚠ ALLOWLIST DRIFT: any new top-level or per-facade field added below
+  // must also be allowlisted in withMode's passThroughOpenings
+  // (frontend/src/utils/instantCalc.js) or the field will be silently
+  // dropped on the way into the engine. See the Finding 1 fix comment
+  // block in instantCalc.js around line 408.
   openings: {
     schedule:      'never',         // 'never' | 'occupied' | 'summer_day' | 'always'
     site_exposure: 'normal',        // 'sheltered' | 'normal' | 'exposed'
     flow_mode:     'single_sided',  // 'cross' | 'single_sided'
-    north: { louvre_area_m2: 0, openable_fraction: 0 },
-    south: { louvre_area_m2: 0, openable_fraction: 0 },
-    east:  { louvre_area_m2: 0, openable_fraction: 0 },
-    west:  { louvre_area_m2: 0, openable_fraction: 0 },
+    north: { louvre_area_m2: 0, openable_fraction: 0, type: 'louvre', internal_resistance: [], width_mm: null, height_mm: null },
+    south: { louvre_area_m2: 0, openable_fraction: 0, type: 'louvre', internal_resistance: [], width_mm: null, height_mm: null },
+    east:  { louvre_area_m2: 0, openable_fraction: 0, type: 'louvre', internal_resistance: [], width_mm: null, height_mm: null },
+    west:  { louvre_area_m2: 0, openable_fraction: 0, type: 'louvre', internal_resistance: [], width_mm: null, height_mm: null },
   },
   window_count:    { north: 8, south: 8, east: 3, west: 3 },
   // Legacy occupancy fields — kept for backward compat with hvac_dhw.py

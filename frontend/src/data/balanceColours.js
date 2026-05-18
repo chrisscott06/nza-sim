@@ -21,22 +21,30 @@ export const INTERNAL_COLOURS = {
 export const HEATING_COLOUR = '#DC2626' // red-600
 export const COOLING_COLOUR = '#00AEEF' // Systems theme cyan
 
-// Fabric losses — grey family
+// Fabric losses — grey family for conductive elements;
+// air-flow losses (infiltration + permanent vents) paired in a blue family
+// per Brief 33 Part 2 (2026-05-18) so the eye groups them as "air-flow"
+// while still distinguishing baseline crack infiltration from intentional
+// permanent vents.
 export const FABRIC_COLOURS = {
   external_wall:    '#6B7280', // grey-500
   roof:             '#475569', // slate-600
   ground_floor:     '#94A3B8', // slate-400
   glazing:          '#A1A1AA', // zinc-400
   thermal_bridging: '#374151', // grey-700 — Y-factor contribution surfaces here at State 1
-  infiltration:     '#4B5563', // grey-600 — legacy combined key; superseded by fabric_leakage at State 1
-  fabric_leakage:   '#4B5563', // grey-600 — crack infiltration (q50-driven)
+  infiltration:     '#7DD3FC', // sky-300 — softer/lighter blue (baseline q50-driven leakage)
+  fabric_leakage:   '#7DD3FC', // sky-300 — engine-internal alias for infiltration; same colour, display label is "Infiltration"
   permanent_vents:  '#0EA5E9', // sky-500 — louvre flow, State-1-correct alias for openings_louvre
   openings_louvre:  '#0EA5E9', // sky-500 — wind-driven, distinct from baseline crack infiltration
   openings_window:  '#0284C7', // sky-600 — State 2.5 operable-window flow
   ventilation:      '#9CA3AF', // grey-400 — mechanical (MEV/MVHR), State 3 only
 }
 
-// Element labels
+// Element labels.
+// Brief 33 Part 2 (2026-05-18): the engine field `fabric_leakage` is
+// surfaced in the UI as "Infiltration" — the term every building physicist
+// uses. The engine key stays as fabric_leakage for back-compat with the
+// existing results schema; only the display label changes.
 export const LABELS = {
   external_wall:    'External wall',
   roof:             'Roof',
@@ -44,7 +52,7 @@ export const LABELS = {
   glazing:          'Glazing',
   thermal_bridging: 'Thermal bridging',
   infiltration:     'Infiltration',
-  fabric_leakage:   'Fabric leakage',
+  fabric_leakage:   'Infiltration',
   permanent_vents:  'Permanent vents',
   openings_louvre:  'Openings — louvres',
   openings_window:  'Openings — windows',

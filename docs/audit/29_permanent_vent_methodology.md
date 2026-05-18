@@ -124,7 +124,69 @@ Annual loss (ΔT_mean 12 K × 5,500 h):
 
 The exact engine output depends on hour-by-hour wind speed and outdoor temperature in the Yeovilton TMYx 2011-2025 EPW. We report what the engine integrates; we do not calibrate to this hand-calc.
 
-**Brief 33 Part 2** replaces the hard-coded global C_d (0.6) with a per-opening derivation from geometry and resistance features, and applies a geometric-restriction factor on the single-sided branch for openings substantially more restrictive than a typical window. The methodology + worked example for that derivation appears in this document once Part 2 lands.
+**Brief 33 Part 2 (2026-05-18)** replaces the hard-coded global C_d (0.6) with a per-opening derivation (`computeCd` in `frontend/src/utils/openingCoefficients.js`) and applies a single-sided restriction factor `min(1.0, C_d / 0.6)` for openings substantially more restrictive than a typical window. After Part 2, Bridgewater's trickle vents (15 × 1300 mm, mesh, flap) resolve to C_d ≈ 0.23. Hand-calc annual loss in the single-digit MWh range — live engine number reported in `STATUS.md` from Chris's browser walkthrough.
+
+---
+
+## C_d derivation and the single-sided restriction factor
+
+The Static engine derives C_d per opening from geometry and resistance features, then either feeds it directly into the cross-flow formula or applies it as a restriction factor on the single-sided empirical correlation. The derivation lives in `frontend/src/utils/openingCoefficients.js`.
+
+### Base C_d by opening type
+
+| Type | Base C_d | Notes |
+|---|---|---|
+| `orifice` | 0.61 | Sharp-edged opening. CIBSE Guide A §4.6. |
+| `louvre` | 0.40 | 45° fixed blades. CIBSE Guide A Table 4.20. |
+| `fixed_grille` | 0.40 | Same order of magnitude as louvre. |
+| `slot`, `trickle_vent` | interpolated by aspect ratio (see below) | CIBSE Guide A Table 4.20 + AIVC Technical Note 32 (Liddament 1996). |
+
+The `trickle_vent` type is a labelling convenience — it shares the slot's aspect-ratio interpolation but lets the UI render trickle-specific copy and apply trickle-typical default resistance features.
+
+### Slot aspect-ratio interpolation
+
+The C_d of a long, narrow slot falls as aspect ratio increases (boundary-layer effects). The engine interpolates linearly between the CIBSE Guide A Table 4.20 anchor points:
+
+| Aspect ratio (longer / shorter) | C_d |
+|---|---|
+| ≤ 1 (square) | 0.61 |
+| 5 | 0.58 |
+| 10 | 0.50 |
+| 50 | 0.42 |
+| 100 | 0.38 |
+| ≥ 100 (saturates) | 0.38 |
+
+### Internal-resistance multipliers
+
+Applied after the base C_d, multiplicatively:
+
+| Feature | Multiplier |
+|---|---|
+| `mesh` | × 0.85 |
+| `flap` | × 0.70 |
+| `acoustic_baffle` | × 0.60 |
+
+These are roughly independent — mesh adds boundary-layer drag, a flap adds a movable obstruction, an acoustic baffle adds a tortuous path. Stacking is multiplicative.
+
+### Bridgewater worked example
+
+- Type: `trickle_vent`
+- Dimensions: 15 mm × 1300 mm → aspect ratio 86.67 → base C_d interpolated between AR-50 (0.42) and AR-100 (0.38): **≈ 0.39**
+- Resistance: `['mesh', 'flap']` → multipliers 0.85 × 0.70 = **0.595**
+- **Final C_d ≈ 0.23**
+
+### Single-sided restriction factor — engineering correction
+
+The empirical single-sided correlation `Q = 0.025 · A · v_wind` (BS EN 16798-7 §6.4) is calibrated for openings with effective C_d in the typical-window range (~0.5–0.65). For openings substantially more restrictive than this — for example slot trickle vents with mesh and flap, where the derived C_d may be 0.25 or lower — applying the unscaled coefficient overstates flow because the empirical baseline assumes an opening as permissive as a typical window. We apply a geometric-restriction factor `min(1.0, C_d / 0.6)` so that more restrictive openings produce proportionally less flow. This is an engineering correction reflecting that the empirical correlation does not natively distinguish between opening geometries. Openings at the reference permissiveness (C_d ≈ 0.6) or higher are not scaled.
+
+Engine forms after Part 2:
+
+```
+Q_cross        = Σ_face (C_d_face · A_face) · √C_w · v_wind                       (CIBSE Guide A §4.6)
+Q_single_sided = 0.025 · Σ_face (min(1, C_d_face / 0.6) · A_face) · v_wind         (BS EN 16798-7 §6.4 + correction)
+```
+
+Per-facade aggregation in the engine (vs a single building-wide C_d) lets each facade carry its own geometry / resistance — typical when a building mixes opening types (e.g. trickle vents on the residential floors plus a louvre to a back-of-house plant area).
 
 ---
 
@@ -144,5 +206,6 @@ The "engine produces what the physics produces" principle (Brief 33): we report 
 - **2026-05-17:** Brief 29 audit captured the wrong-topology finding for Bridgewater. Three-case (A/B/C) methodology recorded; balanced-mechanical case was a scope error and has been removed from this document.
 - **2026-05-18 (Brief 32 Part 2):** `flow_mode` field added to the opening data model. Three-branch dispatch implemented (cross / single_sided / balanced_mechanical). Reverted by Brief 33 — `balanced_mechanical` was a Building/Systems scope violation.
 - **2026-05-18 (Brief 33 Part 1):** `balanced_mechanical` removed. Dispatch reduced to cross / single_sided. Bridgewater migrated to single_sided. C_d still hard-coded 0.6 in the cross branch — addressed in Brief 33 Part 2.
-- **2026-05-18 (Brief 33 Part 2):** scheduled. Geometry-aware C_d via `computeCd(opening)`; single-sided restriction factor `min(1.0, C_d / 0.6)`; Bridgewater trickle vents → C_d ≈ 0.25. Methodology + worked example landed in this document at that commit.
+- **2026-05-18 (Brief 33 Finding 1 fix):** `flow_mode` allowlist drift in `withMode` — the dropdown wasn't reaching the engine. Same class of bug as Brief 29 Issue #1 (parallel-list synchronisation).
+- **2026-05-18 (Brief 33 Part 2):** Geometry-aware C_d via `computeCd(opening)`; single-sided restriction factor `min(1.0, C_d / 0.6)`; Bridgewater trickle vents resolve to C_d ≈ 0.23. Methodology + worked example landed in this document in this commit. Single-sided dispatch in State 2 / DegreeDay paths is a follow-up (cross-flow-only there for now).
 - **Dynamic engine (Brief 30, paused):** `epjson_assembler.py` still emits `ZoneVentilation:WindandStackOpenArea` (cross-flow) for all louvres. Brief 30 Phase 1.x will rework when Brief 32 / 33 close and Dynamic resumes.

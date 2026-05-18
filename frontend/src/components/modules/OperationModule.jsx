@@ -532,8 +532,8 @@ function OperationProfilesView({ instantResult, openings, selectedOpeningId }) {
     { key: 'floor', label: 'Ground floor',     color: '#D1D5DB', daily_kwh: losses?.ground_floor },
     { key: 'glaz',  label: 'Glazing',          color: '#4B5563', daily_kwh: losses?.glazing },
     { key: 'tb',    label: 'Thermal bridging', color: '#475569', daily_kwh: losses?.thermal_bridging },
-    { key: 'leak',  label: 'Fabric leakage',   color: '#94A3B8', daily_kwh: losses?.fabric_leakage },
-    { key: 'pvent', label: 'Permanent vents',  color: '#0891B2', daily_kwh: losses?.permanent_vents },
+    { key: 'leak',  label: 'Infiltration',     color: '#7DD3FC', daily_kwh: losses?.fabric_leakage },
+    { key: 'pvent', label: 'Permanent vents',  color: '#0EA5E9', daily_kwh: losses?.permanent_vents },
   ]
   if (focusEngine?.daily_heat_loss_kwh) {
     stacks.push({
