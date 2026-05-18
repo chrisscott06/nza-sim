@@ -1,6 +1,50 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-18 — Brief 37 Part 1: Colour token sweep (in flight)
+## 🚧 Session 2026-05-18 — Brief 37 Part 2: UnifiedScheduleEditor (component build, isolated) (in flight)
+
+**State:** `single_commit_in_flight` — new shared component lives in `frontend/src/components/shared/scheduleEditor/`; no consumer wired yet (Part 3 does that).
+
+**What's landing in this commit:**
+
+- `frontend/src/components/shared/scheduleEditor/UnifiedScheduleEditor.jsx` (new) — assembled editor component. Side-by-side layout: bars + day-type tabs + quick-set toolbar + monthly dials on the left; annual heatmap + statistics on the right; exceptions panel along the bottom (when `enableExceptions=true`); library meta row (name / schedule_type / zone_type) + Save / Cancel footer when `mode='library'`. Single `accent` prop drives all chrome — title strip border, day-type active tab, bar fill, monthly dial accent-color, statistics-card peak fraction colour, Save button background. The brief's "five separate sub-component files" structure is collapsed to inline definitions within this one file — organisational suggestion, not a contract; splitting is mechanical if the file grows.
+
+- `frontend/src/components/shared/scheduleEditor/AnnualHeatmap.jsx` — moved from `gains/canvas/AnnualHeatmap.jsx`. Already accepts an `accent` prop; no logic changes.
+
+- `frontend/src/components/shared/scheduleEditor/ExceptionsPanel.jsx` — moved from `gains/canvas/ExceptionsPanel.jsx`. No logic changes.
+
+- `frontend/src/components/shared/scheduleEditor/exceptions.js` — moved from `gains/canvas/exceptions.js`. Shared helper that AnnualHeatmap + ExceptionsPanel + ProjectContext consume.
+
+- `frontend/src/components/modules/gains/canvas/ScheduleEditorCanvas.jsx` — import paths updated to the new shared/ locations. The legacy canvas wrapper still wires Internal Gains today; Part 3 swaps it for `UnifiedScheduleEditor`; Part 4 deletes the canvas wrapper entirely.
+
+- `frontend/src/context/ProjectContext.jsx` — import path for `migrateExceptionsV24` updated to the new shared/ location.
+
+**Component API:**
+
+```js
+<UnifiedScheduleEditor
+  schedule={…}              // { weekday[24], saturday[24], sunday[24],
+                            //   monthly_multipliers[12], exceptions?: [] }
+  onChange={(next) => …}    // called on every edit
+  accent="#0F766E"          // single theme colour
+  mode="live"               // 'live' | 'library'
+  enableExceptions={true}   // show exceptions panel
+  libraryMeta={…}           // optional — { name, schedule_type, zone_type,
+                            //   onSave, onCancel, onNameChange, … }
+  contextLabel="Occupancy"  // header text
+/>
+```
+
+**Tolerant schema:** the editor's `ensureSchedule` helper accepts both the new flat shape (`schedule.weekday`) and the legacy nested shape (`schedule.day_types.weekday`). All writes use the flat shape; the legacy reader fallback covers the transition window during Part 3's schema migration.
+
+**Build:** clean, 8.76 s, 2.51 MB JS (gzip 695 kB), zero errors. No consumer wired yet — the component is reachable only via direct import.
+
+**Verification grep:** `git ls-files frontend/src/components/shared/scheduleEditor/` returns four files (UnifiedScheduleEditor, AnnualHeatmap, ExceptionsPanel, exceptions.js). `gains/canvas/AnnualHeatmap.jsx` and `gains/canvas/ExceptionsPanel.jsx` and `gains/canvas/exceptions.js` are gone from that location. Legacy `ScheduleEditorCanvas.jsx` still imports from the new paths and still works (Internal Gains continues to render the existing editor until Part 3 wires the unified one).
+
+**Next:** Part 3 — refactor Internal Gains + Operation + Systems to use `UnifiedScheduleEditor`; schema migration script; engine reader fallback.
+
+---
+
+## ✅ Session 2026-05-18 — Brief 37 Part 1: Colour token sweep (closed `102a2e0`)
 
 **State:** `single_commit_in_flight` — colour-token foundation for Brief 37's unified schedule editor. No editor work or schema work in this Part; that's Parts 2 + 3.
 

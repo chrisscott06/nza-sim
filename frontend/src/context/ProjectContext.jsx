@@ -221,7 +221,8 @@ const DEFAULT_PARAMS = {
 // v2.4 exception migration — assigns deterministic ids + copies parent
 // curves into legacy exceptions that lacked them. Idempotent. Imported
 // from the gains module's canvas helpers.
-import { migrateExceptionsV24 } from '../components/modules/gains/canvas/exceptions.js'
+// Brief 37 Part 2 (2026-05-18): exceptions.js moved to shared/scheduleEditor/.
+import { migrateExceptionsV24 } from '../components/shared/scheduleEditor/exceptions.js'
 
 function _migrateScheduleExceptions(sched) {
   if (!sched) return sched

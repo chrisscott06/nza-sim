@@ -35,8 +35,12 @@
 import { useMemo, useCallback, useState } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import ScheduleEditor from '../ScheduleEditor.jsx'
-import AnnualHeatmap from './AnnualHeatmap.jsx'
-import ExceptionsPanel from './ExceptionsPanel.jsx'
+// Brief 37 Part 2 (2026-05-18): AnnualHeatmap, ExceptionsPanel + their
+// shared `exceptions.js` helper moved to shared/scheduleEditor/. This
+// legacy canvas wrapper keeps using them until Brief 37 Part 3 wires the
+// unified editor; Part 4 then deletes this file entirely.
+import AnnualHeatmap from '../../../shared/scheduleEditor/AnnualHeatmap.jsx'
+import ExceptionsPanel from '../../../shared/scheduleEditor/ExceptionsPanel.jsx'
 
 /**
  * Compute simple summary statistics for the active-day curve of a schedule.
