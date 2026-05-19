@@ -1,6 +1,30 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-19 — Brief 41 Part 0: Operable-opening diagnostic (read-only)
+## 🚧 Session 2026-05-19 — Brief 41 Part 1: flow_mode dispatch into operable openings
+
+**State:** `commit_in_flight` — Brief 41 Part 1. Three locations updated per CLAUDE.md Rule 14 parity (State 1 lines 1322-1380, State 2 lines 2697-2745, inline-legacy lines 5234-5267). Same dispatch shape as Brief 39 Parts 1+2 used for permanent vents.
+
+**Engine changes (`frontend/src/utils/instantCalc.js`):**
+- State 1 + State 2 per-opening loops:
+  - `Q_wind` now dispatches on building-wide `flow_mode`: single_sided → `0.025 × min(1, cd/0.6) × A × v_wind`; cross → `cd × A × √Cw × v_wind`.
+  - `Q_stack` computed **only** when `o.control?.mode === 'temperature'`. Always / scheduled modes get `Q_open = Q_wind` only.
+  - Per-opening `discharge_coefficient` and `wind_coefficient` reads removed (those fields will be removed from the schema in Part 2).
+  - `height_m` retained — used by the temperature-mode stack term.
+- Inline-legacy `Q_window` (aggregate, no per-opening engine) — same flow_mode dispatch as the louvre path; stack-less by inline-legacy architecture.
+
+**Why temperature-mode keeps stack** (per Chris's revision call): stack-driven buoyancy is the entire physical purpose of temperature-mode operable openings — opening a door when the building overheats relies on warm air rising and exiting through the high opening while cool air enters through low openings. Wind-only would gut the control mode.
+
+**Methodology note appended** to `docs/audit/29_permanent_vent_methodology.md` with the canonical wind-vs-wind+stack physics split by control mode. Lock for future operable-opening work.
+
+**Build:** clean, 16.17 s, 2.50 MB JS (gzip 694 kB).
+
+**Three-location parity** (Rule 14): all three operable-opening flow paths now dispatch on `openings.flow_mode`. Pure module-scope helper `resolveFlowMode` (line 145) shared across all three — doesn't violate the Brief 28c parallel-reimpl rule (it's a validator, not a state-trace integration).
+
+**Next:** Part 2 — schema cleanup (drop `discharge_coefficient` + `wind_coefficient` per-opening; keep `height_m`; update `withMode` allowlist).
+
+---
+
+## 🟢 Session 2026-05-19 — Brief 41 Part 0: Operable-opening diagnostic (read-only)
 
 **State:** `commit_in_flight` — Brief 41 Part 0 (read-only diagnostic). Single commit lands the brief file in `active/` + the Part 0 audit doc. **No code changes.** Parts 1-6 pending Chris's review of Part 0 findings.
 

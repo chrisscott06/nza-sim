@@ -1320,22 +1320,25 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
     daily_ghi[_d] += (hourlySolar?.roof?.[h] ?? 0)
 
     // ── Brief 28e Gate E2: per-operable-opening natural ventilation ──────
-    // For each operable opening, evaluate the control mode (using T_op from
-    // the PREVIOUS hour to avoid within-hour coupling) to decide is_open.
-    // When open, compute combined wind+stack flow per EN 16798-7:
-    //   Q_wind  = Cd × A × √(Cw × v²)
-    //   Q_stack = Cd × A × √(2 × g × h × |ΔT| / T_avg)
-    //   Q_open  = √(Q_wind² + Q_stack²)
-    //   UA_open = ρ × Cp × Q_open    (W/K)
-    // Heat loss / cool gain follow Brief 28k setpoint convention.
+    // Brief 41 Part 1 (2026-05-19): flow_mode dispatch ported in from
+    // permanent vents (Brief 33/34), matching the building-wide single_sided
+    // / cross correlation. Per-opening discharge_coefficient + wind_coefficient
+    // dropped (Brief 41 Part 2); building-wide `cd` + `sqrtCw` +
+    // `single_sided_factor` (derived at lines 868-875 above) drive flow
+    // uniformly across permanent vents AND operable openings. Per-opening
+    // height_m retained — temperature-mode openings need it for the stack
+    // term that makes that control mode physically useful.
     //
-    // V1 simplification (Chris's Gate E1 ruling 5): when an opening has
-    // parent_glazing_face set, the parent glazing's static U×A conduction
-    // is NOT subtracted during open hours — natvent flow is additive on
-    // top of glazing conduction. The conduction is small relative to the
-    // open-area flow (sub-1% of the open-flow loss for typical Cd × A
-    // door/window), and keeping the per-element loss accounting clean
-    // outweighs the precision gain.
+    // Wind dispatch (always / scheduled / temperature, whenever decision.is_open):
+    //   single_sided: Q_wind = 0.025 × min(1, cd/0.6) × A × v_wind
+    //   cross:        Q_wind = cd × A × √Cw × v_wind
+    // Stack term (TEMPERATURE-MODE ONLY):
+    //   Q_stack = cd × A × √(2 × g × h × |ΔT| / T_avg)
+    // Combined: Q_open = √(Q_wind² + Q_stack²); UA_open = ρ × Cp × Q_open.
+    //
+    // V1 simplification (Chris's Gate E1 ruling 5) retained: when an opening
+    // has parent_glazing_face set, the parent glazing's static U×A conduction
+    // is NOT subtracted during open hours — natvent flow is additive.
     let nv_heat_h_total = 0
     let nv_cool_h_total = 0
     for (const o of operableOpenings) {
@@ -1345,14 +1348,23 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
       )
       _natvent_state.set(o.id, { wasOpen: decision.is_open })
       if (!decision.is_open) continue
+      const A      = Number(o.area_m2 ?? 0)
+      const Hgt    = Number(o.height_m ?? 1.0)
       const dT_abs = Math.abs(T_op_prev - T_out)
-      const T_avg_K = 0.5 * (T_op_prev + T_out) + 273.15
-      const Cd = Number(o.discharge_coefficient ?? 0.6)
-      const A  = Number(o.area_m2 ?? 0)
-      const Cw = Number(o.wind_coefficient ?? 0.25)
-      const Hgt = Number(o.height_m ?? 1.0)
-      const Q_wind  = Cd * A * Math.sqrt(Cw * v_wind * v_wind)
-      const Q_stack = Cd * A * Math.sqrt(Math.max(0, 2 * GRAVITY * Hgt * dT_abs / Math.max(T_avg_K, 1)))
+
+      let Q_wind
+      if (flow_mode === 'single_sided') {
+        Q_wind = 0.025 * single_sided_factor * A * v_wind
+      } else { // 'cross'
+        Q_wind = cd * A * sqrtCw * v_wind
+      }
+
+      let Q_stack = 0
+      if (o.control?.mode === 'temperature') {
+        const T_avg_K = 0.5 * (T_op_prev + T_out) + 273.15
+        Q_stack = cd * A * Math.sqrt(Math.max(0, 2 * GRAVITY * Hgt * dT_abs / Math.max(T_avg_K, 1)))
+      }
+
       const Q_open  = Math.sqrt(Q_wind * Q_wind + Q_stack * Q_stack)   // m³/s
       const UA_open = AIR_RHO * AIR_CP * Q_open                         // W/K
       const heat_h  = UA_open * dT_heat_out
@@ -2696,10 +2708,17 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     }
 
     // ── Brief 28e Gate E2: per-operable-opening natural ventilation (State 2) ─
-    // Identical math + structure to State 1. Uses T_op_prev (which is the
-    // gain-warmed free-running zone temp in State 2) for temperature-mode
-    // control. For scheduled / permanent modes, T_op_prev is unused —
-    // ensuring State 1 ↔ State 2 invariance on those modes.
+    // Brief 41 Part 1 (2026-05-19): flow_mode dispatch ported in from
+    // permanent vents (Brief 33/34), matching State 1's hour-loop at lines
+    // 1322-1380. Per-opening discharge_coefficient + wind_coefficient
+    // dropped (Part 2); building-wide cd_s2 / sqrtCw / single_sided_factor_s2
+    // (derived at lines 2247-2254) drive flow. height_m retained for
+    // temperature-mode stack contribution.
+    //
+    // Identical structure to State 1; State 2 uses T_op_prev (gain-warmed
+    // free-running zone temp) for temperature-mode control + stack ΔT.
+    // For always / scheduled modes, T_op_prev is unused for flow — ensuring
+    // State 1 ↔ State 2 invariance on those modes.
     let nv_heat_h_total = 0
     let nv_cool_h_total = 0
     for (const o of operableOpenings) {
@@ -2709,14 +2728,23 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       )
       _natvent_state.set(o.id, { wasOpen: decision.is_open })
       if (!decision.is_open) continue
+      const A      = Number(o.area_m2 ?? 0)
+      const Hgt    = Number(o.height_m ?? 1.0)
       const dT_abs = Math.abs(T_op_prev - T_out)
-      const T_avg_K = 0.5 * (T_op_prev + T_out) + 273.15
-      const Cd = Number(o.discharge_coefficient ?? 0.6)
-      const A  = Number(o.area_m2 ?? 0)
-      const Cw = Number(o.wind_coefficient ?? 0.25)
-      const Hgt = Number(o.height_m ?? 1.0)
-      const Q_wind  = Cd * A * Math.sqrt(Cw * v_wind * v_wind)
-      const Q_stack = Cd * A * Math.sqrt(Math.max(0, 2 * GRAVITY * Hgt * dT_abs / Math.max(T_avg_K, 1)))
+
+      let Q_wind
+      if (flow_mode_s2 === 'single_sided') {
+        Q_wind = 0.025 * single_sided_factor_s2 * A * v_wind
+      } else { // 'cross'
+        Q_wind = cd_s2 * A * sqrtCw * v_wind
+      }
+
+      let Q_stack = 0
+      if (o.control?.mode === 'temperature') {
+        const T_avg_K = 0.5 * (T_op_prev + T_out) + 273.15
+        Q_stack = cd_s2 * A * Math.sqrt(Math.max(0, 2 * GRAVITY * Hgt * dT_abs / Math.max(T_avg_K, 1)))
+      }
+
       const Q_open  = Math.sqrt(Q_wind * Q_wind + Q_stack * Q_stack)
       const UA_open = AIR_RHO * AIR_CP * Q_open
       const heat_h  = UA_open * dT_heat_out
@@ -5232,12 +5260,16 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
     const hour_vent_nohr = UA_vent_no_hr * dT_heat / 1000
 
     // Openings — wind-driven flow (m³/s) → ACH-equivalent → Wh/K → kWh
-    // Brief 39 Part 1: two-branch dispatch matches State 1 hour-loop
-    // (lines 1075–1080). The simpler operable-window Q_window below stays
-    // cross-flow-only and schedule-gated — Brief 39 Part 3's sweep
-    // confirmed this is part of inline-legacy's stale-stub status (the
-    // proper per-opening engine is in State 1/2 Gate E2). Cleanup deferred
-    // to the inline-legacy rationalisation follow-up brief (see
+    // Brief 39 Part 1 (permanent louvre): two-branch dispatch matches State 1
+    // hour-loop (lines 1075–1080).
+    // Brief 41 Part 1 (operable window): same two-branch dispatch applied
+    // here too — the simpler operable-window Q_window inherits the building-
+    // wide flow_mode just like the louvre path. No per-opening temperature-
+    // mode stack term in inline-legacy; the simpler model gates by the
+    // building-wide `openings.schedule` field, not per-opening control.
+    // Cleanup of the inline-legacy operable-window stale-stub model (towards
+    // per-opening parity with State 1/2) remains deferred to the inline-
+    // legacy rationalisation follow-up brief (see
     // docs/audit/39_calculation_flow_map.md §"Inline-legacy
     // rationalisation — deferred").
     const v_wind = weatherData.wind_speed?.[h] ?? 0
@@ -5252,7 +5284,14 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
       (openings.schedule === 'occupied'   && occ_frac > 0.1) ||
       (openings.schedule === 'summer_day' && (mo_idx >= 4 && mo_idx <= 8) && hourOfDay >= 8 && hourOfDay <= 20)
     )
-    const Q_window = windowsOpen ? cd_dd * openable_area_total * sqrtCw * v_wind : 0
+    let Q_window = 0
+    if (windowsOpen) {
+      if (flow_mode_dd === 'single_sided') {
+        Q_window = 0.025 * single_sided_factor_dd * openable_area_total * v_wind
+      } else { // 'cross'
+        Q_window = cd_dd * openable_area_total * sqrtCw * v_wind
+      }
+    }
     const hour_openings_louvre = AIR_HEAT_CAPACITY * (Q_louvre * 3600) * dT_heat / 1000
     const hour_openings_window = AIR_HEAT_CAPACITY * (Q_window * 3600) * dT_heat / 1000
 

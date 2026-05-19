@@ -211,3 +211,23 @@ The "engine produces what the physics produces" principle (Brief 33): we report 
 - **2026-05-18 (Brief 33 Finding 1 fix):** `flow_mode` allowlist drift in `withMode` — the dropdown wasn't reaching the engine. Same class of bug as Brief 29 Issue #1 (parallel-list synchronisation).
 - **2026-05-18 (Brief 33 Part 2):** Geometry-aware C_d via `computeCd(opening)`; single-sided restriction factor `min(1.0, C_d / 0.6)`; Bridgewater trickle vents resolve to C_d ≈ 0.23. Methodology + worked example landed in this document in this commit. Single-sided dispatch in State 2 / DegreeDay paths is a follow-up (cross-flow-only there for now).
 - **Dynamic engine (Brief 30, paused):** `epjson_assembler.py` still emits `ZoneVentilation:WindandStackOpenArea` (cross-flow) for all louvres. Brief 30 Phase 1.x will rework when Brief 32 / 33 close and Dynamic resumes.
+- **2026-05-19 (Brief 39 Parts 1+2):** State 2 + inline-legacy 'full' permanent-vent paths received the same `flow_mode` dispatch (Issue #2 in `29_open_issues.md` closed). Three-location parity formalised in CLAUDE.md Rule 14.
+- **2026-05-19 (Brief 41 Parts 1+2):** Operable-opening (Brief 28e Gate E2) flow correlation unified with permanent vents under the same `flow_mode` dispatch. Per-opening `discharge_coefficient` + `wind_coefficient` dropped; building-wide `openings.cd` + `openings.site_exposure → Cw` drive flow for both passive louvres and operable doors / windows. Per-opening `height_m` retained — see the next section.
+
+---
+
+## Operable openings: wind-vs-wind+stack physics split by control mode
+
+Brief 41 (2026-05-19) unifies the wind-driven flow term for operable openings (doors / windows / vents with control modes) with the permanent-vent correlation. **The stack term behaviour differs by control mode** — captured here as the canonical methodology rule:
+
+| Control mode | Wind term | Stack term | Rationale |
+| --- | --- | --- | --- |
+| `always` (permanent) | `flow_mode` dispatch (single_sided / cross) | **None** | A permanently-open opening at a single façade is equivalent to a permanent vent — wind-driven flow only. Stack contribution to a continuously-open opening averages out over the year because warm/cold stratification reverses with weather. Modelling it as a continuous boost overstates annual loss. |
+| `scheduled` | `flow_mode` dispatch (single_sided / cross) | **None** | Same physics as `always`, but the schedule decides whether the opening is open in each hour. When open, treated as a wind-driven opening. |
+| `temperature` | `flow_mode` dispatch (single_sided / cross) | `Q_stack = cd × A × √(2 × g × h × |ΔT| / T_avg)` (additive) | **Stack-driven buoyancy is the entire point of temperature-mode openings.** A user opens a door / window when the building overheats so warm air rises and exits through the high opening while cool air enters through low openings. Wind-only correlations don't capture this and would defeat the control mode. Stack term keeps `height_m` per-opening because vertical separation matters for the buoyancy magnitude. |
+
+Combined: `Q_open = √(Q_wind² + Q_stack²)` (the EN 16798-7 combined-flow formula). `Q_stack = 0` in always / scheduled modes collapses to `Q_open = Q_wind`.
+
+**Why this isn't symmetric with permanent vents:** permanent vents (passive louvres) have **no control mode** — they're always open by definition, no schedule, no temperature trigger. So the always/scheduled-vs-temperature distinction doesn't apply to them. Permanent vents stay wind-only; the stack term for permanent vents was deferred as Issue #4 and remains deferred (different scoping decision).
+
+**Why `height_m` is retained on operable openings:** required for the temperature-mode stack term above. The other per-opening physics fields (`discharge_coefficient`, `wind_coefficient`) were dropped in Brief 41 Part 2 because the building-wide `openings.cd` and `openings.site_exposure` drive flow uniformly for both vents and openings — but stack physics is fundamentally per-opening (each opening has its own vertical separation), so `height_m` cannot be unified to a building-wide value.
