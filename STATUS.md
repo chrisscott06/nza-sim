@@ -1,6 +1,24 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-19 — Brief 39 Part 1: patch inline-legacy perm-vent dispatch in place
+## 🚧 Session 2026-05-19 — Brief 39 Part 2: port flow_mode dispatch into State 2
+
+**State:** `commit_in_flight` — Brief 39 Part 2. State 2's permanent-vent path receives the same two-branch dispatch that State 1 has had since Brief 33/34 and inline-legacy received in Part 1.
+
+**Patch:** `frontend/src/utils/instantCalc.js`
+- Lines 2236–2249 (setup): replace the deferred-follow-up comment with a Brief 39 Part 2 marker; add `flow_mode_s2 = resolveFlowMode(openings)` and `single_sided_factor_s2 = Math.min(1.0, cd_s2 / 0.6)` constants alongside the existing `cd_s2`.
+- Lines 2482–2491 (hour loop): replace the cross-flow-only `Q_louvre_m3s = cd_s2 × A × √C_w × v_wind` with the two-branch dispatch `if (flow_mode_s2 === 'single_sided') Q = 0.025 × single_sided_factor_s2 × A × v_wind; else Q = cd_s2 × A × √C_w × v_wind`.
+
+`resolveFlowMode` is the module-scope pure validator from line 145 — shared across S1, S2, and inline-legacy without violating Brief 28c's parallel-reimpl rule (it's a validator, not a state-trace integration). The `single_sided_factor` formula is the engineering correction from `docs/audit/29_permanent_vent_methodology.md` §"C_d derivation and the single-sided restriction factor".
+
+**Closes the bug class identified in `docs/audit/39_state2_permanent_vent_diagnosis.md`.** State 2's permanent-vent loss on Bridgewater is now driven by the same correlation State 1 uses, so the 5.4× ratio between Internal Gains and Building should collapse to ≈ 1.0× (modulo the legitimate T_air integration difference Brief 28c established). Actual Bridgewater number comes from Chris's walkthrough — captured in Part 5.
+
+**Build:** clean, 16.87 s, 2.50 MB JS (gzip 694 kB). Same size as Part 1 — no new code paths, just dispatch logic where there used to be a single-branch formula.
+
+**Next:** Part 3 — sweep `instantCalc.js` for other deferred-follow-up comments (TODO / FIXME / mirror / deferred). The Audit 39 flow map flagged the operable-window Q_window formula as same drift-risk class — confirm whether it needs the same dispatch or stays cross-flow-only by design.
+
+---
+
+## 🟢 Session 2026-05-19 — Brief 39 Part 1: patch inline-legacy perm-vent dispatch in place
 
 **State:** `commit_in_flight` — Brief 39 Part 1. The Part 1 plan was revised mid-execution from Option (a) (thin router → State 2) to **Option (c)** (in-place patch) after the consumer audit (steps 1.1–1.2) found that `LiveResultsPanel.jsx` reads systems-side fields State 2 doesn't produce. Chris authorised the pivot.
 

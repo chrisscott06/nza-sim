@@ -2233,9 +2233,14 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
 
   // Ventilation — Brief 28-IM q50-derived operational ACH (State 2 mirror)
   //
-  // Brief 34: State 2's permanent-vent path reads the building-wide
-  // openings.cd (cross-flow only — single_sided dispatch for State 2 is
-  // a follow-up; the user-facing Building module is State 1).
+  // Brief 39 Part 2 (2026-05-19): two-branch flow_mode dispatch ported in
+  // from State 1 (Brief 33/34). State 2 intentionally reimplements envelope
+  // physics per Brief 28c (own T_air trace against gains-warmed zone). The
+  // dispatch itself is from State 1's hour-loop branch logic at lines
+  // ~1075-1080; we share `resolveFlowMode` (module-scope pure validator,
+  // line 145) and the `single_sided_factor` formula because neither
+  // integrates against a state-specific trace — they're inputs to the
+  // hour-loop, not part of it.
   const airtightness = deriveOperationalACH(building, geo)
   const ach = airtightness.n_op
   const UA_leakage = AIR_HEAT_CAPACITY * ach * volume
@@ -2244,7 +2249,9 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   const sqrtCw = Math.sqrt(Cw)
   const louvre_area_total = ['north','south','east','west']
     .reduce((s, f) => s + Number(openings?.[f]?.louvre_area_m2 ?? 0), 0)
-  const cd_s2 = typeof openings.cd === 'number' ? openings.cd : 0.25
+  const cd_s2                  = typeof openings.cd === 'number' ? openings.cd : 0.25
+  const flow_mode_s2           = resolveFlowMode(openings)
+  const single_sided_factor_s2 = Math.min(1.0, cd_s2 / 0.6)
 
   // Zone-air effective mass (matches State 1 v3 tuning)
   const C_air_air_J = volume * 1.2 * 1005
@@ -2479,8 +2486,15 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     const T_sa_wall = solAirT(T_out, G_wall_avg, extWallModel.solar_abs ?? 0.6, extWallModel.h_out ?? 25)
     const T_sa_roof = solAirT(T_out, hourlySolar.roof[h], roofModel.solar_abs ?? 0.7, roofModel.h_out ?? 25)
 
-    // Permanent vents UA (State 2, cross-flow only — see Brief 34)
-    const Q_louvre_m3s = cd_s2 * louvre_area_total * sqrtCw * v_wind
+    // Permanent vents UA (State 2). Brief 39 Part 2: two-branch dispatch
+    // matches State 1 hour-loop at lines ~1075-1080. Operable-window
+    // mirror sweep is Brief 39 Part 3.
+    let Q_louvre_m3s
+    if (flow_mode_s2 === 'single_sided') {
+      Q_louvre_m3s = 0.025 * single_sided_factor_s2 * louvre_area_total * v_wind
+    } else { // 'cross'
+      Q_louvre_m3s = cd_s2 * louvre_area_total * sqrtCw * v_wind
+    }
     const UA_permanent = AIR_HEAT_CAPACITY * (Q_louvre_m3s * 3600)
 
     // Glazing inside-surface absorption (extra direct-to-air term)
