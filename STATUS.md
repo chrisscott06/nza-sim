@@ -1,6 +1,46 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-19 — Brief 39 Part 5: Bridgewater reconciliation (code-side)
+## ✅ Session 2026-05-19 — Brief 39 close: Envelope physics architecture fix complete
+
+**State:** `closed` (structurally). Brief 39 (Envelope Physics Architecture Fix) archived to `docs/briefs/archive/39_envelope_architecture_fix_COMPLETED.md`. `docs/briefs/current.md` repointed at "no active brief" (Brief 30 paused continues as the only entry in `active/`). Six commits shipped (`356ea6e`, `42fc0bc`, `d4dc656`, `0152227`, `49c5fcc`, this commit).
+
+**What Brief 39 shipped — recap across the six Parts:**
+
+**Part 1 (`356ea6e`) — Patch inline-legacy in place per Option (c).** The original plan to convert inline-legacy into a thin router calling `_calculateState2` was set aside after the Part 1 consumer audit found `LiveResultsPanel.jsx` reads systems-side fields (`eui_kWh_m2`, `carbon_kgCO2_m2`, `fuel_split`, `monthly`, `gia_m2`) that State 2 doesn't produce. Chris authorised the pivot to Option (c) — patch the perm-vent dispatch in place. Inline-legacy stays as a parallel envelope reimpl; the architectural cleanup is deferred to a follow-up brief, documented in the audit doc.
+
+**Part 2 (`42fc0bc`) — Port State 1's two-branch dispatch into State 2.** Replaces State 2's cross-flow-only `Q_louvre_m3s = cd_s2 × A × √C_w × v_wind` with the same `if (flow_mode === 'single_sided') Q = 0.025 × min(1, cd/0.6) × A × v_wind; else Q = cd × A × √C_w × v_wind` State 1 has had since Brief 33/34. Closes the bug class identified in `docs/audit/39_state2_permanent_vent_diagnosis.md`. State 2's parallel envelope reimpl preserved per Brief 28c — only `resolveFlowMode` (a pure module-scope validator) and the `single_sided_factor` formula are shared across states.
+
+**Part 3 (`d4dc656`) — Sweep deferred-follow-up comments.** Greg of `instantCalc.js` for `TODO`, `FIXME`, `deferred`, `follow-up`, `mirror`, etc. 27 matches reviewed: 16 are documentation aids for parallel-reimpl mirroring (intentional per Brief 28c); 4 are genuine active-deferred items (Issue #4 stack term, computeServiceEnergy scope statement, vent schedule_ref, DHW circulation pump schedule hookup, State 2 daily_profiles V1 flat-rate); 0 stale-indicating-drift. The Audit 39 flagged "mirror of State 1" comment for State 2's operable-opening engine (Brief 28e Gate E2) was **verified faithful** — line 2698 declares identical math to State 1, and inspection of lines 2702–2729 confirms identical `Q_wind / Q_stack / Q_open = √(Q_wind² + Q_stack²)` formulas.
+
+**Part 4 (`0152227`) — CLAUDE.md Rule 14.** Adds the durable architectural rule: envelope-physics changes to State 1 must be ported to State 2 AND inline-legacy 'full' in the same commit. Three locations named explicitly. Pure module-scope helpers (`resolveFlowMode`, `computeCd`) carved out — sharing them doesn't violate the rule. Inline-legacy explicitly noted as known debt awaiting a follow-up brief. Cross-references to Brief 28c, both Audit 39 docs, and Brief 39 itself for traceability.
+
+**Part 5 (`49c5fcc`) — Bridgewater reconciliation (code-side).** Confirms each module's display reads which state's perm-vent output post-fix. Building reads State 1 (unchanged, ~7.7 MWh). Internal Gains + Operation read State 2 with the new single_sided dispatch (expected ~8.0–8.9 MWh). Systems reads State 3 which cascades State 2's demand (perm-vent fix flows through indirectly). LiveResultsPanel + HeatBalanceTab + ProjectDashboard hit inline-legacy with the new dispatch (expected ~7.7 MWh-class). Expected post-fix ratio Internal Gains ÷ Building = 1.05–1.15× (legitimate Brief 28c T_air integration difference); pre-fix was 5.4×.
+
+**Part 6 (this commit) — Close.** Brief archived; current.md repointed; final STATUS entry. Issue #16 (ProjectDashboard latent dead-read of `instantResult?.eui`) was logged in Part 1's commit; no new issues from Parts 2–5.
+
+**Files touched across the brief:**
+- `frontend/src/utils/instantCalc.js` — ~24 lines of code changes (12 in inline-legacy Part 1, 8 in State 2 Part 2, 4 comment updates Part 3)
+- `CLAUDE.md` — new Rule 14
+- `docs/briefs/active/39_envelope_architecture_fix.md` → `docs/briefs/archive/39_envelope_architecture_fix_COMPLETED.md`
+- `docs/briefs/current.md`
+- `docs/audit/39_calculation_flow_map.md` — three new sections (Part 1 outcome, Part 3 outcome, Part 5 reconciliation)
+- `docs/audit/29_open_issues.md` — Issue #16
+- `STATUS.md` — six in-flight entries collapsed into this close entry
+
+**Awaiting Chris's walkthrough.** The Bridgewater reconciliation numbers come from the live frontend. If the post-fix ratio is in the 1.05–1.15× expected band, Brief 39 is fully complete. If the ratio is > 1.5×, the brief reopens for a second-layer diagnostic. The audit doc has placeholders for the four module values + the ratio; backfill into `docs/audit/39_calculation_flow_map.md` §"Brief 39 Part 5 — Bridgewater reconciliation" once the walkthrough lands.
+
+**Next-brief queue:**
+1. **Inline-legacy rationalisation follow-up brief.** Extract inline-legacy's systems block (instantCalc.js lines ~5286–5605) into a `assembleLegacySystemsResult(...)` helper; convert inline-legacy into a router calling State 2 + the helper. Eliminates one of the two remaining parallel envelope-physics implementations. Documented in `docs/audit/39_calculation_flow_map.md` §"Inline-legacy rationalisation — deferred".
+2. **Brief 40 / Systems Library Architecture.** Chris is rewriting the original Systems Library brief offline, informed by the Sankey-polish + Audit 39 findings.
+3. **Brief 30 Phase 1.1+ (paused).** Dynamic engine rebuild — eligible for resumption.
+
+**Verification at close:**
+- Working tree shows the brief move + STATUS update + current.md update only (this commit's diff).
+- `docs/briefs/active/` contains only `30_dynamic_engine_rebuild.md` (paused).
+- `origin/main == local main` after the push.
+- Build clean — last verified at Part 2 commit `42fc0bc` (16.87 s, 2.50 MB JS, gzip 694 kB). No code changes in Parts 3, 4, 5, or this close commit.
+
+---
 
 **State:** `commit_in_flight` — Brief 39 Part 5. Code-side walkthrough of which display reads which state's perm-vent output post-Brief-39. Actual MWh figures await Chris's walkthrough on the live Bridgewater project.
 
