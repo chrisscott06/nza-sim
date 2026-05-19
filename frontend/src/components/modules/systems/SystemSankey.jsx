@@ -129,6 +129,36 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
         .extent([[pad, pad], [dims.width - pad - 90, dims.height - pad]])
 
       layout(g)
+
+      // Brief 38 Part 1 (2026-05-19): post-process energy-carrier nodes.
+      // d3-sankey auto-sizes source-type nodes (Grid Electricity, Natural
+      // Gas) by their total flow, which produces visually large blocks that
+      // don't match the combined width of the uniformly-rendered flows
+      // landing on them. Shrink each source node's rectangle to exactly
+      // span the stack of incoming-link edges; stash the total kWh for a
+      // prominent label rendered outside the rect.
+      for (const node of g.nodes) {
+        if (node.type !== 'source') continue
+        const incoming = g.links.filter(l =>
+          (typeof l.target === 'object' ? l.target.id : l.target) === node.id
+        )
+        if (incoming.length === 0) continue
+        // Each link.y1 is the centre y-coord of the link's right end on the
+        // target side; link.width is its perpendicular thickness. Span the
+        // tightest rectangle around the link-end stack.
+        const tops    = incoming.map(l => (l.y1 ?? 0) - (l.width ?? 1) / 2)
+        const bottoms = incoming.map(l => (l.y1 ?? 0) + (l.width ?? 1) / 2)
+        const yTop = Math.min(...tops)
+        const yBot = Math.max(...bottoms)
+        // Centre the new bounds on the link-stack midpoint; minimum 20 px
+        // height so single-thin-flow carriers still render readably.
+        const mid = (yTop + yBot) / 2
+        const halfH = Math.max((yBot - yTop) / 2, 10)
+        node.y0 = mid - halfH
+        node.y1 = mid + halfH
+        node._totalKwh = incoming.reduce((s, l) => s + (l.value ?? 0), 0)
+      }
+
       return g
     } catch (e) {
       console.warn('[SystemSankey] layout error:', e)
@@ -385,8 +415,21 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
                     style={{ transition: 'fill 300ms ease' }}
                   />
 
-                  {/* Label: right-side for sources/systems/building, left-side for end_use/waste */}
-                  {type !== 'end_use' && type !== 'waste' ? (
+                  {/* Label: right-side for sources/systems/building, left-side for end_use/waste.
+                      Brief 38 Part 1: source-type nodes (Grid Electricity / Natural
+                      Gas) get a prominent two-line label — name + bold MWh total. */}
+                  {type === 'source' && node._totalKwh != null ? (
+                    <>
+                      <text x={labelX} y={y0 + h / 2 - 6} fontSize="9"
+                        fontWeight="500" fill={c.text} dy="0.35em">
+                        {node.label.replace(/^(Grid |Natural )/, '')}
+                      </text>
+                      <text x={labelX} y={y0 + h / 2 + 7} fontSize="12"
+                        fontWeight="700" fill={c.text} dy="0.35em">
+                        {fmtMWh(node._totalKwh)}
+                      </text>
+                    </>
+                  ) : type !== 'end_use' && type !== 'waste' ? (
                     <text x={labelX} y={y0 + h / 2 - (node.metric ? 5 : 0)} fontSize="8"
                       fontWeight="600" fill={c.text} dy="0.35em">
                       {node.label}

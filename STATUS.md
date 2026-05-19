@@ -1,5 +1,25 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-19 — Brief 38 Part 1: Systems Sankey carrier-block sizing (in flight)
+
+**State:** `single_commit_in_flight` — Part 1 of three-part Brief 38 (Systems Sankey polish). Brief authorised chat-form; brief file folded into Part 1 per the Brief 37 pattern.
+
+**What's landing in this commit:**
+
+- `docs/briefs/active/38_systems_sankey_polish.md` (new) — Brief 38 spec. Three Parts: (1) carrier-block sizing, (2) unserved-demand placeholder, (3) waste-heat flows.
+- `frontend/src/components/modules/systems/SystemSankey.jsx` — post-process step in `sankeyResult` useMemo. After d3-sankey computes the layout, identify `source`-type nodes (Grid Electricity, Natural Gas), shrink their rectangles to span exactly the bounds of the incoming link-end stack, stash the total kWh on `node._totalKwh`. Render two-line label outside the node: small name ("Electricity" / "Gas") + bold MWh figure (12px font, 700 weight). Minimum 20 px node height so single-thin-flow carriers still render readably.
+
+**Before:** carrier blocks sized to total flow MWh — visually large rectangles dwarfing the uniformly-rendered flows landing on them.
+**After:** carrier blocks tightly bound the flow stack; the total MWh figure is the prominent visual cue, not the block size.
+
+**Build:** clean, 8.41 s, 2.49 MB JS (gzip 692 kB), zero errors. (No JS size change — pure layout-postprocess + label tweaks; one new field stashed on nodes.)
+
+**Browser verification expected (Chris):** Open Systems → Sankey. Electricity + Gas blocks should now match the visual stack of flows; the total MWh figure should be large and bold next to each block.
+
+**Next:** Part 2 — unserved-demand placeholder.
+
+---
+
 ## ✅ Session 2026-05-19 — Brief 37 close: Unified schedule editor live across Internal Gains + Operation + Systems
 
 **State:** `closed` (this commit). Brief 37 Parts 1–4 all complete; brief archived.
