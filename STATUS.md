@@ -1,6 +1,69 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-19 — Brief 38: Rejection tab + per-vent-system breakdown
+## ✅ Session 2026-05-19 — Brief 38 close + Audit 39 (permanent-vent diagnostic logged)
+
+**State:** `closed`. Brief 38 (Systems Sankey polish) archived to `docs/briefs/archive/38_systems_sankey_polish_COMPLETED.md`. `docs/briefs/current.md` repointed at "no active brief" (Brief 30 paused continues). Audit 39 logged at `docs/audit/39_state2_permanent_vent_diagnosis.md` — read-only diagnostic, no fix yet.
+
+**Brief 38 — what shipped (recap, across the iteration chain):**
+
+The brief opened with three Parts (carrier-block sizing, unserved-demand placeholder, waste-heat flows). Through four chat-form walkthroughs with Chris, the Systems Sankey was rewritten end-to-end into a coherent demand → system → carrier story rather than just polishing the existing layout. The Rejection tab landed alongside as a separate home for heat-rejection numbers that would otherwise distort the demand-driven view.
+
+Final architecture on `/systems`:
+
+1. **3-column tapered-ribbon Sankey** (`cd448b9`).
+   - Demand (left) → System (middle, small italic text, no box) → Energy carrier (right, Electricity + Gas; no Waste).
+   - Flows are **proper Sankey ribbons** (filled polygons via `ribbonPath`), not constant-width strokes — so each ribbon necks down (heat pump) or widens (combustion) through the system column. The width change *is* the SCOP / efficiency.
+   - Demand sum sets the page height; everything else uses the same px-per-MWh scale.
+   - Right column vertically centred against demand column so it doesn't sit empty at the bottom when fuel ≪ demand.
+   - Unserved heating: faint demand bar + " (off)" suffix; no ribbons emitted.
+
+2. **Per-branch system labels at branch midpoints** (`b96ea42`).
+   - Label rule: show on any branch where ribbon tapers/widens OR where the row has more than one branch (so dual-system rows always name both systems).
+   - Single-branch 1:1 rows (Lighting, Small power, Mech vent fans): no label.
+   - DHW Mixed: per-branch — ASHP branch labelled with SCOP, Gas boiler branch with % eff.
+
+3. **Dual-system demand bars with primary/secondary segments** (`6a8cd69`).
+   - Engine output extended on `consumption.space_heating` and `.space_cooling`: new `primary` + `secondary` objects with `{ delivered_mwh, fuel_mwh, fuel, efficiency }`. Internal `heating.primary_perf` / `secondary_perf` from `computeServiceEnergy` now surfaced.
+   - JSX builds branches from primary + secondary via `branchesFromPerfPair`. DHW keeps its `fuel_mix_applied` path (`branchesFromFuelMix`). Lighting / SP / Mech vent use `branchesElectricOneToOne`.
+   - Multi-branch rows render the demand bar as N rects with a 3-px visual gap between them. Bridgewater heating: top 95 % rect = VRF, bottom 5 % rect = electric panel heater, each feeds its own ribbon to Electricity at its own efficiency.
+
+4. **New Rejection centre tab** (`8bb143b`).
+   - Sixth tab between Monthly and Summary on `/systems`.
+   - Top-line: total MWh rejected + horizontal stacked bar of categories + legend.
+   - By-source cards: Cooling condenser, Mech vent exhaust, DHW flue, Heating flue. Zero-contribution categories hidden. Each card has a magnitude bar and a recovery-opportunity note.
+   - Per-vent-system table: System name, Exhaust MWh (post-HRE), HRE recovered, Fan kWh, Type (MVHR / Extract-only). Sorted by exhaust descending.
+
+**Three earlier commits in the same chain (`afab57b`, `fe8a692`, `7b2cad8`)** modified `frontend/src/components/modules/systems/SystemSankey.jsx` — a separate component used only by `SystemsZones.jsx`, not by the `/systems` view. They were no-ops for what Chris saw. Left in history rather than reverted; their effects on the SystemsZones view are non-harmful and approximate the same intent.
+
+**Files touched (final shipping set):**
+- `frontend/src/components/modules/SystemsModule.jsx` (main `/systems` Sankey + `SystemsRejection`)
+- `frontend/src/utils/instantCalc.js` (consumption.space_heating.{primary,secondary} + .space_cooling.{primary,secondary})
+- STATUS.md + brief archive + current.md
+
+**Audit 39 — permanent-vent discrepancy (this commit pair):**
+
+While Chris was reviewing the Sankey, he flagged that Bridgewater's permanent-vent heat loss reads differently across modules:
+- Building module Sankey: 7.7 MWh
+- Internal Gains Sankey: 41.3 MWh
+- Operation Sankey: 41.3 MWh
+
+Diagnosis (`d40f379`): `_calculateState2`'s permanent-vent path uses the cross-flow correlation unconditionally (`instantCalc.js:2483`), missing the `flow_mode` dispatch that Brief 33/34 added to `_calculateEnvelopeOnly`. For Bridgewater (single_sided default, C_d 0.29) the formula gives a 7.6 × larger UA hour-by-hour; observed annual loss ratio is 5.4 × (the gap is dT_air integration differences between the State 1 trace and the State 2 trace). The Brief 34 author's own inline comment at `instantCalc.js:2236-2238` acknowledges State 2's dispatch as a deferred follow-up that never landed. Same class as Brief 29 Issue #1.
+
+Fix is a ~6-line port. Held out of scope of Brief 38 close — recommended as a small standalone close-out before the Systems Library Architecture rewrite Chris is drafting.
+
+**Next-brief candidates (Chris's call):**
+1. Standalone fix-only brief for the State 2 permanent-vent dispatch (Audit 39's recommended fix). Single Part, ~6-line change + Bridgewater pre/post verification.
+2. The new Brief 39 (Systems Library Architecture) — Chris is rewriting the draft offline knowing what the Sankey polish + Audit 39 have surfaced. Held until rewrite lands.
+
+**Verification at close:**
+- Working tree shows the brief move + STATUS update + current.md update only.
+- `docs/briefs/active/` contains only `30_dynamic_engine_rebuild.md` (paused).
+- Build clean (last verified at `8bb143b`, 9.48 s, 2.50 MB JS).
+- `origin/main` matches local after the close commit.
+
+---
+
+## 📦 Session 2026-05-19 — Brief 38: Rejection tab + per-vent-system breakdown
 
 **State:** `commit_in_flight` — added the heat-rejection home Chris picked (new centre tab `Rejection`). The main Sankey stays focused on demand → carrier; rejection lives separately so its magnitudes don't distort the demand-driven view.
 
