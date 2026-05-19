@@ -1,5 +1,39 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-19 — Brief 41 Part 0: Operable-opening diagnostic (read-only)
+
+**State:** `commit_in_flight` — Brief 41 Part 0 (read-only diagnostic). Single commit lands the brief file in `active/` + the Part 0 audit doc. **No code changes.** Parts 1-6 pending Chris's review of Part 0 findings.
+
+**Trigger:** Bridgewater's "New door (east)" — 4 m² × 2 m, permanent always-open — shows 646.3 MWh annual heat loss on the Operation Heat Balance Sankey. Chris flagged: 646 is materially higher than hand-calc 140 MWh (4.5× gap) — suggests there may be an additional bug beyond the missing flow_mode dispatch. Part 0 investigates.
+
+**Three brief revisions captured before authorisation:**
+
+1. **Part 0 (NEW)** — read-only diagnostic before any code changes. Confirms paths, reconciles 646 vs hand-calc, traces git history. Pauses for Chris review before Parts 1-6.
+2. **Keep `height_m`** — temperature-mode operable openings need stack-driven cooling. Revised Part 1: always/scheduled → wind-only dispatch; temperature → wind + additive stack term using `height_m`.
+3. **No numerical target** — Part 5 reconciliation removed the "25-35 MWh" anchor per Brief 33 Principle 1. Order-of-magnitude single-digit to low-double-digit MWh under single_sided dispatch with `cd=0.29`; escalation if > 1.5× a comparable always-open 4 m² louvre.
+
+**Part 0 audit findings** (`docs/audit/41_operable_openings_diagnostic.md`):
+
+- **Three operable-opening code paths confirmed.** State 1 lines 1339-1367 (per-opening engine, Brief 28e Gate E2). State 2 lines 2702-2740 (mirror — Brief 39 Part 3 verified faithful). Inline-legacy line 5255 (`Q_window` aggregate — different simpler model). State 3 cascades on State 2; no own physics. **All use cross-flow Q_wind formula universally; no flow_mode dispatch.**
+- **Bridgewater 646 MWh = engine output from State 2's per-opening engine** (Operation uses `mode='envelope-gains'`). Traced through `losses_at_setpoint.natural_ventilation[].heat_loss_kwh` → State 2 `acc.heat_loss_Wh`. Not a display artefact; not double-counted.
+- **Hand-calc bracket reconciliation:** at Bridgewater-realistic UK coastal weather (≈ 5-6 m/s avg wind, ≈ 8000 heating-direction hours under permanent mode, ≈ 9 K avg dT, stack adding ≈ 12 %), the engine's 646 MWh sits in a 583-700 MWh physically-defensible bracket. Chris's 140 MWh was conservative on all four inputs (4 m/s, 5000 h, 6 K, no stack). Compounded multiplier: 1.6 × 1.5 × 1.4 × 1.12 ≈ 3.8 × → 140 × 3.8 ≈ 532 MWh. Residual gap from 532 to 646 is within hand-calc averaging noise. **No additional bug identified.**
+- **Additional bug candidates investigated and ruled out:** double-counting via inline-legacy (not called by Operation), wind speed unit conversion (raw `weatherData.wind_speed[h]`, no transforms), stack term inflated (standard EN 16798-7 magnitude), multiple-door instance count (cannot verify without DB access; UI shows 1), per-opening Cd/Cw customised (cannot verify; defaults used in bracket analysis).
+- **Git history trace.** Brief 28e Gate E2 (`8474ad9`) introduced the cross-flow-only physics. Brief 33/34 added `flow_mode` dispatch for permanent vents but not operable openings. Brief 39 Part 3 (`d4dc656`) verified the State 1 → State 2 mirror was faithful — ran the right structural check (consistency between states) but the wrong content check (didn't ask whether the underlying correlation is correct).
+- **Suggested Issue #17** for `29_open_issues.md` documented in the audit's §7. Logging deferred to Brief 41 Part 6's close-out commit (which closes the issue against the fix in the same commit).
+- **Confidence the engine is computing what the inputs say**, not that the inputs are physically reasonable. A real 4 m² always-open door would be remediated; the configuration is a stress-test that surfaces the missing flow_mode dispatch via its magnitude. Brief 41 Part 1 fixes the correlation choice; doesn't try to gate against unrealistic inputs.
+
+**Files in this commit:**
+- `docs/audit/41_operable_openings_diagnostic.md` (new)
+- `docs/briefs/active/41_operable_openings_unified_physics.md` (new)
+- `docs/briefs/current.md` (repointed at Brief 41)
+- `STATUS.md` (this entry)
+
+**No code changes.** Build not rebuilt this commit (docs-only); will rebuild before Part 1.
+
+**Next:** Chris reviews Part 0 audit doc + this STATUS entry. If findings reconcile his concern (646 MWh = cross-flow physics on coastal weather, not a hidden bug), he authorises Parts 1-6 and I plough through. If anything in the audit suggests further investigation, Part 1 stays paused.
+
+---
+
 ## ✅ Session 2026-05-19 — Brief 39 close: Envelope physics architecture fix complete
 
 **State:** `closed` (structurally). Brief 39 (Envelope Physics Architecture Fix) archived to `docs/briefs/archive/39_envelope_architecture_fix_COMPLETED.md`. `docs/briefs/current.md` repointed at "no active brief" (Brief 30 paused continues as the only entry in `active/`). Six commits shipped (`356ea6e`, `42fc0bc`, `d4dc656`, `0152227`, `49c5fcc`, this commit).
