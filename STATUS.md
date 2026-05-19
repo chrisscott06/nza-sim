@@ -1,6 +1,43 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-19 — Brief 38 redo on the correct component: SystemsSankey in SystemsModule.jsx
+## 🚧 Session 2026-05-19 — Brief 38: SystemsSankey full redesign per Chris's walkthrough call
+
+**State:** `commit_in_flight` — Sankey rewritten end-to-end after Chris's walkthrough: ditch the four-column "Demand · System · Carrier · Waste" structure, no more system boxes, thick demand-driven bars, three rects in one right column (Electricity / Gas / Waste).
+
+**Layout (L → R):**
+- **Demand column.** Six bars stacked top-to-bottom (Heating, Cooling, DHW, Mech vent — renamed from "Vent fans" per Chris — Lighting, Small power). Each row: small service-name label above the bar, MWh figure below, system label below that. No "demand" word. No system box. Bars rounded rx=2.
+- **Right column.** Three rects in a single vertical stack: Electricity (top), Gas (middle), Waste (bottom). Same label discipline: name above, MWh below.
+- **Flows.** Each non-unserved demand has up to three outgoing flows: Elec, Gas, Waste. Drawn at their true MWh widths via a cubic Bézier (`pathLink`) with `strokeWidth = scaleW(mwh)`. DHW's elec branch is drawn dark-red when the DHW fuel mix has any heat-pump share (the existing ASHP-preheat colour convention).
+
+**Scale:** single uniform px-per-MWh. Total demand MWh maps to roughly the canvas's usable height; every other flow / rect uses the same scale. No caps. On Bridgewater with totalDemand ≈ 697 MWh and ~342 px of usable bar height, scale ≈ 0.49 px/MWh → Heating 110 px, DHW 147 px, Cooling 34 px. Right column is vertically centred against the demand column (right total < demand total because heat-pump COPs make elec ≪ demand) so it doesn't sit empty at the bottom.
+
+**System labels.** Inline `fmtSys` formats library IDs: `vrf_heat_recovery_dual_function` → `VRF heat recovery dual function`; common acronyms upper-cased (VRF, ASHP, MVHR, MEV, DHW, LED, HVAC, HP, SFP, COP, EER, SEER). DHW with both heat-pump and gas → "Mixed". Mech vent with >1 system → "Mixed". Lighting → "LED fixtures". Small power → "Plug load".
+
+**Unserved heating.** Bar still drawn but at 30 % opacity, service name suffixed " (off)", system label "(off — no system)". No outgoing flows. Long cross-diagram dashed-red flow + System-column placeholder rect both gone.
+
+**Cooling waste bigger than cooling demand.** Cooling waste = `delivered + electricity_input` (heat-pump condenser identity), which exceeds the demand bar's height. Flows stack from the bar top and overflow its bottom edge — accepted because the bar shows demand and flows show their true MWh on the same scale. Energy-balance-pedantic but matches the heat-demand Sankey style Chris said he likes elsewhere.
+
+**Removed.** `systemLabel` helper (logic now inline as `sysLabel` per-item, with `fmtSys` formatter as a module-level helper).
+
+**Build:** clean, 9.13 s, 2.49 MB JS (gzip 692 kB).
+
+**Browser verification expected (Chris):** Open Systems → Sankey on Bridgewater.
+- Bars are thick (Heating ~110 px, DHW ~147 px) and fill the available canvas height.
+- Two text lines under each demand bar (MWh, system name).
+- Heating shows faint with " (off)" suffix; no flow leaves it; no cross-diagram artefact.
+- Right column has three rects stacked: Electricity on top, Gas middle, Waste bottom — each labelled above + MWh below.
+- Cooling has visibly fatter flow into Waste than into Electricity (condenser rejection > electrical input).
+- DHW has the Gas branch and a dark-red Elec branch (ASHP preheat colour).
+
+**Supersedes the two previous Brief 38 commits in this redo chain.**
+- `afab57b` & `fe8a692` modified `SystemSankey.jsx` (used only by SystemsZones.jsx) — no effect on the `/systems` view.
+- `7b2cad8` did a first pass on the correct inline `SystemsSankey` but with the old layout (four columns, system boxes, dual-scale carrier sizing). This commit replaces that pass with the layout Chris asked for.
+
+**Next:** walkthrough confirms; brief close commit (archive `38_systems_sankey_polish.md → archive/38_..._COMPLETED.md`, repoint `current.md`).
+
+---
+
+## 📝 Session 2026-05-19 — Brief 38 first redo [SUPERSEDED — wrong layout, before walkthrough]
 
 **State:** `commit_in_flight` — Brief 38 Parts 1 + 2 + 3 all re-targeted at the right component after walkthrough revealed the previous two commits (`afab57b`, `fe8a692`) touched `SystemSankey.jsx`, which is only used by `SystemsZones.jsx`. The visible Sankey on `/systems` is a *different* inline component, `SystemsSankey` defined at `SystemsModule.jsx:676`. Both previous commits remained no-ops for what Chris saw on screen.
 
