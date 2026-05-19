@@ -1,5 +1,42 @@
 # NZA SIMULATE — Status
 
+## 🟢 Session 2026-05-19 — Brief 42 Part 1: Per-opening cd + flow_mode in schema
+
+**State:** `commit_in_flight` — Brief 42 Part 1. Pure data-model change. Each facade and each operable opening now carries its own `cd` and `flow_mode`; building-wide `openings.cd` and `openings.flow_mode` removed from `DEFAULT_PARAMS`. No engine reads change in this commit — Part 2 swaps the engine over to per-opening reads under Rule 14 three-location parity; Part 3 migration writes persisted building-wide values onto each opening.
+
+**`frontend/src/context/ProjectContext.jsx` (`DEFAULT_PARAMS.openings`):**
+- Per-facade entries now `{ louvre_area_m2, openable_fraction, cd: 0.40, flow_mode: 'single_sided' }` (north/south/east/west)
+- Building-wide `cd` and `flow_mode` keys removed from the defaults object
+- `schedule` and `site_exposure` retained at top level (C_w is a property of building setting, not of an individual opening)
+- Preamble comment block updated: new "Brief 42 (2026-05-19) — per-opening cd + flow_mode" paragraph explains reception door (0.60 / cross) vs trickle vent (0.40 / single_sided) on the same building; per-facade default values + range documented
+- `updateParam('openings', …)` reducer (~line 748) — per-face deep-merge unchanged (already spreads the existing per-face object); comment updated to call out that per-face cd + flow_mode merge automatically via that spread
+
+**`frontend/src/utils/instantCalc.js`:**
+- `withMode` `passFace()` now passes per-face `cd` and `flow_mode` through to the engine. Per-face values pass as `null` when missing on the building config, so Part 2's engine reads can fall back to the (transient) building-wide passthrough during the gap between Part 2 and Part 3 migration on persisted projects
+- Building-wide `cd` and `flow_mode` in `passThroughOpenings` kept transiently with an inline note — Part 3 strips persisted building-wide values and Part 2's engine reads will then use only per-face per-opening
+- `synthesiseOperableOpeningsFromLegacy` synthesised opening now carries `cd: 0.55` and `flow_mode: 'single_sided'` (window type defaults per Brief 42 step 1.3)
+- ALLOWLIST DRIFT WARNING discipline preserved — every new per-face field is allowlisted
+
+**`frontend/src/components/modules/OperationModule.jsx`:**
+- `OPENING_TYPE_OPTIONS` gains `defaultCd` + `defaultFlowMode` per type:
+  - Door: cd 0.60, flow_mode 'cross' (rooms on opposite sides through a corridor — cross-flow topology)
+  - Window: cd 0.55, flow_mode 'single_sided' (the more conservative correlation)
+  - Vent: cd 0.40, flow_mode 'single_sided' (louvre / trickle vent seed)
+- `defaultCw` retired from the type options (Cw is building-wide and resolved from `openings.site_exposure`)
+- `newOpening()` factory seeds `cd` and `flow_mode` from the type entry — clicking "+ Door / + Window / + Vent" creates an opening with type-appropriate physics
+
+**Per Principle 1 of the brief: each opening declares what it is.** Defaults are seed values at creation time, not inheritance links. Changing one opening's `cd` has no effect on any other opening; changing the seed default has no effect on existing openings. (Inheritance was Brief 33/34/41's model; Brief 42 retires it for openings.)
+
+**No engine reads changed in this commit** — Part 2 lands the switchover with State 1 + State 2 + inline-legacy in the same commit per Rule 14. Behaviour for persisted projects is unchanged until Part 3 migration runs.
+
+**Build:** clean, 9.99 s, 2.50 MB JS (gzip 694 kB) — unchanged shape from Brief 41 Part 7.
+
+**Verification (visual):** post-Part-1 alone there's nothing visibly different — the UI is unchanged. Visual verification arrives in Part 4 (Building UI per-facade controls) and Part 5 (Operation UI per-opening controls).
+
+**Next:** Part 2 — engine three-location parity. State 1 permanent loop (~1339) + State 1 operable loop (~1339+ further along) + State 2 mirrors (~2702) + inline-legacy Q_window (~5255). `resolveFlowMode` refactored to take an individual opening. Single commit, Rule 14 discipline.
+
+---
+
 ## 🟢 Session 2026-05-19 — Brief 41 close + Brief 42 open (housekeeping)
 
 **State:** `commit_in_flight` — formal close of Brief 41 (Operable openings: unified physics) and opening of Brief 42 (Per-opening C_d and flow_mode) in one housekeeping commit. Brief 41 substantive work shipped in `6c99373`–`5bbdbd1`; this commit lands the documentation hygiene per Process Rule 7.

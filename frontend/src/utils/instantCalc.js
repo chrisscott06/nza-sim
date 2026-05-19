@@ -421,14 +421,28 @@ function withMode(building, mode) {
   // resistance) removed in favour of a single building-wide `cd` field. The
   // computeCd helper in openingCoefficients.js remains as a utility but is
   // no longer wired to the engine. ALLOWLIST DRIFT discipline maintained.
+  // Brief 42 Part 1 (2026-05-19): per-opening cd + flow_mode. Each facade
+  // declares its own physics; engine reads switch over in Part 2. The
+  // per-face passthrough below carries the new fields; building-wide
+  // `cd` and `flow_mode` passthrough kept transiently for Part 2 engine
+  // reads on persisted projects whose facades haven't been migrated yet
+  // (Part 3 strips persisted building-wide values). ALLOWLIST DRIFT
+  // discipline maintained: any new per-face field must be added here.
   const passFace = (face) => ({
     louvre_area_m2:    ops?.[face]?.louvre_area_m2 ?? 0,
     openable_fraction: ops?.[face]?.openable_fraction ?? 0,
+    cd:                typeof ops?.[face]?.cd === 'number' ? ops[face].cd : null,
+    flow_mode:         (ops?.[face]?.flow_mode === 'cross' || ops?.[face]?.flow_mode === 'single_sided')
+                         ? ops[face].flow_mode : null,
   })
   const passThroughOpenings = {
     site_exposure: ops.site_exposure ?? 'normal',
-    flow_mode:     ops.flow_mode     ?? 'single_sided',  // Brief 33 Finding 1 fix
-    cd:            typeof ops.cd === 'number' ? ops.cd : 0.25,  // Brief 34 single C_d slider
+    // Transitional building-wide passthrough — Part 2 swaps engine reads
+    // to per-facade per-opening; Part 3 migration writes these onto each
+    // facade and strips them from the persisted blob. Once persisted
+    // projects are migrated these will be unused.
+    flow_mode:     ops.flow_mode     ?? 'single_sided',
+    cd:            typeof ops.cd === 'number' ? ops.cd : 0.25,
     north:    passFace('north'),
     south:    passFace('south'),
     east:     passFace('east'),
@@ -612,12 +626,14 @@ export function synthesiseOperableOpeningsFromLegacy(building) {
       name:                `Legacy operable window bank (${face})`,
       facade:              face,
       area_m2:             Math.round(area_m2 * 100) / 100,
-      // Brief 41 Part 2: discharge_coefficient + wind_coefficient dropped
-      // from the operable-opening schema. Building-wide `openings.cd` +
-      // `openings.site_exposure → Cw` drive flow uniformly across permanent
-      // vents and operable openings. height_m retained for temperature-mode
-      // stack contribution.
+      // Brief 41 Part 2: discharge_coefficient + wind_coefficient dropped.
+      // Brief 42 Part 1 (2026-05-19): per-opening cd + flow_mode seeded
+      // at synthesis time using the window type defaults (cd 0.55,
+      // flow_mode 'single_sided'). Synthesised entries can be edited
+      // per-opening in Operation post-migration.
       height_m:            floor_height,
+      cd:                  0.55,
+      flow_mode:           'single_sided',
       opening_type:        'window',
       parent_glazing_face: face,
       control: {

@@ -161,15 +161,25 @@ const DEFAULT_PARAMS = {
   // explicitly classified as cross-flow.
   //
   // Brief 34 (2026-05-18) simplified the C_d UI: one building-wide slider
-  // replaces the Brief 33 Part 2 per-facade geometry calculator (type /
-  // dimensions / resistance). The calculator (`computeCd` in
-  // `frontend/src/utils/openingCoefficients.js`) remains as a code utility
-  // and the methodology doc continues to reference the lookup tables for
-  // users choosing an appropriate slider value manually.
+  // replaced the Brief 33 Part 2 per-facade geometry calculator. The
+  // calculator (`computeCd` in `frontend/src/utils/openingCoefficients.js`)
+  // remains as a code utility; the methodology doc continues to reference
+  // the lookup tables for users choosing a slider value manually.
   //
-  // Default cd = 0.25 — typical trickle vent with mesh + flap. Range 0.15
-  // (very restrictive) to 0.65 (sharp orifice). The slider value applies
-  // to every facade with a non-zero opening area.
+  // Brief 42 (2026-05-19) — per-opening cd + flow_mode. Each facade now
+  // carries its own cd and flow_mode. Building-wide openings.cd and
+  // openings.flow_mode are removed. A reception door (cd 0.60, cross) and a
+  // trickle vent (cd 0.40, single_sided) on the same building no longer
+  // share one slider. Site exposure (C_w) stays building-wide — it's a
+  // property of where the building sits, not of any individual opening.
+  //
+  // Per-facade defaults below: cd 0.40 (louvre seed), flow_mode
+  // 'single_sided'. Range cd 0.15 (very restrictive) to 0.65 (sharp
+  // orifice). Defaults are seed values applied to new facades; once a
+  // facade has a non-zero area the values are independent and editable
+  // per-facade. Migration (Brief 42 Part 3) copies the persisted
+  // building-wide value onto every facade so behaviour is unchanged at
+  // migration time.
   //
   // ⚠ ALLOWLIST DRIFT: any new top-level or per-facade field added below
   // must also be allowlisted in withMode's passThroughOpenings
@@ -179,12 +189,13 @@ const DEFAULT_PARAMS = {
   openings: {
     schedule:      'never',         // 'never' | 'occupied' | 'summer_day' | 'always'
     site_exposure: 'normal',        // 'sheltered' | 'normal' | 'exposed'
-    flow_mode:     'single_sided',  // 'cross' | 'single_sided'
-    cd:            0.25,            // building-wide discharge coefficient (Brief 34)
-    north: { louvre_area_m2: 0, openable_fraction: 0 },
-    south: { louvre_area_m2: 0, openable_fraction: 0 },
-    east:  { louvre_area_m2: 0, openable_fraction: 0 },
-    west:  { louvre_area_m2: 0, openable_fraction: 0 },
+    // Building-wide cd + flow_mode REMOVED in Brief 42 — see per-facade
+    // entries below. Migration writes persisted building-wide values onto
+    // each facade at Part 3.
+    north: { louvre_area_m2: 0, openable_fraction: 0, cd: 0.40, flow_mode: 'single_sided' },
+    south: { louvre_area_m2: 0, openable_fraction: 0, cd: 0.40, flow_mode: 'single_sided' },
+    east:  { louvre_area_m2: 0, openable_fraction: 0, cd: 0.40, flow_mode: 'single_sided' },
+    west:  { louvre_area_m2: 0, openable_fraction: 0, cd: 0.40, flow_mode: 'single_sided' },
   },
   window_count:    { north: 8, south: 8, east: 3, west: 3 },
   // Legacy occupancy fields — kept for backward compat with hvac_dhw.py
@@ -736,7 +747,10 @@ export function ProjectProvider({ children }) {
         next = { ...p, [key]: merged }
       } else if (key === 'openings') {
         // Two-level merge: top-level fields (schedule, site_exposure) plus
-        // per-face nested objects ({north, south, east, west}).
+        // per-face nested objects ({north, south, east, west}). Brief 42
+        // (2026-05-19): each per-face object now carries cd + flow_mode in
+        // addition to louvre_area_m2 + openable_fraction; the per-face
+        // spread inside the loop handles them automatically.
         const current = p.openings ?? {}
         const merged = { ...current }
         for (const k of Object.keys(value ?? {})) {

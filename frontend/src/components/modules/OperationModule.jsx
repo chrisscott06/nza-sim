@@ -87,10 +87,19 @@ const SCHEDULE_OPTIONS = [
   { value: 'summer_day_daytime',            label: 'Summer day (May–Sept 08–20)' },
 ]
 
+// Brief 42 Part 1 (2026-05-19): per-type defaults for cd + flow_mode.
+// These are seed values applied at creation time when the user clicks
+// "+ Door / + Window / + Vent". Once an opening exists, its cd and
+// flow_mode are independent of these defaults — no inheritance link.
+// Door defaults to cross-flow (rooms on opposite sides of a corridor
+// connected through the door); window + vent default to single_sided
+// (more conservative, the safe assumption without explicit topology).
+// defaultCw retired: site exposure (C_w) is building-wide and lives on
+// openings.site_exposure (resolved in instantCalc.js's siteExposureCw).
 const OPENING_TYPE_OPTIONS = [
-  { value: 'door',   label: 'Door',   defaultArea: 4.0,  defaultHeight: 2.0, defaultCw: 0.25 },
-  { value: 'window', label: 'Window', defaultArea: 1.5,  defaultHeight: 1.2, defaultCw: 0.40 },
-  { value: 'vent',   label: 'Vent',   defaultArea: 0.5,  defaultHeight: 0.5, defaultCw: 0.25 },
+  { value: 'door',   label: 'Door',   defaultArea: 4.0,  defaultHeight: 2.0, defaultCd: 0.60, defaultFlowMode: 'cross'        },
+  { value: 'window', label: 'Window', defaultArea: 1.5,  defaultHeight: 1.2, defaultCd: 0.55, defaultFlowMode: 'single_sided' },
+  { value: 'vent',   label: 'Vent',   defaultArea: 0.5,  defaultHeight: 0.5, defaultCd: 0.40, defaultFlowMode: 'single_sided' },
 ]
 
 // Module ownership filter — see HeatBalance.MODULE_CATEGORY_KEYS.
@@ -128,10 +137,15 @@ function newOpening(type, facade) {
     facade,
     area_m2:               t.defaultArea,
     height_m:              t.defaultHeight,
-    // Brief 41 Part 2 (2026-05-19): per-opening discharge_coefficient +
-    // wind_coefficient dropped. Building-wide openings.cd +
-    // openings.site_exposure → Cw drive flow uniformly. height_m retained
-    // for temperature-mode stack.
+    // Brief 42 Part 1 (2026-05-19): per-opening cd + flow_mode seeded
+    // from OPENING_TYPE_OPTIONS at creation. Building-wide openings.cd
+    // and openings.flow_mode are removed (DEFAULT_PARAMS, ProjectContext);
+    // each opening declares its own physics. Once created the values are
+    // independent of these defaults — no inheritance link. Site exposure
+    // (C_w) stays building-wide on openings.site_exposure. height_m
+    // retained for temperature-mode stack contribution.
+    cd:                    t.defaultCd,
+    flow_mode:             t.defaultFlowMode,
     opening_type:          type,
     parent_glazing_face:   type === 'window' ? facade : null,
     control: {
