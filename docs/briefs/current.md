@@ -1,6 +1,6 @@
 # Current brief
 
-**Active:** [`active/37_unified_schedule_editor.md`](active/37_unified_schedule_editor.md) — single shared schedule editor across Internal Gains + Operation + Systems with consistent theming + schema + exception-period support. Chat-form authorisation 2026-05-18; Part 1 in flight (this commit) is the colour-token foundation.
+**Active:** none. Brief 37 closed in this commit (Parts 1–4 all complete). Schedule editor unified across Internal Gains + Operation + Systems with module-coloured theming, exception-period support everywhere, and a single flat schedule schema. Legacy editors deleted. Awaiting next-brief sequencing.
 
 **Paused (only remaining entry in active/):** [`active/30_dynamic_engine_rebuild.md`](active/30_dynamic_engine_rebuild.md) — Phase 0 + Phase 1.0 complete (commits `8003577` + `cc96815`). Phase 1.1 onwards PAUSED. Dynamic backend code frozen at HEAD `54407e3` (post Brief 31), not deleted. Eligible for resumption now that Brief 33 has closed.
 
@@ -35,7 +35,7 @@ This pointer file is updated each time a brief in `active/` closes.
 | [`archive/33_building_envelope_COMPLETED.md`](archive/33_building_envelope_COMPLETED.md) + [`archive/33_part_3_module_scopes_COMPLETED.md`](archive/33_part_3_module_scopes_COMPLETED.md) | ✅ closed 2026-05-18 — Part 1 revert `195a87b`; Finding 1 fix `b53b163`; Part 2 geometry-aware C_d `c6a415b`; Part 3 CLAUDE.md "Module scopes" + Process Rules 10–11 `d814973` | `195a87b`, `b53b163`, `c6a415b`, `d814973` |
 | [`archive/34_simplify_permanent_openings_ui_COMPLETED.md`](archive/34_simplify_permanent_openings_ui_COMPLETED.md) | ✅ closed 2026-05-18 — UI simplification to single C_d slider | `f702687` |
 | [`archive/36_internal_gains_audit_polish_COMPLETED.md`](archive/36_internal_gains_audit_polish_COMPLETED.md) | ✅ closed 2026-05-18 — Part 1 Internal Gains Static audit (`2c96896`); Part 2 colour discipline (`376ab41`); Part 3 SchedulePopout shared chrome (`f0b764c`); Part 4 close-out (`66fb0e6`). Two S2 issues logged (#14 scope contamination, #15 lighting `independent` mode scaling). Systems exception-period support deferred to Brief 37. | `2c96896`, `376ab41`, `f0b764c`, `66fb0e6` |
-| **[`active/37_unified_schedule_editor.md`](active/37_unified_schedule_editor.md)** | **🟡 active** — Part 1 in flight (this commit): colour-token sweep (Operation teal-700, Systems DHW pink-500, ventilation teal-500, cooling cyan-bright unified). Parts 2-4 build + wire UnifiedScheduleEditor; Part 4 deletes legacy editors after sign-off pause. | (this commit) |
+| [`archive/37_unified_schedule_editor_COMPLETED.md`](archive/37_unified_schedule_editor_COMPLETED.md) | ✅ closed 2026-05-19 — Part 1 colour-token sweep `102a2e0`; Part 2 UnifiedScheduleEditor `f60535d`; Part 3 wire consumers + schema migration + reader fallback `eb087eb`; Part 4 delete legacy editors (this commit). Three legacy editors deleted; Operation's stuck modal also resolved. | `102a2e0`, `f60535d`, `eb087eb`, (this commit) |
 
 Brief 31 lands the rules that govern future sessions (CLAUDE.md updates) and the project's self-description (STATUS.md refresh + brief management). Brief 30 Phase 1.1 onwards is then re-authorised against that corrected foundation.
 

@@ -1,6 +1,40 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-18 — Brief 37 Part 3: Wire consumers + schema migration (in flight)
+## ✅ Session 2026-05-19 — Brief 37 close: Unified schedule editor live across Internal Gains + Operation + Systems
+
+**State:** `closed` (this commit). Brief 37 Parts 1–4 all complete; brief archived.
+
+**Walkthrough confirmation:** Chris walked through all three consumers (Internal Gains × 3 sections, Operation, Systems × N services) post-Part-3 and reported "All looks good" — parity confirmed, no findings. Part 4 deletion sweep authorised.
+
+**Brief 37 lifecycle:**
+- Part 1 — Colour token sweep: `102a2e0`. Operation accent flipped to teal-700; Systems DHW flipped to pink-500; Systems ventilation flipped to teal-500; Systems cooling unified to cyan-bright (`#00AEEF`). Canonical `SYSTEMS_SERVICE_COLOURS` table added to `balanceColours.js`. 24 files swept.
+- Part 2 — `UnifiedScheduleEditor` (component build, isolated): `f60535d`. New `frontend/src/components/shared/scheduleEditor/UnifiedScheduleEditor.jsx`. `AnnualHeatmap.jsx`, `ExceptionsPanel.jsx`, `exceptions.js` moved from `gains/canvas/` to `shared/scheduleEditor/`.
+- Part 3 — Wire consumers + schema migration: `eb087eb`. Exception edit-mode (`editingException` prop + synthetic-schedule routing) added to `UnifiedScheduleEditor`. Internal Gains + Operation + Systems all routed through the unified editor. Operation's stuck `inset-0` modal also resolved (Brief 36 Part 3 missed it). Service-coloured accents in Systems per `schedule_type`. Schema migration ran (Bridgewater 2/2 library schedules flattened). Reader fallback in `scheduleLibrary.js` covers transition state.
+- Part 4 — Delete legacy editors (this commit): `gains/ScheduleEditor.jsx`, `gains/canvas/ScheduleEditorCanvas.jsx`, `profiles/ScheduleEditor.jsx` all deleted. Brief 37 archived. `docs/briefs/current.md` cleared.
+
+**Architecture state after Brief 37:**
+- One schedule editor used by three modules. Same drag-paint, same monthly dials, same annual heatmap, same exceptions, same look-and-feel.
+- Module / service colours are canonical — Operation teal-700, Systems per-service (heating red / cooling cyan / DHW pink / ventilation teal / lighting amber / small power violet), Internal Gains three purples.
+- Schedule schema is flat (`weekday / saturday / sunday / monthly_multipliers / exceptions[]`) across all consumers + the engine. Reader-side fallback in place for any persisted state that hasn't yet been migrated.
+- Operation's stuck modal complaint resolved (the Brief 36 Part 3 deferred sub-item).
+- Building module remains structurally complete for Static-only (Brief 33 close).
+- Internal Gains audit + polish complete (Brief 36 close). Two open S2 issues (#14 scope contamination, #15 lighting independent mode scaling) still on the queue.
+- Dynamic engine remains paused (Brief 32 Part 1). Eligible for resumption.
+
+**Verification:**
+- Build clean (8.55 s, 2.49 MB JS, gzip 692 kB).
+- `git ls-files "*ScheduleEditor.jsx"` lists only the shared/scheduleEditor variants — three legacy editors gone.
+- Three migration commits + one close-out commit; total Brief 37 footprint ~30 files touched (mostly Part 1 colour sweep) + one new shared component family.
+
+**Next-brief candidates (Chris's call):**
+- Operation module audit (three-lists method, same as Brief 36 Part 1 did for Internal Gains).
+- Systems module audit (same pattern).
+- Dynamic engine rebuild (Brief 30 Phase 1.1+ resumption — eligible now that Brief 32 / 33 / 36 / 37 have closed the Static-side scope work).
+- Issue #15 fix (lighting `independent` mode `occupancy_rate` scaling — single-file follow-up; default Bridgewater unaffected).
+
+---
+
+## ✅ Session 2026-05-18 — Brief 37 Part 3: Wire consumers + schema migration (closed `eb087eb`)
 
 **State:** `single_commit_in_flight` — three consumer refactors + schema migration + engine reader fallback. Builds on Parts 1 + 2. Once Chris's walkthrough confirms parity, Part 4 deletes the legacy editors.
 
