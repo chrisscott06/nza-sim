@@ -14,6 +14,7 @@
 import { resolveCmass } from './thermalMass.js'
 import { resolveScheduleAtHour } from './scheduleLibrary.js'
 import { computeThermalBridges } from './thermalBridges.js'
+import { computeSystemsDelivered } from './systemsEngine.js'   // Brief 40 Part 2 (2026-05-19)
 import {
   buildUkGridYearlyTrajectory,
   ukGridIntensityForYear,
@@ -762,7 +763,29 @@ function pickWholeWallU(item, model) {
   return model.type === 'mass' ? 1 / model.R_total : (model.U ?? 0)
 }
 
-function _calculateEnvelopeOnly(building, constructions, libraryData, weatherData, hourlySolar, comfortBand, tuning = null) {
+function _calculateEnvelopeOnly(building, constructions, libraryData, weatherData, hourlySolar, comfortBand, tuning = null, opts = {}) {
+  // Brief 40 Part 2 (2026-05-19): Rule 14 parity with _calculateState2's
+  // setpoint parameterisation. `opts.setpointOverride = { heating, cooling }`
+  // substitutes the heating / cooling setpoint used in the demand
+  // integration. When undefined, behaviour is byte-identical to pre-Brief-40
+  // (comfortBand.lower_c / .upper_c are used directly).
+  //
+  // State 1 doesn't compute system delivered energy itself, so the override
+  // is not consumed by Brief 40's `computeSystemsDelivered` for the
+  // diagnostic (that calc reads State 2's demand). But Rule 14 keeps the
+  // override symmetric across State 1 + State 2 so any future consumer
+  // calling State 1 with an override gets a consistent demand integral.
+  // Per-element loss / gain accumulators (used by losses_at_setpoint
+  // outputs) shift with the override; the displayed Sankey for the user's
+  // actual heat balance still calls State 1 with no override (comfortBand
+  // path), preserving Brief 38 polish semantics.
+  const effectiveLowerC = (typeof opts?.setpointOverride?.heating === 'number')
+                            ? opts.setpointOverride.heating
+                            : comfortBand.lower_c
+  const effectiveUpperC = (typeof opts?.setpointOverride?.cooling === 'number')
+                            ? opts.setpointOverride.cooling
+                            : comfortBand.upper_c
+
   // Brief 28b Part 3 v2 (2026-05-14 commit d7c7aad + this commit):
   // optional `tuning` overrides for the three thermal-mass /
   // solar-distribution / surface-resistance parameters. Defaults set
@@ -884,8 +907,12 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   // (including floor) is still used in the demand subtraction itself.
   // Rationale: "shoulder" should mean the weather is mild, not that the
   // floor stopped losing heat to constant 11 °C ground.
-  const H_floor_const = wholeWallU_floor * ground_area * Math.max(0, comfortBand.lower_c - T_ground)
-  const C_floor_const = wholeWallU_floor * ground_area * Math.max(0, T_ground - comfortBand.upper_c)
+  // Brief 40 Part 2: floor const uses effectiveLowerC / effectiveUpperC so
+  // the demand-regime gating matches the rest of the demand integration
+  // when an override is in play. Identical to comfortBand values when no
+  // override is supplied.
+  const H_floor_const = wholeWallU_floor * ground_area * Math.max(0, effectiveLowerC - T_ground)
+  const C_floor_const = wholeWallU_floor * ground_area * Math.max(0, T_ground - effectiveUpperC)
 
   // ── Ventilation (split) ──────────────────────────────────────────────────
   // Brief 28-IM Bug 2: derive operational ACH from BRUKL-style q50 input
@@ -1289,8 +1316,10 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
     // Mass step above keeps using the area-weighted T_sa_wall (single shared
     // wall state); for the loss *report* we want per-facade sol-air to
     // compare against the per-facade spreadsheet hand-calc breakdown.
-    const T_heat = comfortBand.lower_c
-    const T_cool = comfortBand.upper_c
+    // Brief 40 Part 2 (2026-05-19): T_heat / T_cool from effectiveLowerC /
+    // effectiveUpperC for Rule 14 parity with State 2's setpoint override.
+    const T_heat = effectiveLowerC
+    const T_cool = effectiveUpperC
     const T_sa_wall_n_h = solAirT(T_out, hourlySolar.f1[h], extWallModel.solar_abs ?? 0.6, extWallModel.h_out ?? 25)
     const T_sa_wall_e_h = solAirT(T_out, hourlySolar.f2[h], extWallModel.solar_abs ?? 0.6, extWallModel.h_out ?? 25)
     const T_sa_wall_s_h = solAirT(T_out, hourlySolar.f3[h], extWallModel.solar_abs ?? 0.6, extWallModel.h_out ?? 25)
@@ -2254,11 +2283,40 @@ export {
  * heat_balance output + delta computations). Then runs an INDEPENDENT
  * 8760-hour loop with internal gains added to the zone air balance.
  */
-function _calculateState2(building, constructions, libraryData, weatherData, hourlySolar, comfortBand) {
+function _calculateState2(building, constructions, libraryData, weatherData, hourlySolar, comfortBand, opts = {}) {
+  // Brief 40 Part 2 (2026-05-19): setpoint parameterisation. The optional
+  // `opts.setpointOverride = { heating: number, cooling: number }` lets a
+  // caller recompute demand against a system-specific setpoint instead of
+  // the comfort band's setpoints. Used by systemsEngine.computeSystemsDelivered
+  // to produce the comfort-vs-setpoint diagnostic (Brief 40 §5). When
+  // undefined (default), behaviour is byte-identical to pre-Brief-40.
+  //
+  // Substitution rule: effectiveLowerC / effectiveUpperC replace comfortBand
+  // .lower_c / .upper_c in the DEMAND integration path only (per-element heat
+  // losses + cooling gains + demand sums + H_floor_const / C_floor_const).
+  // Comfort-hour counting + zone-air init temperatures stay on the original
+  // comfortBand because those questions are "is the zone outside comfort?",
+  // not "what setpoint is the system holding?".
+  const effectiveLowerC = (typeof opts?.setpointOverride?.heating === 'number')
+                            ? opts.setpointOverride.heating
+                            : comfortBand.lower_c
+  const effectiveUpperC = (typeof opts?.setpointOverride?.cooling === 'number')
+                            ? opts.setpointOverride.cooling
+                            : comfortBand.upper_c
+
   // ── State 1 baseline ─────────────────────────────────────────────────────
+  // State 1 is recomputed with the same override so the State 1 baseline
+  // sits at the same setpoint as State 2's demand integral. State 1's
+  // overall shape is the *envelope-only* demand at the chosen setpoint;
+  // Brief 40's comfort-vs-setpoint diagnostic reads State 2's demand
+  // (after gains) per Brief 40 §5, but Rule 14 keeps the two states
+  // mirrored so a future consumer reading State 1 with the override sees
+  // a consistent integration.
   const state1Result = _calculateEnvelopeOnly(
     withMode(building, 'envelope-only'),
     constructions, libraryData, weatherData, hourlySolar, comfortBand,
+    null,   // tuning (State 1 production defaults)
+    opts,   // Brief 40 Part 2: forward setpointOverride for Rule 14 parity
   )
   if (state1Result.state !== 1) return state1Result   // bailout: _empty() or similar
 
@@ -2312,8 +2370,11 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   // Floor still appears in the full H/C sums for the demand subtraction; it
   // just doesn't determine the regime. Same as Gate 2 option (i) in
   // _calculateEnvelopeOnly.
-  const H_floor_const = wholeWallU_floor * ground_area * Math.max(0, comfortBand.lower_c - T_ground)
-  const C_floor_const = wholeWallU_floor * ground_area * Math.max(0, T_ground - comfortBand.upper_c)
+  // Brief 40 Part 2: floor const uses the effective setpoint (override or
+  // comfort band) so the demand-regime gating matches the rest of the
+  // demand integration when an override is in play.
+  const H_floor_const = wholeWallU_floor * ground_area * Math.max(0, effectiveLowerC - T_ground)
+  const C_floor_const = wholeWallU_floor * ground_area * Math.max(0, T_ground - effectiveUpperC)
 
   // Ventilation — Brief 28-IM q50-derived operational ACH (State 2 mirror)
   //
@@ -2681,8 +2742,12 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     // Mirror of Gate 1 in _calculateEnvelopeOnly. Per-facade sol-air on
     // walls so per-facade reporting tracks the spreadsheet hand-calc;
     // single-state mass model still uses area-weighted T_sa_wall.
-    const T_heat = comfortBand.lower_c
-    const T_cool = comfortBand.upper_c
+    // Brief 40 Part 2 (2026-05-19): T_heat / T_cool sourced from
+    // effectiveLowerC / effectiveUpperC so setpoint overrides flow into
+    // per-element loss / gain accumulators. When opts.setpointOverride is
+    // undefined these are identical to comfortBand.lower_c / .upper_c.
+    const T_heat = effectiveLowerC
+    const T_cool = effectiveUpperC
     const T_sa_wall_n_h = solAirT(T_out, hourlySolar.f1[h], extWallModel.solar_abs ?? 0.6, extWallModel.h_out ?? 25)
     const T_sa_wall_e_h = solAirT(T_out, hourlySolar.f2[h], extWallModel.solar_abs ?? 0.6, extWallModel.h_out ?? 25)
     const T_sa_wall_s_h = solAirT(T_out, hourlySolar.f3[h], extWallModel.solar_abs ?? 0.6, extWallModel.h_out ?? 25)
@@ -3946,6 +4011,18 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
   const state2Result = _calculateState2(building, constructions, libraryData, weatherData, hourlySolar, comfortBand)
   if (state2Result.state !== 2) return state2Result   // bailout: _empty()
 
+  // Brief 40 Part 2 (2026-05-19): closure for systemsEngine.computeSystemsDelivered
+  // to recompute State 2 demand at a custom setpoint when a system's setpoint
+  // differs from the comfort band. Per-system comfort-vs-setpoint diagnostic
+  // depends on this — `computeSystemsDelivered` calls this closure per
+  // diff-setpoint system and reads `demand_at_this_setpoint`. The closure
+  // captures the same args the outer State 2 call used so the override
+  // produces a directly comparable demand integral.
+  const state2Recompute = (override) => _calculateState2(
+    building, constructions, libraryData, weatherData, hourlySolar, comfortBand,
+    { setpointOverride: override },
+  )
+
   // Brief 28f Part 5.6/5.7: prefer the v2.5-shaped field (`systems_config_v25`)
   // when present. Fall back to `systems_config` for back-compat with existing
   // tests that wire v2.5-shape data into the legacy field name. Real projects
@@ -4308,6 +4385,15 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
           },
         }
       })(),
+      // Brief 40 Part 2 (2026-05-19): per-system breakdown + comfort-vs-
+      // setpoint diagnostic from systemsEngine.computeSystemsDelivered.
+      // null when systems_config_v40 is absent or every service array is
+      // empty — pre-migration projects (no Brief 40 config) see null here
+      // and the existing Brief 38 polish consumption.space_heating /
+      // .space_cooling / .dhw blocks remain the sole source of truth for
+      // the Sankey + Live Results. Once Brief 40 Part 5 migration runs,
+      // this block populates and Part 3's UI consumes it.
+      brief40: computeSystemsDelivered({ building, state2Result, comfortBand, state2Recompute }),
     },
     // ── Brief 28-IM IM-M5 §9.1: results aggregation block ────────────────
     //

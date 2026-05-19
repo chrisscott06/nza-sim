@@ -1,5 +1,57 @@
 # NZA SIMULATE — Status
 
+## 🟢 Session 2026-05-19 — Brief 40 Part 2: Systems engine — proportional split, setpoint param, DHW tap-mix
+
+**State:** `commit_in_flight` — Brief 40 Part 2. Engine layer for Brief 40 schema landed in a single Rule-14-aware commit. New `systemsEngine.js` co-exists with the existing `computeServiceEnergy` / `computeDhwFuelMix` / `computeVentilationEnergy` paths; per-system breakdown + comfort-vs-setpoint diagnostic attaches under `consumption.brief40` (null until Part 5 migration populates `systems_config_v40`).
+
+**Schema refinement (in this Part, documented in audit doc §12):** Brief 40 schema field name is **`building.systems_config_v40`** (mirrors `systems_config_v25` naming convention) — avoids clashing with the legacy `building.systems_config` fallback used by State 3 line 4018. Mid-Part-2 finding; documented in §12 + the `systems_config_v40` rename block in §1 + Part 2 commit message.
+
+**DHW demand basis refinement (chat-form authorised pre-Part-2):** `demand_basis: 'per_m2' | 'per_person'` with corresponding `demand_litres_per_m2_day` or `demand_litres_per_person_per_day` field. Tap-mix correction sits on top regardless of basis. Bridgewater migrates as `'per_person'` (hotel) — preserves pre-Brief-40 DHW shape modulo the tap-mix correction. Captured in audit doc §2.3 + §4 + §7 + §12.
+
+**Setpoint parameterisation:**
+- `_calculateState2(building, ..., comfortBand, opts = {})` — new `opts.setpointOverride = { heating, cooling }`. When set, `effectiveLowerC` / `effectiveUpperC` substitute for `comfortBand.lower_c` / `.upper_c` in the demand integration path (per-element heat loss + cooling gain accumulators, floor consts). When undefined: behaviour byte-identical to pre-Brief-40
+- Comfort-hour counters + zone-air init temperatures intentionally NOT substituted (those are comfort-related, not setpoint-related)
+- `_calculateEnvelopeOnly(building, ..., comfortBand, tuning, opts = {})` — same shape, Rule 14 parity. **Caught a bug in the wire-up**: State 2's State-1 call site was passing `opts` as the 7th positional `tuning` argument — fixed to pass `null` for tuning + `opts` as 8th positional
+- Inline-legacy (`_calculateDegreeDay`): hardcoded `T_heat_setpoint = 21` / `T_cool_setpoint = 24`, not comfort-band-driven. **Rule 14 sweep finding documented** — override mechanically inapplicable; porting requires the deferred inline-legacy rationalisation follow-up brief. Silent-drift risk absent because inline-legacy doesn't share the comfort-band setpoint contract
+
+**`frontend/src/utils/systemsEngine.js` (new, 333 lines):**
+- `computeSystemsDelivered({ building, state2Result, comfortBand, state2Recompute })` — entry point. Returns null when `building.systems_config_v40` absent or every service array empty
+- `_computeHeatingOrCooling(service, systems, demandAtComfortMwh, comfortBand, state2Recompute)` — per-system proportional split + setpoint diagnostic via `state2Recompute` closure (avoids circular imports). Blended efficiency = weighted harmonic mean per §3.1
+- `_computeDhw(systems, gia, annualOccupantHours)` — basis-aware DHW with tap-mix correction (`hot_fraction = (tap_outlet_temp − cold_supply_temp) / (setpoint − cold_supply_temp)`); §5.2 diagnostic for "no tap-mix" delta
+- `_computeVentilation(systems, gia, peakOccupants, hoursActive)` — per-system fan_electrical via SFP × flow × hours × share. Recovery composition placeholder (sum kWh per system, not %) — full recovery magnitude calc remains in `computeVentilationEnergy` for this Part; follow-up can move it here
+- `_computeThin(systems, gainFromInternalGainsMwh)` — lighting + small_power: `delivered_electrical = gain × control_factor × share/100`. Heat gain stays upstream from Internal Gains (no double-counting)
+- Totals: per-fuel kWh roll-up (electricity/gas/oil/biomass/district_heating/district_cooling), EUI (kWh/m²), carbon (kgCO2/m²) with self-contained CARBON_KG_PER_KWH map
+- `_validateShares` — engine validation that `share_pct` sums to 100 per service (½ pp tolerance)
+
+**`_calculateState3` wire-in:**
+- `state2Recompute = (override) => _calculateState2(..., { setpointOverride: override })` closure constructed after the initial State 2 call
+- `consumption.brief40 = computeSystemsDelivered({ building, state2Result, comfortBand, state2Recompute })` attached as a sibling to the existing `space_heating` / `space_cooling` / `dhw` / `ventilation` / `lighting` / `small_power` blocks. Existing consumers (Sankey, Live Results, Heat Balance) unchanged
+
+**`DEFAULT_PARAMS`:** new `systems_config_v40: bc.systems_config_v40 ?? null` field added alongside the existing `systems_config_v25` line. Empty for new projects until UI Part 3 lets users populate it; Bridgewater Part 5 migration populates it from v25 shape
+
+**`withMode` allowlist:** NO change required. `mode === 'full'` (where State 3 runs) returns the building unchanged (`if (mode !== 'envelope-only' && mode !== 'envelope-gains') return building`), so `systems_config_v40` flows through naturally. Documented in audit doc §9
+
+**Sanity test results (audit doc §9):**
+1. Single heating, SCOP 3.5, share 100%, null setpoint — formula verified ✓
+2. Two-system blended efficiency (GSHP 3.5 @ 60% + gas 0.85 @ 40%) = 1.557. **Brief Part 2 step 2.5 text states ≈ 1.43 — that's an arithmetic typo in the brief. The mathematically correct value is 1.557** ✓
+3. Custom-setpoint cooling delta — sign + magnitude verified at formula level; absolute value at Bridgewater walkthrough
+4. DHW tap-mix on per-person basis — `post / pre = 0.60 ± rounding` ✓ (matches the falsifiable target in §4.3)
+
+**Build:** clean, 16.41 s, 2.51 MB JS (gzip 698 kB) — ~10 kB growth from `systemsEngine.js`
+
+**No escalation triggers fired:**
+- Setpoint param stayed inside `instantCalc.js` + new `systemsEngine.js` (no shape changes to ProjectContext beyond the additive DEFAULT_PARAMS field) ✓
+- Rule 14 sweep found inline-legacy is mechanically inapplicable — documented rather than forced ✓
+- DHW tap-mix verified against hand calc at formula level ✓
+- No external consumer reads `systems_config_v40` directly (Brief 40 is its first user)
+- Schema refinement (per-person/per-m² basis + `_v40` rename) absorbed in Part 2 without re-doing Part 1 ✓
+
+**Verification (visual):** none for Part 2 alone — `consumption.brief40` is `null` until Part 5 migration populates `systems_config_v40` on Bridgewater. Verification arrives in Part 5 walkthrough.
+
+**Next:** Part 3 — UI rebuild. Six service sections (heating / cooling / DHW / ventilation / lighting / small_power) in `SystemsModule.jsx`; new `SystemEditorCard.jsx` with service-aware fields per template; new `AddSystemButton.jsx` per-service add affordance; new `SystemsDiagnosticPanel.jsx` for the comfort-vs-setpoint summary. Library save/load via Brief 37 pattern with `'systems'` namespace.
+
+---
+
 ## 🟢 Session 2026-05-19 — Brief 40 Part 1: Systems library schema documented
 
 **State:** `commit_in_flight` — Brief 40 Part 1. Schema-only commit per Chris's authorisation. No engine code, no UI code. The canonical design captured on disk so Parts 2–5 have a single reference; CLAUDE.md "Module scopes" Systems stub expanded to full scope statement.

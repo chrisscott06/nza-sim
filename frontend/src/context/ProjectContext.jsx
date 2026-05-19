@@ -639,6 +639,18 @@ export function ProjectProvider({ children }) {
       // here under params.systems_config_v25 (the engine auto-detects this
       // field and routes to the State 3 v2.5 path).
       systems_config_v25: bc.systems_config_v25 ?? null,
+      // Brief 40 Part 2 (2026-05-19) — Brief 40 per-system array shape.
+      // Named `systems_config_v40` (mirroring the existing
+      // `systems_config_v25` convention) to avoid clashing with the legacy
+      // `systems_config` fallback used by State 3 line 4018. Coexists with
+      // systems_config_v25 during the migration window (Brief 40 Part 5
+      // migration script populates this from the v25 shape on Bridgewater).
+      // When this field is non-empty for any service, State 3's
+      // systemsEngine.computeSystemsDelivered produces the per-system
+      // breakdown and comfort-vs-setpoint diagnostic and attaches it under
+      // `consumption.brief40`; when absent / empty, the engine falls back
+      // to the v25 path and `consumption.brief40` is null.
+      systems_config_v40: bc.systems_config_v40 ?? null,
     })
     setConstructions(project.construction_choices ?? DEFAULT_CONSTRUCTIONS)
     setSystems(migrateSystemsConfig(project.systems_config))
