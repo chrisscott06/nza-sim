@@ -72,6 +72,10 @@ function seedSystem(service, arch) {
     notes:       '',
     control_mechanism:   arch.control_mechanism ?? 'constant',
     control_schedule_id: null,
+    // Brief 40 Part 5b Section B (2026-05-19): new systems seed enabled.
+    // Engine treats missing `enabled` as true for backward compat with
+    // existing v40 entries, but new systems get the field explicitly.
+    enabled: true,
   }
   if (service === 'heating' || service === 'cooling') {
     return {

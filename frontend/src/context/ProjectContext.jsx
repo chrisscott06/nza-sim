@@ -253,6 +253,7 @@ const DEFAULT_PARAMS = {
       share_pct:           100,
       capacity_kw:         null,
       notes:               '',
+      enabled:             true,   // Brief 40 Part 5b Section B (2026-05-19)
     }],
     small_power: [{
       id:                  'default_small_power',
@@ -267,6 +268,7 @@ const DEFAULT_PARAMS = {
       share_pct:           100,
       capacity_kw:         null,
       notes:               '',
+      enabled:             true,   // Brief 40 Part 5b Section B (2026-05-19)
     }],
   },
   // Brief 40 Part 3 (2026-05-19) — per-project systems library (Brief 37

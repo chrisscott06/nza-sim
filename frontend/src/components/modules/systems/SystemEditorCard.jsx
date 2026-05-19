@@ -139,46 +139,76 @@ export default function SystemEditorCard({
   const sources = SOURCE_OPTIONS[service]  ?? []
   const controls = CONTROL_MECHANISM_OPTIONS[service] ?? []
 
+  // Brief 40 Part 5b Section B (2026-05-19): per-system enable toggle.
+  // `enabled !== false` is the on state — default true; existing v40
+  // entries on disk that pre-date Part 5b are treated as enabled. The
+  // toggle preserves share_pct on disk when disabled (engine ignores
+  // disabled systems entirely; share validation only counts enabled).
+  const isEnabled = system?.enabled !== false
+  const handleToggleEnabled = (e) => {
+    e.stopPropagation()  // don't fire expand/collapse
+    onUpdate({ enabled: !isEnabled })
+  }
+
   // ── Collapsed summary line ─────────────────────────────────────────────
   if (!expanded) {
     return (
-      <div className="border border-light-grey rounded bg-white">
-        <button
-          onClick={onToggleExpanded}
-          className="w-full flex items-center gap-2 px-2 py-1.5 text-left hover:bg-off-white/50 transition-colors"
-        >
-          <span
-            className="w-2 h-2 rounded-full flex-shrink-0"
-            style={{ backgroundColor: accent }}
-          />
-          <span className="flex-1 min-w-0 truncate text-xxs font-medium text-navy">
-            {system?.label ?? '(unnamed)'}
-          </span>
-          <span className={`text-xxs tabular-nums ${shareInvalid ? 'text-amber-600' : 'text-mid-grey'}`}>
-            {Number(system?.share_pct ?? 0)}%
-          </span>
-          {service !== 'lighting' && service !== 'small_power' && service !== 'ventilation' && (
-            <span className="text-xxs text-mid-grey/70 truncate max-w-[80px]">
-              {system?.source ?? '—'}
-              {typeof system?.efficiency_metric === 'number' && ` · η ${system.efficiency_metric.toFixed(2)}`}
+      <div className={`border border-light-grey rounded bg-white ${!isEnabled ? 'opacity-50' : ''}`}>
+        <div className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-off-white/50 transition-colors">
+          <button
+            onClick={handleToggleEnabled}
+            className="flex-shrink-0 p-0.5 rounded hover:bg-light-grey/40 transition-colors"
+            title={isEnabled ? 'Disable this system' : 'Enable this system'}
+          >
+            <span
+              className="block w-2.5 h-2.5 rounded-full"
+              style={{ backgroundColor: isEnabled ? accent : '#9CA3AF' }}
+            />
+          </button>
+          <button
+            onClick={onToggleExpanded}
+            className="flex-1 min-w-0 flex items-center gap-2 text-left"
+          >
+            <span className={`flex-1 min-w-0 truncate text-xxs font-medium ${isEnabled ? 'text-navy' : 'text-mid-grey line-through'}`}>
+              {system?.label ?? '(unnamed)'}
             </span>
-          )}
-          <span className="text-xxs text-mid-grey">▾</span>
-        </button>
+            <span className={`text-xxs tabular-nums ${shareInvalid && isEnabled ? 'text-amber-600' : 'text-mid-grey'}`}>
+              {Number(system?.share_pct ?? 0)}%
+            </span>
+            {service !== 'lighting' && service !== 'small_power' && service !== 'ventilation' && (
+              <span className="text-xxs text-mid-grey/70 truncate max-w-[80px]">
+                {system?.source ?? '—'}
+                {typeof system?.efficiency_metric === 'number' && ` · η ${system.efficiency_metric.toFixed(2)}`}
+              </span>
+            )}
+            <span className="text-xxs text-mid-grey">▾</span>
+          </button>
+        </div>
       </div>
     )
   }
 
   // ── Expanded editor ─────────────────────────────────────────────────────
   return (
-    <div className="border rounded bg-white" style={{ borderColor: accent + '40' }}>
+    <div className={`border rounded bg-white ${!isEnabled ? 'opacity-50' : ''}`} style={{ borderColor: accent + '40' }}>
       {/* Card header */}
       <div
         className="flex items-center gap-2 px-2 py-1.5"
         style={{ backgroundColor: accent + '10', borderBottom: `1px solid ${accent}30` }}
       >
-        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: accent }} />
-        <span className="flex-1 text-xxs font-semibold text-navy">{system?.label ?? '(unnamed)'}</span>
+        <button
+          onClick={handleToggleEnabled}
+          className="flex-shrink-0 p-0.5 rounded hover:bg-light-grey/40 transition-colors"
+          title={isEnabled ? 'Disable this system' : 'Enable this system'}
+        >
+          <span
+            className="block w-2.5 h-2.5 rounded-full"
+            style={{ backgroundColor: isEnabled ? accent : '#9CA3AF' }}
+          />
+        </button>
+        <span className={`flex-1 text-xxs font-semibold ${isEnabled ? 'text-navy' : 'text-mid-grey line-through'}`}>
+          {system?.label ?? '(unnamed)'}
+        </span>
         <button
           onClick={onToggleExpanded}
           className="text-xxs text-mid-grey hover:text-navy px-1"

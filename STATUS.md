@@ -1,5 +1,68 @@
 # NZA SIMULATE — Status
 
+## 🟢 Session 2026-05-19 — Brief 40 Part 5b Section B: Per-system and per-service enable toggles
+
+**State:** `commit_in_flight` — Brief 40 Part 5b Section B. Schema gains `enabled: boolean` per system (default true, missing treated as true). DEFAULT_PARAMS seeds `enabled: true` explicitly. Engine filter `_enabledSystems` already plumbed in Section A. UI adds per-system toggle in card chrome + per-service batch toggle in section header. Normalise quick-fix scales enabled systems only; share-validation badge counts enabled systems.
+
+**Schema add (audit doc §14):**
+- Each v40 system gains `enabled: boolean` field
+- Default `true`; missing field treated as `true` (backward compat for any v40 entries on disk that pre-date Part 5b)
+- No service-level `enabled` field — service "off" is the aggregate of all systems in the service being disabled (one source of truth)
+- `consumption.source_path` block already attached in Section A — surfaces which engine (v25 / v40) produced each service block
+
+**Engine semantics (already landed in Section A):**
+- `_enabledSystems(systems)` filters before validation + compute
+- Disabled system's `share_pct` preserved on disk but excluded at compute time
+- `enabledSystems.length === 0` → `{ all_disabled: true, ...zeros... }` → displacement adapter produces `consumption.{service-block}` with zero delivered
+- Validation failure on enabled sum != 100 → `{ error: '...', ...zeros... }` → adapter propagates error to consumption block
+
+**`SystemEditorCard.jsx`:**
+- Per-system enable toggle in card chrome (left of expand/delete buttons in both collapsed + expanded states)
+- Dot button: service-coloured when enabled, grey when disabled
+- Disabled card body: `opacity-50` + label `line-through`
+- Toggle stays clickable when disabled (user can re-enable)
+- Tooltip: "Enable this system" / "Disable this system"
+
+**`SystemsModule.jsx` `V40SectionHeader`:**
+- Per-service batch toggle (white dot in section header, right of share-validation badge)
+- Click flips `enabled` on every system in the service simultaneously
+- Mixed state always flips to all-enabled (recover-from-partial pattern)
+- Section header count shows `N/M` when partial (e.g. "1/2"), `M` when all enabled
+- "off" badge when all systems disabled
+- Header button structure refactored from single `<button>` to split (toggle + expand) so the batch-enable click doesn't trigger expand/collapse
+
+**`InputsColumn` write helpers (`SystemsModule.jsx`):**
+- `shareValidation(service)` operates on enabled systems; returns `{ sum, valid, allCount, enabledCount, allDisabled }`
+- `normaliseShares(service)` scales enabled systems proportionally to sum 100; disabled systems' shares untouched on disk
+- New `setServiceEnabled(service, enabled)` writes `enabled` on every system in the service in one update
+- New `toggleServiceEnabled(service)` flips per recover-from-partial pattern
+
+**`DEFAULT_PARAMS` thin entries:**
+- `lighting[0].enabled: true`
+- `small_power[0].enabled: true`
+
+**`AddSystemButton.jsx` `seedSystem`:**
+- New systems seed `enabled: true` belt-and-braces
+
+**Migration script `40_bridgewater_systems_migration.py`:**
+- Every migrated system carries `enabled: True` explicitly (5 places — heating primary, heating secondary, DHW per-fuel, DHW fallback primary, ventilation per-system)
+
+**`withMode` allowlist NOT updated** (per pre-flagged architectural note + Section A commit message): `mode === 'full'` returns the building unchanged, so the `enabled` field passes through naturally with no allowlist update needed. Documented in audit doc §9.
+
+**Section B UI flow examples (informal — Section C verifies these for real on Bridgewater):**
+- Toggle Bridgewater's gas boiler off (heating service). Share validation badge changes from "2/2" to "1/2" + amber "⚠ 95%" (heat pump's share). Click Normalise; heat pump goes to 100%. Engine recomputes; Sankey heating ribbon now electricity-only; EUI moves.
+- Toggle heat pump off too. Section header shows "0/2" + "off" badge. Service delivered_mwh = 0; Sankey heating bar disappears.
+- Re-enable both. Numbers restored.
+- Toggle service-level off for ventilation. All three vent systems flip to enabled: false. Ventilation rows in Live Results all go to 0. Toggle back on; restored.
+
+**Build:** clean, 17.23 s, 2.53 MB JS (gzip 704 kB) — +0.6 kB gzip from toggle UI.
+
+**Verification waits for Section C** — Brief 40 Part 5b Principle 5 mandatory real-browser walkthrough via Claude in Chrome MCP.
+
+**Next:** Section C — boot dev server (Chris confirms running), load Claude in Chrome MCP tools, walk the 15-item checklist on Bridgewater, capture pass/fail in `docs/audit/40_walkthrough_diagnosis.md` § "Part 5b Section C verification". Then Section C commit. Then Part 5b close.
+
+---
+
 ## 🟢 Session 2026-05-19 — Brief 40 Part 5b Section A: Engine-side v40 displacement + share validation blocks compute + --force migration
 
 **State:** `commit_in_flight` — Brief 40 Part 5b Section A. Addresses the walkthrough finding that v40 left-panel edits don't reach the headline EUI / Sankey / Live Results. Engine-side displacement: when `building.systems_config_v40.{service}` is non-empty, `consumption.{service-block}` is populated from v40 instead of v25. v25 fallback per-service when v40.{service} is empty. Partial migrations work.

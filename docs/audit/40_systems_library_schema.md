@@ -671,6 +671,71 @@ Reasoning logged for the brief archive: keeping basis-where-the-engine-is preser
 
 ---
 
+## §14. Per-system enable toggle — Brief 40 Part 5b Section B refinement (2026-05-19)
+
+Each Brief 40 system gains an `enabled: boolean` field. Default `true`; missing field treated as `true` for backward compatibility with v40 entries that pre-date Part 5b.
+
+```
+{
+  ...existing v40 system fields...,
+  enabled: boolean,    // default true; missing = true (backward compat)
+}
+```
+
+### §14.1 Engine semantics
+
+A disabled system (`enabled === false`) is **completely out of the calc**:
+- `_enabledSystems(systems)` filters to enabled before any compute
+- Share validation `_validateShares(enabledSystems)` checks `sum(enabled.share_pct) === 100` (within ½pp tolerance)
+- Disabled system's `share_pct` is **preserved on disk** (visible in the SystemEditorCard) but excluded at compute time
+- When `enabledSystems.length === 0` for a service: the engine returns `{ all_disabled: true, ...zeros... }`; the displacement adapter produces `consumption.{service-block}` with zero delivered (same shape as v25's `enabled: false` service-level behaviour pre-Brief-40)
+- Validation failure on enabled-share-sum != 100 returns `{ error: '...', ...zeros... }` which the v25-shape adapter propagates to `consumption.{service-block}.error`
+
+### §14.2 UI semantics
+
+`SystemEditorCard` per-system toggle in card chrome:
+- Dot button (left of the label) — green/coloured when on; grey when off
+- Click flips `enabled`; card body greys out (`opacity-50`) and label gets `line-through`
+- Toggle stays clickable when disabled (user can re-enable)
+- Tooltip: "Enable this system" / "Disable this system"
+
+`V40SectionHeader` per-service batch toggle:
+- White dot button in section header (right of the share-validation badge)
+- Click flips `enabled` on every system in the service simultaneously
+- Mixed state (some on, some off) always flips to all-enabled (recover-from-partial pattern)
+- Section header shows `N/M` count when partial (e.g. "1/2") and `M` count when all enabled
+- "off" badge when all systems in the service are disabled
+
+### §14.3 Service-level vs per-system
+
+No service-level `enabled` field on the v40 schema. Service-level "off" is the aggregate of "all systems in the service have `enabled: false`" — cleaner architecture (one source of truth) and matches the engine's behaviour (`enabledSystems.length === 0` → service `delivered = 0`).
+
+### §14.4 Backward compatibility
+
+- Existing v40 entries on disk without `enabled` field → engine treats as enabled (matches pre-Part-5b behaviour). Bridgewater's manual UI test data (ashp / gas_boiler / mev / dimming) carries no `enabled` field and stays enabled until the user clicks the toggle
+- Migration script (`scripts/40_bridgewater_systems_migration.py`) seeds `enabled: true` on every migrated system explicitly
+- `DEFAULT_PARAMS.systems_config_v40.lighting[0]` + `.small_power[0]` seed `enabled: true` explicitly
+- AddSystemButton's `seedSystem` factory seeds `enabled: true` on every new system
+
+### §14.5 Engine source path metadata
+
+Added in Section A: `consumption.source_path` records which engine (v25 or v40) produced each service block:
+
+```
+consumption.source_path = {
+  heating:     'v40' | 'v25',
+  cooling:     'v40' | 'v25',
+  dhw:         'v40' | 'v25',
+  ventilation: 'v40' | 'v25',
+  lighting:    'v40' | 'v25',
+  small_power: 'v40' | 'v25',
+}
+```
+
+Useful for the Diagnostic tab + debugging partial migrations (a project on v40 for heating + v25 for DHW shows `{ heating: 'v40', dhw: 'v25' }`).
+
+---
+
 ## §13. Thin Systems entries — cross-module accounting (Part 4 deliverable)
 
 Lighting and small_power are "thin" Systems entries — they account the delivered electrical energy at the building meter but do not generate heat themselves. Heat continues to flow upstream from the Internal Gains module's `lpd × gia × schedule_fraction` and `epd × gia × schedule_fraction × occupancy_rate` integrands respectively. Systems' role is electrical end-use accounting + optional controls.

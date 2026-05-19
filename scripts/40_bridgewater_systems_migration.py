@@ -208,6 +208,7 @@ def _migrate_heating_or_cooling(v25_block, service, comfort_value):
             "control_schedule_id": schedule_ref,
             "share_pct":           primary_pct,
             "capacity_kw":         None,
+            "enabled":             True,
             "notes":               f"Migrated from systems_config_v25 (library_id={lib_id})",
         })
     if secondary.get("library_id"):
@@ -225,6 +226,7 @@ def _migrate_heating_or_cooling(v25_block, service, comfort_value):
                 "control_schedule_id": schedule_ref,
                 "share_pct":           secondary_pct,
                 "capacity_kw":         None,
+            "enabled":             True,
                 "notes":               f"Migrated from systems_config_v25 (library_id={lib_id})",
             })
     return systems
@@ -264,6 +266,7 @@ def _migrate_dhw(v25_block):
             "control_schedule_id":             schedule_ref,
             "share_pct":                       share_pct,
             "capacity_kw":                     None,
+            "enabled":                         True,
             "notes":                           f"Migrated from systems_config_v25 fuel_mix[{fuel_key}={frac:.2f}]; tap-mix correction applies (hot_fraction = (40 - {cold_supply}) / ({setpoint} - {cold_supply}))",
         })
 
@@ -288,6 +291,7 @@ def _migrate_dhw(v25_block):
                 "control_schedule_id":             schedule_ref,
                 "share_pct":                       100,
                 "capacity_kw":                     None,
+            "enabled":                         True,
                 "notes":                           f"Migrated from systems_config_v25 primary only (no fuel_mix); tap-mix correction applies",
             })
 
@@ -336,6 +340,7 @@ def _migrate_ventilation(v25_list):
             "control_schedule_id": schedule_ref,
             "share_pct":           share_pct,
             "capacity_kw":         None,
+            "enabled":             True,
             "defrost_penalty_kwh": None,
             "notes":               f"Migrated from systems_config_v25.ventilation[{v.get('library_id','unknown')}]",
         })

@@ -453,29 +453,57 @@ function InputsColumn({ params, updateParam, consumption, comfortBand, openSched
     updateParam('library_systems', [...lib, libEntry])
   }
 
-  // Share-validation helper: returns the sum of share_pct for a service, and
-  // a flag indicating whether it's at 100 (within ½pp tolerance).
+  // Brief 40 Part 5b Section B (2026-05-19): share-validation helper now
+  // operates on ENABLED systems only — matches the engine's _validateShares
+  // semantics. A disabled system's share_pct is preserved on disk but
+  // excluded from the validation sum. Returns: sum, valid, allCount,
+  // enabledCount, allDisabled.
   const shareValidation = (service) => {
     const list = getList(service)
-    if (list.length === 0) return { sum: 0, valid: true }
-    const sum = list.reduce((s, x) => s + Number(x?.share_pct ?? 0), 0)
-    return { sum, valid: Math.abs(sum - 100) < 0.5 }
+    if (list.length === 0) return { sum: 0, valid: true, allCount: 0, enabledCount: 0, allDisabled: false }
+    const enabledList = list.filter(s => s?.enabled !== false)
+    if (enabledList.length === 0) return { sum: 0, valid: true, allCount: list.length, enabledCount: 0, allDisabled: true }
+    const sum = enabledList.reduce((s, x) => s + Number(x?.share_pct ?? 0), 0)
+    return { sum, valid: Math.abs(sum - 100) < 0.5, allCount: list.length, enabledCount: enabledList.length, allDisabled: false }
   }
 
+  // Normalise scales ENABLED systems proportionally to sum 100; disabled
+  // systems' shares are untouched on disk.
   const normaliseShares = (service) => {
     const list = getList(service)
     if (list.length === 0) return
-    const sum = list.reduce((s, x) => s + Number(x?.share_pct ?? 0), 0)
-    if (sum <= 0) {
-      // All zero — distribute equally
-      const per = 100 / list.length
-      const nextList = list.map(s => ({ ...s, share_pct: Math.round(per * 10) / 10 }))
-      writeV40({ ...(v40 ?? {}), [service]: nextList })
-      return
+    const enabledIndices = list.map((s, i) => s?.enabled !== false ? i : -1).filter(i => i >= 0)
+    if (enabledIndices.length === 0) return
+    const enabledSum = enabledIndices.reduce((s, i) => s + Number(list[i].share_pct ?? 0), 0)
+    let nextList
+    if (enabledSum <= 0) {
+      // All enabled systems at zero — distribute equally across enabled
+      const per = 100 / enabledIndices.length
+      nextList = list.map((s, i) => enabledIndices.includes(i) ? { ...s, share_pct: Math.round(per * 10) / 10 } : s)
+    } else {
+      const scale = 100 / enabledSum
+      nextList = list.map((s, i) => enabledIndices.includes(i)
+        ? { ...s, share_pct: Math.round(Number(s.share_pct ?? 0) * scale * 10) / 10 }
+        : s)
     }
-    const scale = 100 / sum
-    const nextList = list.map(s => ({ ...s, share_pct: Math.round(Number(s.share_pct ?? 0) * scale * 10) / 10 }))
     writeV40({ ...(v40 ?? {}), [service]: nextList })
+  }
+
+  // Brief 40 Part 5b Section B: per-service batch enable toggle. A UX
+  // shortcut, not a separate field — clicking flips `enabled` on every
+  // system in the service at once. Mixed state always flips to all-
+  // enabled (so user can always recover from a partial-off state).
+  const setServiceEnabled = (service, nextEnabled) => {
+    const list = getList(service)
+    if (list.length === 0) return
+    const nextList = list.map(s => ({ ...s, enabled: nextEnabled }))
+    writeV40({ ...(v40 ?? {}), [service]: nextList })
+  }
+  const toggleServiceEnabled = (service) => {
+    const list = getList(service)
+    if (list.length === 0) return
+    const allEnabled = list.every(s => s?.enabled !== false)
+    setServiceEnabled(service, !allEnabled)   // all-on → off; off / mixed → on
   }
 
   return (
@@ -484,7 +512,7 @@ function InputsColumn({ params, updateParam, consumption, comfortBand, openSched
         const list = getList(service)
         const isOpen = open[service]
         const accent = SERVICE_COLOURS[service] ?? '#00AEEF'
-        const { sum, valid } = shareValidation(service)
+        const { sum, valid, enabledCount, allDisabled } = shareValidation(service)
         const engineSystems = brief40?.[service]?.systems ?? []
         return (
           <V40SectionHeader
@@ -495,8 +523,11 @@ function InputsColumn({ params, updateParam, consumption, comfortBand, openSched
             open={isOpen}
             onToggle={() => toggle(service)}
             count={list.length}
+            enabledCount={enabledCount}
+            allDisabled={allDisabled}
             shareSum={sum}
             shareValid={valid}
+            onToggleServiceEnabled={() => toggleServiceEnabled(service)}
           >
             {list.length > 0 && (
               <div className="space-y-1.5">
@@ -520,15 +551,20 @@ function InputsColumn({ params, updateParam, consumption, comfortBand, openSched
                     />
                   )
                 })}
-                {!valid && (
+                {!valid && !allDisabled && (
                   <div className="flex items-center gap-2 px-1.5 py-1 text-xxs text-amber-700 bg-amber-50 border border-amber-200 rounded">
-                    <span>⚠ Shares sum to {sum.toFixed(1)}%, not 100%.</span>
+                    <span>⚠ Shares of enabled systems sum to {sum.toFixed(1)}%, not 100%. Engine will not compute this service until fixed.</span>
                     <button
                       onClick={() => normaliseShares(service)}
-                      className="ml-auto px-1.5 py-0.5 rounded border border-amber-300 hover:bg-amber-100 transition-colors"
+                      className="ml-auto px-1.5 py-0.5 rounded border border-amber-300 hover:bg-amber-100 transition-colors flex-shrink-0"
                     >
                       Normalise
                     </button>
+                  </div>
+                )}
+                {allDisabled && (
+                  <div className="flex items-center gap-2 px-1.5 py-1 text-xxs text-mid-grey bg-light-grey/30 border border-light-grey rounded">
+                    <span>All systems in this service are disabled. Service delivered = 0.</span>
                   </div>
                 )}
               </div>
@@ -548,27 +584,64 @@ function InputsColumn({ params, updateParam, consumption, comfortBand, openSched
   )
 }
 
-function V40SectionHeader({ service, label, accent, open, onToggle, count, shareSum, shareValid, children }) {
+function V40SectionHeader({ service, label, accent, open, onToggle, count, enabledCount, allDisabled, shareSum, shareValid, onToggleServiceEnabled, children }) {
+  // Brief 40 Part 5b Section B (2026-05-19): per-service batch enable
+  // toggle. Click flips `enabled` on every system in the service at
+  // once. Mixed state always flips to all-enabled (recover-from-partial
+  // pattern). Tooltip describes the action.
+  const allEnabled = count > 0 && enabledCount === count
+  const batchTitle = allEnabled
+    ? `Disable all ${label.toLowerCase()} systems`
+    : `Enable all ${label.toLowerCase()} systems`
   return (
     <div>
-      <button
-        onClick={onToggle}
+      <div
         className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded text-left transition-opacity"
         style={{ backgroundColor: accent }}
       >
-        <span className="flex items-center gap-2">
+        <button
+          onClick={onToggle}
+          className="flex items-center gap-2 flex-1 text-left"
+        >
           <span className="text-white text-xxs font-semibold uppercase tracking-wider">{label}</span>
           {count > 0 && (
-            <span className="text-white/85 text-xxs bg-black/15 px-1.5 py-0.5 rounded">{count}</span>
+            <span className="text-white/85 text-xxs bg-black/15 px-1.5 py-0.5 rounded" title={`${enabledCount} of ${count} enabled`}>
+              {enabledCount === count ? count : `${enabledCount}/${count}`}
+            </span>
           )}
-          {count > 0 && !shareValid && (
-            <span className="text-white text-xxs bg-amber-600 px-1.5 py-0.5 rounded" title={`Shares sum to ${shareSum.toFixed(1)}%`}>
+          {count > 0 && !shareValid && !allDisabled && (
+            <span className="text-white text-xxs bg-amber-600 px-1.5 py-0.5 rounded" title={`Shares of enabled systems sum to ${shareSum.toFixed(1)}%`}>
               ⚠ {shareSum.toFixed(0)}%
             </span>
           )}
-        </span>
-        <span className="text-white/70 text-xs leading-none">{open ? '▾' : '▸'}</span>
-      </button>
+          {allDisabled && (
+            <span className="text-white/80 text-xxs bg-black/25 px-1.5 py-0.5 rounded" title="All systems disabled">
+              off
+            </span>
+          )}
+        </button>
+        <div className="flex items-center gap-1">
+          {count > 0 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleServiceEnabled?.() }}
+              className="flex-shrink-0 p-0.5 rounded hover:bg-black/20 transition-colors"
+              title={batchTitle}
+            >
+              <span
+                className="block w-2.5 h-2.5 rounded-full"
+                style={{ backgroundColor: allEnabled ? '#FFFFFF' : 'rgba(255,255,255,0.4)' }}
+              />
+            </button>
+          )}
+          <button
+            onClick={onToggle}
+            className="flex-shrink-0 text-white/70 text-xs leading-none px-1"
+            aria-label={open ? 'Collapse' : 'Expand'}
+          >
+            {open ? '▾' : '▸'}
+          </button>
+        </div>
+      </div>
       {open && (
         <div className="pt-2 pb-1 px-1 space-y-1.5">{children}</div>
       )}
