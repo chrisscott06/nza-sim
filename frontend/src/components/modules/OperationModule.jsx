@@ -1119,12 +1119,48 @@ function OpeningRow({ opening, selected, orientation, onSelect, onUpdate, onDele
             />
           </div>
 
-          {/* Brief 41 Part 4 (2026-05-19): per-opening Cd / Cw inputs
-              removed. Building-wide openings.cd + openings.site_exposure
-              (→ Cw) drive flow uniformly across permanent vents and operable
-              openings under the flow_mode dispatch. The Related: line at
-              the bottom of the panel points users to the Building module
-              where those building-wide inputs live. */}
+          {/* Brief 42 Part 5 (2026-05-19): per-opening C_d + flow_mode.
+              Brief 41 Part 4's "Cd / Cw inputs removed" is superseded —
+              each opening now declares its own physics. Seeded by type
+              defaults at creation (Brief 42 Part 1 newOpening factory:
+              door 0.60 / cross; window 0.55 / single_sided; vent 0.40 /
+              single_sided) and editable per-opening here. Once an opening
+              exists, its values are independent of the type defaults —
+              changing the seed would not propagate. Site exposure (C_w)
+              stays building-wide in Building → Permanent openings. */}
+          <div className="pt-2 border-t border-light-grey">
+            <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1.5">Physics</p>
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xxs text-mid-grey w-6">C<sub>d</sub></span>
+                <input
+                  type="range" min={0.15} max={0.65} step={0.01}
+                  value={typeof opening.cd === 'number' ? opening.cd : 0.40}
+                  onChange={e => onUpdate({ cd: Number(e.target.value) })}
+                  className="flex-1 h-[3px] accent-navy"
+                  title="Discharge coefficient — see docs/audit/29_permanent_vent_methodology.md for typical values (trickle vent 0.25 / louvre 0.40 / open window 0.60 / wide door 0.60)"
+                />
+                <span className="text-xxs text-navy tabular-nums w-9 text-right">
+                  {(typeof opening.cd === 'number' ? opening.cd : 0.40).toFixed(2)}
+                </span>
+              </div>
+              <LabeledSelect
+                label="Flow mode"
+                value={opening.flow_mode ?? 'single_sided'}
+                onChange={v => onUpdate({ flow_mode: v })}
+                options={[
+                  { value: 'single_sided', label: 'Single-sided (one façade)' },
+                  { value: 'cross',        label: 'Cross-flow (opposite façades)' },
+                ]}
+              />
+              <p className="text-xxs text-mid-grey/70 leading-tight">
+                Single-sided: <code>Q ≈ 0.025 · A · v<sub>wind</sub></code> (EN 16798-7 §6.4).
+                Cross-flow: <code>Q = C<sub>d</sub> · A · √C<sub>w</sub> · v<sub>wind</sub></code> (CIBSE Guide A §4.6).
+                Use cross-flow only when this opening connects rooms on opposite façades via an open internal air path.
+              </p>
+            </div>
+          </div>
+
 
           {/* Control mode */}
           <div className="pt-2 border-t border-light-grey">

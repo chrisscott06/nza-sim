@@ -1,5 +1,68 @@
 # NZA SIMULATE — Status
 
+## 🟡 Session 2026-05-19 — Brief 42 Part 5: Operation UI per-opening C_d + flow_mode (awaits walkthrough)
+
+**State:** `awaiting_walkthrough` — Brief 42 Part 5. Each opening editor card in Operation now has its own C_d slider + flow_mode dropdown. Same control shape as the Building module's per-facade controls (Part 4), so the user sees a consistent UX whether they're editing a permanent louvre or an operable door / window / vent.
+
+**`frontend/src/components/modules/OperationModule.jsx` (opening editor card):**
+- New "Physics" sub-section inserted between the Area / Height row and the Control mode block. Bordered separator matches the existing "Control" / "Schedule" / "Temperature" sub-sections in the card
+- **C_d slider** (range 0.15–0.65, step 0.01) — reads `opening.cd` with a 0.40 fallback for any opening that somehow lacks the field. Same anchor reference as Building (trickle 0.25 / louvre 0.40 / open window 0.60 / wide door 0.60) via slider tooltip
+- **Flow mode** `LabeledSelect` — reads `opening.flow_mode` with 'single_sided' fallback. Same option labels as Building ("Single-sided (one façade)" / "Cross-flow (opposite façades)")
+- Inline help text under the flow_mode dropdown explains both correlations (Q formulas) and when to pick cross-flow. The brief's Part 5 step 5.6 walkthrough check is anchored on this: setting the reception door to cd 0.60 / cross should produce a visibly different loss to the migrated cd 0.29 / single_sided values
+
+**Brief 42 Part 1 wiring** (already landed) — the `+ Door / + Window / + Vent` buttons seed `cd` + `flow_mode` from `OPENING_TYPE_OPTIONS` (door cd 0.60 / cross; window cd 0.55 / single_sided; vent cd 0.40 / single_sided). Editing here is independent of those seeds (no inheritance per Brief 42 Principle 1).
+
+**Build:** clean, 14.73 s, 2.50 MB JS (gzip 695 kB) — unchanged shape.
+
+---
+
+## Walkthrough checklist for Chris (Parts 1–5 → Part 6 close)
+
+Run from the project root with the dev server stopped first.
+
+1. **Stop dev server.**
+
+2. **Run the migration:**
+   ```
+   python scripts/42_per_opening_cd_flowmode_migration.py
+   ```
+   - Expected first run: Bridgewater shows `OK:` with seed cd / flow_mode + N facades + M openings written + building-wide fields removed.
+   - Re-run for NO-OP idempotency check (`NO-OP: 'Bridgewater' -- already migrated`).
+   - Backfill `docs/audit/42_per_opening_migration.md` pre + post tables.
+
+3. **Restart dev server** (`go.bat` or manual). Open http://localhost:5176.
+
+4. **Building module → Permanent openings:**
+   - Site exposure dropdown at top with C_w value. ✓
+   - For each facade with louvre area > 0: a per-facade physics row showing C_d slider + flow_mode dropdown. ✓
+   - C_d reference line at the bottom (0.25 / 0.40 / 0.60). ✓
+   - Toggle a facade C_d — confirm the value updates and persists across page reload.
+
+5. **Operation module → operable openings:**
+   - The "Building-wide ventilation physics" panel is gone. ✓
+   - Slim "Site exposure (C_w) configured in Building → Permanent openings" inline note instead. ✓
+   - Each opening's editor card has a "Physics" sub-section with C_d slider + Flow mode dropdown. ✓
+   - Click "+ Door" — the new opening defaults to cd 0.60 / cross. ✓
+   - Click "+ Window" — defaults to cd 0.55 / single_sided. ✓
+   - Click "+ Vent" — defaults to cd 0.40 / single_sided. ✓
+
+6. **Engine output invariance (pre any edits):**
+   - Re-run Bridgewater simulation (or refresh the engine output).
+   - Heating demand + cooling demand + permanent louvre loss + operable door loss should match the Brief 41 Part 5 baseline. If they don't, **escalation trigger 2 fires** ("Read-side bug where opening values don't match pre-migration building-wide values").
+
+7. **Per-opening edit test (the point of Brief 42):**
+   - In Operation, find the Bridgewater reception door (likely named "gf_entrance_door" or similar).
+   - Change C_d from migrated 0.29 to 0.60. Change flow_mode from migrated single_sided to cross.
+   - Observe the door's heat loss in the Operation Heat Balance — should increase substantially (cross-flow physics: `Q = 0.60 × 4 m² × √0.10 × v_wind` vs. single-sided `Q = 0.025 × min(1, 0.29/0.6) × 4 × v_wind`). Order of magnitude bracket: hundreds of MWh (Brief 41 Part 0 diagnostic confirms cross-flow physics on UK coastal weather lands here).
+   - Confirm changing this door doesn't move any other opening's value.
+   - Capture before / after MWh in `docs/audit/42_per_opening_migration.md` "post-walkthrough" table.
+
+8. **Sign-off:** report findings in chat. If reconciliation passes, Part 6 close-out commit lands (CLAUDE.md "Module scopes" Building section updated to call out per-opening physics; archive Brief 42; repoint current.md; STATUS.md close-out).
+
+**Next:** Part 6 — walkthrough sign-off + close.
+
+---
+
 ## 🟢 Session 2026-05-19 — Brief 42 Part 4: Building UI per-facade C_d + flow_mode
 
 **State:** `commit_in_flight` — Brief 42 Part 4. The Brief 41 Part 7 `BuildingWideOpeningsControls.jsx` shared component is **deleted**. The Building Permanent Openings panel now has per-facade C_d + flow_mode controls inline beneath each facade's area row; site exposure (C_w) stays as the only remaining building-wide control. Operation's invocation is also retired in this commit to keep the build green; the per-opening UI replacement in Operation lands in Part 5.
