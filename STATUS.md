@@ -1,5 +1,84 @@
 # NZA SIMULATE — Status
 
+## 🟢 Session 2026-05-19 — Brief 40 Part 3: Systems module UI rebuild
+
+**State:** `commit_in_flight` — Brief 40 Part 3. Left panel rewritten from tab-style (HVAC/DHW/Lighting/Ventilation tabs) to section-list (one collapsible section per service: Heating / Cooling / DHW / Ventilation / Lighting / Small power). Per-system editing via the new `SystemEditorCard`; per-service "+ Add system" via the new `AddSystemButton`; comfort-vs-setpoint diagnostic on the new "Diagnostic" centre tab via `SystemsDiagnosticPanel`. Library save/load via Brief 37 pattern with `'systems'` namespace.
+
+**Boundary preserved:** Sankey + Profiles + Schedule + Monthly + Rejection + Summary centre tabs untouched. Right-column `LiveResultsStrip` + `LiveResultsPanel` untouched. Brief 38 Sankey polish contract (`consumption.space_heating.{primary,secondary}` + `consumption.space_cooling.{primary,secondary}`) is unchanged by Brief 40, so those panels render exactly as before. Brief 40's new per-system breakdown attaches under `consumption.brief40` and is consumed only by the new left panel + Diagnostic tab.
+
+**Tab files deleted (zero external consumers confirmed):**
+- `frontend/src/components/modules/systems/HVACTab.jsx`
+- `frontend/src/components/modules/systems/DHWTab.jsx`
+- `frontend/src/components/modules/systems/LightingTab.jsx`
+- `frontend/src/components/modules/systems/VentilationTab.jsx`
+
+Pre-deletion grep across the entire `frontend/` tree returned ZERO external import / reference — the four files were orphan (superseded by Brief 38 polish's inline rewrite). Safe deletion per your instruction.
+
+**`frontend/src/components/modules/systems/SystemEditorCard.jsx` (new, ~430 lines):**
+- Service-aware editor card per the brief Part 3 step 3.2 template (Identity / Energy / Control / Diagnostic / Library groups)
+- Collapsed summary line: dot (service colour), label, share %, source + efficiency
+- Expanded: per-service field variations driven by `system.service`:
+  - **Heating** — source dropdown + SCOP / Seasonal η field (label changes with source — SCOP for heat-pump-class, Seasonal η for combustion); setpoint radio (Follow comfort / Custom) with slider when custom
+  - **Cooling** — SEER field; setpoint defaults to upper band
+  - **DHW** — efficiency + storage setpoint + tap outlet temp + cold supply temp + `demand_basis` selector + corresponding `demand_litres_per_m2_day` or `demand_litres_per_person_per_day`; inline tap-mix correction note showing live hot-fraction percentage
+  - **Ventilation** — SFP + recovery sensible/latent objects; flow rate + flow basis
+  - **Lighting / Small power** (thin) — control mechanism + control factor; no efficiency / setpoint
+- Diagnostic block shows inline when `engineSystem.delta_vs_comfort_mwh` is non-trivial — "Demand at comfort / Delivered at <setpoint> / Δ" three-line summary
+- Library "Save current as library item" button per card
+- Schedule editor wired via `openScheduleEditor(scheduleId)` when `control_mechanism === 'scheduled'`
+- Colour-coded accent per service (heating red / cooling cyan / DHW pink / ventilation teal / lighting amber / small power violet) per Brief 37 Part 1 palette
+
+**`frontend/src/components/modules/systems/AddSystemButton.jsx` (new, ~170 lines):**
+- Per-service "+ Add system" affordance with click-away modal
+- Two paths: "From library" (filtered to current service from `params.library_systems`) + "Start blank" (per-source archetypes)
+- Per-service archetypes per brief Part 3 step 3.4:
+  - Heating: gas boiler (0.92), ASHP (SCOP 3.0), GSHP (SCOP 3.5), electric direct (1.0), district heating, biomass, oil
+  - Cooling: vapour-compression (SEER 3.0), district cooling
+  - DHW: immersion (0.95), gas combi (0.85), heat pump (SCOP 2.5), district heating
+  - Ventilation: MEV (SFP 1.5, 0% recovery), MVHR (SFP 1.8, 82% sensible recovery)
+  - Lighting: constant (control_factor 1.0), daylight dimming (0.70)
+  - Small power: baseline (1.0)
+- `seedSystem(service, archetype)` builds a fully-formed Brief 40 system with stable id, default values per schema, sensible per-service initial state (setpoint null for heating/cooling, tap-mix defaults for DHW)
+- First system on a service seeds with `share_pct: 100`; subsequent systems seed with the remainder
+
+**`frontend/src/components/modules/systems/SystemsDiagnosticPanel.jsx` (new, ~210 lines):**
+- New "Diagnostic" centre tab — brief Part 3 step 3.7
+- Top table: per-service row with demand / delivered / Δ MWh / % over columns
+- Colour-coded delta cells (amber for overdelivery, cyan for underdelivery)
+- DHW row carries a sub-note showing the active tap-mix fraction
+- Click any service row with systems → expands to per-system breakdown (label / share / setpoint / delivered / delta)
+- Totals roll-up at the bottom: EUI / annual source / carbon + fuel-split grid (filters out zero entries)
+- Renders empty state with helpful message when `consumption.brief40 === null` (pre-Brief-40-Part-5 projects)
+
+**`SystemsModule.jsx` left panel rewrite:**
+- Removed: `InputsColumn` (v25 shape), `SectionHeader`, `OnOffToggle`, `ScheduleDropdown`, `ServiceInputs`, `DHWInputs`, `FuelMixSlider`, `VentilationInputs` (~316 lines of v25 helpers, all orphan after the rewrite)
+- Added: new v40 `InputsColumn` (~170 lines) + `V40SectionHeader` (~30 lines) — total ~200 lines new vs ~316 lines removed (net ~116 lines smaller for the left column)
+- Per-section: collapsible service header with system count badge + share-validation indicator; per-system `SystemEditorCard` list; per-service `AddSystemButton`; share-normalise quick-fix banner when sum ≠ 100%
+- Section open/collapsed state local to the column; only one system can be expanded at a time (keyed by `${service}:${systemId}`)
+- Write helpers `addSystem` / `updateSystem` / `removeSystem` / `saveSystemToLibrary` / `normaliseShares` operate on `params.systems_config_v40.{service}[]` via `updateParam`
+- Centre `CENTRE_TABS` gains `{ id: 'diagnostic', label: 'Diagnostic' }` between Rejection and Summary
+- The old top-level `updateSystem` helper that wrote to `params.systems_config_v25` is deleted (no remaining callers after the v25 InputsColumn was retired); a comment block explains the v25 → v40 split
+
+**Library save/load (Brief 37 pattern, `'systems'` namespace):**
+- Save: `SystemEditorCard`'s "Save current as library item" → `saveSystemToLibrary(sys)` writes to `params.library_systems[]` with a fresh `lib_${service}_*` id + `saved_at` timestamp
+- Load: `AddSystemButton`'s modal "From library" tab filters `params.library_systems` by `service === currentService` (cross-service contamination prevented); selecting one reseeds with fresh id + share 100
+- Edit a library entry: not a Part 3 deliverable — covered by future library management UI
+
+**Share validation:**
+- Section header shows the share-sum badge (amber when ≠ 100% within ½pp tolerance)
+- Each system card shows "⚠ service shares ≠ 100%" inline next to the share slider
+- "Normalise" quick-fix scales all systems proportionally to sum to 100; "Distribute" omitted in v1 (the new system add-flow already seeds the remainder to the new system)
+
+**Build:** clean, 9.22 s, 2.53 MB JS (gzip 702 kB) — +4 kB gzip vs Part 2's 698 kB (the three new UI components). 3189 modules transformed.
+
+**Verification (visual — Chris walkthrough):** the new section list is empty for pre-Brief-40 projects (Bridgewater currently has only `systems_config_v25`, not `systems_config_v40`). Per the brief's plough-through pattern, full visual verification waits for Part 5 migration to populate Bridgewater's `systems_config_v40` — then the Heating section shows the migrated heat pump system card, the DHW section shows the tap-mix-corrected system card, the Diagnostic tab populates, etc.
+
+**Engine contract unchanged:** Sankey + Live Results consume `consumption.space_heating.{primary,secondary}` / etc as before. Brief 40 Part 5 migration writes the v40 config without touching v25; both shapes coexist until a follow-up brief retires v25.
+
+**Next:** Part 4 — Lighting + small_power thin Systems entries. `DEFAULT_PARAMS` gets default lighting + small_power systems for new projects; `systemsEngine.js` lighting/small_power calc verified (already implemented in Part 2 via `_computeThin`); audit doc gains a "Thin Systems entries" section documenting cross-module accounting (Internal Gains heat vs Systems delivered electricity).
+
+---
+
 ## 🟢 Session 2026-05-19 — Brief 40 Part 2: Systems engine — proportional split, setpoint param, DHW tap-mix
 
 **State:** `commit_in_flight` — Brief 40 Part 2. Engine layer for Brief 40 schema landed in a single Rule-14-aware commit. New `systemsEngine.js` co-exists with the existing `computeServiceEnergy` / `computeDhwFuelMix` / `computeVentilationEnergy` paths; per-system breakdown + comfort-vs-setpoint diagnostic attaches under `consumption.brief40` (null until Part 5 migration populates `systems_config_v40`).

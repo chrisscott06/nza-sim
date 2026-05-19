@@ -49,6 +49,15 @@ import ChartTotalsBadge from '../shared/ChartTotalsBadge.jsx'
 // — Chris's "stuck" complaint. The schedule body content (ScheduleEditor)
 // is unchanged; only the host is replaced.
 import SchedulePopout from '../shared/SchedulePopout.jsx'
+// Brief 40 Part 3 (2026-05-19): Systems module rewrite from tab-based to
+// section-list shape. SystemEditorCard renders one system at a time with
+// service-aware fields per the Brief 40 schema (audit doc §2).
+// AddSystemButton is the "+ Add system" affordance per section with
+// library + start-blank archetypes. SystemsDiagnosticPanel renders the
+// comfort-vs-setpoint summary table in a new "Diagnostic" centre tab.
+import SystemEditorCard, { SERVICE_COLOURS } from './systems/SystemEditorCard.jsx'
+import AddSystemButton from './systems/AddSystemButton.jsx'
+import SystemsDiagnosticPanel from './systems/SystemsDiagnosticPanel.jsx'
 
 const SYSTEMS_ACCENT = '#00AEEF'
 import LiveResultsStrip from '../shared/LiveResultsStrip.jsx'
@@ -56,12 +65,13 @@ import LiveResultsStrip from '../shared/LiveResultsStrip.jsx'
 const ACCENT = '#00AEEF'   // systems theme — cyan-bright
 
 const CENTRE_TABS = [
-  { id: 'sankey',    label: 'Sankey' },
-  { id: 'profiles',  label: 'Profiles' },
-  { id: 'schedule', label: 'Schedule' },
-  { id: 'monthly',   label: 'Monthly' },
-  { id: 'rejection', label: 'Rejection' },   // Brief 38 (2026-05-19): heat-rejection breakdown
-  { id: 'summary',   label: 'Summary' },
+  { id: 'sankey',     label: 'Sankey' },
+  { id: 'profiles',   label: 'Profiles' },
+  { id: 'schedule',  label: 'Schedule' },
+  { id: 'monthly',    label: 'Monthly' },
+  { id: 'rejection',  label: 'Rejection' },   // Brief 38 (2026-05-19): heat-rejection breakdown
+  { id: 'diagnostic', label: 'Diagnostic' },  // Brief 40 (2026-05-19): comfort-vs-setpoint summary
+  { id: 'summary',    label: 'Summary' },
 ]
 
 const FUEL_COLOURS = {
@@ -209,25 +219,25 @@ export default function SystemsModule() {
     return map[t] ?? '#00AEEF'
   })()
 
+  // Brief 38 polish + IM-M4 §8.1 contract: the centre Sankey + right Live
+  // Results read from `consumption.space_heating` / `.space_cooling` /
+  // `.dhw` / `.ventilation` etc. These remain populated by State 3's
+  // existing `computeServiceEnergy` / `computeDhwFuelMix` /
+  // `computeVentilationEnergy` paths regardless of whether Brief 40
+  // `systems_config_v40` is also populated. The new Brief 40 per-system
+  // breakdown surfaces on `consumption.brief40` and is consumed by the
+  // left panel + the new "Diagnostic" centre tab.
   const sysCfg = params?.systems_config_v25 ?? {}
   const consumption = result?.consumption ?? null
 
-  const updateSystem = (path, patch) => {
-    // path = 'heating' | 'cooling' | 'dhw' | 'ventilation'
-    const current = params?.systems_config_v25 ?? {}
-    if (path === 'ventilation') {
-      // patch = { index, partial }
-      const list = Array.isArray(current.ventilation) ? current.ventilation : []
-      const next = list.map((v, i) => i === patch.index ? { ...v, ...patch.partial } : v)
-      updateParam('systems_config_v25', { ...current, ventilation: next })
-      return
-    }
-    const merged = { ...(current[path] ?? {}), ...patch }
-    if (patch.fuel_mix) {
-      merged.fuel_mix = { ...((current[path] ?? {}).fuel_mix ?? {}), ...patch.fuel_mix }
-    }
-    updateParam('systems_config_v25', { ...current, [path]: merged })
-  }
+  // Brief 40 Part 3 (2026-05-19): the legacy v25 updateSystem helper that
+  // wrote into params.systems_config_v25 from the now-deleted v25 input
+  // accordions has been retired. v40 write helpers live inside InputsColumn
+  // (addSystem / updateSystem / removeSystem / saveSystemToLibrary), which
+  // write through updateParam directly. v25 stays read-only here — Sankey +
+  // Live Results consume it through `sysCfg` for cross-cutting visuals
+  // (system labels, ventilation per-system enabled flags) until those
+  // surfaces also migrate to v40 (follow-up brief).
 
   return (
     <div className="flex flex-col h-[calc(100vh-3rem)] relative">
@@ -251,11 +261,17 @@ export default function SystemsModule() {
       {/* ── Three-column workspace ────────────────────────────────────── */}
       <div className="flex-1 min-h-0 flex">
         {/* LEFT: inputs ───────────────────────────────────────────────── */}
-        <div className="flex-shrink-0 w-[290px] bg-white border-r border-light-grey overflow-y-auto">
+        {/* Brief 40 Part 3 (2026-05-19): per-service section list replacing
+            the v25 tab-style column. Reads params.systems_config_v40 (Brief 40
+            array shape); falls back to empty sections when absent (Bridgewater
+            Part 5 migration populates v40 from v25). Per-system editing via
+            SystemEditorCard + AddSystemButton with library save/load. */}
+        <div className="flex-shrink-0 w-[320px] bg-white border-r border-light-grey overflow-y-auto">
           <InputsColumn
-            sysCfg={sysCfg}
-            updateSystem={updateSystem}
             params={params}
+            updateParam={updateParam}
+            consumption={consumption}
+            comfortBand={comfortBand ?? { lower_c: 20, upper_c: 26 }}
             openScheduleEditor={openScheduleEditor}
           />
         </div>
@@ -302,6 +318,9 @@ export default function SystemsModule() {
             )}
             {consumption && centreView === 'rejection' && (
               <SystemsRejection consumption={consumption} sysCfg={sysCfg} />
+            )}
+            {consumption && centreView === 'diagnostic' && (
+              <SystemsDiagnosticPanel consumption={consumption} />
             )}
             {consumption && centreView === 'summary' && (
               <SystemsSummary consumption={consumption} />
@@ -358,318 +377,201 @@ export default function SystemsModule() {
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
-   LEFT COLUMN — input accordions
+   LEFT COLUMN — per-service section list (Brief 40 Part 3 rewrite)
    ─────────────────────────────────────────────────────────────────────── */
-function InputsColumn({ sysCfg, updateSystem, params, openScheduleEditor }) {
-  const [open, setOpen] = useState({ heating: true, cooling: false, dhw: false, ventilation: false, lighting: false, sp: false })
+
+const SERVICES_IN_ORDER = ['heating', 'cooling', 'dhw', 'ventilation', 'lighting', 'small_power']
+const SERVICE_LABEL_BY_KEY = {
+  heating:     'Heating',
+  cooling:     'Cooling',
+  dhw:         'DHW',
+  ventilation: 'Ventilation',
+  lighting:    'Lighting',
+  small_power: 'Small power',
+}
+
+function InputsColumn({ params, updateParam, consumption, comfortBand, openScheduleEditor }) {
+  // Brief 40 v40 array shape lives at params.systems_config_v40.{service}: []
+  const v40 = params?.systems_config_v40 ?? null
+
+  // Engine-side per-service block (consumption.brief40.{service}) — null when
+  // engine result not ready or no Brief 40 config. Used for the inline
+  // comfort-vs-setpoint diagnostic on each SystemEditorCard.
+  const brief40 = consumption?.brief40 ?? null
+
+  // Per-section open/collapsed state (heating + dhw open by default; rest
+  // collapsed to keep the column compact)
+  const [open, setOpen] = useState({
+    heating: true, cooling: false, dhw: true, ventilation: false, lighting: false, small_power: false,
+  })
   const toggle = (k) => setOpen(o => ({ ...o, [k]: !o[k] }))
 
-  const allSched = useMemo(() => allScheduleNames(params), [params])
+  // Per-system expanded state (collapsed by default — only one expanded at a
+  // time, keyed by system id). Keys: `${service}:${systemId}`.
+  const [expandedSystem, setExpandedSystem] = useState(null)
+  const toggleExpanded = (key) => setExpandedSystem(k => k === key ? null : key)
+
+  // ── Write helpers ──────────────────────────────────────────────────────
+  // Brief 40 schema: params.systems_config_v40 = { heating: [...], ... }.
+  // Maintain through-updateParam so the engine sees the change reactively.
+
+  const writeV40 = (next) => updateParam('systems_config_v40', next)
+  const getList = (service) => Array.isArray(v40?.[service]) ? v40[service] : []
+
+  const addSystem = (service, sys) => {
+    const list = getList(service)
+    // First system gets share 100; subsequent systems get the remainder.
+    const used = list.reduce((s, x) => s + Number(x?.share_pct ?? 0), 0)
+    const share_pct = list.length === 0 ? 100 : Math.max(0, 100 - used)
+    const fresh = { ...sys, share_pct }
+    const nextList = [...list, fresh]
+    writeV40({ ...(v40 ?? {}), [service]: nextList })
+    setExpandedSystem(`${service}:${fresh.id}`)
+  }
+
+  const updateSystem = (service, index, patch) => {
+    const list = getList(service)
+    const nextList = list.map((s, i) => i === index ? { ...s, ...patch } : s)
+    writeV40({ ...(v40 ?? {}), [service]: nextList })
+  }
+
+  const removeSystem = (service, index) => {
+    const list = getList(service)
+    const nextList = list.filter((_, i) => i !== index)
+    writeV40({ ...(v40 ?? {}), [service]: nextList })
+  }
+
+  // Library save — writes to params.library_systems[] (Brief 37 pattern,
+  // namespaced by service via the entry's `service` field)
+  const saveSystemToLibrary = (sys) => {
+    const lib = Array.isArray(params?.library_systems) ? params.library_systems : []
+    const libEntry = {
+      ...sys,
+      id: `lib_${sys.service}_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      saved_at: new Date().toISOString(),
+    }
+    updateParam('library_systems', [...lib, libEntry])
+  }
+
+  // Share-validation helper: returns the sum of share_pct for a service, and
+  // a flag indicating whether it's at 100 (within ½pp tolerance).
+  const shareValidation = (service) => {
+    const list = getList(service)
+    if (list.length === 0) return { sum: 0, valid: true }
+    const sum = list.reduce((s, x) => s + Number(x?.share_pct ?? 0), 0)
+    return { sum, valid: Math.abs(sum - 100) < 0.5 }
+  }
+
+  const normaliseShares = (service) => {
+    const list = getList(service)
+    if (list.length === 0) return
+    const sum = list.reduce((s, x) => s + Number(x?.share_pct ?? 0), 0)
+    if (sum <= 0) {
+      // All zero — distribute equally
+      const per = 100 / list.length
+      const nextList = list.map(s => ({ ...s, share_pct: Math.round(per * 10) / 10 }))
+      writeV40({ ...(v40 ?? {}), [service]: nextList })
+      return
+    }
+    const scale = 100 / sum
+    const nextList = list.map(s => ({ ...s, share_pct: Math.round(Number(s.share_pct ?? 0) * scale * 10) / 10 }))
+    writeV40({ ...(v40 ?? {}), [service]: nextList })
+  }
 
   return (
     <div className="p-3 space-y-2">
-      <SectionHeader id="heating" title="Heating" open={open.heating} onToggle={() => toggle('heating')}>
-        <ServiceInputs
-          serviceKey="heating"
-          cfg={sysCfg.heating ?? {}}
-          updateSystem={updateSystem}
-          allSched={allSched}
-          openScheduleEditor={openScheduleEditor}
-          effLabel="SCOP"
-          effField="primary_pct"
-        />
-      </SectionHeader>
-      <SectionHeader id="cooling" title="Cooling" open={open.cooling} onToggle={() => toggle('cooling')}>
-        <ServiceInputs
-          serviceKey="cooling"
-          cfg={sysCfg.cooling ?? {}}
-          updateSystem={updateSystem}
-          allSched={allSched}
-          openScheduleEditor={openScheduleEditor}
-          effLabel="SEER"
-          effField="primary_pct"
-        />
-      </SectionHeader>
-      <SectionHeader id="dhw" title="DHW" open={open.dhw} onToggle={() => toggle('dhw')}>
-        <DHWInputs
-          cfg={sysCfg.dhw ?? {}}
-          updateSystem={updateSystem}
-          allSched={allSched}
-          openScheduleEditor={openScheduleEditor}
-        />
-      </SectionHeader>
-      <SectionHeader id="ventilation" title="Ventilation" open={open.ventilation} onToggle={() => toggle('ventilation')}>
-        <VentilationInputs
-          list={Array.isArray(sysCfg.ventilation) ? sysCfg.ventilation : []}
-          updateSystem={updateSystem}
-          allSched={allSched}
-          openScheduleEditor={openScheduleEditor}
-        />
-      </SectionHeader>
-      <SectionHeader id="lighting" title="Lighting" open={open.lighting} onToggle={() => toggle('lighting')}>
-        <div className="text-xxs text-mid-grey">
-          LPD + schedule live in <NavLink to="/gains" className="text-navy underline">Internal Gains</NavLink>.
-          Energy use is computed from there.
-        </div>
-      </SectionHeader>
-      <SectionHeader id="sp" title="Small Power" open={open.sp} onToggle={() => toggle('sp')}>
-        <div className="text-xxs text-mid-grey">
-          EPD + schedule live in <NavLink to="/gains" className="text-navy underline">Internal Gains</NavLink>.
-        </div>
-      </SectionHeader>
+      {SERVICES_IN_ORDER.map(service => {
+        const list = getList(service)
+        const isOpen = open[service]
+        const accent = SERVICE_COLOURS[service] ?? '#00AEEF'
+        const { sum, valid } = shareValidation(service)
+        const engineSystems = brief40?.[service]?.systems ?? []
+        return (
+          <V40SectionHeader
+            key={service}
+            service={service}
+            label={SERVICE_LABEL_BY_KEY[service]}
+            accent={accent}
+            open={isOpen}
+            onToggle={() => toggle(service)}
+            count={list.length}
+            shareSum={sum}
+            shareValid={valid}
+          >
+            {list.length > 0 && (
+              <div className="space-y-1.5">
+                {list.map((sys, idx) => {
+                  const key = `${service}:${sys.id ?? idx}`
+                  const isExpanded = expandedSystem === key
+                  const engineSys = engineSystems.find(es => es.id === sys.id) ?? null
+                  return (
+                    <SystemEditorCard
+                      key={key}
+                      system={sys}
+                      engineSystem={engineSys}
+                      comfortBand={comfortBand}
+                      expanded={isExpanded}
+                      onToggleExpanded={() => toggleExpanded(key)}
+                      onUpdate={(patch) => updateSystem(service, idx, patch)}
+                      onDelete={() => removeSystem(service, idx)}
+                      onSaveToLibrary={saveSystemToLibrary}
+                      openScheduleEditor={openScheduleEditor}
+                      shareInvalid={!valid}
+                    />
+                  )
+                })}
+                {!valid && (
+                  <div className="flex items-center gap-2 px-1.5 py-1 text-xxs text-amber-700 bg-amber-50 border border-amber-200 rounded">
+                    <span>⚠ Shares sum to {sum.toFixed(1)}%, not 100%.</span>
+                    <button
+                      onClick={() => normaliseShares(service)}
+                      className="ml-auto px-1.5 py-0.5 rounded border border-amber-300 hover:bg-amber-100 transition-colors"
+                    >
+                      Normalise
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            {list.length === 0 && (
+              <p className="text-xxs text-mid-grey/80 italic mb-1.5">No {SERVICE_LABEL_BY_KEY[service].toLowerCase()} systems yet.</p>
+            )}
+            <AddSystemButton
+              service={service}
+              librarySystems={params?.library_systems ?? []}
+              onAdd={(sys) => addSystem(service, sys)}
+            />
+          </V40SectionHeader>
+        )
+      })}
     </div>
   )
 }
 
-function SectionHeader({ id, title, open, onToggle, children }) {
+function V40SectionHeader({ service, label, accent, open, onToggle, count, shareSum, shareValid, children }) {
   return (
     <div>
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between px-2.5 py-1.5 rounded text-left transition-opacity"
-        style={{ backgroundColor: ACCENT }}
+        className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded text-left transition-opacity"
+        style={{ backgroundColor: accent }}
       >
-        <span className="text-white text-xxs font-semibold uppercase tracking-wider">{title}</span>
+        <span className="flex items-center gap-2">
+          <span className="text-white text-xxs font-semibold uppercase tracking-wider">{label}</span>
+          {count > 0 && (
+            <span className="text-white/85 text-xxs bg-black/15 px-1.5 py-0.5 rounded">{count}</span>
+          )}
+          {count > 0 && !shareValid && (
+            <span className="text-white text-xxs bg-amber-600 px-1.5 py-0.5 rounded" title={`Shares sum to ${shareSum.toFixed(1)}%`}>
+              ⚠ {shareSum.toFixed(0)}%
+            </span>
+          )}
+        </span>
         <span className="text-white/70 text-xs leading-none">{open ? '▾' : '▸'}</span>
       </button>
       {open && (
-        <div className="pt-2 pb-2 px-1 space-y-2">{children}</div>
+        <div className="pt-2 pb-1 px-1 space-y-1.5">{children}</div>
       )}
-    </div>
-  )
-}
-
-function OnOffToggle({ enabled, onChange, label }) {
-  return (
-    <button
-      onClick={() => onChange(!enabled)}
-      className={`w-full flex items-center gap-1.5 text-xxs px-2 py-1.5 rounded border transition-colors ${
-        enabled
-          ? 'bg-cyan-50 text-cyan-800 border-cyan-600'
-          : 'bg-light-grey/30 text-mid-grey border-light-grey'
-      }`}
-    >
-      <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${enabled ? 'bg-cyan-600' : 'bg-mid-grey/40'}`} />
-      <span className="flex-1 text-left">{label}: <span className="font-medium">{enabled ? 'ON' : 'OFF'}</span></span>
-    </button>
-  )
-}
-
-function ScheduleDropdown({ value, onChange, allSched, openScheduleEditor }) {
-  return (
-    <div className="flex items-center gap-1">
-      <select
-        value={value ?? 'always_on'}
-        onChange={e => onChange(e.target.value)}
-        className="flex-1 px-1.5 py-1 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-cyan-700"
-      >
-        {allSched.map(n => <option key={n} value={n}>{n}</option>)}
-      </select>
-      <button
-        onClick={() => openScheduleEditor(value ?? 'always_on')}
-        className="text-xxs px-1.5 py-1 rounded border border-light-grey text-mid-grey hover:text-cyan-700 hover:border-cyan-700 transition-colors"
-        title="Edit this schedule"
-      >
-        ✏️
-      </button>
-    </div>
-  )
-}
-
-function ServiceInputs({ serviceKey, cfg, updateSystem, allSched, openScheduleEditor, effLabel, effField }) {
-  const enabled = cfg.enabled !== false
-  return (
-    <>
-      <OnOffToggle
-        enabled={enabled}
-        onChange={(v) => updateSystem(serviceKey, { enabled: v })}
-        label={serviceKey === 'heating' ? 'Heating' : serviceKey === 'cooling' ? 'Cooling' : serviceKey}
-      />
-      <div className={enabled ? '' : 'opacity-40 pointer-events-none'}>
-        <p className="text-xxs uppercase tracking-wider text-mid-grey mt-1.5 mb-0.5">Primary library_id</p>
-        <p className="text-xxs text-navy font-medium truncate">{cfg.primary?.library_id ?? '—'}</p>
-        <p className="text-xxs uppercase tracking-wider text-mid-grey mt-1.5 mb-0.5">Primary share (%)</p>
-        <input
-          type="range" min={0} max={100} step={5}
-          value={Number(cfg.primary_pct ?? 100)}
-          onChange={e => updateSystem(serviceKey, { primary_pct: Number(e.target.value) })}
-          className="w-full h-[3px] accent-cyan-700"
-        />
-        <p className="text-xxs text-navy tabular-nums mt-0.5">{cfg.primary_pct ?? 100}%</p>
-        {cfg.secondary?.library_id && (
-          <>
-            <p className="text-xxs uppercase tracking-wider text-mid-grey mt-2 mb-0.5">Secondary library_id</p>
-            <p className="text-xxs text-navy font-medium truncate">{cfg.secondary?.library_id}</p>
-            <p className="text-xxs text-mid-grey mt-0.5">covers {100 - (cfg.primary_pct ?? 100)}%</p>
-          </>
-        )}
-        {serviceKey === 'heating' && (
-          <>
-            <p className="text-xxs uppercase tracking-wider text-mid-grey mt-2 mb-0.5">Setpoint (°C)</p>
-            <input
-              type="number" min={10} max={28} step={0.5}
-              value={Number(cfg.setpoint_c ?? 21)}
-              onChange={e => updateSystem(serviceKey, { setpoint_c: Number(e.target.value) })}
-              className="w-full px-1.5 py-0.5 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-cyan-700 tabular-nums"
-            />
-          </>
-        )}
-        {serviceKey === 'cooling' && (
-          <>
-            <p className="text-xxs uppercase tracking-wider text-mid-grey mt-2 mb-0.5">Setpoint (°C)</p>
-            <input
-              type="number" min={18} max={30} step={0.5}
-              value={Number(cfg.setpoint_c ?? 25)}
-              onChange={e => updateSystem(serviceKey, { setpoint_c: Number(e.target.value) })}
-              className="w-full px-1.5 py-0.5 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-cyan-700 tabular-nums"
-            />
-          </>
-        )}
-        <p className="text-xxs uppercase tracking-wider text-mid-grey mt-2 mb-0.5">Schedule</p>
-        <ScheduleDropdown
-          value={cfg.schedule_ref}
-          onChange={v => updateSystem(serviceKey, { schedule_ref: v })}
-          allSched={allSched}
-          openScheduleEditor={openScheduleEditor}
-        />
-      </div>
-    </>
-  )
-}
-
-function DHWInputs({ cfg, updateSystem, allSched, openScheduleEditor }) {
-  const enabled = cfg.enabled !== false
-  const mix = cfg.fuel_mix ?? { gas: 1.0, electric_resistance: 0.0, heat_pump: 0.0 }
-  const sumPct = Math.round((Number(mix.gas) + Number(mix.electric_resistance) + Number(mix.heat_pump)) * 100)
-
-  // Slider change: keep the other two fractions proportional so the total
-  // stays at 1.0 (the engine normalises anyway, but the slider should
-  // visually balance).
-  const setMix = (key, pct) => {
-    const frac = pct / 100
-    const others = Object.keys(mix).filter(k => k !== key)
-    const remainingFrac = Math.max(0, 1 - frac)
-    const othersSum = others.reduce((s, k) => s + Number(mix[k] ?? 0), 0)
-    const next = { ...mix, [key]: frac }
-    for (const k of others) {
-      next[k] = othersSum > 0 ? Number(mix[k]) * (remainingFrac / othersSum) : remainingFrac / others.length
-    }
-    updateSystem('dhw', { fuel_mix: next })
-  }
-
-  return (
-    <>
-      <OnOffToggle enabled={enabled} onChange={v => updateSystem('dhw', { enabled: v })} label="DHW" />
-      <div className={enabled ? '' : 'opacity-40 pointer-events-none'}>
-        <p className="text-xxs uppercase tracking-wider text-mid-grey mt-2 mb-1">Fuel mix (must sum to 100%)</p>
-        <FuelMixSlider label="Gas"               color="#DC2626" pct={Math.round(Number(mix.gas) * 100)}                 onChange={p => setMix('gas', p)} />
-        <FuelMixSlider label="Electric resistance" color="#ECB01F" pct={Math.round(Number(mix.electric_resistance) * 100)} onChange={p => setMix('electric_resistance', p)} />
-        <FuelMixSlider label="Heat pump"         color="#16A34A" pct={Math.round(Number(mix.heat_pump) * 100)}           onChange={p => setMix('heat_pump', p)} />
-        <p className={`text-xxs mt-1 ${sumPct === 100 ? 'text-mid-grey' : 'text-amber-700'}`}>
-          Sum: {sumPct}% {sumPct !== 100 && '(engine normalises)'}
-        </p>
-        <p className="text-xxs uppercase tracking-wider text-mid-grey mt-2 mb-0.5">Heat pump library</p>
-        <p className="text-xxs text-navy font-medium truncate">{cfg.primary?.library_id ?? '—'}</p>
-        <p className="text-xxs uppercase tracking-wider text-mid-grey mt-1.5 mb-0.5">Gas boiler library</p>
-        <p className="text-xxs text-navy font-medium truncate">{cfg.secondary?.library_id ?? '—'}</p>
-        <p className="text-xxs uppercase tracking-wider text-mid-grey mt-1.5 mb-0.5">Litres / person / day</p>
-        <input
-          type="number" min={20} max={200} step={5}
-          value={Number(cfg.litres_per_person_per_day ?? 80)}
-          onChange={e => updateSystem('dhw', { litres_per_person_per_day: Number(e.target.value) })}
-          className="w-full px-1.5 py-0.5 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-cyan-700 tabular-nums"
-        />
-        <p className="text-xxs uppercase tracking-wider text-mid-grey mt-1.5 mb-0.5">Schedule</p>
-        <ScheduleDropdown
-          value={cfg.schedule_ref}
-          onChange={v => updateSystem('dhw', { schedule_ref: v })}
-          allSched={allSched}
-          openScheduleEditor={openScheduleEditor}
-        />
-      </div>
-    </>
-  )
-}
-
-function FuelMixSlider({ label, color, pct, onChange }) {
-  return (
-    <div className="flex items-center gap-1.5 mb-1">
-      <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: color }} />
-      <span className="text-xxs text-mid-grey w-24 flex-shrink-0 truncate">{label}</span>
-      <input
-        type="range" min={0} max={100} step={5}
-        value={pct}
-        onChange={e => onChange(Number(e.target.value))}
-        className="flex-1 h-[3px]"
-        style={{ accentColor: color }}
-      />
-      <span className="text-xxs text-navy tabular-nums w-7 text-right">{pct}%</span>
-    </div>
-  )
-}
-
-function VentilationInputs({ list, updateSystem, allSched, openScheduleEditor }) {
-  if (list.length === 0) return <div className="text-xxs text-mid-grey">No ventilation systems configured.</div>
-  return (
-    <div className="space-y-2">
-      {list.map((v, i) => (
-        <div key={v.id ?? i} className="border border-light-grey rounded p-2 space-y-1.5">
-          <p className="text-xxs font-medium text-navy truncate">{v.name ?? v.id ?? `Vent ${i + 1}`}</p>
-          <OnOffToggle
-            enabled={v.enabled !== false}
-            onChange={en => updateSystem('ventilation', { index: i, partial: { enabled: en } })}
-            label="System"
-          />
-          <div className={v.enabled === false ? 'opacity-40 pointer-events-none' : ''}>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xxs text-mid-grey w-12 flex-shrink-0">Flow</span>
-              <input
-                type="number" min={0} step={10}
-                value={Number(v.flow_l_s ?? 0)}
-                onChange={e => updateSystem('ventilation', { index: i, partial: { flow_l_s: Number(e.target.value) } })}
-                className="flex-1 px-1.5 py-0.5 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-cyan-700 tabular-nums"
-              />
-              <span className="text-xxs text-mid-grey w-5">L/s</span>
-            </div>
-            <div className="flex items-center gap-1.5 mt-1">
-              <span className="text-xxs text-mid-grey w-12 flex-shrink-0">SFP</span>
-              <input
-                type="number" min={0} step={0.05}
-                value={Number(v.sfp_w_per_l_s ?? 0)}
-                onChange={e => updateSystem('ventilation', { index: i, partial: { sfp_w_per_l_s: Number(e.target.value) } })}
-                className="flex-1 px-1.5 py-0.5 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-cyan-700 tabular-nums"
-              />
-              <span className="text-xxs text-mid-grey w-12">W/(L/s)</span>
-            </div>
-            <div className="mt-1.5">
-              <OnOffToggle
-                enabled={v.hre_enabled !== false && (Number(v.hre ?? 0) > 0)}
-                onChange={en => updateSystem('ventilation', { index: i, partial: { hre_enabled: en, hre: en ? Math.max(Number(v.hre ?? 0), 0.7) : 0 } })}
-                label="HRE"
-              />
-              {Number(v.hre ?? 0) > 0 && (
-                <div className="flex items-center gap-1.5 mt-1">
-                  <span className="text-xxs text-mid-grey w-12 flex-shrink-0">η</span>
-                  <input
-                    type="range" min={0.5} max={0.95} step={0.05}
-                    value={Number(v.hre ?? 0.7)}
-                    onChange={e => updateSystem('ventilation', { index: i, partial: { hre: Number(e.target.value) } })}
-                    className="flex-1 h-[3px] accent-cyan-700"
-                  />
-                  <span className="text-xxs text-navy tabular-nums w-9 text-right">{Math.round(Number(v.hre ?? 0) * 100)}%</span>
-                </div>
-              )}
-            </div>
-            <p className="text-xxs uppercase tracking-wider text-mid-grey mt-1.5 mb-0.5">Schedule</p>
-            <ScheduleDropdown
-              value={v.schedule_ref}
-              onChange={r => updateSystem('ventilation', { index: i, partial: { schedule_ref: r } })}
-              allSched={allSched}
-              openScheduleEditor={openScheduleEditor}
-            />
-          </div>
-        </div>
-      ))}
     </div>
   )
 }
