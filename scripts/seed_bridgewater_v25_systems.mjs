@@ -238,8 +238,10 @@ const BRIDGEWATER_OPERABLE_OPENINGS = [
     facade:              'south',
     area_m2:             4.0,
     height_m:            2.0,
-    discharge_coefficient: 0.6,
-    wind_coefficient:    0.25,        // BS 5925 typical sheltered/open door
+    // Brief 41 Part 2 (2026-05-19): discharge_coefficient + wind_coefficient
+    // removed from operable-opening schema. Building-wide openings.cd +
+    // openings.site_exposure → Cw drive flow uniformly. height_m retained
+    // for temperature-mode stack contribution.
     opening_type:        'door',
     parent_glazing_face: null,        // doors add envelope area, not glazing
     control: {

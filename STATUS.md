@@ -1,6 +1,22 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-19 — Brief 41 Part 1: flow_mode dispatch into operable openings
+## 🚧 Session 2026-05-19 — Brief 41 Part 2: Schema cleanup — drop Cd/Cw per-opening
+
+**State:** `commit_in_flight` — Brief 41 Part 2. Per-opening `discharge_coefficient` and `wind_coefficient` defaults removed from the engine's `synthesiseOperableOpeningsFromLegacy` helper (`instantCalc.js:610–626`) and from the Bridgewater seed script (`scripts/seed_bridgewater_v25_systems.mjs:239–242`). `height_m` retained.
+
+**Why this is safe immediately:** Part 1 already removed all engine reads of `o.discharge_coefficient` and `o.wind_coefficient` — those code paths now use building-wide `openings.cd` and `openings.site_exposure → Cw`. The fields are inert if present on persisted state; Part 3's migration script removes them from the DB.
+
+**UI cleanup deferred to Part 4:** the OperationModule.jsx editor card (lines 130-131 + 1097-1104) still binds the (now-unused) sliders. Those are removed in Part 4 alongside the schedule-picker work.
+
+**withMode allowlist:** unchanged. The `operable_openings` array passes through as a whole; per-field allowlisting wasn't applied at that level. The dropped fields are simply ignored when the engine reads the opening.
+
+**Build:** clean, 10.89 s, 2.50 MB JS (gzip 694 kB).
+
+**Next:** Part 3 — migration script for persisted state.
+
+---
+
+## 🟢 Session 2026-05-19 — Brief 41 Part 1: flow_mode dispatch into operable openings
 
 **State:** `commit_in_flight` — Brief 41 Part 1. Three locations updated per CLAUDE.md Rule 14 parity (State 1 lines 1322-1380, State 2 lines 2697-2745, inline-legacy lines 5234-5267). Same dispatch shape as Brief 39 Parts 1+2 used for permanent vents.
 

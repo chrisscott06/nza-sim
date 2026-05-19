@@ -612,9 +612,12 @@ export function synthesiseOperableOpeningsFromLegacy(building) {
       name:                `Legacy operable window bank (${face})`,
       facade:              face,
       area_m2:             Math.round(area_m2 * 100) / 100,
+      // Brief 41 Part 2: discharge_coefficient + wind_coefficient dropped
+      // from the operable-opening schema. Building-wide `openings.cd` +
+      // `openings.site_exposure → Cw` drive flow uniformly across permanent
+      // vents and operable openings. height_m retained for temperature-mode
+      // stack contribution.
       height_m:            floor_height,
-      discharge_coefficient: 0.6,
-      wind_coefficient:    0.25,
       opening_type:        'window',
       parent_glazing_face: face,
       control: {
