@@ -1,5 +1,42 @@
 # NZA SIMULATE — Status
 
+## 🟢 Session 2026-05-19 — Brief 42 Part 3: Per-opening cd/flow_mode migration
+
+**State:** `commit_in_flight` — Brief 42 Part 3. One-shot migration script + Bridgewater audit doc. The script copies each project's persisted building-wide `openings.cd` and `openings.flow_mode` onto every per-facade entry and every operable opening, then removes the now-orphaned building-wide fields. `openings.site_exposure` stays building-wide per Principle 3. Idempotent.
+
+**`scripts/42_per_opening_cd_flowmode_migration.py` (new, 188 lines):**
+- Same shape as `41_operable_openings_schema_migration.py` (matched the structure for consistency)
+- `_resolve_seed_cd` / `_resolve_seed_flow_mode` — fall back to Brief 42 Part 1 DEFAULT_PARAMS values (cd 0.40, flow_mode 'single_sided') if a project has no persisted building-wide values (freshly-created post-Part-1 project)
+- `_migrate_openings_block` — per-facade injection, idempotent; only writes `cd` / `flow_mode` if they're missing on the facade entry. Strips building-wide `cd` and `flow_mode` from the openings dict
+- `_migrate_operable_openings` — same idempotent pattern over the `operable_openings` array
+- Per-project console output captures seed values, facade write/skip counts, opening write/skip counts, and a per-opening table (type / area / cd / flow_mode) for at-a-glance verification
+- Stop-dev-server discipline per CLAUDE.md Process Rule 11 — documented in the docstring
+
+**`docs/audit/42_per_opening_migration.md` (new):**
+- Pre-migration table for Bridgewater: building-wide block fields + per-facade table + operable-opening table. Pre-values noted as "to be confirmed by Chris" since the session can't query the DB without a running backend; Brief 41 Part 5 walkthrough notes provide best-known values (cd 0.29 / single_sided)
+- Migration script execution slot — expected console output shape + idempotent re-run NO-OP shape
+- Post-migration table (pre-walkthrough) — Chris fills after running the script. Expected invariance vs. pre-Brief-42 baseline (Principle 5)
+- Post-walkthrough table (Part 5 per-opening edits) — captures the magnitude of the change Brief 42's whole point is to enable. Suggested edit: Bridgewater reception door from migrated cd 0.29 / single_sided → cd 0.60 / cross (Brief 42 Part 1 Door defaults)
+- Sign-off checklist for Chris
+
+**Behaviour preservation (Brief 42 Principle 5):** At migration time the per-opening values are *copies* of the building-wide values. Engine output is unchanged at the moment the script runs. Once the user edits per-opening values in Parts 4/5, behaviour diverges intentionally.
+
+**Engine state post-Part-3:** The fallback chain in `resolveFlowMode(o, fallback)` and `resolveCd(o, fallback)` becomes mechanically irrelevant for migrated projects because every opening carries its own values. The fallback stays in place because (a) freshly-created post-Part-1 projects might still rely on it during a brief window before they have any opening data and (b) the resolvers are pure helpers used in multiple call sites — keeping the fallback parameter doesn't cost anything.
+
+**Build:** unchanged (Python-only commit).
+
+**Verification (Chris's walkthrough — folds into Part 5):**
+1. Stop dev server.
+2. Run `python scripts/42_per_opening_cd_flowmode_migration.py`.
+3. Re-run for NO-OP check.
+4. Restart dev server.
+5. In `docs/audit/42_per_opening_migration.md`, backfill the pre-migration and post-migration tables from the persisted state.
+6. Re-run Bridgewater simulation pre any Part 5 edits — confirm heating/cooling demand and operable-door loss are unchanged vs. the Brief 41 Part 5 baseline.
+
+**Next:** Part 4 — Building UI per-facade C_d + flow_mode controls. `BuildingDefinition.jsx`'s Permanent Openings panel gets per-facade controls; `BuildingWideOpeningsControls.jsx` deleted (Brief 41 Part 7's shared component is superseded — building-wide cd + flow_mode no longer exist as shared state). Site exposure dropdown stays — it's the only remaining building-wide control in the panel.
+
+---
+
 ## 🟢 Session 2026-05-19 — Brief 42 Part 2: Engine three-location parity (per-opening cd + flow_mode)
 
 **State:** `commit_in_flight` — Brief 42 Part 2. Engine now reads `cd` and `flow_mode` per-opening across all three parallel envelope implementations (State 1 + State 2 + inline-legacy) per CLAUDE.md Rule 14 three-location parity in a single commit. No physics changes — same single_sided / cross correlations. Source of `cd` and `flow_mode` shifts from building-wide to per-opening with a fallback chain to building-wide (for unmigrated persisted projects until Part 3 migration runs).
