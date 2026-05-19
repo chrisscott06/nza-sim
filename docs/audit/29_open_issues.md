@@ -330,3 +330,22 @@ By severity (after Brief 30 Phase 1.0 re-diagnosis 2026-05-18):
 | Why not caught by reconciliation row | The Heat Balance ↔ Monthly reconciliation in SummaryView compares two *display* paths of the same engine output. Both paths sum the same buggy integrand. Display-vs-display consistency holds; integrand-vs-physical-intent does not. Same shape as the Brief 29 Issue #1 door bug at the integrand-defining layer — except here the consequence is a wrong scaling factor on a real term, not a hidden ghost term. |
 | Fix scope | Branch on `relationship_to_occupancy` inside `lightingFractionForHour`. When `'independent'`, skip the `occupancy_rate` multiply (mirroring equipment's branch). When `'proportional'` / `'proportional_with_spill'`, retain it. The exception-override branch at line 2066-2071 already skips occupancy_rate scaling (correctly); this fix aligns the no-exception path. Single-file fix in `instantCalc.js`; verify Bridgewater's headline lighting kWh moves only if it has an `independent` profile (default profile is `proportional_with_spill`, so default Bridgewater is unaffected — fix is for users who configure independent emergency lighting). |
 | Cross-references | Brief 36 Part 1 §"Sanity-check hand-calcs" (`docs/audit/32_static_audit_FINDINGS.md`). |
+
+---
+
+## #16 — `ProjectDashboard.jsx` reads non-existent `instantResult.eui` field (always undefined)
+
+| Field | Value |
+|---|---|
+| Module | Home / Project Dashboard |
+| Engine | Static (any path through `calculateInstant`) |
+| Severity | **S1** |
+| Status | **OPEN** |
+| Discovered | Brief 39 Part 1 consumer audit (2026-05-19) |
+| Location | `frontend/src/pages/ProjectDashboard.jsx:219` — `const modelledEui = results?.summary?.eui_kWh_per_m2 ?? instantResult?.eui ?? null`. The `instantResult?.eui` fallback reads a field that doesn't exist on any of the five `calculateInstant` result shapes. The real field on inline-legacy is `eui_kWh_m2` (instantCalc.js line 5534); on State 3 it's `eui_kwh_per_m2`. |
+| Current value | The expression always evaluates `instantResult?.eui` → `undefined` → falls through to the final `null` fallback. Effectively, when `results?.summary?.eui_kWh_per_m2` is absent, the dashboard shows "—" instead of the instant-calc estimate it intended to. |
+| Expected value | When the saved-simulation EUI is absent, the dashboard should show the instant-calc estimate. That's what the `?? instantResult?.eui` fallback was meant to do — but the field name is wrong. |
+| Root cause | Field name mismatch — the original author probably typed the intuitive short name `eui` rather than the actual `eui_kWh_m2`. No test caught it because there's no test that exercises the dashboard in the no-simulation-result branch with a populated instant-calc result. |
+| Fix scope | Single-line fix: read both possible names: `instantResult?.eui_kWh_m2 ?? instantResult?.eui_kwh_per_m2`. **Not in scope of Brief 39** — logged here for a future small-fix pass. |
+| Why this is currently tolerable | The dashboard shows "—" instead of a number in the no-simulation case. Cosmetic; no decision impact. |
+| Cross-references | `docs/audit/39_calculation_flow_map.md` "Inline-legacy rationalisation — deferred" section §"Consumer audit findings". |

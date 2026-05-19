@@ -1,5 +1,28 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-19 — Brief 39 Part 1: patch inline-legacy perm-vent dispatch in place
+
+**State:** `commit_in_flight` — Brief 39 Part 1. The Part 1 plan was revised mid-execution from Option (a) (thin router → State 2) to **Option (c)** (in-place patch) after the consumer audit (steps 1.1–1.2) found that `LiveResultsPanel.jsx` reads systems-side fields State 2 doesn't produce. Chris authorised the pivot.
+
+**What's landing in this commit:**
+
+1. **Brief file folded into `docs/briefs/active/`** — `docs/briefs/active/39_envelope_architecture_fix.md` with the revised Part 1 text.
+2. **Inline-legacy perm-vent patch** — `frontend/src/utils/instantCalc.js` lines 5155–5165 + 5210–5220. The cross-flow-only `Q_louvre = cd_dd × A × √C_w × v_wind` is replaced with the same two-branch dispatch State 1 uses (Brief 33/34): `if (flow_mode_dd === 'single_sided') Q = 0.025 × min(1, cd/0.6) × A × v_wind; else Q = cd × A × √C_w × v_wind`. `resolveFlowMode(openings)` is the module-scope pure validator from line 145 (no parallel-reimpl rule violation — it doesn't integrate against any state's T_air trace).
+3. **Audit doc deferred section** — `docs/audit/39_calculation_flow_map.md` appended with "Brief 39 Part 1 outcome — Inline-legacy rationalisation deferred". Documents:
+   - The three-consumer audit findings (LiveResultsPanel reads `eui_kWh_m2`, `carbon_kgCO2_m2`, `fuel_split`, `monthly`; HeatBalanceTab + ProjectDashboard are clean for Option A).
+   - Why Option (c) was chosen over (a) — the systems-block extraction is non-trivial and beyond Brief 39's focused scope.
+   - The shape of the eventual follow-up brief that will land Option (a): extract inline-legacy's systems block (lines 5286–5605) into a `assembleLegacySystemsResult(...)` helper, convert inline-legacy into a router calling State 2 + the helper, eventually delete the router once all consumers move to v2.5 libraryData.
+4. **Issue #16 logged** — `docs/audit/29_open_issues.md` gets a new S1 entry for `ProjectDashboard.jsx:219`'s dead-read of `instantResult?.eui` (a field that doesn't exist on any result shape; the read always returns undefined). Not in scope of Brief 39; logged for a future small-fix pass.
+5. **`docs/briefs/current.md`** repointed at Brief 39 active.
+
+**Build:** not yet rebuilt (next part will trigger build). Diff is small (~12 lines code + brief file + audit + issue + status).
+
+**Browser verification deferred:** Bridgewater reconciliation captured in Part 5 after the State 2 port lands in Part 2.
+
+**Next:** Part 2 — port the same two-branch dispatch into `_calculateState2` (lines 2247 + 2483).
+
+---
+
 ## ✅ Session 2026-05-19 — Brief 38 close + Audit 39 (permanent-vent diagnostic logged)
 
 **State:** `closed`. Brief 38 (Systems Sankey polish) archived to `docs/briefs/archive/38_systems_sankey_polish_COMPLETED.md`. `docs/briefs/current.md` repointed at "no active brief" (Brief 30 paused continues). Audit 39 logged at `docs/audit/39_state2_permanent_vent_diagnosis.md` — read-only diagnostic, no fix yet.

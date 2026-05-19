@@ -351,3 +351,49 @@ No code modified in this commit. Single deliverable: this audit doc + a cross-li
 - The intentional-vs-accidental classification per term.
 
 Standing by for Brief 39 authorisation.
+
+---
+
+## Brief 39 Part 1 outcome — Inline-legacy rationalisation deferred
+
+**Author:** Claude Code (executor) — appended during Brief 39 Part 1 (2026-05-19).
+
+Brief 39 Part 1 was authorised with the audit's Option (a) recommendation in mind — convert the inline-legacy 'full' path into a thin router calling `_calculateState2`. The Part 1 consumer audit (steps 1.1–1.2) found that this is not viable without a heavier consumer-side rewrite. Chris authorised **Option (c)** — patch inline-legacy in place with the same two-branch dispatch as State 1 — as the pragmatic ship-the-fix path. Architectural rationalisation of inline-legacy is deferred to a follow-up brief. This section documents the findings so the follow-up brief doesn't need to redo the consumer audit work.
+
+### Consumer audit findings (the three live consumers of inline-legacy)
+
+| Consumer | `libraryData` passed | Fields read from `result` | Verdict |
+| --- | --- | --- | --- |
+| `LiveResultsPanel.jsx:258` | propagated from parent (default `{}` if absent) | `eui_kWh_m2` (line 274); `annual_heating_kWh`, `annual_cooling_kWh`, `annual_dhw_kWh` (lines 289, 295, 301); `carbon_kgCO2_m2` (307); `gia_m2` (313); `fuel_split.{total_kWh, electricity_pct, gas_pct}` (320–342); `monthly.{heating_kWh, cooling_kWh, solar_kWh}` (349); passes whole `result` to `GainsLossesChart` (278) | **Heavy systems-side reads.** State 2 doesn't produce `eui_kWh_m2`, `carbon_kgCO2_m2`, `fuel_split`, or `monthly`. Option A (thin router → State 2) would break this view. |
+| `HeatBalanceTab.jsx:33` | `{}` explicit | `liveResult?.heat_balance` only (lines 54, 68) | **Clean for Option A.** `heat_balance` is built by the shared `_buildHeatBalance` helper and is present on State 2's result. |
+| `ProjectDashboard.jsx:212` | `{}` explicit | `instantResult?.eui` (line 219) | **Clean for Option A** — but the field name is *wrong*: the real field is `eui_kWh_m2`. This read has always returned `undefined`; the dashboard falls through to `results?.summary?.eui_kWh_per_m2`. Latent dead read — logged as Issue #16 in `29_open_issues.md`. |
+
+### Why Option (c) instead of (a)
+
+Option (a) (thin router → State 2 for envelope+gains, with a shared `legacySystemsAssembly` helper for systems-side fields) is architecturally correct but the systems-block extraction is non-trivial:
+
+- Inline-legacy's systems block spans roughly `instantCalc.js:5286–5605` (320 lines). It does heating/cooling/DHW/fans dispatch via `sysDefaults`, builds the `fuel_split`, computes carbon, assembles `systems_flow`, accumulates `monthly` arrays.
+- Extracting this into a callable helper that produces the same output shape requires either passing State 2's full result + a building/systems config or duplicating those inputs. The helper would also need access to the same constants and per-fuel split logic.
+- The extracted helper would be a *second* systems engine (after State 3's `computeServiceEnergy` / `computeDhwFuelMix` / `computeVentilationEnergy`) — the same parallel-reimpl pattern problem that's already in scope.
+
+Brief 39's purpose is to close the perm-vent bug class and prevent recurrence. Both happen with Option (c) in ~6 lines of code. The architectural cleanup of inline-legacy is real and worth doing, but it warrants its own focused brief.
+
+### What the follow-up brief should do
+
+The eventual rationalisation of inline-legacy should:
+
+1. **Extract the systems block** (inline-legacy lines 5286–5605) into a module-scope helper, e.g. `assembleLegacySystemsResult(envelopeGainsResult, building, systems)` that takes a State-2-shape result + building + systems config and produces the systems-side fields (`fuel_split`, `carbon_kgCO2_m2`, `systems_flow`, `monthly`, `annual_heating_kWh`, etc.) using the same `sysDefaults`-based dispatch the inline path uses today.
+
+2. **Convert inline-legacy into a router:** call `_calculateState2(...)` for envelope+gains, then `assembleLegacySystemsResult(...)` for systems-side, merge the two and return. Net effect: one less parallel envelope-physics implementation; the systems-side parallel implementation remains but is now isolated in a single helper.
+
+3. **Bridgewater reconciliation step:** confirm that the four consumers (`LiveResultsPanel`, `HeatBalanceTab`, `ProjectDashboard`, plus any others surfaced during inspection) see the same `eui_kWh_m2`, `carbon_kgCO2_m2`, `fuel_split` numbers post-refactor as they did pre-refactor. Pure code-motion change — no math changes.
+
+4. **Eventual delete:** once all consumers have been migrated to v2.5 libraryData and pass `engine: 'v2.5'` (so they hit State 3 directly), the inline-legacy router can be removed entirely and `assembleLegacySystemsResult` can stay as a v2.5-fallback helper for callers that don't want to maintain a full system_templates library.
+
+The follow-up brief is roughly Brief 41-shaped (after Brief 40 — Systems Library Architecture, the rewritten draft Chris is preparing).
+
+### Cross-link
+
+- Brief 39 Part 1 commit lands the in-place patch.
+- Issue #16 in `docs/audit/29_open_issues.md` documents the ProjectDashboard latent dead-read found during this audit.
+- CLAUDE.md's new architectural rule (Brief 39 Part 4) explicitly names inline-legacy as a parity-required location so the follow-up brief can find this audit doc by following the rule.

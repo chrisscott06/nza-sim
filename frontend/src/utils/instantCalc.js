@@ -5151,14 +5151,23 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
   // ── Openings (wind-driven natural ventilation) ────────────────────────────
   // Per-facade always-open louvre area + operable window fraction.
   //
-  // Brief 34: single building-wide C_d. Cross-flow only on this path
-  // (single_sided dispatch follow-up tracked with State 2).
+  // Brief 39 Part 1 (2026-05-19): two-branch flow_mode dispatch ported in
+  // from State 1 (Brief 33/34). Pre-Brief-39 this path was cross-flow only
+  // with a deferred follow-up that never landed — same bug class as
+  // _calculateState2 — see docs/audit/39_state2_permanent_vent_diagnosis.md.
+  // Inline-legacy is known architectural debt (parallel envelope reimpl);
+  // a follow-up brief will rationalise it via systems-block extraction
+  // (Option A in docs/audit/39_calculation_flow_map.md "Inline-legacy
+  // rationalisation — deferred" section). Until then, this path must be
+  // kept in sync with State 1 and State 2 per CLAUDE.md Rule 14.
   const openings = building.openings ?? {}
   const Cw = ({ sheltered: 0.05, normal: 0.10, exposed: 0.20 })[openings.site_exposure] ?? 0.10
   const sqrtCw = Math.sqrt(Cw)
   const louvre_area_total = ['north','south','east','west']
     .reduce((s, f) => s + Number(openings?.[f]?.louvre_area_m2 ?? 0), 0)
-  const cd_dd = typeof openings.cd === 'number' ? openings.cd : 0.25
+  const cd_dd                     = typeof openings.cd === 'number' ? openings.cd : 0.25
+  const flow_mode_dd              = resolveFlowMode(openings)
+  const single_sided_factor_dd    = Math.min(1.0, cd_dd / 0.6)
   const openable_area_per_face = (f) => Number(openings?.[f]?.openable_fraction ?? 0) * (glazing[f] ?? 0)
   const openable_area_total = openable_area_per_face('north') + openable_area_per_face('south') +
                               openable_area_per_face('east') + openable_area_per_face('west')
@@ -5208,9 +5217,16 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
     const hour_vent_nohr = UA_vent_no_hr * dT_heat / 1000
 
     // Openings — wind-driven flow (m³/s) → ACH-equivalent → Wh/K → kWh
-    // Brief 34: single building-wide C_d (cd_dd).
+    // Brief 39 Part 1: two-branch dispatch matches State 1 hour-loop
+    // (lines 1075–1080). Operable-window Q_window remains cross-flow only
+    // pending Brief 39 Part 3's mirror-comment sweep.
     const v_wind = weatherData.wind_speed?.[h] ?? 0
-    const Q_louvre = cd_dd * louvre_area_total * sqrtCw * v_wind
+    let Q_louvre
+    if (flow_mode_dd === 'single_sided') {
+      Q_louvre = 0.025 * single_sided_factor_dd * louvre_area_total * v_wind
+    } else { // 'cross'
+      Q_louvre = cd_dd * louvre_area_total * sqrtCw * v_wind
+    }
     const windowsOpen = (
       openings.schedule === 'always' ||
       (openings.schedule === 'occupied'   && occ_frac > 0.1) ||
