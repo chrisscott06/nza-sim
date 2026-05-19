@@ -1,6 +1,37 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-19 — Brief 41 Part 5: Bridgewater reconciliation (code-side; walkthrough pending)
+## 🚧 Session 2026-05-19 — Brief 41 Part 7: Building-wide flow controls mirrored into Operation module
+
+**State:** `commit_in_flight` — Brief 41 Part 7. Walkthrough surfaced a UX gap: the engine work (Parts 1-5) correctly unified operable-opening flow with permanent vents under building-wide `cd` / `flow_mode` / `site_exposure`, but the controls were only exposed in the Building module's Permanent openings panel. Operation's openings panel had only a static footnote pointing to Building. Part 7 fixes that by surfacing the same controls inline in Operation, with both modules wired to the same `params.openings` for reactive consistency.
+
+**New shared component** `frontend/src/components/modules/building/BuildingWideOpeningsControls.jsx`:
+- Three controls factored out of `BuildingDefinition.jsx`'s inline implementation (lines 817-902 pre-factor):
+  - Flow topology dropdown (`single_sided` / `cross`) — edits `openings.flow_mode`
+  - C_d slider with anchor labels at 0.25 (trickle vent) / 0.40 (louvre) / 0.60 (open window) — edits `openings.cd`
+  - Site exposure dropdown (Sheltered / Normal / Exposed) with derived C_w display — edits `openings.site_exposure`
+- Props-driven (`openings`, `onChange`) — each consumer wires to ProjectContext as it prefers. Pure presentation; no internal state.
+- Companion to CLAUDE.md Rule 14 mirror-correctness amendment (Part 6): two implementations of the same UI control would have created exactly the drift risk Rule 14 warns against, so single source of truth was the right call.
+
+**Wired in two modules** (single source of truth, reactive across views):
+- `BuildingDefinition.jsx` — replaced the inline implementation; imported the component. `cwProvenance` import removed (component owns it now); `setOpeningsCd` helper retired.
+- `OperationModule.jsx` — inserted at top of openings panel, before the legacy CTA + Add Opening buttons. Section header *"Building-wide ventilation physics"* + footnote *"Applies to every opening — permanent louvres in Building plus all operable openings here. Same controls appear in Building → Permanent openings."*
+
+**Footnote retired:** the "Related: Building-wide C_d, flow mode, and site exposure live in Building" footer in Operation is gone (Part 4 had updated the wording; Part 7 retires the whole pointer because the controls are now inline). Slim *"MEV / MVHR in Systems"* footnote retained.
+
+**Build:** clean, 19.95 s, 2.50 MB JS (gzip 694 kB).
+
+**Visual verification for Chris (added to walkthrough):**
+- Open Operation: the top of the left panel now shows three controls (Flow topology, C_d slider, Site exposure) under a "Building-wide ventilation physics" section header.
+- Change C_d slider in Operation → navigate to Building → confirm the same value appears there.
+- Change Site exposure in Building → navigate to Operation → confirm the same value appears.
+- The "Show / Hide Cd / Cw" toggle in the per-opening editor is gone (Part 4 removed it).
+- Footer reads "MEV / MVHR in Systems" only.
+
+**Next:** Chris's walkthrough now covers Parts 1-5 reconciliation + Part 7 mirror verification. If all reconciles, Part 6 close commit lands.
+
+---
+
+## 🟢 Session 2026-05-19 — Brief 41 Part 5: Bridgewater reconciliation (code-side; walkthrough pending)
 
 **State:** `commit_in_flight` — Brief 41 Part 5. Code-side walkthrough of which display reads which calculator's output for the operable-opening loss post-Parts 1-4. Audit doc updated with display-view map, physics-driven order-of-magnitude bracket, escalation threshold, and walkthrough checklist for Chris.
 

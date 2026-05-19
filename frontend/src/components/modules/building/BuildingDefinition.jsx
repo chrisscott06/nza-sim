@@ -40,7 +40,7 @@ import { useWeather } from '../../../context/WeatherContext.jsx'
 import { useHourlySolar } from '../../../hooks/useHourlySolar.js'
 import { useSimulationBalance } from '../../../hooks/useSimulationBalance.js'
 import { calculateInstant } from '../../../utils/instantCalc.js'
-import { cwProvenance } from '../../../utils/openingCoefficients.js'
+import BuildingWideOpeningsControls from './BuildingWideOpeningsControls.jsx'
 
 // ── Layout: resizable columns ────────────────────────────────────────────────
 // Persisted column widths so users can size to their screen / focus area.
@@ -642,8 +642,10 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
   // Brief 34 (2026-05-18): the per-facade opening geometry helpers from
   // Brief 33 Part 2 (setOpeningType / setOpeningDim / toggleOpeningResistance)
   // have been removed alongside the per-facade UI. The Permanent Openings
-  // panel now exposes a single building-wide C_d slider via setOpeningsCd.
-  const setOpeningsCd = (v) => updateParam('openings', { cd: v })
+  // panel now exposes a single building-wide C_d slider — wired through the
+  // shared BuildingWideOpeningsControls component (Brief 41 Part 7).
+  // setOpeningsCd helper retired; the component's onChange handler does the
+  // updateParam call directly.
 
   const anyOpenings = ['north','south','east','west'].some(f =>
     (openings?.[f]?.louvre_area_m2 ?? 0) > 0
@@ -814,92 +816,17 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
               mechanical ventilation lives in /systems — neither belong here.
               See CLAUDE.md "Module scopes" + Brief 33 §"Scope statement". */}
         <CollapsibleSection title={`Permanent openings${anyOpenings ? ' · active' : ''}`} defaultOpen={anyOpenings}>
-          <div className="mb-2">
-            <label className="text-xxs text-mid-grey block mb-0.5">Flow topology</label>
-            <select
-              value={openings.flow_mode ?? 'single_sided'}
-              onChange={e => updateParam('openings', { flow_mode: e.target.value })}
-              className="w-full px-2 py-1 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-teal cursor-pointer"
-              title="Which wind-driven correlation the Static engine uses for permanent-vent flow"
-            >
-              <option value="single_sided">Single-sided (one façade per room — BS EN 16798-7 §6.4)</option>
-              <option value="cross">Cross-flow (wind-driven, openings on opposite façades)</option>
-            </select>
-            <p className="text-xxs text-mid-grey/70 mt-1 leading-tight">
-              {(openings.flow_mode ?? 'single_sided') === 'single_sided' && (
-                <>Single-sided: <code>Q ≈ 0.025 · A · v<sub>wind</sub></code>. BS EN 16798-7 §6.4 empirical correlation for one-façade openings or cellular layouts with no cross-flow path.</>
-              )}
-              {openings.flow_mode === 'cross' && (
-                <>Cross-flow: <code>Q = C<sub>d</sub> · A · √C<sub>w</sub> · v<sub>wind</sub></code>. Use when openings on opposite façades have an open internal air path (atrium, open plan).</>
-              )}
-            </p>
-          </div>
-
-          {/* Brief 34 (2026-05-18): single C_d slider replaces the Brief 33
-              Part 2 per-facade geometry calculator. Anchor labels map slider
-              positions to typical opening types; tables in the methodology
-              doc are the manual reference. */}
-          <div className="mb-3">
-            <div className="flex items-baseline justify-between gap-2 mb-0.5">
-              <label className="text-xxs text-mid-grey">C<sub>d</sub> (discharge coefficient)</label>
-              <span className="text-xxs text-navy/70 tabular-nums">
-                Current: <span className="font-semibold text-navy">{(typeof openings.cd === 'number' ? openings.cd : 0.25).toFixed(2)}</span>
-              </span>
-            </div>
-            <input
-              type="range" min={0.15} max={0.65} step={0.01}
-              value={typeof openings.cd === 'number' ? openings.cd : 0.25}
-              onChange={e => setOpeningsCd(Number(e.target.value))}
-              className="w-full h-[3px] accent-navy"
-              title="Building-wide discharge coefficient for permanent openings — see methodology doc for typical values"
-            />
-            {/* Anchor labels at 0.25 / 0.40 / 0.60 → positions 20% / 50% / 90%
-                of the 0.15-0.65 slider range. Hover for usage notes. */}
-            <div className="relative h-7 mt-0.5 text-xxs text-mid-grey/80">
-              {[
-                { v: 0.25, label: 'Trickle vent',  pct: 20, tip: '0.25 — trickle vent with mesh and flap (typical)' },
-                { v: 0.40, label: 'Louvre',         pct: 50, tip: '0.40 — fixed louvre or grille (45° blades)' },
-                { v: 0.60, label: 'Open window',    pct: 90, tip: '0.60 — open window or sharp-edged orifice' },
-              ].map(a => (
-                <span
-                  key={a.v}
-                  className="absolute -translate-x-1/2 cursor-help text-center leading-tight"
-                  style={{ left: `${a.pct}%` }}
-                  title={a.tip}
-                >
-                  <span className="tabular-nums">{a.v.toFixed(2)}</span>
-                  <span className="block">{a.label}</span>
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div className="mb-2">
-            <div className="flex items-baseline justify-between gap-2 mb-0.5">
-              <label className="text-xxs text-mid-grey">Site exposure</label>
-              {(() => {
-                const cwp = cwProvenance(openings.site_exposure ?? 'normal')
-                return (
-                  <span
-                    className="text-xxs text-navy/70 tabular-nums cursor-help"
-                    title={`C_w = ${cwp.text}`}
-                  >
-                    C<sub>w</sub> = <span className="font-semibold text-navy">{cwp.cw.toFixed(2)}</span>
-                  </span>
-                )
-              })()}
-            </div>
-            <select
-              value={openings.site_exposure ?? 'normal'}
-              onChange={e => updateParam('openings', { site_exposure: e.target.value })}
-              className="w-full px-2 py-1 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-teal cursor-pointer"
-              title="Wind-pressure coefficient: sheltered = 0.05, normal = 0.10, exposed = 0.20"
-            >
-              <option value="sheltered">Sheltered</option>
-              <option value="normal">Normal</option>
-              <option value="exposed">Exposed</option>
-            </select>
-          </div>
+          {/* Brief 41 Part 7 (2026-05-19): three building-wide controls
+              (flow_mode, cd, site_exposure) factored into the shared
+              BuildingWideOpeningsControls component, also surfaced in the
+              Operation module's openings panel. Both consumers wire to the
+              same params.openings so changes propagate reactively across
+              modules. Single source of truth — see component header for
+              the mirror-correctness rationale. */}
+          <BuildingWideOpeningsControls
+            openings={openings}
+            onChange={updates => updateParam('openings', updates)}
+          />
 
           <p className="text-xxs text-mid-grey mt-2 mb-1">Louvres (always open, m² per facade)</p>
           {FACADES.map(fac => {

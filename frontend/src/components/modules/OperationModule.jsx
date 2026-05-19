@@ -39,6 +39,7 @@ import { useHourlySolar } from '../../hooks/useHourlySolar.js'
 import { calculateInstant, synthesiseOperableOpeningsFromLegacy } from '../../utils/instantCalc.js'
 import { SCHEDULES, allScheduleNames } from '../../utils/scheduleLibrary.js'
 import BuildingViewer3D from './building/BuildingViewer3D.jsx'
+import BuildingWideOpeningsControls from './building/BuildingWideOpeningsControls.jsx'
 import HeatBalance from './balance/HeatBalance.jsx'
 import WeatherSynchronisedProfile from '../profiles/WeatherSynchronisedProfile.jsx'
 // Brief 37 Part 3 (2026-05-18): the legacy profiles/ScheduleEditor was
@@ -331,6 +332,25 @@ export default function OperationModule() {
         <div className="flex-shrink-0 w-[300px] bg-white border-r border-light-grey overflow-y-auto">
           <div className="p-3 space-y-3">
 
+            {/* Brief 41 Part 7 (2026-05-19): building-wide flow controls
+                surfaced at the top of the openings panel. Same three controls
+                shown in Building → Permanent openings; both modules wire to
+                params.openings, so changes propagate reactively across views.
+                These apply to EVERY opening on the building — permanent
+                louvres AND operable doors / windows / vents. */}
+            <div className="bg-off-white border border-light-grey rounded-lg p-2.5">
+              <p className="text-xxs uppercase tracking-wider text-mid-grey mb-2">
+                Building-wide ventilation physics
+              </p>
+              <BuildingWideOpeningsControls
+                openings={params?.openings ?? {}}
+                onChange={updates => updateParam('openings', updates)}
+              />
+              <p className="text-xxs text-mid-grey/70 mt-2 leading-tight">
+                Applies to every opening — permanent louvres in Building plus all operable openings here. Same controls appear in <span className="text-navy/80">Building → Permanent openings</span>.
+              </p>
+            </div>
+
             {/* Legacy conversion CTA (operable_openings empty + legacy present) */}
             {openings.length === 0 && legacyPreview.length > 0 && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
@@ -436,14 +456,13 @@ export default function OperationModule() {
             </div>
 
             {/* Footer cross-reference ─────────────────────────────── */}
-            {/* Brief 41 (2026-05-19): openings.cd + site exposure also drive
-                operable-opening wind flow now — unified with permanent vents
-                under the same flow_mode dispatch. Footnote wording updated
-                to make that visible. */}
+            {/* Brief 41 Part 7 (2026-05-19): the "Building-wide cd / flow_mode
+                / site_exposure live in Building" footnote retired — those
+                controls now appear inline at the top of this panel via the
+                shared BuildingWideOpeningsControls component. Slim footer
+                retained for the MEV / MVHR pointer only. */}
             <div className="text-xxs text-mid-grey/90 leading-snug pt-2 border-t border-light-grey">
               <span className="font-medium text-dark-grey">Related:</span>{' '}
-              Building-wide C<sub>d</sub>, flow mode, and site exposure (used by both permanent louvres AND operable openings) live in{' '}
-              <NavLink to="/building" className="text-navy underline">Building</NavLink>.
               MEV / MVHR in{' '}
               <NavLink to="/systems" className="text-navy underline">Systems</NavLink>.
             </div>
