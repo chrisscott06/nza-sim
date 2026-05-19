@@ -1,6 +1,26 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-19 — Brief 39 Part 3: deferred-follow-up sweep complete
+## 🚧 Session 2026-05-19 — Brief 39 Part 4: CLAUDE.md Rule 14 — three-location envelope parity
+
+**State:** `commit_in_flight` — Brief 39 Part 4. New non-negotiable technical Rule 14 in CLAUDE.md captures the durable architectural constraint that prevents future Brief-39 recurrences.
+
+**Rule wording (verbatim from the brief, with Chris's three-location adjustment):** envelope-physics changes to State 1 must be ported to **State 2 AND to the inline-legacy 'full' code path in `calculateInstant`** in the same commit. Silent divergence forbidden; intentional divergence must be documented in the commit message. Inline-legacy explicitly named as known architectural debt (follow-up rationalisation brief documented in `docs/audit/39_calculation_flow_map.md` will collapse it via systems-block extraction).
+
+**Why three locations and not two:** the Audit 39 flow map confirmed the bug class existed in all three (State 1 had the Brief 33/34 dispatch; State 2 + inline-legacy missed the sweep). Brief 39 Parts 1+2 closed the bug class in State 2 and inline-legacy; Rule 14 now makes the three-location parity formal so future envelope refinements can't drift again.
+
+**Rule numbering:** confirmed at write-time — CLAUDE.md's "Non-negotiable technical rules" block ended at Rule 13 (Brief 29/30 lessons). Inserted as Rule 14 between Rule 13 and the "Module scopes" section. Cross-referenced to both Audit 39 docs and Brief 39 for traceability.
+
+**Helpers carve-out:** the rule explicitly excludes pure module-scope helpers (`resolveFlowMode`, lookups like `computeCd`) from the parity requirement — those don't integrate against any state's T_air trace and sharing them across states is correct.
+
+**Files touched:** `CLAUDE.md` + STATUS.md.
+
+**Build:** not rebuilt (docs-only); will rebuild before close commit if any code touched in Parts 5/6.
+
+**Next:** Part 5 — Bridgewater code-side reconciliation walkthrough (which display reads which state's perm-vent number); actual post-fix MWh values from Chris's walkthrough.
+
+---
+
+## 🟢 Session 2026-05-19 — Brief 39 Part 3: deferred-follow-up sweep complete
 
 **State:** `commit_in_flight` — Brief 39 Part 3. Grep of `instantCalc.js` for the markers `TODO`, `FIXME`, `deferred`, `follow-up`, `mirror`, `see also`, `XXX`, `HACK`, `stale`, `TBD`. 27 matches reviewed.
 

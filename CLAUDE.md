@@ -53,6 +53,20 @@ These rules were learned the hard way during the May 2026 audit and dynamic-engi
 
 13. **When a problem keeps having "the real root cause" turn out to be one level deeper than the previous diagnosis, the working assumption should be that more layers remain.** Continue diagnostic discipline; do not accept the latest plausible cause as final until the symptom is fully explained and verifiable from end to end. (Brief 29/30 multi-layer diagnostics / Bible lesson 3. The Issue #13 cascade: "lumped 2-node artefact" → "VRF + DSOA not muted by setpoints" → "API silently drops mode from JSON body" — three diagnoses, each more shallow than the next.)
 
+14. **Envelope-physics changes to State 1 must be ported to State 2 and to the inline-legacy 'full' code path in `calculateInstant` in the same commit.** The Static engine intentionally maintains parallel envelope-physics implementations in State 1 and State 2 (Brief 28c — gains-warmed T_air trace makes the two states physically different, and combining them would re-introduce the bug class Brief 28c was designed to prevent). The inline-legacy 'full' code path in `calculateInstant` (`frontend/src/utils/instantCalc.js` line ~5087+) is a third parallel envelope implementation — known architectural debt; a follow-up brief will rationalise it via systems-block extraction (Option (a) in `docs/audit/39_calculation_flow_map.md`); until then, it must be kept in sync.
+
+    This is Pattern C per `docs/audit/39_calculation_flow_map.md`.
+
+    The risk of Pattern C is silent drift: a refinement lands in one state and the follow-up in the others never happens (e.g. Brief 33/34 added flow_mode dispatch to State 1; State 2 and inline-legacy received it eight briefs later via Brief 39).
+
+    To prevent recurrence: any commit that changes the physics of an envelope-only term (conduction, thermal bridging, infiltration, permanent vents, solar transmission, glazing transmission) in State 1 MUST land the equivalent change in State 2 AND inline-legacy in the same commit. Not in follow-ups. Not as TODOs. The commit is incomplete until all three locations reflect the new physics.
+
+    If a state genuinely requires different physics (e.g. the gains-warmed T_air trace produces a different integrand shape, or inline-legacy uses a simplified `sysDefaults` model), the commit message must explicitly state why the locations diverge and what the divergence means. Silent divergence is the failure mode.
+
+    Helpers that are pure functions (validators like `resolveFlowMode`, lookups like `computeCd`) are module-scoped and shared across locations — those don't fall under this rule because they don't contain integration logic. The rule applies to integration-bearing code: the loops that walk hours/days/months and sum into demand integrals.
+
+    (Brief 39, May 2026. Audit chain: `docs/audit/39_state2_permanent_vent_diagnosis.md` → `docs/audit/39_calculation_flow_map.md` → Brief 39 Parts 1–6.)
+
 ---
 
 ## Module scopes
