@@ -457,23 +457,105 @@ Bridgewater's pre/post headline numbers (delivered MWh per service, EUI, fuel sp
 
 ## §8. Bridgewater migration — pre/post
 
-*To be filled in at Part 5 (`scripts/40_bridgewater_systems_migration.py` execution).*
+Bridgewater's persisted `systems_config_v25` shape (captured 2026-05-19 during Part 5 script authoring):
+
+```
+heating:     primary library_id 'vrf_heat_recovery_dual_function' @ 95%
+             secondary 'electric_panel_heater' @ 5%
+             setpoint_c 21, schedule_ref 'business_hours_09_18_weekdays'
+cooling:     primary 'vrf_heat_recovery_dual_function' @ 100%
+             secondary 'dx_split_cooling' (0% share — primary_pct=100)
+             setpoint_c 24, schedule_ref 'business_hours_09_18_weekdays'
+dhw:         primary 'ashp_dhw_preheat', secondary 'gas_boiler_calorifier'
+             fuel_mix { gas: 0.8, heat_pump: 0.2, electric_resistance: 0.0 }
+             store_temperature_c 60, cold_mains_temperature_c 10
+             litres_per_person_per_day 80, schedule_ref 'hotel_systems_24x7'
+ventilation: [
+   { mvhr_gf_public, flow 1425 l/s, SFP 1.4, HRE 0.8 }
+   { bedroom_extract, flow 2208 l/s, SFP 0.4, HRE 0 }
+   { public_toilet_extract, flow 210 l/s, SFP 0.4, HRE 0 }
+]
+```
+
+### Projected `systems_config_v40` post-migration
+
+Per the migration script's field mapping (§7 + Part 5 implementation):
+
+**heating** (2 systems, shares sum to 100):
+- `Primary heating (vrf_heat_recovery_dual_function)` — source `ambient_air`, SCOP 5.12, share 95%, setpoint null (matches comfort 21°C), schedule `business_hours_09_18_weekdays`
+- `Secondary heating (electric_panel_heater)` — source `electricity`, η 1.0, share 5%, setpoint null
+
+**cooling** (1 system because secondary share = 0):
+- `Primary cooling (vrf_heat_recovery_dual_function)` — source `electricity`, SEER 3.51, share 100%, setpoint null (matches comfort 24°C)
+
+**dhw** (2 systems from fuel_mix, gas 80% + heat_pump 20%):
+- `DHW gas (gas_boiler_calorifier)` — source `gas`, η 0.90, share 80%, setpoint 60°C, tap_outlet 40°C, cold_supply 10°C, demand_basis `'per_person'`, demand_litres_per_person_per_day 80
+- `DHW heat pump (ashp_dhw_preheat)` — source `ambient_air`, SCOP 3.0, share 20%, same DHW physics fields
+
+**ventilation** (3 systems by flow-share):
+- `mvhr_gf_public` — flow 1425 l/s, SFP 1.4, recovery_sensible 80%, share 1425/3843 = 37.1%
+- `bedroom_extract` — flow 2208 l/s, SFP 0.4, recovery 0%, share 57.5%
+- `public_toilet_extract` — flow 210 l/s, SFP 0.4, recovery 0%, share 5.5%
+- Total flow: 3843 l/s; shares normalised to sum to exactly 100
+
+**lighting + small_power** preserved from Part 4 DEFAULT_PARAMS (default thin entries at control_factor 1.0 / share 100).
+
+### Expected pre/post engine-output movements
+
+(To be backfilled by Chris's walkthrough — empirical MWh figures captured live.)
 
 | Service | Pre delivered (MWh) | Post delivered (MWh) | Δ | Reason |
 |---------|---------------------|----------------------|----|--------|
-| Heating | TBD | TBD | TBD | Expected ~unchanged (proportional split for n=2 already shipped in Brief 38) |
-| Cooling | TBD | TBD | TBD | Expected ~unchanged for same reason |
-| DHW (thermal) | TBD | TBD | TBD | Expected ~40% reduction from tap-mix correction per §4 |
-| Ventilation (fan kWh) | TBD | TBD | TBD | Magnitude documented |
-| Lighting (delivered electrical) | TBD | TBD | TBD | New as separate line item |
-| Small power (delivered electrical) | TBD | TBD | TBD | New as separate line item |
-| **Total EUI (kWh/m²)** | TBD | TBD | TBD | Net of above |
-| **Fuel split** | TBD | TBD | TBD | Per-fuel kWh breakdown |
-| **Carbon (kgCO2/m²)** | TBD | TBD | TBD | Net of above |
+| Heating | (Chris fills) | (Chris fills) | (Chris) | **Expected ~unchanged** — proportional split for primary/secondary already shipped in Brief 38 polish; Brief 40 generalisation reads the same library efficiencies + shares |
+| Cooling | (Chris fills) | (Chris fills) | (Chris) | **Expected ~unchanged** — same reason; secondary 0% share so single-system shape |
+| DHW thermal | (Chris fills) | (Chris fills) | (Chris) | **Expected ~40% reduction** from tap-mix correction (`hot_fraction = (40 − 10) / (60 − 10) = 0.60` for hotel defaults). Post = pre × 0.60 ± rounding per §4.3 falsifiable target |
+| DHW source (gas) | (Chris fills) | (Chris fills) | (Chris) | Pre = pre_thermal × fuel_mix_gas / efficiency_gas; post = post_thermal × 0.80 / 0.90 |
+| DHW source (electricity, heat pump) | (Chris fills) | (Chris fills) | (Chris) | Pre/post = thermal × 0.20 / 3.0 (per-fuel split via Brief 40 per-system shares) |
+| Ventilation (fan kWh) | (Chris fills) | (Chris fills) | (Chris) | **Expected ~unchanged**; each per-vent fan kWh in v40 = same SFP × same flow × same hours as v25 path; the `_computeVentilation` calc in `systemsEngine.js` produces the same total |
+| Lighting (delivered electrical) | (Chris fills) | (Chris fills) | (Chris) | **Expected ~unchanged** — already in pre-Brief-40 EUI via the legacy `state2Result.heat_balance.annual.gains.internal.lighting.kwh` pass-through. Brief 40 surfaces it as an explicit Systems entry at control_factor 1.0 / share 100 → delivered = gain (1:1) |
+| Small power (delivered electrical) | (Chris fills) | (Chris fills) | (Chris) | **Expected ~unchanged** — same provenance as lighting |
+| **Total EUI (kWh/m²)** | (Chris fills) | (Chris fills) | (Chris) | **Expected ~5–8% reduction** — net of the DHW thermal correction (only line item with a deliberate physics change) |
+| **Fuel split — electricity** | (Chris fills) | (Chris fills) | (Chris) | DHW heat-pump share + ventilation fans + lighting + small power |
+| **Fuel split — gas** | (Chris fills) | (Chris fills) | (Chris) | Heating primary + DHW gas share |
+| **Carbon (kgCO2/m²)** | (Chris fills) | (Chris fills) | (Chris) | Net of fuel split × per-fuel CO2 factors |
+
+Any service movement >2% that **cannot** be explained from first principles is a finding logged in `29_open_issues.md` and pauses the brief at Part 5 — does not proceed to Part 6 walkthrough until reconciled. The expected explainable movements: DHW thermal (×0.60 — the only deliberate physics change in Brief 40); lighting + small_power (new explicit line items, but identical totals to the pre-Brief-40 pass-through).
 
 ### Comfort-vs-setpoint diagnostic — Bridgewater post-migration
 
-Per-system deltas captured here once migration runs, per §5 — particularly any service with `setpoint ≠ comfort` (cooling at 20°C vs comfort 24°C is the canonical example Chris flagged).
+Bridgewater's migrated setpoints land at:
+- Heating systems: `setpoint: null` (matches comfort 21°C) → diagnostic delta = 0
+- Cooling systems: `setpoint: null` (matches comfort 24°C) → diagnostic delta = 0
+
+The diagnostic is therefore "silent" on Bridgewater out-of-the-box — which is correct: pre-Brief-40 setpoints matched the comfort band exactly. The diagnostic activates when the user dials a custom setpoint into any system via Part 3's `SystemEditorCard`. The canonical example from the brief (cooling at 20°C vs comfort 24°C overcool) is a per-user-edit demonstration, not a Bridgewater migration finding.
+
+### Migration script execution slot
+
+To be filled in at Chris's walkthrough. Expected first-run console output shape (Bridgewater only):
+
+```
+OK: 'HIX Bridgewater'
+    Heating:     2 systems, shares [95.0, 5.0]
+      - Primary heating (vrf_heat_recovery_dual_function)        source=ambient_air        eff=5.12   setpoint=None
+      - Secondary heating (electric_panel_heater)                source=electricity        eff=1.0    setpoint=None
+    Cooling:     1 systems, shares [100.0]
+      - Primary cooling (vrf_heat_recovery_dual_function)        source=electricity        eff=3.51   setpoint=None
+    DHW:         2 systems, shares [80.0, 20.0]
+      - DHW gas (gas_boiler_calorifier)                          source=gas                eff=0.9    basis=per_person  tap=40°C
+      - DHW heat pump (ashp_dhw_preheat)                         source=ambient_air        eff=3.0    basis=per_person  tap=40°C
+    Ventilation: 3 systems, shares [37.1, 57.5, 5.5]   # within rounding
+      - mvhr_gf_public                                          flow=1425.0 l/s  SFP=1.4  HR sensible=80%
+      - bedroom_extract                                         flow=2208.0 l/s  SFP=0.4  HR sensible=0%
+      - public_toilet_extract                                   flow= 210.0 l/s  SFP=0.4  HR sensible=0%
+    Lighting:    1 systems (preserved from Part 4 default)
+    Small power: 1 systems (preserved from Part 4 default)
+```
+
+Re-run should print:
+
+```
+NO-OP: 'HIX Bridgewater' -- systems_config_v40 already has heating/cooling/dhw/ventilation populated (idempotent re-run)
+```
 
 ---
 

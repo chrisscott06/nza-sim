@@ -1,5 +1,85 @@
 # NZA SIMULATE — Status
 
+## 🟡 Session 2026-05-19 — Brief 40 Part 5: Bridgewater migration (awaits walkthrough)
+
+**State:** `awaiting_walkthrough` — Brief 40 Part 5. Migration script `scripts/40_bridgewater_systems_migration.py` translates Bridgewater's persisted `systems_config_v25` (Brief 28f shape) to `systems_config_v40` (Brief 40 per-system array shape) for heating / cooling / DHW / ventilation. Lighting + small_power already populated via Part 4's DEFAULT_PARAMS fallback — preserved by the migration. Idempotent (re-run is a no-op).
+
+**`scripts/40_bridgewater_systems_migration.py` (new, 320 lines):**
+- Pattern matches the Brief 41 + Brief 42 migration scripts (`urllib`-only HTTP to backend on port 8002, idempotent re-run check, per-project console output)
+- `_TEMPLATE_LOOKUP` table for Bridgewater's library_ids — `vrf_heat_recovery_dual_function`, `electric_panel_heater`, `dx_split_cooling`, `ashp_dhw_preheat`, `gas_boiler_calorifier`. Values mirror `frontend/src/data/systemTemplatesLibrary.js`. Generic fallback for unknown library_ids
+- `_resolve_template(library_id, service)` → `(source, efficiency_metric, label)` derives the v40 source + efficiency from the v25 library_id per service
+- `_migrate_heating_or_cooling(v25_block, service, comfort_value)` — primary + secondary → 2 v40 systems with `share_pct = [primary_pct, 100 - primary_pct]`; `setpoint = null` when v25.setpoint_c matches comfort (audit §5.4 follow-comfort flag); else the value
+- `_migrate_dhw(v25_block)` — fuel_mix → per-fuel v40 systems (Bridgewater: 2 systems for gas 80% + heat_pump 20%). Tap-mix defaults applied: `tap_outlet_temp_c = 40` (hotel), `demand_basis: 'per_person'`, `demand_litres_per_person_per_day` from v25
+- `_migrate_ventilation(v25_list)` — each v25 entry → one v40 system with `share_pct = flow_l_s / total_flow × 100` (flow-share interpretation). Shares normalised to sum to exactly 100
+- `_is_already_migrated(v40)` — checks if heating / cooling / dhw / ventilation arrays are non-empty (lighting + small_power don't count — those come from Part 4)
+- Per-project console output captures each migrated system with its key fields for at-a-glance walkthrough
+
+**Bridgewater projected migration shape** (per the v25 config read from disk):
+- Heating: 2 systems (VRF heat recovery 95% + electric panel 5%)
+- Cooling: 1 system (VRF heat recovery 100%; secondary 0% share suppressed)
+- DHW: 2 systems (gas boiler 80% + ASHP 20%) with `demand_basis: 'per_person'`, tap_outlet 40°C
+- Ventilation: 3 systems (MVHR 37.1% + bedroom extract 57.5% + WC extract 5.5% by flow-share)
+- Lighting + small_power preserved (1 thin entry each from DEFAULT_PARAMS)
+
+Full pre/post tables + projected shape captured in `docs/audit/40_systems_library_schema.md` §8 (heavily extended this Part — old placeholder rows replaced with the concrete migration plan + expected movements + walkthrough sign-off slots).
+
+**Behaviour preservation (Brief 40 Principle 5):** at migration time the v40 per-system values are derived from the v25 library_ids + shares + fuel_mix. The ONE deliberate physics change is DHW tap-mix: post-migration DHW thermal = pre-migration DHW thermal × `hot_fraction = 0.60` (audit §4.3 falsifiable target). All other services should produce ~unchanged delivered MWh because the engine computes the same physics with the same efficiencies + the same shares; only the data shape changed.
+
+**No engine changes in this Part.** Brief 38 polish's `consumption.space_heating.{primary,secondary}` blocks continue to populate from `_calculateState3`'s existing `computeServiceEnergy` path (unchanged); Brief 40's `consumption.brief40.*` populates from `systemsEngine.computeSystemsDelivered` (added in Part 2). Both consumption objects coexist on the same engine return — UI consumers choose which to read.
+
+**Build:** unchanged (Python-only this Part).
+
+---
+
+## Walkthrough checklist for Chris (Parts 1–5 → Part 6 close)
+
+1. **Stop dev server.**
+
+2. **Run the migration:**
+   ```
+   python scripts/40_bridgewater_systems_migration.py
+   ```
+   - First run: Bridgewater shows `OK:` with the projected migration shape (see audit doc §8 "Migration script execution slot" for the expected output)
+   - Re-run for NO-OP idempotency check (`NO-OP: 'HIX Bridgewater' -- systems_config_v40 already has heating/cooling/dhw/ventilation populated`)
+
+3. **Restart dev server** (`go.bat` or manual). Open http://localhost:5176.
+
+4. **Systems module — left panel verification:**
+   - Six service sections visible (Heating / Cooling / DHW / Ventilation / Lighting / Small power) per Brief 37 colour palette
+   - Heating: 2 system cards (VRF primary 95% + electric panel 5%)
+   - Cooling: 1 system card (VRF 100%)
+   - DHW: 2 system cards (gas 80% + ASHP 20%); editor cards show tap_outlet_temp_c = 40°C with the inline tap-mix correction note ("60% hot fraction")
+   - Ventilation: 3 system cards with flow + SFP + recovery
+   - Lighting + Small power: 1 thin entry each at control_factor 1.0 / share 100
+   - Section share badges all green (sums = 100)
+
+5. **Engine output invariance pre-edit (Principle 5):**
+   - Heating + cooling + ventilation + lighting + small_power delivered MWh: identical to pre-Brief-40 baseline (the Brief 38 polish Sankey shows the same numbers because Brief 40 didn't touch its read paths)
+   - DHW thermal: **expected ~40% reduction** vs pre-Brief-40 (tap-mix correction; falsifiable target post = pre × 0.60). This is the only intentional movement
+   - Total EUI: should drop a few % from the DHW correction; any other movement >2% is a finding
+
+6. **New "Diagnostic" centre tab:**
+   - Per-service table: heating + cooling rows show delta = 0 (setpoints match comfort post-migration); DHW row shows the tap-mix delta (delivered_no_mix vs demand_at_comfort); ventilation + lighting + small_power show delivered only
+   - Totals roll-up at bottom (EUI / source / carbon + fuel split)
+
+7. **Per-system edit verification (the point of Brief 40 generalisation):**
+   - In Heating section, add a third system at 0% share → confirm UI's share-validation badge goes amber
+   - Click "Normalise" quick-fix → confirm shares redistribute proportionally to sum 100
+   - In Cooling section, dial the system's setpoint to 'Custom 20°C' → confirm engine recomputes delivered_at_setpoint > demand_at_comfort; Diagnostic tab row turns amber with positive delta
+   - In DHW section, edit `tap_outlet_temp_c` from 40 → 30 (cooler tap) → confirm thermal drops further (hot_fraction goes from 0.60 → 0.40)
+
+8. **Library save/load:**
+   - In any heating system card, click "Save current as library item" → entry lands in `params.library_systems`
+   - Click + Add system on a service → modal shows "From library" tab with the saved entry; selecting it adds a fresh copy
+
+9. **Existing Sankey + Live Results:**
+   - Sankey diagram (centre default view) unchanged from Brief 38 polish — same 3-column tapered-ribbon layout, same per-branch labels
+   - Right-column Live Results strip + panel unchanged — EUI big number + fuel split bars + per-system mini-diagnostic
+
+10. **Sign-off:** report findings in chat. If reconciliation passes, Part 6 close-out commit lands (CLAUDE.md confirmation that Module scopes Systems expansion already shipped in Part 1; archive Brief 40; repoint current.md; STATUS.md close-out; single push).
+
+---
+
 ## 🟢 Session 2026-05-19 — Brief 40 Part 4: Lighting + small_power thin Systems entries
 
 **State:** `commit_in_flight` — Brief 40 Part 4. Small Part: the engine work for `_computeThin` already landed in Part 2; UI editor card already supports lighting + small_power thin types in Part 3. Part 4's deliverable is **DEFAULT_PARAMS seeds + load-side fallback + audit-doc §13** documenting cross-module accounting (Internal Gains heat vs Systems delivered electricity).
