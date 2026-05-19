@@ -4024,6 +4024,22 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
           ? Math.round(heating.total_perf.delivered_mwh / Math.max(heating.total_perf.fuel_mwh, 1e-9) * 100) / 100
           : null,
         recovery_offset_mwh: r_mwh(effective_recovery_mwh),
+        // Brief 38 (2026-05-19): expose per-system split so the Sankey can
+        // render dual-system rows (primary + secondary) as two separate
+        // ribbons. Internally these are already in heating.primary_perf /
+        // heating.secondary_perf — just surface them.
+        primary:   heating.primary_perf
+          ? { delivered_mwh: r_mwh(heating.primary_perf.delivered_mwh),
+              fuel_mwh:      r_mwh(heating.primary_perf.fuel_mwh),
+              fuel:          heating.primary_perf.fuel,
+              efficiency:    heating.primary_perf.avg_cop_or_eff }
+          : null,
+        secondary: heating.secondary_perf
+          ? { delivered_mwh: r_mwh(heating.secondary_perf.delivered_mwh),
+              fuel_mwh:      r_mwh(heating.secondary_perf.fuel_mwh),
+              fuel:          heating.secondary_perf.fuel,
+              efficiency:    heating.secondary_perf.avg_cop_or_eff }
+          : null,
       },
       space_cooling: {
         enabled:        sys.cooling?.enabled !== false,
@@ -4033,6 +4049,19 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
                               + (cooling.fuel_split.electricity?.secondary_mwh ?? 0)),
         seer_effective: cooling.total_perf.delivered_mwh > 0
           ? Math.round(cooling.total_perf.delivered_mwh / Math.max(cooling.total_perf.fuel_mwh, 1e-9) * 100) / 100
+          : null,
+        // Brief 38 (2026-05-19): same per-system split as heating.
+        primary:   cooling.primary_perf
+          ? { delivered_mwh: r_mwh(cooling.primary_perf.delivered_mwh),
+              fuel_mwh:      r_mwh(cooling.primary_perf.fuel_mwh),
+              fuel:          cooling.primary_perf.fuel,
+              efficiency:    cooling.primary_perf.avg_cop_or_eff }
+          : null,
+        secondary: cooling.secondary_perf
+          ? { delivered_mwh: r_mwh(cooling.secondary_perf.delivered_mwh),
+              fuel_mwh:      r_mwh(cooling.secondary_perf.fuel_mwh),
+              fuel:          cooling.secondary_perf.fuel,
+              efficiency:    cooling.secondary_perf.avg_cop_or_eff }
           : null,
       },
       dhw: {

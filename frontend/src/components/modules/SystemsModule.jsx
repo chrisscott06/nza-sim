@@ -717,28 +717,70 @@ function SystemsSankey({ consumption, sysCfg }) {
   const dhwIsMixed  = !!dhwMix && (dhwMix.heat_pump ?? 0) > 0 && (dhwMix.gas ?? 0) > 0
   const dhwIsAshpPreheat = (dhwMix?.heat_pump ?? 0) > 0
 
-  // Split a service's delivered demand into fuel branches. Each branch has
-  // a delivered_mwh (source-side / left width of the ribbon) and a fuel_mwh
-  // (target-side / right width of the ribbon). The width change IS the
-  // SCOP / efficiency.
-  function makeBranches(delivered, e_mwh, g_mwh, mix) {
+  // Branches for heating / cooling come from the engine's primary + secondary
+  // perf objects (added to consumption in Brief 38 2026-05-19) — preserves
+  // the per-system identity (primary VRF vs secondary electric panel) and
+  // their individual efficiencies, even when both end up consuming the same
+  // fuel. DHW uses fuel_mix_applied (existing engine output).
+  function branchesFromPerfPair(primary, secondary) {
+    const out = []
+    if (primary && primary.delivered_mwh > 0.01) {
+      out.push({
+        role:           'primary',
+        fuel:           primary.fuel,
+        delivered_mwh:  primary.delivered_mwh,
+        fuel_mwh:       primary.fuel_mwh,
+        efficiency:     primary.efficiency,
+      })
+    }
+    if (secondary && secondary.delivered_mwh > 0.01) {
+      out.push({
+        role:           'secondary',
+        fuel:           secondary.fuel,
+        delivered_mwh:  secondary.delivered_mwh,
+        fuel_mwh:       secondary.fuel_mwh,
+        efficiency:     secondary.efficiency,
+      })
+    }
+    return out
+  }
+
+  function branchesFromFuelMix(delivered, e_mwh, g_mwh, mix) {
     if (!delivered || delivered < 0.01) return []
     const branches = []
     if (mix && (mix.heat_pump ?? 0) > 0 && (mix.gas ?? 0) > 0) {
       const total = (mix.heat_pump ?? 0) + (mix.gas ?? 0)
-      branches.push({ fuel: 'electricity', delivered_mwh: delivered * mix.heat_pump / total, fuel_mwh: e_mwh })
-      branches.push({ fuel: 'gas',         delivered_mwh: delivered * mix.gas / total,       fuel_mwh: g_mwh })
-    } else if (e_mwh > 0.01 && g_mwh > 0.01) {
-      // No fuel_mix but both fuels — split by fuel proportion (rare).
-      const t = e_mwh + g_mwh
-      branches.push({ fuel: 'electricity', delivered_mwh: delivered * e_mwh / t, fuel_mwh: e_mwh })
-      branches.push({ fuel: 'gas',         delivered_mwh: delivered * g_mwh / t, fuel_mwh: g_mwh })
+      const elec_delivered = delivered * mix.heat_pump / total
+      const gas_delivered  = delivered * mix.gas       / total
+      branches.push({
+        role: 'primary',  fuel: 'electricity',
+        delivered_mwh: elec_delivered, fuel_mwh: e_mwh,
+        efficiency: e_mwh > 0 ? elec_delivered / e_mwh : 1,
+      })
+      branches.push({
+        role: 'secondary', fuel: 'gas',
+        delivered_mwh: gas_delivered, fuel_mwh: g_mwh,
+        efficiency: g_mwh > 0 ? gas_delivered / g_mwh : 1,
+      })
     } else if (e_mwh > 0.01) {
-      branches.push({ fuel: 'electricity', delivered_mwh: delivered, fuel_mwh: e_mwh })
+      branches.push({
+        role: 'primary', fuel: 'electricity',
+        delivered_mwh: delivered, fuel_mwh: e_mwh,
+        efficiency: e_mwh > 0 ? delivered / e_mwh : 1,
+      })
     } else if (g_mwh > 0.01) {
-      branches.push({ fuel: 'gas',         delivered_mwh: delivered, fuel_mwh: g_mwh })
+      branches.push({
+        role: 'primary', fuel: 'gas',
+        delivered_mwh: delivered, fuel_mwh: g_mwh,
+        efficiency: g_mwh > 0 ? delivered / g_mwh : 1,
+      })
     }
     return branches
+  }
+
+  function branchesElectricOneToOne(mwh) {
+    if (!mwh || mwh < 0.01) return []
+    return [{ role: 'primary', fuel: 'electricity', delivered_mwh: mwh, fuel_mwh: mwh, efficiency: 1 }]
   }
 
   const items = [
@@ -746,29 +788,19 @@ function SystemsSankey({ consumption, sysCfg }) {
       key: 'space_heating', label: 'Heating',
       demand:    c.space_heating?.demand_mwh    ?? 0,
       delivered: c.space_heating?.delivered_mwh ?? 0,
-      branches:  makeBranches(
-        c.space_heating?.delivered_mwh ?? 0,
-        c.space_heating?.electricity_mwh ?? 0,
-        c.space_heating?.gas_mwh ?? 0,
-        null,
-      ),
+      branches:  branchesFromPerfPair(c.space_heating?.primary, c.space_heating?.secondary),
     },
     {
       key: 'space_cooling', label: 'Cooling',
       demand:    c.space_cooling?.demand_mwh    ?? 0,
       delivered: c.space_cooling?.delivered_mwh ?? 0,
-      branches:  makeBranches(
-        c.space_cooling?.delivered_mwh ?? 0,
-        c.space_cooling?.electricity_mwh ?? 0,
-        0,
-        null,
-      ),
+      branches:  branchesFromPerfPair(c.space_cooling?.primary, c.space_cooling?.secondary),
     },
     {
       key: 'dhw', label: 'DHW',
       demand:    c.dhw?.demand_mwh    ?? 0,
       delivered: c.dhw?.delivered_mwh ?? 0,
-      branches:  makeBranches(
+      branches:  branchesFromFuelMix(
         c.dhw?.delivered_mwh ?? 0,
         c.dhw?.electricity_mwh ?? 0,
         c.dhw?.gas_mwh ?? 0,
@@ -779,29 +811,19 @@ function SystemsSankey({ consumption, sysCfg }) {
       key: 'fans', label: 'Mech vent',
       demand:    fan_total,
       delivered: fan_total,
-      branches:  makeBranches(fan_total, fan_total, 0, null),
+      branches:  branchesElectricOneToOne(fan_total),
     },
     {
       key: 'lighting', label: 'Lighting',
       demand:    c.lighting?.electricity_mwh ?? 0,
       delivered: c.lighting?.electricity_mwh ?? 0,
-      branches:  makeBranches(
-        c.lighting?.electricity_mwh ?? 0,
-        c.lighting?.electricity_mwh ?? 0,
-        0,
-        null,
-      ),
+      branches:  branchesElectricOneToOne(c.lighting?.electricity_mwh ?? 0),
     },
     {
       key: 'small_power', label: 'Small power',
       demand:    c.small_power?.electricity_mwh ?? 0,
       delivered: c.small_power?.electricity_mwh ?? 0,
-      branches:  makeBranches(
-        c.small_power?.electricity_mwh ?? 0,
-        c.small_power?.electricity_mwh ?? 0,
-        0,
-        null,
-      ),
+      branches:  branchesElectricOneToOne(c.small_power?.electricity_mwh ?? 0),
     },
   ].filter(it => it.demand > 0.01)
 
@@ -809,33 +831,51 @@ function SystemsSankey({ consumption, sysCfg }) {
     it.isUnserved = it.demand > 0.01 && it.delivered < 0.01
   }
 
-  // ── Per-branch labels: only where the ribbon visually tapers / widens ───
-  // Chris's call (walkthrough #4): show a label only where there's a real
-  // efficiency story. Mech vent / Lighting / Small power are 1:1 (delivered
-  // == fuel) → no label. Heating / Cooling have one branch each with COP /
-  // EER → keep system name + efficiency. Mixed DHW splits into ASHP branch
-  // (necks down by SCOP) and Gas boiler branch (widens by 1/eff) — label
-  // each branch separately at its own y so the per-branch story reads on
-  // the ribbon itself.
-  const EFF_TOLERANCE = 0.05  // |eff − 1| below this → treat as 1:1, no label
+  // ── Per-branch labels (Brief 38, walkthrough #4 + #5) ───────────────────
+  // Rule: label a branch if either (a) the ribbon visually tapers/widens
+  // (efficiency != 1) OR (b) the row has more than one branch (so the user
+  // can see which system is which). Single-branch rows at 1:1 efficiency
+  // (lighting, small power, mech vent fans) get no label.
+  //
+  // System name source per item.key:
+  //   - heating  → sysCfg.heating.{primary|secondary}.library_id by role
+  //   - cooling  → sysCfg.cooling.{primary|secondary}.library_id by role
+  //   - dhw (mixed) → generic by fuel: 'ASHP' / 'Gas boiler'
+  //   - dhw (single) → sysCfg.dhw.primary.library_id
+  //
+  // Efficiency text:
+  //   - eff > 1 + cooling row → 'EER X.X'
+  //   - eff > 1 elsewhere     → 'SCOP X.X'
+  //   - eff < 1               → 'X% eff'
+  //   - eff ≈ 1               → no efficiency suffix (the system name alone)
+  const EFF_TOLERANCE = 0.05
   for (const it of items) {
+    const isMultiBranch = it.branches.length > 1
     for (const br of it.branches) {
       const eff = br.fuel_mwh > 0 ? br.delivered_mwh / br.fuel_mwh : 1
       br.efficiency = eff
-      const hasChange = Math.abs(eff - 1) > EFF_TOLERANCE
-      if (!hasChange) { br.sysName = null; br.effText = null; continue }
-      const effText = eff > 1
-        ? `SCOP ${eff.toFixed(1)}`        // heat pump / COP-style display
-        : `${Math.round(eff * 100)}% eff`  // combustion / electric resistance efficiency
+      const hasEffChange = Math.abs(eff - 1) > EFF_TOLERANCE
+
+      // Drop the label entirely only when the row is single-branch AND 1:1.
+      if (!hasEffChange && !isMultiBranch) {
+        br.sysName = null; br.effText = null; continue
+      }
+
+      const effText = !hasEffChange
+        ? null
+        : eff > 1
+          ? `SCOP ${eff.toFixed(1)}`
+          : `${Math.round(eff * 100)}% eff`
 
       if (it.key === 'space_heating') {
-        br.sysName = fmtSys(sysCfg.heating?.primary?.library_id ?? '')
+        const cfg = br.role === 'secondary' ? sysCfg.heating?.secondary : sysCfg.heating?.primary
+        br.sysName = fmtSys(cfg?.library_id ?? '')
         br.effText = effText
       } else if (it.key === 'space_cooling') {
-        br.sysName = fmtSys(sysCfg.cooling?.primary?.library_id ?? '')
-        br.effText = `EER ${eff.toFixed(1)}`  // cooling reads EER, not SCOP
-      } else if (it.key === 'dhw' && it.branches.length > 1) {
-        // Mixed DHW: generic fuel-side label per branch.
+        const cfg = br.role === 'secondary' ? sysCfg.cooling?.secondary : sysCfg.cooling?.primary
+        br.sysName = fmtSys(cfg?.library_id ?? '')
+        br.effText = hasEffChange ? `EER ${eff.toFixed(1)}` : null
+      } else if (it.key === 'dhw' && isMultiBranch) {
         br.sysName = br.fuel === 'electricity' ? 'ASHP' : 'Gas boiler'
         br.effText = effText
       } else if (it.key === 'dhw') {
@@ -855,6 +895,7 @@ function SystemsSankey({ consumption, sysCfg }) {
   const availH = H - padT - padB
   const NAME_GAP_PX = 14   // service-name label above the bar
   const MWH_GAP_PX  = 13   // MWh figure below the bar
+  const BRANCH_GAP_PX = 3  // visual break between primary+secondary segments
   const LANE_TEXT_PX = NAME_GAP_PX + MWH_GAP_PX  // system label moved out of the lane
 
   const totalDemand = items.reduce((s, it) => s + it.demand, 0)
@@ -868,26 +909,32 @@ function SystemsSankey({ consumption, sysCfg }) {
 
   let yCursor = padT
   for (const it of items) {
-    const barH = scaleW(it.demand)
+    const nBranches = (it.branches?.length ?? 0)
+    const innerGap  = nBranches > 1 ? BRANCH_GAP_PX : 0
     it.nameY = yCursor + NAME_GAP_PX - 4
     it.barY0 = yCursor + NAME_GAP_PX
-    it.barY1 = it.barY0 + barH
+
+    // Lay out branch source segments (top-down). Each segment height is the
+    // scaled delivered share; small visual gap between segments for dual-
+    // system rows (Brief 38, walkthrough #5).
+    let bcy = it.barY0
+    if (it.isUnserved) {
+      bcy = it.barY0 + scaleW(it.demand)  // unserved bar uses raw demand height
+    } else {
+      for (let i = 0; i < nBranches; i++) {
+        const br = it.branches[i]
+        br.srcW  = scaleW(br.delivered_mwh)
+        br.srcY0 = bcy
+        br.srcY1 = bcy + br.srcW
+        bcy = br.srcY1
+        if (i < nBranches - 1) bcy += innerGap
+      }
+    }
+
+    it.barY1 = bcy
     it.barMid = (it.barY0 + it.barY1) / 2
     it.mwhY  = it.barY1 + MWH_GAP_PX - 3
     yCursor  = it.barY1 + MWH_GAP_PX
-  }
-
-  // Assign source-side y-extents to each branch (stack from bar top using the
-  // delivered share). Sum of branch source heights ≈ demand bar height.
-  for (const it of items) {
-    if (it.isUnserved) continue
-    let cy = it.barY0
-    for (const br of it.branches) {
-      br.srcW  = scaleW(br.delivered_mwh)
-      br.srcY0 = cy
-      br.srcY1 = cy + br.srcW
-      cy = br.srcY1
-    }
   }
 
   // ── Right column geometry (Electricity + Gas, no Waste) ──────────────────
@@ -987,8 +1034,11 @@ function SystemsSankey({ consumption, sysCfg }) {
         })}
 
         {/* ── Demand bars (left) ─────────────────────────────────────────── */}
+        {/* Multi-branch rows (primary + secondary) render as separate rects
+            stacked with a small visual gap, so the user can see at a glance
+            that two systems are serving the demand. Single-branch rows draw
+            as one rect spanning the whole demand. */}
         {items.map(it => {
-          const barH = it.barY1 - it.barY0
           const colour = DEMAND_COLOURS[it.key] ?? '#94A3B8'
           return (
             <g key={`d-${it.key}`}>
@@ -997,8 +1047,18 @@ function SystemsSankey({ consumption, sysCfg }) {
                 fontWeight="600">
                 {it.label}{it.isUnserved ? ' (off)' : ''}
               </text>
-              <rect x={leftX0} y={it.barY0} width={nodeW} height={Math.max(2, barH)}
-                fill={colour} opacity={it.isUnserved ? 0.30 : 0.90} rx={2} />
+              {it.isUnserved ? (
+                <rect x={leftX0} y={it.barY0} width={nodeW}
+                  height={Math.max(2, it.barY1 - it.barY0)}
+                  fill={colour} opacity={0.30} rx={2} />
+              ) : (
+                it.branches.map((br, bi) => (
+                  <rect key={bi}
+                    x={leftX0} y={br.srcY0} width={nodeW}
+                    height={Math.max(2, br.srcW)}
+                    fill={colour} opacity={0.90} rx={2} />
+                ))
+              )}
               <text x={leftX0 + nodeW / 2} y={it.mwhY} fontSize="9"
                 fill={it.isUnserved ? '#9CA3AF' : '#374151'} textAnchor="middle"
                 fontWeight="500">
