@@ -586,3 +586,57 @@ Migration policy:
 This refinement does not require re-doing Part 1's commit. The CLAUDE.md "Module scopes" Systems section already says "DHW point-of-use η" generically and doesn't specify the demand basis. The audit doc above (§2.3 + §4 + §7) captures the per-basis schema; Part 2's commit message documents the schema change.
 
 Reasoning logged for the brief archive: keeping basis-where-the-engine-is preserves the tap-mix correction as the only DHW change at migration, so Principle 6 (no calibration) can be honoured cleanly. Bridgewater post-Brief-40 DHW thermal = Bridgewater pre-Brief-40 DHW thermal × `hot_fraction`; that's the falsifiable verification target for Part 5.
+
+---
+
+## §13. Thin Systems entries — cross-module accounting (Part 4 deliverable)
+
+Lighting and small_power are "thin" Systems entries — they account the delivered electrical energy at the building meter but do not generate heat themselves. Heat continues to flow upstream from the Internal Gains module's `lpd × gia × schedule_fraction` and `epd × gia × schedule_fraction × occupancy_rate` integrands respectively. Systems' role is electrical end-use accounting + optional controls.
+
+### §13.1 Cross-module accounting model
+
+```
+                  Internal Gains module                        Systems module
+                  ─────────────────────                        ──────────────
+  Lighting:  lpd × gia × schedule_fraction  →  heat into       (one Systems
+             [W → kWh integrated annually]      zone (heat      lighting entry)
+                                                balance         control_factor ×
+                                                integrand)      share/100 →
+                                                                delivered_electrical_kWh
+                                                                (end-use accounting)
+
+  Equipment: epd × gia × schedule_fraction × occupancy_rate
+             → heat into zone   |   (one Systems small_power entry)
+                                |   control_factor × share/100 → delivered_electrical_kWh
+```
+
+**Key invariant:** the Internal Gains heat-balance integrand is unchanged by Brief 40. The Systems thin entry consumes the *annual* gain figure (`gain_from_internal_gains_mwh`) and applies the per-system `control_factor × share/100` to produce the delivered electrical end-use number. Heat balance ↔ end-use accounting are kept as separate flows so they don't double-count.
+
+### §13.2 Implementation (Part 2 engine + Part 4 defaults)
+
+`systemsEngine.js _computeThin(systems, gainFromInternalGainsMwh)` (Brief 40 Part 2):
+- Reads `gain_from_internal_gains_mwh` from the State 2 output (`state2Result.heat_balance.annual.gains.internal.lighting.kwh` ÷ 1000, ditto equipment)
+- For each system in the array: `delivered_electrical_mwh = gain × control_factor × share/100`
+- Per-fuel roll-up: source is always `'electricity'`; no fuel split branch
+
+`DEFAULT_PARAMS.systems_config_v40` (Brief 40 Part 4) seeds:
+```js
+lighting:    [{ id: 'default_lighting',    service: 'lighting',
+                source: 'electricity', control_mechanism: 'constant',
+                control_factor: 1.0, share_pct: 100, ... }],
+small_power: [{ id: 'default_small_power', service: 'small_power',
+                source: 'electricity', control_mechanism: 'constant',
+                control_factor: 1.0, share_pct: 100, ... }],
+```
+
+Both entries default to `control_factor: 1.0` — baseline-as-found, no controls. The user dials in daylight dimming (`control_factor: 0.70`), occupancy sensors (`0.70`), or both (`0.50`) by editing the system's `control_mechanism` in the SystemEditorCard; the UI seeds the corresponding default control_factor when the mechanism changes (Brief 40 Part 3 `SystemEditorCard` `LIGHTING_CONTROL_FACTOR_DEFAULTS` map).
+
+### §13.3 Bridgewater migration (Part 5)
+
+Bridgewater's lighting + small_power systems land via the DEFAULT_PARAMS fallback in `ProjectContext` (no v25 → v40 translation needed — these are new line items in the consumption breakdown). The migration's lighting + small_power lines are documented in §8 as "new as separate line item" with the pre-Brief-40 EUI continuing to count these via the legacy `state2Result.heat_balance.annual.gains.internal.{lighting,equipment}.kwh` pass-through at `_calculateState3` lines 4097–4098 — i.e. the kWh figures were already in the EUI; Brief 40 surfaces them as explicit per-system entries with their own accounting hooks.
+
+### §13.4 Brief 40 Part 4 verification
+
+Engine-side wiring confirmed during Part 2 (`_computeThin` already produces the per-system delivered_electrical figure). Part 4's deliverable is the DEFAULT_PARAMS seed + the load-side fallback so new projects (and unmigrated projects pre-Part-5) carry the lighting + small_power thin entries.
+
+Build confirmation: lighting + small_power show in the Systems left panel section list with default control_factor 1.0; the Diagnostic centre tab includes their delivered_electrical rows in the per-service breakdown. Empty heating / cooling / DHW / ventilation arrays render only the "+ Add system" affordance — the user populates those via Part 3's UI (or via Part 5's migration for Bridgewater).

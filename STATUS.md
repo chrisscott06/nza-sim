@@ -1,5 +1,39 @@
 # NZA SIMULATE — Status
 
+## 🟢 Session 2026-05-19 — Brief 40 Part 4: Lighting + small_power thin Systems entries
+
+**State:** `commit_in_flight` — Brief 40 Part 4. Small Part: the engine work for `_computeThin` already landed in Part 2; UI editor card already supports lighting + small_power thin types in Part 3. Part 4's deliverable is **DEFAULT_PARAMS seeds + load-side fallback + audit-doc §13** documenting cross-module accounting (Internal Gains heat vs Systems delivered electricity).
+
+**`DEFAULT_PARAMS.systems_config_v40` (ProjectContext.jsx):**
+- `lighting: [{ default_lighting }]` — one thin entry, control_mechanism 'constant', control_factor 1.0, share_pct 100
+- `small_power: [{ default_small_power }]` — same shape, control_factor 1.0, share_pct 100
+- Heating / cooling / DHW / ventilation arrays start empty (user populates via the SystemEditorCard + AddSystemButton flow in Part 3; Bridgewater Part 5 migration populates from v25)
+- New `library_systems: []` field for the per-project systems library (Brief 37 pattern, 'systems' namespace)
+
+**Load-side fallback** (project-loader at line ~653):
+- `systems_config_v40: bc.systems_config_v40 ?? DEFAULT_PARAMS.systems_config_v40` — pre-Brief-40 projects (which don't carry the field on disk) load with the seeded lighting + small_power defaults. Engine paths gate the `systemsEngine.computeSystemsDelivered` call on "any service array non-empty" — a project with only lighting + small_power triggers the Brief 40 path for those services and `consumption.brief40.lighting` + `.small_power` populate; the v25 heating / cooling / DHW / ventilation contracts continue to drive their Sankey visuals unchanged. No accounting overlap because `_computeThin` only consumes `gain_from_internal_gains_mwh` (already in EUI via the legacy pass-through) and produces a per-system `delivered_electrical_mwh` figure that's identical to the legacy `lighting_kwh` / `equipment_kwh` total at control_factor 1.0 share 100
+- `library_systems: Array.isArray(bc.library_systems) ? bc.library_systems : []`
+
+**Heat-gain provenance preserved** (audit doc §13.1):
+- Lighting heat: Internal Gains' `lpd × gia × schedule_fraction` integrand → State 2 heat balance (unchanged)
+- Equipment heat: Internal Gains' `epd × gia × schedule_fraction × occupancy_rate` integrand → State 2 heat balance (unchanged)
+- Systems thin entries consume the **annual** gain figure (`gain_from_internal_gains_mwh`) and apply per-system `control_factor × share/100` → `delivered_electrical_mwh`. Heat-balance integrand and end-use accounting flow are kept separate so they don't double-count
+- Default control_factor 1.0 / share 100 means delivered_electrical = gain (1:1), matching the pre-Brief-40 EUI behaviour for Bridgewater
+
+**`docs/audit/40_systems_library_schema.md` §13 (new):**
+- §13.1 Cross-module accounting model — explicit flow diagram (Internal Gains → heat into zone | Systems → delivered electrical)
+- §13.2 Implementation (Part 2 engine `_computeThin` + Part 4 DEFAULT_PARAMS seeds + LIGHTING_CONTROL_FACTOR_DEFAULTS map)
+- §13.3 Bridgewater migration note — lighting + small_power lands via DEFAULT_PARAMS fallback (no v25 → v40 translation needed); pre-Brief-40 EUI already counted these
+- §13.4 Part 4 verification — engine wiring confirmed during Part 2; Part 4 ships the seeds + load fallback
+
+**Build:** clean, 16.27 s, 2.53 MB JS (gzip 702 kB) — +0.2 kB gzip from the DEFAULT_PARAMS additions (no new components)
+
+**Verification (visual):** new projects + pre-Brief-40 unmigrated projects now show two thin Systems entries (lighting + small_power) in the left panel section list. Toggling `control_mechanism` to 'daylight_dimming' seeds `control_factor: 0.70` via Part 3's SystemEditorCard logic; delivered electrical drops by ~30% per the proportional split. Full Bridgewater walkthrough waits for Part 5 migration of heating / cooling / DHW / ventilation.
+
+**Next:** Part 5 — Bridgewater migration. `scripts/40_bridgewater_systems_migration.py` (new, idempotent) maps `systems_config_v25` to `systems_config_v40` for the heating / cooling / DHW / ventilation services; lighting + small_power already populated via DEFAULT_PARAMS fallback. Pre/post numbers documented in audit doc §8. Stop-dev-server discipline per CLAUDE.md Process Rule 11.
+
+---
+
 ## 🟢 Session 2026-05-19 — Brief 40 Part 3: Systems module UI rebuild
 
 **State:** `commit_in_flight` — Brief 40 Part 3. Left panel rewritten from tab-style (HVAC/DHW/Lighting/Ventilation tabs) to section-list (one collapsible section per service: Heating / Cooling / DHW / Ventilation / Lighting / Small power). Per-system editing via the new `SystemEditorCard`; per-service "+ Add system" via the new `AddSystemButton`; comfort-vs-setpoint diagnostic on the new "Diagnostic" centre tab via `SystemsDiagnosticPanel`. Library save/load via Brief 37 pattern with `'systems'` namespace.

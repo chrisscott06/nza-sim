@@ -220,6 +220,61 @@ const DEFAULT_PARAMS = {
     longitude: -2.985,
     name:      'Bridgwater, Somerset',
   },
+  // Brief 40 Part 4 (2026-05-19) — default Brief 40 systems config for new
+  // projects. Heating / cooling / DHW / ventilation arrays start empty; the
+  // user adds systems via the SystemEditorCard + AddSystemButton UI.
+  // Lighting + small_power are seeded with thin entries at control_factor
+  // 1.0 / share 100 (baseline-as-found) per Brief 40 Part 4 step 4.1 — these
+  // mirror the heat-gain energy from Internal Gains 1:1 into Systems'
+  // delivered electrical accounting. User can dial in daylight dimming /
+  // occupancy sensors / etc by editing the control_mechanism on the card.
+  //
+  // Heat-gain provenance: lighting + small_power heat stays sourced from
+  // Internal Gains (heat balance integrand unchanged). Systems' thin
+  // entries account the delivered electrical energy only — no double-
+  // counting in the heat balance because lighting heat is upstream of the
+  // Systems split. Audit doc §13 "Thin Systems entries — cross-module
+  // accounting" documents the wiring.
+  systems_config_v40: {
+    heating:     [],
+    cooling:     [],
+    dhw:         [],
+    ventilation: [],
+    lighting: [{
+      id:                  'default_lighting',
+      label:               'Lighting (baseline)',
+      service:             'lighting',
+      source:              'electricity',
+      efficiency_metric:   null,
+      setpoint:            null,
+      control_mechanism:   'constant',
+      control_schedule_id: null,
+      control_factor:      1.0,
+      share_pct:           100,
+      capacity_kw:         null,
+      notes:               '',
+    }],
+    small_power: [{
+      id:                  'default_small_power',
+      label:               'Small power (baseline)',
+      service:             'small_power',
+      source:              'electricity',
+      efficiency_metric:   null,
+      setpoint:            null,
+      control_mechanism:   'constant',
+      control_schedule_id: null,
+      control_factor:      1.0,
+      share_pct:           100,
+      capacity_kw:         null,
+      notes:               '',
+    }],
+  },
+  // Brief 40 Part 3 (2026-05-19) — per-project systems library (Brief 37
+  // pattern, 'systems' namespace). Populated by SystemEditorCard "Save to
+  // library" action; consumed by AddSystemButton "From library" modal tab.
+  // Library entries carry their full Brief 40 system shape + an additional
+  // `saved_at` timestamp + `lib_${service}_*` id.
+  library_systems: [],
 }
 
 // ── Brief 27 Part 1 — v2.3 migration helpers ─────────────────────────────────
@@ -650,7 +705,19 @@ export function ProjectProvider({ children }) {
       // breakdown and comfort-vs-setpoint diagnostic and attaches it under
       // `consumption.brief40`; when absent / empty, the engine falls back
       // to the v25 path and `consumption.brief40` is null.
-      systems_config_v40: bc.systems_config_v40 ?? null,
+      //
+      // Brief 40 Part 4 (2026-05-19) — fall back to DEFAULT_PARAMS when bc
+      // doesn't carry the field, so loading a pre-Brief-40 project still
+      // gets the seeded lighting + small_power thin entries. Engine paths
+      // gate the systemsEngine call on "any service array non-empty", so
+      // a project with only lighting + small_power populated still triggers
+      // the Brief 40 path for those services (and the heating / cooling /
+      // dhw / ventilation v25 contracts continue to drive their Sankey
+      // visuals unchanged).
+      systems_config_v40: bc.systems_config_v40 ?? DEFAULT_PARAMS.systems_config_v40,
+      // Brief 40 Part 3 (2026-05-19) — per-project systems library.
+      // Same load semantics as systems_config_v40.
+      library_systems: Array.isArray(bc.library_systems) ? bc.library_systems : (DEFAULT_PARAMS.library_systems ?? []),
     })
     setConstructions(project.construction_choices ?? DEFAULT_CONSTRUCTIONS)
     setSystems(migrateSystemsConfig(project.systems_config))
