@@ -1,6 +1,29 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-19 — Brief 39 Part 4: CLAUDE.md Rule 14 — three-location envelope parity
+## 🚧 Session 2026-05-19 — Brief 39 Part 5: Bridgewater reconciliation (code-side)
+
+**State:** `commit_in_flight` — Brief 39 Part 5. Code-side walkthrough of which display reads which state's perm-vent output post-Brief-39. Actual MWh figures await Chris's walkthrough on the live Bridgewater project.
+
+**Display → state map (post-Brief-39):**
+- Building module Sankey → State 1 `acc_vent_permanent` (unchanged, already correct since Brief 33/34) → expected ~7.7 MWh
+- Internal Gains Sankey + Operation Sankey → State 2 `acc_vent_permanent` — **now with single_sided dispatch (Brief 39 Part 2)** → expected ~8.0–8.9 MWh
+- Systems module → State 3 cascades State 2's demand → indirectly reflects corrected perm-vent number
+- LiveResultsPanel + HeatBalanceTab + ProjectDashboard → inline-legacy 'full' — **now with single_sided dispatch (Brief 39 Part 1)** → expected ~7.7 MWh-class
+
+**Reconciliation ratio targets:**
+- Pre-fix ratio (Internal Gains ÷ Building): 5.4× (the bug — what triggered Audit 39)
+- Expected post-fix ratio: 1.05–1.15× (Brief 28c T_air integration difference is the only legitimate divergence between State 1 and State 2)
+- Escalation threshold: if walkthrough produces a ratio still > 1.5×, that's a Severity 2 finding — Brief 39 does **not** close; a new diagnostic investigates a second-layer drift
+
+**Awaiting Chris's walkthrough.** Part 6 (close) waits for the walkthrough confirmation that the ratio is within the expected band.
+
+**Files touched:** `docs/audit/39_calculation_flow_map.md` (new "Brief 39 Part 5 — Bridgewater reconciliation" section) + STATUS.md.
+
+**Next:** Chris's walkthrough → fill in actual numbers in the audit doc → Part 6 close commit. If escalation triggered, Brief 39 stays open.
+
+---
+
+## 🟢 Session 2026-05-19 — Brief 39 Part 4: CLAUDE.md Rule 14 — three-location envelope parity
 
 **State:** `commit_in_flight` — Brief 39 Part 4. New non-negotiable technical Rule 14 in CLAUDE.md captures the durable architectural constraint that prevents future Brief-39 recurrences.
 

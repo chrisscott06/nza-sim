@@ -443,3 +443,56 @@ The third Part 1/2 marker is the multi-line history comment at lines ~5170–517
 - **No new issues logged.** The latent ProjectDashboard dead-read (Issue #16) was logged in Part 1's commit; nothing else needed in `29_open_issues.md`.
 
 The parallel-reimpl pattern's residual surface area (the actual drift risk going forward) is captured by CLAUDE.md's new architectural rule landing in Part 4 — not by the sweep itself.
+
+---
+
+## Brief 39 Part 5 — Bridgewater reconciliation
+
+**Author:** Claude Code (executor) — appended during Brief 39 Part 5 (2026-05-19).
+
+Code-side reconciliation: confirms which display reads which state's permanent-vent output post-Brief-39. Actual MWh figures come from Chris's walkthrough on the live Bridgewater project.
+
+### Display view → state output map (post-Brief-39, unchanged in structure from §4 of the original flow map)
+
+| Display | Module | `calculateInstant` mode | Field path read | Field source post-Brief-39 |
+| --- | --- | --- | --- | --- |
+| Heat Balance Sankey | Building (`BuildingDefinition.jsx:1486`) | `'envelope-only'` | `result.losses.permanent_vents.kwh` | State 1 `acc_vent_permanent` — single_sided dispatch (unchanged, correct since Brief 33/34) |
+| Heat Balance Sankey / Stacked / Rows | Internal Gains (`useStateComparison.js:72,77`) | `'envelope-only'` + `'envelope-gains'` | both | Building card reads State 1 (unchanged); Internal Gains card reads State 2 `acc_vent_permanent` — **now with single_sided dispatch (Brief 39 Part 2)** |
+| Heat Balance Sankey | Operation (`OperationModule.jsx:264`) | `'envelope-gains'` | `result.losses.permanent_vents` | State 2 `acc_vent_permanent` — **now with single_sided dispatch (Brief 39 Part 2)** |
+| Systems Sankey + KPI strip | Systems (`SystemsModule.jsx:123`) | `'full'` + `engine='v2.5'` | `result.consumption.*` and indirect via demand cascade | State 3 cascades State 2's demand — **State 2's demand now includes the corrected perm-vent loss (Brief 39 Part 2)** |
+| Live Results Panel | Building (`LiveResultsPanel.jsx:258`) | none (default `'full'`); libraryData empty unless caller provides v2.5 templates | varies (eui, fuel_split, carbon, monthly) | Inline-legacy 'full' — **now with single_sided dispatch (Brief 39 Part 1)** when v2.5 not active; State 3 cascading State 2 when v2.5 is active |
+| Heat Balance Tab | Results (`HeatBalanceTab.jsx:33`) | none, libraryData = `{}` | `liveResult?.heat_balance` | Inline-legacy 'full' — **now with single_sided dispatch (Brief 39 Part 1)** |
+| Project Dashboard | (`ProjectDashboard.jsx:212`) | none, libraryData = `{}` | `instantResult?.eui` (latent dead read — see Issue #16) | Inline-legacy 'full' (the dead read returns undefined regardless) |
+
+### Expected post-Brief-39 numbers (Bridgewater, single_sided default, openings.cd = 0.29, normal site exposure)
+
+| Module | Source | Pre-Brief-39 | Expected post-Brief-39 |
+| --- | --- | --- | --- |
+| Building (State 1) | `acc_vent_permanent` with single_sided dispatch | ~7.7 MWh | ~7.7 MWh (unchanged — State 1 already had the dispatch) |
+| Internal Gains (State 2) | `acc_vent_permanent` with single_sided dispatch | 41.3 MWh | close to State 1, +/− Brief 28c T_air integration difference |
+| Operation (State 2) | same as Internal Gains | 41.3 MWh | same as Internal Gains |
+| Systems (State 3 cascade) | State 2 demand cascade | reflects State 2 perm-vent indirectly | reflects corrected State 2 perm-vent indirectly |
+
+### Reconciliation ratio targets
+
+- **Pre-fix ratio (Internal Gains ÷ Building):** 5.4× (the bug — this is what triggered Audit 39 and Brief 39).
+- **Expected post-fix ratio:** 1.05–1.15× (legitimate State 1 vs State 2 difference due to Brief 28c — gains-warmed T_air trace in State 2 produces a slightly different `dT_air > 0` integration than State 1's free-running trace).
+- **Escalation threshold:** if Chris's walkthrough produces a post-fix ratio still > 1.5×, that's a Severity 2 finding — Brief 39 does NOT close; instead a new diagnostic investigates whether there's a second drift in the State 2 integration beyond the dispatch.
+
+### What the walkthrough captures
+
+Chris's walkthrough on the live Bridgewater project will produce the following data points (to be backfilled here when reported):
+
+1. Building module Sankey: permanent vents = **___ MWh** (expected ~7.7, unchanged)
+2. Internal Gains module Sankey: permanent vents = **___ MWh** (expected ~8.0–8.9, post-fix)
+3. Operation module Sankey: permanent vents = **___ MWh** (expected same as Internal Gains)
+4. Systems module (no direct perm-vent display, but heating demand should reflect corrected State 2 number — captured indirectly via EUI)
+5. Internal Gains : Building ratio = **___×** (expected 1.05–1.15)
+
+### Build verification
+
+Build clean for the code changes in Parts 1 and 2 (verified at each commit — see STATUS.md entries for `356ea6e` and `42fc0bc`). No code changes in Parts 3 (comment-only), 4 (docs-only), or 5 (audit-doc-only).
+
+### Awaiting Chris's walkthrough
+
+The actual Bridgewater numbers come from Chris's manual walkthrough on the live frontend. Part 6 (close) waits for the walkthrough confirmation that the ratio is within the 1.05–1.15× expected band (Brief 39 closes) or that the ratio is > 1.5× (Brief 39 does not close, escalation diagnostic begins).
