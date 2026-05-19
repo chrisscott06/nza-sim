@@ -1,22 +1,41 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-19 — Brief 38 Part 1: Systems Sankey carrier-block sizing (in flight)
+## 🚧 Session 2026-05-19 — Brief 38 Parts 1 (redo) + 2: Sankey carrier sizing + unserved placeholder
 
-**State:** `single_commit_in_flight` — Part 1 of three-part Brief 38 (Systems Sankey polish). Brief authorised chat-form; brief file folded into Part 1 per the Brief 37 pattern.
+**State:** `commit_in_flight` — Brief 38 Part 1 re-attempt (previous `afab57b` shipped but failed walkthrough) folded together with Part 2 (unserved-demand placeholder).
 
-**What's landing in this commit:**
+**Why Part 1 needed a redo:** the previous attempt filtered `g.links` for those with `target === node.id` (incoming flows). For source-type nodes (`grid`, `gas`), no link is ever targeted at them — they're pure sources, emitting links only as `source`. So the `incoming.length === 0` early-out fired silently and the override did nothing. Visually unchanged: Electricity + Gas blocks still d3-sankey-inflated.
 
-- `docs/briefs/active/38_systems_sankey_polish.md` (new) — Brief 38 spec. Three Parts: (1) carrier-block sizing, (2) unserved-demand placeholder, (3) waste-heat flows.
-- `frontend/src/components/modules/systems/SystemSankey.jsx` — post-process step in `sankeyResult` useMemo. After d3-sankey computes the layout, identify `source`-type nodes (Grid Electricity, Natural Gas), shrink their rectangles to span exactly the bounds of the incoming link-end stack, stash the total kWh on `node._totalKwh`. Render two-line label outside the node: small name ("Electricity" / "Gas") + bold MWh figure (12px font, 700 weight). Minimum 20 px node height so single-thin-flow carriers still render readably.
+**Part 1 fix (this commit):**
+- Filter on `l.source === node.id` (outgoing) instead.
+- Restack each outgoing link's `y0` (source-end centre) contiguously inside the new node range. `link.y1` (target-end) is left alone so the curve adjusts naturally to its new origin.
+- Total height = sum of `link.width` for outgoing links (flush stack, no padding — matches d3-sankey's contiguous-pack convention).
+- Bypass the `Math.max(24, y1 - y0)` minimum-height clamp for source-type nodes (it would re-inflate them back to mismatch the curves).
+- MWh label bumped to fontSize 14, weight 700 (was 12) per the brief's "14-16 px bold" target; carrier name above at 10/500.
 
-**Before:** carrier blocks sized to total flow MWh — visually large rectangles dwarfing the uniformly-rendered flows landing on them.
-**After:** carrier blocks tightly bound the flow stack; the total MWh figure is the prominent visual cue, not the block size.
+**Part 2 — Unserved demand placeholder:**
+- `buildGraph` now flags any `system`-type node that has outgoing flow but no incoming link from a `source` node. (This is the engine's footprint when a service has `enabled: false` — Brief 28-IM IM-M4: demand still flows but no fuel link is emitted.)
+- All outgoing links from such nodes get their `style` switched to `'unserved'`.
+- New `LINK_COLORS.unserved` = red-500 (`#EF4444`) with 3–3 dasharray.
+- New `NODE_COLORS.unserved` = `#FAFAFA` bg / `#D4D4D4` border / `#9CA3AF` text; rect rendered with a 3–2 dasharray stroke.
+- Node relabelled to "No system configured"; the post-layout pass also snaps the node's `x0`/`x1` to the median x-range of the *served* system nodes so the placeholder appears in the System column rather than sankeyLeft's column-0 default. Outgoing link's `y0` is re-anchored to the new node midpoint to keep the stub short.
+- Link rendering: `unserved` links draw at a fixed 2-px stroke (indicator, not flow-proportional) with 75 % base opacity.
 
-**Build:** clean, 8.41 s, 2.49 MB JS (gzip 692 kB), zero errors. (No JS size change — pure layout-postprocess + label tweaks; one new field stashed on nodes.)
+**Build:** clean, 10.28 s, 2.49 MB JS (gzip 692 kB), zero errors. No JS-size change vs Part 1 baseline.
 
-**Browser verification expected (Chris):** Open Systems → Sankey. Electricity + Gas blocks should now match the visual stack of flows; the total MWh figure should be large and bold next to each block.
+**Browser verification expected (Chris):** Open Systems → Sankey on Bridgewater.
+- Electricity + Gas carrier blocks now span only the height of their stacked outgoing flows, with the prominent bold MWh figure to the right.
+- Heating (which is OFF on Bridgewater) shows a small faint "No system configured" placeholder in the System column with a thin red dotted stub to the Space Heating demand; the long dark-red flow across the diagram is gone.
 
-**Next:** Part 2 — unserved-demand placeholder.
+**Part 3 — Waste-heat flows (deferred to next commit; engine already emits them):** verification shows `instantCalc.js` v2.5 builder (and legacy builder) already emit four waste links on Bridgewater:
+- `cooling_sys → heat_reject` (cooling condenser rejection: `cooling_thermal × (1 + 1/EER)`)
+- `sh_node → heating_flue` (`heating_gas × (1 − sh_eff)` — zero on Bridgewater since heating is off)
+- `dhw_node → dhw_flue` (`dhw_gas × (1 − dhw_eff)`)
+- `space_heat → vent_exhaust` (`acc_vent_loss` — aggregated across all vent systems, including the MVHR's non-recovered share and the MEV systems' full extract heat)
+
+The aggregation under one `vent_exhaust` node simplifies the brief's per-vent-system split but covers all four expected categories. Next commit: walkthrough confirms numbers + brief close.
+
+**Next:** Part 3 close — walkthrough confirms waste numbers; archive brief.
 
 ---
 

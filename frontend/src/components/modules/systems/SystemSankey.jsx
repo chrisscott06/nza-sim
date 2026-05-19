@@ -30,6 +30,7 @@ const LINK_COLORS = {
   air:         '#14B8A6',   // teal-500    — ventilation air (Brief 37 Part 1: was '#06B6D4' cyan-500)
   waste:       '#D4D4D4',   // light grey  — heat rejection / flue loss (solid)
   recovered:   '#16A34A',   // green       — recovered / cascaded heat (dashed)
+  unserved:    '#EF4444',   // red-500     — demand with no system supplying it (Brief 38 Part 2; dotted)
   default:     '#CCCCCC',
 }
 
@@ -40,6 +41,7 @@ const NODE_COLORS = {
   end_use:   { bg: '#F0FDF4', border: '#16A34A', text: '#14532D' },
   waste:     { bg: '#F9FAFB', border: '#D4D4D4', text: '#6B7280' },  // light grey — waste nodes
   recovered: { bg: '#ECFDF5', border: '#16A34A', text: '#064E3B' },
+  unserved:  { bg: '#FAFAFA', border: '#D4D4D4', text: '#9CA3AF' },  // faint grey — placeholder for off-system (Brief 38 Part 2)
 }
 
 // ── Build Sankey graph from systems_flow ──────────────────────────────────────
@@ -57,6 +59,42 @@ function buildGraph(systemsFlow) {
     .map(l => ({ source: l.source, target: l.target, value: l.value_kWh, style: l.style }))
 
   if (sLinks.length === 0) return null
+
+  // Brief 38 Part 2 (2026-05-19): mark unserved system nodes.
+  //
+  // A "system" node is unserved when it has outgoing flow to a demand but no
+  // incoming flow from any "source" node (Grid / Gas). This happens when a
+  // service has `enabled: false` (Brief 28-IM IM-M4) — the engine still emits
+  // the demand link (heating_thermal > 0) but skips the source→system fuel
+  // link because heating_electricity / heating_gas are zero. Without this
+  // intervention the unserved system gets bumped to column 0 by sankeyLeft
+  // (no incoming) and renders as a long dark-red horizontal flow spanning
+  // the whole diagram.
+  //
+  // Strategy: keep the system→demand link but flag it for 'unserved' styling
+  // (red dotted), and tag the node itself so rendering can swap label to
+  // "No system configured", apply faint-grey styling, and post-layout snap
+  // the node's x-range to the same column as the served system nodes.
+  const sourceIds = new Set(sNodes.filter(n => n.type === 'source').map(n => n.id))
+  const systemNodesWithFuel = new Set(
+    sLinks.filter(l => sourceIds.has(l.source)).map(l => l.target)
+  )
+  for (const node of sNodes) {
+    if (node.type !== 'system') continue
+    if (systemNodesWithFuel.has(node.id)) continue
+    // Does this node actually have outgoing demand flow? (Skip system nodes
+    // that are simply absent — e.g. cooling 'none' — those weren't emitted
+    // anyway since the engine guards with value_kWh > 0.)
+    const hasOutgoing = sLinks.some(l => l.source === node.id)
+    if (!hasOutgoing) continue
+    node._unserved = true
+  }
+  // Restyle the outgoing links from unserved system nodes as 'unserved'.
+  for (const link of sLinks) {
+    const srcNode = sNodes.find(n => n.id === link.source)
+    if (srcNode?._unserved) link.style = 'unserved'
+  }
+
   return { nodes: sNodes, links: sLinks }
 }
 
@@ -131,32 +169,110 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
       layout(g)
 
       // Brief 38 Part 1 (2026-05-19): post-process energy-carrier nodes.
-      // d3-sankey auto-sizes source-type nodes (Grid Electricity, Natural
-      // Gas) by their total flow, which produces visually large blocks that
-      // don't match the combined width of the uniformly-rendered flows
-      // landing on them. Shrink each source node's rectangle to exactly
-      // span the stack of incoming-link edges; stash the total kWh for a
-      // prominent label rendered outside the rect.
+      //
+      // d3-sankey's column-balancing inflates source-type nodes (Grid
+      // Electricity, Natural Gas) far beyond the visual width of the flows
+      // leaving them. The cause: the carrier column has only 2 nodes whereas
+      // the demand column has 10+, so d3-sankey gives each carrier roughly
+      // half the column height even though individual outgoing links are
+      // proportionally slim. The result is a visually-massive carrier block
+      // with thin curves leaving it.
+      //
+      // Fix: for each source-type node, sum its OUTGOING link widths (the
+      // links 'grid' / 'gas' are always source, never target — see
+      // instantCalc.js _addLink calls), resize node.y0/y1 to span exactly
+      // that height centred on the existing midpoint, then restack each
+      // outgoing link's y0 contiguously inside the new range so the curves
+      // emerge directly from the resized block.
       for (const node of g.nodes) {
         if (node.type !== 'source') continue
-        const incoming = g.links.filter(l =>
-          (typeof l.target === 'object' ? l.target.id : l.target) === node.id
+        const outgoing = g.links.filter(l =>
+          (typeof l.source === 'object' ? l.source.id : l.source) === node.id
         )
-        if (incoming.length === 0) continue
-        // Each link.y1 is the centre y-coord of the link's right end on the
-        // target side; link.width is its perpendicular thickness. Span the
-        // tightest rectangle around the link-end stack.
-        const tops    = incoming.map(l => (l.y1 ?? 0) - (l.width ?? 1) / 2)
-        const bottoms = incoming.map(l => (l.y1 ?? 0) + (l.width ?? 1) / 2)
-        const yTop = Math.min(...tops)
-        const yBot = Math.max(...bottoms)
-        // Centre the new bounds on the link-stack midpoint; minimum 20 px
-        // height so single-thin-flow carriers still render readably.
-        const mid = (yTop + yBot) / 2
-        const halfH = Math.max((yBot - yTop) / 2, 10)
-        node.y0 = mid - halfH
-        node.y1 = mid + halfH
-        node._totalKwh = incoming.reduce((s, l) => s + (l.value ?? 0), 0)
+        if (outgoing.length === 0) continue
+
+        // Preserve the visual order d3-sankey assigned (by current source-end y).
+        outgoing.sort((a, b) => (a.y0 ?? 0) - (b.y0 ?? 0))
+
+        // Desired height = sum of link widths (links touch flush, matching
+        // d3-sankey's contiguous-pack convention).
+        const totalH = outgoing.reduce((s, l) => s + (l.width ?? 1), 0)
+        const existingMid = ((node.y0 ?? 0) + (node.y1 ?? 0)) / 2
+        const newY0 = existingMid - totalH / 2
+        node.y0 = newY0
+        node.y1 = existingMid + totalH / 2
+
+        // Restack each outgoing link's source-end centre inside the new range.
+        // link.y1 (target-end centre) is left untouched so the curve adjusts
+        // naturally to its new origin.
+        let cursor = newY0
+        for (const l of outgoing) {
+          const w = l.width ?? 1
+          l.y0 = cursor + w / 2
+          cursor += w
+        }
+
+        node._totalKwh = outgoing.reduce((s, l) => s + (l.value ?? 0), 0)
+      }
+
+      // Brief 38 Part 2 (2026-05-19): snap unserved system nodes back into
+      // the served-system column. sankeyLeft put them in column 0 because
+      // they have no incoming fuel link; force them to the median x-range of
+      // the served system nodes so the rendered stub is short and lands
+      // visually where a system would belong. If no served system nodes
+      // exist (heating-only-and-off — degenerate), fall back to the midpoint
+      // between the leftmost and rightmost nodes.
+      const servedSysX = g.nodes
+        .filter(n => n.type === 'system' && !n._unserved)
+        .map(n => ({ x0: n.x0 ?? 0, x1: n.x1 ?? 0 }))
+      let sysX0, sysX1
+      if (servedSysX.length > 0) {
+        sysX0 = servedSysX.reduce((s, n) => s + n.x0, 0) / servedSysX.length
+        sysX1 = servedSysX.reduce((s, n) => s + n.x1, 0) / servedSysX.length
+      } else {
+        const allX0 = g.nodes.map(n => n.x0 ?? 0)
+        const allX1 = g.nodes.map(n => n.x1 ?? 0)
+        const minX = Math.min(...allX0)
+        const maxX = Math.max(...allX1)
+        sysX0 = minX + (maxX - minX) * 0.45
+        sysX1 = sysX0 + 18
+      }
+      for (const node of g.nodes) {
+        if (!node._unserved) continue
+
+        // Snap x to the system column.
+        const origX0 = node.x0 ?? 0
+        const origX1 = node.x1 ?? origX0 + 18
+        node.x0 = sysX0
+        node.x1 = sysX1
+        // Shrink the node's y-range so it doesn't dominate the demand column
+        // visually — a small faint placeholder is the goal. Keep it centred
+        // on the existing midpoint. Minimum 18 px so the label fits.
+        const midY = ((node.y0 ?? 0) + (node.y1 ?? 0)) / 2
+        const newH = 22
+        node.y0 = midY - newH / 2
+        node.y1 = midY + newH / 2
+
+        // Update outgoing link source-end position: x is implied by node.x1,
+        // but link.y0 should now be at the new node midpoint.
+        for (const l of g.links) {
+          const srcId = typeof l.source === 'object' ? l.source.id : l.source
+          if (srcId === node.id) {
+            l.y0 = midY
+          }
+        }
+
+        // Tag for the renderer: relabel as "No system configured" and
+        // change the visible node type to 'unserved' (used by NODE_COLORS).
+        node._origLabel = node.label
+        node.label      = 'No system configured'
+        node.type       = 'unserved'
+        // Mark for the curve-shortening renderer: avoid the previously-long
+        // path through column 0 by also nudging the source-end x to the new
+        // node's x1 — d3-sankey's path generator reads source.x1, target.x0
+        // dynamically so this happens automatically once node.x1 is updated.
+        // (No-op here — left as documentation of the chained effect.)
+        void origX0; void origX1
       }
 
       return g
@@ -304,8 +420,11 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
             {sankeyResult.links.map((link, i) => {
               const style  = link.style ?? 'default'
               const color  = LINK_COLORS[style] ?? LINK_COLORS.default
-              const isRecovered = style === 'recovered'  // only recovered gets dashed; waste is solid
-              const w = Math.max(1, link.width ?? 2)
+              const isRecovered = style === 'recovered'
+              const isUnserved  = style === 'unserved'  // Brief 38 Part 2: red dotted stub for off-system demands
+              const w = isUnserved
+                ? 2  // unserved is a thin indicator stub, not a flow-proportional line
+                : Math.max(1, link.width ?? 2)
               const srcId = typeof link.source === 'object' ? link.source.id : link.source
               const tgtId = typeof link.target === 'object' ? link.target.id : link.target
 
@@ -317,12 +436,13 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
                 isHighlighted = i === hoveredLinkIdx
               }
 
-              const baseOpacity = isRecovered ? 0.7 : 0.45
+              const baseOpacity = isRecovered ? 0.7 : isUnserved ? 0.75 : 0.45
               const anyHover = hoveredNodeId || hoveredLinkIdx !== null
               const opacity = anyHover
                 ? (isHighlighted ? Math.min(baseOpacity + 0.35, 1) : 0.08)
                 : baseOpacity
               const strokeW = isHighlighted && anyHover ? w * 1.2 : w
+              const dash    = isRecovered ? '6 3' : isUnserved ? '3 3' : undefined
 
               const d = linkPath(link)
               return (
@@ -333,7 +453,7 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
                     stroke={color}
                     strokeWidth={strokeW}
                     strokeOpacity={opacity}
-                    strokeDasharray={isRecovered ? '6 3' : undefined}
+                    strokeDasharray={dash}
                     style={{ transition: 'stroke-width 300ms ease, stroke-opacity 300ms ease' }}
                   />
                   {/* Invisible wider path for easier mouse targeting */}
@@ -367,8 +487,11 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
             {sankeyResult.nodes.map((node, i) => {
               const x0 = node.x0 ?? 0, x1 = node.x1 ?? x0 + 18
               const y0 = node.y0 ?? 0, y1 = node.y1 ?? y0 + 20
-              const h  = Math.max(24, y1 - y0)
               const type = node.type ?? 'system'
+              // Brief 38 Part 1: source-type nodes are post-processed to span
+              // exactly their outgoing link-stack — bypass the 24-px min that
+              // would re-inflate them and break the alignment with the curves.
+              const h  = type === 'source' ? (y1 - y0) : Math.max(24, y1 - y0)
               const c  = NODE_COLORS[type] ?? NODE_COLORS.system
               const nid = node.id ?? ''
               const isClickable = nid.startsWith('sh_') || nid.startsWith('sc_') ||
@@ -412,6 +535,7 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
                     fill={c.bg}
                     stroke={c.border}
                     strokeWidth="1.5"
+                    strokeDasharray={type === 'unserved' ? '3 2' : undefined}
                     style={{ transition: 'fill 300ms ease' }}
                   />
 
@@ -420,11 +544,11 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
                       Gas) get a prominent two-line label — name + bold MWh total. */}
                   {type === 'source' && node._totalKwh != null ? (
                     <>
-                      <text x={labelX} y={y0 + h / 2 - 6} fontSize="9"
+                      <text x={labelX} y={y0 + h / 2 - 9} fontSize="10"
                         fontWeight="500" fill={c.text} dy="0.35em">
                         {node.label.replace(/^(Grid |Natural )/, '')}
                       </text>
-                      <text x={labelX} y={y0 + h / 2 + 7} fontSize="12"
+                      <text x={labelX} y={y0 + h / 2 + 9} fontSize="14"
                         fontWeight="700" fill={c.text} dy="0.35em">
                         {fmtMWh(node._totalKwh)}
                       </text>
