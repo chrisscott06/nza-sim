@@ -127,8 +127,10 @@ function newOpening(type, facade) {
     facade,
     area_m2:               t.defaultArea,
     height_m:              t.defaultHeight,
-    discharge_coefficient: 0.6,
-    wind_coefficient:      t.defaultCw,
+    // Brief 41 Part 2 (2026-05-19): per-opening discharge_coefficient +
+    // wind_coefficient dropped. Building-wide openings.cd +
+    // openings.site_exposure → Cw drive flow uniformly. height_m retained
+    // for temperature-mode stack.
     opening_type:          type,
     parent_glazing_face:   type === 'window' ? facade : null,
     control: {
@@ -434,9 +436,13 @@ export default function OperationModule() {
             </div>
 
             {/* Footer cross-reference ─────────────────────────────── */}
+            {/* Brief 41 (2026-05-19): openings.cd + site exposure also drive
+                operable-opening wind flow now — unified with permanent vents
+                under the same flow_mode dispatch. Footnote wording updated
+                to make that visible. */}
             <div className="text-xxs text-mid-grey/90 leading-snug pt-2 border-t border-light-grey">
               <span className="font-medium text-dark-grey">Related:</span>{' '}
-              Permanent louvres + site exposure in{' '}
+              Building-wide C<sub>d</sub>, flow mode, and site exposure (used by both permanent louvres AND operable openings) live in{' '}
               <NavLink to="/building" className="text-navy underline">Building</NavLink>.
               MEV / MVHR in{' '}
               <NavLink to="/systems" className="text-navy underline">Systems</NavLink>.
@@ -980,7 +986,11 @@ function OperationSummaryView({ instantResult, openings, orientation }) {
 /* ── Per-opening collapsible row (preserved from Gate E5a) ───────────── */
 function OpeningRow({ opening, selected, orientation, onSelect, onUpdate, onDelete, openScheduleEditor, allSched }) {
   const [expanded, setExpanded] = useState(false)
-  const [showAdvanced, setShowAdvanced] = useState(false)
+  // Brief 41 Part 4 (2026-05-19): showAdvanced state retired — it gated the
+  // per-opening Cd / Cw sliders, which were dropped from the schema in
+  // Part 2. Building-wide openings.cd + openings.site_exposure → Cw now
+  // drive flow uniformly. See docs/audit/29_permanent_vent_methodology.md.
+  // (Kept here as a marker; remove on next OperationModule refactor.)
 
   const ctl = opening.control ?? {}
   const mode = ctl.mode ?? 'permanent'
@@ -1084,28 +1094,12 @@ function OpeningRow({ opening, selected, orientation, onSelect, onUpdate, onDele
             />
           </div>
 
-          <button
-            onClick={() => setShowAdvanced(s => !s)}
-            className="text-xxs text-mid-grey hover:text-navy underline"
-          >
-            {showAdvanced ? 'Hide' : 'Show'} Cd / Cw
-          </button>
-          {showAdvanced && (
-            <div className="grid grid-cols-2 gap-2">
-              <LabeledNumber
-                label="Cd"
-                value={opening.discharge_coefficient ?? 0.6}
-                onChange={v => onUpdate({ discharge_coefficient: v })}
-                min={0} max={1} step={0.05}
-              />
-              <LabeledNumber
-                label="Cw"
-                value={opening.wind_coefficient ?? 0.25}
-                onChange={v => onUpdate({ wind_coefficient: v })}
-                min={0} max={1} step={0.05}
-              />
-            </div>
-          )}
+          {/* Brief 41 Part 4 (2026-05-19): per-opening Cd / Cw inputs
+              removed. Building-wide openings.cd + openings.site_exposure
+              (→ Cw) drive flow uniformly across permanent vents and operable
+              openings under the flow_mode dispatch. The Related: line at
+              the bottom of the panel points users to the Building module
+              where those building-wide inputs live. */}
 
           {/* Control mode */}
           <div className="pt-2 border-t border-light-grey">

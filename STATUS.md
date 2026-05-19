@@ -1,6 +1,30 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-19 — Brief 41 Part 3: Migration script
+## 🚧 Session 2026-05-19 — Brief 41 Part 4: UI — Cd/Cw inputs removed; footnote updated
+
+**State:** `commit_in_flight` — Brief 41 Part 4. UI cleanup for the operable-opening editor card in `OperationModule.jsx`.
+
+**Removed:**
+- The `Cd` + `Cw` `LabeledNumber` inputs (lines 1087-1108 pre-edit). Now a comment block explaining the schema cleanup.
+- The `Show / Hide Cd / Cw` toggle button.
+- The `showAdvanced` `useState` hook (no remaining consumers).
+- `discharge_coefficient: 0.6` + `wind_coefficient: t.defaultCw` from the `newOpening()` defaults (lines 130-131 pre-edit).
+
+**Kept (already wired by Brief 37):**
+- The schedule picker dropdown for `scheduled` and `temperature` control modes (lines 1129-1148). Reads project-scoped schedules + library presets; pencil-icon button opens the Brief 37 `UnifiedScheduleEditor` via `openScheduleEditor` callback.
+- Temperature-mode inputs (`open_above_zone_c`, `hysteresis_c`, `require_outside_cooler`) — unchanged. Temperature-mode opens still use `height_m` for stack term per Brief 41 Part 1.
+
+**Footer "Related" footnote updated** (lines 438-449): now reads *"Building-wide C_d, flow mode, and site exposure (used by both permanent louvres AND operable openings) live in Building. MEV / MVHR in Systems."* The wording makes explicit that openings.cd / flow_mode / site_exposure are shared inputs across permanent vents and operable openings post-Brief-41.
+
+**Build:** clean, 9.78 s, 2.50 MB JS (gzip 694 kB).
+
+**Verification (visual):** when Chris reloads Operation, the per-opening editor cards show: Name / Facade / Opening type / Area / Height / Control Mode (+ schedule picker when scheduled/temperature, + temperature-only inputs when temperature). The old "Show Cd / Cw" toggle is gone. The footer footnote points to Building for the building-wide flow inputs.
+
+**Next:** Part 5 — Bridgewater walkthrough reconciliation. Chris reloads the Operation Heat Balance Sankey and reports the post-fix 4 m² door MWh value.
+
+---
+
+## 🟢 Session 2026-05-19 — Brief 41 Part 3: Migration script
 
 **State:** `commit_in_flight` — Brief 41 Part 3. Script `scripts/41_operable_openings_schema_migration.py` removes `discharge_coefficient` and `wind_coefficient` from all persisted projects' `operable_openings[*]` entries. `height_m` retained.
 
