@@ -674,50 +674,160 @@ function VentilationInputs({ list, updateSystem, allSched, openScheduleEditor })
    CENTRE — SANKEY (inline SVG, demand → systems → carriers)
    ─────────────────────────────────────────────────────────────────────── */
 function SystemsSankey({ consumption, sysCfg }) {
-  // Build the three columns:
-  //   col 0: demands (space_heating, space_cooling, dhw, fans, lighting, sp)
-  //   col 1: systems (named per category) — middle "router" nodes
-  //   col 2: energy carriers (electricity, gas)
-  // Plus a right-edge waste stream node for cooling heat rejection + exhaust loss.
+  // Four columns L → R:
+  //   col 0: Demand    (space_heating, space_cooling, dhw, fans, lighting, sp)
+  //   col 1: System    (named per category) — middle "router" nodes
+  //   col 2: Carrier   (Electricity, Gas) — rectangles sized to the SUM of
+  //                    incoming flow widths (Brief 38 Part 1, 2026-05-19).
+  //   col 3: Waste     (cooling condenser, gas flue losses, vent extract
+  //                    non-recovered — Brief 38 Part 3).
   //
-  // Each link width ∝ MWh value. Demand→system link = delivered_mwh.
-  // System→carrier link = fuel_mwh per carrier. Unserved (enabled:false)
-  // demands get a dashed red link to a "Unserved" sink instead of a system.
-  //
-  // ASHP preheat (dhw with heat_pump>0): the DHW system box's electricity
-  // link is rendered red (RECOVERED-style) rather than green — per
-  // Brief 28-IM Bug 5 fix.
+  // Width of every flow is proportional to annual MWh on a single uniform
+  // scale (`scaleW`). Carrier and waste rects then stack their incoming
+  // flows contiguously so the rect heights equal the sum of flow widths.
+  // Unserved (enabled:false → demand without delivery) renders as a short
+  // red dotted stub from the demand node to a faint "No system configured"
+  // placeholder in the System column — no cross-diagram flow.
+
+  const c = consumption ?? {}
+  const ventList = c.ventilation ?? []
+  const fan_total      = ventList.reduce((s, v) => s + (v.fan_electricity_mwh ?? 0), 0)
+  const vent_extract_unrecovered = ventList.reduce((s, v) => s + (v.exhaust_loss_mwh ?? 0), 0)
+
+  // Per-item view model. `e_mwh` / `g_mwh` are the carrier-side fuel widths.
+  // `waste_mwh` is the heat-to-waste contribution from this service (cooling
+  // condenser rejection, gas flue loss). Vent extract is handled separately
+  // as a single aggregated 'fans' contribution (all vent systems combined).
+  const HEATING_BOILER_EFF = 0.92  // typical gas-boiler efficiency for the flue-loss approximation
+  const DHW_BOILER_EFF     = 0.92
+
+  const dhw_fuel_mix = c.dhw?.fuel_mix_applied ?? null
+  const dhw_is_ashp_preheat = (dhw_fuel_mix?.heat_pump ?? 0) > 0
 
   const items = [
-    { key: 'space_heating', label: 'Heating',     unit: consumption.space_heating?.delivered_mwh ?? 0, demand: consumption.space_heating?.demand_mwh ?? 0, enabled: consumption.space_heating?.enabled !== false, e_mwh: consumption.space_heating?.electricity_mwh ?? 0, g_mwh: consumption.space_heating?.gas_mwh ?? 0 },
-    { key: 'space_cooling', label: 'Cooling',     unit: consumption.space_cooling?.delivered_mwh ?? 0, demand: consumption.space_cooling?.demand_mwh ?? 0, enabled: consumption.space_cooling?.enabled !== false, e_mwh: consumption.space_cooling?.electricity_mwh ?? 0, g_mwh: 0 },
-    { key: 'dhw',           label: 'DHW',         unit: consumption.dhw?.delivered_mwh ?? 0,           demand: consumption.dhw?.demand_mwh ?? 0,           enabled: consumption.dhw?.enabled !== false,           e_mwh: consumption.dhw?.electricity_mwh ?? 0, g_mwh: consumption.dhw?.gas_mwh ?? 0, fuel_mix: consumption.dhw?.fuel_mix_applied ?? null },
-    { key: 'fans',          label: 'Vent fans',   unit: (consumption.ventilation ?? []).reduce((s, v) => s + (v.fan_electricity_mwh ?? 0), 0), demand: (consumption.ventilation ?? []).reduce((s, v) => s + (v.fan_electricity_mwh ?? 0), 0), enabled: true, e_mwh: (consumption.ventilation ?? []).reduce((s, v) => s + (v.fan_electricity_mwh ?? 0), 0), g_mwh: 0 },
-    { key: 'lighting',      label: 'Lighting',    unit: consumption.lighting?.electricity_mwh ?? 0, demand: consumption.lighting?.electricity_mwh ?? 0, enabled: true, e_mwh: consumption.lighting?.electricity_mwh ?? 0, g_mwh: 0 },
-    { key: 'small_power',   label: 'Small power', unit: consumption.small_power?.electricity_mwh ?? 0, demand: consumption.small_power?.electricity_mwh ?? 0, enabled: true, e_mwh: consumption.small_power?.electricity_mwh ?? 0, g_mwh: 0 },
+    {
+      key: 'space_heating', label: 'Heating',
+      demand: c.space_heating?.demand_mwh ?? 0,
+      delivered: c.space_heating?.delivered_mwh ?? 0,
+      enabled: c.space_heating?.enabled !== false,
+      e_mwh: c.space_heating?.electricity_mwh ?? 0,
+      g_mwh: c.space_heating?.gas_mwh ?? 0,
+      waste_mwh: (c.space_heating?.gas_mwh ?? 0) * (1 - HEATING_BOILER_EFF),
+      waste_label: 'Heating flue',
+    },
+    {
+      key: 'space_cooling', label: 'Cooling',
+      demand: c.space_cooling?.demand_mwh ?? 0,
+      delivered: c.space_cooling?.delivered_mwh ?? 0,
+      enabled: c.space_cooling?.enabled !== false,
+      e_mwh: c.space_cooling?.electricity_mwh ?? 0,
+      g_mwh: 0,
+      // Condenser rejection: heat pulled from zone + electrical work input.
+      //   reject = cooling_delivered + cooling_electricity
+      waste_mwh: (c.space_cooling?.delivered_mwh ?? 0) + (c.space_cooling?.electricity_mwh ?? 0),
+      waste_label: 'Heat rejection',
+    },
+    {
+      key: 'dhw', label: 'DHW',
+      demand: c.dhw?.demand_mwh ?? 0,
+      delivered: c.dhw?.delivered_mwh ?? 0,
+      enabled: c.dhw?.enabled !== false,
+      e_mwh: c.dhw?.electricity_mwh ?? 0,
+      g_mwh: c.dhw?.gas_mwh ?? 0,
+      fuel_mix: dhw_fuel_mix,
+      waste_mwh: (c.dhw?.gas_mwh ?? 0) * (1 - DHW_BOILER_EFF),
+      waste_label: 'DHW flue',
+    },
+    {
+      key: 'fans', label: 'Vent fans',
+      demand: fan_total,
+      delivered: fan_total,
+      enabled: true,
+      e_mwh: fan_total,
+      g_mwh: 0,
+      waste_mwh: vent_extract_unrecovered,
+      waste_label: 'Vent exhaust',
+    },
+    {
+      key: 'lighting', label: 'Lighting',
+      demand: c.lighting?.electricity_mwh ?? 0,
+      delivered: c.lighting?.electricity_mwh ?? 0,
+      enabled: true,
+      e_mwh: c.lighting?.electricity_mwh ?? 0,
+      g_mwh: 0,
+      waste_mwh: 0,
+    },
+    {
+      key: 'small_power', label: 'Small power',
+      demand: c.small_power?.electricity_mwh ?? 0,
+      delivered: c.small_power?.electricity_mwh ?? 0,
+      enabled: true,
+      e_mwh: c.small_power?.electricity_mwh ?? 0,
+      g_mwh: 0,
+      waste_mwh: 0,
+    },
   ]
 
-  const maxFlow = Math.max(...items.map(i => Math.max(i.demand, i.unit, i.e_mwh, i.g_mwh)), 1)
-  const W = 1000
-  const H = 580
+  // Unserved detection: demand exists but nothing is being delivered.
+  for (const it of items) it.isUnserved = it.demand > 0.01 && it.delivered < 0.01
+
+  // Single uniform scale: largest flow in the diagram maps to FLOW_MAX_PX.
+  // Carrier and waste rect heights are computed as the SUM of incoming flow
+  // widths, so the visual block size matches the cumulative flow width
+  // landing on it — Brief 38 Part 1's deliverable.
+  const allMagnitudes = []
+  for (const it of items) {
+    if (it.isUnserved) continue
+    allMagnitudes.push(it.demand, it.e_mwh, it.g_mwh, it.waste_mwh ?? 0)
+  }
+  const maxFlow = Math.max(...allMagnitudes.filter(v => v > 0), 1)
+  const FLOW_MAX_PX = 26
+  const scaleW = (mwh) => mwh > 0 ? Math.max(2, (mwh / maxFlow) * FLOW_MAX_PX) : 0
+
+  // Canvas geometry
+  const W = 1000, H = 580
   const padT = 50
-  const padB = 70
-  const col0X = 140    // demand right edge
-  const col1X = 480    // system right edge
-  const col2X = 820    // carriers right edge
-  const rightX = 920   // waste sink
-  const lanesY = 480   // total height for items
+  const col0X = 140, col1X = 480, col2X = 820, rightX = 920
+  const nodeW = 130
+  const lanesY = 460
   const laneH  = lanesY / items.length
-  const nodeW  = 130
-  const itemHmax = 50
 
-  const scaleW = (mwh) => Math.max(2, Math.min(itemHmax, (mwh / maxFlow) * itemHmax))
+  // ── Carrier rectangles: stack incoming flows contiguously, top-down ───────
+  // Each contribution remembers the y-coordinate at which its link enters
+  // the carrier (centre of the flow's slot on the carrier).
+  const carrierContribs = (carrier) => items
+    .filter(it => !it.isUnserved)
+    .map(it => ({ item: it, mwh: carrier === 'e' ? it.e_mwh : it.g_mwh }))
+    .filter(c => c.mwh > 0.01)
 
-  // Per-carrier totals
-  const totalElec = consumption.total?.electricity_mwh ?? 0
-  const totalGas  = consumption.total?.gas_mwh ?? 0
-  const carrierMax = Math.max(totalElec, totalGas, 1)
-  const carrierH = (mwh) => Math.max(8, (mwh / carrierMax) * 180)
+  const elecContribs = carrierContribs('e')
+  const gasContribs  = carrierContribs('g')
+  const elecH = elecContribs.reduce((s, c) => s + scaleW(c.mwh), 0)
+  const gasH  = gasContribs.reduce((s, c) => s + scaleW(c.mwh), 0)
+
+  const carrierGap = 24
+  const elecY0 = padT + 4
+  const elecY1 = elecY0 + elecH
+  const gasY0  = elecY1 + carrierGap
+  const gasY1  = gasY0 + gasH
+
+  let cursor = elecY0
+  for (const cc of elecContribs) { const w = scaleW(cc.mwh); cc.targetY = cursor + w / 2; cursor += w }
+  cursor = gasY0
+  for (const cc of gasContribs)  { const w = scaleW(cc.mwh); cc.targetY = cursor + w / 2; cursor += w }
+
+  // ── Waste rectangle: stack incoming waste contributions ────────────────────
+  const wasteContribs = items
+    .filter(it => !it.isUnserved && (it.waste_mwh ?? 0) > 0.01)
+    .map(it => ({ item: it, mwh: it.waste_mwh, label: it.waste_label }))
+  const wasteH = wasteContribs.reduce((s, c) => s + scaleW(c.mwh), 0)
+  const wasteY0 = padT + 4
+  cursor = wasteY0
+  for (const wc of wasteContribs) { const w = scaleW(wc.mwh); wc.targetY = cursor + w / 2; cursor += w }
+  const wasteTotal = wasteContribs.reduce((s, c) => s + c.mwh, 0)
+
+  const totalElec = c.total?.electricity_mwh ?? 0
+  const totalGas  = c.total?.gas_mwh ?? 0
 
   // Brief 28-IM-Polish POL-M2.
   return (
@@ -728,16 +838,18 @@ function SystemsSankey({ consumption, sysCfg }) {
           <p className="text-caption font-semibold text-navy">Energy flow — demand to system to fuel</p>
         </div>
         <div className="flex items-center gap-2">
-          <ChartTotalsBadge label="Σ elec" value_kwh={(consumption.total?.electricity_mwh ?? 0) * 1000} />
-          <ChartTotalsBadge label="Σ gas"  value_kwh={(consumption.total?.gas_mwh         ?? 0) * 1000} />
+          <ChartTotalsBadge label="Σ elec" value_kwh={totalElec * 1000} />
+          <ChartTotalsBadge label="Σ gas"  value_kwh={totalGas  * 1000} />
         </div>
       </div>
       <p className="text-xxs text-mid-grey mb-3">
         Left → middle → right: building demand, served by named systems,
-        consuming energy carriers. Width of each flow is proportional to
-        annual MWh. <span className="text-amber-700">Dashed red</span> = unserved
-        demand (system off). DHW heat-pump preheat shows in <span className="text-red-600 font-medium">red</span> (energy
-        flowing INTO an upstream heat pump, recovered by gas boiler downstream).
+        consuming energy carriers; heat that leaves the building shows on the
+        Waste column. Width of each flow is proportional to annual MWh.{' '}
+        <span className="text-red-600 font-medium">Red dotted</span> = unserved
+        demand (no system configured). DHW heat-pump preheat shows in{' '}
+        <span className="text-red-600 font-medium">red</span> (energy flowing
+        INTO an upstream heat pump, recovered by gas boiler downstream).
       </p>
 
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: H }}>
@@ -749,80 +861,123 @@ function SystemsSankey({ consumption, sysCfg }) {
           <text x={rightX + 40} y={28}>Waste</text>
         </g>
 
-        {/* Carrier bars on right */}
+        {/* ── Carrier rects sized to sum of incoming flow widths ──────────── */}
         <g>
-          <rect x={col2X - nodeW} y={padT} width={nodeW} height={carrierH(totalElec)} fill={FUEL_COLOURS.electricity} opacity={0.75} />
-          <text x={col2X - nodeW / 2} y={padT + carrierH(totalElec) / 2} fontSize="11" fill="white" textAnchor="middle" dominantBaseline="middle" fontWeight="600">Electricity {totalElec.toFixed(1)}</text>
-          <rect x={col2X - nodeW} y={padT + carrierH(totalElec) + 16} width={nodeW} height={carrierH(totalGas)} fill={FUEL_COLOURS.gas} opacity={0.75} />
-          <text x={col2X - nodeW / 2} y={padT + carrierH(totalElec) + 16 + carrierH(totalGas) / 2} fontSize="11" fill="white" textAnchor="middle" dominantBaseline="middle" fontWeight="600">Gas {totalGas.toFixed(1)}</text>
+          {elecH > 0 && (
+            <>
+              <rect x={col2X - nodeW} y={elecY0} width={nodeW} height={elecH}
+                fill={FUEL_COLOURS.electricity} opacity={0.85} rx={3} />
+              <text x={col2X - nodeW / 2} y={elecY0 + elecH / 2 - 7} fontSize="10"
+                fill="white" textAnchor="middle" fontWeight="500" dominantBaseline="middle">
+                Electricity
+              </text>
+              <text x={col2X - nodeW / 2} y={elecY0 + elecH / 2 + 8} fontSize="15"
+                fill="white" textAnchor="middle" fontWeight="700" dominantBaseline="middle">
+                {totalElec.toFixed(1)} MWh
+              </text>
+            </>
+          )}
+          {gasH > 0 && (
+            <>
+              <rect x={col2X - nodeW} y={gasY0} width={nodeW} height={gasH}
+                fill={FUEL_COLOURS.gas} opacity={0.85} rx={3} />
+              <text x={col2X - nodeW / 2} y={gasY0 + gasH / 2 - 7} fontSize="10"
+                fill="white" textAnchor="middle" fontWeight="500" dominantBaseline="middle">
+                Gas
+              </text>
+              <text x={col2X - nodeW / 2} y={gasY0 + gasH / 2 + 8} fontSize="15"
+                fill="white" textAnchor="middle" fontWeight="700" dominantBaseline="middle">
+                {totalGas.toFixed(1)} MWh
+              </text>
+            </>
+          )}
         </g>
 
-        {/* Waste sink */}
-        <g>
-          <rect x={rightX} y={padT} width={80} height={70} fill="#E5E7EB" stroke="#9CA3AF" />
-          <text x={rightX + 40} y={padT + 38} fontSize="10" fill="#6B7280" textAnchor="middle">Exhaust / heat rejection</text>
-        </g>
+        {/* ── Waste sink sized to sum of incoming waste widths ────────────── */}
+        {wasteH > 0 && (
+          <g>
+            <rect x={rightX} y={wasteY0} width={80} height={Math.max(60, wasteH)}
+              fill="#F3F4F6" stroke="#9CA3AF" rx={3} />
+            <text x={rightX + 40} y={wasteY0 + Math.max(60, wasteH) / 2 - 6}
+              fontSize="9" fill="#6B7280" textAnchor="middle" fontWeight="500">
+              Exhaust /
+            </text>
+            <text x={rightX + 40} y={wasteY0 + Math.max(60, wasteH) / 2 + 4}
+              fontSize="9" fill="#6B7280" textAnchor="middle" fontWeight="500">
+              heat rejection
+            </text>
+            <text x={rightX + 40} y={wasteY0 + Math.max(60, wasteH) / 2 + 18}
+              fontSize="11" fill="#374151" textAnchor="middle" fontWeight="700">
+              {wasteTotal.toFixed(1)} MWh
+            </text>
+          </g>
+        )}
 
-        {/* Items rows */}
+        {/* ── Items rows: demand + system + flows ─────────────────────────── */}
         {items.map((it, i) => {
           const cy = padT + laneH * (i + 0.5)
           const demandW = scaleW(it.demand)
-          const deliveredW = scaleW(it.unit)
-          const elecW = scaleW(it.e_mwh)
-          const gasW = scaleW(it.g_mwh)
-          const isUnserved = it.demand > 0.01 && it.unit < 0.01
-          const isAshpPreheat = it.key === 'dhw' && (it.fuel_mix?.heat_pump ?? 0) > 0
+          const isAshpPreheat = it.key === 'dhw' && dhw_is_ashp_preheat
+          const elecContrib = elecContribs.find(c => c.item.key === it.key)
+          const gasContrib  = gasContribs.find(c  => c.item.key === it.key)
+          const wasteContrib = wasteContribs.find(w => w.item.key === it.key)
+          const demandColour = DEMAND_COLOURS[it.key] ?? '#94A3B8'
+
           return (
             <g key={it.key}>
               {/* Demand node */}
-              <rect x={col0X - nodeW} y={cy - 14} width={nodeW} height={28} rx={4} fill={DEMAND_COLOURS[it.key] ?? '#94A3B8'} opacity={isUnserved ? 0.4 : 0.85} />
-              <text x={col0X - nodeW / 2} y={cy + 4} fontSize="11" fill="white" textAnchor="middle" fontWeight="600">{it.label}</text>
-              <text x={col0X - nodeW / 2} y={cy + 18} fontSize="9" fill="#334155" textAnchor="middle">{it.demand.toFixed(1)} MWh demand</text>
+              <rect x={col0X - nodeW} y={cy - 14} width={nodeW} height={28} rx={4}
+                fill={demandColour} opacity={it.isUnserved ? 0.45 : 0.9} />
+              <text x={col0X - nodeW / 2} y={cy + 4} fontSize="11" fill="white"
+                textAnchor="middle" fontWeight="600">{it.label}</text>
+              <text x={col0X - nodeW / 2} y={cy + 18} fontSize="9" fill="#334155"
+                textAnchor="middle">{it.demand.toFixed(1)} MWh demand</text>
 
-              {/* Link: demand → system (or unserved sink) */}
-              {isUnserved ? (
-                <g>
-                  <path
-                    d={pathLink(col0X, cy, rightX, padT + 110, demandW)}
-                    fill="none" stroke="#DC2626" strokeWidth={Math.max(2, demandW * 0.7)} strokeDasharray="6 4" opacity={0.7}
-                  />
-                  <text x={(col0X + rightX) / 2} y={(cy + padT + 110) / 2 - 8} fontSize="10" fill="#DC2626" fontWeight="600">unserved {it.demand.toFixed(1)}</text>
-                </g>
-              ) : (
-                <path
-                  d={pathLink(col0X, cy, col1X - nodeW, cy, deliveredW)}
-                  fill="none" stroke={DEMAND_COLOURS[it.key] ?? '#94A3B8'} strokeWidth={Math.max(2, deliveredW * 0.7)} opacity={0.55}
-                />
-              )}
-
-              {/* System node */}
-              {!isUnserved && (
+              {it.isUnserved ? (
                 <>
-                  <rect x={col1X - nodeW} y={cy - 14} width={nodeW} height={28} rx={4} fill="white" stroke="#0F766E" />
-                  <text x={col1X - nodeW / 2} y={cy + 4} fontSize="11" fill="#0C4A6E" textAnchor="middle">{systemLabel(it, sysCfg)}</text>
+                  {/* Short red dotted stub Demand → faint placeholder in System column */}
+                  <path d={pathLink(col0X, cy, col1X - nodeW, cy, 2)}
+                    fill="none" stroke="#EF4444" strokeWidth={2}
+                    strokeDasharray="3 3" opacity={0.85} />
+                  {/* Faint "No system configured" placeholder */}
+                  <rect x={col1X - nodeW} y={cy - 12} width={nodeW} height={24} rx={4}
+                    fill="#FAFAFA" stroke="#D4D4D4" strokeDasharray="3 2" strokeWidth="1" />
+                  <text x={col1X - nodeW / 2} y={cy + 4} fontSize="10" fill="#9CA3AF"
+                    textAnchor="middle" fontStyle="italic">No system configured</text>
+                </>
+              ) : (
+                <>
+                  {/* Demand → System link */}
+                  <path d={pathLink(col0X, cy, col1X - nodeW, cy, demandW)}
+                    fill="none" stroke={demandColour}
+                    strokeWidth={Math.max(2, demandW)} opacity={0.55} />
 
-                  {/* System → carrier(s) */}
-                  {it.e_mwh > 0.01 && (
-                    <path
-                      d={pathLink(col1X, cy - 4, col2X - nodeW, padT + carrierH(totalElec) / 2, elecW)}
+                  {/* System node */}
+                  <rect x={col1X - nodeW} y={cy - 14} width={nodeW} height={28} rx={4}
+                    fill="white" stroke="#0F766E" />
+                  <text x={col1X - nodeW / 2} y={cy + 4} fontSize="11" fill="#0C4A6E"
+                    textAnchor="middle">{systemLabel(it, sysCfg)}</text>
+
+                  {/* System → Electricity carrier */}
+                  {elecContrib && (
+                    <path d={pathLink(col1X, cy - 4, col2X - nodeW, elecContrib.targetY, scaleW(it.e_mwh))}
                       fill="none"
                       stroke={isAshpPreheat ? '#DC2626' : FUEL_COLOURS.electricity}
-                      strokeWidth={Math.max(2, elecW * 0.7)}
-                      opacity={0.55}
-                    />
+                      strokeWidth={Math.max(2, scaleW(it.e_mwh))} opacity={0.55} />
                   )}
-                  {it.g_mwh > 0.01 && (
-                    <path
-                      d={pathLink(col1X, cy + 4, col2X - nodeW, padT + carrierH(totalElec) + 16 + carrierH(totalGas) / 2, gasW)}
-                      fill="none" stroke={FUEL_COLOURS.gas} strokeWidth={Math.max(2, gasW * 0.7)} opacity={0.55}
-                    />
+
+                  {/* System → Gas carrier */}
+                  {gasContrib && (
+                    <path d={pathLink(col1X, cy + 4, col2X - nodeW, gasContrib.targetY, scaleW(it.g_mwh))}
+                      fill="none" stroke={FUEL_COLOURS.gas}
+                      strokeWidth={Math.max(2, scaleW(it.g_mwh))} opacity={0.55} />
                   )}
-                  {/* Cooling → waste */}
-                  {it.key === 'space_cooling' && it.unit > 0.01 && (
-                    <path
-                      d={pathLink(col1X, cy, rightX, padT + 35, scaleW(it.unit))}
-                      fill="none" stroke="#94A3B8" strokeWidth={Math.max(2, scaleW(it.unit) * 0.4)} opacity={0.45} strokeDasharray="4 4"
-                    />
+
+                  {/* System → Waste sink */}
+                  {wasteContrib && (
+                    <path d={pathLink(col1X, cy, rightX, wasteContrib.targetY, scaleW(wasteContrib.mwh))}
+                      fill="none" stroke="#94A3B8"
+                      strokeWidth={Math.max(2, scaleW(wasteContrib.mwh))} opacity={0.45} />
                   )}
                 </>
               )}

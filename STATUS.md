@@ -1,6 +1,40 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-19 — Brief 38 Parts 1 (redo) + 2: Sankey carrier sizing + unserved placeholder
+## 🚧 Session 2026-05-19 — Brief 38 redo on the correct component: SystemsSankey in SystemsModule.jsx
+
+**State:** `commit_in_flight` — Brief 38 Parts 1 + 2 + 3 all re-targeted at the right component after walkthrough revealed the previous two commits (`afab57b`, `fe8a692`) touched `SystemSankey.jsx`, which is only used by `SystemsZones.jsx`. The visible Sankey on `/systems` is a *different* inline component, `SystemsSankey` defined at `SystemsModule.jsx:676`. Both previous commits remained no-ops for what Chris saw on screen.
+
+**What landed in this commit:**
+
+- `frontend/src/components/modules/SystemsModule.jsx` (the inline `SystemsSankey` function, lines 676–) — full rewrite of the data-prep + render path.
+
+  - **Part 1 — Carrier-block sizing.** Replaced the dual-scale arrangement (carriers scaled by `mwh / carrierMax × 180`, flows scaled by `scaleW` capped at 50 px) with a single uniform scale (`scaleW = mwh / maxFlow × 26`). Carrier rect heights are computed as the sum of incoming flow widths (`elecH = Σ scaleW(it.e_mwh)`, same for gas). Each system's contribution is assigned its own y-slot on the carrier so the flow lands contiguously rather than every flow converging on the carrier's vertical centre. Carrier label is now a two-line block: small "Electricity" / "Gas" name + big bold MWh total (fontSize 15, weight 700).
+
+  - **Part 2 — Unserved demand placeholder.** When `it.isUnserved` (demand > 0.01 ∧ delivered < 0.01) the long cross-diagram dashed-red flow is gone. In its place: a faint grey rectangle in the System column with a 3-2 dashed border, italic label "No system configured", and a short red dotted (3-3) 2-px stub from the Demand node to it. Nothing flows to Waste from an unserved demand.
+
+  - **Part 3 — Waste flows from served systems.** Each served item now carries a `waste_mwh` derived from existing engine fields:
+    - Heating gas flue: `space_heating.gas_mwh × (1 − 0.92)` (off on Bridgewater).
+    - Cooling condenser rejection: `space_cooling.delivered_mwh + space_cooling.electricity_mwh` (heat from zone + electrical work input).
+    - DHW gas flue: `dhw.gas_mwh × (1 − 0.92)`.
+    - Vent extract non-recovered: `Σ ventilation[].exhaust_loss_mwh` (engine's per-system post-HRE exhaust loss; aggregated across MVHR + MEV systems).
+    A new System → Waste link is rendered per service with positive waste; the Waste rect is sized to the sum of incoming waste widths and shows the total MWh inside.
+
+  - The single header note now reads "Red dotted = unserved demand (no system configured). DHW heat-pump preheat shows in red …" (previously "Dashed red = unserved demand (system off)").
+
+**Previous two commits clarified.** `afab57b` ("Brief 38 Part 1: Carrier-block sizing matches flow stack") and `fe8a692` ("Brief 38 Parts 1 (redo) + 2") both modify `frontend/src/components/modules/systems/SystemSankey.jsx` — a *different* Sankey component that's imported only by `SystemsZones.jsx` (the alternative three-column view). The edits there are not harmful and remain in place as an unintended-but-coherent improvement to that view; the right component for Chris's `/systems` Sankey is the inline `SystemsSankey` inside `SystemsModule.jsx`, which this commit fixes.
+
+**Build:** clean, 8.45 s, 2.49 MB JS (gzip 692 kB).
+
+**Browser verification expected (Chris):** Open Systems → Sankey on Bridgewater.
+- Electricity + Gas carrier blocks now hug the sum of the flow widths landing on them, with a prominent bold MWh figure centred on each block.
+- Heating (off on Bridgewater) shows a small faint grey "No system configured" placeholder in the System column with a thin red dotted stub from the Heating demand node; no cross-diagram flow to Waste.
+- The Waste rect now receives links from served systems: cooling-condenser rejection, DHW flue, and aggregated vent exhaust (heating flue is zero because heating is off). Waste rect height ∝ sum of incoming flow widths, with the total MWh shown inside.
+
+**Next:** walkthrough confirms numbers + visual; commit Part 3 close (archive brief, repoint `current.md`, final STATUS).
+
+---
+
+## 🚫 Session 2026-05-19 — Brief 38 Parts 1 (redo) + 2 [SUPERSEDED — wrong component]
 
 **State:** `commit_in_flight` — Brief 38 Part 1 re-attempt (previous `afab57b` shipped but failed walkthrough) folded together with Part 2 (unserved-demand placeholder).
 
