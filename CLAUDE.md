@@ -59,13 +59,17 @@ These rules were learned the hard way during the May 2026 audit and dynamic-engi
 
     The risk of Pattern C is silent drift: a refinement lands in one state and the follow-up in the others never happens (e.g. Brief 33/34 added flow_mode dispatch to State 1; State 2 and inline-legacy received it eight briefs later via Brief 39).
 
-    To prevent recurrence: any commit that changes the physics of an envelope-only term (conduction, thermal bridging, infiltration, permanent vents, solar transmission, glazing transmission) in State 1 MUST land the equivalent change in State 2 AND inline-legacy in the same commit. Not in follow-ups. Not as TODOs. The commit is incomplete until all three locations reflect the new physics.
+    To prevent recurrence: any commit that changes the physics of an envelope-only term (conduction, thermal bridging, infiltration, **permanent vents, operable openings — per-opening flow_mode dispatch including stack contribution for temperature-mode**, solar transmission, glazing transmission) in State 1 MUST land the equivalent change in State 2 AND inline-legacy in the same commit. Not in follow-ups. Not as TODOs. The commit is incomplete until all three locations reflect the new physics.
 
     If a state genuinely requires different physics (e.g. the gains-warmed T_air trace produces a different integrand shape, or inline-legacy uses a simplified `sysDefaults` model), the commit message must explicitly state why the locations diverge and what the divergence means. Silent divergence is the failure mode.
 
     Helpers that are pure functions (validators like `resolveFlowMode`, lookups like `computeCd`) are module-scoped and shared across locations — those don't fall under this rule because they don't contain integration logic. The rule applies to integration-bearing code: the loops that walk hours/days/months and sum into demand integrals.
 
-    (Brief 39, May 2026. Audit chain: `docs/audit/39_state2_permanent_vent_diagnosis.md` → `docs/audit/39_calculation_flow_map.md` → Brief 39 Parts 1–6.)
+    **Structural mirror-checks (do State 1 and State 2 agree with each other) are necessary but not sufficient.** A periodic *correlation-correctness* check — does the shared correlation match current best-practice physics — is also required. The Brief 41 case: State 1 and State 2 were faithfully mirroring each other (Brief 39 Part 3 verified this), but both were running cross-flow-only physics that Brief 33/34 had already replaced for permanent vents. Mirror-correctness ≠ physics-correctness. The structural mirror check passed; the correlation hadn't been swept into the new dispatch. A correlation-correctness audit pass should accompany every Brief 14-class change so the parity rule is reinforced by an independent check on the *physics*, not just the *structure*.
+
+    The rule's spirit applies to UI surfaces too: two implementations of the same control across modules create the same drift risk as two implementations of the same engine path. Brief 41 Part 7's shared `BuildingWideOpeningsControls` component (and its successor patterns) is the right shape — single source of truth, both modules wire to the same data, reactivity guaranteed.
+
+    (Brief 39, May 2026. Audit chain: `docs/audit/39_state2_permanent_vent_diagnosis.md` → `docs/audit/39_calculation_flow_map.md` → Brief 39 Parts 1–6. Extended by Brief 41 Parts 0–7 + Part 6 close: operable openings, mirror-vs-physics-correctness, UI parity.)
 
 ---
 

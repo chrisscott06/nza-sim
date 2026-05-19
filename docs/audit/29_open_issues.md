@@ -349,3 +349,22 @@ By severity (after Brief 30 Phase 1.0 re-diagnosis 2026-05-18):
 | Fix scope | Single-line fix: read both possible names: `instantResult?.eui_kWh_m2 ?? instantResult?.eui_kwh_per_m2`. **Not in scope of Brief 39** — logged here for a future small-fix pass. |
 | Why this is currently tolerable | The dashboard shows "—" instead of a number in the no-simulation case. Cosmetic; no decision impact. |
 | Cross-references | `docs/audit/39_calculation_flow_map.md` "Inline-legacy rationalisation — deferred" section §"Consumer audit findings". |
+
+---
+
+## #17 — Operable-opening flow_mode dispatch absent (same class as Issue #2)
+
+| Field | Value |
+|---|---|
+| Module | Building (envelope-only), Operation, Internal Gains |
+| Engine | Static (State 1 + State 2 + inline-legacy) |
+| Severity | **S2** — wrong-numbers, bounded magnitude depending on opening size, visible to user; not S3 because the system isn't physically delivering service through an always-open opening in production buildings. |
+| Status | **FIXED** by Brief 41 Parts 0–7 (commits `6c99373` Part 0 diagnostic, `4b3b984` Part 1 engine dispatch, `68aca29` Part 2 schema cleanup, `d72a216` Part 3 migration, `afdcb51` Part 4 UI, `a5f3d5c` Part 5 reconciliation code-side, `5bbdbd1` Part 7 UI mirror). Per-opening cd/flow_mode UX is Brief 42's territory. |
+| Discovered | Bridgewater walkthrough 2026-05-19 (4 m² always-open door surfaced 646.3 MWh annual loss). |
+| Location | `frontend/src/utils/instantCalc.js`:1354 (State 1 Q_wind), 2718 (State 2 Q_wind), 5255 (inline-legacy Q_window) — all pre-fix. |
+| Current value (pre-fix) | Bridgewater 4 m² × 2 m permanent door: 646.3 MWh/yr (cross-flow correlation on UK coastal weather). |
+| Expected value (post-fix) | Single-digit to low-double-digit MWh under single_sided dispatch with building-wide cd 0.29 (10-30 MWh physics-defensible bracket; no calibration target). Bridgewater post-fix value to be backfilled into `docs/audit/41_operable_openings_diagnostic.md` §"Brief 41 Part 5 — Bridgewater reconciliation" after the walkthrough. Walkthrough rolls into Brief 42's per-opening UI verification. |
+| Root cause | Brief 28e Gate E2 introduced per-opening wind+stack physics with cross-flow Q_wind formula (`Cd × A × √(Cw × v²)`). Brief 33/34 added flow_mode dispatch for permanent vents only; operable openings missed the sweep. Brief 39 Part 3 verified the State 1 → State 2 mirror was faithful but didn't audit the correlation itself — *mirror-correctness ≠ physics-correctness*. |
+| Same class as | Issue #2 (permanent-vent flow_mode dispatch absent in State 2 + inline-legacy — fixed by Brief 39). |
+| Fix delivered | Three-location parity per CLAUDE.md Rule 14: State 1 + State 2 + inline-legacy all dispatch on flow_mode for operable openings. Temperature-mode keeps stack term (height_m retained); always/scheduled modes wind-only. |
+| Cross-references | `docs/audit/41_operable_openings_diagnostic.md` (Part 0 audit), `docs/audit/29_permanent_vent_methodology.md` §"Operable openings: wind-vs-wind+stack physics split by control mode", CLAUDE.md Rule 14 (extended to call out operable openings). |

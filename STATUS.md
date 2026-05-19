@@ -1,5 +1,34 @@
 # NZA SIMULATE — Status
 
+## 🟢 Session 2026-05-19 — Brief 41 close + Brief 42 open (housekeeping)
+
+**State:** `commit_in_flight` — formal close of Brief 41 (Operable openings: unified physics) and opening of Brief 42 (Per-opening C_d and flow_mode) in one housekeeping commit. Brief 41 substantive work shipped in `6c99373`–`5bbdbd1`; this commit lands the documentation hygiene per Process Rule 7.
+
+**Brief 41 close deliverables in this commit:**
+- `CLAUDE.md` Rule 14 extended:
+  - "Operable openings — per-opening flow_mode dispatch including stack contribution for temperature-mode" added to the list of envelope-only terms that require three-location parity
+  - **Mirror-correctness ≠ physics-correctness** paragraph added — structural mirror checks (does State 1 agree with State 2) are necessary but not sufficient; a correlation-correctness audit on the *physics* must accompany every Brief 14-class change. The Brief 41 case: State 1 and State 2 faithfully mirrored each other (Brief 39 Part 3 verified this) but both ran cross-flow-only physics that Brief 33/34 had replaced for permanent vents
+  - UI parity note added — two implementations of the same control across modules carry the same drift risk as two engine paths. Brief 41 Part 7's shared `BuildingWideOpeningsControls` is the right shape; Brief 42 supersedes its UI design but the principle (single source of truth) remains
+- `docs/audit/29_open_issues.md` Issue #17 marked **FIXED** by Brief 41 Parts 0–7 with citation chain (`6c99373` Part 0 diagnostic → `5bbdbd1` Part 7 UI mirror); same class as Issue #2; per-opening cd/flow_mode UX deferred to Brief 42
+- `docs/briefs/active/41_operable_openings_unified_physics.md` → `docs/briefs/archive/41_operable_openings_unified_physics_COMPLETED.md` (git mv)
+- `docs/briefs/current.md` updated: Brief 41 archived row appended; Brief 42 marked active
+
+**Brief 42 open deliverables in this commit:**
+- `docs/briefs/active/42_per_opening_cd_flowmode.md` staged — six Parts: (1) schema per-opening cd + flow_mode, (2) engine three-location parity, (3) migration + Bridgewater audit, (4) Building UI per-facade, (5) Operation UI per-opening, (6) walkthrough + close
+- Per-type defaults at creation: door cd 0.60 / cross; window cd 0.55 / single_sided; vent / louvre / fixed-grille cd 0.40 / single_sided
+- Site exposure (C_w) remains building-wide — it's a property of where the building sits, not of any individual opening
+- Authorisation: chat-form 2026-05-19 ("Lets go" → "Brief 42 Part 1 authorised — go", standard six-Part run with up-front authorisation through Part 5, walkthrough pause before Part 6)
+
+**Brief 41 walkthrough verification rolls into Brief 42's walkthrough** — Brief 42 supersedes Brief 41 Part 7's building-wide UI design and validates the engine work from Brief 41 Parts 1–5 by exercise of the per-opening UI.
+
+**No engine code in this commit** — documentation hygiene only. Brief 42 Part 1 follows immediately as a separate commit with the schema changes.
+
+**Build:** not re-run (no JS / Python touched).
+
+**Next:** Brief 42 Part 1 — DEFAULT_PARAMS gain per-opening `cd` + `flow_mode` on F1–F4 permanent openings and on each operable opening; `withMode` allowlist passes them through; `newOpening` factory seeds per-type defaults; building-wide `openings.cd` and `openings.flow_mode` removed; `openings.site_exposure` stays.
+
+---
+
 ## 🚧 Session 2026-05-19 — Brief 41 Part 7: Building-wide flow controls mirrored into Operation module
 
 **State:** `commit_in_flight` — Brief 41 Part 7. Walkthrough surfaced a UX gap: the engine work (Parts 1-5) correctly unified operable-opening flow with permanent vents under building-wide `cd` / `flow_mode` / `site_exposure`, but the controls were only exposed in the Building module's Permanent openings panel. Operation's openings panel had only a static footnote pointing to Building. Part 7 fixes that by surfacing the same controls inline in Operation, with both modules wired to the same `params.openings` for reactive consistency.
