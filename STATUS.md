@@ -1,5 +1,37 @@
 # NZA SIMULATE — Status
 
+## 🟢 Session 2026-05-19 — Brief 42 Part 4: Building UI per-facade C_d + flow_mode
+
+**State:** `commit_in_flight` — Brief 42 Part 4. The Brief 41 Part 7 `BuildingWideOpeningsControls.jsx` shared component is **deleted**. The Building Permanent Openings panel now has per-facade C_d + flow_mode controls inline beneath each facade's area row; site exposure (C_w) stays as the only remaining building-wide control. Operation's invocation is also retired in this commit to keep the build green; the per-opening UI replacement in Operation lands in Part 5.
+
+**`frontend/src/components/modules/building/BuildingDefinition.jsx`:**
+- Removed `BuildingWideOpeningsControls` import; added `cwProvenance` import (for the per-facade C_w display on the site-exposure control)
+- Added `setFacadeCd(face, v)` and `setFacadeFlowMode(face, v)` updaters — write to `params.openings.{face}.cd` / `.flow_mode` via the existing two-level deep-merge reducer landed in Part 1
+- Permanent openings section rebuilt:
+  - **Site exposure dropdown** at top (with derived C_w display) — only remaining building-wide control
+  - **Per-facade rows**, each with:
+    - The original area row (checkbox + label + area slider + numeric input + "m²")
+    - When the facade is included (area > 0): a new physics row showing per-facade `C_d` slider (range 0.15–0.65) + `flow_mode` dropdown (single_sided / cross). The slider tooltip references `docs/audit/29_permanent_vent_methodology.md` for typical values
+    - Border separator between facades for visual grouping
+  - Footer reference line listing the anchor C_d values (0.25 trickle vent / 0.40 louvre / 0.60 open window)
+- The brief's "anchor labels" requirement (step 4.2) handled as a single reference line rather than per-slider labels — keeps the panel quiet when all four facades are included
+
+**`frontend/src/components/modules/OperationModule.jsx`:**
+- Removed `BuildingWideOpeningsControls` import + invocation (Part 4 deletes the file)
+- Replaced with a slim "Site exposure (C_w) is configured in Building → Permanent openings" inline note. The per-opening editor card gets its C_d + flow_mode controls in Part 5
+
+**`frontend/src/components/modules/building/BuildingWideOpeningsControls.jsx` — DELETED** (`git rm`). Brief 41 Part 7's shared-component approach is superseded — building-wide cd + flow_mode no longer exist as shared state.
+
+**Build:** clean, 8.90 s, 2.50 MB JS (gzip 694 kB) — unchanged shape.
+
+**Verification (visual, Chris):**
+- Building → Permanent openings: site exposure dropdown at top with C_w value; per-facade rows showing area slider + (when included) C_d slider + flow_mode dropdown; C_d anchor reference line at bottom
+- Operation: the "Building-wide ventilation physics" panel header + three-control block is gone; replaced with a single line pointing back to Building. The per-opening editor cards still don't show C_d / flow_mode controls — that's Part 5
+
+**Next:** Part 5 — Operation UI per-opening controls. Each opening editor card gains a C_d slider + flow_mode dropdown; the + Door / + Window / + Vent buttons already seed the per-type defaults (Brief 42 Part 1 work).
+
+---
+
 ## 🟢 Session 2026-05-19 — Brief 42 Part 3: Per-opening cd/flow_mode migration
 
 **State:** `commit_in_flight` — Brief 42 Part 3. One-shot migration script + Bridgewater audit doc. The script copies each project's persisted building-wide `openings.cd` and `openings.flow_mode` onto every per-facade entry and every operable opening, then removes the now-orphaned building-wide fields. `openings.site_exposure` stays building-wide per Principle 3. Idempotent.

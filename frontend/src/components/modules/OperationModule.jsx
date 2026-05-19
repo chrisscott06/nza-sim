@@ -39,7 +39,6 @@ import { useHourlySolar } from '../../hooks/useHourlySolar.js'
 import { calculateInstant, synthesiseOperableOpeningsFromLegacy } from '../../utils/instantCalc.js'
 import { SCHEDULES, allScheduleNames } from '../../utils/scheduleLibrary.js'
 import BuildingViewer3D from './building/BuildingViewer3D.jsx'
-import BuildingWideOpeningsControls from './building/BuildingWideOpeningsControls.jsx'
 import HeatBalance from './balance/HeatBalance.jsx'
 import WeatherSynchronisedProfile from '../profiles/WeatherSynchronisedProfile.jsx'
 // Brief 37 Part 3 (2026-05-18): the legacy profiles/ScheduleEditor was
@@ -346,23 +345,16 @@ export default function OperationModule() {
         <div className="flex-shrink-0 w-[300px] bg-white border-r border-light-grey overflow-y-auto">
           <div className="p-3 space-y-3">
 
-            {/* Brief 41 Part 7 (2026-05-19): building-wide flow controls
-                surfaced at the top of the openings panel. Same three controls
-                shown in Building → Permanent openings; both modules wire to
-                params.openings, so changes propagate reactively across views.
-                These apply to EVERY opening on the building — permanent
-                louvres AND operable doors / windows / vents. */}
-            <div className="bg-off-white border border-light-grey rounded-lg p-2.5">
-              <p className="text-xxs uppercase tracking-wider text-mid-grey mb-2">
-                Building-wide ventilation physics
-              </p>
-              <BuildingWideOpeningsControls
-                openings={params?.openings ?? {}}
-                onChange={updates => updateParam('openings', updates)}
-              />
-              <p className="text-xxs text-mid-grey/70 mt-2 leading-tight">
-                Applies to every opening — permanent louvres in Building plus all operable openings here. Same controls appear in <span className="text-navy/80">Building → Permanent openings</span>.
-              </p>
+            {/* Brief 42 Part 4 (2026-05-19): the Brief 41 Part 7
+                BuildingWideOpeningsControls invocation is retired. Each
+                opening now declares its own C_d + flow_mode in its
+                editor card (per-opening UI lands in Brief 42 Part 5).
+                Site exposure (C_w) stays building-wide — configured in
+                Building → Permanent openings. */}
+            <div className="text-xxs text-mid-grey/80 leading-snug bg-off-white border border-light-grey rounded-lg px-2.5 py-2">
+              Site exposure (C<sub>w</sub>) is configured in{' '}
+              <NavLink to="/building" className="text-navy underline">Building → Permanent openings</NavLink>
+              {' '}— it applies to every opening on this building.
             </div>
 
             {/* Legacy conversion CTA (operable_openings empty + legacy present) */}

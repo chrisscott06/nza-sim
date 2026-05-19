@@ -40,7 +40,7 @@ import { useWeather } from '../../../context/WeatherContext.jsx'
 import { useHourlySolar } from '../../../hooks/useHourlySolar.js'
 import { useSimulationBalance } from '../../../hooks/useSimulationBalance.js'
 import { calculateInstant } from '../../../utils/instantCalc.js'
-import BuildingWideOpeningsControls from './BuildingWideOpeningsControls.jsx'
+import { cwProvenance } from '../../../utils/openingCoefficients.js'
 
 // ── Layout: resizable columns ────────────────────────────────────────────────
 // Persisted column widths so users can size to their screen / focus area.
@@ -639,13 +639,27 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
       setLouvreFor(face, 0)
     }
   }
-  // Brief 34 (2026-05-18): the per-facade opening geometry helpers from
-  // Brief 33 Part 2 (setOpeningType / setOpeningDim / toggleOpeningResistance)
-  // have been removed alongside the per-facade UI. The Permanent Openings
-  // panel now exposes a single building-wide C_d slider — wired through the
-  // shared BuildingWideOpeningsControls component (Brief 41 Part 7).
-  // setOpeningsCd helper retired; the component's onChange handler does the
-  // updateParam call directly.
+  // Brief 42 Part 4 (2026-05-19): per-facade C_d + flow_mode replaces
+  // Brief 41 Part 7's building-wide BuildingWideOpeningsControls shared
+  // component (file deleted). Each facade with a non-zero louvre area
+  // declares its own physics — a windward sharp-edged louvre and a
+  // sheltered trickle vent on the same building no longer share one
+  // slider. Site exposure (C_w) stays building-wide — it's a property
+  // of where the building sits, not of any individual opening (Brief 42
+  // Principle 3). The per-facade controls write to the per-face
+  // `openings.{face}.cd` / `openings.{face}.flow_mode` schema fields
+  // landed in Part 1; engine reads land in Part 2; migration Part 3
+  // copies persisted building-wide values onto each facade for
+  // behaviour preservation at migration time.
+  const site_exposure = openings.site_exposure ?? 'normal'
+  const cwp = cwProvenance(site_exposure)
+
+  const setFacadeCd = (face, v) => {
+    updateParam('openings', { [face]: { cd: v } })
+  }
+  const setFacadeFlowMode = (face, v) => {
+    updateParam('openings', { [face]: { flow_mode: v } })
+  }
 
   const anyOpenings = ['north','south','east','west'].some(f =>
     (openings?.[f]?.louvre_area_m2 ?? 0) > 0
@@ -816,51 +830,107 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
               mechanical ventilation lives in /systems — neither belong here.
               See CLAUDE.md "Module scopes" + Brief 33 §"Scope statement". */}
         <CollapsibleSection title={`Permanent openings${anyOpenings ? ' · active' : ''}`} defaultOpen={anyOpenings}>
-          {/* Brief 41 Part 7 (2026-05-19): three building-wide controls
-              (flow_mode, cd, site_exposure) factored into the shared
-              BuildingWideOpeningsControls component, also surfaced in the
-              Operation module's openings panel. Both consumers wire to the
-              same params.openings so changes propagate reactively across
-              modules. Single source of truth — see component header for
-              the mirror-correctness rationale. */}
-          <BuildingWideOpeningsControls
-            openings={openings}
-            onChange={updates => updateParam('openings', updates)}
-          />
+          {/* Brief 42 Part 4 (2026-05-19): per-facade C_d + flow_mode. The
+              Brief 41 Part 7 shared BuildingWideOpeningsControls component
+              is retired — each facade declares its own physics now.
+              Site exposure (C_w) remains the only building-wide control
+              here. */}
+
+          {/* Site exposure — only remaining building-wide control */}
+          <div className="mb-3">
+            <div className="flex items-baseline justify-between gap-2 mb-0.5">
+              <label className="text-xxs text-mid-grey">Site exposure</label>
+              <span
+                className="text-xxs text-navy/70 tabular-nums cursor-help"
+                title={`C_w = ${cwp.text}`}
+              >
+                C<sub>w</sub> = <span className="font-semibold text-navy">{cwp.cw.toFixed(2)}</span>
+              </span>
+            </div>
+            <select
+              value={site_exposure}
+              onChange={e => updateParam('openings', { site_exposure: e.target.value })}
+              className="w-full px-2 py-1 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-teal cursor-pointer"
+              title="Wind-pressure coefficient: sheltered = 0.05, normal = 0.10, exposed = 0.20"
+            >
+              <option value="sheltered">Sheltered</option>
+              <option value="normal">Normal</option>
+              <option value="exposed">Exposed</option>
+            </select>
+          </div>
 
           <p className="text-xxs text-mid-grey mt-2 mb-1">Louvres (always open, m² per facade)</p>
           {FACADES.map(fac => {
-            const area = Number(openings?.[fac.key]?.louvre_area_m2 ?? 0)
-            const included = area > 0
+            const area      = Number(openings?.[fac.key]?.louvre_area_m2 ?? 0)
+            const included  = area > 0
+            const facCd     = typeof openings?.[fac.key]?.cd === 'number' ? openings[fac.key].cd : 0.40
+            const facFlow   = openings?.[fac.key]?.flow_mode ?? 'single_sided'
             return (
-              <div key={`louvre-${fac.key}`} className="flex items-center gap-1 mb-1">
-                <input
-                  type="checkbox"
-                  checked={included}
-                  onChange={e => toggleLouvreInclude(fac.key, e.target.checked)}
-                  className="accent-navy w-3 h-3 flex-shrink-0"
-                  title={`Include louvre on ${facadeLabel(fac.num, orientation)}`}
-                />
-                <span className={`text-xxs w-14 flex-shrink-0 ${included ? 'text-navy' : 'text-light-grey'}`}>
-                  {facadeLabel(fac.num, orientation)}
-                </span>
-                <input
-                  type="range" min={0} max={5} step={0.1}
-                  value={area}
-                  onChange={e => setLouvreFor(fac.key, Number(e.target.value))}
-                  disabled={!included}
-                  className="flex-1 h-[3px] accent-navy disabled:opacity-30"
-                />
-                <LouvreAreaInput
-                  value={area}
-                  disabled={!included}
-                  onCommit={v => setLouvreFor(fac.key, v)}
-                  title={`${facadeLabel(fac.num, orientation)} louvre area (m²)`}
-                />
-                <span className={`text-xxs w-4 ${included ? 'text-mid-grey' : 'text-light-grey'}`}>m²</span>
+              <div key={`louvre-${fac.key}`} className={`mb-1.5 ${included ? 'pb-1.5 border-b border-light-grey/40 last:border-b-0 last:pb-0' : ''}`}>
+                {/* Area row — existing layout */}
+                <div className="flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={included}
+                    onChange={e => toggleLouvreInclude(fac.key, e.target.checked)}
+                    className="accent-navy w-3 h-3 flex-shrink-0"
+                    title={`Include louvre on ${facadeLabel(fac.num, orientation)}`}
+                  />
+                  <span className={`text-xxs w-14 flex-shrink-0 ${included ? 'text-navy' : 'text-light-grey'}`}>
+                    {facadeLabel(fac.num, orientation)}
+                  </span>
+                  <input
+                    type="range" min={0} max={5} step={0.1}
+                    value={area}
+                    onChange={e => setLouvreFor(fac.key, Number(e.target.value))}
+                    disabled={!included}
+                    className="flex-1 h-[3px] accent-navy disabled:opacity-30"
+                  />
+                  <LouvreAreaInput
+                    value={area}
+                    disabled={!included}
+                    onCommit={v => setLouvreFor(fac.key, v)}
+                    title={`${facadeLabel(fac.num, orientation)} louvre area (m²)`}
+                  />
+                  <span className={`text-xxs w-4 ${included ? 'text-mid-grey' : 'text-light-grey'}`}>m²</span>
+                </div>
+                {/* Physics row — per-facade C_d slider + flow_mode dropdown.
+                    Only shown when the facade has area, to keep the panel
+                    quiet when nothing's opted in. */}
+                {included && (
+                  <div className="grid grid-cols-[1fr_auto] gap-2 mt-1 pl-5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xxs text-mid-grey w-6">C<sub>d</sub></span>
+                      <input
+                        type="range" min={0.15} max={0.65} step={0.01}
+                        value={facCd}
+                        onChange={e => setFacadeCd(fac.key, Number(e.target.value))}
+                        className="flex-1 h-[3px] accent-navy"
+                        title="Discharge coefficient — see docs/audit/29_permanent_vent_methodology.md for typical values (trickle vent 0.25 / louvre 0.40 / open window 0.60)"
+                      />
+                      <span className="text-xxs text-navy tabular-nums w-9 text-right">{facCd.toFixed(2)}</span>
+                    </div>
+                    <select
+                      value={facFlow}
+                      onChange={e => setFacadeFlowMode(fac.key, e.target.value)}
+                      className="px-1 py-0.5 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-teal cursor-pointer"
+                      title="Flow correlation: single-sided (BS EN 16798-7 §6.4 — one façade per room / cellular) or cross-flow (CIBSE Guide A §4.6 — opposite façades with open air path)"
+                    >
+                      <option value="single_sided">Single-sided</option>
+                      <option value="cross">Cross-flow</option>
+                    </select>
+                  </div>
+                )}
               </div>
             )
           })}
+
+          {/* Anchor reference for the per-facade C_d sliders */}
+          {anyOpenings && (
+            <p className="text-xxs text-mid-grey/70 mt-2 leading-tight">
+              C<sub>d</sub> reference: <span className="tabular-nums">0.25</span> trickle vent · <span className="tabular-nums">0.40</span> louvre · <span className="tabular-nums">0.60</span> open window. See methodology doc for typical values.
+            </p>
+          )}
         </CollapsibleSection>
 
         {/* ── Fabric ── */}
