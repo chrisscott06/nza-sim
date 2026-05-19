@@ -56,11 +56,12 @@ import LiveResultsStrip from '../shared/LiveResultsStrip.jsx'
 const ACCENT = '#00AEEF'   // systems theme — cyan-bright
 
 const CENTRE_TABS = [
-  { id: 'sankey',   label: 'Sankey' },
-  { id: 'profiles', label: 'Profiles' },
+  { id: 'sankey',    label: 'Sankey' },
+  { id: 'profiles',  label: 'Profiles' },
   { id: 'schedule', label: 'Schedule' },
-  { id: 'monthly',  label: 'Monthly' },
-  { id: 'summary',  label: 'Summary' },
+  { id: 'monthly',   label: 'Monthly' },
+  { id: 'rejection', label: 'Rejection' },   // Brief 38 (2026-05-19): heat-rejection breakdown
+  { id: 'summary',   label: 'Summary' },
 ]
 
 const FUEL_COLOURS = {
@@ -298,6 +299,9 @@ export default function SystemsModule() {
             )}
             {consumption && centreView === 'monthly' && (
               <SystemsMonthly consumption={consumption} result={result} />
+            )}
+            {consumption && centreView === 'rejection' && (
+              <SystemsRejection consumption={consumption} sysCfg={sysCfg} />
             )}
             {consumption && centreView === 'summary' && (
               <SystemsSummary consumption={consumption} />
@@ -1046,6 +1050,214 @@ function ribbonPath(x0, y0_top, y0_bot, x1, y1_top, y1_bot) {
          `L ${x1} ${y1_bot} ` +
          `C ${cp} ${y1_bot}, ${cp} ${y0_bot}, ${x0} ${y0_bot} ` +
          `Z`
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   CENTRE — REJECTION (Brief 38, 2026-05-19)
+
+   Heat-rejection breakdown — what leaves the building via system pathways.
+   Intentionally separate from the main Sankey: cooling condenser rejection
+   alone exceeds cooling demand (because reject = delivered + electrical work
+   input), so combining it into the demand-driven Sankey distorts the layout.
+
+   Sources surfaced here:
+     - Cooling condenser:      cooling_delivered + cooling_electricity
+                               (heat pulled from zone + electrical work in,
+                               both leave through the outdoor unit)
+     - Mech vent exhaust:      Σ ventilation[].exhaust_loss_mwh
+                               (engine's per-system post-HRE exhaust loss;
+                               broken out per system here so the user can
+                               see which fan is throwing the most heat out)
+     - DHW flue:               dhw.gas_mwh × (1 - 0.92)  approx, 92% boiler
+     - Heating flue:           space_heating.gas_mwh × (1 - 0.92)  approx
+
+   Out of scope: fabric loss + infiltration (those live in the Building
+   module's heat-balance view); ASHP-DHW outdoor-unit "rejection" is
+   negative (it ABSORBS heat from outdoor air to deliver hot water — not
+   a rejection at all).
+   ─────────────────────────────────────────────────────────────────────── */
+function SystemsRejection({ consumption, sysCfg }) {
+  const c = consumption ?? {}
+
+  // Category totals
+  const cooling_reject = (c.space_cooling?.delivered_mwh ?? 0) + (c.space_cooling?.electricity_mwh ?? 0)
+  const dhw_flue       = (c.dhw?.gas_mwh ?? 0) * (1 - 0.92)
+  const heat_flue      = (c.space_heating?.gas_mwh ?? 0) * (1 - 0.92)
+  const ventList       = c.ventilation ?? []
+  const vent_exhaust   = ventList.reduce((s, v) => s + (v.exhaust_loss_mwh ?? 0), 0)
+
+  const categories = [
+    {
+      key:    'cooling',
+      label:  'Cooling condenser',
+      mwh:    cooling_reject,
+      colour: '#00AEEF',
+      note:   c.space_cooling?.seer_effective != null
+        ? `Cooling delivered ${(c.space_cooling.delivered_mwh ?? 0).toFixed(1)} MWh + electrical work ${(c.space_cooling.electricity_mwh ?? 0).toFixed(1)} MWh, both leave via the outdoor condenser. EER ${c.space_cooling.seer_effective.toFixed(1)}.`
+        : 'Heat pulled from the zone + electrical work in, both leave via the outdoor condenser.',
+    },
+    {
+      key:    'vent_exhaust',
+      label:  'Mech vent exhaust',
+      mwh:    vent_exhaust,
+      colour: '#14B8A6',
+      note:   `Heating-season vent loss after HRE recovery. ${ventList.length} ventilation system${ventList.length === 1 ? '' : 's'}; per-system breakdown below.`,
+    },
+    {
+      key:    'dhw_flue',
+      label:  'DHW flue',
+      mwh:    dhw_flue,
+      colour: '#EC4899',
+      note:   '~8 % of DHW gas input leaves as flue loss on a 92 %-efficient boiler. Recovery opportunity: flue-gas heat-recovery (FGHR) or condensing-boiler tuning.',
+      hidden: (c.dhw?.gas_mwh ?? 0) < 0.01,
+    },
+    {
+      key:    'heat_flue',
+      label:  'Heating flue',
+      mwh:    heat_flue,
+      colour: '#DC2626',
+      note:   '~8 % of heating gas input leaves as flue loss on a 92 %-efficient boiler.',
+      hidden: (c.space_heating?.gas_mwh ?? 0) < 0.01,
+    },
+  ].filter(cat => !cat.hidden && cat.mwh > 0.01)
+
+  const totalReject = categories.reduce((s, cat) => s + cat.mwh, 0)
+  const maxCat      = Math.max(1, ...categories.map(c => c.mwh))
+
+  // Per-vent-system breakdown (separate table below the categories)
+  const ventListCfg = sysCfg.ventilation ?? []
+  const ventRows = ventList.map((v, vi) => {
+    const cfg = ventListCfg[vi]
+    const name = cfg?.name ?? v.name ?? v.id ?? `vent_${vi + 1}`
+    return {
+      key: v.id ?? name,
+      label: fmtSys(name),
+      exhaust_mwh:  v.exhaust_loss_mwh   ?? 0,
+      recovery_mwh: v.hre_recovery_mwh   ?? 0,
+      fan_mwh:      v.fan_electricity_mwh ?? 0,
+      is_mvhr:      (cfg?.type ?? '').toLowerCase().includes('mvhr')
+                 || (v.id ?? '').toLowerCase().includes('mvhr')
+                 || (v.hre_recovery_mwh ?? 0) > 0.01,
+    }
+  }).sort((a, b) => b.exhaust_mwh - a.exhaust_mwh)
+
+  return (
+    <div className="w-full h-full overflow-auto p-4">
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+        <div className="flex items-center gap-2">
+          <EnginePill mode="static" />
+          <p className="text-caption font-semibold text-navy">Heat rejection — where heat leaves the building</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <ChartTotalsBadge label="Σ rejected" value_kwh={totalReject * 1000} />
+        </div>
+      </div>
+      <p className="text-xxs text-mid-grey mb-4 max-w-3xl">
+        Heat that leaves the building via system pathways — separate from the
+        demand-to-fuel Sankey so its magnitudes don't distort that view.
+        Fabric losses and infiltration are not included here (they live in the
+        Building module's heat-balance view).
+      </p>
+
+      {/* ── Top-line totals + horizontal stacked bar ───────────────────── */}
+      <div className="mb-6 max-w-3xl">
+        <div className="text-caption font-semibold text-navy mb-2">
+          {totalReject.toFixed(1)} MWh rejected per year
+        </div>
+        <div className="flex w-full h-7 rounded overflow-hidden border border-light-grey">
+          {categories.map(cat => {
+            const pct = (cat.mwh / Math.max(totalReject, 1)) * 100
+            if (pct < 0.5) return null
+            return (
+              <div key={cat.key}
+                title={`${cat.label}: ${cat.mwh.toFixed(1)} MWh (${pct.toFixed(0)} %)`}
+                style={{ width: `${pct}%`, backgroundColor: cat.colour, opacity: 0.85 }}
+              />
+            )
+          })}
+        </div>
+        <div className="flex gap-3 flex-wrap mt-2">
+          {categories.map(cat => {
+            const pct = (cat.mwh / Math.max(totalReject, 1)) * 100
+            return (
+              <div key={cat.key} className="flex items-center gap-1.5">
+                <span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: cat.colour, opacity: 0.85 }} />
+                <span className="text-xxs text-mid-grey">
+                  {cat.label} <span className="text-navy font-medium tabular-nums">{cat.mwh.toFixed(1)} MWh</span> <span className="text-mid-grey">({pct.toFixed(0)} %)</span>
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ── Categories detail (bars + notes) ─────────────────────────────── */}
+      <div className="mb-6 max-w-3xl">
+        <p className="text-xxs uppercase tracking-wider text-mid-grey mb-2">By source</p>
+        <div className="space-y-3">
+          {categories.length === 0 && (
+            <p className="text-caption text-mid-grey italic">No system-side rejection in this configuration.</p>
+          )}
+          {categories.map(cat => {
+            const pct = (cat.mwh / maxCat) * 100
+            return (
+              <div key={cat.key} className="bg-white border border-light-grey rounded p-3">
+                <div className="flex items-baseline justify-between mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: cat.colour, opacity: 0.85 }} />
+                    <span className="text-caption font-medium text-navy">{cat.label}</span>
+                  </div>
+                  <span className="text-caption font-semibold text-navy tabular-nums">{cat.mwh.toFixed(1)} MWh</span>
+                </div>
+                <div className="h-2 rounded-sm bg-off-white overflow-hidden mb-1.5">
+                  <div className="h-full" style={{ width: `${pct}%`, backgroundColor: cat.colour, opacity: 0.75 }} />
+                </div>
+                <p className="text-xxs text-mid-grey leading-relaxed">{cat.note}</p>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ── Per-vent-system breakdown ────────────────────────────────────── */}
+      {ventRows.length > 0 && vent_exhaust > 0.01 && (
+        <div className="max-w-3xl">
+          <p className="text-xxs uppercase tracking-wider text-mid-grey mb-2">Mech vent — per system (post-HRE)</p>
+          <div className="bg-white border border-light-grey rounded">
+            <table className="w-full text-caption">
+              <thead>
+                <tr className="border-b border-light-grey text-xxs uppercase tracking-wider text-mid-grey">
+                  <th className="text-left  font-medium px-3 py-2">System</th>
+                  <th className="text-right font-medium px-3 py-2">Exhaust MWh</th>
+                  <th className="text-right font-medium px-3 py-2">HRE recovered</th>
+                  <th className="text-right font-medium px-3 py-2">Fan kWh</th>
+                  <th className="text-left  font-medium px-3 py-2">Type</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ventRows.map(r => (
+                  <tr key={r.key} className="border-b border-light-grey last:border-b-0">
+                    <td className="px-3 py-2 text-navy">{r.label}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-navy">{r.exhaust_mwh.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-mid-grey">
+                      {r.is_mvhr ? `${r.recovery_mwh.toFixed(2)}` : '—'}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-mid-grey">{(r.fan_mwh * 1000).toFixed(0)}</td>
+                    <td className="px-3 py-2 text-xxs text-mid-grey italic">{r.is_mvhr ? 'MVHR (with recovery)' : 'Extract-only'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xxs text-mid-grey mt-2 leading-relaxed">
+            Exhaust MWh = heating-season stale-air heat leaving via this system,
+            after HRE recovery where present. Recovery opportunity: convert
+            extract-only systems to MVHR to recover ~ 80 % of the listed exhaust.
+          </p>
+        </div>
+      )}
+    </div>
+  )
 }
 
 /* ───────────────────────────────────────────────────────────────────────────

@@ -1,6 +1,39 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-19 — Brief 38: 3-column Sankey with tapered ribbons + waste removed
+## 🚧 Session 2026-05-19 — Brief 38: Rejection tab + per-vent-system breakdown
+
+**State:** `commit_in_flight` — added the heat-rejection home Chris picked (new centre tab `Rejection`). The main Sankey stays focused on demand → carrier; rejection lives separately so its magnitudes don't distort the demand-driven view.
+
+**New centre tab:** `Sankey · Profiles · Schedule · Monthly · Rejection · Summary` (Rejection slots in between Monthly and Summary so the input-flow → analysis-output narrative still reads left-to-right).
+
+**`SystemsRejection` component layout:**
+- **Top-line totals.** "Σ rejected" chip in the header + a "X.X MWh rejected per year" headline number + a horizontal stacked bar showing % per category + a small legend underneath.
+- **By source.** A vertical list of category cards (Cooling condenser / Mech vent exhaust / DHW flue / Heating flue) — each card has a coloured swatch, the category name, MWh figure, a horizontal magnitude bar, and a short explanatory note. Categories with zero contribution (e.g. heating flue when heating is off) are hidden.
+- **Mech vent — per system.** Table broken out per ventilation system: System name, Exhaust MWh (post-HRE), HRE recovered MWh (or "—" for extract-only), Fan kWh, Type (MVHR / Extract-only). Sorted by exhaust descending so the worst offender is at the top. Closes Chris's request for "I do want to be able to say, 'right, there's X kWh going out through the vent at the moment,' and dig into that".
+
+**Categories computed:**
+- Cooling condenser: `space_cooling.delivered_mwh + space_cooling.electricity_mwh` (heat from zone + electrical work in, both leave via the outdoor unit).
+- Mech vent exhaust: `Σ ventilation[].exhaust_loss_mwh` (engine's per-system post-HRE figure, broken out below).
+- DHW flue: `dhw.gas_mwh × (1 − 0.92)` ≈ 8 % of DHW gas input — hidden if DHW gas is zero.
+- Heating flue: `space_heating.gas_mwh × (1 − 0.92)` — hidden if heating gas is zero (e.g. heating off on Bridgewater).
+
+**Out of scope** (called out in the page subhead): fabric losses and infiltration live in the Building module's heat-balance Sankey; ASHP-DHW outdoor-unit "rejection" is negative (it absorbs heat from outdoor air to deliver hot water) so it's not a rejection source.
+
+**Build:** clean, 9.48 s, 2.49 MB JS (gzip 694 kB) — +1.5 kB gzip for the new component.
+
+**Browser verification expected (Chris):** Open Systems → Rejection tab on Bridgewater.
+- Top headline: total rejected MWh (probably 80–100 MWh, dominated by cooling condenser + MEV exhaust).
+- Stacked bar shows Cooling condenser as the biggest slice, then Mech vent exhaust, then DHW flue.
+- "By source" cards: each with its own bar + note.
+- "Mech vent — per system" table at the bottom: rows for `mvhr_gf_public`, `bedroom_extract`, `public_toilet_extract` with their individual exhaust MWh and HRE-recovered (only the MVHR row).
+
+**Main Sankey tab** remains the demand → system → carrier view from `d726415`; this commit only adds the Rejection tab + component.
+
+**Next:** walkthrough confirms; brief close commit (archive `38_systems_sankey_polish.md → archive/38_..._COMPLETED.md`, repoint `current.md`, final STATUS).
+
+---
+
+## 📝 Session 2026-05-19 — Brief 38 third pass [SUPERSEDED — rejection moved to its own tab]
 
 **State:** `commit_in_flight` — second walkthrough iteration. Sankey now shows the demand → system → carrier transformation as a *visual taper* of each flow at the system column. Waste is intentionally removed from this view; heat-rejection visual is a separate widget on the docket (see "Open question" below).
 
