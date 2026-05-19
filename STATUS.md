@@ -1,5 +1,43 @@
 # NZA SIMULATE — Status
 
+## 🟢 Session 2026-05-19 — Brief 42 Part 2: Engine three-location parity (per-opening cd + flow_mode)
+
+**State:** `commit_in_flight` — Brief 42 Part 2. Engine now reads `cd` and `flow_mode` per-opening across all three parallel envelope implementations (State 1 + State 2 + inline-legacy) per CLAUDE.md Rule 14 three-location parity in a single commit. No physics changes — same single_sided / cross correlations. Source of `cd` and `flow_mode` shifts from building-wide to per-opening with a fallback chain to building-wide (for unmigrated persisted projects until Part 3 migration runs).
+
+**Helper refactor (`instantCalc.js` ~line 145):**
+- `resolveFlowMode(opening, fallback = 'single_sided')` — now takes an individual opening (or any object with a `.flow_mode` field) plus an explicit fallback. Same validation logic. Building-wide callers still get the old behaviour because they pass `'single_sided'` as the implicit fallback; per-opening callers pass the building-wide value so unmigrated entries inherit it
+- `resolveCd(opening, fallback = 0.25)` — new paired helper, same fallback semantics
+- Pure module-scoped validators — Rule 14's pure-helper carve-out, shared across all three locations without affecting the integration-logic parity rule
+
+**State 1 (`_calculateEnvelopeOnly`):**
+- Permanent louvre dispatch: per-facade loop over north/south/east/west. Each facade with `louvre_area_m2 > 0` declares its own `f_flow_mode` and `f_cd` via the resolvers with building-wide fallback. Single-sided factor now computed per-facade because it depends on the chosen cd. Aggregated `louvre_area_total` dropped (was only valid when every facade shared the same correlation)
+- Operable opening dispatch: per-opening `o_flow_mode` and `o_cd` via the resolvers. Stack term (temperature-mode) uses per-opening cd. Mirrors permanent-vent dispatch exactly
+- Hoisted `cd` + `flow_mode` retained as building-wide fallback values for the resolvers. `single_sided_factor` dropped from hoisting (per-opening now)
+
+**State 2 (`_calculateState2`):**
+- Permanent louvre dispatch: mirrored from State 1 — per-facade loop with `cd_s2` / `flow_mode_s2` as the fallback
+- Operable opening dispatch: mirrored from State 1 — per-opening reads with `cd_s2` / `flow_mode_s2` as the fallback
+- Hoisted `cd_s2` + `flow_mode_s2` retained as fallback values. `single_sided_factor_s2` dropped. Dead `louvre_area_total` declaration removed
+
+**Inline-legacy (`_calculateDegreeDay` ~line 5300+):**
+- Permanent louvre + operable window dispatch: per-facade loop. Inline-legacy doesn't carry a per-opening list (degree-day model lumps operable windows into `openable_fraction × glazing[face]` per facade), so operable-window contributions on a facade share the same per-facade `cd` + `flow_mode` as the louvre on that facade. Full per-opening parity with State 1/2 awaits the inline-legacy rationalisation follow-up (per `docs/audit/39_calculation_flow_map.md`)
+- Hoisted `cd_dd` + `flow_mode_dd` retained as building-wide fallback. `single_sided_factor_dd` + `louvre_area_total` + `openable_area_total` aggregates dropped
+
+**Behaviour invariance pre-Part-3:** For a persisted Bridgewater pre-Brief-42 (building-wide cd 0.29 + flow_mode 'single_sided', no per-facade/per-opening overrides), every dispatch site falls through the resolver chain and reads the persisted building-wide value. Numbers unchanged. Once Part 3 migration runs, the per-opening fields are populated from the same building-wide values; still no change. Behaviour change only happens when the user starts editing per-opening in Parts 4/5.
+
+**Escalation audit (per the brief's "When to escalate" §):**
+1. **Fourth code path emerging?** No. Three documented locations cover all operable-opening physics: State 1 (`_calculateEnvelopeOnly` operable loop ~1361), State 2 (`_calculateState2` operable loop ~2796), inline-legacy (`_calculateDegreeDay` ~5375). Permanent vents on all three. No drift found
+2. **Read-side bug where post-Part-2 values don't match pre-migration building-wide values?** No. Fallback chain (per-opening → building-wide → typed default) ensures unmigrated persisted projects keep the same numbers as pre-Brief-42
+3. **External consumer reading `openings.cd` directly?** No. Audit of `nza_engine/`, `api/`, and all of `frontend/src/` found only: the three engine locations (now fixed); `BuildingWideOpeningsControls.jsx` (Brief 41 Part 7's UI — to be DELETED in Part 4); doc comments only. No external Python or JS consumer
+
+**Build:** clean, 7.60 s, 2.50 MB JS (gzip 694 kB) — unchanged shape.
+
+**Verification (visual):** post-Part-2 alone there's no visible change because no persisted Bridgewater config has per-opening values yet (Part 3 writes those). Visual verification arrives in Part 5 walkthrough when Chris changes a per-opening C_d in the UI.
+
+**Next:** Part 3 — migration script `scripts/42_per_opening_cd_flowmode_migration.py`. For each project's `building.openings.cd` + `openings.flow_mode`: write onto each facade entry + each operable opening; then remove the building-wide fields. Idempotent. Stop-dev-server discipline per Process Rule 11. Bridgewater pre/post audit in `docs/audit/42_per_opening_migration.md`.
+
+---
+
 ## 🟢 Session 2026-05-19 — Brief 42 Part 1: Per-opening cd + flow_mode in schema
 
 **State:** `commit_in_flight` — Brief 42 Part 1. Pure data-model change. Each facade and each operable opening now carries its own `cd` and `flow_mode`; building-wide `openings.cd` and `openings.flow_mode` removed from `DEFAULT_PARAMS`. No engine reads change in this commit — Part 2 swaps the engine over to per-opening reads under Rule 14 three-location parity; Part 3 migration writes persisted building-wide values onto each opening.

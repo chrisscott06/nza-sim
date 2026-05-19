@@ -142,9 +142,39 @@ const AIR_HEAT_CAPACITY = 0.33  // kWh/m³/K (ρ × Cp for air)
 // Bathroom extract, MVHR, supply fans, heat recovery — all are systems
 // concepts and live in the Systems module, not in this dispatch.
 // See docs/audit/29_permanent_vent_methodology.md.
-function resolveFlowMode(openings) {
-  const v = openings?.flow_mode
-  return (v === 'cross' || v === 'single_sided') ? v : 'single_sided'
+//
+// Brief 42 Part 2 (2026-05-19): refactored to take a single opening (or
+// any object carrying a `.flow_mode` field) plus an explicit fallback.
+// The function reads `.flow_mode` regardless of whether the passed
+// object is the building-wide `openings` block (legacy callers) or a
+// per-facade entry / per-operable-opening entry (Brief 42 per-opening
+// dispatch). Per CLAUDE.md Rule 14's pure-helper carve-out, this is a
+// module-scoped validator shared across State 1 / State 2 / inline-
+// legacy without affecting the three-location parity rule.
+//
+// Fallback semantics:
+//   - per-opening call sites pass the building-wide flow_mode as the
+//     fallback so persisted projects without per-opening values keep
+//     their pre-migration behaviour until Brief 42 Part 3 migration
+//     writes per-opening values onto each entry
+//   - building-wide call sites pass 'single_sided' as the fallback
+//     (the conservative default) — same as the pre-Part-2 behaviour
+//
+// Once Part 3 migration has run, the fallback is mechanically
+// irrelevant because every opening carries its own value.
+function resolveFlowMode(opening, fallback = 'single_sided') {
+  const v = opening?.flow_mode
+  return (v === 'cross' || v === 'single_sided') ? v : fallback
+}
+
+// Brief 42 Part 2 (2026-05-19): per-opening cd resolver paired with
+// resolveFlowMode. Same fallback semantics — per-opening call sites
+// pass the building-wide cd as fallback; building-wide call sites pass
+// the legacy 0.25 typed default. Range checking is delegated to the UI
+// slider (0.15 – 0.65 in the Building module). Pure module-scoped
+// helper per Rule 14's pure-helper carve-out.
+function resolveCd(opening, fallback = 0.25) {
+  return (typeof opening?.cd === 'number') ? opening.cd : fallback
 }
 
 // Brief 28e Gate E2 (2026-05-16): explicit ρ + Cp constants for the
@@ -887,11 +917,13 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   const openings = building.openings ?? {}
   const Cw = ({ sheltered: 0.05, normal: 0.10, exposed: 0.20 })[openings.site_exposure] ?? 0.10
   const sqrtCw = Math.sqrt(Cw)
-  const louvre_area_total = ['north','south','east','west']
-    .reduce((s, f) => s + Number(openings?.[f]?.louvre_area_m2 ?? 0), 0)
+  // Brief 42 Part 2 (2026-05-19): per-facade cd + flow_mode dispatch.
+  // The single-sided factor is now per-opening (depends on the per-
+  // opening cd) so it can no longer be hoisted; cd + flow_mode retained
+  // as building-wide fallback values for unmigrated persisted projects
+  // until Part 3 migration runs.
   const flow_mode = resolveFlowMode(openings)
-  const cd                     = typeof openings.cd === 'number' ? openings.cd : 0.25
-  const single_sided_factor    = Math.min(1.0, cd / 0.6)
+  const cd        = typeof openings.cd === 'number' ? openings.cd : 0.25
 
   // ── Zone-air effective thermal capacitance (Brief 28b Part 3) ────────────
   // Represents zone air + internal mass (furniture, partitions, content)
@@ -1085,17 +1117,30 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
     // Permanent-vent UA this hour — two-branch wind-driven dispatch
     // (Brief 33 Part 1 / 34). Both correlations are pure envelope physics;
     // the Building module does not see mechanical systems.
-    //   cross         — Q = cd · A_total · sqrt(C_w) · v_wind                 (CIBSE Guide A §4.6)
-    //   single_sided  — Q = 0.025 · min(1, cd/0.6) · A_total · v_wind          (BS EN 16798-7 §6.4 + engineering correction)
+    //   cross         — Q = cd · A · sqrt(C_w) · v_wind                 (CIBSE Guide A §4.6)
+    //   single_sided  — Q = 0.025 · min(1, cd/0.6) · A · v_wind         (BS EN 16798-7 §6.4 + engineering correction)
     //
-    // cd / single_sided_factor / louvre_area_total / sqrtCw all resolved
-    // once above the hour loop. Stack term still absent in 'cross'
-    // (Issue #4 — deferred).
-    let Q_louvre_m3s
-    if (flow_mode === 'single_sided') {
-      Q_louvre_m3s = 0.025 * single_sided_factor * louvre_area_total * v_wind
-    } else { // 'cross'
-      Q_louvre_m3s = cd * louvre_area_total * sqrtCw * v_wind
+    // Brief 42 Part 2 (2026-05-19): per-facade dispatch. Each facade with
+    // non-zero louvre area declares its own cd + flow_mode. Aggregating
+    // areas across facades (pre-Brief-42 design) was only valid when
+    // every facade shared the same correlation; the single-sided factor
+    // is non-linear in cd. Site exposure (sqrtCw) stays building-wide
+    // per Brief 42 Principle 3. cd + flow_mode fall back to the
+    // building-wide passthrough for unmigrated persisted projects;
+    // Brief 42 Part 3 migration writes per-facade values, after which
+    // the fallback is mechanically irrelevant. Stack term still absent
+    // in 'cross' (Issue #4 — deferred).
+    let Q_louvre_m3s = 0
+    for (const face of ['north','south','east','west']) {
+      const A = Number(openings?.[face]?.louvre_area_m2 ?? 0)
+      if (!(A > 0)) continue
+      const f_flow_mode = resolveFlowMode(openings?.[face], flow_mode)
+      const f_cd        = resolveCd(openings?.[face], cd)
+      if (f_flow_mode === 'single_sided') {
+        Q_louvre_m3s += 0.025 * Math.min(1.0, f_cd / 0.6) * A * v_wind
+      } else { // 'cross'
+        Q_louvre_m3s += f_cd * A * sqrtCw * v_wind
+      }
     }
     const UA_permanent = AIR_HEAT_CAPACITY * (Q_louvre_m3s * 3600)
 
@@ -1340,13 +1385,19 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
 
     // ── Brief 28e Gate E2: per-operable-opening natural ventilation ──────
     // Brief 41 Part 1 (2026-05-19): flow_mode dispatch ported in from
-    // permanent vents (Brief 33/34), matching the building-wide single_sided
-    // / cross correlation. Per-opening discharge_coefficient + wind_coefficient
-    // dropped (Brief 41 Part 2); building-wide `cd` + `sqrtCw` +
-    // `single_sided_factor` (derived at lines 868-875 above) drive flow
-    // uniformly across permanent vents AND operable openings. Per-opening
-    // height_m retained — temperature-mode openings need it for the stack
-    // term that makes that control mode physically useful.
+    // permanent vents (Brief 33/34).
+    // Brief 42 Part 2 (2026-05-19): per-opening cd + flow_mode dispatch.
+    // Each opening declares its own physics — a reception door declared
+    // as cross-flow with cd 0.60 produces visibly different heat loss
+    // to a trickle vent declared as single_sided with cd 0.40 even on
+    // the same building. Site exposure (sqrtCw) stays building-wide
+    // per Brief 42 Principle 3. Per-opening cd + flow_mode fall back
+    // to the building-wide passthrough for unmigrated persisted
+    // projects; Brief 42 Part 3 migration writes per-opening values
+    // onto each entry, after which the fallback is mechanically
+    // irrelevant. Per-opening height_m retained — temperature-mode
+    // openings need it for the stack term that makes that control
+    // mode physically useful.
     //
     // Wind dispatch (always / scheduled / temperature, whenever decision.is_open):
     //   single_sided: Q_wind = 0.025 × min(1, cd/0.6) × A × v_wind
@@ -1367,21 +1418,23 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
       )
       _natvent_state.set(o.id, { wasOpen: decision.is_open })
       if (!decision.is_open) continue
-      const A      = Number(o.area_m2 ?? 0)
-      const Hgt    = Number(o.height_m ?? 1.0)
-      const dT_abs = Math.abs(T_op_prev - T_out)
+      const A           = Number(o.area_m2 ?? 0)
+      const Hgt         = Number(o.height_m ?? 1.0)
+      const dT_abs      = Math.abs(T_op_prev - T_out)
+      const o_flow_mode = resolveFlowMode(o, flow_mode)
+      const o_cd        = resolveCd(o, cd)
 
       let Q_wind
-      if (flow_mode === 'single_sided') {
-        Q_wind = 0.025 * single_sided_factor * A * v_wind
+      if (o_flow_mode === 'single_sided') {
+        Q_wind = 0.025 * Math.min(1.0, o_cd / 0.6) * A * v_wind
       } else { // 'cross'
-        Q_wind = cd * A * sqrtCw * v_wind
+        Q_wind = o_cd * A * sqrtCw * v_wind
       }
 
       let Q_stack = 0
       if (o.control?.mode === 'temperature') {
         const T_avg_K = 0.5 * (T_op_prev + T_out) + 273.15
-        Q_stack = cd * A * Math.sqrt(Math.max(0, 2 * GRAVITY * Hgt * dT_abs / Math.max(T_avg_K, 1)))
+        Q_stack = o_cd * A * Math.sqrt(Math.max(0, 2 * GRAVITY * Hgt * dT_abs / Math.max(T_avg_K, 1)))
       }
 
       const Q_open  = Math.sqrt(Q_wind * Q_wind + Q_stack * Q_stack)   // m³/s
@@ -2266,23 +2319,24 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   //
   // Brief 39 Part 2 (2026-05-19): two-branch flow_mode dispatch ported in
   // from State 1 (Brief 33/34). State 2 intentionally reimplements envelope
-  // physics per Brief 28c (own T_air trace against gains-warmed zone). The
-  // dispatch itself is from State 1's hour-loop branch logic at lines
-  // ~1075-1080; we share `resolveFlowMode` (module-scope pure validator,
-  // line 145) and the `single_sided_factor` formula because neither
-  // integrates against a state-specific trace — they're inputs to the
-  // hour-loop, not part of it.
+  // physics per Brief 28c (own T_air trace against gains-warmed zone).
+  //
+  // Brief 42 Part 2 (2026-05-19): per-opening cd + flow_mode dispatch.
+  // The single-sided factor is now per-opening (depends on chosen cd)
+  // so it can no longer be hoisted; cd_s2 + flow_mode_s2 retained as
+  // building-wide fallback values for unmigrated persisted projects
+  // until Part 3 migration writes per-opening values. The dispatch
+  // itself is shared with State 1's hour-loop branch logic via the
+  // module-scoped `resolveFlowMode` + `resolveCd` validators (line
+  // 145+), which fall under Rule 14's pure-helper carve-out.
   const airtightness = deriveOperationalACH(building, geo)
   const ach = airtightness.n_op
   const UA_leakage = AIR_HEAT_CAPACITY * ach * volume
   const openings = building.openings ?? {}
   const Cw = ({ sheltered: 0.05, normal: 0.10, exposed: 0.20 })[openings.site_exposure] ?? 0.10
   const sqrtCw = Math.sqrt(Cw)
-  const louvre_area_total = ['north','south','east','west']
-    .reduce((s, f) => s + Number(openings?.[f]?.louvre_area_m2 ?? 0), 0)
-  const cd_s2                  = typeof openings.cd === 'number' ? openings.cd : 0.25
-  const flow_mode_s2           = resolveFlowMode(openings)
-  const single_sided_factor_s2 = Math.min(1.0, cd_s2 / 0.6)
+  const cd_s2        = typeof openings.cd === 'number' ? openings.cd : 0.25
+  const flow_mode_s2 = resolveFlowMode(openings)
 
   // Zone-air effective mass (matches State 1 v3 tuning)
   const C_air_air_J = volume * 1.2 * 1005
@@ -2518,14 +2572,27 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     const T_sa_roof = solAirT(T_out, hourlySolar.roof[h], roofModel.solar_abs ?? 0.7, roofModel.h_out ?? 25)
 
     // Permanent vents UA (State 2). Brief 39 Part 2: two-branch dispatch
-    // matches State 1 hour-loop at lines ~1075-1080. Brief 39 Part 3
-    // verified State 2's operable-opening engine (Brief 28e Gate E2, line
-    // 2697 onwards) is faithfully mirrored from State 1 — no drift.
-    let Q_louvre_m3s
-    if (flow_mode_s2 === 'single_sided') {
-      Q_louvre_m3s = 0.025 * single_sided_factor_s2 * louvre_area_total * v_wind
-    } else { // 'cross'
-      Q_louvre_m3s = cd_s2 * louvre_area_total * sqrtCw * v_wind
+    // matches State 1. Brief 39 Part 3 verified State 2's operable-opening
+    // engine (Brief 28e Gate E2) is faithfully mirrored from State 1 —
+    // no drift. Brief 42 Part 2 (2026-05-19): per-facade dispatch
+    // mirrored from State 1 — each facade declares its own cd +
+    // flow_mode; aggregating areas was only valid when every facade
+    // shared the same correlation. Site exposure (sqrtCw) stays
+    // building-wide per Brief 42 Principle 3. Fallback chain mirrors
+    // State 1: per-facade → building-wide (cd_s2 / flow_mode_s2) →
+    // typed default. After Part 3 migration the fallback is
+    // mechanically irrelevant.
+    let Q_louvre_m3s = 0
+    for (const face of ['north','south','east','west']) {
+      const A = Number(openings?.[face]?.louvre_area_m2 ?? 0)
+      if (!(A > 0)) continue
+      const f_flow_mode = resolveFlowMode(openings?.[face], flow_mode_s2)
+      const f_cd        = resolveCd(openings?.[face], cd_s2)
+      if (f_flow_mode === 'single_sided') {
+        Q_louvre_m3s += 0.025 * Math.min(1.0, f_cd / 0.6) * A * v_wind
+      } else { // 'cross'
+        Q_louvre_m3s += f_cd * A * sqrtCw * v_wind
+      }
     }
     const UA_permanent = AIR_HEAT_CAPACITY * (Q_louvre_m3s * 3600)
 
@@ -2728,11 +2795,13 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
 
     // ── Brief 28e Gate E2: per-operable-opening natural ventilation (State 2) ─
     // Brief 41 Part 1 (2026-05-19): flow_mode dispatch ported in from
-    // permanent vents (Brief 33/34), matching State 1's hour-loop at lines
-    // 1322-1380. Per-opening discharge_coefficient + wind_coefficient
-    // dropped (Part 2); building-wide cd_s2 / sqrtCw / single_sided_factor_s2
-    // (derived at lines 2247-2254) drive flow. height_m retained for
-    // temperature-mode stack contribution.
+    // permanent vents (Brief 33/34).
+    // Brief 42 Part 2 (2026-05-19): per-opening cd + flow_mode dispatch
+    // mirrored from State 1. Each opening declares its own physics;
+    // fallback chain to building-wide (cd_s2 / flow_mode_s2) handles
+    // unmigrated persisted projects until Part 3 migration runs.
+    // height_m retained for temperature-mode stack contribution. Site
+    // exposure (sqrtCw) stays building-wide per Brief 42 Principle 3.
     //
     // Identical structure to State 1; State 2 uses T_op_prev (gain-warmed
     // free-running zone temp) for temperature-mode control + stack ΔT.
@@ -2747,21 +2816,23 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       )
       _natvent_state.set(o.id, { wasOpen: decision.is_open })
       if (!decision.is_open) continue
-      const A      = Number(o.area_m2 ?? 0)
-      const Hgt    = Number(o.height_m ?? 1.0)
-      const dT_abs = Math.abs(T_op_prev - T_out)
+      const A           = Number(o.area_m2 ?? 0)
+      const Hgt         = Number(o.height_m ?? 1.0)
+      const dT_abs      = Math.abs(T_op_prev - T_out)
+      const o_flow_mode = resolveFlowMode(o, flow_mode_s2)
+      const o_cd        = resolveCd(o, cd_s2)
 
       let Q_wind
-      if (flow_mode_s2 === 'single_sided') {
-        Q_wind = 0.025 * single_sided_factor_s2 * A * v_wind
+      if (o_flow_mode === 'single_sided') {
+        Q_wind = 0.025 * Math.min(1.0, o_cd / 0.6) * A * v_wind
       } else { // 'cross'
-        Q_wind = cd_s2 * A * sqrtCw * v_wind
+        Q_wind = o_cd * A * sqrtCw * v_wind
       }
 
       let Q_stack = 0
       if (o.control?.mode === 'temperature') {
         const T_avg_K = 0.5 * (T_op_prev + T_out) + 273.15
-        Q_stack = cd_s2 * A * Math.sqrt(Math.max(0, 2 * GRAVITY * Hgt * dT_abs / Math.max(T_avg_K, 1)))
+        Q_stack = o_cd * A * Math.sqrt(Math.max(0, 2 * GRAVITY * Hgt * dT_abs / Math.max(T_avg_K, 1)))
       }
 
       const Q_open  = Math.sqrt(Q_wind * Q_wind + Q_stack * Q_stack)
@@ -5222,17 +5293,22 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
   // (Option A in docs/audit/39_calculation_flow_map.md "Inline-legacy
   // rationalisation — deferred" section). Until then, this path must be
   // kept in sync with State 1 and State 2 per CLAUDE.md Rule 14.
+  //
+  // Brief 42 Part 2 (2026-05-19): per-facade cd + flow_mode dispatch
+  // mirrored from State 1 / State 2. Inline-legacy doesn't carry a
+  // per-opening list (degree-day model lumps operable windows into a
+  // per-facade aggregate via `openable_fraction × glazing[face]`),
+  // so operable-window contributions on each facade use that facade's
+  // permanent-vent cd + flow_mode — full per-opening parity with State
+  // 1/2 awaits the inline-legacy rationalisation follow-up. cd_dd +
+  // flow_mode_dd retained as building-wide fallback for unmigrated
+  // persisted projects until Part 3 migration writes per-facade values.
   const openings = building.openings ?? {}
   const Cw = ({ sheltered: 0.05, normal: 0.10, exposed: 0.20 })[openings.site_exposure] ?? 0.10
   const sqrtCw = Math.sqrt(Cw)
-  const louvre_area_total = ['north','south','east','west']
-    .reduce((s, f) => s + Number(openings?.[f]?.louvre_area_m2 ?? 0), 0)
-  const cd_dd                     = typeof openings.cd === 'number' ? openings.cd : 0.25
-  const flow_mode_dd              = resolveFlowMode(openings)
-  const single_sided_factor_dd    = Math.min(1.0, cd_dd / 0.6)
+  const cd_dd        = typeof openings.cd === 'number' ? openings.cd : 0.25
+  const flow_mode_dd = resolveFlowMode(openings)
   const openable_area_per_face = (f) => Number(openings?.[f]?.openable_fraction ?? 0) * (glazing[f] ?? 0)
-  const openable_area_total = openable_area_per_face('north') + openable_area_per_face('south') +
-                              openable_area_per_face('east') + openable_area_per_face('west')
 
   // ── 8760-hour loop ────────────────────────────────────────────────────────
   let total_heating = 0, total_cooling = 0
@@ -5279,36 +5355,41 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
     const hour_vent_nohr = UA_vent_no_hr * dT_heat / 1000
 
     // Openings — wind-driven flow (m³/s) → ACH-equivalent → Wh/K → kWh
-    // Brief 39 Part 1 (permanent louvre): two-branch dispatch matches State 1
-    // hour-loop (lines 1075–1080).
+    // Brief 39 Part 1 (permanent louvre): two-branch dispatch matches State 1.
     // Brief 41 Part 1 (operable window): same two-branch dispatch applied
-    // here too — the simpler operable-window Q_window inherits the building-
-    // wide flow_mode just like the louvre path. No per-opening temperature-
-    // mode stack term in inline-legacy; the simpler model gates by the
-    // building-wide `openings.schedule` field, not per-opening control.
-    // Cleanup of the inline-legacy operable-window stale-stub model (towards
-    // per-opening parity with State 1/2) remains deferred to the inline-
-    // legacy rationalisation follow-up brief (see
-    // docs/audit/39_calculation_flow_map.md §"Inline-legacy
-    // rationalisation — deferred").
+    // to inline-legacy's lumped operable-window path.
+    // Brief 42 Part 2 (2026-05-19): per-facade cd + flow_mode dispatch.
+    // Each facade's louvre + operable window contributions use that
+    // facade's per-facade cd + flow_mode. Inline-legacy doesn't carry a
+    // per-opening list, so operable-window contributions on a facade
+    // inherit the same per-facade cd + flow_mode as the louvre on that
+    // facade — full per-opening parity with State 1/2 awaits the
+    // inline-legacy rationalisation follow-up. cd_dd + flow_mode_dd
+    // fall back to building-wide for unmigrated persisted projects;
+    // Part 3 migration writes per-facade values, after which the
+    // fallback is mechanically irrelevant. No per-opening temperature-
+    // mode stack term in inline-legacy.
     const v_wind = weatherData.wind_speed?.[h] ?? 0
-    let Q_louvre
-    if (flow_mode_dd === 'single_sided') {
-      Q_louvre = 0.025 * single_sided_factor_dd * louvre_area_total * v_wind
-    } else { // 'cross'
-      Q_louvre = cd_dd * louvre_area_total * sqrtCw * v_wind
-    }
     const windowsOpen = (
       openings.schedule === 'always' ||
       (openings.schedule === 'occupied'   && occ_frac > 0.1) ||
       (openings.schedule === 'summer_day' && (mo_idx >= 4 && mo_idx <= 8) && hourOfDay >= 8 && hourOfDay <= 20)
     )
+    let Q_louvre = 0
     let Q_window = 0
-    if (windowsOpen) {
-      if (flow_mode_dd === 'single_sided') {
-        Q_window = 0.025 * single_sided_factor_dd * openable_area_total * v_wind
+    for (const face of ['north','south','east','west']) {
+      const A_louvre = Number(openings?.[face]?.louvre_area_m2 ?? 0)
+      const A_window = windowsOpen ? openable_area_per_face(face) : 0
+      if (A_louvre <= 0 && A_window <= 0) continue
+      const f_flow_mode = resolveFlowMode(openings?.[face], flow_mode_dd)
+      const f_cd        = resolveCd(openings?.[face], cd_dd)
+      if (f_flow_mode === 'single_sided') {
+        const ssf = Math.min(1.0, f_cd / 0.6)
+        if (A_louvre > 0) Q_louvre += 0.025 * ssf * A_louvre * v_wind
+        if (A_window > 0) Q_window += 0.025 * ssf * A_window * v_wind
       } else { // 'cross'
-        Q_window = cd_dd * openable_area_total * sqrtCw * v_wind
+        if (A_louvre > 0) Q_louvre += f_cd * A_louvre * sqrtCw * v_wind
+        if (A_window > 0) Q_window += f_cd * A_window * sqrtCw * v_wind
       }
     }
     const hour_openings_louvre = AIR_HEAT_CAPACITY * (Q_louvre * 3600) * dT_heat / 1000
