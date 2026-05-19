@@ -161,30 +161,53 @@ This stub will be expanded into a full scope statement when the
 Operation module is reworked. Briefs touching Operation must declare
 which of these scope items they affect.
 
-### Systems module — scope (stub, to be expanded when Systems is reworked)
+### Systems module — scope
 
 **Computes:**
-- Heating system (boiler, heat pump, district heat, etc.)
-- Cooling system (chiller, heat pump, etc.)
-- Mechanical ventilation (MVHR, MEV, extract fans, supply fans) and
-  associated fan power, heat recovery effectiveness, defrost penalties
-- DHW (storage, distribution, primary fuel)
-- Lighting controls (daylight dimming, occupancy sensors — anything
-  that modifies the lighting use defined in Operation)
-- Electrical end-use accounting (kWh delivered for lights, equipment,
-  fans, pumps, plant)
-- Conversion from envelope demand → delivered energy → primary energy
-  → carbon
+- Energy delivered by installed equipment to serve heating, cooling,
+  DHW, ventilation, lighting, and small-power demands
+- Per-system: efficiency (SCOP / SEER / combustion η / SFP / recovery
+  effectiveness / DHW point-of-use η), setpoint, control mechanism,
+  share of demand served
+- Proportional split across multiple systems serving the same demand
+  (no priority+capacity, no lead/lag, no schedule-based handoff)
+- Comfort-vs-setpoint diagnostic: demand at envelope comfort vs
+  delivered at system setpoint, per service, with the delta exposed
+- DHW tap-mix model: the boiler heats only the hot fraction of tap
+  consumption, not the total tap litres. `hot_fraction =
+  (tap_outlet_temp − cold_supply_temp) / (setpoint − cold_supply_temp)`
+- Electrical end-use accounting for lighting and small power (thin
+  entries that read the heat gain from Internal Gains and apply any
+  controls; no double-counting in the heat balance)
+- Fuel split, carbon, total EUI roll-ups across all systems
+- Conversion from envelope/internal-gains demand → delivered energy
+  → source energy → carbon
 
 **Does not contain:**
 - Envelope physics (Building)
-- Occupancy or manual operation (Operation)
-- Permanent vents — these are passive envelope features in Building,
-  not mechanical ventilation
+- Occupancy schedules (Internal Gains)
+- Operable envelope operation (Operation)
+- Permanent vents — passive envelope features in Building, not
+  mechanical ventilation
+- Renewables (PV, solar thermal) — queued for a follow-up brief
+- Heat networks at the network level (district heat / district cooling
+  are modelled as sources with an efficiency + loss factor; network-
+  side modelling is out of scope)
+- Capacity-based or schedule-based system stacking — proportional
+  split only
 
-This stub will be expanded into a full scope statement when the Systems
-module is reworked. Briefs touching Systems must declare which of these
-scope items they affect.
+**Per-system setpoint semantics:** `setpoint: null` on a heating /
+cooling system means "follow the comfort band's corresponding
+setpoint" (Building's comfort band drives the demand calculation; the
+system's resolved setpoint drives the delivered calculation). Non-null
+`setpoint` recomputes demand at the system's setpoint so the comfort-
+vs-setpoint diagnostic can surface the delta. This mirrors Brief 42's
+per-opening C_d / flow_mode pattern (per-system null is a flag, not an
+inheritance link — editing a system to a custom setpoint severs the
+relationship).
+
+(Brief 40, May 2026. Full schema and mathematics in
+`docs/audit/40_systems_library_schema.md`.)
 
 ---
 

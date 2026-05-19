@@ -1,5 +1,50 @@
 # NZA SIMULATE — Status
 
+## 🟢 Session 2026-05-19 — Brief 40 Part 1: Systems library schema documented
+
+**State:** `commit_in_flight` — Brief 40 Part 1. Schema-only commit per Chris's authorisation. No engine code, no UI code. The canonical design captured on disk so Parts 2–5 have a single reference; CLAUDE.md "Module scopes" Systems stub expanded to full scope statement.
+
+**Brief 40 opens** Systems Library Architecture. Each demand (heating, cooling, DHW, ventilation, lighting, small power) is served by one or more systems with proportional shares. Each system declares its own setpoint and efficiency metric. A comfort-vs-setpoint diagnostic surfaces over/under-delivery against the homepage comfort band. The DHW tap-mix model corrects the current overestimate that treats all tap consumption as needing full-temperature heating.
+
+**`docs/audit/40_systems_library_schema.md` (new, canonical reference):**
+- §1 Generic system shape — `{ id, label, service, source, efficiency_metric, setpoint, control_mechanism, control_schedule_id, share_pct, capacity_kw, notes }` with per-service `systems_config.{service}: [system, ...]` array shape
+- §2 Per-service schemas — heating / cooling / DHW / ventilation / lighting / small_power, with sources, efficiency metrics, and field-label hints for the UI (SCOP vs Seasonal η driven by `source`; SEER for cooling; SFP + recovery_sensible_pct + recovery_latent_pct object for ventilation; tap-mix fields for DHW; thin entries for lighting + small_power)
+- §3 Proportional-split mathematics — `delivered_i = demand × (share_pct[i]/100)`; `source_energy_i = delivered_i / efficiency_metric_i`; blended seasonal efficiency = weighted harmonic mean of efficiencies; ventilation recovery composition rule (sum kWh, not %); lighting/small_power `delivered_electrical = gain_from_internal_gains × control_factor × share`
+- §4 DHW tap-mix mathematics — `hot_fraction = (tap_outlet_temp − cold_supply_temp) / (setpoint − cold_supply_temp)`; for Bridgewater hotel defaults (tap 40°C, cold 10°C, setpoint 60°C) `hot_fraction = 0.60` → 40% reduction in DHW thermal. Documented as a physics-derived expected bracket (Brief 33 Principle 1 / Brief 40 Principle 6), not a calibration target
+- §5 Comfort-vs-setpoint diagnostic — per-system `delta = delivered_at_setpoint − demand_at_comfort`; sign convention (positive = overdelivery: heating above lower_c or cooling below upper_c); DHW diagnostic uses `delivered_no_mix = demand × (1/hot_fraction − 1)`; `setpoint: null` resolves to comfort band's corresponding setpoint at compute time
+- §6 Engine return shape — `systemsEngine.computeSystemsDelivered(...)` produces an extension of Brief 38 Sankey polish's `consumption` object; existing `primary`/`secondary` blocks on heating + cooling retained for Sankey backwards compatibility; new `systems[]` array adds N-way per-system detail; `totals` block carries EUI / annual_source_kWh / fuel_split / carbon
+- §7 Migration notes — table mapping pre-Brief-40 fields (`systems_config_v25.*`, engine constants `DHW_LITRES_PER_M2_DAY` / `DHW_COLD_TEMP` / `DHW_SETPOINT`) to Brief 40 schema fields. Part 5 implements
+- §8 Bridgewater migration pre/post — placeholder table; Part 5 fills
+- §9 Part 2 engine verification — sanity-test targets per the brief (single heating, two-system blended efficiency, custom-setpoint cooling delta, DHW tap-mix vs hand calc); Rule 14 sweep result slot
+- §10 Out of scope — explicit list (Dynamic-side frozen; renewables out; heat networks treated as sources only; proportional split only; no calibration; no inheritance; no envelope-side scope creep)
+- §11 Open questions parked for Part 2/3 (not Part 1 blockers)
+
+**`CLAUDE.md` "Module scopes" Systems stub → full scope statement:**
+- Computes list refined to six services, per-system efficiency / setpoint / share / control, proportional split, comfort-vs-setpoint diagnostic, DHW tap-mix, electrical end-use accounting for lighting + small power, fuel split / carbon / EUI roll-ups
+- Does-not-contain list explicit on envelope physics (Building), occupancy schedules (Internal Gains), operable envelope operation (Operation), permanent vents (Building), renewables (queued for follow-up), network-level heat-network modelling, capacity / lead-lag / schedule-based system stacking
+- New paragraph on per-system setpoint semantics — `setpoint: null` follows comfort band; non-null recomputes demand at the system's setpoint for the diagnostic. Mirrors Brief 42's per-opening C_d / flow_mode pattern (null = flag, not inheritance link)
+- Cross-reference to `docs/audit/40_systems_library_schema.md` for full schema + mathematics
+
+**`docs/briefs/active/40_systems_library_architecture.md` (new):** the brief itself folded into `active/` per the established pattern. Verbatim content matching Chris's Downloads version; the file is the durable source of the BEFORE-DOING-ANYTHING checklist + Parts 1–6 specs + commit messages + final report fields.
+
+**`docs/briefs/current.md`:** `Active:` pointer repointed at Brief 40; recent-sequencing table gains a new active row above the Brief 42 archived row.
+
+**No code, no schema migrations, no engine changes.** Part 2 lands the engine work; Part 5 lands the migration. Part 1 is pure documentation hygiene per Process Rule 7.
+
+**Build:** not re-run (docs-only commit).
+
+**Verification (visual):** none for Part 1 — design is captured on disk, not yet visible to the user. Verification arrives in Part 5 walkthrough (Chris opens Systems module post-migration, exercises the 10-step checklist).
+
+**Open questions parked for Part 2/3** (audit doc §11) — not blockers on Part 1:
+- DHW setpoint range UI warning for legionella safety (Part 3 UI work)
+- Ventilation `flow_rate_basis: 'constant'` units assumed l/s — confirm in Part 3
+- Per-service shared fuel kWh roll-up confirmed in §3 / §6 (yes, summed across services per `source`)
+- Recovery credit composition rule (sum kWh, not %) confirmed per CIBSE TM38
+
+**Next:** Part 2 — engine. New `frontend/src/utils/systemsEngine.js` implementing `computeSystemsDelivered()`; `setpointOverride` parameter threaded into `_calculateState2`; DHW tap-mix correction; `withMode` allowlist updates per ALLOWLIST DRIFT discipline; Rule 14 sweep covering State 1 + State 2 + inline-legacy + the second `_calculateState3` fallback path. Sanity-test results documented in audit doc §9.
+
+---
+
 ## ✅ Session 2026-05-19 — Brief 42 close: Per-opening C_d and flow_mode live
 
 **State:** `commit_in_flight` — Brief 42 close. Walkthrough passed (Chris's confirmation 2026-05-19: single-sided and cross-flow both producing sensible numbers per opening; mixed-type behaviour confirmed — different openings on the same building can have different physics). Brief 42's premise delivered: each envelope opening declares its own discharge coefficient and flow mode; the Brief 41 Part 7 building-wide UI is superseded.
