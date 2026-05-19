@@ -741,15 +741,6 @@ function SystemsSankey({ consumption, sysCfg }) {
     return branches
   }
 
-  // Efficiency string for the system column footer line, where the engine
-  // exposes it. SCOP / EER live on the consumption block; for DHW (mixed)
-  // and lighting/SP/fans (1:1) we don't show one.
-  function effString(scopOrSeer, kind) {
-    if (scopOrSeer == null || !isFinite(scopOrSeer) || scopOrSeer <= 0) return null
-    if (scopOrSeer < 1) return `${Math.round(scopOrSeer * 100)}% eff`
-    return `${kind} ${scopOrSeer.toFixed(1)}`
-  }
-
   const items = [
     {
       key: 'space_heating', label: 'Heating',
@@ -761,8 +752,6 @@ function SystemsSankey({ consumption, sysCfg }) {
         c.space_heating?.gas_mwh ?? 0,
         null,
       ),
-      sysLabel: fmtSys(sysCfg.heating?.primary?.library_id ?? ''),
-      effLabel: effString(c.space_heating?.scop_effective, 'SCOP'),
     },
     {
       key: 'space_cooling', label: 'Cooling',
@@ -774,8 +763,6 @@ function SystemsSankey({ consumption, sysCfg }) {
         0,
         null,
       ),
-      sysLabel: fmtSys(sysCfg.cooling?.primary?.library_id ?? ''),
-      effLabel: effString(c.space_cooling?.seer_effective, 'EER'),
     },
     {
       key: 'dhw', label: 'DHW',
@@ -787,18 +774,12 @@ function SystemsSankey({ consumption, sysCfg }) {
         c.dhw?.gas_mwh ?? 0,
         dhwMix,
       ),
-      sysLabel: dhwIsMixed ? 'Mixed' : fmtSys(sysCfg.dhw?.primary?.library_id ?? ''),
-      effLabel: null,  // Mixed → blended SCOP/eff not meaningful as one figure
     },
     {
       key: 'fans', label: 'Mech vent',
       demand:    fan_total,
       delivered: fan_total,
       branches:  makeBranches(fan_total, fan_total, 0, null),
-      sysLabel:  ventListCfg.length > 1
-        ? `${ventListCfg.length} systems`
-        : (ventListCfg[0]?.name ? fmtSys(ventListCfg[0].name) : fmtSys(ventListCfg[0]?.id ?? '')),
-      effLabel:  null,
     },
     {
       key: 'lighting', label: 'Lighting',
@@ -810,8 +791,6 @@ function SystemsSankey({ consumption, sysCfg }) {
         0,
         null,
       ),
-      sysLabel: 'LED fixtures',
-      effLabel: null,
     },
     {
       key: 'small_power', label: 'Small power',
@@ -823,14 +802,50 @@ function SystemsSankey({ consumption, sysCfg }) {
         0,
         null,
       ),
-      sysLabel: 'Plug load',
-      effLabel: null,
     },
   ].filter(it => it.demand > 0.01)
 
   for (const it of items) {
     it.isUnserved = it.demand > 0.01 && it.delivered < 0.01
-    if (it.isUnserved) { it.sysLabel = '(off — no system)'; it.effLabel = null }
+  }
+
+  // ── Per-branch labels: only where the ribbon visually tapers / widens ───
+  // Chris's call (walkthrough #4): show a label only where there's a real
+  // efficiency story. Mech vent / Lighting / Small power are 1:1 (delivered
+  // == fuel) → no label. Heating / Cooling have one branch each with COP /
+  // EER → keep system name + efficiency. Mixed DHW splits into ASHP branch
+  // (necks down by SCOP) and Gas boiler branch (widens by 1/eff) — label
+  // each branch separately at its own y so the per-branch story reads on
+  // the ribbon itself.
+  const EFF_TOLERANCE = 0.05  // |eff − 1| below this → treat as 1:1, no label
+  for (const it of items) {
+    for (const br of it.branches) {
+      const eff = br.fuel_mwh > 0 ? br.delivered_mwh / br.fuel_mwh : 1
+      br.efficiency = eff
+      const hasChange = Math.abs(eff - 1) > EFF_TOLERANCE
+      if (!hasChange) { br.sysName = null; br.effText = null; continue }
+      const effText = eff > 1
+        ? `SCOP ${eff.toFixed(1)}`        // heat pump / COP-style display
+        : `${Math.round(eff * 100)}% eff`  // combustion / electric resistance efficiency
+
+      if (it.key === 'space_heating') {
+        br.sysName = fmtSys(sysCfg.heating?.primary?.library_id ?? '')
+        br.effText = effText
+      } else if (it.key === 'space_cooling') {
+        br.sysName = fmtSys(sysCfg.cooling?.primary?.library_id ?? '')
+        br.effText = `EER ${eff.toFixed(1)}`  // cooling reads EER, not SCOP
+      } else if (it.key === 'dhw' && it.branches.length > 1) {
+        // Mixed DHW: generic fuel-side label per branch.
+        br.sysName = br.fuel === 'electricity' ? 'ASHP' : 'Gas boiler'
+        br.effText = effText
+      } else if (it.key === 'dhw') {
+        br.sysName = fmtSys(sysCfg.dhw?.primary?.library_id ?? '')
+        br.effText = effText
+      } else {
+        br.sysName = null
+        br.effText = null
+      }
+    }
   }
 
   // ── Single uniform scale: demand sum drives the page height ──────────────
@@ -993,22 +1008,33 @@ function SystemsSankey({ consumption, sysCfg }) {
           )
         })}
 
-        {/* ── System column (middle) — small text per row, no box ────────── */}
-        {items.map(it => (
-          <g key={`s-${it.key}`}>
-            <text x={systemX} y={it.barMid - (it.effLabel ? 5 : 0)} fontSize="9"
-              fill={it.isUnserved ? '#9CA3AF' : '#374151'} textAnchor="middle"
-              fontWeight="500" fontStyle="italic">
-              {it.sysLabel}
-            </text>
-            {it.effLabel && !it.isUnserved && (
-              <text x={systemX} y={it.barMid + 8} fontSize="8"
-                fill="#6B7280" textAnchor="middle">
-                {it.effLabel}
-              </text>
-            )}
-          </g>
-        ))}
+        {/* ── System column (middle) — per-branch labels where the ribbon
+             actually tapers or widens. 1:1 branches (lighting, small power,
+             mech-vent fans) get no label. ────────────────────────────────── */}
+        {items.map(it => {
+          if (it.isUnserved) return null
+          return it.branches.map((br, bi) => {
+            if (!br.sysName && !br.effText) return null
+            const srcMid = (br.srcY0 + br.srcY1) / 2
+            const tgtMid = (br.tgtY0 + br.tgtY1) / 2
+            const midY = (srcMid + tgtMid) / 2
+            return (
+              <g key={`s-${it.key}-${bi}`}>
+                <text x={systemX} y={midY - (br.effText ? 5 : 0)} fontSize="9"
+                  fill="#374151" textAnchor="middle"
+                  fontWeight="500" fontStyle="italic">
+                  {br.sysName}
+                </text>
+                {br.effText && (
+                  <text x={systemX} y={midY + 8} fontSize="8"
+                    fill="#6B7280" textAnchor="middle">
+                    {br.effText}
+                  </text>
+                )}
+              </g>
+            )
+          })
+        })}
 
         {/* ── Right column rects ─────────────────────────────────────────── */}
         {carrierBars.map(b => {
