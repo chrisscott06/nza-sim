@@ -59,7 +59,7 @@ These rules were learned the hard way during the May 2026 audit and dynamic-engi
 
     The risk of Pattern C is silent drift: a refinement lands in one state and the follow-up in the others never happens (e.g. Brief 33/34 added flow_mode dispatch to State 1; State 2 and inline-legacy received it eight briefs later via Brief 39).
 
-    To prevent recurrence: any commit that changes the physics of an envelope-only term (conduction, thermal bridging, infiltration, **permanent vents, operable openings — per-opening flow_mode dispatch including stack contribution for temperature-mode**, solar transmission, glazing transmission) in State 1 MUST land the equivalent change in State 2 AND inline-legacy in the same commit. Not in follow-ups. Not as TODOs. The commit is incomplete until all three locations reflect the new physics.
+    To prevent recurrence: any commit that changes the physics of an envelope-only term (conduction, thermal bridging, infiltration, **permanent vents, operable openings — per-opening cd + flow_mode dispatch (each facade and each operable opening declares its own physics), including stack contribution for temperature-mode**, solar transmission, glazing transmission) in State 1 MUST land the equivalent change in State 2 AND inline-legacy in the same commit. Not in follow-ups. Not as TODOs. The commit is incomplete until all three locations reflect the new physics.
 
     If a state genuinely requires different physics (e.g. the gains-warmed T_air trace produces a different integrand shape, or inline-legacy uses a simplified `sysDefaults` model), the commit message must explicitly state why the locations diverge and what the divergence means. Silent divergence is the failure mode.
 
@@ -69,7 +69,7 @@ These rules were learned the hard way during the May 2026 audit and dynamic-engi
 
     The rule's spirit applies to UI surfaces too: two implementations of the same control across modules create the same drift risk as two implementations of the same engine path. Brief 41 Part 7's shared `BuildingWideOpeningsControls` component (and its successor patterns) is the right shape — single source of truth, both modules wire to the same data, reactivity guaranteed.
 
-    (Brief 39, May 2026. Audit chain: `docs/audit/39_state2_permanent_vent_diagnosis.md` → `docs/audit/39_calculation_flow_map.md` → Brief 39 Parts 1–6. Extended by Brief 41 Parts 0–7 + Part 6 close: operable openings, mirror-vs-physics-correctness, UI parity.)
+    (Brief 39, May 2026. Audit chain: `docs/audit/39_state2_permanent_vent_diagnosis.md` → `docs/audit/39_calculation_flow_map.md` → Brief 39 Parts 1–6. Extended by Brief 41 Parts 0–7 + Part 6 close: operable openings, mirror-vs-physics-correctness, UI parity. Extended by Brief 42 Parts 1–6: per-opening cd + flow_mode — each facade and each operable opening declares its own physics; building-wide `openings.cd` and `openings.flow_mode` removed; site exposure stays building-wide. Engine reads switch under Rule 14 three-location parity in a single commit, `docs/audit/42_per_opening_migration.md`.)
 
 ---
 
@@ -113,6 +113,15 @@ exists). They have no schedule. They have no control. They have no
 relationship to any mechanical system in the building. If a building
 has a bathroom extract fan, that fan is modelled in the Systems module
 — not by changing how the trickle vent calculates flow.
+
+Each permanent vent — and each operable opening in the Operation
+module — declares its own discharge coefficient and flow mode
+(single-sided / cross). Building-wide `openings.cd` and
+`openings.flow_mode` were retired in Brief 42; a windward sharp-edged
+louvre and a sheltered trickle vent on the same building no longer
+share one slider. Site exposure (C_w) stays building-wide because
+it's a property of where the building sits, not of any individual
+opening.
 
 **Notes on the comfort band:**
 The setpoint used in heating/cooling demand calculation is a

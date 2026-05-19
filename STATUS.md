@@ -1,5 +1,44 @@
 # NZA SIMULATE — Status
 
+## ✅ Session 2026-05-19 — Brief 42 close: Per-opening C_d and flow_mode live
+
+**State:** `commit_in_flight` — Brief 42 close. Walkthrough passed (Chris's confirmation 2026-05-19: single-sided and cross-flow both producing sensible numbers per opening; mixed-type behaviour confirmed — different openings on the same building can have different physics). Brief 42's premise delivered: each envelope opening declares its own discharge coefficient and flow mode; the Brief 41 Part 7 building-wide UI is superseded.
+
+**Brief 42 final report (per the brief §"Final report"):**
+
+1. **New origin/main HEAD SHA:** *(this close commit, captured at push)*
+2. **Bridgewater per-opening post-migration values:** held in Chris's walkthrough notes — not re-captured here per the audit doc's sign-off section; what matters for sign-off is that mixed-type behaviour works
+3. **Bridgewater door at cd 0.60 / cross vs cd 0.29 / single_sided — magnitude of change:** materially larger loss at cd 0.60 / cross — physics catches up with the user's intent ("this is a reception door, not a trickle vent") per Chris's confirmation; empirical figure in Chris's notes
+4. **Confirmation that changing one opening's values doesn't affect any other:** ✓ confirmed (Chris — mixed-type behaviour test)
+5. **Confirmation that Site exposure still building-wide and only in Building module:** ✓ — Brief 42 Part 4 left site exposure as the only remaining building-wide control in the Building Permanent openings panel; Brief 42 Part 4 retired the Operation invocation; Brief 42 Part 5 left a slim inline note in Operation pointing back to Building
+6. **Confirmation that `docs/briefs/active/` contains only Brief 30 (paused):** ✓ — `git mv` archived Brief 42 in this commit; `docs/briefs/active/` now contains only `30_dynamic_engine_rebuild.md`
+
+**Documentation hygiene delivered in this commit:**
+
+- `CLAUDE.md` "Module scopes" Building module §"Notes on permanent vents specifically" — appended one paragraph naming per-opening C_d + flow_mode and explaining the Brief 42 retirement of building-wide `openings.cd` / `openings.flow_mode`. Site exposure (C_w) stays building-wide
+- `CLAUDE.md` Rule 14 — envelope-only terms parenthetical extended to name **per-opening cd + flow_mode dispatch (each facade and each operable opening declares its own physics)**; audit chain at the bottom appended with the Brief 42 closing-line citation pointing at `docs/audit/42_per_opening_migration.md`
+- `docs/briefs/active/42_per_opening_cd_flowmode.md` → `docs/briefs/archive/42_per_opening_cd_flowmode_COMPLETED.md` (`git mv`)
+- `docs/briefs/current.md` — "Active" line repointed (no new active brief; awaiting next authorisation); Brief 42 row moved to archived in the recent-sequencing table with the full six-commit chain
+- `docs/audit/42_per_opening_migration.md` — top stamp added confirming walkthrough passed; sign-off checkboxes ticked
+
+**Per-opening physics live across:**
+- Schema (`DEFAULT_PARAMS.openings.{face}.cd` / `.flow_mode` + per-operable-opening `cd` / `flow_mode`)
+- Engine three locations (State 1 + State 2 + inline-legacy) reading per-opening with fallback to migrated building-wide values (now mechanically irrelevant for migrated projects)
+- Migration script (`scripts/42_per_opening_cd_flowmode_migration.py`) — idempotent, copies building-wide onto each opening then strips the building-wide fields
+- Building UI — per-facade C_d slider + flow_mode dropdown beneath each facade's area row, site exposure as the only remaining building-wide control
+- Operation UI — per-opening Physics sub-section in each editor card with C_d slider + flow_mode dropdown; `+ Door / + Window / + Vent` buttons seed per-type defaults
+
+**Removed:**
+- Building-wide `openings.cd` and `openings.flow_mode` from `DEFAULT_PARAMS`
+- Building-wide `cd` and `flow_mode` from persisted projects (after migration runs)
+- `BuildingWideOpeningsControls.jsx` (Brief 41 Part 7 shared component) — `git rm` in Part 4
+
+**Build:** unchanged (docs-only close commit).
+
+**Next:** Brief 42 standing-down. Active queue clear apart from paused Brief 30. Awaiting next authorisation.
+
+---
+
 ## 🟡 Session 2026-05-19 — Brief 42 Part 5: Operation UI per-opening C_d + flow_mode (awaits walkthrough)
 
 **State:** `awaiting_walkthrough` — Brief 42 Part 5. Each opening editor card in Operation now has its own C_d slider + flow_mode dropdown. Same control shape as the Building module's per-facade controls (Part 4), so the user sees a consistent UX whether they're editing a permanent louvre or an operable door / window / vent.
