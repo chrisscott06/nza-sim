@@ -64,6 +64,18 @@ Usage
     # 3. Confirm output. Re-run for NO-OP check.
     # 4. Restart the dev server.
 
+    # To OVERWRITE existing systems_config_v40 (Brief 40 Part 5b --force
+    # flag): use after a schema refinement, after manual UI test data has
+    # been written that needs replacing, or to retry a previously
+    # incomplete migration.
+    python scripts/40_bridgewater_systems_migration.py --force
+
+The --force flag (Brief 40 Part 5b Section A) bypasses the idempotency
+check. Use with care: any per-system edits the user made via the Systems
+left panel will be replaced with the freshly-migrated shape. Lighting +
+small_power entries are still preserved from Part 4 DEFAULT_PARAMS
+fallback (these don't come from the v25 migration source).
+
 Requires the backend running on port 8002.
 """
 
@@ -348,7 +360,7 @@ def _is_already_migrated(v40):
     return False
 
 
-def _migrate_project(project):
+def _migrate_project(project, force=False):
     name = project.get("name") or project.get("id")
     project_id = project["id"]
     full = http_get(f"{API_BASE}/projects/{project_id}")
@@ -359,9 +371,11 @@ def _migrate_project(project):
         return False
 
     existing_v40 = bc.get("systems_config_v40") or {}
-    if _is_already_migrated(existing_v40):
-        print(f"NO-OP: {name!r} -- systems_config_v40 already has heating/cooling/dhw/ventilation populated (idempotent re-run)")
+    if _is_already_migrated(existing_v40) and not force:
+        print(f"NO-OP: {name!r} -- systems_config_v40 already has heating/cooling/dhw/ventilation populated (idempotent re-run; use --force to overwrite)")
         return False
+    if _is_already_migrated(existing_v40) and force:
+        print(f"FORCE: {name!r} -- existing systems_config_v40 contents WILL BE OVERWRITTEN with fresh migration from systems_config_v25 (lighting + small_power preserved)")
 
     # Resolve comfort band for setpoint:null detection. Falls back to (20, 26)
     # per state-contract default if no comfort_band on the project row.
@@ -408,6 +422,11 @@ def _migrate_project(project):
 
 
 def main():
+    # Brief 40 Part 5b Section A: --force flag bypasses idempotency check
+    force = "--force" in sys.argv[1:]
+    if force:
+        print("(--force flag set — existing systems_config_v40 will be overwritten)")
+
     try:
         projects = http_get(f"{API_BASE}/projects")
     except urllib.error.URLError as e:
@@ -417,14 +436,14 @@ def main():
     any_changed = False
     for p in projects:
         try:
-            if _migrate_project(p):
+            if _migrate_project(p, force=force):
                 any_changed = True
         except Exception as e:
             print(f"ERROR migrating {p.get('name')}: {e}")
             return 3
 
     if not any_changed:
-        print("All projects already migrated; nothing to do.")
+        print("All projects already migrated; nothing to do." + ("" if not force else " (--force was set but no projects needed re-migration)"))
     return 0
 
 

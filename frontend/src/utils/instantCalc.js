@@ -14,7 +14,12 @@
 import { resolveCmass } from './thermalMass.js'
 import { resolveScheduleAtHour } from './scheduleLibrary.js'
 import { computeThermalBridges } from './thermalBridges.js'
-import { computeSystemsDelivered } from './systemsEngine.js'   // Brief 40 Part 2 (2026-05-19)
+import {
+  computeSystemsDelivered,
+  v40ServiceBlockToV25Shape,
+  v40VentilationToV25List,
+  v40ThinBlockToKwh,
+} from './systemsEngine.js'   // Brief 40 Part 2 + Part 5b (2026-05-19)
 import {
   buildUkGridYearlyTrajectory,
   ukGridIntensityForYear,
@@ -4049,17 +4054,68 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
   const dhw_demand_kwh = annual_occupant_hours * dhw_kwh_per_person_hour
   const dhw_demand_mwh = dhw_demand_kwh / 1000
 
+  // ── Brief 40 Part 5b Section A (2026-05-19): per-service displacement ────
+  //
+  // Strategy: compute the Brief 40 per-service blocks once (via
+  // `computeSystemsDelivered` already attached as consumption.brief40
+  // below). For each service where `building.systems_config_v40.{service}`
+  // is non-empty, displace the v25-shape consumption block with v40's
+  // output (adapted to the v25 contract by `v40ServiceBlockToV25Shape` /
+  // `v40VentilationToV25List` / `v40ThinBlockToKwh`). Sankey + Live
+  // Results + headline EUI read consumption.{service-block} regardless of
+  // which path produced it.
+  //
+  // Per Brief 40 Part 5b A.4: share-validation failure in v40 yields a
+  // block with `error` field set + zero delivered; displacement still
+  // fires (engine emits zeros for the service; UI surfaces the error).
+  // v25 path is bypassed in that case.
+  //
+  // Partial migrations: a project on v40 for some services + v25 for
+  // others works correctly — the per-service check fires independently.
+
+  const v40 = building.systems_config_v40 ?? {}
+  const v40HeatingPresent = Array.isArray(v40.heating)     && v40.heating.length > 0
+  const v40CoolingPresent = Array.isArray(v40.cooling)     && v40.cooling.length > 0
+  const v40DhwPresent     = Array.isArray(v40.dhw)         && v40.dhw.length > 0
+  const v40VentPresent    = Array.isArray(v40.ventilation) && v40.ventilation.length > 0
+  const v40LightPresent   = Array.isArray(v40.lighting)    && v40.lighting.length > 0
+  const v40SpPresent      = Array.isArray(v40.small_power) && v40.small_power.length > 0
+
   // ── Mech ventilation (Part 4 + Brief 28j hourly cap): fans + HRE recovery ─
+  // When v40 ventilation is populated, build a v25-shaped list from v40
+  // systems and run the existing `computeVentilationEnergy` (which has
+  // the per-hour ΔT recovery cap math from Brief 28j). This way the
+  // hourly recovery cap behaviour is preserved regardless of which path
+  // (v40 or v25) populated the ventilation list.
   const T_heating_setpoint = sys.heating?.setpoint_c ?? comfortBand?.lower_c ?? 21
-  // Brief 28j: pass State 2's per-hour heating demand series so
-  // computeVentilationEnergy can apply the cap hour-by-hour rather than as
-  // an annual aggregate. The hourly cap is physically correct: at hour h
-  // recovery contributes at most the heating demand at hour h. Replaces the
-  // pre-28j annual-aggregate Math.min(theoretical, state2_demand) which
-  // could let summer recovery cancel winter demand arithmetically.
   const heatingDemandHourlyKwh = state2Result.demand?.heating_demand_hourly_kwh ?? null
+  let ventList = Array.isArray(sys.ventilation) ? sys.ventilation : []
+  let ventSourcePath = 'v25'
+  if (v40VentPresent) {
+    // Compute v40 ventilation block (also feeds consumption.brief40 below
+    // via computeSystemsDelivered's own call — duplicate compute is cheap
+    // and keeps the displacement adapter standalone).
+    const v40VentBlock = (() => {
+      const gia0 = state2Result?.metadata?.gia_m2 ?? state2Result?.heat_balance?.metadata?.gia_m2 ?? 0
+      const peak0 = state2Result?.occupancy_summary?.peak_people ?? 0
+      // _computeVentilation is internal to systemsEngine.js; the public
+      // computeSystemsDelivered exposes its output via brief40.ventilation
+      // — read that downstream. For the v25-list adapter here we need the
+      // brief40 block before the main computeSystemsDelivered call (chicken
+      // and egg). Simplest: do a one-shot call here ONLY to extract the
+      // ventilation block; the full computeSystemsDelivered call later
+      // returns the same numbers (deterministic inputs).
+      const tempBrief40 = computeSystemsDelivered({ building, state2Result, comfortBand, state2Recompute })
+      return tempBrief40?.ventilation
+    })()
+    const v25ListFromV40 = v40VentilationToV25List(v40VentBlock)
+    if (v25ListFromV40 !== null) {
+      ventList = v25ListFromV40
+      ventSourcePath = 'v40'
+    }
+  }
   const ventResult = computeVentilationEnergy(
-    Array.isArray(sys.ventilation) ? sys.ventilation : [],
+    ventList,
     weatherData,
     T_heating_setpoint,
     building,
@@ -4074,13 +4130,55 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
   const heating_demand_mwh     = Math.max(0, heating_demand_state2_mwh - effective_recovery_mwh)
 
   // ── Service energy math (heating, cooling, DHW) ───────────────────────────
-  const heating = computeServiceEnergy(sys.heating, 'heating', heating_demand_mwh, resolved)
-  const cooling = computeServiceEnergy(sys.cooling, 'cooling', cooling_demand_mwh, resolved)
+  // v25 path (existing computeServiceEnergy / computeDhwFuelMix):
+  const heating_v25 = computeServiceEnergy(sys.heating, 'heating', heating_demand_mwh, resolved)
+  const cooling_v25 = computeServiceEnergy(sys.cooling, 'cooling', cooling_demand_mwh, resolved)
   // Brief 28-IM IM-M4 §8.1: DHW prefers fuel_mix when present. Falls back to
   // the legacy primary/secondary computeServiceEnergy path when not.
   const dhw_mix_result = computeDhwFuelMix(sys.dhw, dhw_demand_mwh, resolved)
-  const dhw     = dhw_mix_result ?? computeServiceEnergy(sys.dhw, 'dhw', dhw_demand_mwh, resolved)
+  const dhw_v25        = dhw_mix_result ?? computeServiceEnergy(sys.dhw, 'dhw', dhw_demand_mwh, resolved)
   const dhw_fuel_mix_applied = dhw_mix_result?.fuel_mix_applied ?? null
+
+  // v40 path: build the brief40 block ONCE here so the v25-shape adapters
+  // (heating/cooling/DHW) and the consumption.brief40 attachment can both
+  // consume it. Pass heating_demand_mwh (post-recovery) so v40 matches v25's
+  // post-recovery demand exactly.
+  const brief40Computed = computeSystemsDelivered({
+    building, state2Result, comfortBand, state2Recompute,
+    heatingDemandOverrideMwh: heating_demand_mwh,
+  })
+
+  // Per-service displacement: when v40.{service} is non-empty, v40 wins.
+  // When v40 is empty or absent, v25 wins. Adapter returns null when v40
+  // has nothing to displace — `??` falls through to v25. When validation
+  // fails, the adapter returns {error, ...zeros...} — displacement fires
+  // with zeros and the error surfaces in the consumption block for the UI.
+  const heating_v40_block = v40HeatingPresent ? v40ServiceBlockToV25Shape(brief40Computed?.heating) : null
+  const cooling_v40_block = v40CoolingPresent ? v40ServiceBlockToV25Shape(brief40Computed?.cooling) : null
+  const dhw_v40_block     = v40DhwPresent     ? v40ServiceBlockToV25Shape(brief40Computed?.dhw)     : null
+
+  const heating = heating_v40_block ?? heating_v25
+  const cooling = cooling_v40_block ?? cooling_v25
+  const dhw     = dhw_v40_block     ?? dhw_v25
+
+  // DHW demand for the consumption block also needs to switch when v40 is
+  // in play — v40's tap-mix correction lives on brief40.dhw.demand_at_comfort_mwh
+  // (post-correction); v25's dhw_demand_mwh is the pre-correction value. The
+  // headline "DHW demand" should reflect what the building actually needs,
+  // which post-Brief-40 is the tap-mix-corrected number.
+  const dhw_demand_displayed_mwh = (v40DhwPresent && brief40Computed?.dhw?.demand_at_comfort_mwh != null)
+    ? brief40Computed.dhw.demand_at_comfort_mwh
+    : dhw_demand_mwh
+
+  // Source path metadata for the consumption block (debugging + audit)
+  const source_path = {
+    heating:     v40HeatingPresent ? 'v40' : 'v25',
+    cooling:     v40CoolingPresent ? 'v40' : 'v25',
+    dhw:         v40DhwPresent     ? 'v40' : 'v25',
+    ventilation: ventSourcePath,
+    lighting:    v40LightPresent   ? 'v40' : 'v25',
+    small_power: v40SpPresent      ? 'v40' : 'v25',
+  }
 
   // DHW circulation pump (Part 4): continuous electrical baseload.
   // V1: schedule_ref hookup deferred — 8760 h hardcoded.
@@ -4112,8 +4210,19 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
   // Lighting + equipment pass-through from State 2 internal-gain accumulators.
   // 100% of installed electricity becomes heat in zone (already counted as a
   // gain in State 2 — here we count it as electricity-used in State 3).
-  const lighting_kwh  = state2Result.heat_balance?.annual?.gains?.internal?.lighting?.kwh  ?? 0
-  const equipment_kwh = state2Result.heat_balance?.annual?.gains?.internal?.equipment?.kwh ?? 0
+  //
+  // Brief 40 Part 5b Section A (2026-05-19): per-service displacement for
+  // thin entries. When v40 lighting / small_power is populated AND the
+  // control_factor differs from 1.0 (e.g. daylight_dimming = 0.70),
+  // delivered electrical = gain × control_factor × share/100 — surfaces
+  // in the headline EUI as a reduction. When v40 thin block is empty or
+  // absent, fall through to the pre-Brief-40 1:1 gain pass-through.
+  const lighting_v25_kwh  = state2Result.heat_balance?.annual?.gains?.internal?.lighting?.kwh  ?? 0
+  const equipment_v25_kwh = state2Result.heat_balance?.annual?.gains?.internal?.equipment?.kwh ?? 0
+  const lighting_v40_kwh  = v40LightPresent ? v40ThinBlockToKwh(brief40Computed?.lighting)    : null
+  const equipment_v40_kwh = v40SpPresent    ? v40ThinBlockToKwh(brief40Computed?.small_power) : null
+  const lighting_kwh  = (lighting_v40_kwh  != null) ? lighting_v40_kwh  : lighting_v25_kwh
+  const equipment_kwh = (equipment_v40_kwh != null) ? equipment_v40_kwh : equipment_v25_kwh
   const total_fan_kwh = ventResult.totalFanKwh
 
   // ── Top-level fuel sums ───────────────────────────────────────────────────
@@ -4276,7 +4385,11 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
       },
       dhw: {
         enabled:          sys.dhw?.enabled !== false,
-        demand_mwh:       r_mwh(dhw_demand_mwh),
+        // Brief 40 Part 5b Section A: when v40 DHW is populated, demand
+        // reflects the tap-mix-corrected value (~60% of pre-Brief-40 for
+        // Bridgewater hotel defaults). When v40 DHW is empty, falls
+        // through to the v25 pre-correction value.
+        demand_mwh:       r_mwh(dhw_demand_displayed_mwh),
         delivered_mwh:    r_mwh(dhw.total_perf.delivered_mwh),
         electricity_mwh:  r_mwh(elec_dhw_total / 1000),
         gas_mwh:          r_mwh(gas_dhw_total / 1000),
@@ -4388,12 +4501,21 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
       // Brief 40 Part 2 (2026-05-19): per-system breakdown + comfort-vs-
       // setpoint diagnostic from systemsEngine.computeSystemsDelivered.
       // null when systems_config_v40 is absent or every service array is
-      // empty — pre-migration projects (no Brief 40 config) see null here
-      // and the existing Brief 38 polish consumption.space_heating /
-      // .space_cooling / .dhw blocks remain the sole source of truth for
-      // the Sankey + Live Results. Once Brief 40 Part 5 migration runs,
-      // this block populates and Part 3's UI consumes it.
-      brief40: computeSystemsDelivered({ building, state2Result, comfortBand, state2Recompute }),
+      // empty — pre-migration projects (no Brief 40 config) see null here.
+      //
+      // Brief 40 Part 5b Section A (2026-05-19): brief40Computed is built
+      // once near the top of _calculateState3 (after MVHR recovery is
+      // known so heating demand can be passed post-recovery for v40
+      // displacement parity with v25). The same brief40Computed feeds the
+      // displacement adapters above; attaching it here too gives the
+      // SystemEditorCard + SystemsDiagnosticPanel UI surfaces the per-
+      // system detail they consume.
+      brief40: brief40Computed,
+      // Brief 40 Part 5b Section A (2026-05-19): which engine path
+      // produced each service block. Useful for the Diagnostic tab and
+      // for debugging partial migrations (a project on v40 for heating
+      // but v25 for DHW shows source_path: { heating: 'v40', dhw: 'v25' }).
+      source_path,
     },
     // ── Brief 28-IM IM-M5 §9.1: results aggregation block ────────────────
     //

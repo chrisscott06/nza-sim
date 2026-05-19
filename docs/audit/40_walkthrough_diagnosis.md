@@ -295,7 +295,44 @@ Brief 40 stays paused at `71598d1` until Path 1/2 decision lands. Once authorise
 
 - [x] Diagnostic read complete, no code changes
 - [x] Findings logged with severity + location
-- [ ] Path 1/2 decision (Chris)
-- [ ] Part 5b corrective commit (after Path decision)
-- [ ] Re-walkthrough
-- [ ] Part 6 close
+- [x] Path 1 decision authorised by Chris (Part 5b corrective + enable toggles)
+- [x] Part 5b Section A landed (this commit — engine displacement + share validation blocks compute + --force migration flag)
+- [ ] Part 5b Section B (enable toggles)
+- [ ] Part 5b Section C (browser walkthrough)
+- [ ] Part 5b close
+- [ ] Brief 40 Part 6 close
+
+---
+
+## 11. Part 5b Section A — engine-side displacement landed
+
+**Files touched:**
+- `frontend/src/utils/systemsEngine.js` — `_enabledSystems` helper; share validation operates on enabled systems and returns `error` field on failure; `computeSystemsDelivered` accepts `heatingDemandOverrideMwh`; new exports `v40ServiceBlockToV25Shape`, `v40VentilationToV25List`, `v40ThinBlockToKwh`
+- `frontend/src/utils/instantCalc.js` `_calculateState3` — v40 displacement wired per service (heating / cooling / DHW / ventilation / lighting / small_power); v40 ventilation routes through `computeVentilationEnergy` via the v25-list adapter so Brief 28j hourly recovery cap math is preserved; lighting + small_power displacement via `v40ThinBlockToKwh`; `dhw_demand_displayed_mwh` surfaces the tap-mix-corrected demand when v40 is in play; `source_path` metadata attached to consumption block
+- `scripts/40_bridgewater_systems_migration.py` — `--force` flag
+
+**Per-service displacement summary:**
+
+| Service | Pre-Part-5b headline | Post-Part-5b headline when v40 populated |
+|---|---|---|
+| Heating | v25 `computeServiceEnergy(sys.heating, ...)` (Brief 28f primary/secondary path) | v40 `_computeHeatingOrCooling` → `v40ServiceBlockToV25Shape` produces matching primary/secondary contract; existing Sankey + Live Results render unchanged shape with v40 numbers |
+| Cooling | Same pattern as heating | Same pattern |
+| DHW | v25 `computeDhwFuelMix` reads `dhw_demand_mwh` (pre-tap-mix) | v40 `_computeDhw` produces tap-mix-corrected `demand_at_comfort_mwh`; `dhw_demand_displayed_mwh` swaps in; headline DHW thermal × hot_fraction (~0.60 for Bridgewater hotel defaults) |
+| Ventilation | v25 `computeVentilationEnergy(sys.ventilation, ...)` with Brief 28j hourly recovery cap | v40 systems mapped to v25-list shape via `v40VentilationToV25List`; passed through unchanged `computeVentilationEnergy` so recovery cap math preserved; per-system fan + recovery unchanged numerically when v25 ↔ v40 mappings produce equivalent inputs |
+| Lighting | `state2Result.heat_balance.annual.gains.internal.lighting.kwh` (1:1 gain pass-through) | `v40ThinBlockToKwh` × control_factor × share/100; when control_factor 1.0 result is identical to v25; when control_factor 0.70 (daylight dimming) result drops by 30% |
+| Small power | Same pattern as lighting | Same pattern |
+
+**Share-validation now blocks compute:**
+- v40 `_computeHeatingOrCooling` / `_computeDhw` / `_computeVentilation` / `_computeThin` filter enabled systems first, then validate sum(enabled.share_pct) === 100 within ½pp tolerance
+- Validation failure → block returns `{ error: '...', systems: [], delivered_total_mwh: 0 }`
+- `v40ServiceBlockToV25Shape` propagates the error field; consumption.{service} carries `error` + zero numbers
+- Headline EUI drops by the service amount; user sees the existing share-mismatch warning in the left panel; the connection between "warning visible" and "number dropped" is now causal not advisory
+
+**--force migration flag:**
+- `python scripts/40_bridgewater_systems_migration.py --force` overwrites any existing `systems_config_v40` on a project
+- Bridgewater's current manual-test v40 state (ASHP 90% / gas boiler 85% / MEV 100% / dimming 100%) will be replaced with the migrated shape (2 heating systems + 1 cooling + 2 DHW + 3 ventilation) on first --force run
+- Lighting + small_power preserved (these come from Part 4 DEFAULT_PARAMS fallback, not v25 migration source)
+
+**Build:** clean, 9.98 s, 2.53 MB JS (gzip 704 kB).
+
+**Browser verification deferred to Section C** (Brief 40 Part 5b Principle 5 — mandatory real-browser walkthrough, not code-side reasoning). Section C executes the 15-item walkthrough via Claude in Chrome MCP and captures pass/fail per item in this doc.

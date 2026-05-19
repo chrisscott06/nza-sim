@@ -1,5 +1,41 @@
 # NZA SIMULATE — Status
 
+## 🟢 Session 2026-05-19 — Brief 40 Part 5b Section A: Engine-side v40 displacement + share validation blocks compute + --force migration
+
+**State:** `commit_in_flight` — Brief 40 Part 5b Section A. Addresses the walkthrough finding that v40 left-panel edits don't reach the headline EUI / Sankey / Live Results. Engine-side displacement: when `building.systems_config_v40.{service}` is non-empty, `consumption.{service-block}` is populated from v40 instead of v25. v25 fallback per-service when v40.{service} is empty. Partial migrations work.
+
+**systemsEngine.js refactor:**
+- New `_enabledSystems(systems)` filter — Section B prerequisite (no system has `enabled === false` yet; Section B adds the UI to set the flag)
+- `_validateShares` now operates on enabled systems; returns false when sum != 100 within ½pp tolerance
+- `_computeHeatingOrCooling` / `_computeDhw` / `_computeVentilation` / `_computeThin` filter enabled first; on validation failure return `{ error: '...', systems: [], delivered_total_mwh: 0 }` instead of swallowing silently; on all-disabled return `{ all_disabled: true, ...zeros... }`
+- `computeSystemsDelivered({...})` accepts new `heatingDemandOverrideMwh` parameter so v40 heating demand matches v25's post-MVHR-recovery demand exactly (previously v40 read raw State 2 demand and would have overstated by the recovery amount)
+- New exports: `v40ServiceBlockToV25Shape(brief40Block)` — converts brief40 service block to v25 `{primary_perf, secondary_perf, total_perf, fuel_split}` shape (first system → primary; second → secondary; 3rd+ folded into secondary totals; per-fuel split aggregated); `v40VentilationToV25List(brief40VentBlock)` — converts brief40 vent systems to v25-shaped list for `computeVentilationEnergy` so Brief 28j hourly recovery cap math is preserved; `v40ThinBlockToKwh(brief40ThinBlock)` — extracts delivered electrical kWh for lighting + small_power displacement
+
+**`_calculateState3` per-service displacement (Option A from diagnosis §7):**
+- `brief40Computed` built once near the top after MVHR recovery is known (post-recovery demand passed to v40 via override)
+- Per service: when v40.{service} is non-empty, adapter produces v25-shape block from `brief40Computed.{service}`; displaces v25's `computeServiceEnergy` / `computeDhwFuelMix` / `computeVentilationEnergy` output for that service
+- Ventilation displacement: v40 systems mapped to v25-list shape and routed through unchanged `computeVentilationEnergy` (preserves Brief 28j hourly recovery cap math)
+- Lighting + small_power displacement: when v40 thin block populated, delivered_kwh = control_factor × share × gain (vs v25's 1:1 gain pass-through); daylight_dimming 0.70 drops lighting electrical to 70% of pre-Brief-40 in the headline EUI
+- DHW demand_mwh in consumption block swaps to tap-mix-corrected `brief40.dhw.demand_at_comfort_mwh` when v40 displaces; previously the headline always showed the v25 pre-correction value
+- `consumption.source_path` metadata block records which engine (v25 vs v40) produced each service block — useful for the Diagnostic tab and partial-migration debugging
+
+**Share validation now blocks compute (A.4):**
+- Pre-Section-A: v40 returned `{ systems: [], validation_error: '...' }` silently; v25 path computed regardless; headline EUI unchanged → walkthrough finding
+- Post-Section-A: v40 returns `{ error: '...', ...zeros... }`; v25-shape adapter propagates error to `consumption.{service}.error`; headline EUI drops by the service amount; user sees existing share-mismatch warning in the left panel AND the headline number visibly drop → the connection is now causal not advisory
+
+**`scripts/40_bridgewater_systems_migration.py` `--force` flag:**
+- `python scripts/40_bridgewater_systems_migration.py --force` overwrites any existing `systems_config_v40` on a project (bypasses `_is_already_migrated` idempotency check)
+- Bridgewater's current manual UI test data (ASHP 90% / gas boiler 85% / MEV 100% / dimming 100% per the walkthrough diagnosis) will be replaced with the migrated shape on first --force run
+- Lighting + small_power preserved (these come from Part 4 DEFAULT_PARAMS fallback, not v25 migration source)
+
+**Build:** clean, 9.98 s, 2.53 MB JS (gzip 704 kB) — +1.5 kB gzip from the displacement adapters.
+
+**Verification deferred to Section C** per Brief 40 Part 5b Principle 5 (mandatory real-browser walkthrough via Claude in Chrome MCP). Code-side reasoning alone is insufficient — the previous walkthrough surfaced a wiring problem that code-side reasoning had missed; Section C verifies the fix end-to-end with real browser, real Bridgewater, real numbers.
+
+**Next:** Section B — per-system + per-service enable toggles. Schema add (`enabled: boolean`); DEFAULT_PARAMS seeds `enabled: true` belt-and-braces; UI toggle in SystemEditorCard chrome; per-service batch toggle in V40SectionHeader; share-validation badge text shows "(of enabled)"; Normalise quick-fix scales enabled systems only.
+
+---
+
 ## 🟡 Session 2026-05-19 — Brief 40 Part 5: Bridgewater migration (awaits walkthrough)
 
 **State:** `awaiting_walkthrough` — Brief 40 Part 5. Migration script `scripts/40_bridgewater_systems_migration.py` translates Bridgewater's persisted `systems_config_v25` (Brief 28f shape) to `systems_config_v40` (Brief 40 per-system array shape) for heating / cooling / DHW / ventilation. Lighting + small_power already populated via Part 4's DEFAULT_PARAMS fallback — preserved by the migration. Idempotent (re-run is a no-op).
