@@ -1,6 +1,26 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-19 — Brief 41 Part 2: Schema cleanup — drop Cd/Cw per-opening
+## 🚧 Session 2026-05-19 — Brief 41 Part 3: Migration script
+
+**State:** `commit_in_flight` — Brief 41 Part 3. Script `scripts/41_operable_openings_schema_migration.py` removes `discharge_coefficient` and `wind_coefficient` from all persisted projects' `operable_openings[*]` entries. `height_m` retained.
+
+**Design follows the Brief 37 schedule-migration pattern:**
+- HTTP-based migration (talks to backend at port 8002), no direct DB access.
+- Iterates `GET /api/projects`, fetches each project's building_config, walks `operable_openings[]`, removes dropped fields, `PUT /api/projects/{id}/building` to persist.
+- Idempotent: re-running on a clean project reports `NO-OP`.
+- Stop-dev-server discipline per CLAUDE.md Process Rule 11 (autosave can race the migration).
+
+**Per-project reporting:** prints how many openings were touched + how many fields removed, plus an inventory line per opening showing remaining shape (id, area_m2, height_m).
+
+**Not run yet** — Chris runs the script on his Windows machine after restarting the backend. The script will read live data and clean Bridgewater + any other project that has operable openings with the dropped fields.
+
+**Build:** unchanged from Part 2 (no JS / engine changes this Part).
+
+**Next:** Part 4 — UI cleanup. Remove the `discharge_coefficient` + `wind_coefficient` inputs from the opening-editor card in `OperationModule.jsx` (lines 130-131 + 1097-1104) and surface the schedule picker prominently.
+
+---
+
+## 🟢 Session 2026-05-19 — Brief 41 Part 2: Schema cleanup — drop Cd/Cw per-opening
 
 **State:** `commit_in_flight` — Brief 41 Part 2. Per-opening `discharge_coefficient` and `wind_coefficient` defaults removed from the engine's `synthesiseOperableOpeningsFromLegacy` helper (`instantCalc.js:610–626`) and from the Bridgewater seed script (`scripts/seed_bridgewater_v25_systems.mjs:239–242`). `height_m` retained.
 
