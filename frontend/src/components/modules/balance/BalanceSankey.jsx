@@ -24,9 +24,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { sankey, sankeyLeft, sankeyLinkHorizontal } from 'd3-sankey'
 import { colourForElement, LABELS } from '../../../data/balanceColours.js'
-import { DEFAULT_MODE, loadOrderFor, gainOrderFor } from '../../../utils/stateMode.js'
+import { DEFAULT_MODE, gainOrderFor } from '../../../utils/stateMode.js'
 import { solarLabel } from '../../../utils/facadeLabel.js'
-import { TooltipPill } from './HeatBalance.jsx'
+import { TooltipPill, buildLossesMap, colourKeyForLossElement } from './HeatBalance.jsx'
 
 const BUILDING_NODE_ID = '_zone'
 const BUILDING_NODE_COLOUR = '#0F172A'   // dark navy
@@ -43,46 +43,19 @@ function readValue(node, unit) {
   return unit === 'kwh_per_m2' ? (node.kwh_per_m2 ?? 0) : (node.kwh ?? 0)
 }
 
-// Bug fix (Chris reported 2026-05-17):
-// _normaliseSetpointNode mirrors HeatBalance.flattenLosses' logic so the
-// Sankey reads the same Brief 28k setpoint-convention losses block as the
-// Rows / Stacked layouts. Without this, the Sankey was reading the legacy
-// free-running `data.annual.losses` accumulator, which is comfort-band
-// INSENSITIVE — so changing the heating setpoint visibly moved Rows / Stacked
-// numbers but the Sankey diagram stayed put. Both layouts now consume the
-// same losses_at_setpoint block, so all three views agree.
-function _normaliseSetpointNode(node, gia) {
-  if (!node) return null
-  const kwh = node.heating_loss_kwh ?? 0
-  if (!(kwh > 0.01)) return null
-  const kwh_per_m2 = (node.kwh_per_m2 != null && Number.isFinite(node.kwh_per_m2))
-    ? node.kwh_per_m2
-    : (gia > 0 ? kwh / gia : 0)
-  return { kwh, kwh_per_m2 }
-}
-
 // ── Build Sankey graph from heat_balance ─────────────────────────────────────
 
-function buildGraph(data, unit, orientationDeg = 0, mode = DEFAULT_MODE) {
+// Brief 39 follow-up (2026-05-19): losses-side iteration is now driven by
+// `buildLossesMap` (shared with HeatBalance's flattenLosses), so the Sankey,
+// Rows, and Stacked views all see the same elements. Pre-factor the Sankey
+// only iterated `loadOrderFor(mode)` and missed dynamically-appended keys
+// like `natvent_<id>` (per-opening operable openings) and `ventilation_<name>`
+// (per-system mech vent) — those vanished from the Sankey while staying
+// visible in Rows + Stacked. Now all three layouts share one ordered key
+// list and one losses map.
+function buildGraph(data, unit, orientationDeg = 0, mode = DEFAULT_MODE, modules = null) {
   if (!data?.annual) return null
   const { gains } = data.annual
-  const gia = data?.metadata?.gia_m2 ?? 0
-  const setpoint = data?.losses_at_setpoint
-  const legacyLosses = data?.annual?.losses ?? {}
-
-  // Build the loss map the same way HeatBalance.flattenLosses does — prefer
-  // setpoint values where available, fall back to legacy for anything the
-  // new shape doesn't carry.
-  const losses = { ...legacyLosses }
-  if (setpoint) {
-    for (const k of [
-      'external_wall', 'roof', 'ground_floor', 'glazing',
-      'fabric_leakage', 'permanent_vents', 'thermal_bridging',
-    ]) {
-      const sp = _normaliseSetpointNode(setpoint[k], gia)
-      if (sp) losses[k] = sp
-    }
-  }
 
   const nodes = []
   const links = []
@@ -127,17 +100,19 @@ function buildGraph(data, unit, orientationDeg = 0, mode = DEFAULT_MODE) {
   // ── Centre node ──────────────────────────────────────────────────────────
   addNode(BUILDING_NODE_ID, 'Zone', BUILDING_NODE_COLOUR)
 
-  // ── Losses out (right) ───────────────────────────────────────────────────
-  // State-aware loss order: State 1 excludes cooling + openings_window; future
-  // states extend the list. New loss elements appear automatically when added
-  // to LOSS_ORDERS in stateMode.js. `losses[k]` is now the merged setpoint /
-  // legacy map built above.
-  for (const k of loadOrderFor(mode)) {
-    const v = readValue(losses?.[k], unit)
-    if (v > 0) {
-      addNode(k, LABELS[k], colourForElement(k))
-      addLink(BUILDING_NODE_ID, k, v, colourForElement(k))
-    }
+  // ── Losses out (right) — driven by shared buildLossesMap ─────────────────
+  const { orderedKeys, losses } = buildLossesMap(data, mode, modules)
+  for (const k of orderedKeys) {
+    const node = losses[k]
+    if (!node) continue
+    const v = readValue(node, unit)
+    if (v <= 0) continue
+    // Synthetic `_label` (per-system vent, per-opening natvent, cooling)
+    // wins over the canonical LABELS table.
+    const label = node._label ?? LABELS[k] ?? k
+    const colour = colourForElement(colourKeyForLossElement(k))
+    addNode(k, label, colour)
+    addLink(BUILDING_NODE_ID, k, v, colour)
   }
 
   if (!links.length) return null
@@ -146,7 +121,7 @@ function buildGraph(data, unit, orientationDeg = 0, mode = DEFAULT_MODE) {
 
 // ── Render ───────────────────────────────────────────────────────────────────
 
-export default function BalanceSankey({ data, unit, orientationDeg = 0, onElementClick, mode = DEFAULT_MODE }) {
+export default function BalanceSankey({ data, unit, orientationDeg = 0, onElementClick, mode = DEFAULT_MODE, modules = null }) {
   const containerRef = useRef(null)
   const [dims, setDims] = useState({ width: 720, height: 420 })
   const [hover, setHover] = useState(null)
@@ -166,7 +141,7 @@ export default function BalanceSankey({ data, unit, orientationDeg = 0, onElemen
   }, [])
 
   const graph = useMemo(() => {
-    const raw = buildGraph(data, unit, orientationDeg, mode)
+    const raw = buildGraph(data, unit, orientationDeg, mode, modules)
     if (!raw) return null
     try {
       const layout = sankey()
@@ -184,7 +159,7 @@ export default function BalanceSankey({ data, unit, orientationDeg = 0, onElemen
     } catch (e) {
       return null
     }
-  }, [data, unit, orientationDeg, dims, mode])
+  }, [data, unit, orientationDeg, dims, mode, modules])
 
   if (!graph) {
     return (

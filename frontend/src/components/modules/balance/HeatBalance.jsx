@@ -130,11 +130,24 @@ function _modulesToCategoryMatcher(modules) {
   return (key) => allowed.has(key) || prefixes.some(p => key.startsWith(p))
 }
 
-function flattenLosses(data, unit, mode = DEFAULT_MODE, modules = null) {
-  // Brief 28-TB-Simple TB-V1: prefer losses_at_setpoint when present
-  // (carries thermal_bridging via ISO 14683 H_TB, per-system mech vent
-  // breakdown, per-opening natural-ventilation breakdown — none of which
-  // exist on the legacy annual.losses block).
+/**
+ * Brief 39 follow-up (2026-05-19): factored out of flattenLosses so the
+ * Sankey layout (`BalanceSankey.buildGraph`) can consume the SAME losses
+ * map + ordering + module-filter logic that Rows / Stacked use. Pre-
+ * factor the Sankey iterated `loadOrderFor(mode)` directly, which missed
+ * the dynamically-appended per-opening natvent (`natvent_<id>`) and per-
+ * system mech-vent (`ventilation_<name>`) entries — Chris caught this when
+ * his "New door" operable opening appeared in Rows/Stacked but vanished
+ * from the Sankey. Both views now share this function, so any future
+ * dynamic category appears consistently across all three layouts.
+ *
+ * Synthetic-cooling note: the legacy flattenLosses inlined the cooling
+ * row inside its .map step. This helper pre-populates `losses.cooling`
+ * with the synthesised shape (kwh, kwh_per_m2, _label, synthetic flag)
+ * so downstream consumers can treat cooling identically to any other
+ * key — the special-case is handled here, once.
+ */
+export function buildLossesMap(data, mode = DEFAULT_MODE, modules = null) {
   const setpoint = data?.losses_at_setpoint
   const legacyLosses = data?.annual?.losses ?? {}
   const gia    = data?.metadata?.gia_m2 ?? 0
@@ -199,19 +212,23 @@ function flattenLosses(data, unit, mode = DEFAULT_MODE, modules = null) {
     }
   }
 
+  // Synthetic cooling — pre-populate so downstream treats it like any key.
+  if (orderWithNew.includes('cooling')) {
+    const mwh = data?.demand?.cooling_demand_mwh
+    if (mwh != null && mwh > 0.01) {
+      const kwh = mwh * 1000
+      const kwh_per_m2 = gia > 0 ? kwh / gia : 0
+      losses.cooling = { kwh, kwh_per_m2, synthetic: true, source: 'demand.cooling_demand_mwh', _label: LABELS.cooling }
+    }
+  }
+
   // Brief 28-IM §3 module ownership filter: only render keys owned by the
   // requesting module. Cooling demand (synthesised) is always allowed when
   // present — it's a State-2+ rollup, not a category line.
   const moduleMatcher = _modulesToCategoryMatcher(modules)
-  return orderWithNew
+  const orderedKeys = orderWithNew
     .filter(k => {
-      // 'cooling' is synthesised from demand — falls through the normal
-      // losses[k] lookup. Only present when the mode order includes it
-      // (envelope-gains, full). Always allowed regardless of module filter.
-      if (k === 'cooling') {
-        const mwh = data?.demand?.cooling_demand_mwh
-        return mwh != null && mwh > 0.01
-      }
+      if (k === 'cooling') return losses.cooling != null
       // Drop the legacy aggregate 'ventilation' line when we've already
       // expanded it into per-system entries — avoids double-counting.
       if (k === 'ventilation' && orderWithNew.some(x => x.startsWith('ventilation_'))) return false
@@ -221,24 +238,29 @@ function flattenLosses(data, unit, mode = DEFAULT_MODE, modules = null) {
     .filter(k => !k.startsWith('openings_') || (losses[k]?.kwh ?? 0) > 0.01)
     .filter(k => !['fabric_leakage', 'permanent_vents', 'thermal_bridging'].includes(k)
                  || (losses[k]?.kwh ?? 0) > 0.01)
+
+  return { orderedKeys, losses }
+}
+
+/**
+ * Map a loss-element key to the colour-palette key. Synthetic dynamic
+ * categories (per-system mech vent, per-opening natvent) need to be
+ * resolved to their parent category's colour.
+ */
+export function colourKeyForLossElement(k) {
+  if (k.startsWith('ventilation_')) return 'ventilation'
+  if (k.startsWith('natvent_')) return 'openings_window'
+  return k
+}
+
+function flattenLosses(data, unit, mode = DEFAULT_MODE, modules = null) {
+  const { orderedKeys, losses } = buildLossesMap(data, mode, modules)
+  return orderedKeys
     .map(k => {
-      if (k === 'cooling') {
-        const kwh = (data.demand.cooling_demand_mwh ?? 0) * 1000
-        const kwh_per_m2 = gia > 0 ? kwh / gia : 0
-        return {
-          key:   'cooling',
-          label: LABELS.cooling,
-          value: unit === 'kwh_per_m2' ? kwh_per_m2 : kwh,
-          raw_kwh: kwh,
-          raw_kwh_per_m2: kwh_per_m2,
-          colour: colourForElement('cooling'),
-          meta:  { kwh, kwh_per_m2, synthetic: true, source: 'demand.cooling_demand_mwh' },
-        }
-      }
       const node = losses[k]
-      // Per-system vent + per-opening natvent rows carry a synthetic _label
-      // so they render with a descriptive name instead of the synthetic
-      // composite key. Everything else uses the canonical LABELS table.
+      // Per-system vent + per-opening natvent rows (and synthetic cooling)
+      // carry a synthetic _label so they render with a descriptive name
+      // instead of the composite key. Everything else uses LABELS.
       const label = node?._label ?? LABELS[k] ?? k
       return {
         key: k,
@@ -246,7 +268,7 @@ function flattenLosses(data, unit, mode = DEFAULT_MODE, modules = null) {
         value: readValue(node, unit),
         raw_kwh: node?.kwh ?? 0,
         raw_kwh_per_m2: node?.kwh_per_m2 ?? 0,
-        colour: colourForElement(k.startsWith('ventilation_') ? 'ventilation' : k.startsWith('natvent_') ? 'openings_window' : k),
+        colour: colourForElement(colourKeyForLossElement(k)),
         area_m2: node?.area_m2,
         meta: node,
       }
@@ -721,6 +743,7 @@ export default function HeatBalance({
             orientationDeg={orientationDeg}
             onElementClick={onElementClick}
             mode={mode}
+            modules={modules}
           />
         )}
       </div>
