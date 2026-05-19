@@ -1,6 +1,45 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-19 — Brief 41 Part 4: UI — Cd/Cw inputs removed; footnote updated
+## 🚧 Session 2026-05-19 — Brief 41 Part 5: Bridgewater reconciliation (code-side; walkthrough pending)
+
+**State:** `commit_in_flight` — Brief 41 Part 5. Code-side walkthrough of which display reads which calculator's output for the operable-opening loss post-Parts 1-4. Audit doc updated with display-view map, physics-driven order-of-magnitude bracket, escalation threshold, and walkthrough checklist for Chris.
+
+**Display map post-Brief-41 (per Rule 14 three-location parity):**
+- Building module Heat Balance → State 1 per-opening loop (lines 1322-1380) → `losses_at_setpoint.natural_ventilation[i].heat_loss_kwh`
+- Internal Gains + Operation → State 2 per-opening loop (lines 2697-2745) → same field path
+- Systems Sankey → State 3 cascades State 2 demand (heating + cooling demand reflect the corrected door indirectly)
+- LiveResultsPanel / HeatBalanceTab / ProjectDashboard → inline-legacy `Q_window` (also patched in Part 1)
+
+**Physics-driven order-of-magnitude bracket** for Bridgewater's 4 m² always-open door under building-wide `cd=0.29` + `flow_mode='single_sided'`:
+```
+Q_wind ≈ 0.0483 × v_wind m³/s (single_sided dispatch with cd 0.29)
+At v_wind avg 5 m/s, 8000 heating hours, avg dT 9 K, no stack (permanent mode):
+   UA × dT × hours = 1206 × 0.24 × 9 × 8000 / 1e6 ≈ 21 MWh
+Range: 10-30 MWh depending on actual wind / hours / dT.
+```
+
+**No numerical target.** Per Brief 33 Principle 1, the engine produces what the physics produces. The 10-30 MWh range is a physically-defensible bracket — if Chris's walkthrough is outside this, investigate from physics, do not calibrate.
+
+**Escalation threshold:** door loss > 1.5× a comparable 4 m² always-open louvre under the same single_sided dispatch is a Severity 2 finding. Brief 41 does not close until reconciled.
+
+**Walkthrough checklist for Chris** (full version in `docs/audit/41_operable_openings_diagnostic.md` §"Brief 41 Part 5 — Bridgewater reconciliation"):
+1. Refresh Operation Heat Balance — capture "Operable: New door (east)" value (expected single-digit / low-double-digit MWh)
+2. Building module same door under State 1 — same order of magnitude
+3. Comparable louvre figure for ratio check
+4. Heating demand back toward Brief-39 baseline (~265 MWh)
+5. Cooling demand recovered (~70 MWh)
+6. Temperature-mode test (stack term should kick in)
+7. Scheduled-mode test (schedule fraction should reduce loss proportionally)
+
+**Audit doc placeholders** for the six walkthrough fields ready to be filled by Chris in chat or directly in the doc.
+
+**Build:** unchanged from Part 4 (docs-only this Part).
+
+**Next:** Walkthrough sign-off by Chris. If numbers reconcile, Part 6 close-out commit lands (archive brief, repoint current.md, amend CLAUDE.md Rule 14 with the operable-openings extension + the new mirror-vs-physics-correctness paragraph, mark Issue #17 FIXED). If walkthrough escalates, Brief 41 stays open for diagnostic.
+
+---
+
+## 🟢 Session 2026-05-19 — Brief 41 Part 4: UI — Cd/Cw inputs removed; footnote updated
 
 **State:** `commit_in_flight` — Brief 41 Part 4. UI cleanup for the operable-opening editor card in `OperationModule.jsx`.
 

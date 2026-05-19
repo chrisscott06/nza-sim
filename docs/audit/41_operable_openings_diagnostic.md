@@ -292,3 +292,71 @@ Audit confirms Chris's three changes are sound:
 - No numerical target — language fixed.
 
 Standing by for authorisation to proceed with Parts 1–6.
+
+---
+
+## Brief 41 Part 5 — Bridgewater reconciliation (code-side)
+
+**Author:** Claude Code (executor) — appended during Brief 41 Part 5 (2026-05-19).
+
+Code-side walkthrough confirming each module reads the corrected operable-opening output post-Parts 1-4. Actual MWh figures await Chris's walkthrough.
+
+### Display-view → engine output map (post-Brief-41)
+
+| View | Module | Calculator | Field path | Post-fix expectation |
+| --- | --- | --- | --- | --- |
+| Heat Balance Sankey / Stacked / Rows | Building (`mode='envelope-only'`) | State 1 per-opening loop (lines 1322-1380) | `losses_at_setpoint.natural_ventilation[i].heat_loss_kwh` → keyed `natvent_<id>` via `buildLossesMap` | Single-digit MWh / opening (4 m² always-open door order-of-magnitude) under building-wide `cd=0.29` + `flow_mode='single_sided'` |
+| Heat Balance Sankey / Stacked / Rows | Internal Gains (`mode='envelope-gains'`) | State 2 per-opening loop (lines 2697-2745) | same as Building, via the State 2 mirror | Single-digit MWh, possibly slightly higher than State 1 due to Brief 28c gain-warmed T_op trace's hysteresis interaction with temperature-mode controls (always/scheduled modes are T_air-invariant) |
+| Heat Balance Sankey / Stacked / Rows | Operation (`mode='envelope-gains'`) | State 2 (same as Internal Gains) | same path | same number as Internal Gains |
+| Systems Sankey + KPI strip | Systems (`mode='full'` + v2.5) | State 3 cascades State 2 demand | indirect via State 2's heating/cooling demand cascade | Heating demand drops from 802 MWh back toward Brief-39 baseline (~265 MWh) plus a small contribution from the door at its corrected magnitude. Cooling demand recovers toward 70 MWh from the suppressed 38 MWh. |
+| Live Results Panel / HeatBalanceTab / ProjectDashboard | various | inline-legacy 'full' (no v2.5 library) | inline-legacy `Q_window` post-Part-1 dispatch | Aggregate operable-opening flow now also single_sided-correct in the legacy fallback path. |
+
+### Expected order of magnitude (no calibration target)
+
+Per CLAUDE.md and the Part 0 audit, Brief 41 does NOT pre-assume a Bridgewater post-fix number. The physics-driven order of magnitude under `single_sided` dispatch with building-wide `cd=0.29`:
+
+```
+Q_wind = 0.025 × min(1, 0.29/0.6) × A × v_wind
+       = 0.025 × 0.483 × 4 × v_wind
+       = 0.0483 × v_wind                                  m³/s
+
+At v_wind ≈ 5 m/s avg:  Q_wind ≈ 0.24 m³/s
+UA_open  = ρ × Cp × Q  = 1206 × 0.24                     ≈ 291 W/K
+
+Annual hand-bracket (~ 8000 heating hours, avg dT ≈ 9 K, no stack term in permanent mode):
+   291 × 9 × 8000 / 1e6                                  ≈ 21 MWh
+
+Lower bracket (lower wind, fewer hours):                 ~ 10 MWh
+Upper bracket (higher wind, longer integration):          ~ 30 MWh
+```
+
+**Physically-defensible range: ~ 10–30 MWh** for the always-open 4 m² door under building-wide cd 0.29 single_sided dispatch. Comparable to what a 4 m² louvre would produce under the same dispatch (permanent vents post-Brief-39).
+
+### Escalation condition
+
+If Chris's walkthrough produces a number **> 1.5× a comparable 4 m² always-open louvre** under the same single_sided dispatch — that's a Severity 2 finding. Investigate from physics: check that all three code paths (S1, S2, inline-legacy) actually picked up the new dispatch; check that the door isn't somehow being double-counted between the per-opening engine AND inline-legacy's `Q_window`; check that no per-opening Cd / Cw fields are still being read somewhere. **Do not adjust the engine to fit a target.** Brief 41 does not close until reconciled.
+
+### Walkthrough checklist for Chris
+
+1. Refresh the Operation module Heat Balance tab. The "Operable: New door (east)" row in Rows / Stacked / Sankey should now show a single-digit-to-low-double-digit MWh figure (not 646 MWh). **Capture the actual value.**
+2. Refresh the Building module Heat Balance — same door should show the same order of magnitude under State 1 (envelope-only mode).
+3. Refresh the Systems module Sankey — heating demand should have dropped substantially (back toward Brief-39 baseline). Cooling demand should have recovered.
+4. Switch the door's control mode to `temperature-triggered` (the dropdown in the editor card). Observe that the same opening now reports a higher loss / gain than `permanent` mode would — because the stack term contributes when temperature-controlled (per Brief 41's design call: temperature-mode keeps stack).
+5. If the schedule library has a "business hours" schedule, set the door to `scheduled` and pick that schedule. The opening's loss should drop relative to `permanent` mode in proportion to the schedule's open-hours fraction. Wind-only physics; no stack.
+
+### Awaiting walkthrough
+
+Part 6 (close) waits for Chris's walkthrough to confirm:
+- Bridgewater 4 m² door post-fix value is in the 10-30 MWh order-of-magnitude bracket.
+- Ratio against a comparable always-open louvre is ≤ 1.5× (escalation threshold).
+- Temperature-mode and scheduled-mode behave as designed.
+- No regressions on permanent vents, internal gains, or heating/cooling demand calcs unrelated to the door.
+
+**Walkthrough fields (Chris fills these in chat or directly in this doc):**
+
+1. Bridgewater Operation Sankey, "Operable: New door (east)" loss: **___ MWh** _(expected 10-30 MWh)_
+2. Bridgewater Building Sankey, same door under State 1: **___ MWh** _(expected same order)_
+3. Comparable always-open 4 m² louvre under permanent-vent dispatch: **___ MWh** _(reference for the ratio)_
+4. Ratio (door ÷ louvre): **___×** _(expected ≤ 1.5×)_
+5. Bridgewater heating demand: **___ MWh** _(expected back toward Brief-39 baseline ≈ 265 MWh, possibly slightly higher due to the door's small contribution)_
+6. Bridgewater cooling demand: **___ MWh** _(expected back to ≈ 70 MWh from suppressed 38 MWh)_
