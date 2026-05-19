@@ -397,3 +397,49 @@ The follow-up brief is roughly Brief 41-shaped (after Brief 40 — Systems Libra
 - Brief 39 Part 1 commit lands the in-place patch.
 - Issue #16 in `docs/audit/29_open_issues.md` documents the ProjectDashboard latent dead-read found during this audit.
 - CLAUDE.md's new architectural rule (Brief 39 Part 4) explicitly names inline-legacy as a parity-required location so the follow-up brief can find this audit doc by following the rule.
+
+---
+
+## Brief 39 Part 3 outcome — Deferred-follow-up sweep
+
+**Author:** Claude Code (executor) — appended during Brief 39 Part 3 (2026-05-19).
+
+Greg of `frontend/src/utils/instantCalc.js` for the markers `TODO`, `FIXME`, `deferred`, `follow-up`, `mirror`, `see also`, `XXX`, `HACK`, `stale`, `TBD`. 27 matches reviewed; classification below.
+
+### Mirror comments — documentation of parallel-reimpl architecture (16 of 27)
+
+Lines 2187, 2266, 2312, 2331, 2338, 2359, 2637, 2651, 2912, 2977, 3013, 3046, 3061, 3087, 3161, 3276. All describe State 2 mirroring State 1's structure (Brief 28-IM IM-M2 / IM-M3 / 28k Gate 3 mirrors of corresponding State 1 sections). These are documentation aids for the intentional parallel-reimpl pattern per Brief 28c; they don't indicate drift. **Verdict: keep as-is.**
+
+### The line 2187 operable-opening mirror (Audit 39 flagged concern)
+
+The Audit 39 flow map flagged this comment as same-class drift-risk as the perm-vent bug, since both were "mirror of State 1" claims. **Verified faithful**: State 2's Brief 28e Gate E2 operable-opening engine (lines 2697–2740) uses the identical `Q_wind / Q_stack / Q_open = √(Q_wind² + Q_stack²)` formula State 1 uses (lines 1339–1367), with the only addition being a daily accumulator (`_natvent_daily`, lines 2731–2740 — Brief 28-IM IM-M3 feature). The State 2 mirror comment at line 2698 explicitly confirms: *"Identical math + structure to State 1."*
+
+The Brief 28e Gate E2 operable-opening engine uses **wind+stack combined flow** with per-opening Cd, area, and stack height. It is independent of the Brief 33/34 `flow_mode` dispatch (which is for permanent vents only). No port required.
+
+### Genuine deferred items (4 of 27) — all active, no drift
+
+| Line | Marker | Classification | Action |
+| --- | --- | --- | --- |
+| 867, 1074 | Issue #4: stack term absent in cross branch (permanent vents) | **Active deferred** — known since Brief 33; logged in `29_open_issues.md` Issue #4 | Leave |
+| 3449 | "DHW + ventilation deferred to Part 4" (computeServiceEnergy JSDoc) | **Current** — the function correctly covers heating + cooling; DHW + ventilation use `computeDhwFuelMix` and `computeVentilationEnergy` respectively. The comment accurately describes this function's scope. | Leave |
+| 3821 | "Ventilation schedule_ref always_on; bespoke schedules deferred" (computeVentilationEnergy JSDoc) | **Active deferred** — schedule_ref isn't fully wired in ventilation; sensible future enhancement | Leave |
+| 3890 | "V1: schedule_ref hookup deferred — 8760 h hardcoded" (State 3 DHW circulation pump) | **Active deferred** — small future enhancement | Leave |
+| 4122 | "queued for a follow-up; the Sankey + Live Results don't need them" (State 2 daily_profiles) | **Active deferred** — DHW + lighting + small power per-hour profile capture is a real future enhancement | Leave |
+
+### Inline-legacy Q_window (cross-flow-only) — scoped out
+
+The simpler `Q_window = cd_dd × A × √C_w × v_wind` formula in inline-legacy (line 5219 onwards, now ~5230) remains cross-flow-only and schedule-gated. This is a known **stale stub** — the inline-legacy operable-window model predates Brief 28e Gate E2 and is part of inline-legacy's broader stale-stub status. Cleanup is deferred to the inline-legacy rationalisation follow-up brief (Option A) documented in this audit doc's "Inline-legacy rationalisation — deferred" section. Comment updated on lines ~5230 to reflect this Part 3 decision.
+
+### Brief 39 in-flight markers (3 of 27) — cleaned up in this Part
+
+Lines 2491 (State 2 perm-vent) and 5230s (inline-legacy Q_window): two markers from Parts 1 and 2 that pointed forward to "Part 3 mirror-comment sweep". Updated in Part 3's commit to reflect this Part's verdicts (no drift in State 2 operable openings; Q_window stays cross-flow-only in inline-legacy by design).
+
+The third Part 1/2 marker is the multi-line history comment at lines ~5170–5175 in inline-legacy explaining the Brief 39 patch rationale — that's history, not a pending action, kept as-is.
+
+### Summary
+
+- **27 matches reviewed.** 16 documentation aids (mirror comments); 4 genuine active-deferred items (all logged or scope-clear); 1 false positive ("stale-air extract" — not stale code); the rest are either resolved by Parts 1/2 or Part 3 own markers that get cleaned in this commit.
+- **0 stale-indicating-drift items found.** The only drift class identified in this brief — the perm-vent dispatch missing from State 2 + inline-legacy — was already addressed in Parts 1 and 2.
+- **No new issues logged.** The latent ProjectDashboard dead-read (Issue #16) was logged in Part 1's commit; nothing else needed in `29_open_issues.md`.
+
+The parallel-reimpl pattern's residual surface area (the actual drift risk going forward) is captured by CLAUDE.md's new architectural rule landing in Part 4 — not by the sweep itself.

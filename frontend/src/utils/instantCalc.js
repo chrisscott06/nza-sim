@@ -2487,8 +2487,9 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     const T_sa_roof = solAirT(T_out, hourlySolar.roof[h], roofModel.solar_abs ?? 0.7, roofModel.h_out ?? 25)
 
     // Permanent vents UA (State 2). Brief 39 Part 2: two-branch dispatch
-    // matches State 1 hour-loop at lines ~1075-1080. Operable-window
-    // mirror sweep is Brief 39 Part 3.
+    // matches State 1 hour-loop at lines ~1075-1080. Brief 39 Part 3
+    // verified State 2's operable-opening engine (Brief 28e Gate E2, line
+    // 2697 onwards) is faithfully mirrored from State 1 — no drift.
     let Q_louvre_m3s
     if (flow_mode_s2 === 'single_sided') {
       Q_louvre_m3s = 0.025 * single_sided_factor_s2 * louvre_area_total * v_wind
@@ -5232,8 +5233,13 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
 
     // Openings — wind-driven flow (m³/s) → ACH-equivalent → Wh/K → kWh
     // Brief 39 Part 1: two-branch dispatch matches State 1 hour-loop
-    // (lines 1075–1080). Operable-window Q_window remains cross-flow only
-    // pending Brief 39 Part 3's mirror-comment sweep.
+    // (lines 1075–1080). The simpler operable-window Q_window below stays
+    // cross-flow-only and schedule-gated — Brief 39 Part 3's sweep
+    // confirmed this is part of inline-legacy's stale-stub status (the
+    // proper per-opening engine is in State 1/2 Gate E2). Cleanup deferred
+    // to the inline-legacy rationalisation follow-up brief (see
+    // docs/audit/39_calculation_flow_map.md §"Inline-legacy
+    // rationalisation — deferred").
     const v_wind = weatherData.wind_speed?.[h] ?? 0
     let Q_louvre
     if (flow_mode_dd === 'single_sided') {

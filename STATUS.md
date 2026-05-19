@@ -1,6 +1,29 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-19 — Brief 39 Part 2: port flow_mode dispatch into State 2
+## 🚧 Session 2026-05-19 — Brief 39 Part 3: deferred-follow-up sweep complete
+
+**State:** `commit_in_flight` — Brief 39 Part 3. Grep of `instantCalc.js` for the markers `TODO`, `FIXME`, `deferred`, `follow-up`, `mirror`, `see also`, `XXX`, `HACK`, `stale`, `TBD`. 27 matches reviewed.
+
+**Findings summary:**
+- **16 of 27** are "mirror" comments describing State 2 mirroring State 1's structure — documentation aids for the intentional parallel-reimpl pattern per Brief 28c. Not drift; kept as-is.
+- **The line 2187 operable-opening "mirror of State 1" claim** (the Audit 39 flagged drift-risk concern) — **verified faithful**. State 2's Brief 28e Gate E2 engine (lines 2697–2740) uses the identical `Q_wind / Q_stack / Q_open = √(Q_wind² + Q_stack²)` formula State 1 uses (lines 1339–1367). The State 2 mirror comment at line 2698 explicitly confirms: *"Identical math + structure to State 1."* No port required.
+- **4 genuine active-deferred items** (Issue #4 stack term in cross branch; computeServiceEnergy scope statement; vent schedule_ref; State 3 DHW circulation_pump_kwh; State 2 daily_profiles V1 flat-rate). All current; all either logged (Issue #4) or scope-clear. Left as-is.
+- **0 stale-indicating-drift items found.** The only drift class — perm-vent dispatch missing from State 2 + inline-legacy — was already closed in Parts 1 and 2.
+- **0 new issues logged.** Issue #16 (ProjectDashboard dead-read) was logged in Part 1; nothing else surfaced.
+
+**Code change:** two comment markers cleaned up:
+- Line 2491 (State 2 perm-vent): pointer to Part 3 sweep replaced with the sweep's verdict (Gate E2 mirror verified faithful).
+- Line 5230s (inline-legacy Q_window): pointer to Part 3 sweep replaced with the verdict (Q_window stays cross-flow-only as part of inline-legacy's stale-stub status, deferred to follow-up rationalisation brief).
+
+**Audit doc:** appended a "Brief 39 Part 3 outcome — Deferred-follow-up sweep" section to `docs/audit/39_calculation_flow_map.md` with the full classification table, the Gate E2 mirror verification details, and the cross-link to the inline-legacy follow-up brief.
+
+**Build:** not rebuilt this Part (comment-only changes); will rebuild at Part 4 / 6.
+
+**Next:** Part 4 — CLAUDE.md architectural rule (3-location envelope-physics parity rule).
+
+---
+
+## 🟢 Session 2026-05-19 — Brief 39 Part 2: port flow_mode dispatch into State 2
 
 **State:** `commit_in_flight` — Brief 39 Part 2. State 2's permanent-vent path receives the same two-branch dispatch that State 1 has had since Brief 33/34 and inline-legacy received in Part 1.
 
