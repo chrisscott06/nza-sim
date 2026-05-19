@@ -683,115 +683,167 @@ function fmtSys(s) {
 }
 
 function SystemsSankey({ consumption, sysCfg }) {
-  // Two-column layout per Chris's walkthrough call (Brief 38 redo 2026-05-19):
-  //   LEFT  — Demand bars (Heating, Cooling, DHW, Mech vent, Lighting, Small power)
-  //   RIGHT — three stacked rects in one column: Electricity, Gas, Waste
+  // Three-column Sankey per Chris's walkthrough call (2026-05-19, second
+  // iteration):
+  //   LEFT   — Demand bars (Heating, Cooling, DHW, Mech vent, Lighting, SP)
+  //   MIDDLE — System annotation (small italic text, no box). The flow
+  //            visually NECKS DOWN through here: source-side width is the
+  //            demand share served by this branch, target-side width is the
+  //            fuel consumed. The taper IS the SCOP/efficiency.
+  //   RIGHT  — Energy carrier: Electricity (top) + Gas (bottom), no Waste.
   //
-  // No system boxes. Each demand carries 3 stacked text lines: name above,
-  // MWh below, system label (or "Mixed") below that. Flows are drawn at
-  // their true MWh widths on a single uniform scale, and the demand sum
-  // sets the page height — bars are thick, no caps.
+  // Waste (cooling condenser, MEV/MVHR exhaust, flue losses) is intentionally
+  // out of scope of THIS view — it dominated the layout in the previous pass
+  // because cooling's reject (delivered + elec) is bigger than cooling demand.
+  // Heat-rejection visual is a separate widget on the docket.
   //
-  // Unserved (enabled:false → demand without delivery) renders as a faint
-  // demand bar with the system label set to "(off — no system)" and no
-  // outgoing flows. The demand simply terminates at the bar's right edge.
+  // Flows are drawn as proper Sankey ribbons (filled tapered polygons), not
+  // constant-width strokes — so the demand → fuel transformation reads
+  // visually as a width change through the system column.
+  //
+  // Unserved heating: demand bar drawn faint, name suffixed " (off)", system
+  // label "(off — no system)", no ribbons.
 
   const c = consumption ?? {}
   const ventList    = c.ventilation ?? []
   const ventListCfg = sysCfg.ventilation ?? []
-  const fan_total                = ventList.reduce((s, v) => s + (v.fan_electricity_mwh ?? 0), 0)
-  const vent_extract_unrecovered = ventList.reduce((s, v) => s + (v.exhaust_loss_mwh ?? 0), 0)
-
-  const FLUE_LOSS_FRACTION = 1 - 0.92  // gas-boiler flue loss approximation (heating + DHW)
+  const fan_total   = ventList.reduce((s, v) => s + (v.fan_electricity_mwh ?? 0), 0)
 
   const dhwMix      = c.dhw?.fuel_mix_applied ?? null
   const dhwIsMixed  = !!dhwMix && (dhwMix.heat_pump ?? 0) > 0 && (dhwMix.gas ?? 0) > 0
   const dhwIsAshpPreheat = (dhwMix?.heat_pump ?? 0) > 0
 
-  // Per-item view model. demand sets the row's bar height; e_mwh / g_mwh /
-  // waste_mwh set the widths of up to three outgoing flows. sysLabel is the
-  // text shown below the MWh figure in the demand column footer.
+  // Split a service's delivered demand into fuel branches. Each branch has
+  // a delivered_mwh (source-side / left width of the ribbon) and a fuel_mwh
+  // (target-side / right width of the ribbon). The width change IS the
+  // SCOP / efficiency.
+  function makeBranches(delivered, e_mwh, g_mwh, mix) {
+    if (!delivered || delivered < 0.01) return []
+    const branches = []
+    if (mix && (mix.heat_pump ?? 0) > 0 && (mix.gas ?? 0) > 0) {
+      const total = (mix.heat_pump ?? 0) + (mix.gas ?? 0)
+      branches.push({ fuel: 'electricity', delivered_mwh: delivered * mix.heat_pump / total, fuel_mwh: e_mwh })
+      branches.push({ fuel: 'gas',         delivered_mwh: delivered * mix.gas / total,       fuel_mwh: g_mwh })
+    } else if (e_mwh > 0.01 && g_mwh > 0.01) {
+      // No fuel_mix but both fuels — split by fuel proportion (rare).
+      const t = e_mwh + g_mwh
+      branches.push({ fuel: 'electricity', delivered_mwh: delivered * e_mwh / t, fuel_mwh: e_mwh })
+      branches.push({ fuel: 'gas',         delivered_mwh: delivered * g_mwh / t, fuel_mwh: g_mwh })
+    } else if (e_mwh > 0.01) {
+      branches.push({ fuel: 'electricity', delivered_mwh: delivered, fuel_mwh: e_mwh })
+    } else if (g_mwh > 0.01) {
+      branches.push({ fuel: 'gas',         delivered_mwh: delivered, fuel_mwh: g_mwh })
+    }
+    return branches
+  }
+
+  // Efficiency string for the system column footer line, where the engine
+  // exposes it. SCOP / EER live on the consumption block; for DHW (mixed)
+  // and lighting/SP/fans (1:1) we don't show one.
+  function effString(scopOrSeer, kind) {
+    if (scopOrSeer == null || !isFinite(scopOrSeer) || scopOrSeer <= 0) return null
+    if (scopOrSeer < 1) return `${Math.round(scopOrSeer * 100)}% eff`
+    return `${kind} ${scopOrSeer.toFixed(1)}`
+  }
+
   const items = [
     {
       key: 'space_heating', label: 'Heating',
       demand:    c.space_heating?.demand_mwh    ?? 0,
       delivered: c.space_heating?.delivered_mwh ?? 0,
-      e_mwh:     c.space_heating?.electricity_mwh ?? 0,
-      g_mwh:     c.space_heating?.gas_mwh ?? 0,
-      waste_mwh: (c.space_heating?.gas_mwh ?? 0) * FLUE_LOSS_FRACTION,
-      sysLabel:  fmtSys(sysCfg.heating?.primary?.library_id ?? ''),
+      branches:  makeBranches(
+        c.space_heating?.delivered_mwh ?? 0,
+        c.space_heating?.electricity_mwh ?? 0,
+        c.space_heating?.gas_mwh ?? 0,
+        null,
+      ),
+      sysLabel: fmtSys(sysCfg.heating?.primary?.library_id ?? ''),
+      effLabel: effString(c.space_heating?.scop_effective, 'SCOP'),
     },
     {
       key: 'space_cooling', label: 'Cooling',
       demand:    c.space_cooling?.demand_mwh    ?? 0,
       delivered: c.space_cooling?.delivered_mwh ?? 0,
-      e_mwh:     c.space_cooling?.electricity_mwh ?? 0,
-      g_mwh:     0,
-      waste_mwh: (c.space_cooling?.delivered_mwh ?? 0) + (c.space_cooling?.electricity_mwh ?? 0),
-      sysLabel:  fmtSys(sysCfg.cooling?.primary?.library_id ?? ''),
+      branches:  makeBranches(
+        c.space_cooling?.delivered_mwh ?? 0,
+        c.space_cooling?.electricity_mwh ?? 0,
+        0,
+        null,
+      ),
+      sysLabel: fmtSys(sysCfg.cooling?.primary?.library_id ?? ''),
+      effLabel: effString(c.space_cooling?.seer_effective, 'EER'),
     },
     {
       key: 'dhw', label: 'DHW',
       demand:    c.dhw?.demand_mwh    ?? 0,
       delivered: c.dhw?.delivered_mwh ?? 0,
-      e_mwh:     c.dhw?.electricity_mwh ?? 0,
-      g_mwh:     c.dhw?.gas_mwh ?? 0,
-      waste_mwh: (c.dhw?.gas_mwh ?? 0) * FLUE_LOSS_FRACTION,
-      sysLabel:  dhwIsMixed ? 'Mixed' : fmtSys(sysCfg.dhw?.primary?.library_id ?? ''),
+      branches:  makeBranches(
+        c.dhw?.delivered_mwh ?? 0,
+        c.dhw?.electricity_mwh ?? 0,
+        c.dhw?.gas_mwh ?? 0,
+        dhwMix,
+      ),
+      sysLabel: dhwIsMixed ? 'Mixed' : fmtSys(sysCfg.dhw?.primary?.library_id ?? ''),
+      effLabel: null,  // Mixed → blended SCOP/eff not meaningful as one figure
     },
     {
       key: 'fans', label: 'Mech vent',
       demand:    fan_total,
       delivered: fan_total,
-      e_mwh:     fan_total,
-      g_mwh:     0,
-      waste_mwh: vent_extract_unrecovered,
+      branches:  makeBranches(fan_total, fan_total, 0, null),
       sysLabel:  ventListCfg.length > 1
-        ? 'Mixed'
+        ? `${ventListCfg.length} systems`
         : (ventListCfg[0]?.name ? fmtSys(ventListCfg[0].name) : fmtSys(ventListCfg[0]?.id ?? '')),
+      effLabel:  null,
     },
     {
       key: 'lighting', label: 'Lighting',
       demand:    c.lighting?.electricity_mwh ?? 0,
       delivered: c.lighting?.electricity_mwh ?? 0,
-      e_mwh:     c.lighting?.electricity_mwh ?? 0,
-      g_mwh:     0,
-      waste_mwh: 0,
-      sysLabel:  'LED fixtures',
+      branches:  makeBranches(
+        c.lighting?.electricity_mwh ?? 0,
+        c.lighting?.electricity_mwh ?? 0,
+        0,
+        null,
+      ),
+      sysLabel: 'LED fixtures',
+      effLabel: null,
     },
     {
       key: 'small_power', label: 'Small power',
       demand:    c.small_power?.electricity_mwh ?? 0,
       delivered: c.small_power?.electricity_mwh ?? 0,
-      e_mwh:     c.small_power?.electricity_mwh ?? 0,
-      g_mwh:     0,
-      waste_mwh: 0,
-      sysLabel:  'Plug load',
+      branches:  makeBranches(
+        c.small_power?.electricity_mwh ?? 0,
+        c.small_power?.electricity_mwh ?? 0,
+        0,
+        null,
+      ),
+      sysLabel: 'Plug load',
+      effLabel: null,
     },
   ].filter(it => it.demand > 0.01)
 
   for (const it of items) {
     it.isUnserved = it.demand > 0.01 && it.delivered < 0.01
-    if (it.isUnserved) it.sysLabel = '(off — no system)'
+    if (it.isUnserved) { it.sysLabel = '(off — no system)'; it.effLabel = null }
   }
 
   // ── Single uniform scale: demand sum drives the page height ──────────────
-  const W = 920, H = 640
+  const W = 920, H = 620
   const padT = 32
   const padB = 16
   const availH = H - padT - padB
-  // Per-row text overhead above + below each bar (centred around the bar).
   const NAME_GAP_PX = 14   // service-name label above the bar
   const MWH_GAP_PX  = 13   // MWh figure below the bar
-  const SYS_GAP_PX  = 12   // system label below the MWh
-  const LANE_TEXT_PX = NAME_GAP_PX + MWH_GAP_PX + SYS_GAP_PX
+  const LANE_TEXT_PX = NAME_GAP_PX + MWH_GAP_PX  // system label moved out of the lane
 
   const totalDemand = items.reduce((s, it) => s + it.demand, 0)
   const totalBarsPx = Math.max(120, availH - items.length * LANE_TEXT_PX)
   const pxPerMWh = totalBarsPx / Math.max(totalDemand, 1)
-  const scaleW = (mwh) => mwh > 0 ? Math.max(2, mwh * pxPerMWh) : 0
+  const scaleW = (mwh) => mwh > 0 ? Math.max(1.5, mwh * pxPerMWh) : 0
 
-  // ── Left column geometry (Demand bars stacked top-down) ──────────────────
+  // ── Left column geometry ─────────────────────────────────────────────────
   const leftX0 = 60, nodeW = 130
   const leftX1 = leftX0 + nodeW
 
@@ -803,45 +855,33 @@ function SystemsSankey({ consumption, sysCfg }) {
     it.barY1 = it.barY0 + barH
     it.barMid = (it.barY0 + it.barY1) / 2
     it.mwhY  = it.barY1 + MWH_GAP_PX - 3
-    it.sysY  = it.barY1 + MWH_GAP_PX + SYS_GAP_PX - 3
-    yCursor  = it.barY1 + MWH_GAP_PX + SYS_GAP_PX
+    yCursor  = it.barY1 + MWH_GAP_PX
   }
 
-  // Assign source-y to each outflow (stack from bar top). Flows can sum to
-  // more than the bar height (cooling waste > cooling demand because the
-  // condenser-rejection identity gives reject = delivered + elec); they
-  // overflow the bar's bottom edge — accepted because the bar shows demand
-  // and the flows show their true MWh, on the same uniform scale.
+  // Assign source-side y-extents to each branch (stack from bar top using the
+  // delivered share). Sum of branch source heights ≈ demand bar height.
   for (const it of items) {
-    if (it.isUnserved) { it.outflows = []; continue }
+    if (it.isUnserved) continue
     let cy = it.barY0
-    const flows = []
-    if (it.e_mwh     > 0.01) flows.push({ to: 'electricity', mwh: it.e_mwh,     w: scaleW(it.e_mwh) })
-    if (it.g_mwh     > 0.01) flows.push({ to: 'gas',         mwh: it.g_mwh,     w: scaleW(it.g_mwh) })
-    if (it.waste_mwh > 0.01) flows.push({ to: 'waste',       mwh: it.waste_mwh, w: scaleW(it.waste_mwh) })
-    for (const f of flows) {
-      f.sourceY = cy + f.w / 2
-      cy += f.w
+    for (const br of it.branches) {
+      br.srcW  = scaleW(br.delivered_mwh)
+      br.srcY0 = cy
+      br.srcY1 = cy + br.srcW
+      cy = br.srcY1
     }
-    it.outflows = flows
   }
 
-  // ── Right column geometry (Electricity / Gas / Waste stacked) ────────────
+  // ── Right column geometry (Electricity + Gas, no Waste) ──────────────────
   const rightX0 = 730, rightX1 = rightX0 + nodeW
-  const totalElec  = c.total?.electricity_mwh ?? 0
-  const totalGas   = c.total?.gas_mwh ?? 0
-  const totalWaste = items.reduce((s, it) => s + (it.waste_mwh ?? 0), 0)
+  const totalElec = c.total?.electricity_mwh ?? 0
+  const totalGas  = c.total?.gas_mwh ?? 0
 
   const carrierBars = [
-    { key: 'electricity', label: 'Electricity', mwh: totalElec,  color: FUEL_COLOURS.electricity },
-    { key: 'gas',         label: 'Gas',         mwh: totalGas,   color: FUEL_COLOURS.gas },
-    { key: 'waste',       label: 'Waste',       mwh: totalWaste, color: '#9CA3AF' },
+    { key: 'electricity', label: 'Electricity', mwh: totalElec, color: FUEL_COLOURS.electricity },
+    { key: 'gas',         label: 'Gas',         mwh: totalGas,  color: FUEL_COLOURS.gas },
   ].filter(b => b.mwh > 0.01)
 
-  // Vertically centre the right column against the demand column so the
-  // visual feels balanced when right total < left total (which it will be,
-  // because heat-pump COPs make elec ≪ demand).
-  const INTER_RECT_GAP = 8
+  const INTER_RECT_GAP = 16
   const rightTotalH = carrierBars.reduce((s, b) => s + scaleW(b.mwh), 0)
                     + carrierBars.length * (NAME_GAP_PX + MWH_GAP_PX)
                     + Math.max(0, carrierBars.length - 1) * INTER_RECT_GAP
@@ -859,32 +899,32 @@ function SystemsSankey({ consumption, sysCfg }) {
     yCursor = b.barY1 + MWH_GAP_PX + INTER_RECT_GAP
   }
 
-  // Assign target-y to incoming contributions on each right-column rect.
-  // Stack from top of rect; sum of incoming widths == rect height (since
-  // both are mwh × the same scale).
+  // For each carrier rect, assign target-side y-extents to incoming branches.
+  // Stack from rect top using the fuel_mwh widths (sum = rect height).
   for (const b of carrierBars) {
     let cy = b.barY0
-    b.contribs = []
     for (const it of items) {
       if (it.isUnserved) continue
-      let mwh = 0
-      if (b.key === 'electricity') mwh = it.e_mwh
-      else if (b.key === 'gas')    mwh = it.g_mwh
-      else if (b.key === 'waste')  mwh = it.waste_mwh ?? 0
-      if (mwh > 0.01) {
-        const w = scaleW(mwh)
-        b.contribs.push({ item_key: it.key, mwh, w, y: cy + w / 2 })
-        cy += w
+      for (const br of it.branches) {
+        if (br.fuel !== b.key) continue
+        if (br.fuel_mwh < 0.01) continue
+        br.tgtW  = scaleW(br.fuel_mwh)
+        br.tgtY0 = cy
+        br.tgtY1 = cy + br.tgtW
+        cy = br.tgtY1
       }
     }
   }
+
+  // ── System column (middle) — small italic text, no box ───────────────────
+  const systemX = (leftX1 + rightX0) / 2  // ≈ 460
 
   return (
     <div className="w-full h-full overflow-auto p-4">
       <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
         <div className="flex items-center gap-2">
           <EnginePill mode="static" />
-          <p className="text-caption font-semibold text-navy">Energy flow — demand to carrier &amp; waste</p>
+          <p className="text-caption font-semibold text-navy">Energy flow — demand · system · carrier</p>
         </div>
         <div className="flex items-center gap-2">
           <ChartTotalsBadge label="Σ elec" value_kwh={totalElec * 1000} />
@@ -892,38 +932,36 @@ function SystemsSankey({ consumption, sysCfg }) {
         </div>
       </div>
       <p className="text-xxs text-mid-grey mb-3">
-        Each demand on the left flows to the energy carrier(s) it consumes and —
-        if the system rejects heat — to the Waste rect on the right. Bar height
-        and flow width are proportional to annual MWh on a single uniform scale
-        (the total demand sets the canvas height). The system serving each
-        demand is named below its MWh figure.
+        Each demand on the left passes through its system in the middle, which
+        consumes electricity and/or gas on the right. The ribbon's width on
+        the left side is the demand served by that branch; on the right side
+        it's the fuel consumed — so a heat pump's ribbon necks down
+        through the system column, a gas boiler's barely tapers. Bar height
+        and ribbon width share a single uniform scale (the total demand sets
+        the canvas height). Heat rejection (cooling condenser, MEV / MVHR
+        exhaust, gas flue) is intentionally out of scope of this view.
       </p>
 
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: H }} preserveAspectRatio="xMidYMid meet">
         {/* Column headers */}
         <g fontSize="10" fill="#475569" fontWeight="600" textAnchor="middle">
           <text x={leftX0 + nodeW / 2}  y={padT - 12}>Demand</text>
-          <text x={rightX0 + nodeW / 2} y={padT - 12}>Energy carrier · waste</text>
+          <text x={systemX}              y={padT - 12}>System</text>
+          <text x={rightX0 + nodeW / 2}  y={padT - 12}>Energy carrier</text>
         </g>
 
-        {/* ── Flows (drawn before bars so the bars sit cleanly on top) ──── */}
+        {/* ── Sankey ribbons (drawn first; bars sit on top at the edges) ── */}
         {items.map(it => {
           if (it.isUnserved) return null
-          return (it.outflows ?? []).map((f, fi) => {
-            const target = carrierBars.find(b => b.key === f.to)
-            if (!target) return null
-            const targetContrib = target.contribs.find(co => co.item_key === it.key)
-            if (!targetContrib) return null
-            const colour = f.to === 'electricity'
+          return it.branches.map((br, bi) => {
+            const colour = br.fuel === 'electricity'
               ? (it.key === 'dhw' && dhwIsAshpPreheat ? '#DC2626' : FUEL_COLOURS.electricity)
-              : f.to === 'gas'   ? FUEL_COLOURS.gas
-              : '#94A3B8'
+              : FUEL_COLOURS.gas
             return (
-              <path key={`${it.key}-${fi}`}
-                d={pathLink(leftX1, f.sourceY, rightX0, targetContrib.y, f.w)}
-                fill="none" stroke={colour}
-                strokeWidth={f.w} opacity={0.55}
-                strokeLinecap="butt"
+              <path key={`r-${it.key}-${bi}`}
+                d={ribbonPath(leftX1, br.srcY0, br.srcY1, rightX0, br.tgtY0, br.tgtY1)}
+                fill={colour} fillOpacity={0.50}
+                stroke={colour} strokeOpacity={0.20} strokeWidth={0.5}
               />
             )
           })
@@ -947,13 +985,26 @@ function SystemsSankey({ consumption, sysCfg }) {
                 fontWeight="500">
                 {it.demand.toFixed(1)} MWh
               </text>
-              <text x={leftX0 + nodeW / 2} y={it.sysY} fontSize="8.5"
-                fill="#6B7280" textAnchor="middle" fontStyle="italic">
-                {it.sysLabel}
-              </text>
             </g>
           )
         })}
+
+        {/* ── System column (middle) — small text per row, no box ────────── */}
+        {items.map(it => (
+          <g key={`s-${it.key}`}>
+            <text x={systemX} y={it.barMid - (it.effLabel ? 5 : 0)} fontSize="9"
+              fill={it.isUnserved ? '#9CA3AF' : '#374151'} textAnchor="middle"
+              fontWeight="500" fontStyle="italic">
+              {it.sysLabel}
+            </text>
+            {it.effLabel && !it.isUnserved && (
+              <text x={systemX} y={it.barMid + 8} fontSize="8"
+                fill="#6B7280" textAnchor="middle">
+                {it.effLabel}
+              </text>
+            )}
+          </g>
+        ))}
 
         {/* ── Right column rects ─────────────────────────────────────────── */}
         {carrierBars.map(b => {
@@ -976,9 +1027,25 @@ function SystemsSankey({ consumption, sysCfg }) {
   )
 }
 
+// pathLink — constant-width stroke path (legacy, retained in case other
+// callers appear). New SystemsSankey uses ribbonPath below for tapered flows.
 function pathLink(x0, y0, x1, y1, _w) {
   const cp = (x0 + x1) / 2
   return `M ${x0} ${y0} C ${cp} ${y0}, ${cp} ${y1}, ${x1} ${y1}`
+}
+
+// ribbonPath — a closed path forming a Sankey ribbon between a source edge
+// (vertical segment x0 / y0_top..y0_bot) and a target edge (x1 / y1_top..y1_bot).
+// The top edge is a cubic Bézier with horizontal control points at the midpoint
+// x, then a vertical segment down the target edge, then a mirror Bézier back
+// along the bottom edge, then close. SVG draws a smoothly tapering polygon.
+function ribbonPath(x0, y0_top, y0_bot, x1, y1_top, y1_bot) {
+  const cp = (x0 + x1) / 2
+  return `M ${x0} ${y0_top} ` +
+         `C ${cp} ${y0_top}, ${cp} ${y1_top}, ${x1} ${y1_top} ` +
+         `L ${x1} ${y1_bot} ` +
+         `C ${cp} ${y1_bot}, ${cp} ${y0_bot}, ${x0} ${y0_bot} ` +
+         `Z`
 }
 
 /* ───────────────────────────────────────────────────────────────────────────

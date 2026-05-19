@@ -1,6 +1,48 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-19 — Brief 38: SystemsSankey full redesign per Chris's walkthrough call
+## 🚧 Session 2026-05-19 — Brief 38: 3-column Sankey with tapered ribbons + waste removed
+
+**State:** `commit_in_flight` — second walkthrough iteration. Sankey now shows the demand → system → carrier transformation as a *visual taper* of each flow at the system column. Waste is intentionally removed from this view; heat-rejection visual is a separate widget on the docket (see "Open question" below).
+
+**Layout (L → R):**
+- **Demand** column (left) — six thick bars stacked contiguously (Heating, Cooling, DHW, Mech vent, Lighting, Small power). Service name above, MWh below. No system label below — that's moved to the middle column.
+- **System** column (middle, x ≈ 460) — small italic text per row: system name on one line, efficiency (SCOP / EER / % eff) on a second line where the engine exposes it. No box.
+- **Energy carrier** column (right) — two rects: Electricity (top) + Gas (bottom). No Waste.
+
+**Flow rendering:** proper Sankey ribbons (filled tapered polygons via `ribbonPath`), not constant-width strokes. Each ribbon has:
+- A source-side vertical edge at the demand bar with height = `scaleW(delivered_via_this_branch)`.
+- A target-side vertical edge at the carrier rect with height = `scaleW(fuel_consumed)`.
+- Two cubic Béziers (top + bottom edges) joining them, so the ribbon necks down (heat pump) or stays roughly flat (gas boiler / electric resistance) through the system column.
+
+**Mixed-fuel DHW:** `makeBranches` splits the DHW delivered into ASHP share and gas share using `fuel_mix_applied`. Two ribbons stack source-side at the DHW demand bar — one tapers down to the Electricity rect (red-tinted per the ASHP-preheat convention), one barely tapers to the Gas rect.
+
+**Single-fuel rows:** one branch per row. Source-side = full demand, target-side = fuel. Lighting / Small power / Mech vent fans are 1 : 1 so the ribbon doesn't taper.
+
+**Unserved heating (off-state):** demand bar drawn at 30 % opacity, name suffixed " (off)", system label "(off — no system)", no ribbons emitted.
+
+**Waste removed:** previously had cooling condenser, DHW flue, heating flue, and aggregated MEV / MVHR exhaust all flowing to a single Waste rect. Cooling's condenser rejection alone (≈ `delivered + electricity_input`) was bigger than cooling demand, blowing up the right column visually. All four waste contributions are now skipped in this view.
+
+**System-label formatting (unchanged):** `fmtSys` converts snake_case to spaced + upper-cases acronyms (VRF, ASHP, MVHR, MEV, DHW, LED, HVAC, HP, SFP, COP, EER, SEER). DHW mixed → "Mixed". Mech vent with N > 1 systems → "N systems" (was "Mixed" previously; "N systems" is more informative now that there's room for the label on its own line).
+
+**Efficiency labels (new):** `effString` formats `c.space_heating.scop_effective` → "SCOP 3.5" (or "92% eff" when the engine value is < 1, i.e. gas boiler). `c.space_cooling.seer_effective` → "EER 3.5". DHW mixed and lighting / SP / fans get none.
+
+**Build:** clean, 7.89 s, 2.49 MB JS (gzip 692 kB).
+
+**Browser verification expected (Chris):** Open Systems → Sankey on Bridgewater.
+- Three column headers: Demand, System, Energy carrier.
+- DHW row: ASHP ribbon necks DOWN to a much narrower Electricity edge (≈ delivered_HP / COP); Gas ribbon stays roughly the same width to Gas.
+- Cooling row: ribbon necks down by factor ≈ EER (cooling-elec ≈ cooling-demand / EER).
+- Heating row: faint bar, "Heating (off)" label, no ribbon.
+- Right column: only Electricity + Gas (Waste rect gone).
+- Demand totals on the left + carrier totals on the right both visible, with the ribbon widths showing the SCOP/efficiency transformation in between.
+
+**Open question for heat rejection.** Chris flagged he still wants to surface cooling condenser, ASHP outdoor unit, MEV/MVHR exhaust, and gas flue losses — just not in THIS view because they distort the demand-driven layout. Candidate widgets (to discuss before committing): (a) small "Heat rejected" summary panel below the Sankey on the same page; (b) a new centre tab — *Sankey · Profiles · Schedule · Monthly · Summary · **Rejection***; (c) a mini-Sankey below the main one showing rejection sources flowing to a single "Outdoor" sink. **No code committed for this yet** — proposed to Chris in chat.
+
+**Next:** walkthrough confirms; pick heat-rejection widget direction → separate brief or fold into Brief 38 close.
+
+---
+
+## 📝 Session 2026-05-19 — Brief 38 second redo [SUPERSEDED — waste rect blew up the layout]
 
 **State:** `commit_in_flight` — Sankey rewritten end-to-end after Chris's walkthrough: ditch the four-column "Demand · System · Carrier · Waste" structure, no more system boxes, thick demand-driven bars, three rects in one right column (Electricity / Gas / Waste).
 
