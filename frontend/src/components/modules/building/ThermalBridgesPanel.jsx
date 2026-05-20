@@ -37,7 +37,7 @@ const MODE_OPTIONS = [
   { value: 'absent',        label: 'Absent (no TB modelled)' },
 ]
 
-export default function ThermalBridgesPanel({ engineResult }) {
+export default function ThermalBridgesPanel({ engineResult, isOpen, onToggle }) {
   const { params, updateParam } = useContext(ProjectContext)
   const [expanded, setExpanded] = useState(false)
   // Brief 33 follow-up (UX nit, 2026-05-18): section header is now a
@@ -45,7 +45,14 @@ export default function ThermalBridgesPanel({ engineResult }) {
   // input section in the Building module (Airtightness, Geometry,
   // Glazing, Shading, Permanent openings, Fabric — all wrapped in
   // CollapsibleSection from BuildingDefinition.jsx). Default open.
-  const [open, setOpen] = useState(true)
+  //
+  // Inline-polish 2026-05-20: supports controlled isOpen/onToggle so the
+  // Building module's single-expand accordion can manage this section
+  // alongside the others. Falls back to local state when uncontrolled.
+  const [localOpen, setLocalOpen] = useState(true)
+  const controlled = typeof isOpen === 'boolean' && typeof onToggle === 'function'
+  const open = controlled ? isOpen : localOpen
+  const toggleOpen = () => { if (controlled) onToggle(); else setLocalOpen(o => !o) }
 
   // Read the engine output for the live H_TB + per-junction breakdown.
   const tb = engineResult?.losses_at_setpoint?.thermal_bridging
@@ -76,7 +83,7 @@ export default function ThermalBridgesPanel({ engineResult }) {
           Building module. H_TB readout stays in the header so the headline
           number remains visible when collapsed. */}
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={toggleOpen}
         className="w-full flex items-center justify-between px-2.5 py-1.5 rounded text-left transition-opacity"
         style={{ backgroundColor: BUILDING_ACCENT }}
       >

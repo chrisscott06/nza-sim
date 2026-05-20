@@ -129,12 +129,23 @@ const FACADES = [
 
 const BUILDING_ACCENT = '#A1887F'  // warm earth — building module
 
-function CollapsibleSection({ title, children, defaultOpen = true }) {
-  const [open, setOpen] = useState(defaultOpen)
+// Inline-polish 2026-05-20: supports controlled open/onToggle for the
+// single-expand accordion pattern used in the left panel. When isOpen +
+// onToggle are provided, parent manages state (only one section open at
+// a time across the panel). When omitted, falls back to local state for
+// any callers that want independent collapse/expand.
+function CollapsibleSection({ title, children, isOpen, onToggle, defaultOpen = true }) {
+  const [localOpen, setLocalOpen] = useState(defaultOpen)
+  const controlled = typeof isOpen === 'boolean' && typeof onToggle === 'function'
+  const open = controlled ? isOpen : localOpen
+  const handleClick = () => {
+    if (controlled) onToggle()
+    else setLocalOpen(o => !o)
+  }
   return (
     <div className="mb-2">
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={handleClick}
         className="w-full flex items-center justify-between px-2.5 py-1.5 rounded text-left transition-opacity"
         style={{ backgroundColor: BUILDING_ACCENT }}
       >
@@ -456,11 +467,11 @@ function LouvreAreaInput({ value, onCommit, disabled, title }) {
 // m³/(h·m²). UI display toggles between m³/(h·m²) and l/(s·m²) (factor of
 // 1/3.6). Both are valid pressurisation-test conventions; some BRUKL
 // reports list q50 in l/(s·m²) (often labelled q₅₀_l).
-function Airtightness({ q50, derivedN50, derivedOperational, onChange }) {
+function Airtightness({ q50, derivedN50, derivedOperational, onChange, isOpen, onToggle }) {
   const [unit, setUnit] = useState('m3_h_m2')  // 'm3_h_m2' | 'l_s_m2'
   const q50_ls = q50 / 3.6
   return (
-    <CollapsibleSection title="Airtightness">
+    <CollapsibleSection title="Airtightness" isOpen={isOpen} onToggle={onToggle}>
       <div className="flex items-center justify-between mb-1">
         <label className="text-xxs text-mid-grey">
           Air permeability q₅₀
@@ -671,6 +682,18 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
 
   const { text: achText, color: achColor } = achLabel(ach)
 
+  // Inline-polish 2026-05-20: single-expand accordion for the entire
+  // Building left panel — Geometry / Glazing / Shading / Permanent
+  // openings / Fabric / Thermal bridges / Airtightness / Comfort band.
+  // Only one section is expanded at a time; clicking the open section
+  // collapses it.
+  const [openSection, setOpenSection] = useState('geometry')
+  const toggleAccordion = (id) => setOpenSection(prev => prev === id ? null : id)
+  const accordionProps = (id) => ({
+    isOpen: openSection === id,
+    onToggle: () => toggleAccordion(id),
+  })
+
   return (
     <div className="h-full overflow-y-auto overflow-x-hidden bg-white border-r border-light-grey">
       {/* Module header with warm earth accent */}
@@ -688,7 +711,7 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
       <div className="p-3 space-y-0">
 
         {/* ── Geometry ── */}
-        <CollapsibleSection title="Geometry">
+        <CollapsibleSection title="Geometry" {...accordionProps('geometry')}>
           <Field label="Building name">
             <input
               type="text"
@@ -747,7 +770,7 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
         </CollapsibleSection>
 
         {/* ── Glazing ── */}
-        <CollapsibleSection title="Glazing (WWR)">
+        <CollapsibleSection title="Glazing (WWR)" {...accordionProps('glazing')}>
           {FACADES.map(fac => {
             const included = (wwr[fac.key] ?? 0) > 0
             return (
@@ -789,7 +812,7 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
               wrapping every window. Drives overhang.depth_m + fin.left/right
               together so the per-window 3D frame matches the EnergyPlus
               shading objects emitted per fenestration. ── */}
-        <CollapsibleSection title={`Shading${anyShading ? ' · active' : ''}`} defaultOpen={anyShading}>
+        <CollapsibleSection title={`Shading${anyShading ? ' · active' : ''}`} {...accordionProps('shading')}>
           {FACADES.map(fac => {
             const reveal = Math.max(
               Number(shadingOverhang[fac.key]?.depth_m   ?? 0),
@@ -829,7 +852,7 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
               Wind-driven only. Operable windows + schedules live in /operation;
               mechanical ventilation lives in /systems — neither belong here.
               See CLAUDE.md "Module scopes" + Brief 33 §"Scope statement". */}
-        <CollapsibleSection title={`Permanent openings${anyOpenings ? ' · active' : ''}`} defaultOpen={anyOpenings}>
+        <CollapsibleSection title={`Permanent openings${anyOpenings ? ' · active' : ''}`} {...accordionProps('openings')}>
           {/* Brief 42 Part 4 (2026-05-19): per-facade C_d + flow_mode. The
               Brief 41 Part 7 shared BuildingWideOpeningsControls component
               is retired — each facade declares its own physics now.
@@ -934,7 +957,7 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
         </CollapsibleSection>
 
         {/* ── Fabric ── */}
-        <CollapsibleSection title="Fabric">
+        <CollapsibleSection title="Fabric" {...accordionProps('fabric')}>
           {CONSTRUCTION_ELEMENTS.map(el => (
             <ConstructionSelect
               key={el.key}
@@ -954,7 +977,7 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
             engine H_TB + collapsible per-junction breakdown). Replaces the
             dead y-factor selector that previously lived inside each
             construction-editor popout. */}
-        <ThermalBridgesPanel engineResult={liveResult} />
+        <ThermalBridgesPanel engineResult={liveResult} {...accordionProps('thermal_bridges')} />
 
         {/* ── Airtightness (Brief 28-IM Bug 2 + add 3 unit toggle) ── */}
         <Airtightness
@@ -962,6 +985,7 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
           derivedN50={derivedN50}
           derivedOperational={derivedOperational}
           onChange={(v) => updateParam('fabric', { air_permeability_q50: v })}
+          {...accordionProps('airtightness')}
         />
 
         {/* ── Comfort band (Brief 28-IM-Polish IA 3.1) ──
@@ -969,7 +993,7 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
             left column, not below the chart. The Heat Balance tab's old
             inline `ComfortBandEditor` stays in place for now as a redundant
             secondary editor; this one is the canonical input. */}
-        <ComfortBandLeftPanel />
+        <ComfortBandLeftPanel {...accordionProps('comfort')} />
 
       </div>
     </div>
@@ -979,12 +1003,12 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
 /* Brief 28-IM-Polish IA 3.1: comfort band sliders in the left column.
    Writes via the existing ProjectContext.setComfortBand which persists to
    the project record (comfort_band_lower_c / comfort_band_upper_c). */
-function ComfortBandLeftPanel() {
+function ComfortBandLeftPanel({ isOpen, onToggle }) {
   const { comfortBand, setComfortBand } = useContext(ProjectContext)
   const lo = Number(comfortBand?.lower_c ?? 20)
   const hi = Number(comfortBand?.upper_c ?? 26)
   return (
-    <CollapsibleSection title="Comfort band (setpoints)">
+    <CollapsibleSection title="Comfort band (setpoints)" isOpen={isOpen} onToggle={onToggle}>
       <div className="space-y-1.5">
         <div>
           <div className="flex items-center justify-between mb-0.5">

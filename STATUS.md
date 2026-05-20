@@ -1,5 +1,49 @@
 # NZA SIMULATE — Status
 
+## 🔧 Session 2026-05-20 — Inline polish: single-expand accordion in Building / Internal Gains / Systems left panels
+
+**State:** `commit_in_flight` — small UX housekeeping commit during Brief 41 walkthrough.
+
+**Prior HEAD:** `1d59213` (Brief 41 Part 4.1).
+
+### What changed
+
+Chris's request during the Brief 41 walkthrough: the left-panel input sections in Building / Internal Gains / Systems modules were independently collapsible, leading to a "messy" column when multiple sections were expanded. Refactored the three modules' left panels to a **single-expand accordion** pattern — only one section can be open at a time; clicking another section auto-collapses the current one; clicking the open section collapses to nothing.
+
+**Building module** (`BuildingDefinition.jsx` + `ThermalBridgesPanel.jsx`):
+- `CollapsibleSection` extended with optional controlled `isOpen` + `onToggle` props (falls back to local state when uncontrolled — preserves any external uses).
+- `Airtightness` + `ComfortBandLeftPanel` helper components gain `isOpen`/`onToggle` pass-through props.
+- `ThermalBridgesPanel.jsx` (separate file) gains the same pass-through pattern.
+- `InputsColumn` adds `openSection` state controller + `accordionProps(id)` helper; passes through to all 8 sections (Geometry / Glazing / Shading / Permanent openings / Fabric / Thermal bridges / Airtightness / Comfort band).
+- Default open section: Geometry.
+
+**Internal Gains module** (`InternalGainsModule.jsx`):
+- `CollapsibleSection` extended with the same controlled-props pattern; `onActivate` callback kept (drives the schedule popout's context — orthogonal from accordion state).
+- Module parent adds `openSection` state initialised from existing `activeSection` pref. Three sections (Occupancy / Lighting / Equipment) receive `isOpen` + `onToggle` props.
+- Default open section: Occupancy (matches `activeSection` default).
+
+**Systems module** (`SystemsModule.jsx`):
+- Existing `open` state was already an object; updated `toggle()` to clear other services on open and toggle the current one. Same default (Heating only).
+
+### Verification (browser MCP on Bridgewater, all three modules)
+
+- **Building**: Initial state Geometry open; click Glazing → Geometry collapses, Glazing opens; click Glazing again → collapses to none ✓
+- **Internal Gains**: Initial Occupancy open; click Lighting → Lighting only; click Equipment → Equipment only ✓
+- **Systems**: Initial Heating open (with Primary + Secondary heating cards visible); click Cooling → only Primary cooling visible, heating cards gone; click Heating → cooling cards gone, heating visible ✓ (only one `+ Add system` button visible at any time, confirming single service section is expanded)
+
+### What did NOT change
+
+- No engine logic. No envelope physics. Rule 14 unaffected.
+- No backend changes.
+- No data-model changes. No Brief 41 changes (Brief 41 walkthrough sign-off still pending).
+- Section content unchanged — only the open/closed orchestration.
+
+### Cross-cutting note
+
+The CollapsibleSection refactor preserves backward compatibility — any caller that doesn't pass `isOpen`/`onToggle` continues to use local-state collapse. The three modules' usage opts in to controlled mode via `accordionProps(id)`. Future modules that want single-expand can adopt the same pattern in three lines: `useState`, `toggleAccordion`, `accordionProps`.
+
+---
+
 ## 🚧 Session 2026-05-20 — Brief 41 Part 4.1: Editor coverage widened to all 10 §V matrix rows (corrective)
 
 **State:** `commit_in_flight` — Brief 41 Part 4.1 corrective.

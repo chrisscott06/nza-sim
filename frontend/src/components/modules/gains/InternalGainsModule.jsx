@@ -135,11 +135,19 @@ function ResizeHandle({ onResize }) {
 }
 
 // ── Section bounding box ────────────────────────────────────────────────────
-function CollapsibleSection({ title, accent, onActivate, children, defaultOpen = true }) {
-  const [open, setOpen] = useState(defaultOpen)
+// Inline-polish 2026-05-20: supports controlled open/onToggle for the
+// single-expand accordion pattern used in the left panel. When isOpen +
+// onToggle are provided, parent manages state (only one section open at
+// a time across the panel). When omitted, falls back to local state for
+// any callers that want independent collapse/expand.
+function CollapsibleSection({ title, accent, onActivate, children, isOpen, onToggle, defaultOpen = true }) {
+  const [localOpen, setLocalOpen] = useState(defaultOpen)
+  const controlled = typeof isOpen === 'boolean' && typeof onToggle === 'function'
+  const open = controlled ? isOpen : localOpen
   const handleClick = () => {
     if (onActivate) onActivate()
-    setOpen(o => !o)
+    if (controlled) onToggle()
+    else setLocalOpen(o => !o)
   }
   return (
     <div className="mb-2">
@@ -326,6 +334,17 @@ export default function InternalGainsModule() {
     setEditingExceptionId(null)
     setPrefs(p => ({ ...p, activeSection: next }))
   }, [])
+
+  // Inline-polish 2026-05-20: single-expand accordion for the left
+  // panel — only one of Occupancy / Lighting / Equipment is expanded at
+  // a time. Independent from `activeSection` (which drives the schedule
+  // popout's context); clicking a closed section opens it AND becomes
+  // the active section; clicking the open section collapses it without
+  // changing the active section.
+  const [openSection, setOpenSection] = useState(activeSection)
+  const toggleAccordion = useCallback((id) => {
+    setOpenSection(prev => prev === id ? null : id)
+  }, [])
   const onEditSchedule = useCallback((section) => {
     setEditingExceptionId(null)
     setPrefs(p => ({ ...p, activeSection: section }))
@@ -369,6 +388,8 @@ export default function InternalGainsModule() {
               title="Occupancy"
               accent={GAIN_COLOURS.occupancy}
               onActivate={() => setActiveSection('occupancy')}
+              isOpen={openSection === 'occupancy'}
+              onToggle={() => toggleAccordion('occupancy')}
             >
               <OccupancySection
                 annual={annual}
@@ -380,6 +401,8 @@ export default function InternalGainsModule() {
               title="Lighting"
               accent={GAIN_COLOURS.lighting}
               onActivate={() => setActiveSection('lighting')}
+              isOpen={openSection === 'lighting'}
+              onToggle={() => toggleAccordion('lighting')}
             >
               <LightingSection
                 annual={annual}
@@ -393,6 +416,8 @@ export default function InternalGainsModule() {
               title="Equipment"
               accent={GAIN_COLOURS.equipment}
               onActivate={() => setActiveSection('equipment')}
+              isOpen={openSection === 'equipment'}
+              onToggle={() => toggleAccordion('equipment')}
             >
               <EquipmentSection
                 annual={annual}

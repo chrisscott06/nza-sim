@@ -399,12 +399,19 @@ function InputsColumn({ params, updateParam, consumption, comfortBand, openSched
   // comfort-vs-setpoint diagnostic on each SystemEditorCard.
   const brief40 = consumption?.brief40 ?? null
 
-  // Per-section open/collapsed state (heating + dhw open by default; rest
-  // collapsed to keep the column compact)
+  // Per-section open/collapsed state. Single-expand accordion (2026-05-20
+  // walkthrough request): only one service section can be open at a time;
+  // clicking another service closes the current one. Clicking the open
+  // section collapses it (leaving nothing open). Heating is the default.
   const [open, setOpen] = useState({
-    heating: true, cooling: false, dhw: true, ventilation: false, lighting: false, small_power: false,
+    heating: true, cooling: false, dhw: false, ventilation: false, lighting: false, small_power: false,
   })
-  const toggle = (k) => setOpen(o => ({ ...o, [k]: !o[k] }))
+  const toggle = (k) => setOpen(o => {
+    const wasOpen = !!o[k]
+    const next = Object.fromEntries(Object.keys(o).map(key => [key, false]))
+    if (!wasOpen) next[k] = true
+    return next
+  })
 
   // Per-system expanded state (collapsed by default — only one expanded at a
   // time, keyed by system id). Keys: `${service}:${systemId}`.
