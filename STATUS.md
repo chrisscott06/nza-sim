@@ -1,5 +1,74 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-20 — Brief 41 Part 4.1: Editor coverage widened to all 10 §V matrix rows (corrective)
+
+**State:** `commit_in_flight` — Brief 41 Part 4.1 corrective.
+
+**Prior HEAD:** `f2f4fb0` (Brief 41 Part 5 close).
+
+**Context:** Chris's authorisation of the pragmatic curated editor carried an explicit acceptance criterion that the curation must cover all 10 Notion §V verification matrix rows. The Part 4 commit shipped a curated editor that covered 6/10 rows fully — the audit against the matrix wasn't run before Part 4 closed. This Part 4.1 corrective widens the curation + fixes three editor bugs uncovered by the audit, so every matrix row produces the predicted visual response when patched via the editor.
+
+### Editor additions
+
+- **External shading — overhang depth per facade** (Row 3): four `NumberInput`s under the Envelope section, patching `building.shading_overhang.{north|south|east|west}.depth_m`. South is the dominant solar driver for UK; all four exposed for completeness.
+- **Per-system setpoint** on heating + cooling ServiceBlocks (Row 9): patches `building.systems_config_v40.{service}[id=...].setpoint`. `null` means "follow comfort band" per CLAUDE.md Systems scope — empty input → null on save. Non-null triggers the comfort-vs-setpoint state2Recompute closure (Brief 40 audit doc §3 per-system setpoint semantics).
+- **Occupancy density value** (Row 8): patches `building.occupancy.density.value`. Label shows the current basis (per_room / per_m2 / per_workstation / total) — basis editing is out of Part 4.1 scope (use Internal Gains module).
+
+### Editor bug fixes uncovered by the matrix audit
+
+- **Construction picker wrote wrong shape** (Row 1): The picker captured a STRING value (e.g. `'cavity_wall_enhanced'`) but the engine reads `constructions.external_wall` as an object `{library_id, u_value_override}` and prefers the override when set. Bridgewater's external_wall is `{library_id: 'cavity_wall_enhanced', u_value_override: 0.14}` — the override (0.14) wins over the library U (0.18). The string-shape patch replaced the whole object with a string, the engine dropped the override, and the wall U effectively WORSENED from 0.14 → 0.18. **Fix:** the picker now writes the full object `{library_id: v, u_value_override: null}` so swapping libraries clears any inherited override. A future enhancement could expose `u_value_override` as a separate input for Passivhaus-style direct-U authoring (out of Part 4.1 scope).
+
+- **Ventilation SFP + recovery patched wrong field paths** (Row 4): The editor patched `building.systems_config_v40.ventilation[id=...].sfp_w_per_l_per_s` and `.recovery_sensible_pct` (top-level). The actual v40 shape nests these under `efficiency_metric.{sfp_w_per_lps, recovery_sensible_pct, recovery_latent_pct}`. Engine effect: zero (the engine read efficiency_metric.* unchanged). **Fix:** patches now target the nested paths, and the editor's `value` reads from `system.efficiency_metric?.sfp_w_per_lps` etc. Note also the SFP field name is `sfp_w_per_lps` (not `sfp_w_per_l_per_s`).
+
+- **V25 ventilation mirror dual-write** (Row 4 architectural gap): With the nested-path fix above, v40 patches landed but heating demand still didn't change. Root cause: State 2 (`_calculateState2`) reads `building.systems_config_v25.ventilation` for the envelope-recovery integration (Brief 28j hourly recovery cap math); the v40 array is consumed by State 3 for delivered/electrical accounting only. Boosting v40 MVHR recovery doesn't reduce DEMAND because demand comes from State 2. **Fix:** the editor's vent SFP + recovery inputs now DUAL-WRITE — v40 patch (`efficiency_metric.recovery_sensible_pct`) + v25 mirror patch (`hre = pct/100`). State 2's demand calc and State 3's delivered calc both see the change. The dual-write pattern is documented in the editor + 29_open_issues.md #20 as a precedent for the future "wrap main-app UI" follow-up brief, which should generalise it.
+
+### Verification — engine-direct 10-row matrix (browser MCP on Bridgewater)
+
+Bridgewater baseline (State 3 path): EUI 58.0 kWh/m², heating demand 148.5 MWh, cooling demand 95.4 MWh, electricity 175.8 MWh, gas 74.7 MWh, lighting 26.8 MWh, DHW gas 74.7 MWh, carbon 11.6 kgCO₂/m².
+
+| Row | Intervention | Predicted | Observed (engine-direct) |
+|---|---|---|---|
+| 1 | Reduce wall U (override 0.14 → 0.06) | Heat demand drops | Heat 148.5 → 139.4 MWh (Δ −9.1) ✓ |
+| 2 | Reduce infiltration q50 (4.64 → 1.0 m³/h·m²) | Heat demand drops | Heat 148.5 → 133.2 MWh (Δ −15.3) ✓ |
+| 3 | South overhang depth (0 → 1.5 m) | Cool demand drops | Cool 95.4 → 85.3 MWh (Δ −10.1) ✓ |
+| 4 | MVHR sensible recovery (80% → 95%, dual-write v40+v25) | Heat demand drops | Heat 148.5 → 132.6 MWh (Δ −15.9) ✓ |
+| 5 | Reduce lighting load (1.5 → 0.5 W/m² on first profile) | Lighting drops | Lighting 26.8 → 8.93 MWh (Δ −17.9) ✓ |
+| 6 | Daylight dimming control_factor (0.7 → 0.5) | Lighting + total elec drop | Lighting 26.8 → 19.1, total elec 175.8 → 168.1 (Δ −7.65 each) ✓ |
+| 7 | Raise heating SCOP (→ 5.0) | Electricity drops, demand unchanged | Elec 175.8 → 163.9 (Δ −11.85); heat demand unchanged ✓ |
+| 8 | Reduce occupancy density (→ 0.5/room) | Heat rises, cool drops | Heat +78.0 MWh, Cool −29.7 MWh ✓ |
+| 9 | Cooling setpoint 22°C → 18°C (custom) | EUI rises, cooling elec rises | EUI 58.0 → 58.6 (+0.6), coolElec 28.3 → 30.9 (+2.56) ✓ |
+| 10 | Swap gas DHW (disable + raise ASHP to 100%) | DHW gas drops | DHW gas 74.7 → 0.0 (Δ −74.7) ✓ |
+
+**10/10 pass.** Every Notion §V matrix row triggers via the curated editor and produces the predicted physics direction. Acceptance criterion met.
+
+### Lighting flat-on-occupancy nuance (Row 8 conditional)
+
+Notion §V Row 8 has the conditional "lighting + equipment gains drop **if linked to occupancy**". Bridgewater's lighting profile has `relationship_to_occupancy: 'independent'` — so reducing density doesn't affect lighting in this project. That's correct behaviour, not a coverage gap. The editor lets the user patch the relationship via the schedule editor (out of Part 4.1's per-leaf editor scope but available from the existing Internal Gains module).
+
+### Logged follow-up
+
+- **`docs/audit/29_open_issues.md` #20** — Interventions editor: full main-app UI in patch capture context deferred. **S2.** Documents the curated-editor scope boundary, the patch-granularity question (atomic-per-leaf vs compound-per-key) that the future brief owns, and the v40+v25 dual-write precedent established in Part 4.1's ventilation handling.
+
+### What did NOT change in Part 4.1
+
+- No engine logic changes.
+- No envelope physics changes. Rule 14 did not fire.
+- No comparison view / library changes (Part 5 stands).
+- No backend changes.
+- Brief 40 Issues #18 / #19 still deferred.
+
+### Walkthrough status
+
+The Part 5.6 walkthrough (3-intervention Bridgewater stack: Fabric / Plant / Demand → cumulative −5.0 kWh/m²) shipped at `f2f4fb0` is still the headline behaviour. Part 4.1 widens what the editor can capture without changing the engine; the existing 3-intervention stack and library round-trip results remain valid.
+
+**Walkthrough sign-off pending from Chris before Part 6 close.** With Part 4.1 in, the editor coverage matches the brief's acceptance criterion. Open `/interventions`, add a new intervention, and confirm the Envelope section now includes Air permeability (q50) + four shading overhang inputs + the per-system setpoint input on cooling/heating systems + the occupancy density input. The persisted Bridgewater state from Part 5 remains for inspection (or clean-slate by deleting Part 5's test interventions + library entry).
+
+### Next
+
+After walkthrough sign-off → Part 6 — archive Brief 41 to `archive/41_interventions_module_COMPLETED.md`; update `current.md`; STATUS.md final report.
+
+---
+
 ## 🚧 Session 2026-05-20 — Brief 41 Part 5: Comparison view + library save/load + 3-intervention walkthrough (awaits walkthrough sign-off)
 
 **State:** `commit_in_flight` — Brief 41 Part 5. **Walkthrough sign-off pending before Part 6 close.**

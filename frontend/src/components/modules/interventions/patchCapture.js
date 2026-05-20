@@ -111,14 +111,28 @@ const PATH_HANDLERS = [
   { test: /^building\.fabric\.air_permeability_q50$/,                                  label: 'Air permeability (q50)',      unit: ' m³/(h·m²)' },
   { test: /^building\.openings\.(north|south|east|west)\.cd$/,                          label: m => `${m[1][0].toUpperCase()+m[1].slice(1)} facade C_d` },
   { test: /^building\.openings\.(north|south|east|west)\.flow_mode$/,                   label: m => `${m[1][0].toUpperCase()+m[1].slice(1)} facade flow mode` },
-  // Constructions (passed via construction_choices, but path root is "constructions" in the engine quartet)
+  // External shading (Brief 41 §V row 3)
+  { test: /^building\.shading_overhang\.(north|south|east|west)\.depth_m$/,             label: m => `${m[1][0].toUpperCase()+m[1].slice(1)} overhang depth`, unit: ' m' },
+  { test: /^building\.shading_overhang\.(north|south|east|west)\.offset_m$/,            label: m => `${m[1][0].toUpperCase()+m[1].slice(1)} overhang offset`, unit: ' m' },
+  { test: /^building\.shading_fin\.(north|south|east|west)\.(left|right)_depth_m$/,     label: m => `${m[1][0].toUpperCase()+m[1].slice(1)} ${m[2]} fin depth`, unit: ' m' },
+  // Constructions (passed via construction_choices, but path root is "constructions" in the engine quartet).
+  // Shape: { library_id: string, u_value_override: number|null }. Patches that swap
+  // construction libraries write the whole object; an explicit U-override is a
+  // future enhancement.
   { test: /^constructions\.external_wall$/,                                            label: 'External wall construction' },
+  { test: /^constructions\.external_wall\.library_id$/,                                label: 'External wall library' },
+  { test: /^constructions\.external_wall\.u_value_override$/,                          label: 'External wall U override', unit: ' W/m²·K' },
   { test: /^constructions\.roof$/,                                                     label: 'Roof construction' },
+  { test: /^constructions\.roof\.library_id$/,                                         label: 'Roof library' },
+  { test: /^constructions\.roof\.u_value_override$/,                                   label: 'Roof U override', unit: ' W/m²·K' },
   { test: /^constructions\.ground_floor$/,                                             label: 'Ground floor construction' },
   { test: /^constructions\.glazing$/,                                                  label: 'Glazing construction' },
+  { test: /^constructions\.glazing\.library_id$/,                                      label: 'Glazing library' },
+  { test: /^constructions\.glazing\.u_value_override$/,                                label: 'Glazing U override', unit: ' W/m²·K' },
   // Internal gains
   { test: /^building\.occupancy_rate$/,                                                label: 'Occupancy rate' },
   { test: /^building\.occupancy\.occupancy_rate$/,                                     label: 'Occupancy rate (v2.3)' },
+  { test: /^building\.occupancy\.density\.value$/,                                     label: 'Occupancy density' },
   { test: /^building\.gains\.lighting\.profiles\[[^\]]+\]\.magnitude\.value$/,         label: 'Lighting load',                unit: ' W/m²' },
   { test: /^building\.gains\.equipment\.profiles\[[^\]]+\]\.active\.value$/,           label: 'Equipment active load',        unit: ' W/m²' },
   { test: /^building\.gains\.equipment\.profiles\[[^\]]+\]\.baseload\.value$/,         label: 'Equipment baseload',           unit: ' W/m²' },
@@ -129,12 +143,18 @@ const PATH_HANDLERS = [
   { test: /^building\.systems_config_v40\.cooling\[id=([^\]]+)\]\.efficiency_metric$/, label: m => `Cooling "${m[1]}" efficiency` },
   { test: /^building\.systems_config_v40\.cooling\[id=([^\]]+)\]\.share_pct$/,         label: m => `Cooling "${m[1]}" share`,        unit: '%' },
   { test: /^building\.systems_config_v40\.cooling\[id=([^\]]+)\]\.enabled$/,           label: m => `Cooling "${m[1]}" enabled` },
+  { test: /^building\.systems_config_v40\.cooling\[id=([^\]]+)\]\.setpoint$/,          label: m => `Cooling "${m[1]}" setpoint`,     unit: '°C' },
+  { test: /^building\.systems_config_v40\.heating\[id=([^\]]+)\]\.setpoint$/,          label: m => `Heating "${m[1]}" setpoint`,     unit: '°C' },
   { test: /^building\.systems_config_v40\.dhw\[id=([^\]]+)\]\.efficiency_metric$/,     label: m => `DHW "${m[1]}" efficiency` },
   { test: /^building\.systems_config_v40\.dhw\[id=([^\]]+)\]\.share_pct$/,             label: m => `DHW "${m[1]}" share`,            unit: '%' },
   { test: /^building\.systems_config_v40\.dhw\[id=([^\]]+)\]\.enabled$/,               label: m => `DHW "${m[1]}" enabled` },
-  { test: /^building\.systems_config_v40\.ventilation\[id=([^\]]+)\]\.sfp_w_per_l_per_s$/, label: m => `Ventilation "${m[1]}" SFP`,  unit: ' W/l·s⁻¹' },
-  { test: /^building\.systems_config_v40\.ventilation\[id=([^\]]+)\]\.recovery_sensible_pct$/, label: m => `Ventilation "${m[1]}" sensible recovery`, unit: '%' },
+  { test: /^building\.systems_config_v40\.ventilation\[id=([^\]]+)\]\.efficiency_metric\.sfp_w_per_lps$/,         label: m => `Ventilation "${m[1]}" SFP (v40)`,           unit: ' W/l·s⁻¹' },
+  { test: /^building\.systems_config_v40\.ventilation\[id=([^\]]+)\]\.efficiency_metric\.recovery_sensible_pct$/, label: m => `Ventilation "${m[1]}" sensible recovery (v40)`, unit: '%' },
+  { test: /^building\.systems_config_v40\.ventilation\[id=([^\]]+)\]\.efficiency_metric\.recovery_latent_pct$/,   label: m => `Ventilation "${m[1]}" latent recovery (v40)`,   unit: '%' },
   { test: /^building\.systems_config_v40\.ventilation\[id=([^\]]+)\]\.enabled$/,       label: m => `Ventilation "${m[1]}" enabled` },
+  // v25 vent mirror — written by editor's vent dual-write (State 2 demand-side reads v25)
+  { test: /^building\.systems_config_v25\.ventilation\[id=([^\]]+)\]\.sfp_w_per_l_s$/,  label: m => `Ventilation "${m[1]}" SFP (v25 mirror)`,    unit: ' W/l·s⁻¹' },
+  { test: /^building\.systems_config_v25\.ventilation\[id=([^\]]+)\]\.hre$/,            label: m => `Ventilation "${m[1]}" HRE (v25 mirror)`,    unit: '' },
   { test: /^building\.systems_config_v40\.lighting\[id=([^\]]+)\]\.control_mechanism$/,label: m => `Lighting "${m[1]}" control mechanism` },
   { test: /^building\.systems_config_v40\.lighting\[id=([^\]]+)\]\.control_factor$/,   label: m => `Lighting "${m[1]}" control factor` },
   { test: /^building\.systems_config_v40\.small_power\[id=([^\]]+)\]\.control_mechanism$/, label: m => `Small power "${m[1]}" control mechanism` },

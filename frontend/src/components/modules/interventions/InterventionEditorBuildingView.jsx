@@ -151,21 +151,62 @@ function ServiceBlock({ system, service, capture }) {
             min={0}
             max={100}
           />
+          {/*
+            Per-system setpoint (heating + cooling). Brief 41 §V row 9
+            acceptance: "Cooling setpoint custom 20°C (vs comfort 24°C)
+            → comfort-vs-setpoint diagnostic appears; EUI rises;
+            cooling electrical rises." `setpoint: null` means "follow
+            comfort band" per CLAUDE.md Systems scope. Non-null
+            triggers state2Recompute closure with the custom setpoint
+            (Brief 40 audit doc §3 — per-system setpoint semantics).
+            Empty input → null on save (follow comfort).
+          */}
+          {(service === 'heating' || service === 'cooling') && (
+            <NumberInput
+              label="Setpoint (blank = follow comfort)"
+              value={system.setpoint}
+              onChange={(v) => capture({ id: newPatchId(), op: 'set', path: `building.systems_config_v40.${service}[id=${sysId}].setpoint`, value: v, source: 'inline' })}
+              unit="°C"
+              step={0.5}
+            />
+          )}
         </>
       )}
       {baseVent && (
         <>
+          {/*
+            Ventilation: SFP and recovery fields live under
+            `efficiency_metric.{sfp_w_per_lps, recovery_sensible_pct,
+            recovery_latent_pct}` on v40 — NOT top-level on the
+            system entry.
+
+            Dual-write to v25 ventilation array entries with the same
+            id (`hre`, `sfp_w_per_l_s`): State 2's demand calc reads
+            v25 ventilation for envelope-recovery integration (Brief
+            28j hourly recovery cap math). The v40 entry drives State
+            3 delivered/electrical; the v25 entry drives State 2
+            demand-side recovery. Until a follow-up engine brief
+            consolidates these, the editor must mirror both so
+            patches produce the predicted heating-demand response.
+            See Brief 41 Part 4.1 STATUS + 29_open_issues.md.
+          */}
           <NumberInput
             label="SFP"
-            value={system.sfp_w_per_l_per_s}
-            onChange={(v) => capture({ id: newPatchId(), op: 'set', path: `building.systems_config_v40.ventilation[id=${sysId}].sfp_w_per_l_per_s`, value: v, source: 'inline' })}
+            value={system.efficiency_metric?.sfp_w_per_lps}
+            onChange={(v) => {
+              capture({ id: newPatchId(), op: 'set', path: `building.systems_config_v40.ventilation[id=${sysId}].efficiency_metric.sfp_w_per_lps`, value: v, source: 'inline' })
+              capture({ id: newPatchId(), op: 'set', path: `building.systems_config_v25.ventilation[id=${sysId}].sfp_w_per_l_s`, value: v, source: 'inline' })
+            }}
             unit="W/l·s⁻¹"
             step={0.1}
           />
           <NumberInput
             label="Sensible recovery"
-            value={system.recovery_sensible_pct}
-            onChange={(v) => capture({ id: newPatchId(), op: 'set', path: `building.systems_config_v40.ventilation[id=${sysId}].recovery_sensible_pct`, value: v, source: 'inline' })}
+            value={system.efficiency_metric?.recovery_sensible_pct}
+            onChange={(v) => {
+              capture({ id: newPatchId(), op: 'set', path: `building.systems_config_v40.ventilation[id=${sysId}].efficiency_metric.recovery_sensible_pct`, value: v, source: 'inline' })
+              capture({ id: newPatchId(), op: 'set', path: `building.systems_config_v25.ventilation[id=${sysId}].hre`, value: v / 100, source: 'inline' })
+            }}
             unit="%"
             step={1}
             min={0}
@@ -244,24 +285,54 @@ export default function InterventionEditorBuildingView({
           step={0.1}
           min={0}
         />
+        {/*
+          Construction shape: `{ library_id: string, u_value_override: number|null }`.
+          The engine prefers `u_value_override` when set (per
+          getUValue in instantCalc), otherwise resolves library_id
+          through libraryData.constructions. Patching the whole
+          object replaces both — and we explicitly set
+          u_value_override to null so library_id wins.
+          A separate input for u_value_override could be added later
+          if the user wants to author a specific U regardless of
+          library — out of Part 4.1 scope.
+        */}
         <SelectInput
           label="External wall"
-          value={c.external_wall}
-          onChange={(v) => capture({ id: newPatchId(), op: 'set', path: 'constructions.external_wall', value: v, source: 'inline' })}
+          value={typeof c.external_wall === 'object' ? c.external_wall?.library_id : c.external_wall}
+          onChange={(v) => capture({ id: newPatchId(), op: 'set', path: 'constructions.external_wall', value: { library_id: v, u_value_override: null }, source: 'inline' })}
           options={constructionOptions}
         />
         <SelectInput
           label="Roof"
-          value={c.roof}
-          onChange={(v) => capture({ id: newPatchId(), op: 'set', path: 'constructions.roof', value: v, source: 'inline' })}
+          value={typeof c.roof === 'object' ? c.roof?.library_id : c.roof}
+          onChange={(v) => capture({ id: newPatchId(), op: 'set', path: 'constructions.roof', value: { library_id: v, u_value_override: null }, source: 'inline' })}
           options={constructionOptions}
         />
         <SelectInput
           label="Glazing"
-          value={c.glazing}
-          onChange={(v) => capture({ id: newPatchId(), op: 'set', path: 'constructions.glazing', value: v, source: 'inline' })}
+          value={typeof c.glazing === 'object' ? c.glazing?.library_id : c.glazing}
+          onChange={(v) => capture({ id: newPatchId(), op: 'set', path: 'constructions.glazing', value: { library_id: v, u_value_override: null }, source: 'inline' })}
           options={constructionOptions}
         />
+        {/*
+          External shading — per-facade overhang depth (m). Brief 41 §V
+          row 3 acceptance: "Reduce solar gain via shading → cooling
+          demand drops; heating demand may rise slightly". South facade
+          is typically the dominant solar driver; expose all four for
+          completeness.
+        */}
+        <div className="pt-1 pb-0.5 text-xxs text-mid-grey/80 uppercase tracking-wider font-medium">External shading — overhang depth</div>
+        {['south', 'east', 'west', 'north'].map(face => (
+          <NumberInput
+            key={`overhang-${face}`}
+            label={`${face[0].toUpperCase() + face.slice(1)} overhang`}
+            value={b.shading_overhang?.[face]?.depth_m}
+            onChange={(v) => capture({ id: newPatchId(), op: 'set', path: `building.shading_overhang.${face}.depth_m`, value: v, source: 'inline' })}
+            unit="m"
+            step={0.1}
+            min={0}
+          />
+        ))}
       </Section>
 
       {/* Internal Gains */}
@@ -277,6 +348,24 @@ export default function InterventionEditorBuildingView({
           step={0.05}
           min={0}
           max={1}
+        />
+        {/*
+          Occupancy density — number of people per the chosen basis
+          (per_room / per_m2 / total / per_workstation). Brief 41 §V
+          row 8 acceptance: "Reduce occupancy density → people gain
+          narrows; heating demand rises slightly; cooling demand
+          drops; lighting + equipment gains drop if linked to
+          occupancy; DHW drops on per-person basis."
+          The basis is held on params.occupancy.density.basis (not
+          editable here in Part 4.1 — change basis through the
+          Internal Gains module). User edits the value only.
+        */}
+        <NumberInput
+          label={`Density (${b.occupancy?.density?.basis ?? 'per_room'})`}
+          value={b.occupancy?.density?.value}
+          onChange={(v) => capture({ id: newPatchId(), op: 'set', path: 'building.occupancy.density.value', value: v, source: 'inline' })}
+          step={0.1}
+          min={0}
         />
         {lightingProfile && (
           <NumberInput
