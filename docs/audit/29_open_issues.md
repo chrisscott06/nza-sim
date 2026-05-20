@@ -420,3 +420,35 @@ By severity (after Brief 30 Phase 1.0 re-diagnosis 2026-05-18):
 | Expected fix scope | A future brief implements `PatchCaptureProvider` + a sub-sidebar inside the editor pop-out for navigating modules. Estimate ~6-8 hours including the patch-granularity design + per-module wiring + dedupe handling. Should land alongside theme-grouped UI (Brief 42) since both touch the editor surface. |
 | Dual-write pattern in vent fields | Part 4.1 establishes a precedent for fields where v40 + v25 dual-write is needed (ventilation SFP + recovery — State 2 demand-side reads v25, State 3 delivery reads v40). The wrap-main-app-UI follow-up should generalise this pattern: if a wrapped main-app input writes to a v25 field that has a v40 counterpart, the capture context should dual-write (or vice versa). |
 | Cross-references | `docs/briefs/active/41_interventions_module.md` §Part 4 §4.4 (the deferred original spec); Notion design note §V "Visualisation verification matrix" (the engine-side acceptance criterion that the curated editor meets in full); Brief 41 STATUS.md Part 4.1 entry. |
+
+---
+
+## #21 — DHW demand fields are per-system; should be per-service
+
+| Field | Value |
+|---|---|
+| Module | Systems |
+| Engine | Static (v40 + v25 DHW paths) |
+| Severity | **S1** — user-visible AND structurally wrong. Multiple DHW systems can carry inconsistent demand fields with no defined precedence; engine behaviour when two systems disagree is undefined. |
+| Status | **OPEN** — surfaced 2026-05-20 during Brief 41 Part 5 walkthrough. To be addressed by **Brief 42 — Systems UX**. |
+| Discovered | Brief 41 Part 5 walkthrough on Bridgewater. Bridgewater has two DHW v40 entries (gas + ASHP); each carries its own `demand_litres_per_m2_day` / `demand_litres_per_person_per_day` / `demand_basis` / `tap_outlet_temp_c` / `cold_supply_temp_c` fields. |
+| Location | `frontend/src/utils/systemsEngine.js` `_computeDhw` reads demand fields from the per-system block. `frontend/src/components/modules/systems/SystemEditorCard.jsx` exposes them as per-system editable inputs (Brief 40 Part 3 schema). |
+| Behaviour | DHW demand is a building / service property (single source of truth for L/person/day or L/m²/day + tap-mix temperatures), not a system property. Multiple systems share the demand via `share_pct`. The current per-system schema creates ambiguity: if user sets gas DHW's demand to 50 L/person/day and ASHP's to 80 L/person/day, what's the actual demand? The engine's current behaviour appears to use the first-enabled system's demand (`enabledSystems[0]`), which is fragile + surprising + invisible to the user. |
+| Expected fix | Move `demand_litres_per_m2_day`, `demand_litres_per_person_per_day`, `demand_basis`, `tap_outlet_temp_c`, `cold_supply_temp_c` to a service-level block at the top of the DHW section (e.g. `params.systems_config_v40.dhw_service = { demand_basis, demand_litres_per_..., tap_outlet_temp_c, cold_supply_temp_c }`). Per-system DHW entries retain only `source, efficiency_metric, setpoint, share_pct, control_mechanism, enabled`. Engine reads service-level for demand calc; multiplies by share for delivered/fuel per system. UI exposes service-level fields ONCE per service (in the section header or a service-level expandable block), not once per system. Migration: existing per-system fields collapsed to service-level (first non-null wins; warn on disagreement). |
+| Cross-references | Brief 40 audit doc §4 (DHW tap-mix mathematics — math is correct; the per-system home is the bug). Brief 41 Part 5 walkthrough findings. To be addressed by **Brief 42 — Systems UX**. |
+
+---
+
+## #22 — System editor needs a draggable pop-out (Brief 40 Part 5c deferred work)
+
+| Field | Value |
+|---|---|
+| Module | Systems |
+| Engine | n/a (UI scope) |
+| Severity | **S1** — user-visible. The left panel (~300 px) is too cramped to author a full system; the per-system editor's Identity / Energy / Control / Diagnostic / Library / source groups don't fit comfortably. Authoring any non-trivial DHW or Ventilation system is uncomfortable. |
+| Status | **OPEN** — Brief 40 Part 5c originally scoped this work but was skipped after Section C walkthrough verdict that "the section-list UX works cleanly." That verdict reflected the Bridgewater test stack which used near-default values; the cramped UX surfaces once a user tries to author or significantly edit a system in earnest. Resurfaced 2026-05-20 during Brief 41 Part 5 walkthrough. To be addressed by **Brief 42 — Systems UX**. |
+| Discovered | Brief 41 Part 5 walkthrough on Bridgewater. The full SystemEditorCard rendered inside the ~300 px left column doesn't have enough horizontal space for the multi-field Energy block, DHW tap-mix fields, ventilation SFP + recovery fields, Diagnostic comfort-vs-setpoint table, or the source / control / library group spread. |
+| Location | `frontend/src/components/modules/SystemsModule.jsx` (left panel layout); `frontend/src/components/modules/systems/SystemEditorCard.jsx` (current full editor — needs to move into a pop-out). |
+| Behaviour | Each system is currently a collapsible card in the left panel with an inline-expanded full editor when clicked. The editor card's content doesn't fit comfortably; field labels truncate, numeric inputs are narrow, and the Library group's actions overflow. Combined with the single-expand accordion shipped 2026-05-20 (`a92d563`), only one system is visible at a time, which improves readability but doesn't solve the fundamental width problem. |
+| Expected fix | Refactor to a draggable pop-out using the established Brief 37 `SchedulePopout` chrome (already reused by Brief 41 Part 4 `InterventionEditorPopout` — proven pattern). localStorage key: `nza-system-editor-popout-position`. Left panel becomes a SUMMARY row per system: label, share %, headline efficiency (e.g. SCOP 3.5 / η 0.85 / SEER 4.0 / SFP 1.4), on/off toggle, edit button. Click edit → pop-out opens with the full SystemEditorCard inside; Save / Cancel commit/discard via `updateSystem(service, idx, patch)`. Mirrors the interventions editor pop-out shape so users have one consistent editor chrome across the app. Per-service summary block at the top of each service section can absorb shared fields once #21 lands (DHW service-level demand). |
+| Cross-references | `docs/briefs/archive/40_part_5b_wiring_and_toggles_COMPLETED.md` §"Operational mode" (the Part 5c skip decision); `docs/briefs/archive/40_systems_library_architecture_COMPLETED.md` (Brief 40 close — recorded Part 5c as skipped); Brief 41 Part 4 `InterventionEditorPopout` (the established pattern); Brief 37 `SchedulePopout` (shared chrome). To be addressed by **Brief 42 — Systems UX** alongside #21. |

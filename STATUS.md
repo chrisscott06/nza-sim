@@ -1,5 +1,80 @@
 # NZA SIMULATE — Status
 
+## ✅ Session 2026-05-20 — Brief 41 close: Interventions Module shipped
+
+**State:** `commit_in_flight` — Brief 41 formal close. Conditional-pass walkthrough sign-off from Chris. All substantive code shipped over the preceding commit chain (P1 / P2 / P3 / P4 / P5 / P4.1 corrective / accordion polish); this close commit lands the documentation hygiene: Brief 41 archived, `current.md` repointed, Issues #21 + #22 logged in `29_open_issues.md` for Brief 42 — Systems UX, STATUS.md final report.
+
+### Final report (per the brief's §"Final report" + Chris's conditional-pass close authorisation)
+
+**1. New origin/main HEAD SHA:** *(captured at push)*
+
+**2. Bridgewater intervention stack used in walkthrough — full description:**
+
+| # | Label | Theme | Patch(es) |
+|---|---|---|---|
+| 1 | Fabric upgrade | Envelope | `set building.fabric.air_permeability_q50 = 1.0` (was 4.64 m³/h·m² @ 50Pa — EnerPHit-class airtightness target) |
+| 2 | Plant replacement — boost SCOP | Plant | `set building.systems_config_v40.heating[id=primary].efficiency_metric = 5.0` (was current Bridgewater value; near-best-in-class heat pump SCOP) |
+| 3 | Demand reduction — lighting controls | Demand | `set building.systems_config_v40.lighting[id=...].control_factor = 0.5` (was 0.7 baseline daylight dimming — tighter controls + occupancy sensors) |
+
+**3. EUI numbers:**
+
+| Stage | EUI (kWh/m²·yr) | Δ from previous | Cumulative Δ |
+|---|---|---|---|
+| Baseline | 58.0 | — | — |
+| After Intervention 1 (Fabric) | 57.0 | −1.0 (−1.7%) | −1.0 (−1.7%) |
+| After Intervention 2 (Plant) | 54.8 | −2.2 (−3.9%) | −3.2 (−5.5%) |
+| After Intervention 3 (Demand) | 53.0 | −1.8 (−3.3%) | **−5.0 (−8.6%)** |
+
+Full stack effect: EUI 58.0 → 53.0 kWh/m²·yr; heating demand 148.5 → 133.2 MWh (after Fabric alone, no further demand-side drop from Plant); electricity 175.8 → 154.4 MWh (−12.2%); carbon 11.6 → 10.6 kgCO₂/m² (−8.8%).
+
+**4. Order-dependence test results:** Library round-trip used as the reorder test surface — save Fabric → delete from stack → reload Fabric (which appends to end of stack, placing it AFTER Plant + Demand). Re-running engine:
+- Fabric in position 3 (originally position 1) marginal: **−0.5 kWh/m²** (vs original position-1 marginal **−1.0**); less remaining demand to reduce after Plant + Demand already applied.
+- Cumulative final: **−5.0 kWh/m²** — IDENTICAL to original-order final. Notion §10 acceptance criterion ("the final cumulative EUI is unchanged when reordered") met — patches are commutative on the final state, not on individual marginal contributions.
+
+**5. Toggle test results:** Disable Fabric (Intervention 1) → Plant's marginal grows from **−2.2 → −2.8 kWh/m²** (more heating demand to convert with no fabric improvement); Demand reduction's marginal slightly shifts from **−1.8 → −1.7**. Disabled-row marginal Δ === 0 per audit doc §8.2 contract. Cumulative correctly skips disabled entries in the chain.
+
+**6. Library round-trip confirmation:** Save Fabric to library (count 0 → 1) → Delete from stack → Open Library picker → Click Fabric entry → New intervention appended to stack with deep-cloned patches, new top-level + per-patch ids, label/theme/notes preserved. Engine output reproducible: cumulative −5.0 kWh/m² in both original and reloaded orders. Save-to-library snapshot uses `schema_version: 1` stamp; future schema changes will trigger `migratePatch` (Brief 41 Part 2 no-op stub today).
+
+**7. New issues logged in `29_open_issues.md`:**
+- **#20 (S2)** — Interventions editor: full main-app UI in patch-capture context **deferred** to future brief. Documents the curated-editor scope boundary, the patch-granularity question (atomic-per-leaf vs compound-per-key) the future brief will own, and the v40+v25 dual-write precedent established by Part 4.1's vent fields.
+- **#21 (S1)** — DHW demand fields are per-system; should be per-service. Surfaced at walkthrough. Multiple DHW systems can carry inconsistent demand fields with no defined precedence; engine behaviour when two systems disagree is undefined. **Queued for Brief 42 — Systems UX.**
+- **#22 (S1)** — System editor needs a draggable pop-out (Brief 40 Part 5c deferred work). Left panel too cramped to author a full system; full editor should move to a draggable pop-out using the established Brief 37 SchedulePopout chrome (already proven by Brief 41 Part 4 `InterventionEditorPopout`). Left panel becomes a summary row per system. **Queued for Brief 42 — Systems UX.**
+
+**8. Brief management — `docs/briefs/active/` confirmed empty after this close:** Brief 41 main moved to `docs/briefs/archive/41_interventions_module_COMPLETED.md` in this commit. Brief 30 already lives at `archive/30_dynamic_engine_rebuild_PAUSED.md` (moved at the start of Brief 41). No active briefs; Brief 42 (Systems UX) expected next per Chris's authorisation in the walkthrough sign-off message.
+
+**9. CLAUDE.md Module Scopes Interventions section confirmed in place** at the top of the Process rules section (added in Part 1 commit `2279bb6`). Covers Computes / Does-not-contain / Pattern Y discipline / schema-flexibility discipline. Links to audit doc + Notion design note.
+
+### Commit chain — Brief 41
+
+| Part | SHA | Substance |
+|---|---|---|
+| P1 | `2279bb6` | Demolition (scenarios deleted, no salvage) + data model in DEFAULT_PARAMS (`interventions: []` + `schema_version: 1`) + schema audit doc + CLAUDE.md Module Scopes Interventions section |
+| P2 | `521fbf5` | `interventionsEngine.js` (parsePath / navigateToParent / resolveValue / applyPatch / applyIntervention / runInterventionStack / computeDelta / migratePatch) + `instantCalc.js` wrapper with `_skipInterventions` recursion guard; 13/13 synthetic-config sanity tests PASS |
+| P3 | `3a860d6` | `/interventions` route + sidebar entry between Systems and Results + InterventionsModule shell (Stack / Comparison tabs) + InterventionStackView (drag-and-drop reorder, override-warning detection, empty state) + InterventionRow (enable toggle, label, theme pill, Δ cells, drag handle) + stub editor pop-out |
+| P4 | `45bcfe0` | InterventionEditorPopout (Brief 37 SchedulePopout reuse, key `nza-intervention-editor-popout-position`) + InterventionEditorBuildingView (curated patch-capture editor) + InterventionEditorPreview (KPI strip + heat-balance bars + plain-English PatchList) + patchCapture.js helpers + State 3 result-shape path-list extension + air-permeability q50 source-of-truth fix |
+| P5 | `f2f4fb0` | ComparisonView (KPI strip + paired heat-balance bars + delta table + per-intervention drill-down) + library_interventions namespace + SaveToLibraryModal / LoadFromLibraryModal / LibraryStripButton + 3-intervention Bridgewater walkthrough (cumulative −5.0 kWh/m²) |
+| P4.1 | `1d59213` | Corrective — editor coverage widened to all 10 Notion §V matrix rows (shading overhang, heating + cooling setpoint, occupancy density inputs added; wall construction shape fix; ventilation SFP/recovery paths + v25 dual-write for State 2 demand); 10/10 matrix rows engine-verified PASS on Bridgewater |
+| (polish) | `a92d563` | Inline accordion polish — single-expand left panels in Building / Internal Gains / Systems modules (shipped during walkthrough at Chris's request) |
+| Close | (this commit) | Brief 41 archived, current.md repointed, Issues #21 + #22 logged, STATUS final report |
+
+### Status of broader system
+
+- Static Building physics: bulletproof (Briefs 33–34, 39–42)
+- Internal Gains: audited (Brief 36)
+- Operation natural ventilation: correct + consistent with Building (Briefs 41a, 42)
+- Schedule editor: unified across modules (Brief 37)
+- Systems Library: functional (Brief 40); two structural issues outstanding (#21 + #22, both queued for Brief 42)
+- **Interventions: functional and tested** (this brief) — Pattern Y declarative patches against the baseline; engine config-transformer that respects existing State 1 + State 2 + State 3 paths; visualisation-as-verification discipline applied throughout
+- Dynamic engine: paused (Brief 30 archived as PAUSED, not deleted)
+
+### Next
+
+Brief 42 — Systems UX. Per Chris's walkthrough sign-off message: addresses Issues #21 (DHW demand → service-level) and #22 (system editor pop-out). Architectural ordering: #21 should land first (schema move) so #22's pop-out absorbs the cleaned-up service-level block at the top of the DHW section. Brief author (Chris) to scope when ready.
+
+NZA-Sim is now a complete pre-feasibility tool: build baseline → layer interventions → see deltas → compare against CRREM target. Time to use it.
+
+---
+
 ## 🔧 Session 2026-05-20 — Inline polish: single-expand accordion in Building / Internal Gains / Systems left panels
 
 **State:** `commit_in_flight` — small UX housekeeping commit during Brief 41 walkthrough.
