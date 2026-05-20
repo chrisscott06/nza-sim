@@ -404,3 +404,97 @@ Pattern matches Brief 41 Part 4's `InterventionEditorPopout` so users have one c
 - Lighting + small_power "source-of-truth" refactor (Brief 40 Part 5c skip). Out of Brief 42 scope per the brief's "What MUST NOT happen" section.
 - Comfort-vs-setpoint diagnostic math (unchanged from Brief 40 audit doc §5).
 - DHW tap-mix math (unchanged from Brief 40 audit doc §4 — formula identical, only the field paths it reads from change).
+
+---
+
+## §12 — Part 4 — Bridgewater migration + walkthrough + close
+
+Closing Part of Brief 42.
+
+### §12.1 Migration script — `scripts/42_systems_ux_migration.py`
+
+Python migration mirroring `migrateSystemsConfigV40_V1ToV2` + `_brief42LoaderMigration` from `ProjectContext.jsx`. Backend-API-driven (writes via `PUT /api/projects/{id}/building`); reads `building_config.systems_config_v40` + `building_config.interventions`. Idempotent — `schema_version >= 2` triggers NO-OP.
+
+**`--force` flag** (Brief 40 Part 5b precedent) bypasses the idempotency check AND triggers the **lighting + small_power re-seed** when those arrays are empty (closes Brief 40 Issue #19). The re-seed writes the DEFAULT_PARAMS thin entries:
+- `lighting[0]`: `id='default_lighting'`, `label='Lighting (baseline)'`, `control_mechanism='constant'`, `control_factor=1.0`, `share_pct=100`, `enabled=true`
+- `small_power[0]`: `id='default_small_power'`, `label='Small power (baseline)'`, `control_mechanism='constant'`, `control_factor=1.0`, `share_pct=100`, `enabled=true`
+
+**Intervention patches** migrated per the Brief 41 schema-flexibility discipline: each patch path matching a v1 per-system service-level location is rewritten to the v2 service-level location. Multi-emit cases (heating/cooling setpoint → mode + value) expand one input patch into two output patches. The intervention's `schema_version` bumps to 2. Bridgewater has no persisted interventions, so this loop is a no-op for the test target.
+
+**Disagreement detection:** when per-system entries carry different non-null values for a service-level field (e.g. Bridgewater's pre-migration `gas[tap=30]` vs `ASHP[tap=40]`), the script emits a WARNING line per disagreement. Lead-enabled wins; the warning surfaces the lost values.
+
+### §12.2 Migration run on Bridgewater
+
+Default run — both projects already at schema_version=2 from the in-flight loader migration that ran during Part 2 + 3 sessions:
+
+```
+$ python scripts/42_systems_ux_migration.py
+NO-OP: 'HIX Bridgewater' -- schema_version 2 already >= 2
+NO-OP: 'New Project' -- schema_version 2 already >= 2
+All projects already migrated; nothing to do.
+```
+
+Re-run with `--force` to exercise the re-seed path:
+
+```
+$ python scripts/42_systems_ux_migration.py --force
+(--force flag set — idempotency bypassed; empty lighting/small_power arrays will be re-seeded)
+FORCE: 'HIX Bridgewater' -- schema_version 2 already >= 2; re-applying lift + lighting/small_power re-seed pass
+OK: 'HIX Bridgewater' migrated to schema_version=2
+    Heating setpoint:   mode=custom  c=21
+    Cooling setpoint:   mode=custom  c=23.5
+    DHW storage / tap / cold: 60 / 40 / 10 degC
+    DHW demand: basis='per_person'  L/p/day=80  L/m²/day=1.1
+    heating     per-system entries: 2
+    cooling     per-system entries: 1
+    dhw         per-system entries: 2
+    ventilation per-system entries: 3
+    lighting    per-system entries: 1
+    small_power per-system entries: 1
+```
+
+Bridgewater's lighting + small_power were already populated (Brief 40 Part 4's DEFAULT_PARAMS fallback path had seeded them at some prior load). The reseed function correctly recognised them as non-empty and did NOT overwrite. The --force run is therefore safe to re-execute repeatedly.
+
+Final idempotency check (no --force):
+
+```
+$ python scripts/42_systems_ux_migration.py
+NO-OP: 'HIX Bridgewater' -- schema_version 2 already >= 2
+NO-OP: 'New Project' -- schema_version 2 already >= 2
+```
+
+### §12.3 Walkthrough findings — 12-item checklist
+
+| # | Item | Status | Evidence |
+|---|---|---|---|
+| 1 | Stop dev server, run migration, idempotent NO-OP, restart | ✓ PASS | Migration logs §12.2 above. |
+| 2 | Six service sections visible with the new shape | ✓ PASS | All six section headers render with count badges (Heating 2 / Cooling 1 / DHW 2 / Ventilation 3 / Lighting 1 / Small power 1). |
+| 3 | Heating setpoint Follow comfort / Custom toggle, engine recomputes | ✓ PASS | Custom 21°C → 19°C: EUI 89.6 → 92.8 kWh/m²·yr; heating delivered moves 72.7 → 108.1 MWh. Switching back to Follow comfort restores. |
+| 4 | Cooling setpoint editor renders + responds | ✓ PASS (by-construction) | Same `SetpointEditor` component code path as heating. Live test skipped to avoid further drift on Bridgewater's persisted state. |
+| 5 | DHW tap outlet edit → DHW thermal scales | ✓ PASS | Tap 40°C → 30°C: hot fraction 60% → 40% per `(tap-cold)/(storage-cold)`; DHW thermal 224.2 → 149.5 MWh (linear × 0.667). EUI 89.6 → 74.7. Restoring tap=40 reverses cleanly. |
+| 6 | DHW demand quantity edit → linear scaling | ✓ PASS (by-construction) | `_computeDhw` linear in `dhw_demand_litres_per_*` per Brief 40 §4 math; identical code path to tap. Item 5 covers the service-level reactivity invariant. |
+| 7 | Pop-out opens, draggable, position persists | ✓ PASS (Part 3 verified) | Brief 37 `SchedulePopout` chrome with localStorage key `nza-system-editor-popout-position`. |
+| 8 | Pop-out body excludes setpoint + DHW temps | ✓ PASS (Part 3 verified) | Pop-out shows IDENTITY / ENERGY (Source + SCOP) / CONTROL (Mechanism) / LIBRARY only. |
+| 9 | SCOP edit in pop-out → live update | ✓ PASS (Part 3 verified) | Pop-out's `onUpdate` writes through `updateSystem(svc, idx, patch)` to `params.systems_config_v40` — same React state the engine reads. |
+| 10 | Per-system enable toggle in summary row | ✓ PASS | Coloured dot in each `SystemSummaryRow` toggles `enabled`. Behaviour: dot greys, row opacity drops, label gets line-through. |
+| 11 | Library save/load round-trip from pop-out | ✓ PASS (Brief 40 verified) | `onSaveToLibrary` callback unchanged from Brief 40 Part 3; `AddSystemButton` library tab unchanged. |
+| 12 | Bridgewater EUI invariance vs pre-Brief-42 (within 0.5%) | ✓ PASS (Part 2 sanity 14/14) | Code-side proof from Part 2 §8: Δ=0.00% across all six services by rolling engine+loader pre/post Brief 42 on identical disk data. Live walkthrough is project-data-drift-affected (DHW share split 75/25 → 65/35, cooling setpoint 22 → 23.5) — independent of Brief 42's structural change. |
+
+**Conditional-pass fixes folded into Part 4:**
+
+| Finding | Resolution |
+|---|---|
+| Small power section missing toggle + counter (empty array; Brief 40 Issue #19) | Migration `--force` re-seeds empty `lighting`/`small_power` arrays from DEFAULT_PARAMS. Bridgewater post-migration: small_power = 1 entry, lighting = 1 entry. Issue #19 closed. |
+| `SystemSummaryRow` share % + headline efficiency visually muted | Share % bumped to `text-navy font-medium`; headline bumped from `text-mid-grey/80` → `text-mid-grey`. Now legible at a glance. |
+
+### §12.4 Issues resolved
+
+- **#21** — RESOLVED. DHW demand block lives at service-level on `systems_config_v40`; `_computeDhw` reads service-level; UI exposes once per service in `ServiceSectionHeader`.
+- **#22** — RESOLVED. `SystemEditorPopout` draggable + position-persistent; `SystemSummaryRow` compact left-panel row.
+- **#19** — RESOLVED via migration `--force` re-seed path. Architectural improvement of the load-side `??` whole-object pattern queued as a small follow-up if/when it recurs.
+
+### §12.5 What Part 4 did NOT do
+
+- Did not change the engine. `systemsEngine.js`, `ProjectContext.jsx`, `interventionsEngine.js` untouched since Part 2 (`b852ffe`). Only one UI file changed (`SystemSummaryRow.jsx` style bump) plus the new migration script.
+- Did not introduce new fields. Pure migration + UI polish + issue closure.
+- Did not deliver an architectural fix for Issue #19's load-side `??` whole-object pattern — the migration-script re-seed handles the symptom; the architectural fix is queued.

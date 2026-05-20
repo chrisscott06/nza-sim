@@ -86,14 +86,22 @@ export default function SystemSummaryRow({ system, onToggleEnabled, onEdit, shar
         </span>
       </button>
 
-      {/* Share */}
-      <span className={`flex-shrink-0 text-xxs tabular-nums ${shareInvalid && isEnabled ? 'text-amber-600 font-medium' : 'text-mid-grey'}`}>
+      {/* Share — Brief 42 Part 4 conditional-pass review: bumped from
+          text-mid-grey to text-navy font-medium. Share is the single most-
+          edited per-system field; needing to open the pop-out just to read
+          it was friction. */}
+      <span className={`flex-shrink-0 text-xxs tabular-nums font-medium ${
+        shareInvalid && isEnabled ? 'text-amber-600' : (isEnabled ? 'text-navy' : 'text-mid-grey')
+      }`}>
         {Number(system?.share_pct ?? 0)}%
       </span>
 
-      {/* Headline efficiency */}
+      {/* Headline efficiency — bumped from text-mid-grey/80 to text-mid-grey
+          for the same readability reason (still secondary to share). */}
       {headline && (
-        <span className="flex-shrink-0 text-xxs text-mid-grey/80 truncate max-w-[140px]" title={headline}>
+        <span className={`flex-shrink-0 text-xxs truncate max-w-[140px] ${
+          isEnabled ? 'text-mid-grey' : 'text-mid-grey/60'
+        }`} title={headline}>
           {headline}
         </span>
       )}

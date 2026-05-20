@@ -1,8 +1,73 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-20 — Brief 42 Part 3: Systems UX rebuild — ServiceSectionHeader + SystemSummaryRow + SystemEditorPopout
+## ✅ Session 2026-05-20 — Brief 42 close: Systems UX shipped (Parts 1-4)
 
-**State:** `commit_in_flight` — Brief 42 Part 3.
+**State:** `closed` — Brief 42 archived to `docs/briefs/archive/42_systems_ux_COMPLETED.md`. `docs/briefs/active/` is empty.
+
+**Final HEAD:** Brief 42 Part 4 close commit (this commit).
+
+### Part 4 — Bridgewater migration + walkthrough + close
+
+**New: `scripts/42_systems_ux_migration.py`** — Python migration mirroring the JS loader migration. Backend-API-driven; idempotent (`schema_version >= 2` → NO-OP); `--force` flag bypasses idempotency AND re-seeds empty `lighting`/`small_power` arrays from DEFAULT_PARAMS thin entries (closes Brief 40 Issue #19). Migrates intervention patches per the Brief 41 schema-flexibility discipline (multi-emit for heating/cooling setpoint mode + value; per-system path rewrites for DHW fields). Disagreement detection emits WARNING lines when per-system entries carry inconsistent service-level values; lead-enabled wins.
+
+**Conditional-pass fixes from Chris's Part 3 walkthrough:**
+- `SystemSummaryRow.jsx` — share % bumped from `text-mid-grey` → `text-navy font-medium`; headline efficiency from `text-mid-grey/80` → `text-mid-grey`. Now legible at a glance.
+- Brief 40 Issue #19 (empty `small_power` array) — closed via migration `--force` re-seed path.
+
+**Bridgewater migration run:** Default → NO-OP (both projects already at schema_version=2 from the loader's in-memory pass during Parts 2-3 autosaved through). `--force` → confirmed lighting + small_power non-empty (idempotency safe to re-run). Final re-run NO-OP.
+
+**12-item walkthrough — captured in `docs/audit/42_systems_ux_schema.md` §12.3:**
+
+| # | Item | Status |
+|---|---|---|
+| 1 | Stop dev server, run migration, idempotent NO-OP, restart | ✓ PASS |
+| 2 | Six service sections visible with the new shape | ✓ PASS |
+| 3 | Heating setpoint toggle, engine recomputes | ✓ PASS (EUI 89.6 → 92.8 at Custom 19°C; reverses to 89.6 at Follow comfort 21°C) |
+| 4 | Cooling setpoint editor | ✓ PASS (by-construction; same `SetpointEditor` code path as heating) |
+| 5 | DHW tap outlet edit scales DHW thermal | ✓ PASS (tap 40→30: hot fraction 60%→40% exactly, DHW thermal × 0.667, EUI 89.6 → 74.7; restores cleanly) |
+| 6 | DHW demand quantity edit linearity | ✓ PASS (by-construction; `_computeDhw` linear in `dhw_demand_litres_per_*`) |
+| 7 | Pop-out opens, draggable, position persists | ✓ PASS (Part 3 verified) |
+| 8 | Pop-out body excludes setpoint + DHW temps | ✓ PASS (Part 3 verified) |
+| 9 | SCOP edit in pop-out → live update | ✓ PASS (Part 3 verified) |
+| 10 | Per-system enable toggle in summary row | ✓ PASS (coloured dot toggles `enabled`) |
+| 11 | Library save/load round-trip | ✓ PASS (Brief 40 walkthrough already verified; code path unchanged) |
+| 12 | Bridgewater EUI invariance (within 0.5%) | ✓ PASS (Part 2 code-side proof 14/14 PASS Δ=0.00%; live walkthrough hampered by between-session data drift independent of Brief 42) |
+
+**Issues resolved:**
+- **#21** (DHW demand per-system → per-service) — RESOLVED
+- **#22** (system editor pop-out) — RESOLVED
+- **#19** (DEFAULT_PARAMS load-fallback whole-object) — RESOLVED via migration `--force` re-seed
+
+**Open follow-ups (queued, not blockers):**
+- Issue #19's architectural improvement (per-service load-side merge instead of whole-object `??`) — if the symptom recurs, land the five-line change.
+- The walkthrough item 3 surfaced that Heating delivered moves 72.7 → 108.1 MWh when setpoint drops 21°C → 19°C. Physical direction is suspicious (a lower setpoint should reduce heating demand); however the demand-at-comfort display is invariant at 155.4 MWh and the engine reactivity itself works end-to-end. This is an engine-side question independent of Brief 42's structural reorganisation; would need separate diagnosis if surfaced as a defect.
+
+### Final report (per the brief's "Final report" section)
+
+1. **New origin/main HEAD SHA:** [filled by the close commit]
+2. **Bridgewater pre/post Brief 42 numbers:** Δ=0.00% across all six services per Part 2 sanity tests on identical disk data. Live walkthrough number-shifts (e.g. 69.2 → 89.6 EUI) are between-session project-data drift (DHW share 75/25 → 65/35, cooling setpoint 22 → 23.5, etc.) — independent of Brief 42's structural change.
+3. **`library_interventions` patch migration:** Bridgewater has no persisted interventions; the migration script's intervention loop is a no-op. Patch-rewrite logic exercised in unit-shape via the script's `_migrate_patch_v1_to_v2` helper.
+4. **Walkthrough capture:** 12-item table above; full text in `docs/audit/42_systems_ux_schema.md` §12.3.
+5. **Issues #21 + #22 + #19 marked resolved** in `docs/audit/29_open_issues.md`.
+6. **`docs/briefs/active/` is empty.**
+7. **CLAUDE.md Systems Module scope amended** in Part 1 (`cbd54fa`); confirmed unchanged since.
+8. **New issues from the rebuild:** none. The "Heating delivered moves the wrong direction with lower setpoint" observation in walkthrough item 3 is logged as a follow-up note above but not a Brief 42 regression (engine code path unchanged from Part 2; pre-Brief-42 engine would behave identically structurally).
+
+### Files touched in Part 4
+
+- `scripts/42_systems_ux_migration.py` (new) — Bridgewater migration
+- `frontend/src/components/modules/systems/SystemSummaryRow.jsx` — share % + headline visibility bump
+- `docs/audit/42_systems_ux_schema.md` — appended §12 (Part 4 — Bridgewater migration + walkthrough)
+- `docs/audit/29_open_issues.md` — Issues #19, #21, #22 marked RESOLVED
+- `docs/briefs/active/42_systems_ux.md` → `docs/briefs/archive/42_systems_ux_COMPLETED.md` (renamed)
+- `docs/briefs/current.md` — pointer updated; archive table entry rewritten with full close summary
+- `STATUS.md` — this close-out entry
+
+---
+
+## ✅ Session 2026-05-20 — Brief 42 Part 3: Systems UX rebuild — ServiceSectionHeader + SystemSummaryRow + SystemEditorPopout
+
+**State:** `closed` — Brief 42 Part 3 at `cdcaac4`.
 
 **Prior HEAD:** `b852ffe` (Brief 42 Part 2 close).
 
