@@ -441,27 +441,34 @@ function pickNumber(result, paths) {
  */
 export function computeDelta(fromResult, toResult) {
   return {
-    // Headline
+    // Headline — supports State 3 v2.5 (consumption.total.kwh_per_m2_yr,
+    // results.energy.kwh_per_m2_yr, energy_use.totals.eui_kwh_per_m2),
+    // degree-day fallback (eui_kWh_m2), and legacy summary shapes.
     eui_kwh_per_m2:      deltaRecord(
-      pickNumber(fromResult, ['eui_kwh_per_m2', 'eui_kWh_per_m2', 'results_summary.eui_kWh_per_m2']),
-      pickNumber(toResult,   ['eui_kwh_per_m2', 'eui_kWh_per_m2', 'results_summary.eui_kWh_per_m2']),
+      pickNumber(fromResult, ['consumption.total.kwh_per_m2_yr', 'results.energy.kwh_per_m2_yr', 'energy_use.totals.eui_kwh_per_m2', 'eui_kwh_per_m2', 'eui_kWh_per_m2', 'eui_kWh_m2', 'results_summary.eui_kWh_per_m2', 'results_summary.eui_kWh_m2']),
+      pickNumber(toResult,   ['consumption.total.kwh_per_m2_yr', 'results.energy.kwh_per_m2_yr', 'energy_use.totals.eui_kwh_per_m2', 'eui_kwh_per_m2', 'eui_kWh_per_m2', 'eui_kWh_m2', 'results_summary.eui_kWh_per_m2', 'results_summary.eui_kWh_m2']),
     ),
     total_delivered_mwh: deltaRecord(
-      pickNumber(fromResult, ['consumption.total_delivered_mwh', 'total_delivered_mwh', 'annual_energy.total_kWh']),
-      pickNumber(toResult,   ['consumption.total_delivered_mwh', 'total_delivered_mwh', 'annual_energy.total_kWh']),
+      pickNumber(fromResult, ['results.energy.total_mwh', 'consumption.total_delivered_mwh', 'total_delivered_mwh', 'annual_energy.total_kWh', 'fuel_split.total_kWh']),
+      pickNumber(toResult,   ['results.energy.total_mwh', 'consumption.total_delivered_mwh', 'total_delivered_mwh', 'annual_energy.total_kWh', 'fuel_split.total_kWh']),
     ),
     carbon_kgco2_per_m2: deltaRecord(
-      pickNumber(fromResult, ['carbon_kgco2_per_m2', 'consumption.carbon_kgco2_per_m2', 'results_summary.carbon_kgco2_per_m2']),
-      pickNumber(toResult,   ['carbon_kgco2_per_m2', 'consumption.carbon_kgco2_per_m2', 'results_summary.carbon_kgco2_per_m2']),
+      pickNumber(fromResult, ['carbon_kg_co2_per_m2', 'results.carbon.today.kgCO2_per_m2_yr', 'carbon_kgco2_per_m2', 'consumption.carbon_kgco2_per_m2', 'carbon_kgCO2_m2', 'results_summary.carbon_kgco2_per_m2']),
+      pickNumber(toResult,   ['carbon_kg_co2_per_m2', 'results.carbon.today.kgCO2_per_m2_yr', 'carbon_kgco2_per_m2', 'consumption.carbon_kgco2_per_m2', 'carbon_kgCO2_m2', 'results_summary.carbon_kgco2_per_m2']),
     ),
-    // Demand-side (engine convention: `consumption.{service}.demand_mwh`)
+    // Demand-side: State 3 emits MWh under `consumption.{service}.demand_mwh`;
+    // degree-day fallback emits kWh under `annual_{service}_kWh` (which we
+    // divide by 1000 for parity is NOT done here — comparison view shows
+    // kWh-vs-MWh by reading the actual values; deltaRecord is unit-agnostic
+    // and the comparison view's label tracks "MWh" generically. The slot
+    // exposes raw values from whichever shape the engine produced.)
     heating_demand_mwh:  deltaRecord(
-      pickNumber(fromResult, ['consumption.space_heating.demand_mwh', 'demand.heating_mwh', 'consumption.heating_demand_mwh', 'heating_demand_mwh']),
-      pickNumber(toResult,   ['consumption.space_heating.demand_mwh', 'demand.heating_mwh', 'consumption.heating_demand_mwh', 'heating_demand_mwh']),
+      pickNumber(fromResult, ['consumption.space_heating.demand_mwh', 'demand.heating_demand_mwh', 'demand.heating_mwh', 'consumption.heating_demand_mwh', 'heating_demand_mwh', 'annual_heating_kWh']),
+      pickNumber(toResult,   ['consumption.space_heating.demand_mwh', 'demand.heating_demand_mwh', 'demand.heating_mwh', 'consumption.heating_demand_mwh', 'heating_demand_mwh', 'annual_heating_kWh']),
     ),
     cooling_demand_mwh:  deltaRecord(
-      pickNumber(fromResult, ['consumption.space_cooling.demand_mwh', 'demand.cooling_mwh', 'consumption.cooling_demand_mwh', 'cooling_demand_mwh']),
-      pickNumber(toResult,   ['consumption.space_cooling.demand_mwh', 'demand.cooling_mwh', 'consumption.cooling_demand_mwh', 'cooling_demand_mwh']),
+      pickNumber(fromResult, ['consumption.space_cooling.demand_mwh', 'demand.cooling_demand_mwh', 'demand.cooling_mwh', 'consumption.cooling_demand_mwh', 'cooling_demand_mwh', 'annual_cooling_kWh']),
+      pickNumber(toResult,   ['consumption.space_cooling.demand_mwh', 'demand.cooling_demand_mwh', 'demand.cooling_mwh', 'consumption.cooling_demand_mwh', 'cooling_demand_mwh', 'annual_cooling_kWh']),
     ),
     // Per-service delivered (Brief 40 / v40 + v25 engine paths attach
     // these under consumption.* sub-blocks).
@@ -473,23 +480,24 @@ export function computeDelta(fromResult, toResult) {
       lighting:     _serviceDelta(fromResult, toResult, 'lighting'),
       small_power:  _serviceDelta(fromResult, toResult, 'small_power'),
     },
-    // Per-fuel
+    // Per-fuel — State 3 emits MWh under consumption.total.*_mwh + results.energy.by_carrier.*,
+    // degree-day fallback emits kWh under fuel_split.*.
     per_fuel: {
       electricity_mwh: deltaRecord(
-        pickNumber(fromResult, ['consumption.electricity_mwh', 'annual_energy.electricity_kWh']),
-        pickNumber(toResult,   ['consumption.electricity_mwh', 'annual_energy.electricity_kWh']),
+        pickNumber(fromResult, ['consumption.total.electricity_mwh', 'results.energy.by_carrier.electricity', 'consumption.electricity_mwh', 'annual_energy.electricity_kWh', 'fuel_split.electricity_kWh']),
+        pickNumber(toResult,   ['consumption.total.electricity_mwh', 'results.energy.by_carrier.electricity', 'consumption.electricity_mwh', 'annual_energy.electricity_kWh', 'fuel_split.electricity_kWh']),
       ),
       gas_mwh: deltaRecord(
-        pickNumber(fromResult, ['consumption.gas_mwh', 'annual_energy.gas_kWh']),
-        pickNumber(toResult,   ['consumption.gas_mwh', 'annual_energy.gas_kWh']),
+        pickNumber(fromResult, ['consumption.total.gas_mwh', 'results.energy.by_carrier.gas', 'consumption.gas_mwh', 'annual_energy.gas_kWh', 'fuel_split.gas_kWh']),
+        pickNumber(toResult,   ['consumption.total.gas_mwh', 'results.energy.by_carrier.gas', 'consumption.gas_mwh', 'annual_energy.gas_kWh', 'fuel_split.gas_kWh']),
       ),
       oil_mwh: deltaRecord(
         pickNumber(fromResult, ['consumption.oil_mwh']),
         pickNumber(toResult,   ['consumption.oil_mwh']),
       ),
       district_heat_mwh: deltaRecord(
-        pickNumber(fromResult, ['consumption.district_heat_mwh']),
-        pickNumber(toResult,   ['consumption.district_heat_mwh']),
+        pickNumber(fromResult, ['consumption.total.district_heat_mwh', 'results.energy.by_carrier.district_heat', 'consumption.district_heat_mwh']),
+        pickNumber(toResult,   ['consumption.total.district_heat_mwh', 'results.energy.by_carrier.district_heat', 'consumption.district_heat_mwh']),
       ),
     },
     // Per-envelope-term (Building module integrand)

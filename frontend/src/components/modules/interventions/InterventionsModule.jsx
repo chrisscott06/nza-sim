@@ -1,14 +1,15 @@
 /**
- * InterventionsModule.jsx — Brief 41 Part 3 (page-level)
+ * InterventionsModule.jsx — Brief 41 Parts 3 + 4 (page-level)
  *
  * Routes at /interventions. Composition:
  *   - Header: "Interventions" + subhead
  *   - Tab switcher: Stack | Comparison (Comparison is Part 5)
  *   - Stack tab content: InterventionStackView with baseline +
  *     intervention rows + drag-and-drop + enable toggles + "+ Add"
- *   - Stub editor pop-out: clicking "+ Add" or a row's edit creates /
- *     edits an intervention. Full editor pop-out (with the building
- *     model embedded + live preview) is Brief 41 Part 4.
+ *   - Brief 41 Part 4: InterventionEditorPopout (replaces the Part 3
+ *     stub). Draggable, two-column layout (curated editor + live
+ *     preview) with patch capture and Save / Cancel semantics. Part 5
+ *     adds the Comparison full-page view.
  *
  * Data flow:
  *   - Reads `params.interventions` from ProjectContext.
@@ -16,20 +17,17 @@
  *     deltas (engine populates `consumption.interventions` when
  *     params.interventions is non-empty — see Brief 41 Part 2 wiring).
  *   - Writes through updateParam('interventions', ...) for add /
- *     toggle / reorder / delete.
- *
- * Part 3 ships the shell. Parts 4-5 expand the editor + comparison
- * view. Part 6 walkthrough + close.
+ *     toggle / reorder / save / delete.
  */
 
 import { useContext, useEffect, useMemo, useState } from 'react'
-import { Plus, X } from 'lucide-react'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { WeatherContext } from '../../../context/WeatherContext.jsx'
 import { useHourlySolar } from '../../../hooks/useHourlySolar.js'
 import { calculateInstant } from '../../../utils/instantCalc.js'
 import { SYSTEM_TEMPLATES_LIBRARY } from '../../../data/systemTemplatesLibrary.js'
 import InterventionStackView from './InterventionStackView.jsx'
+import InterventionEditorPopout from './InterventionEditorPopout.jsx'
 
 const INTERVENTIONS_ACCENT = '#E84393'
 const CURRENT_SCHEMA_VERSION = 1   // Mirrors DEFAULT_PARAMS.schema_version
@@ -44,95 +42,6 @@ function newId(prefix) {
     ? crypto.randomUUID()
     : `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`
   return `${prefix}_${raw}`
-}
-
-function StubEditorPopout({ intervention, onClose, onUpdate, onDelete }) {
-  if (!intervention) return null
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/40">
-      <div className="bg-white rounded-2xl shadow-2xl w-[560px] max-w-[90vw] p-6 space-y-4">
-        <div className="flex items-start justify-between">
-          <div className="min-w-0">
-            <p className="text-xxs uppercase tracking-wider text-mid-grey font-medium">
-              Editing intervention (stub — full editor in Part 4)
-            </p>
-            <h2 className="text-heading font-semibold text-navy truncate">
-              {intervention.label || '(unnamed intervention)'}
-            </h2>
-          </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-light-grey/40 text-mid-grey">
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="space-y-3">
-          <div>
-            <label className="block text-xxs font-medium text-mid-grey uppercase tracking-wider mb-1">Label</label>
-            <input
-              type="text"
-              value={intervention.label || ''}
-              onChange={(e) => onUpdate({ label: e.target.value })}
-              placeholder="e.g. Fabric upgrade — south retrofit"
-              className="w-full px-3 py-2 rounded-lg border border-light-grey text-caption text-navy focus:outline-none focus:border-navy"
-            />
-          </div>
-          <div>
-            <label className="block text-xxs font-medium text-mid-grey uppercase tracking-wider mb-1">Theme (optional)</label>
-            <input
-              type="text"
-              value={intervention.theme || ''}
-              onChange={(e) => onUpdate({ theme: e.target.value || null })}
-              placeholder="e.g. Ventilation strategy, Phase 1, Compliance baseline"
-              className="w-full px-3 py-2 rounded-lg border border-light-grey text-caption text-navy focus:outline-none focus:border-navy"
-            />
-            <p className="text-xxs text-mid-grey mt-1">
-              Free-text. Same string across interventions clusters them in a future theme-grouped view (Brief 42).
-            </p>
-          </div>
-          <div>
-            <label className="block text-xxs font-medium text-mid-grey uppercase tracking-wider mb-1">Notes (optional)</label>
-            <textarea
-              value={intervention.notes || ''}
-              onChange={(e) => onUpdate({ notes: e.target.value })}
-              rows={2}
-              placeholder="Free-text notes — not consumed by the engine"
-              className="w-full px-3 py-2 rounded-lg border border-light-grey text-caption text-navy focus:outline-none focus:border-navy resize-none"
-            />
-          </div>
-          <div className="rounded-lg border border-dashed border-light-grey p-4 bg-off-white/50">
-            <p className="text-xxs text-mid-grey">
-              <span className="font-semibold text-navy">Part 4 lands the full editor here:</span> a draggable pop-out
-              with the building model on the left (Building / Internal Gains / Operation / Systems sub-modules,
-              wrapped in a patch-capture context) and a live preview on the right (KPI strip + paired Sankeys +
-              patch list). For now this stub just lets you name the intervention and toggle / reorder it in the
-              stack.
-            </p>
-            <p className="text-xxs text-mid-grey mt-2">
-              Patches in this intervention:{' '}
-              <span className="font-semibold text-navy">{intervention.patches?.length ?? 0}</span>
-              {' '}— Part 4 builds the patch-capture UI.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between pt-2 border-t border-light-grey">
-          <button
-            onClick={onDelete}
-            className="px-3 py-1.5 rounded-lg border border-light-grey text-xxs font-medium text-red-600 hover:bg-red-50 transition-colors"
-          >
-            Delete intervention
-          </button>
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 rounded-lg text-white text-xxs font-medium hover:opacity-90 transition-opacity"
-            style={{ backgroundColor: INTERVENTIONS_ACCENT }}
-          >
-            Done
-          </button>
-        </div>
-      </div>
-    </div>
-  )
 }
 
 export default function InterventionsModule() {
@@ -180,8 +89,11 @@ export default function InterventionsModule() {
   const baselineSummary = useMemo(() => {
     const baseline = stackResult?.baseline ?? engineResult
     if (!baseline) return null
-    const eui    = baseline.eui_kwh_per_m2 ?? baseline.eui_kWh_per_m2 ?? baseline.results_summary?.eui_kWh_per_m2 ?? null
-    const carbon = baseline.carbon_kgco2_per_m2 ?? baseline.carbon_kgCO2_m2 ?? baseline.consumption?.carbon_kgco2_per_m2 ?? null
+    // Accept State 3 (consumption.total.kwh_per_m2_yr / results.energy.kwh_per_m2_yr /
+    // energy_use.totals.eui_kwh_per_m2), degree-day fallback (eui_kWh_m2),
+    // and historical eui_kWh_per_m2 / results_summary shapes.
+    const eui    = baseline.consumption?.total?.kwh_per_m2_yr ?? baseline.results?.energy?.kwh_per_m2_yr ?? baseline.energy_use?.totals?.eui_kwh_per_m2 ?? baseline.eui_kwh_per_m2 ?? baseline.eui_kWh_per_m2 ?? baseline.eui_kWh_m2 ?? baseline.results_summary?.eui_kWh_per_m2 ?? null
+    const carbon = baseline.carbon_kg_co2_per_m2 ?? baseline.results?.carbon?.today?.kgCO2_per_m2_yr ?? baseline.carbon_kgco2_per_m2 ?? baseline.carbon_kgCO2_m2 ?? baseline.consumption?.carbon_kgco2_per_m2 ?? null
     return {
       eui:    Number.isFinite(eui)    ? Number(eui)    : null,
       carbon: Number.isFinite(carbon) ? Number(carbon) : null,
@@ -220,12 +132,13 @@ export default function InterventionsModule() {
   const handleEdit = (id) => setEditingId(id)
   const handleCloseEditor = () => setEditingId(null)
 
-  const handleUpdateEditing = (patch) => {
+  const handleSaveEditing = (updatedIntervention) => {
     if (!editingId) return
     const next = interventions.map(i =>
-      i.id === editingId ? { ...i, ...patch } : i
+      i.id === editingId ? { ...i, ...updatedIntervention, id: editingId } : i
     )
     updateParam('interventions', next)
+    setEditingId(null)
   }
 
   const handleDeleteEditing = () => {
@@ -236,6 +149,17 @@ export default function InterventionsModule() {
   }
 
   const editing = editingId ? interventions.find(i => i.id === editingId) : null
+
+  // Engine quartet that patches address as their root — built once per
+  // render. The editor pop-out passes this to runInterventionStack +
+  // applyIntervention so the live preview can render against the
+  // current baseline.
+  const baselineConfig = useMemo(() => ({
+    building: params,
+    constructions,
+    systems,
+    libraryData,
+  }), [params, constructions, systems, libraryData])
 
   // ── Render ──────────────────────────────────────────────────────────
 
@@ -291,11 +215,16 @@ export default function InterventionsModule() {
         )}
       </div>
 
-      {/* Stub editor pop-out (Part 4 will replace with the full one) */}
-      <StubEditorPopout
+      {/* Brief 41 Part 4 — draggable editor pop-out with patch capture
+          + live preview. Replaces the Part 3 stub. */}
+      <InterventionEditorPopout
         intervention={editing}
-        onClose={handleCloseEditor}
-        onUpdate={handleUpdateEditing}
+        baselineConfig={baselineConfig}
+        weatherData={weatherData}
+        hourlySolar={hourlySolar}
+        scheduleProfiles={null}
+        onSave={handleSaveEditing}
+        onCancel={handleCloseEditor}
         onDelete={handleDeleteEditing}
       />
     </div>

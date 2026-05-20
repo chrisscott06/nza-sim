@@ -1,6 +1,75 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-20 — Brief 41 Part 3: Interventions module shell + stack view
+## 🚧 Session 2026-05-20 — Brief 41 Part 4: Editor pop-out + patch capture + live preview
+
+**State:** `commit_in_flight` — Brief 41 Part 4.
+
+**Prior HEAD:** `3a860d6` (Brief 41 Part 3 close).
+
+### What landed in Part 4
+
+**Five new files** in `frontend/src/components/modules/interventions/`:
+
+- **`patchCapture.js`** — helpers for the editor's capture flow. `newPatchId()` (UUID), `getValueAtPath(config, path)` (read-only navigate via `interventionsEngine.parsePath`/`navigateToParent`), `capturePatch(patches, newPatch)` (dedupe-aware append — `set` ops at the same path REPLACE the existing patch instead of stacking, keeping the patch list short), `removePatch(patches, patchId)`, and `summarizePatch(patch, baselineConfig, libraryData)` returning `{label, verb, before, after, pct, tone}` for plain-English rendering. Path-to-label dispatch table covers infiltration / fabric / openings / occupancy / gains profiles / all six v40 services (heating/cooling/DHW/ventilation/lighting/small_power).
+- **`PatchList.jsx`** — renders patches as: `[verb chip] [label] [before → after] [pct] [×]`. Verb chips colour-coded (set=grey, add=green, remove=red, replace=amber). Tone colouring on before/after (green for savings, red for increases, neutral otherwise). Hover ×-button removes the patch.
+- **`InterventionEditorBuildingView.jsx`** — curated editor exposing the highest-value patch targets, organised in collapsible sections: Envelope (q50 + wall/roof/glazing construction pickers from library), Internal Gains (occupancy rate + lighting / equipment loads — first profile only), and per-service Systems blocks (heating / cooling / DHW / ventilation / lighting / small_power). Each per-system block carries enable toggle + service-specific fields (efficiency_metric + share_pct for thermal services; SFP + recovery_sensible_pct for ventilation; control_mechanism + control_factor for lighting/small_power). Selecting a control mechanism auto-captures BOTH the mechanism patch AND the default control_factor for that mechanism.
+- **`InterventionEditorPreview.jsx`** — right-half preview reading `runInterventionStack(baseline, [thisIntervention])` from the parent. Three sections: KPI strip (Metric / Baseline / Intervention / Δ rows for EUI / heating demand / cooling demand / electricity / gas / carbon, with colour-coded Δ), Heat-balance comparison bars (paired bars per metric with the "moved" terms highlighted in the interventions accent colour), and the embedded `PatchList`. Engine validation errors surface in a red banner above the KPI strip and disable Save.
+- **`InterventionEditorPopout.jsx`** — orchestrator. Reuses the shared **Brief 37 `SchedulePopout`** chrome (draggable, persistent-position via localStorage `nza-intervention-editor-popout-position`, Esc-to-close, non-blocking backdrop). Two-column body inside the pop-out (editor left + preview right) plus an identity row at the top (label + theme inputs) and a sticky footer (Delete intervention / Cancel / Save intervention). Local state: `localPatches` accumulates via `capturePatch`. Currentconfig is `applyIntervention(baseline, {...intervention, patches: localPatches})`. Live preview re-runs `runInterventionStack` on every patch change.
+
+**Replaced the Part 3 stub editor** in `InterventionsModule.jsx`:
+- Removed the inline StubEditorPopout (the modal placeholder).
+- Imported and wired `InterventionEditorPopout` with `baselineConfig` (the engine quartet `{building, constructions, systems, libraryData}`), `weatherData`, `hourlySolar`, and Save / Cancel / Delete callbacks.
+- `handleSaveEditing(updatedIntervention)` writes back via `updateParam('interventions', ...)` with the captured patches merged in.
+
+**Engine result-shape integration fixes** (essential for Part 4 numbers to flow on Bridgewater):
+- `interventionsEngine.js` `computeDelta` path lists extended to recognise the **State 3 v2.5** result shape (`consumption.total.kwh_per_m2_yr`, `results.energy.kwh_per_m2_yr`, `consumption.total.electricity_mwh`, `results.energy.by_carrier.gas`, `carbon_kg_co2_per_m2`, `results.carbon.today.kgCO2_per_m2_yr`) AND the legacy "full" path shape (`eui_kWh_m2`, `fuel_split.*`, `annual_*_kWh`, `carbon_kgCO2_m2`).
+- `InterventionsModule.baselineSummary` and `InterventionEditorPreview.pickFirst` updated with the same path lists so the stack row baseline EUI / carbon and the editor's KPI strip both populate.
+
+**Air permeability vs legacy ACH source-of-truth correction.** The first verification run showed patches on `building.infiltration_ach` had ZERO engine effect because Bridgewater's engine reads `building.fabric.air_permeability_q50` via `deriveOperationalACH()` first (Brief 28-IM Bug 2 canonical input). The legacy `infiltration_ach` is bypassed when q50 is set. The editor was updated to patch q50 directly (industry-standard m³/h·m² @ 50Pa units, with typical ranges in the inline comment from 10.0 leaky to 0.6 Passivhaus). `patchCapture.js` PATH_HANDLERS gained a `building.fabric.air_permeability_q50` entry. This is a real Brief 28-IM data-model gotcha; documenting in the audit doc and brief follow-up to consider unifying or surfacing the dual fields.
+
+### Verification (browser MCP on Bridgewater, State 3 path)
+
+End-to-end intervention round-trip:
+1. Click "+ Add your first intervention" → draggable pop-out opens with editor left + preview right + identity row + sticky footer ✓
+2. Set label "Airtightness retrofit" → state captured locally; intervention stays in stack as "New intervention" until Save ✓
+3. Set Envelope → Air permeability (q50) from 4.64 → 1.00 m³/h·m² ✓
+4. **Live preview KPI strip updates in real-time:**
+   - EUI: 58.0 → 57.0 kWh/m² (−1.00, −2%) ✓
+   - Heating demand: 149 → 133 MWh (−15.3, −10%) ✓
+   - Cooling demand: 95.4 → 99.2 MWh (+3.80, +4%) ✓ — less infiltration = less free cooling, expected per physics
+   - Electricity: 176 → 172 MWh (−4.19, −2%) ✓
+   - Gas: 74.7 → 74.7 MWh (no change — heat pump on heating, no gas-fired tied to envelope demand here)
+   - Carbon: 11.6 → 11.4 kgCO₂/m² (−0.2, −2%) ✓
+5. Heat-balance comparison bars highlight moved terms in the interventions accent (E84393) ✓
+6. PatchList shows: `[SET] Air permeability (q50) 4.64 m³/(h·m²) → 1.00 m³/(h·m²) −78%` ✓
+7. Save closes the pop-out; stack row shows `Airtightness retrofit | −1.0 kWh/m² (−2%) | −1.0 kWh/m² (−2%) | [edit]` ✓
+8. Edit re-opens the pop-out with the saved label + theme + patches loaded; Delete removes the row and reverts to the empty state ✓
+
+**Visualisation-as-verification discipline (Notion §10) — Reduce infiltration ACH row of the matrix:**
+- ✓ Infiltration ribbon narrows (engine demand drop confirmed via heating demand −15.3 MWh)
+- ✓ Heating demand drops (−10%)
+- ⚠ Cooling demand rises slightly (+3.8 MWh, +4%) — Notion's matrix says "Conduction losses, internal gains" should not change. Cooling change is a real second-order physics effect (less infiltration = less free cooling); the matrix didn't anticipate this for infiltration, but it's physically correct. Flagged for awareness; not a bug.
+
+### Scope boundary
+
+Per pre-Part-4 escalation Chris approved "Pragmatic curated editor": this ships the focused editor with the established curated patch targets + the full live-preview discipline. The brief's full "wrap arbitrary main-app UI in a patch-capture context" affordance is deferred to a future follow-up (Brief 42 territory). The patch-granularity question — atomic-per-leaf vs compound-per-key — is currently atomic-per-leaf (each input is a single `set` patch on its leaf path), which works well for the curated targets but would need a design pass for arbitrary nested-blob writes.
+
+### What did NOT change in Part 4
+
+- No engine logic changes (Parts 1-2 own the engine). `computeDelta` path-lists got extra entries to handle the State 3 result shape; the algorithm is unchanged.
+- No envelope physics changes. Rule 14 did not fire.
+- No comparison view (Part 5).
+- No library save/load (Part 5).
+- No backend changes.
+- Brief 40 Issues #18 / #19 remain deferred.
+
+### Next
+
+Part 5 — Full-page comparison view (KPI strip + paired Sankeys + paired heat-balance bars + delta table + per-intervention drill-down) accessible via the Comparison tab. Library save/load namespace `library_interventions`. Browser-verified three-intervention Bridgewater stack (fabric / plant / demand) with reorder + toggle tests. Walkthrough sign-off after Part 5 before Part 6 close.
+
+---
+
+## ✅ Session 2026-05-20 — Brief 41 Part 3: Interventions module shell + stack view
 
 **State:** `commit_in_flight` — Brief 41 Part 3.
 
