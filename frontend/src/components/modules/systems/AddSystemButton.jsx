@@ -45,7 +45,9 @@ import { SERVICE_COLOURS } from './SystemEditorCard.jsx'
 //   cooling for areas not served by VRF (comms rooms, plant rooms with
 //   year-round cooling). Refrigerant-based like VRF but without the
 //   heating mode.
-const BLANK_ARCHETYPES = {
+// Exported (Brief 43 Part 2) so the intervention editor's structural-op
+// modal can reuse the same archetype list as the Systems module.
+export const BLANK_ARCHETYPES = {
   heating: [
     { key: 'gas_boiler',     label: 'Gas boiler',                source: 'gas',             efficiency_metric: 0.92 },
     { key: 'vrf',            label: 'VRF (heat pump, refrigerant)', source: 'ambient_air',  efficiency_metric: 4.5  },
@@ -84,7 +86,10 @@ const BLANK_ARCHETYPES = {
 }
 
 // Build a new system entry from an archetype + parent service.
-function seedSystem(service, arch) {
+// Exported (Brief 43 Part 2): reused by InterventionEditorBuildingView's
+// + Add system / ⇄ Replace affordances which capture patches against
+// `systems_config_v40.<service>` arrays.
+export function seedSystem(service, arch) {
   const id = `sys_${service}_${Date.now()}_${Math.floor(Math.random() * 1000)}`
   const base = {
     id,

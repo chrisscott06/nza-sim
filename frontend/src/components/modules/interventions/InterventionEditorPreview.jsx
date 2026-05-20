@@ -105,7 +105,11 @@ export default function InterventionEditorPreview({
   libraryData,
   onRemovePatch,
   validationError,
+  onNormaliseShares,
 }) {
+  // Brief 43 Part 2: detect a share-validation error so the Normalise
+  // quick-fix button can be surfaced next to the error block.
+  const isShareError = typeof validationError === 'string' && /share_pct of enabled systems sums to/.test(validationError)
   // Helper to pull numeric from either result. Supports State 3 v2.5
   // shape (consumption.total.* + results.energy.* + consumption.space_*.demand_mwh +
   // carbon_kg_co2_per_m2), the legacy "full" path shape (eui_kWh_m2 +
@@ -128,12 +132,27 @@ export default function InterventionEditorPreview({
 
   return (
     <div className="space-y-4">
-      {/* Validation error (if any) */}
+      {/* Validation error (if any). Brief 43 Part 2: when the error is
+          a share-validation failure, surface a "Normalise enabled shares"
+          quick-fix button that captures `set` patches to scale the
+          offending service's enabled-system shares to 100%. */}
       {validationError && (
         <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2">
           <p className="text-xxs font-semibold text-red-700 uppercase tracking-wider mb-0.5">Engine validation</p>
           <p className="text-xxs text-red-700">{validationError}</p>
-          <p className="text-xxs text-red-600/70 mt-1">Resolve before saving.</p>
+          <div className="flex items-center justify-between mt-1.5 gap-2">
+            <p className="text-xxs text-red-600/70">Resolve before saving.</p>
+            {isShareError && onNormaliseShares && (
+              <button
+                type="button"
+                onClick={onNormaliseShares}
+                className="flex-shrink-0 px-2 py-0.5 rounded border border-red-300 text-xxs font-medium text-red-700 hover:bg-red-100 transition-colors"
+                title="Scale enabled-system shares proportionally to sum to 100%"
+              >
+                Normalise enabled shares
+              </button>
+            )}
+          </div>
         </div>
       )}
 

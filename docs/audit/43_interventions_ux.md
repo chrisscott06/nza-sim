@@ -88,9 +88,86 @@ The intervention's marginal Δ and cumulative Δ in the stack row continue to re
 
 ---
 
-## §3 — Part 2 — Structural ops (placeholder, filled in Part 2)
+## §3 — Part 2 — Structural ops (2026-05-20)
 
-To be filled.
+### §3.1 The three ops
+
+The engine has supported `op: 'add'` / `'remove'` / `'replace'` since Brief 41 Part 2. Brief 43 Part 2 ships the UI affordances:
+
+| Op | Path shape | Payload | Purpose |
+|---|---|---|---|
+| `add` | `building.systems_config_v40.<service>` (whole array) | `value: { id, label, service, source, ... }` + `source: 'inline' \| 'library'` | Add a new system into a service |
+| `remove` | `building.systems_config_v40.<service>` (whole array) | `match: { id: '<system_id>' }` | Remove an existing system from a service |
+| `replace` | `building.systems_config_v40.<service>` (whole array) | `match: { id: '<system_id>' }` + `value: { id: '<old_id>', ...replacement }` | Replace an existing system, preserving its slot's id + share + enabled |
+
+Patch ordering within an intervention is preserved by the engine (`applyIntervention` iterates patches in order). If the user removes one system and then adds two, the final array is `original − removed + add1 + add2` — handled automatically.
+
+### §3.2 UI affordances
+
+`InterventionEditorBuildingView.jsx` per service section now renders:
+
+- **`+ Add system`** button at the bottom of the section. Click opens a small popover (`StructuralOpMenu`) with:
+  - **From library** — entries filtered to the matching service from `params.library_systems`. Clicking copies the library entry into the patch value with a freshly-generated system uuid and `source: 'library'` (the library reference is surfaced in the PatchList's plain-English rendering as `— from library`).
+  - **Start blank** — archetypes from `BLANK_ARCHETYPES` (reused from Brief 40's `AddSystemButton`). Each archetype produces a `seedSystem(service, arch)` with defaults per service (gas boiler η 0.92, ASHP SCOP 3.0, MVHR SFP 1.8 + recovery 82%, etc.). Source on the patch is `'inline'`.
+
+  Sections render for ALL six services even when the baseline has none, so the user can add the first heating/cooling/DHW/ventilation/lighting/small_power system in an intervention.
+
+- **⊗ Remove** (X icon) on each existing system row. Confirms with `window.confirm` then captures `op: 'remove'` with `match: { id: sysId }`.
+
+- **⇄ Replace** (Repeat icon) on each existing system row. Opens the same `StructuralOpMenu` popover. On pick, captures `op: 'replace'` with `match: { id: oldId }` and the resolved replacement merged with `{ id: oldId, share_pct: oldShare, enabled: oldEnabled }` so the slot's identity + share split + enable state survive the swap (subsequent patches in the same intervention that address `<service>[id=<old_id>].efficiency_metric` continue to resolve cleanly).
+
+### §3.3 PatchList plain-English rendering
+
+`patchCapture.summarizePatch` updated to:
+
+- **add**: `"Heating system" + add + — + "ASHP" — from library` (or just `"ASHP"` for inline).
+- **remove**: `"Heating system" + remove + "old label"` (looked up from baselineConfig via the match.id; falls back to id string).
+- **replace**: `"Heating system" + replace + "old label" → "new label" — from library`.
+
+The path-label table in `patchCapture.js` gained service-array entries:
+
+```
+building.systems_config_v40.heating      → 'Heating system'
+building.systems_config_v40.cooling      → 'Cooling system'
+building.systems_config_v40.dhw          → 'DHW system'
+building.systems_config_v40.ventilation  → 'Ventilation system'
+building.systems_config_v40.lighting     → 'Lighting entry'
+building.systems_config_v40.small_power  → 'Small power entry'
+```
+
+(Brief 42 service-level paths added to the same table — heating_setpoint_c, cooling_setpoint_c, dhw_storage_setpoint_c, etc. — pre-emptively to support Part 3.)
+
+### §3.4 Share validation + Normalise quick-fix
+
+The engine's share validation (`_validateShares` in `systemsEngine.js`, Brief 40 Part 5b) emits an error string when `enabled` systems' `share_pct` don't sum to 100% for a service. The error reaches the preview pane via the existing `validationError` prop on `InterventionEditorPreview`.
+
+Brief 43 Part 2 adds:
+
+- The error block now shows a **"Normalise enabled shares"** button when the error string matches the share-validation pattern.
+- Click handler (`InterventionEditorPopout.handleNormaliseShares`):
+  - Parses the offending service from the error (`for service '<name>'`)
+  - Reads enabled systems from `currentConfig.building.systems_config_v40[service]`
+  - Computes new shares: `cur / enabled_sum * 100` (proportional scaling), or `100 / count` if all enabled systems are at zero
+  - Captures one `set` patch per enabled system at `...[id=<id>].share_pct`
+- Save remains disabled until the validation error clears (a re-run on the next render returns no error once the captured patches sum the shares to 100%).
+
+Pattern mirrors Brief 40 Part 5b's Normalise (which operated on the baseline config); here it operates at intervention-authoring time, leaving the baseline untouched.
+
+### §3.5 What Part 2 did NOT change
+
+- No engine changes — `applyPatch`'s add/remove/replace handlers untouched.
+- No data model changes — patch shape per Brief 41 (`{ id, op, path, value, match, source, schema_version }`).
+- Service sections render even when empty (one minor UX upgrade) — but the empty-section message is purely cosmetic; the patch-capture flow doesn't depend on it.
+- The popout body still uses the Brief 41 two-column layout inside the 1000 px width. No width / layout refactor in Part 2.
+- Removed systems disappear from the editor immediately (currentConfig reflects the captured remove patch). The "ghost row crossed-out" treatment from the brief §2.2 is deferred — the PatchList already shows what was removed, which is sufficient for the patch-authoring use-case.
+
+### §3.6 Files touched in Part 2
+
+- `frontend/src/components/modules/interventions/InterventionEditorBuildingView.jsx` — `StructuralOpMenu` + `AddSystemAffordance` + `ReplaceSystemAffordance` helpers; ServiceBlock gains ⊗ / ⇄ buttons; sections render for all six services
+- `frontend/src/components/modules/interventions/InterventionEditorPopout.jsx` — `handleNormaliseShares` parses the engine error + captures `set` patches; passes through to preview as `onNormaliseShares`
+- `frontend/src/components/modules/interventions/InterventionEditorPreview.jsx` — surfaces the Normalise quick-fix button next to share-validation errors
+- `frontend/src/components/modules/interventions/patchCapture.js` — `pathLabel` gains service-array + Brief 42 service-level entries; `summarizePatch` improves add/remove/replace rendering
+- `frontend/src/components/modules/systems/AddSystemButton.jsx` — exported `seedSystem` + `BLANK_ARCHETYPES` for reuse
 
 ---
 

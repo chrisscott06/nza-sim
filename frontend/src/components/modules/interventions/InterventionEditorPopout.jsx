@@ -48,7 +48,7 @@ import {
   runInterventionStack,
 } from '../../../utils/interventionsEngine.js'
 import { calculateInstant } from '../../../utils/instantCalc.js'
-import { capturePatch, removePatch } from './patchCapture.js'
+import { capturePatch, newPatchId, removePatch } from './patchCapture.js'
 import InterventionEditorBuildingView from './InterventionEditorBuildingView.jsx'
 import InterventionEditorPreview from './InterventionEditorPreview.jsx'
 
@@ -195,6 +195,39 @@ export default function InterventionEditorPopout({
     setLocalPatches(prev => removePatch(prev, id))
   }
 
+  // Brief 43 Part 2: Normalise quick-fix. Parses the engine's
+  // share-validation error to identify the offending service, then
+  // captures `set` patches on each enabled system in that service to
+  // scale their shares proportionally to 100%. Mirrors the Brief 40
+  // Part 5b Normalise pattern but lifted into intervention-authoring
+  // time (the patches are captured against the intervention, not
+  // committed to the baseline).
+  const handleNormaliseShares = () => {
+    if (!validationError) return
+    const m = validationError.match(/for service '([^']+)'/)
+    if (!m) return
+    const service = m[1]
+    const list = currentConfig?.building?.systems_config_v40?.[service] ?? []
+    if (!Array.isArray(list) || list.length === 0) return
+    const enabledIndices = list.map((s, i) => s?.enabled !== false ? i : -1).filter(i => i >= 0)
+    if (enabledIndices.length === 0) return
+    const enabledSum = enabledIndices.reduce((s, i) => s + Number(list[i].share_pct ?? 0), 0)
+    enabledIndices.forEach(i => {
+      const sys = list[i]
+      const cur = Number(sys.share_pct ?? 0)
+      const next = enabledSum > 0
+        ? Math.round((cur / enabledSum) * 100 * 10) / 10
+        : Math.round((100 / enabledIndices.length) * 10) / 10
+      capture({
+        id: newPatchId(),
+        op: 'set',
+        path: `building.systems_config_v40.${service}[id=${sys.id}].share_pct`,
+        value: next,
+        source: 'inline',
+      })
+    })
+  }
+
   // ── Save / Cancel ──────────────────────────────────────────────────
 
   const canSave = !validationError && !!localLabel?.trim()
@@ -286,6 +319,7 @@ export default function InterventionEditorPopout({
                 libraryData={baselineConfig?.libraryData}
                 onRemovePatch={handleRemovePatch}
                 validationError={validationError}
+                onNormaliseShares={handleNormaliseShares}
               />
             </div>
           </div>

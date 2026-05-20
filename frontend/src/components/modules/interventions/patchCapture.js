@@ -106,6 +106,26 @@ function fmtPct(before, after) {
  * grows.
  */
 const PATH_HANDLERS = [
+  // Brief 43 Part 2: structural ops target whole-array paths.
+  // pathLabel returns a service-aware label so PatchList reads as
+  // "Added Heating system: ASHP" / "Removed DHW system: gas_combi_1".
+  { test: /^building\.systems_config_v40\.heating$/,      label: 'Heating system' },
+  { test: /^building\.systems_config_v40\.cooling$/,      label: 'Cooling system' },
+  { test: /^building\.systems_config_v40\.dhw$/,          label: 'DHW system' },
+  { test: /^building\.systems_config_v40\.ventilation$/,  label: 'Ventilation system' },
+  { test: /^building\.systems_config_v40\.lighting$/,     label: 'Lighting entry' },
+  { test: /^building\.systems_config_v40\.small_power$/,  label: 'Small power entry' },
+  // Brief 43 Part 3: service-level (building-level) field paths post-Brief-42.
+  { test: /^building\.systems_config_v40\.heating_setpoint_mode$/, label: 'Heating setpoint mode' },
+  { test: /^building\.systems_config_v40\.heating_setpoint_c$/,    label: 'Heating setpoint',         unit: '°C' },
+  { test: /^building\.systems_config_v40\.cooling_setpoint_mode$/, label: 'Cooling setpoint mode' },
+  { test: /^building\.systems_config_v40\.cooling_setpoint_c$/,    label: 'Cooling setpoint',         unit: '°C' },
+  { test: /^building\.systems_config_v40\.dhw_storage_setpoint_c$/, label: 'DHW storage setpoint',    unit: '°C' },
+  { test: /^building\.systems_config_v40\.dhw_tap_outlet_temp_c$/,  label: 'DHW tap outlet',          unit: '°C' },
+  { test: /^building\.systems_config_v40\.dhw_cold_supply_temp_c$/, label: 'DHW cold supply',         unit: '°C' },
+  { test: /^building\.systems_config_v40\.dhw_demand_basis$/,       label: 'DHW demand basis' },
+  { test: /^building\.systems_config_v40\.dhw_demand_litres_per_person_per_day$/, label: 'DHW demand',  unit: ' L/p/day' },
+  { test: /^building\.systems_config_v40\.dhw_demand_litres_per_m2_per_day$/,     label: 'DHW demand',  unit: ' L/m²/day' },
   // Envelope
   { test: /^building\.infiltration_ach$/,                                              label: 'Infiltration (legacy ACH)',   unit: ' ACH' },
   { test: /^building\.fabric\.air_permeability_q50$/,                                  label: 'Air permeability (q50)',      unit: ' m³/(h·m²)' },
@@ -231,20 +251,36 @@ export function summarizePatch(patch, baselineConfig, libraryData) {
       }
     }
     case 'add': {
-      const ref = patch.source === 'library' && patch.value?.library_ref
-        ? patch.value.library_ref
-        : (patch.value && typeof patch.value === 'object' && patch.value.label)
-          ? `"${patch.value.label}"`
-          : 'item'
+      // Brief 43 Part 2: prefer the new system's label, then library_ref,
+      // then a generic 'item' fallback. Append " — from library" when the
+      // source is 'library' so the user can see provenance at a glance.
+      const lbl = patch.value && typeof patch.value === 'object' && patch.value.label
+        ? `"${patch.value.label}"`
+        : (patch.source === 'library' && patch.value?.library_ref ? patch.value.library_ref : 'item')
+      const provenance = patch.source === 'library' ? ' — from library' : ''
       return {
         label, verb: 'add',
         before: '—',
-        after: ref,
+        after: lbl + provenance,
         pct: null, tone: 'neutral',
       }
     }
     case 'remove': {
-      const which = patch.match?.id ?? JSON.stringify(patch.match ?? {})
+      // Brief 43 Part 2: try to read the human label of the removed entry
+      // from baselineConfig. Falls back to the match id. If baseline lookup
+      // fails (the patch references a system added by a prior patch in the
+      // same intervention chain — applyIntervention sees it but baseline
+      // doesn't) we still render the id as the descriptor.
+      const matchId = patch.match?.id
+      let removedLabel = null
+      if (matchId && patch.path) {
+        const arr = getValueAtPath(baselineConfig, patch.path)
+        if (Array.isArray(arr)) {
+          const found = arr.find(e => e && e.id === matchId)
+          if (found && found.label) removedLabel = `"${found.label}"`
+        }
+      }
+      const which = removedLabel ?? matchId ?? JSON.stringify(patch.match ?? {})
       return {
         label, verb: 'remove',
         before: which,
@@ -253,16 +289,26 @@ export function summarizePatch(patch, baselineConfig, libraryData) {
       }
     }
     case 'replace': {
-      const which = patch.match?.id ?? JSON.stringify(patch.match ?? {})
-      const ref = patch.source === 'library' && patch.value?.library_ref
-        ? patch.value.library_ref
-        : (patch.value && typeof patch.value === 'object' && patch.value.label)
-          ? `"${patch.value.label}"`
-          : 'item'
+      // Brief 43 Part 2: surface "X with Y" — old entry from baseline,
+      // new entry from patch.value.
+      const matchId = patch.match?.id
+      let oldLabel = null
+      if (matchId && patch.path) {
+        const arr = getValueAtPath(baselineConfig, patch.path)
+        if (Array.isArray(arr)) {
+          const found = arr.find(e => e && e.id === matchId)
+          if (found && found.label) oldLabel = `"${found.label}"`
+        }
+      }
+      const oldDescriptor = oldLabel ?? matchId ?? JSON.stringify(patch.match ?? {})
+      const newLabel = patch.value && typeof patch.value === 'object' && patch.value.label
+        ? `"${patch.value.label}"`
+        : (patch.source === 'library' && patch.value?.library_ref ? patch.value.library_ref : 'item')
+      const provenance = patch.source === 'library' ? ' — from library' : ''
       return {
         label, verb: 'replace',
-        before: which,
-        after: ref,
+        before: oldDescriptor,
+        after: newLabel + provenance,
         pct: null, tone: 'neutral',
       }
     }

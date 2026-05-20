@@ -1,5 +1,6 @@
 /**
  * InterventionEditorBuildingView.jsx — Brief 41 Part 4
+ *                                     + Brief 43 Part 2 (2026-05-20)
  *
  * Curated editor exposing the highest-value patch targets for the
  * Interventions module. Wraps a set of inputs that, on edit, capture
@@ -9,10 +10,7 @@
  *
  * Per Brief 41 Part 4 pragmatic scope (Chris-approved): this ships a
  * focused subset of edits rather than wrapping arbitrary main-app
- * components in a patch-capture context. The brief's full
- * "navigate-between-modules-inside-the-popout" affordance is deferred
- * to Brief 42 where the patch-granularity question (atomic-per-leaf
- * vs compound-per-key) can be designed properly.
+ * components in a patch-capture context.
  *
  * Section list:
  *   - Envelope: infiltration ACH, wall/roof/glazing construction
@@ -21,14 +19,23 @@
  *     cooling / DHW; ventilation SFP + sensible recovery; lighting
  *     control_mechanism + control_factor
  *
+ * Brief 43 Part 2 (2026-05-20): structural ops in the curated editor.
+ * Each service section gains a "+ Add system" button (library / blank
+ * archetype picker) that captures `op: 'add'`. Each existing system
+ * gains ⊗ Remove and ⇄ Replace buttons that capture `op: 'remove'` /
+ * `op: 'replace'` patches against the systems_config_v40.<service>
+ * array. Reuses the BLANK_ARCHETYPES + seedSystem helpers from the
+ * Systems module's AddSystemButton (Brief 40 Part 3 affordance).
+ *
  * The `currentConfig` prop is the engine-quartet AFTER applying all
  * captured patches so far — the editor reads current values from it
  * (so the user sees the running edit state, not stale baseline).
  */
 
 import { useState } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, Plus, X, Repeat } from 'lucide-react'
 import { newPatchId } from './patchCapture.js'
+import { BLANK_ARCHETYPES, seedSystem } from '../systems/AddSystemButton.jsx'
 
 const CONTROL_OPTIONS = [
   { value: 'constant',         label: 'Constant (no control)',  factor: 1.00 },
@@ -116,18 +123,191 @@ function ToggleInput({ label, value, onChange }) {
   )
 }
 
-function ServiceBlock({ system, service, capture }) {
+// Brief 43 Part 2 — small picker shown when the user clicks "+ Add
+// system" or "⇄ Replace". Surfaces library entries filtered by service
+// + the blank archetypes from BLANK_ARCHETYPES. Calls onPick(seededSystem)
+// with a fully-formed system entry; the caller wraps it in the
+// appropriate add or replace patch.
+function StructuralOpMenu({ service, librarySystems, onPick, onClose }) {
+  const archetypes = BLANK_ARCHETYPES[service] ?? []
+  const filteredLibrary = (librarySystems ?? []).filter(s => s?.service === service)
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-light-grey rounded shadow-lg p-2 space-y-2 max-h-[400px] overflow-y-auto">
+        {filteredLibrary.length > 0 && (
+          <div>
+            <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1">From library</p>
+            <div className="space-y-0.5">
+              {filteredLibrary.map(lib => (
+                <button
+                  key={lib.id ?? lib.label}
+                  type="button"
+                  onClick={() => {
+                    // Inline-resolve: copy the library entry into the patch
+                    // value with a fresh system uuid. Source stays 'library'
+                    // so the patch list shows " — from library" provenance.
+                    const fresh = {
+                      ...lib,
+                      id: `sys_${service}_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+                      share_pct: lib.share_pct ?? 100,
+                      enabled: lib.enabled !== false,
+                    }
+                    onPick({ value: fresh, source: 'library' })
+                    onClose()
+                  }}
+                  className="w-full text-left text-xxs px-1.5 py-1 rounded hover:bg-off-white/50 transition-colors"
+                >
+                  <span className="text-navy">{lib.label}</span>
+                  {' '}
+                  <span className="text-mid-grey">— {lib.source ?? '—'}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <div>
+          <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1">Start blank</p>
+          <div className="space-y-0.5">
+            {archetypes.length === 0 && (
+              <p className="text-xxs text-mid-grey/70 italic px-1.5 py-1">No archetypes for this service.</p>
+            )}
+            {archetypes.map(arch => (
+              <button
+                key={arch.key}
+                type="button"
+                onClick={() => {
+                  onPick({ value: seedSystem(service, arch), source: 'inline' })
+                  onClose()
+                }}
+                className="w-full text-left text-xxs px-1.5 py-1 rounded hover:bg-off-white/50 transition-colors text-navy"
+              >
+                {arch.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+// Brief 43 Part 2 — Add affordance per service. Pairs with the
+// service-section header to capture an `op: 'add'` patch.
+function AddSystemAffordance({ service, librarySystems, onCapture }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full text-xxs px-2 py-1 rounded border border-dashed border-mid-grey/40 text-mid-grey hover:text-navy hover:bg-off-white/50 transition-colors flex items-center justify-center gap-1"
+      >
+        <Plus size={11} /> Add system
+      </button>
+      {open && (
+        <StructuralOpMenu
+          service={service}
+          librarySystems={librarySystems}
+          onPick={({ value, source }) => {
+            onCapture({
+              id: newPatchId(),
+              op: 'add',
+              path: `building.systems_config_v40.${service}`,
+              value,
+              source,
+            })
+          }}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+// Brief 43 Part 2 — Replace affordance for a specific existing system.
+// Inlined into ServiceBlock's header. On pick, captures a `replace`
+// patch where the value carries the OLD system's id + share_pct +
+// enabled — so subsequent per-system field edits in this intervention
+// (paths like `...heating[id=<old_id>].efficiency_metric`) continue to
+// resolve cleanly, and the original slot's share + enable state survive
+// the swap unless explicitly overridden.
+function ReplaceSystemAffordance({ service, oldSystem, librarySystems, onCapture }) {
+  const [open, setOpen] = useState(false)
+  if (!oldSystem?.id) return null
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="flex-shrink-0 p-0.5 rounded text-mid-grey hover:text-amber-700 hover:bg-amber-50 transition-colors"
+        title="Replace this system with a different one"
+      >
+        <Repeat size={11} />
+      </button>
+      {open && (
+        <StructuralOpMenu
+          service={service}
+          librarySystems={librarySystems}
+          onPick={({ value, source }) => {
+            const idPreserved = {
+              ...value,
+              id: oldSystem.id,
+              share_pct: oldSystem.share_pct ?? value.share_pct ?? 100,
+              enabled: oldSystem.enabled !== false,
+            }
+            onCapture({
+              id: newPatchId(),
+              op: 'replace',
+              path: `building.systems_config_v40.${service}`,
+              match: { id: oldSystem.id },
+              value: idPreserved,
+              source,
+            })
+          }}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+function ServiceBlock({ system, service, capture, librarySystems }) {
   const sysId = system?.id
   if (!sysId) return null
   const baseHeating = service === 'heating' || service === 'cooling' || service === 'dhw'
   const baseVent    = service === 'ventilation'
   const baseLight   = service === 'lighting' || service === 'small_power'
 
+  const handleRemove = () => {
+    if (!window.confirm(`Remove ${service} system "${system.label || sysId}" from this intervention?`)) return
+    capture({
+      id: newPatchId(),
+      op: 'remove',
+      path: `building.systems_config_v40.${service}`,
+      match: { id: sysId },
+    })
+  }
+
   return (
     <div className="rounded border border-light-grey/70 bg-off-white/40 p-2 space-y-2">
       <div className="flex items-center gap-2">
         <span className="text-xxs font-semibold text-navy truncate flex-1">{system.label || sysId}</span>
-        <span className="text-xxs text-mid-grey/60 truncate" title={sysId}>{sysId}</span>
+        <ReplaceSystemAffordance
+          service={service}
+          oldSystem={system}
+          librarySystems={librarySystems}
+          onCapture={capture}
+        />
+        <button
+          type="button"
+          onClick={handleRemove}
+          className="flex-shrink-0 p-0.5 rounded text-mid-grey hover:text-red-600 hover:bg-red-50 transition-colors"
+          title="Remove this system from the intervention"
+        >
+          <X size={11} />
+        </button>
+        <span className="text-xxs text-mid-grey/60 truncate max-w-[110px]" title={sysId}>{sysId}</span>
       </div>
       <ToggleInput
         label="Enabled"
@@ -257,6 +437,10 @@ export default function InterventionEditorBuildingView({
     value: item.name || item.id,
     label: `${item.name || item.id}${item.u_value_W_per_m2K != null ? ` (U ${Number(item.u_value_W_per_m2K).toFixed(2)})` : ''}`,
   }))
+
+  // Brief 43 Part 2 — library systems (from params.library_systems via
+  // libraryData) for the structural-op modals (add / replace).
+  const librarySystems = Array.isArray(libraryData?.library_systems) ? libraryData.library_systems : []
 
   const lightingProfile = (b.gains?.lighting?.profiles ?? [])[0]
   const equipmentProfile = (b.gains?.equipment?.profiles ?? [])[0]
@@ -397,59 +581,73 @@ export default function InterventionEditorBuildingView({
         )}
       </Section>
 
-      {/* Heating systems */}
-      {(sysCfg.heating ?? []).length > 0 && (
-        <Section title="Heating systems" defaultOpen={false}>
-          {sysCfg.heating.map(sys => (
-            <ServiceBlock key={sys.id} system={sys} service="heating" capture={capture} />
-          ))}
-        </Section>
-      )}
+      {/* Heating systems. Brief 43 Part 2: section always rendered so
+          the user can `+ Add` the first heating system as part of the
+          intervention even when the baseline has none. */}
+      <Section title="Heating systems" defaultOpen={false}>
+        {(sysCfg.heating ?? []).map(sys => (
+          <ServiceBlock key={sys.id} system={sys} service="heating" capture={capture} librarySystems={librarySystems} />
+        ))}
+        {(sysCfg.heating ?? []).length === 0 && (
+          <p className="text-xxs text-mid-grey/70 italic">No heating systems in the current config — add one to capture an `op: 'add'` patch.</p>
+        )}
+        <AddSystemAffordance service="heating" librarySystems={librarySystems} onCapture={capture} />
+      </Section>
 
       {/* Cooling systems */}
-      {(sysCfg.cooling ?? []).length > 0 && (
-        <Section title="Cooling systems" defaultOpen={false}>
-          {sysCfg.cooling.map(sys => (
-            <ServiceBlock key={sys.id} system={sys} service="cooling" capture={capture} />
-          ))}
-        </Section>
-      )}
+      <Section title="Cooling systems" defaultOpen={false}>
+        {(sysCfg.cooling ?? []).map(sys => (
+          <ServiceBlock key={sys.id} system={sys} service="cooling" capture={capture} librarySystems={librarySystems} />
+        ))}
+        {(sysCfg.cooling ?? []).length === 0 && (
+          <p className="text-xxs text-mid-grey/70 italic">No cooling systems in the current config.</p>
+        )}
+        <AddSystemAffordance service="cooling" librarySystems={librarySystems} onCapture={capture} />
+      </Section>
 
       {/* DHW systems */}
-      {(sysCfg.dhw ?? []).length > 0 && (
-        <Section title="DHW systems" defaultOpen={false}>
-          {sysCfg.dhw.map(sys => (
-            <ServiceBlock key={sys.id} system={sys} service="dhw" capture={capture} />
-          ))}
-        </Section>
-      )}
+      <Section title="DHW systems" defaultOpen={false}>
+        {(sysCfg.dhw ?? []).map(sys => (
+          <ServiceBlock key={sys.id} system={sys} service="dhw" capture={capture} librarySystems={librarySystems} />
+        ))}
+        {(sysCfg.dhw ?? []).length === 0 && (
+          <p className="text-xxs text-mid-grey/70 italic">No DHW systems in the current config.</p>
+        )}
+        <AddSystemAffordance service="dhw" librarySystems={librarySystems} onCapture={capture} />
+      </Section>
 
       {/* Ventilation systems */}
-      {(sysCfg.ventilation ?? []).length > 0 && (
-        <Section title="Ventilation systems" defaultOpen={false}>
-          {sysCfg.ventilation.map(sys => (
-            <ServiceBlock key={sys.id} system={sys} service="ventilation" capture={capture} />
-          ))}
-        </Section>
-      )}
+      <Section title="Ventilation systems" defaultOpen={false}>
+        {(sysCfg.ventilation ?? []).map(sys => (
+          <ServiceBlock key={sys.id} system={sys} service="ventilation" capture={capture} librarySystems={librarySystems} />
+        ))}
+        {(sysCfg.ventilation ?? []).length === 0 && (
+          <p className="text-xxs text-mid-grey/70 italic">No ventilation systems in the current config.</p>
+        )}
+        <AddSystemAffordance service="ventilation" librarySystems={librarySystems} onCapture={capture} />
+      </Section>
 
       {/* Lighting controls (thin entries) */}
-      {(sysCfg.lighting ?? []).length > 0 && (
-        <Section title="Lighting controls" defaultOpen={false}>
-          {sysCfg.lighting.map(sys => (
-            <ServiceBlock key={sys.id} system={sys} service="lighting" capture={capture} />
-          ))}
-        </Section>
-      )}
+      <Section title="Lighting controls" defaultOpen={false}>
+        {(sysCfg.lighting ?? []).map(sys => (
+          <ServiceBlock key={sys.id} system={sys} service="lighting" capture={capture} librarySystems={librarySystems} />
+        ))}
+        {(sysCfg.lighting ?? []).length === 0 && (
+          <p className="text-xxs text-mid-grey/70 italic">No lighting entries in the current config.</p>
+        )}
+        <AddSystemAffordance service="lighting" librarySystems={librarySystems} onCapture={capture} />
+      </Section>
 
       {/* Small power controls (thin entries) */}
-      {(sysCfg.small_power ?? []).length > 0 && (
-        <Section title="Small power controls" defaultOpen={false}>
-          {sysCfg.small_power.map(sys => (
-            <ServiceBlock key={sys.id} system={sys} service="small_power" capture={capture} />
-          ))}
-        </Section>
-      )}
+      <Section title="Small power controls" defaultOpen={false}>
+        {(sysCfg.small_power ?? []).map(sys => (
+          <ServiceBlock key={sys.id} system={sys} service="small_power" capture={capture} librarySystems={librarySystems} />
+        ))}
+        {(sysCfg.small_power ?? []).length === 0 && (
+          <p className="text-xxs text-mid-grey/70 italic">No small power entries in the current config.</p>
+        )}
+        <AddSystemAffordance service="small_power" librarySystems={librarySystems} onCapture={capture} />
+      </Section>
     </div>
   )
 }

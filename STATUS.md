@@ -1,8 +1,51 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-20 — Brief 43 Part 1: Interventions layout refactor — stack in main view, pop-out beside
+## 🚧 Session 2026-05-20 — Brief 43 Part 2: Structural ops in the intervention editor — add / remove / replace systems
 
-**State:** `commit_in_flight` — Brief 43 Part 1.
+**State:** `commit_in_flight` — Brief 43 Part 2.
+
+**Prior HEAD:** `e06cc90` (Brief 43 Part 1 close).
+
+### What landed in Part 2
+
+**`InterventionEditorBuildingView.jsx`** gained three small components:
+
+- **`StructuralOpMenu`** — reusable popover for picking a system. Shows library entries (filtered to the matching service from `params.library_systems`) and `BLANK_ARCHETYPES` defaults (reused from `AddSystemButton.jsx`). On pick, returns `{ value, source }` to the caller.
+- **`AddSystemAffordance`** — `+ Add system` button at the bottom of each service section. Click opens the menu; on pick, captures `op: 'add'` against `building.systems_config_v40.<service>`.
+- **`ReplaceSystemAffordance`** — Repeat icon next to each existing system. Click opens the same menu; on pick, captures `op: 'replace'` with `match: { id: oldId }`. The replacement value carries the OLD system's id + share + enabled state so the slot's identity survives the swap.
+
+`ServiceBlock` gained ⊗ Remove (X icon) — confirms via `window.confirm`, captures `op: 'remove'` with `match: { id: sysId }`.
+
+All six service sections render even when the baseline has none, so the user can add the first heating/cooling/DHW/ventilation/lighting/small_power system as part of an intervention.
+
+**`patchCapture.js`** updates:
+- `pathLabel` gained service-array entries (`building.systems_config_v40.heating` → `'Heating system'`, etc.) and the Brief 42 service-level paths pre-emptively (heating_setpoint_c, dhw_storage_setpoint_c, etc.).
+- `summarizePatch` for `add` / `remove` / `replace` now produces friendlier output: `"Heating system" + add + "ASHP" — from library`; `"Heating system" + replace + "old label" → "new label"`; etc. Looks up the old system's label from baselineConfig via the match.id.
+
+**`InterventionEditorPopout.jsx`**:
+- `handleNormaliseShares` parses the engine's share-validation error string (`for service '<name>'`), reads enabled systems from `currentConfig.building.systems_config_v40[service]`, captures `set` patches that scale each enabled system's `share_pct` proportionally to sum to 100%.
+- Passes through to preview as `onNormaliseShares`.
+
+**`InterventionEditorPreview.jsx`** surfaces the **"Normalise enabled shares"** button next to share-validation errors. Mirrors the Brief 40 Part 5b Normalise pattern but lifted into intervention-authoring time.
+
+**`AddSystemButton.jsx`** — `seedSystem` and `BLANK_ARCHETYPES` exported for reuse.
+
+### What did NOT change in Part 2
+
+- No engine changes. `applyPatch` add/remove/replace logic untouched since Brief 41 Part 2.
+- No data model changes. Patch shape unchanged.
+- The popout body still uses the Brief 41 two-column layout inside the 1000 px width.
+- Removed systems disappear from the editor immediately (currentConfig reflects the patch). The "ghost row crossed-out" treatment from the brief §2.2 is deferred — the PatchList already shows what was removed.
+
+### Next
+
+Part 3 — wider field coverage + service-level patches (Brief 42 paths in the editor section headers) + InterventionRow patch-summary enrichment.
+
+---
+
+## ✅ Session 2026-05-20 — Brief 43 Part 1: Interventions layout refactor — stack in main view, pop-out beside
+
+**State:** `closed` — Brief 43 Part 1 at `e06cc90`.
 
 **Prior HEAD:** `db7d7a4` (Brief 42 close).
 
