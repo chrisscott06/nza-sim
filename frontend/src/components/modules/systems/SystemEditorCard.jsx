@@ -27,6 +27,7 @@
  */
 
 import { useState } from 'react'
+import { NavLink } from 'react-router-dom'
 
 // Service colour palette per Brief 37 Part 1 / SYSTEMS_SERVICE_COLOURS
 export const SERVICE_COLOURS = {
@@ -336,6 +337,56 @@ export default function SystemEditorCard({
             />
           )}
         </Group>
+
+        {/* SOURCE group — lighting + small_power only. Makes the link to
+            Internal Gains visible: shows the annual gain figure that
+            sources the load + the formula that produces delivered electrical
+            after controls + share. Engine wiring: systemsEngine._computeThin
+            reads gain_from_internal_gains_mwh from state2Result.heat_balance
+            .annual.gains.internal.{lighting|equipment}.kwh; the Internal
+            Gains module's lpd × gia × schedule_fraction integrand. */}
+        {(service === 'lighting' || service === 'small_power') && (
+          <Group title="Source — linked to Internal Gains">
+            {engineSystem ? (
+              <>
+                <div className="flex justify-between items-baseline gap-2 text-xxs">
+                  <span className="text-mid-grey">Annual gain</span>
+                  <span className="text-navy tabular-nums font-medium whitespace-nowrap">
+                    {(engineSystem.gain_from_internal_gains_mwh ?? 0).toFixed(1)} MWh/yr
+                  </span>
+                </div>
+                <div className="flex justify-between items-baseline gap-2 text-xxs">
+                  <span className="text-mid-grey">× control × share</span>
+                  <span className="text-navy tabular-nums whitespace-nowrap">
+                    × {Number(engineSystem.control_factor ?? 1).toFixed(2)} × {Number(system?.share_pct ?? 0)}%
+                  </span>
+                </div>
+                <div className="flex justify-between items-baseline gap-2 text-xxs pt-1 border-t border-light-grey/40">
+                  <span className="text-navy font-medium">= Delivered electrical</span>
+                  <span className="text-navy tabular-nums font-semibold whitespace-nowrap">
+                    {(engineSystem.delivered_electrical_mwh ?? 0).toFixed(1)} MWh/yr
+                  </span>
+                </div>
+                <p className="text-xxs text-mid-grey/70 leading-tight pt-0.5">
+                  Gain = (LPD or EPD) × GIA × schedule fraction × hours, computed in Internal Gains.
+                </p>
+              </>
+            ) : (
+              <p className="text-xxs text-mid-grey/70 leading-tight">
+                Delivered electrical = annual gain × control_factor × share/100.
+                Gain comes from Internal Gains (schedule × power density);
+                controls applied here reduce delivered electrical while the
+                heat-balance gain stays sourced from upstream.
+              </p>
+            )}
+            <NavLink
+              to="/gains"
+              className="text-xxs text-navy underline hover:text-cyan-700 transition-colors"
+            >
+              Edit gain in Internal Gains →
+            </NavLink>
+          </Group>
+        )}
 
         {/* DIAGNOSTIC group — only when engine has computed it */}
         {engineSystem && (service === 'heating' || service === 'cooling') &&
