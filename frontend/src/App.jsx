@@ -15,8 +15,9 @@ import OperationModule    from './components/modules/OperationModule.jsx'
 import InformationModule  from './components/modules/InformationModule.jsx'
 import ResultsDashboard from './components/modules/results/ResultsDashboard.jsx'
 // Brief 28-IM IM-M5: full-width single-column Results module reading the
-// new `results.*` engine block. Legacy ResultsDashboard kept in tree for
-// scenario-comparison routes that still depend on its tab list.
+// new `results.*` engine block. Legacy ResultsDashboard is reachable only
+// via the orphan /results-legacy route after Brief 41 deleted /scenarios;
+// kept in tree pending a follow-up cleanup brief.
 import IMResultsModule from './components/modules/IMResultsModule.jsx'
 // Brief 28-IM IM-M6: Retrofit Roadmap — sequenced intervention surface
 // with per-year per-intervention leave-one-out marginal attribution.
@@ -31,7 +32,6 @@ import LibraryBrowser  from './components/modules/LibraryBrowser.jsx'
 // data/schedulePresets.js and are surfaced as "Apply preset…" inside each
 // gain's ScheduleEditor.
 import InternalGainsModule from './components/modules/gains/InternalGainsModule.jsx'
-import ScenarioManager from './components/modules/ScenarioManager.jsx'
 import ConsumptionManager from './components/modules/consumption/ConsumptionManager.jsx'
 import CRREMModule from './components/modules/CRREMModule.jsx'
 import WeatherModule from './components/modules/WeatherModule.jsx'
@@ -66,7 +66,6 @@ export default function App() {
                 <Route path="/weather"   element={<ErrorBoundary moduleName="Weather"><WeatherModule /></ErrorBoundary>} />
                 <Route path="/balance-test" element={<ErrorBoundary moduleName="Heat Balance Test"><BalanceTestPage /></ErrorBoundary>} />
                 <Route path="/chart-test"   element={<ErrorBoundary moduleName="Chart Components Test"><ChartComponentsTestPage /></ErrorBoundary>} />
-                <Route path="/scenarios" element={<ErrorBoundary moduleName="Scenario Manager"><ScenarioManager /></ErrorBoundary>} />
                 <Route path="/library"   element={<ErrorBoundary moduleName="Library Browser"><LibraryBrowser /></ErrorBoundary>} />
               </Route>
             </Routes>

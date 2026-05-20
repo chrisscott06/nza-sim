@@ -277,6 +277,20 @@ const DEFAULT_PARAMS = {
   // Library entries carry their full Brief 40 system shape + an additional
   // `saved_at` timestamp + `lib_${service}_*` id.
   library_systems: [],
+  // Brief 41 Part 1 (2026-05-20) — Interventions module data model.
+  // Ordered list of declarative patches against the baseline
+  // (Pattern Y per Notion design note §1–2). Engine in Part 2 runs the
+  // cumulative state for each enabled intervention in order. Schema +
+  // patch shape + path conventions + schema-flexibility discipline
+  // documented in docs/audit/41_interventions_schema.md.
+  //
+  // schema_version stamps the building_config schema version each
+  // intervention's patches were authored against. The first stamped
+  // version is 1 (Brief 41); future briefs that change building_config
+  // schema must increment this AND register a patch-migration function
+  // alongside the schema migration (Notion §7).
+  interventions:  [],
+  schema_version: 1,
 }
 
 // ── Brief 27 Part 1 — v2.3 migration helpers ─────────────────────────────────
@@ -720,6 +734,13 @@ export function ProjectProvider({ children }) {
       // Brief 40 Part 3 (2026-05-19) — per-project systems library.
       // Same load semantics as systems_config_v40.
       library_systems: Array.isArray(bc.library_systems) ? bc.library_systems : (DEFAULT_PARAMS.library_systems ?? []),
+      // Brief 41 Part 1 (2026-05-20) — Interventions stack. Falls back to
+      // empty array for pre-Brief-41 projects (no patches stamped against
+      // older schemas, so no migration to run on load). schema_version
+      // tracks the building_config schema version this project's
+      // interventions were authored against; absent → default to current.
+      interventions:  Array.isArray(bc.interventions) ? bc.interventions : DEFAULT_PARAMS.interventions,
+      schema_version: Number.isInteger(bc.schema_version) ? bc.schema_version : DEFAULT_PARAMS.schema_version,
     })
     setConstructions(project.construction_choices ?? DEFAULT_CONSTRUCTIONS)
     setSystems(migrateSystemsConfig(project.systems_config))

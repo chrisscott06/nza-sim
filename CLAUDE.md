@@ -209,6 +209,58 @@ relationship).
 (Brief 40, May 2026. Full schema and mathematics in
 `docs/audit/40_systems_library_schema.md`.)
 
+### Interventions module — scope
+
+**Computes:**
+- Cumulative engine state for each enabled intervention in the user's
+  stack, in order
+- Marginal delta per intervention (this intervention's contribution
+  on top of everything above it)
+- Cumulative delta from baseline (sum of all enabled interventions'
+  marginals)
+- Patches composing each intervention — Type 1 field changes, Type 2
+  array add/remove, Type 3 array replace, per the Notion design note
+  §4
+
+**Does not contain:**
+- Envelope physics (Building)
+- Internal gain definitions (Internal Gains)
+- System definitions (Systems — interventions patch these, but the
+  canonical shape lives in Systems)
+- Operable envelope operation (Operation)
+- Cost / payback / ROI (Roadmap module; interventions carry an
+  optional `capex_gbp` field that Roadmap will read in a follow-up)
+- Library items (existing library patterns from Brief 37 and Brief 40
+  own these; interventions reference library items by ID through
+  patches with `source: 'library'`)
+- Calibration (calibration is just baseline editing per Notion §16 —
+  no separate engine, no Interventions involvement)
+
+The Interventions module touches `ProjectContext` only to add
+`interventions: []` and `schema_version: <int>` to `DEFAULT_PARAMS`
+as siblings of the existing building_config fields. It does not
+modify any existing building_config field — interventions are
+non-destructive declarative patches against the baseline.
+
+**Pattern Y discipline (Notion §1–2):** patches are declarative, not
+branched states. The engine runs the same baseline + computed
+cumulative configs through unchanged engine entry points; no new
+physics. Reordering reruns the chain; toggling an intervention skips
+its patches; last-write-wins when two interventions patch the same
+path.
+
+**Schema-flexibility discipline (Notion §7, audit doc §7):** every
+patch records the `schema_version` it was authored against; every
+brief that changes building_config schema in a way that touches
+existing patch paths must land a patch-migration function in the
+same commit. No silent breakage of stored interventions when the
+baseline schema evolves.
+
+(Brief 41, May 2026. Full schema, patch shape, path conventions,
+patch-application algorithm, and schema-flexibility discipline in
+`docs/audit/41_interventions_schema.md`. Notion design note:
+https://www.notion.so/365d645e05cc81b79160e49029d2158c.)
+
 ---
 
 ## Process rules

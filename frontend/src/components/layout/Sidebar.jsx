@@ -9,7 +9,6 @@ import {
   FileSpreadsheet,
   BarChart3,
   TrendingDown,
-  GitCompare,
   BookOpen,
   Cloud,
   Route as RouteIcon,
@@ -24,9 +23,9 @@ import { accentForPath } from '../../data/moduleThemes.js'
 // module redesign) may rename the route to /overview at the same time as
 // other URL-shape changes.
 //
-// Profiles + Consumption + CRREM + Scenarios live below the divider as
-// secondary / sub-views. Profiles is legacy and slated for deletion in
-// Brief 27 Revised Part 11 once /gains fully absorbs its functionality.
+// Brief 41 (2026-05-20) — /scenarios removed (entire scenarios module
+// deleted per Notion design note §9). The new Interventions module is added
+// in Brief 41 Part 3.
 const TOP_ITEMS = [
   { to: '/',            icon: Home,            label: 'Home' },
   { to: '/information', icon: ClipboardList,   label: 'Overview' },
@@ -44,10 +43,6 @@ const TOP_ITEMS = [
 const BOTTOM_ITEMS = [
   { to: '/consumption', icon: FileSpreadsheet, label: 'Consumption' },
   { to: '/crrem',       icon: TrendingDown,    label: 'CRREM'       },
-  { to: '/scenarios',   icon: GitCompare,      label: 'Scenarios'   },
-  // /profiles deleted in Brief 27 Revised Part 11 — superseded by the
-  // multi-profile Internal Gains module. Schedule presets remain available
-  // as "Apply preset…" inside each gain's ScheduleEditor.
 ]
 
 function NavItem({ to, icon: Icon, label }) {

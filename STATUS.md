@@ -1,5 +1,65 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-20 — Brief 41 Part 1: Interventions module demolition + data model
+
+**State:** `commit_in_flight` — Brief 41 Part 1.
+
+**Prior HEAD:** `5835d21` (Brief 40 close).
+
+### What landed in Part 1
+
+**Demolition (per Notion design note §9 — delete on sight, no salvage).**
+- Deleted `frontend/src/components/modules/scenarios/` directory (4 files: `ComparisonView.jsx`, `CreateScenarioModal.jsx`, `ScenarioEditor.jsx`, `ScenarioList.jsx`).
+- Deleted `frontend/src/components/modules/ScenarioManager.jsx` (top-level routed component).
+- Removed sidebar entry `/scenarios` from `Sidebar.jsx` (BOTTOM_ITEMS); removed unused `GitCompare` icon import.
+- Removed `/scenarios` route + `ScenarioManager` import from `App.jsx`; updated the legacy ResultsDashboard comment to reflect that scenario-comparison routes no longer exist.
+- Cleaned three user-visible scenario consumers (surgical clean, per pre-Part-1 escalation):
+  - `pages/ProjectDashboard.jsx`: removed scenarios state, scenarios fetching `useEffect`, and the entire Scenario Summary section (lines 530-572).
+  - `components/modules/results/OverviewTab.jsx`: removed `useNavigate` import + hook, `GitCompareArrows` icon, and the "Compare Scenarios →" cross-navigation button.
+- Left intact (orphan / harmless): `/results-legacy` route + its ResultsDashboard scenario selector + CRREMTab multi-scenario plotting (no inbound links, may be repurposed for multi-intervention plotting later); `EnergyFlowsTab.jsx` `scenarioName` heading (falls back to 'Dynamic'); `SimulationContext.jsx` `scenario_name` normalizer field (undefined for non-scenario runs).
+- Backend `/api/projects/{id}/scenarios` endpoints untouched (frontend simply no longer queries them).
+
+**Data model (Pattern Y).**
+- `frontend/src/context/ProjectContext.jsx` DEFAULT_PARAMS gains two top-level fields:
+  - `interventions: []` — ordered list of declarative patches against the baseline (Notion §1–2 Pattern Y).
+  - `schema_version: 1` — first stamped building_config schema version. Future briefs that change building_config schema in a way that touches existing patch paths must increment and register a patch-migration function in the same commit (Notion §7).
+- Project loader (`_applyProject`) gains defensive fall-backs:
+  - `interventions: Array.isArray(bc.interventions) ? bc.interventions : DEFAULT_PARAMS.interventions`
+  - `schema_version: Number.isInteger(bc.schema_version) ? bc.schema_version : DEFAULT_PARAMS.schema_version`
+
+**Documentation.**
+- New canonical schema reference: `docs/audit/41_interventions_schema.md` — covers headline architecture (§1), top-level project addition (§2), intervention shape including the `theme` and `schema_version` and `capex_gbp` fields (§3), patch shape with op semantics (§4), path conventions including `[id=value]` array addressing (§5), patch-application algorithm with the last-write-wins boundary condition (§6), schema-flexibility discipline with patch-migration function discipline (§7), engine integration sketch (§8), sanity test list placeholder (§9 — populated in Part 2), and explicit out-of-scope list (§10).
+- CLAUDE.md "Module scopes" gains a new **Interventions module — scope** entry after Systems. Documents Computes/Does-not-contain, Pattern Y discipline, and schema-flexibility discipline; links to the audit doc + Notion design note.
+- `docs/briefs/current.md` repointed to Brief 41 as active; Brief 30 noted as paused-in-archive (moved from `active/` → `archive/30_dynamic_engine_rebuild_PAUSED.md` at the start of Brief 41 to keep `active/` to one entry).
+- Brief 41 brief folded into `docs/briefs/active/41_interventions_module.md` (the original Brief 41 — operable openings unified physics — is already archived as `archive/41_operable_openings_unified_physics_COMPLETED.md`; the number is reused per the architect's chat-form sequencing).
+
+**Decisions captured from the Notion design note that the brief didn't state explicitly:**
+- `theme` field is data-model only in Brief 41 (free-text, can span modules, no UI). Brief 42 (future) will add theme-grouped UI with autocomplete + "Ungrouped" section.
+- `capex_gbp` is captured but not consumed in Brief 41 — Roadmap module reads it later. Roadmap's existing nested `building_config.roadmap.interventions` array (Brief 28-IM data shape) is unrelated and untouched.
+- Calibration is just baseline editing per Notion §16 — no Brief 41 implications.
+
+### Escalation resolved before Part 1 work
+
+The brief assumed scenarios was UI-only state in ProjectContext with a one-line migration. Actual scenarios was a backend-persisted object via `/api/projects/{id}/scenarios` with **zero ProjectContext keys** but **six frontend consumers** (ProjectDashboard, OverviewTab, EnergyFlowsTab, CRREMTab, ResultsDashboard, SimulationContext). Chris approved "Surgical clean": delete + fix the three user-visible navigation dead-ends in the same Part 1 commit; leave the three harmless / orphan-route consumers alone.
+
+### What did NOT change in Part 1
+
+- No engine code. `frontend/src/utils/interventionsEngine.js` is Part 2.
+- No new UI module. `frontend/src/components/modules/interventions/` directory is Part 3.
+- No backend changes (no API endpoints added or removed; no schema migrations on the SQLite side).
+- No envelope physics changes. Rule 14 did not fire.
+- Brief 40's deferred Issues #18 and #19 remain deferred — Part 1 didn't touch the engine/systems code paths that own those issues.
+
+### Verification
+
+Browser smoke test forthcoming (Sidebar shows no Scenarios entry, no /scenarios route, app boots cleanly, Bridgewater loads with interventions: [] in params, dev tools console no errors). Logged at commit time.
+
+### Next
+
+Part 2 — Engine: `interventionsEngine.js` implements `applyPatch` (deep-clone + path navigate + op execute), `applyIntervention` (patches in order, skip if disabled), `runInterventionStack` (cumulative configs through engine, marginal + cumulative deltas), `computeDelta` (structured delta object covering headline metrics + per-service + per-envelope-term), and `migratePatch` no-op stub for future schema migrations.
+
+---
+
 ## ✅ Session 2026-05-19 — Brief 40 close: Systems Library Architecture shipped
 
 **State:** `commit_in_flight` — Brief 40 formal close. All substantive code + verification shipped over the preceding commit chain; this close commit lands documentation hygiene: Part 5b brief folded into archive, Brief 40 main archived, current.md repointed, Issues #18/#19 logged in `29_open_issues.md`, STATUS.md close-out summary.

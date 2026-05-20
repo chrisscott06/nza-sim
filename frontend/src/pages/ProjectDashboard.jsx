@@ -174,7 +174,6 @@ export default function ProjectDashboard() {
 
   const [crremData,            setCrremData]            = useState(null)
   const [consumptionDatasets,  setConsumptionDatasets]  = useState(null) // null = loading
-  const [scenarios,            setScenarios]            = useState([])
 
   // ── Data fetching ────────────────────────────────────────────────────────────
 
@@ -194,14 +193,6 @@ export default function ProjectDashboard() {
       .then(r => r.ok ? r.json() : { datasets: [] })
       .then(data => setConsumptionDatasets(data.datasets ?? []))
       .catch(() => setConsumptionDatasets([]))
-  }, [currentProjectId])
-
-  useEffect(() => {
-    if (!currentProjectId) return
-    fetch(`/api/projects/${currentProjectId}/scenarios`)
-      .then(r => r.ok ? r.json() : [])
-      .then(data => setScenarios(Array.isArray(data) ? data : []))
-      .catch(() => setScenarios([]))
   }, [currentProjectId])
 
   // ── Instant calc (fallback if no simulation result) ──────────────────────────
@@ -526,50 +517,6 @@ export default function ProjectDashboard() {
             </div>
           </div>
         </div>
-
-        {/* ── Scenario summary ── */}
-        {scenarios.filter(s => s.latest_eui != null).length > 0 && (
-          <div className="bg-white rounded-xl border border-light-grey p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-caption font-semibold text-navy">Scenario Summary</h3>
-              <button
-                onClick={() => navigate('/scenarios')}
-                className="text-xxs text-teal hover:text-teal/70 transition-colors flex items-center gap-0.5"
-              >
-                Compare scenarios <ChevronRight size={11} />
-              </button>
-            </div>
-            <div className="space-y-0.5">
-              {[...scenarios]
-                .filter(s => s.latest_eui != null)
-                .sort((a, b) => a.latest_eui - b.latest_eui)
-                .slice(0, 6)
-                .map(s => (
-                  <div
-                    key={s.id}
-                    className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-off-white"
-                  >
-                    <span className="text-caption text-dark-grey">{s.name}</span>
-                    <div className="flex items-center gap-3">
-                      <span className="text-caption font-semibold text-navy tabular-nums">
-                        {Math.round(s.latest_eui)} kWh/m²
-                      </span>
-                      {crremTarget != null && (
-                        <span className={`text-xxs font-medium ${
-                          s.latest_eui <= crremTarget ? 'text-green-600' : 'text-red-600'
-                        }`}>
-                          {s.latest_eui <= crremTarget
-                            ? '✓ On target'
-                            : `+${Math.round(s.latest_eui - crremTarget)} over`}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))
-              }
-            </div>
-          </div>
-        )}
 
       </div>
     </div>
