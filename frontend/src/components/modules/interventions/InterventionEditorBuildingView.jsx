@@ -34,8 +34,13 @@
 
 import { useState } from 'react'
 import { ChevronDown, ChevronRight, Plus, X, Repeat } from 'lucide-react'
+import { NavLink } from 'react-router-dom'
 import { newPatchId } from './patchCapture.js'
 import { BLANK_ARCHETYPES, seedSystem } from '../systems/AddSystemButton.jsx'
+// Brief 43 Part 3: reuse the canonical source + control-mechanism
+// option lists from SystemEditorCard so the editor matches the Systems
+// module's affordances.
+import { SOURCE_OPTIONS, CONTROL_MECHANISM_OPTIONS } from '../systems/SystemEditorCard.jsx'
 
 const CONTROL_OPTIONS = [
   { value: 'constant',         label: 'Constant (no control)',  factor: 1.00 },
@@ -121,6 +126,132 @@ function ToggleInput({ label, value, onChange }) {
       </button>
     </div>
   )
+}
+
+// Brief 43 Part 3 — service-level (building-level) field editor that
+// sits above each service's per-system list in the intervention editor.
+// Mirrors `ServiceSectionHeader.jsx` from the Systems module (Brief 42
+// Part 3) but with patch-capture wiring instead of direct-write.
+//
+// Patch paths (post-Brief-42):
+//   heating: heating_setpoint_mode + heating_setpoint_c
+//   cooling: cooling_setpoint_mode + cooling_setpoint_c
+//   dhw:     dhw_storage_setpoint_c + dhw_tap_outlet_temp_c +
+//            dhw_cold_supply_temp_c + dhw_demand_basis +
+//            dhw_demand_litres_per_person_per_day +
+//            dhw_demand_litres_per_m2_per_day
+function ServiceLevelHeader({ service, currentConfig, capture }) {
+  const sysCfg = currentConfig?.building?.systems_config_v40 ?? {}
+
+  if (service === 'heating' || service === 'cooling') {
+    const modeKey = `${service}_setpoint_mode`
+    const cKey    = `${service}_setpoint_c`
+    const mode    = sysCfg[modeKey] ?? 'follow_comfort'
+    const cVal    = sysCfg[cKey]
+    const isCustom = mode === 'custom'
+    const min = service === 'heating' ? 10 : 18
+    const max = service === 'heating' ? 28 : 32
+    return (
+      <div className="rounded border border-light-grey bg-white/60 p-2 space-y-1.5 mb-1.5">
+        <p className="text-xxs uppercase tracking-wider text-mid-grey font-medium">{service === 'heating' ? 'Heating' : 'Cooling'} setpoint (service-level)</p>
+        <div className="flex items-center gap-2 text-xxs">
+          <input
+            type="radio"
+            checked={!isCustom}
+            onChange={() => {
+              capture({ id: newPatchId(), op: 'set', path: `building.systems_config_v40.${modeKey}`, value: 'follow_comfort', source: 'inline' })
+              capture({ id: newPatchId(), op: 'set', path: `building.systems_config_v40.${cKey}`,    value: null,             source: 'inline' })
+            }}
+          />
+          <span className={!isCustom ? 'text-navy' : 'text-mid-grey'}>Follow comfort band</span>
+        </div>
+        <div className="flex items-center gap-2 text-xxs">
+          <input
+            type="radio"
+            checked={isCustom}
+            onChange={() => {
+              const seed = typeof cVal === 'number' ? cVal : (service === 'heating' ? 21 : 24)
+              capture({ id: newPatchId(), op: 'set', path: `building.systems_config_v40.${modeKey}`, value: 'custom', source: 'inline' })
+              capture({ id: newPatchId(), op: 'set', path: `building.systems_config_v40.${cKey}`,    value: seed,     source: 'inline' })
+            }}
+          />
+          <span className={isCustom ? 'text-navy' : 'text-mid-grey'}>Custom</span>
+          {isCustom && (
+            <input
+              type="number"
+              min={min} max={max} step={0.5}
+              value={cVal ?? ''}
+              onChange={(e) => {
+                const v = e.target.value === '' ? null : Number(e.target.value)
+                capture({ id: newPatchId(), op: 'set', path: `building.systems_config_v40.${cKey}`, value: v, source: 'inline' })
+              }}
+              className="w-16 px-1.5 py-0.5 text-xxs text-navy tabular-nums text-right border border-light-grey rounded focus:outline-none focus:border-navy"
+            />
+          )}
+          {isCustom && <span className="text-xxs text-mid-grey">°C</span>}
+        </div>
+      </div>
+    )
+  }
+
+  if (service === 'dhw') {
+    const storage = sysCfg.dhw_storage_setpoint_c
+    const tap     = sysCfg.dhw_tap_outlet_temp_c
+    const cold    = sysCfg.dhw_cold_supply_temp_c
+    const basis   = sysCfg.dhw_demand_basis ?? 'per_person'
+    const perP    = sysCfg.dhw_demand_litres_per_person_per_day
+    const perM    = sysCfg.dhw_demand_litres_per_m2_per_day
+    return (
+      <div className="rounded border border-light-grey bg-white/60 p-2 space-y-1.5 mb-1.5">
+        <p className="text-xxs uppercase tracking-wider text-mid-grey font-medium">DHW service-level</p>
+        <NumberInput
+          label="Storage setpoint"
+          value={storage}
+          onChange={(v) => capture({ id: newPatchId(), op: 'set', path: 'building.systems_config_v40.dhw_storage_setpoint_c', value: v, source: 'inline' })}
+          unit="°C" step={1} min={45} max={80}
+        />
+        <NumberInput
+          label="Tap outlet"
+          value={tap}
+          onChange={(v) => capture({ id: newPatchId(), op: 'set', path: 'building.systems_config_v40.dhw_tap_outlet_temp_c', value: v, source: 'inline' })}
+          unit="°C" step={1} min={20} max={70}
+        />
+        <NumberInput
+          label="Cold supply"
+          value={cold}
+          onChange={(v) => capture({ id: newPatchId(), op: 'set', path: 'building.systems_config_v40.dhw_cold_supply_temp_c', value: v, source: 'inline' })}
+          unit="°C" step={1} min={2} max={20}
+        />
+        <SelectInput
+          label="Demand basis"
+          value={basis}
+          onChange={(v) => capture({ id: newPatchId(), op: 'set', path: 'building.systems_config_v40.dhw_demand_basis', value: v, source: 'inline' })}
+          options={[
+            { value: 'per_person', label: 'Per person (occupancy)' },
+            { value: 'per_m2',     label: 'Per m² (CIBSE TM54)' },
+          ]}
+        />
+        {basis === 'per_person' && (
+          <NumberInput
+            label="Demand"
+            value={perP}
+            onChange={(v) => capture({ id: newPatchId(), op: 'set', path: 'building.systems_config_v40.dhw_demand_litres_per_person_per_day', value: v, source: 'inline' })}
+            unit="L/p/day" step={5} min={5} max={500}
+          />
+        )}
+        {basis === 'per_m2' && (
+          <NumberInput
+            label="Demand"
+            value={perM}
+            onChange={(v) => capture({ id: newPatchId(), op: 'set', path: 'building.systems_config_v40.dhw_demand_litres_per_m2_per_day', value: v, source: 'inline' })}
+            unit="L/m²/day" step={0.1} min={0.1} max={10.0}
+          />
+        )}
+      </div>
+    )
+  }
+
+  return null
 }
 
 // Brief 43 Part 2 — small picker shown when the user clicks "+ Add
@@ -316,9 +447,19 @@ function ServiceBlock({ system, service, capture, librarySystems }) {
       />
       {baseHeating && (
         <>
+          {/* Brief 43 Part 3: source dropdown per service. Sources come
+              from the canonical SOURCE_OPTIONS table in SystemEditorCard
+              (the same dropdown the Systems module uses).  */}
+          <SelectInput
+            label="Source"
+            value={system.source}
+            onChange={(v) => capture({ id: newPatchId(), op: 'set', path: `building.systems_config_v40.${service}[id=${sysId}].source`, value: v, source: 'inline' })}
+            options={SOURCE_OPTIONS[service] ?? []}
+            placeholder="(unchanged)"
+          />
           <NumberInput
-            label={service === 'heating' ? 'Efficiency (η / SCOP)' : (service === 'cooling' ? 'Efficiency (SEER)' : 'Efficiency (η / SCOP)')}
-            value={system.efficiency_metric}
+            label={service === 'heating' ? 'Efficiency (η / SCOP)' : (service === 'cooling' ? 'Efficiency (SEER)' : 'Point-of-use η')}
+            value={service === 'dhw' ? Number(system.efficiency_metric) : system.efficiency_metric}
             onChange={(v) => capture({ id: newPatchId(), op: 'set', path: `building.systems_config_v40.${service}[id=${sysId}].efficiency_metric`, value: v, source: 'inline' })}
             step={0.05}
           />
@@ -331,34 +472,26 @@ function ServiceBlock({ system, service, capture, librarySystems }) {
             min={0}
             max={100}
           />
-          {/*
-            Per-system setpoint (heating + cooling). Brief 41 §V row 9
-            acceptance: "Cooling setpoint custom 20°C (vs comfort 24°C)
-            → comfort-vs-setpoint diagnostic appears; EUI rises;
-            cooling electrical rises." `setpoint: null` means "follow
-            comfort band" per CLAUDE.md Systems scope. Non-null
-            triggers state2Recompute closure with the custom setpoint
-            (Brief 40 audit doc §3 — per-system setpoint semantics).
-            Empty input → null on save (follow comfort).
-          */}
-          {(service === 'heating' || service === 'cooling') && (
-            <NumberInput
-              label="Setpoint (blank = follow comfort)"
-              value={system.setpoint}
-              onChange={(v) => capture({ id: newPatchId(), op: 'set', path: `building.systems_config_v40.${service}[id=${sysId}].setpoint`, value: v, source: 'inline' })}
-              unit="°C"
-              step={0.5}
-            />
-          )}
+          {/* Brief 43 Part 3: control mechanism for heating / cooling /
+              DHW. Brief 42 moved heating/cooling SETPOINT to service-
+              level — see ServiceLevelHeader above. Per-system setpoint
+              edit is no longer offered here; it's an invalid path. */}
+          <SelectInput
+            label="Control mechanism"
+            value={system.control_mechanism ?? 'constant'}
+            onChange={(v) => capture({ id: newPatchId(), op: 'set', path: `building.systems_config_v40.${service}[id=${sysId}].control_mechanism`, value: v, source: 'inline' })}
+            options={CONTROL_MECHANISM_OPTIONS[service] ?? []}
+          />
         </>
       )}
       {baseVent && (
         <>
           {/*
-            Ventilation: SFP and recovery fields live under
-            `efficiency_metric.{sfp_w_per_lps, recovery_sensible_pct,
-            recovery_latent_pct}` on v40 — NOT top-level on the
-            system entry.
+            Ventilation: SFP, recovery sensible + latent fields live
+            under `efficiency_metric.{sfp_w_per_lps,
+            recovery_sensible_pct, recovery_latent_pct}` on v40 — NOT
+            top-level on the system entry. flow_rate + flow_rate_basis
+            ARE top-level on the system.
 
             Dual-write to v25 ventilation array entries with the same
             id (`hre`, `sfp_w_per_l_s`): State 2's demand calc reads
@@ -368,8 +501,24 @@ function ServiceBlock({ system, service, capture, librarySystems }) {
             demand-side recovery. Until a follow-up engine brief
             consolidates these, the editor must mirror both so
             patches produce the predicted heating-demand response.
-            See Brief 41 Part 4.1 STATUS + 29_open_issues.md.
           */}
+          <NumberInput
+            label="Flow rate"
+            value={system.flow_rate}
+            onChange={(v) => capture({ id: newPatchId(), op: 'set', path: `building.systems_config_v40.ventilation[id=${sysId}].flow_rate`, value: v, source: 'inline' })}
+            step={0.5}
+            min={0}
+          />
+          <SelectInput
+            label="Flow basis"
+            value={system.flow_rate_basis ?? 'per_person'}
+            onChange={(v) => capture({ id: newPatchId(), op: 'set', path: `building.systems_config_v40.ventilation[id=${sysId}].flow_rate_basis`, value: v, source: 'inline' })}
+            options={[
+              { value: 'per_person', label: 'Per person (l/s/person)' },
+              { value: 'per_m2',     label: 'Per m² (l/s/m²)' },
+              { value: 'constant',   label: 'Constant (l/s total)' },
+            ]}
+          />
           <NumberInput
             label="SFP"
             value={system.efficiency_metric?.sfp_w_per_lps}
@@ -391,6 +540,24 @@ function ServiceBlock({ system, service, capture, librarySystems }) {
             step={1}
             min={0}
             max={100}
+          />
+          {/* Brief 43 Part 3: latent recovery (enthalpy-wheel MVHR).
+              No v25 mirror — Brief 28j's State 2 recovery cap is
+              sensible-only. */}
+          <NumberInput
+            label="Latent recovery"
+            value={system.efficiency_metric?.recovery_latent_pct}
+            onChange={(v) => capture({ id: newPatchId(), op: 'set', path: `building.systems_config_v40.ventilation[id=${sysId}].efficiency_metric.recovery_latent_pct`, value: v, source: 'inline' })}
+            unit="%"
+            step={1}
+            min={0}
+            max={100}
+          />
+          <SelectInput
+            label="Control mechanism"
+            value={system.control_mechanism ?? 'constant'}
+            onChange={(v) => capture({ id: newPatchId(), op: 'set', path: `building.systems_config_v40.ventilation[id=${sysId}].control_mechanism`, value: v, source: 'inline' })}
+            options={CONTROL_MECHANISM_OPTIONS.ventilation ?? []}
           />
         </>
       )}
@@ -417,6 +584,17 @@ function ServiceBlock({ system, service, capture, librarySystems }) {
             min={0}
             max={1}
           />
+          {/* Brief 43 Part 3: cross-reference to Internal Gains — the
+              source of truth for lighting + equipment power densities
+              (Brief 40 Part 4 + standalone d3a7f5a thin-entry pattern). */}
+          <div className="pt-1 border-t border-light-grey/40">
+            <NavLink
+              to="/gains"
+              className="text-xxs text-navy underline hover:text-cyan-700 transition-colors"
+            >
+              Edit {service === 'lighting' ? 'lighting' : 'equipment'} load in Internal Gains →
+            </NavLink>
+          </div>
         </>
       )}
     </div>
@@ -496,6 +674,16 @@ export default function InterventionEditorBuildingView({
           label="Glazing"
           value={typeof c.glazing === 'object' ? c.glazing?.library_id : c.glazing}
           onChange={(v) => capture({ id: newPatchId(), op: 'set', path: 'constructions.glazing', value: { library_id: v, u_value_override: null }, source: 'inline' })}
+          options={constructionOptions}
+        />
+        {/* Brief 43 Part 3 §3.6: ground floor U was specifically called out
+            as missing during the Brief 41 walkthrough. Same construction-
+            picker shape as wall/roof/glazing — library_id + nullable
+            u_value_override; the engine prefers the override when set. */}
+        <SelectInput
+          label="Ground floor"
+          value={typeof c.ground_floor === 'object' ? c.ground_floor?.library_id : c.ground_floor}
+          onChange={(v) => capture({ id: newPatchId(), op: 'set', path: 'constructions.ground_floor', value: { library_id: v, u_value_override: null }, source: 'inline' })}
           options={constructionOptions}
         />
         {/*
@@ -581,10 +769,10 @@ export default function InterventionEditorBuildingView({
         )}
       </Section>
 
-      {/* Heating systems. Brief 43 Part 2: section always rendered so
-          the user can `+ Add` the first heating system as part of the
-          intervention even when the baseline has none. */}
+      {/* Heating systems. Brief 43 Part 3: service-level setpoint
+          editor (Brief 42 paths) sits above the per-system list. */}
       <Section title="Heating systems" defaultOpen={false}>
+        <ServiceLevelHeader service="heating" currentConfig={currentConfig} capture={capture} />
         {(sysCfg.heating ?? []).map(sys => (
           <ServiceBlock key={sys.id} system={sys} service="heating" capture={capture} librarySystems={librarySystems} />
         ))}
@@ -596,6 +784,7 @@ export default function InterventionEditorBuildingView({
 
       {/* Cooling systems */}
       <Section title="Cooling systems" defaultOpen={false}>
+        <ServiceLevelHeader service="cooling" currentConfig={currentConfig} capture={capture} />
         {(sysCfg.cooling ?? []).map(sys => (
           <ServiceBlock key={sys.id} system={sys} service="cooling" capture={capture} librarySystems={librarySystems} />
         ))}
@@ -607,6 +796,7 @@ export default function InterventionEditorBuildingView({
 
       {/* DHW systems */}
       <Section title="DHW systems" defaultOpen={false}>
+        <ServiceLevelHeader service="dhw" currentConfig={currentConfig} capture={capture} />
         {(sysCfg.dhw ?? []).map(sys => (
           <ServiceBlock key={sys.id} system={sys} service="dhw" capture={capture} librarySystems={librarySystems} />
         ))}

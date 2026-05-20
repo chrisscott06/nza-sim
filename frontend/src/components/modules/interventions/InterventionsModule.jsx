@@ -287,6 +287,7 @@ export default function InterventionsModule() {
             interventions={interventions}
             baselineSummary={baselineSummary}
             stackResult={stackResult}
+            baselineConfig={baselineConfig}
             onToggleEnabled={handleToggleEnabled}
             onReorder={handleReorder}
             onEdit={handleEdit}

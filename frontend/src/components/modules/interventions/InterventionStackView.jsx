@@ -112,6 +112,7 @@ export default function InterventionStackView({
   interventions = [],
   baselineSummary,
   stackResult,
+  baselineConfig,
   onToggleEnabled,
   onReorder,
   onEdit,
@@ -199,6 +200,7 @@ export default function InterventionStackView({
             marginalDelta={row?.marginal_delta?.eui_kwh_per_m2 ?? null}
             cumulativeDelta={row?.cumulative_delta?.eui_kwh_per_m2 ?? null}
             overridden={overridden.has(intervention.id)}
+            baselineConfig={baselineConfig}
             onToggleEnabled={() => onToggleEnabled?.(intervention.id)}
             onEdit={() => onEdit?.(intervention.id)}
             onSaveToLibrary={() => onSaveToLibrary?.(intervention.id)}

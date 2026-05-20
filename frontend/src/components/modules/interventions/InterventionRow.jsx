@@ -1,8 +1,16 @@
 /**
  * InterventionRow.jsx — Brief 41 Part 3
+ *                     + Brief 43 Part 3 (2026-05-20)
  *
  * One row in the intervention stack. Composition:
- *   [drag handle] [enable dot] [label] [marginal Δ] [cumulative Δ] [edit]
+ *   [drag] [dot] [label + summary] [marginal Δ] [cumulative Δ] [save] [edit]
+ *
+ * Brief 43 Part 3 (2026-05-20) — inline patch-count + short plain-English
+ * summary below the label. So the user can read what an intervention
+ * actually does without opening the editor pop-out. Summary is generated
+ * from the patch list via `summarizePatchListShort` (see patchCapture.js),
+ * which takes the first three short patch labels comma-separated with a
+ * "+N more" suffix when truncated.
  *
  * Enable toggle mirrors the Brief 40 Part 5b per-system pattern — a 2.5px
  * round dot, accent colour when on / grey when off; row wrapper carries
@@ -29,6 +37,7 @@
  */
 
 import { GripVertical, Pencil, AlertTriangle, Save } from 'lucide-react'
+import { summarizePatchListShort } from './patchCapture.js'
 
 const INTERVENTIONS_ACCENT = '#E84393'
 
@@ -62,6 +71,7 @@ export default function InterventionRow({
   marginalDelta,
   cumulativeDelta,
   overridden,
+  baselineConfig,
   onToggleEnabled,
   onEdit,
   onSaveToLibrary,
@@ -73,9 +83,15 @@ export default function InterventionRow({
 }) {
   const isEnabled = intervention?.enabled !== false
   const isDragging = draggingId === intervention?.id
-  const wrapperBase = 'flex items-center gap-3 px-3 py-2 rounded-lg border border-light-grey bg-white hover:border-mid-grey/40 transition-colors'
+  const wrapperBase = 'flex items-start gap-3 px-3 py-2 rounded-lg border border-light-grey bg-white hover:border-mid-grey/40 transition-colors'
   const wrapperState = !isEnabled ? 'opacity-50' : ''
   const wrapperDrag  = isDragging ? 'ring-2 ring-offset-1' : ''
+
+  // Brief 43 Part 3: derive patch count + short plain-English summary
+  // from the intervention's patches. baselineConfig lets remove/replace
+  // labels resolve the OLD entry's label by id.
+  const patchCount = Array.isArray(intervention?.patches) ? intervention.patches.length : 0
+  const patchSummary = patchCount > 0 ? summarizePatchListShort(intervention.patches, baselineConfig, { maxItems: 3 }) : null
 
   return (
     <div
@@ -90,7 +106,7 @@ export default function InterventionRow({
       {/* Drag handle */}
       <button
         type="button"
-        className="cursor-grab text-mid-grey/60 hover:text-mid-grey active:cursor-grabbing flex-shrink-0"
+        className="cursor-grab text-mid-grey/60 hover:text-mid-grey active:cursor-grabbing flex-shrink-0 mt-1"
         title="Drag to reorder"
         tabIndex={-1}
       >
@@ -101,7 +117,7 @@ export default function InterventionRow({
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); onToggleEnabled?.() }}
-        className="flex-shrink-0 p-0.5 rounded hover:bg-light-grey/40 transition-colors"
+        className="flex-shrink-0 p-0.5 rounded hover:bg-light-grey/40 transition-colors mt-0.5"
         title={isEnabled ? 'Disable this intervention' : 'Enable this intervention'}
       >
         <span
@@ -110,31 +126,49 @@ export default function InterventionRow({
         />
       </button>
 
-      {/* Label + theme + override warning */}
+      {/* Label (top) + Brief 43 Part 3 patch summary (bottom) + theme +
+          override warning. Two-row layout for the main label column so
+          the at-a-glance patch summary fits beneath the title without
+          competing for horizontal space with the Δ columns. */}
       <button
         type="button"
         onClick={onEdit}
-        className="flex-1 min-w-0 flex items-center gap-2 text-left"
+        className="flex-1 min-w-0 text-left"
       >
-        <span className={`flex-shrink min-w-0 truncate text-caption ${isEnabled ? 'text-navy font-medium' : 'text-mid-grey line-through'}`}>
-          {intervention?.label || '(unnamed intervention)'}
-        </span>
-        {intervention?.theme && (
-          <span
-            className="flex-shrink-0 px-1.5 py-0.5 rounded-full bg-light-grey/60 text-xxs text-mid-grey font-medium"
-            title={`Theme: ${intervention.theme}`}
-          >
-            {intervention.theme}
+        <div className="flex items-center gap-2">
+          <span className={`flex-shrink min-w-0 truncate text-caption ${isEnabled ? 'text-navy font-medium' : 'text-mid-grey line-through'}`}>
+            {intervention?.label || '(unnamed intervention)'}
           </span>
+          {intervention?.theme && (
+            <span
+              className="flex-shrink-0 px-1.5 py-0.5 rounded-full bg-light-grey/60 text-xxs text-mid-grey font-medium"
+              title={`Theme: ${intervention.theme}`}
+            >
+              {intervention.theme}
+            </span>
+          )}
+          {overridden && isEnabled && (
+            <AlertTriangle
+              size={12}
+              className="flex-shrink-0 text-amber-600"
+              aria-label="Overridden by a later intervention"
+            >
+              <title>One or more of this intervention's patches are overridden by a later enabled intervention (last-write-wins).</title>
+            </AlertTriangle>
+          )}
+        </div>
+        {patchCount > 0 && (
+          <div className="flex items-baseline gap-2 mt-0.5 min-w-0">
+            <span className="flex-shrink-0 text-xxs text-mid-grey/70 tabular-nums">
+              {patchCount} {patchCount === 1 ? 'patch' : 'patches'}:
+            </span>
+            <span className="text-xxs text-mid-grey truncate" title={patchSummary ?? ''}>
+              {patchSummary ?? '—'}
+            </span>
+          </div>
         )}
-        {overridden && isEnabled && (
-          <AlertTriangle
-            size={12}
-            className="flex-shrink-0 text-amber-600"
-            aria-label="Overridden by a later intervention"
-          >
-            <title>One or more of this intervention's patches are overridden by a later enabled intervention (last-write-wins).</title>
-          </AlertTriangle>
+        {patchCount === 0 && (
+          <div className="text-xxs text-mid-grey/60 italic mt-0.5">No patches yet</div>
         )}
       </button>
 

@@ -1,8 +1,75 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-20 — Brief 43 Part 2: Structural ops in the intervention editor — add / remove / replace systems
+## 🚧 Session 2026-05-20 — Brief 43 Part 3: Wider field coverage + service-level patches + InterventionRow summary
 
-**State:** `commit_in_flight` — Brief 43 Part 2.
+**State:** `commit_in_flight` — Brief 43 Part 3.
+
+**Prior HEAD:** `f012ad0` (Brief 43 Part 2 close).
+
+### What landed in Part 3
+
+**Service-level patches in the editor.** New `ServiceLevelHeader` component in `InterventionEditorBuildingView.jsx` mirrors the Brief 42 Systems-module `ServiceSectionHeader` but with patch-capture wiring:
+
+- Heating + cooling sections: Follow comfort / Custom radio + custom °C input. Emits paired `set` patches at `heating_setpoint_mode` + `heating_setpoint_c` (or cooling equivalents).
+- DHW section: storage / tap outlet / cold supply temps + demand basis + demand quantity. Emits `set` patches at the six DHW service-level paths.
+- Ventilation / lighting / small_power: header returns null (no service-level fields).
+
+**Per-system field coverage widened in `ServiceBlock`:**
+
+- Added **Source** dropdown (heating / cooling / DHW / ventilation) reading `SOURCE_OPTIONS` from `SystemEditorCard.jsx`.
+- Added **Control mechanism** dropdown for heating / cooling / DHW (was lighting / small_power-only in Brief 41).
+- **Removed** per-system `setpoint` input — Brief 42 invalidated those paths; the `ServiceLevelHeader` now owns setpoint UI.
+- Ventilation gained `flow_rate` + `flow_rate_basis` (per_person / per_m2 / constant) inputs and `recovery_latent_pct`.
+- Lighting + small_power gained a NavLink to `/gains` for editing the underlying load (Brief 40 thin-entry cross-reference pattern).
+
+**Envelope: Ground floor U.** Added construction picker for `constructions.ground_floor` with the same `{ library_id, u_value_override }` shape as wall/roof/glazing. Specifically called out as missing during Brief 41 walkthrough.
+
+**InterventionRow patch-summary enrichment.** The row's label column now renders as two lines:
+- Line 1: label + theme chip + override-warn icon (existing).
+- Line 2: `N patches: <short summary>` (new) — comma-separated short patch tags via `summarizePatchListShort(patches, baselineConfig, { maxItems: 3 })`, with ` +N more` suffix when truncated.
+
+Tag formats:
+- set: `Wall construction` / `Heating setpoint`
+- add: `+ Heating system: ASHP_Daikin_VRV_X`
+- remove: `− DHW system: gas_combi_dhw`
+- replace: `⇄ Ventilation system: MEV → MVHR`
+
+Empty patch lists render `No patches yet`. `baselineConfig` is threaded down `InterventionsModule` → `InterventionStackView` → `InterventionRow` so remove/replace tags can resolve the baseline label by match.id.
+
+**`patchCapture.js`** gained `shortPatchLabel` + `summarizePatchListShort` helpers and ground-floor pathLabel entries.
+
+### Walkthrough verification matrix — 16 rows planned
+
+| # | Type | Path family |
+|---|---|---|
+| 1–8, 10 | Brief 41 §V rows (envelope, gain, system efficiency, ventilation, daylight dimming) | unchanged |
+| 9 | Custom cooling setpoint — **rewired to service-level** | `cooling_setpoint_mode` + `_c` |
+| 11 | Add MVHR ventilation system | `add ventilation` |
+| 12 | Remove gas combi heating | `remove heating, match.id` |
+| 13 | Replace gas DHW with ASHP DHW | `replace dhw, match.id` |
+| 14 | Heating setpoint (service-level) | `heating_setpoint_mode + _c` |
+| 15 | DHW demand (service-level) | `dhw_demand_litres_per_person_per_day` |
+| 16 | Ground floor U | `constructions.ground_floor` |
+
+(Brief 41 §V row 9's per-system path is no longer offered in the UI; Brief 42's `migratePatch` rewrites any persisted v1 intervention to the v2 service-level path.)
+
+### What did NOT change in Part 3
+
+- No engine changes. `applyPatch` / `applyIntervention` / `runInterventionStack` / `computeDelta` untouched.
+- No data model changes. Patch shape unchanged.
+- Schedule-override authoring (occupancy / lighting / equipment schedules) deferred. Cross-reference NavLink to `/gains` is the lighter answer per Brief 43 §3.5; the full editor mount in the popout is significant scope.
+- Shading fins (left/right fin depth per facade) — out of scope for the curated editor.
+- The popout body still uses the Brief 41 two-column layout inside 1000 px width.
+
+### Next
+
+Part 4 — walkthrough (15-item per the brief's §Part 4 §4.3). Chris is asleep so Claude runs the walkthrough itself in the browser, captures pass/fail per item, then closes. Brief 43 archived, Issue #20 resolved, current.md repointed.
+
+---
+
+## ✅ Session 2026-05-20 — Brief 43 Part 2: Structural ops in the intervention editor — add / remove / replace systems
+
+**State:** `closed` — Brief 43 Part 2 at `f012ad0`.
 
 **Prior HEAD:** `e06cc90` (Brief 43 Part 1 close).
 

@@ -146,6 +146,8 @@ const PATH_HANDLERS = [
   { test: /^constructions\.roof\.library_id$/,                                         label: 'Roof library' },
   { test: /^constructions\.roof\.u_value_override$/,                                   label: 'Roof U override', unit: ' W/m²·K' },
   { test: /^constructions\.ground_floor$/,                                             label: 'Ground floor construction' },
+  { test: /^constructions\.ground_floor\.library_id$/,                                 label: 'Ground floor library' },
+  { test: /^constructions\.ground_floor\.u_value_override$/,                           label: 'Ground floor U override', unit: ' W/m²·K' },
   { test: /^constructions\.glazing$/,                                                  label: 'Glazing construction' },
   { test: /^constructions\.glazing\.library_id$/,                                      label: 'Glazing library' },
   { test: /^constructions\.glazing\.u_value_override$/,                                label: 'Glazing U override', unit: ' W/m²·K' },
@@ -193,6 +195,81 @@ function pathLabel(path) {
   const segs = path.split('.')
   const last = segs[segs.length - 1]
   return { label: last.replace(/_/g, ' '), unit: '' }
+}
+
+// Brief 43 Part 3: short label for one patch, suitable for inline use in
+// the stack row's summary column. Concatenates a verb prefix with the
+// path's label. For structural ops the value's label (if present) is
+// appended so the user sees what's being added / replaced.
+//
+//   set    Wall U-value             →  "Wall construction"
+//   add    Heating system (ASHP)    →  "+ Heating system: ASHP"
+//   remove DHW system (gas_combi)   →  "− DHW system: gas_combi"
+//   replace Ventilation MEV→MVHR    →  "⇄ Ventilation system: MEV → MVHR"
+function shortPatchLabel(patch, baselineConfig) {
+  if (!patch) return null
+  const { label } = pathLabel(patch.path || '')
+  if (patch.op === 'add') {
+    const newLbl = (patch.value && typeof patch.value === 'object' && patch.value.label)
+      ? patch.value.label
+      : (patch.value?.library_ref ?? 'item')
+    return `+ ${label}: ${newLbl}`
+  }
+  if (patch.op === 'remove') {
+    const matchId = patch.match?.id
+    let oldLbl = matchId ?? '?'
+    if (matchId && patch.path) {
+      const arr = getValueAtPath(baselineConfig, patch.path)
+      if (Array.isArray(arr)) {
+        const found = arr.find(e => e && e.id === matchId)
+        if (found?.label) oldLbl = found.label
+      }
+    }
+    return `− ${label}: ${oldLbl}`
+  }
+  if (patch.op === 'replace') {
+    const matchId = patch.match?.id
+    let oldLbl = matchId ?? '?'
+    if (matchId && patch.path) {
+      const arr = getValueAtPath(baselineConfig, patch.path)
+      if (Array.isArray(arr)) {
+        const found = arr.find(e => e && e.id === matchId)
+        if (found?.label) oldLbl = found.label
+      }
+    }
+    const newLbl = (patch.value && typeof patch.value === 'object' && patch.value.label)
+      ? patch.value.label
+      : (patch.value?.library_ref ?? 'item')
+    return `⇄ ${label}: ${oldLbl} → ${newLbl}`
+  }
+  // set — just the label.
+  return label
+}
+
+/**
+ * Brief 43 Part 3: build a single-line summary of an intervention's
+ * patch list for use in the stack row. Returns the first `maxItems` short
+ * labels comma-separated, with a "+N more" suffix when truncated. The
+ * total returned string is independent of patch count (one tag per
+ * captured leaf — capturePatch dedupes set ops to per-path; structural
+ * ops append).
+ *
+ *   summarizePatchListShort([infiltration, wallU, ashp_add], baseline)
+ *     → "Air permeability, Wall construction, + Heating system: ASHP"
+ *
+ *   summarizePatchListShort([5 patches], baseline, { maxItems: 3 })
+ *     → "Wall, Roof, Heating mech +2 more"
+ */
+export function summarizePatchListShort(patches, baselineConfig, { maxItems = 3 } = {}) {
+  if (!Array.isArray(patches) || patches.length === 0) return null
+  const tags = patches
+    .map(p => shortPatchLabel(p, baselineConfig))
+    .filter(Boolean)
+  if (tags.length === 0) return null
+  if (tags.length <= maxItems) return tags.join(', ')
+  const head = tags.slice(0, maxItems)
+  const more = tags.length - maxItems
+  return `${head.join(', ')} +${more} more`
 }
 
 /**
