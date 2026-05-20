@@ -25,9 +25,30 @@ import { useState } from 'react'
 import { SERVICE_COLOURS } from './SystemEditorCard.jsx'
 
 // Per-service blank-add archetypes. User picks one, gets a seeded system.
+//
+// VRF + DX additions (2026-05-19) — refrigerant-based systems alongside
+// the existing wet-system (boiler, chiller) + air-source / ground-source
+// heat pump options:
+//
+//   VRF (Variable Refrigerant Flow): refrigerant distributed directly to
+//   indoor units, heat-pump cycle in both modes. Appears in both heating
+//   and cooling archetype lists because a real VRF system serves both
+//   services on the same refrigerant loop. For now each archetype creates
+//   an INDEPENDENT v40 entry (one in heating, one in cooling) — the user
+//   can pick "VRF" in both heating + cooling sections to model a dual-
+//   function installation. Linked-system semantics (shared identity +
+//   heat-recovery credit between paired heating + cooling demands) is
+//   not yet in the schema — that's a Brief 40 follow-up candidate
+//   (potential Part 5d or successor brief).
+//
+//   DX split: direct-expansion split unit, cooling-only. Common backup
+//   cooling for areas not served by VRF (comms rooms, plant rooms with
+//   year-round cooling). Refrigerant-based like VRF but without the
+//   heating mode.
 const BLANK_ARCHETYPES = {
   heating: [
     { key: 'gas_boiler',     label: 'Gas boiler',                source: 'gas',             efficiency_metric: 0.92 },
+    { key: 'vrf',            label: 'VRF (heat pump, refrigerant)', source: 'ambient_air',  efficiency_metric: 4.5  },
     { key: 'ashp',           label: 'Air-source heat pump',      source: 'ambient_air',     efficiency_metric: 3.0  },
     { key: 'gshp',           label: 'Ground-source heat pump',   source: 'ambient_ground',  efficiency_metric: 3.5  },
     { key: 'electric',       label: 'Electric (direct)',         source: 'electricity',     efficiency_metric: 1.0  },
@@ -36,7 +57,9 @@ const BLANK_ARCHETYPES = {
     { key: 'oil_boiler',     label: 'Oil boiler',                source: 'oil',             efficiency_metric: 0.88 },
   ],
   cooling: [
-    { key: 'vapour_comp',    label: 'Vapour-compression chiller', source: 'electricity',     efficiency_metric: 3.0 },
+    { key: 'vrf',            label: 'VRF (refrigerant)',          source: 'electricity',     efficiency_metric: 3.5 },
+    { key: 'dx_split',       label: 'DX split (refrigerant)',     source: 'electricity',     efficiency_metric: 4.0 },
+    { key: 'vapour_comp',    label: 'Vapour-compression chiller (wet)', source: 'electricity', efficiency_metric: 3.0 },
     { key: 'district',       label: 'District cooling',           source: 'district_cooling', efficiency_metric: 1.0 },
   ],
   dhw: [
