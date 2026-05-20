@@ -28,7 +28,7 @@
  * in InterventionEditorPopout from Part 4.
  */
 
-import { GripVertical, Pencil, AlertTriangle } from 'lucide-react'
+import { GripVertical, Pencil, AlertTriangle, Save } from 'lucide-react'
 
 const INTERVENTIONS_ACCENT = '#E84393'
 
@@ -64,6 +64,7 @@ export default function InterventionRow({
   overridden,
   onToggleEnabled,
   onEdit,
+  onSaveToLibrary,
   onDragStart,
   onDragOver,
   onDrop,
@@ -146,6 +147,16 @@ export default function InterventionRow({
       <div className="flex-shrink-0 w-28 text-right">
         <DeltaCell record={cumulativeDelta} unit=" kWh/m²" muted={!isEnabled} />
       </div>
+
+      {/* Save to library */}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onSaveToLibrary?.() }}
+        className="flex-shrink-0 p-1 rounded hover:bg-light-grey/40 transition-colors text-mid-grey"
+        title="Save this intervention to library"
+      >
+        <Save size={12} />
+      </button>
 
       {/* Edit */}
       <button

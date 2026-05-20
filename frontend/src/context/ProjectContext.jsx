@@ -291,6 +291,14 @@ const DEFAULT_PARAMS = {
   // alongside the schema migration (Notion §7).
   interventions:  [],
   schema_version: 1,
+  // Brief 41 Part 5 (2026-05-20) — per-project intervention library.
+  // Mirrors Brief 37 (schedules) + Brief 40 (systems) library
+  // patterns. Populated by InterventionLibrary "Save to library"
+  // action; consumed by "Load from library" picker. Entries carry the
+  // intervention shape (id, label, theme, notes, patches,
+  // schema_version) plus a saved_at timestamp and a `lib_intervention_*`
+  // id assigned at save time.
+  library_interventions: [],
 }
 
 // ── Brief 27 Part 1 — v2.3 migration helpers ─────────────────────────────────
@@ -741,6 +749,9 @@ export function ProjectProvider({ children }) {
       // interventions were authored against; absent → default to current.
       interventions:  Array.isArray(bc.interventions) ? bc.interventions : DEFAULT_PARAMS.interventions,
       schema_version: Number.isInteger(bc.schema_version) ? bc.schema_version : DEFAULT_PARAMS.schema_version,
+      // Brief 41 Part 5 (2026-05-20) — per-project intervention library.
+      // Same load semantics as systems_config_v40 / library_systems.
+      library_interventions: Array.isArray(bc.library_interventions) ? bc.library_interventions : DEFAULT_PARAMS.library_interventions,
     })
     setConstructions(project.construction_choices ?? DEFAULT_CONSTRUCTIONS)
     setSystems(migrateSystemsConfig(project.systems_config))

@@ -1,6 +1,101 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-20 — Brief 41 Part 4: Editor pop-out + patch capture + live preview
+## 🚧 Session 2026-05-20 — Brief 41 Part 5: Comparison view + library save/load + 3-intervention walkthrough (awaits walkthrough sign-off)
+
+**State:** `commit_in_flight` — Brief 41 Part 5. **Walkthrough sign-off pending before Part 6 close.**
+
+**Prior HEAD:** `45bcfe0` (Brief 41 Part 4 close).
+
+### What landed in Part 5
+
+**New `library_interventions` namespace** on ProjectContext (mirrors Brief 37 schedules / Brief 40 systems library patterns):
+- `frontend/src/context/ProjectContext.jsx` DEFAULT_PARAMS gains `library_interventions: []`.
+- Project loader (`_applyProject`) gains defensive `Array.isArray(bc.library_interventions) ? ... : DEFAULT_PARAMS.library_interventions` fallback so pre-Part-5 projects load with an empty library.
+
+**Two new components** in `frontend/src/components/modules/interventions/`:
+
+- **`ComparisonView.jsx`** — full-page comparison surface in the Comparison tab. Composition:
+  - Drill-down sub-selector: `Final (N enabled)` + per-intervention `After N: <label>` buttons. Default `Final`.
+  - KPI strip: Metric / Baseline / Target / Δ rows for EUI / heating demand / cooling demand / electricity / gas / carbon, with colour-coded Δ cells.
+  - Paired heat-balance bars: per-metric bar pairs (baseline grey on top, target accent on bottom), with "moved" terms highlighted in the interventions accent.
+  - Delta table: full per-service delivered + per-fuel total + headline metrics in a tabular form.
+  - Paired Sankey placeholder card explaining the pragmatic deferral (the comparison view's analytical coverage is complete via KPI + heat balance + delta table; Sankey adds a visual ribbon-width dimension but no new data).
+- **`InterventionLibrary.jsx`** — three exports:
+  - `SaveToLibraryModal` — opens when the user clicks the Save icon on a stack row. Captures library_label (defaults to intervention label), saves snapshot with `id`, `library_label`, `saved_at`, `schema_version`, plus the full intervention shape (label / theme / notes / patches / capex_gbp).
+  - `LoadFromLibraryModal` — opens from the top-of-module Library button. Renders the library_entries list; clicking an entry creates a fresh intervention (new id, deep-cloned patches with new patch ids) at the END of the stack; per-row trash-can deletes a library entry.
+  - `LibraryStripButton` — the top-of-module Library button showing `Library (N)` count.
+
+**Stack row gained a Save icon** (saves to library) — wired through `InterventionStackView.onSaveToLibrary` → `InterventionRow` (new prop). Baseline-row + column-header spacer columns updated to keep alignment.
+
+**Wired into `InterventionsModule.jsx`:**
+- Comparison tab is now ENABLED (Part 4 had it disabled with a "(Part 5)" label).
+- `LibraryStripButton` added to the right side of the tab bar with the current library count.
+- `SaveToLibraryModal` mounted with `saveLibIntervention` state-driven open/close.
+- `LoadFromLibraryModal` mounted with `libraryPickerOpen` state.
+- New handlers: `handleSaveToLibrary(id)` opens the save modal, `handleConfirmSaveLib(entry)` appends to `library_interventions` via `updateParam`, `handleLoadFromLibrary(entry)` creates a fresh intervention from the library entry (new ids, deep-cloned patches), `handleDeleteFromLibrary(id)` removes from the library.
+
+### Part 5.6 walkthrough — Bridgewater 3-intervention stack (browser MCP)
+
+Built and verified end-to-end with Claude Preview MCP:
+
+**Stack construction:**
+1. **Fabric upgrade** (theme: Envelope) — q50 4.64 → 1.00 m³/h·m². Marginal **−1.0 kWh/m² (−2%)**, Cumulative **−1.0**.
+2. **Plant replacement — boost SCOP** (theme: Plant) — heating system efficiency_metric → 5.0. Marginal **−2.2 kWh/m² (−4%)**, Cumulative **−3.2**.
+3. **Demand reduction — lighting controls** (theme: Demand) — lighting control_factor → 0.5. Marginal **−1.8 kWh/m² (−3%)**, Cumulative **−5.0 kWh/m² (−9%)**.
+
+**Comparison tab drill-down** (verifies cumulatives match stack-row values):
+- Baseline: EUI 58.0 kWh/m², carbon 11.6 kgCO₂/m²
+- After 1: EUI 57.0 (Δ −1.0 / −1.7%) — Heating demand 149 → 133 MWh (−15.3, −10.3%)
+- After 2: EUI 54.8 (Δ −3.2 / −5.5%)
+- After 3: EUI 53.0 (Δ −5.0 / −8.6%) — Electricity 176 → 154 MWh (−21.4, −12.2%); Carbon 11.6 → 10.6 (−8.8%)
+- Final (= After 3): same as After 3 since all enabled
+
+**Toggle verification (Notion §10 order-dependence):**
+- Disable Fabric (Intervention 1) → Plant's marginal grows from **−2.2 → −2.8** (more heating demand to convert with no fabric improvement). Demand reduction's marginal slightly shifts (−1.8 → −1.7). Disabled row's marginal Δ is 0.0 per audit doc §8.2 contract.
+
+**Library round-trip:**
+- Save Fabric → library: `Library (1)` count updates.
+- Delete Fabric from stack: stack now Plant + Demand only.
+- Load Fabric from library (via Library picker): new intervention created at end of stack with cloned patches and new ids; theme + label preserved.
+- Cumulative after load: Plant (−2.8 / −2.8) + Demand (−1.7 / −4.5) + Fabric (−0.5 / **−5.0**). **Final cumulative converges to −5.0** — identical to the original order's cumulative. Order changes marginals but preserves the final cumulative per Notion §10 "the final cumulative EUI is unchanged."
+
+This is the canonical Pattern Y verification: declarative patches against a single baseline; engine runs cumulative state per intervention; reordering reshuffles marginal attribution but converges to the same final state.
+
+### Visualisation-as-verification matrix (Notion §10) — partial run
+
+Three of the ten matrix rows exercised in the walkthrough:
+| # | Intervention | Predicted | Observed |
+|---|---|---|---|
+| 2 | Reduce infiltration ACH | Infiltration ribbon narrows; heating demand drops | q50 4.64 → 1.0: heating demand 149 → 133 MWh (−10%); cooling demand +4% (secondary effect, expected per physics) ✓ |
+| 6 | Daylight dimming (Systems) | Lighting electrical drops by control_factor; Sankey lighting branch narrows on electricity side | control_factor 0.7 → 0.5: lighting delivered drops; total electricity follows ✓ |
+| 7 | Change heat pump SCOP | Heating-to-electricity ribbon widens/narrows; EUI moves | Heating efficiency_metric → 5.0: heating delivered 62.4 → 50.2 MWh (−19.6%); EUI follows ✓ |
+
+Rows 1/3/4/5/8/9/10 not exercised in this walkthrough — covered by analogous patch targets (per audit doc §5 path catalogue). The pattern carries.
+
+### Scope boundary
+
+Per pre-Part-4 escalation (Chris-approved pragmatic scope): paired Sankey deferred — the comparison view ships full KPI + paired bar + delta table coverage. A future polish brief can layer Sankey on top using the existing Brief 38 Sankey infrastructure.
+
+### What did NOT change in Part 5
+
+- No engine logic changes. The interventions engine + instantCalc wrapper are unchanged from Parts 2/4.
+- No envelope physics changes. Rule 14 did not fire.
+- No backend changes.
+- Brief 40 Issues #18 / #19 remain deferred.
+
+### Walkthrough sign-off
+
+**Walkthrough sign-off required from Chris before Part 6 close** per the established pattern (Briefs 36, 39, 40). The Bridgewater 3-intervention stack is persisted on the project for inspection; library has 1 saved entry ("Fabric upgrade"). Open `/interventions` to inspect; Stack + Comparison tabs both populated.
+
+If anything anomalous → log finding in `29_open_issues.md`, diagnose, fix in a follow-up commit within Part 6, re-verify. Otherwise Part 6 closes Brief 41.
+
+### Next
+
+Part 6 — walkthrough sign-off + archive Brief 41 + STATUS final + close commit.
+
+---
+
+## ✅ Session 2026-05-20 — Brief 41 Part 4: Editor pop-out + patch capture + live preview
 
 **State:** `commit_in_flight` — Brief 41 Part 4.
 

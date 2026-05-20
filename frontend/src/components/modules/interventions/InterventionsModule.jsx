@@ -28,6 +28,8 @@ import { calculateInstant } from '../../../utils/instantCalc.js'
 import { SYSTEM_TEMPLATES_LIBRARY } from '../../../data/systemTemplatesLibrary.js'
 import InterventionStackView from './InterventionStackView.jsx'
 import InterventionEditorPopout from './InterventionEditorPopout.jsx'
+import ComparisonView from './ComparisonView.jsx'
+import { SaveToLibraryModal, LoadFromLibraryModal, LibraryStripButton } from './InterventionLibrary.jsx'
 
 const INTERVENTIONS_ACCENT = '#E84393'
 const CURRENT_SCHEMA_VERSION = 1   // Mirrors DEFAULT_PARAMS.schema_version
@@ -49,10 +51,13 @@ export default function InterventionsModule() {
   const { weatherData } = useContext(WeatherContext)
   const hourlySolar = useHourlySolar(weatherData, params?.orientation ?? 0)
 
-  const [tab, setTab] = useState('stack')   // 'stack' | 'comparison' (Comparison is Part 5)
+  const [tab, setTab] = useState('stack')   // 'stack' | 'comparison'
   const [editingId, setEditingId] = useState(null)
+  const [saveLibId, setSaveLibId] = useState(null)        // id of intervention to save → library
+  const [libraryPickerOpen, setLibraryPickerOpen] = useState(false)
 
   const interventions = Array.isArray(params?.interventions) ? params.interventions : []
+  const libraryInterventions = Array.isArray(params?.library_interventions) ? params.library_interventions : []
 
   // Fetch constructions library (same pattern as SystemsModule).
   const [constructionsLib, setConstructionsLib] = useState([])
@@ -150,6 +155,42 @@ export default function InterventionsModule() {
 
   const editing = editingId ? interventions.find(i => i.id === editingId) : null
 
+  // ── Library save / load ─────────────────────────────────────────────
+
+  const handleSaveToLibrary = (id) => setSaveLibId(id)
+  const handleCloseSaveLib = () => setSaveLibId(null)
+  const handleConfirmSaveLib = (libraryEntry) => {
+    updateParam('library_interventions', [...libraryInterventions, libraryEntry])
+    setSaveLibId(null)
+  }
+  const handleOpenLibrary = () => setLibraryPickerOpen(true)
+  const handleCloseLibrary = () => setLibraryPickerOpen(false)
+  const handleLoadFromLibrary = (libEntry) => {
+    // Create a fresh intervention from the library entry — give it a
+    // new top-level id so the user can have multiple instances of the
+    // same library entry in the stack. Patches are deep-copied at save
+    // time (in SaveToLibraryModal); we shallow-copy here.
+    const fresh = {
+      id: newId('int'),
+      label: libEntry.library_label || libEntry.label || 'Loaded intervention',
+      notes: libEntry.notes ?? '',
+      theme: libEntry.theme ?? null,
+      enabled: true,
+      capex_gbp: libEntry.capex_gbp ?? null,
+      schema_version: libEntry.schema_version ?? CURRENT_SCHEMA_VERSION,
+      patches: Array.isArray(libEntry.patches)
+        ? libEntry.patches.map(p => ({ ...p, id: `patch_${(typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2)}` }))
+        : [],
+    }
+    updateParam('interventions', [...interventions, fresh])
+    setLibraryPickerOpen(false)
+  }
+  const handleDeleteFromLibrary = (libId) => {
+    updateParam('library_interventions', libraryInterventions.filter(e => e.id !== libId))
+  }
+
+  const saveLibIntervention = saveLibId ? interventions.find(i => i.id === saveLibId) : null
+
   // Engine quartet that patches address as their root — built once per
   // render. The editor pop-out passes this to runInterventionStack +
   // applyIntervention so the live preview can render against the
@@ -181,24 +222,29 @@ export default function InterventionsModule() {
           </p>
         </div>
 
-        {/* Tab switcher */}
-        <div className="flex items-center gap-1 border-b border-light-grey">
-          <button
-            onClick={() => setTab('stack')}
-            className={`px-3 py-2 text-caption font-medium transition-colors border-b-2 ${
-              tab === 'stack' ? 'border-navy text-navy' : 'border-transparent text-mid-grey hover:text-navy'
-            }`}
-          >
-            Stack
-          </button>
-          <button
-            onClick={() => setTab('comparison')}
-            disabled
-            className="px-3 py-2 text-caption font-medium text-mid-grey/50 cursor-not-allowed border-b-2 border-transparent"
-            title="Comparison view ships in Brief 41 Part 5"
-          >
-            Comparison <span className="text-xxs">(Part 5)</span>
-          </button>
+        {/* Tab switcher + library button */}
+        <div className="flex items-center justify-between border-b border-light-grey">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setTab('stack')}
+              className={`px-3 py-2 text-caption font-medium transition-colors border-b-2 ${
+                tab === 'stack' ? 'border-navy text-navy' : 'border-transparent text-mid-grey hover:text-navy'
+              }`}
+            >
+              Stack
+            </button>
+            <button
+              onClick={() => setTab('comparison')}
+              className={`px-3 py-2 text-caption font-medium transition-colors border-b-2 ${
+                tab === 'comparison' ? 'border-navy text-navy' : 'border-transparent text-mid-grey hover:text-navy'
+              }`}
+            >
+              Comparison
+            </button>
+          </div>
+          <div className="pb-1">
+            <LibraryStripButton libraryCount={libraryInterventions.length} onClick={handleOpenLibrary} />
+          </div>
         </div>
 
         {/* Tab content */}
@@ -211,6 +257,14 @@ export default function InterventionsModule() {
             onReorder={handleReorder}
             onEdit={handleEdit}
             onAdd={handleAdd}
+            onSaveToLibrary={handleSaveToLibrary}
+          />
+        )}
+        {tab === 'comparison' && (
+          <ComparisonView
+            interventions={interventions}
+            stackResult={stackResult}
+            baselineConfig={baselineConfig}
           />
         )}
       </div>
@@ -226,6 +280,21 @@ export default function InterventionsModule() {
         onSave={handleSaveEditing}
         onCancel={handleCloseEditor}
         onDelete={handleDeleteEditing}
+      />
+
+      {/* Brief 41 Part 5 — library save/load modals */}
+      <SaveToLibraryModal
+        open={!!saveLibIntervention}
+        intervention={saveLibIntervention}
+        onClose={handleCloseSaveLib}
+        onSave={handleConfirmSaveLib}
+      />
+      <LoadFromLibraryModal
+        open={libraryPickerOpen}
+        libraryEntries={libraryInterventions}
+        onClose={handleCloseLibrary}
+        onLoad={handleLoadFromLibrary}
+        onDelete={handleDeleteFromLibrary}
       />
     </div>
   )

@@ -79,6 +79,7 @@ function BaselineRow({ baselineSummary }) {
       <div className="flex-shrink-0 w-28 text-right text-xxs text-mid-grey">
         {baselineSummary?.carbon != null ? `${baselineSummary.carbon.toFixed(1)} kgCO₂/m²` : '—'}
       </div>
+      <span className="w-5" />  {/* save-button column spacer */}
       <span className="w-5" />  {/* edit-button column spacer */}
     </div>
   )
@@ -115,6 +116,7 @@ export default function InterventionStackView({
   onReorder,
   onEdit,
   onAdd,
+  onSaveToLibrary,
 }) {
   const [draggingId, setDraggingId] = useState(null)
   const [hoverId,    setHoverId]    = useState(null)
@@ -179,6 +181,7 @@ export default function InterventionStackView({
         <span className="flex-shrink-0 w-28 text-right text-xxs text-mid-grey uppercase tracking-wider font-medium">Marginal Δ</span>
         <span className="flex-shrink-0 w-28 text-right text-xxs text-mid-grey uppercase tracking-wider font-medium">Cumulative Δ</span>
         <span className="w-5" />
+        <span className="w-5" />
       </div>
 
       {/* Baseline row */}
@@ -198,6 +201,7 @@ export default function InterventionStackView({
             overridden={overridden.has(intervention.id)}
             onToggleEnabled={() => onToggleEnabled?.(intervention.id)}
             onEdit={() => onEdit?.(intervention.id)}
+            onSaveToLibrary={() => onSaveToLibrary?.(intervention.id)}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDrop={handleDrop}
