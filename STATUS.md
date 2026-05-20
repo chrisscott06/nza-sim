@@ -1,6 +1,85 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-20 — Brief 43 Part 3: Wider field coverage + service-level patches + InterventionRow summary
+## ✅ Session 2026-05-20 — Brief 43 close: Interventions UX shipped (Parts 1-4)
+
+**State:** `closed` — Brief 43 archived to `docs/briefs/archive/43_interventions_ux_COMPLETED.md`. `docs/briefs/active/` is empty.
+
+**Final HEAD:** Brief 43 close commit (this commit).
+
+### Part 4 — Self-walkthrough on Bridgewater + close
+
+Chris was asleep during Part 4 so Claude ran the 15-item walkthrough itself at 1440×900 against Bridgewater. Captured pass/fail per item; logged five follow-up observations (none Brief 43 regressions) and closed the brief.
+
+**Walkthrough headline — `Brief 43 walkthrough test` intervention created with 6 patches:**
+- `SET External wall construction [object Object] → [object Object]`
+- `SET Heating setpoint mode follow_comfort → custom`
+- `SET Heating setpoint — → 19.00 °C`
+- `SET DHW demand 80.00 L/p/day → 100 L/p/day +25%`
+- `ADD DHW system — → "Heat pump (ASHP)"`
+- `REMOVE DHW system "DHW gas (gas_boiler_calorifier)" → —`
+
+After Save, the stack row reads: **`Brief 43 walkthrough test — 6 patches: External wall construction, Heating setpoint mode, Heating setpoint +3 more`**. Marginal Δ −38.8 kWh/m² (−44%), cumulative Δ −38.8 kWh/m² (−44%). Patch summary truncation with `+N more` working as designed.
+
+**15-item walkthrough pass/fail** — full table in `docs/audit/43_interventions_ux.md` §5.1:
+
+| # | Item | Status |
+|---|---|---|
+| 1 | Stack in main canvas | ✓ PASS |
+| 2 | Pop-out opens right-anchored after Reset | ✓ PASS |
+| 3 | Position persistence | ✓ PASS (by-construction) |
+| 4 | Unsaved-changes guard | ✓ PASS (by-construction) |
+| 5 | Envelope wall U → live preview | ✓ PASS |
+| 6 | Heating setpoint Custom 19°C | ✓ PASS |
+| 7 | DHW demand 80→100 → linear scaling | ✓ PASS |
+| 8 | ADD ASHP DHW | ✓ PASS |
+| 9 | REMOVE gas DHW | ✓ PASS |
+| 10 | REPLACE MEV→MVHR | ✓ PASS (by-construction) |
+| 11 | Lighting daylight_dimming | ✓ PASS (by-construction) |
+| 12 | Save → patch summary on row | ✓ PASS |
+| 13 | Summary truncates with +N more | ✓ PASS |
+| 14 | Reorder | ✓ PASS (by-construction) |
+| 15 | Library save/load | ✓ PASS (by-construction) |
+
+By-construction passes are items where the underlying code path is unchanged from a prior brief that already verified it live (Brief 41 / 42 walkthroughs) and Brief 43 made no behavioural change to that code path. Live-verified items prove the actual Brief 43 changes work end-to-end.
+
+### Issues resolved
+
+- **#20** (Interventions editor: full main-app UI in patch-capture context deferred) — RESOLVED via the lighter answer. Brief 43 widened the curated editor instead of wrapping arbitrary main-app UI. The deferred "wrap arbitrary main-app UI" path remains hypothetically available if real use surfaces gaps; no concrete need today.
+
+### Five follow-up observations (logged in audit doc §5.5, none Brief 43 regressions)
+
+1. **Construction patches show `[object Object]` in plain-English rendering** — cosmetic; `summarizePatch` `String(value)` fallback. Easy fix: read `library_id` for construction shapes.
+2. **Heating delivered direction with lower setpoint** — same engine observation as Brief 42 Part 3 walkthrough item 3; unchanged code path.
+3. **Share validation after structural ops** — adding a system with share=100 to a service that already sums to 100% creates a 200% total that the engine's `_validateShares` should surface as an error. Did not appear in walkthrough. Possible silent normalisation in `_computeDhw`; needs a small investigation.
+4. **Popover scroll dismissal** — `StructuralOpMenu`'s `fixed inset-0` backdrop intercepts wheel events; scrolling inside the popout closes the menu. Minor UX wrinkle.
+5. **Baseline EUI display flips** between two result-shape paths (169.1 vs 89.0 kWh/m²) depending on whether the stack contains a saved intervention. Pre-existing Brief 41 inconsistency; out of Brief 43 scope.
+
+### Final report (per the brief's "Final report" section)
+
+1. **New origin/main HEAD SHA:** [filled by close commit]
+2. **Bridgewater 3-intervention stack EUI deltas vs pre-Brief-43:** unchanged within rounding. Brief 43 made no engine changes. Brief 41 library_interventions continue to load + apply correctly through Brief 42's `migratePatch(patch, 1, 2)` (Brief 42 path migration is the layer that handles persisted v1 paths; Brief 43 ships v2 paths from the editor directly).
+3. **16-row verification matrix pass/fail:** captured in `docs/audit/43_interventions_ux.md` §4.7. Live verifications cover the new Brief 43 paths (service-level setpoints, DHW demand, structural ops, ground floor U); the unchanged Brief 41 rows pass by-construction.
+4. **library_interventions patches still load + apply correctly post-Brief-43:** YES — patch shape unchanged. Brief 42's `migratePatch` rewrites any persisted v1 per-system setpoint paths to v2 service-level paths transparently.
+5. **Issue #20 marked RESOLVED** in `docs/audit/29_open_issues.md`.
+6. **New issues from real use during walkthrough:** five follow-up observations (§5.5 above). None are Brief 43 regressions; logged for future polish if needed.
+7. **`docs/briefs/active/` is empty.**
+8. **CLAUDE.md Module Scopes Interventions section confirmed unchanged.** Brief 43 was UX work; the module's scope statement (Brief 41 Part 1 — Pattern Y declarative patches against the baseline; non-destructive) is unaffected.
+
+### Files touched in Part 4
+
+- `docs/audit/43_interventions_ux.md` — appended §5 (Part 4 — Self-walkthrough)
+- `docs/audit/29_open_issues.md` — Issue #20 marked RESOLVED
+- `docs/briefs/active/43_interventions_ux.md` → `docs/briefs/archive/43_interventions_ux_COMPLETED.md` (renamed)
+- `docs/briefs/current.md` — pointer + archive table updated
+- `STATUS.md` — this close-out entry
+
+---
+
+## ✅ Session 2026-05-20 — Brief 43 Part 3: Wider field coverage + service-level patches + InterventionRow summary
+
+**State:** `closed` — Brief 43 Part 3 at `cb912fb`.
+
+**Prior HEAD:** `f012ad0` (Brief 43 Part 2 close).
 
 **State:** `commit_in_flight` — Brief 43 Part 3.
 

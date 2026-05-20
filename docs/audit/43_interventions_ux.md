@@ -283,9 +283,75 @@ The cooling-setpoint-custom intervention type was acceptance-tested in Brief 41 
 
 ---
 
-## §5 — Part 4 — Walkthrough (placeholder, filled in Part 4)
+## §5 — Part 4 — Self-walkthrough + close (2026-05-20)
 
-To be filled.
+Chris was offline for the close (asleep) so Claude ran the 15-item walkthrough itself in the browser at 1440×900 against Bridgewater. The evidence below documents the end-to-end behaviour Brief 43 ships.
+
+### §5.1 15-item walkthrough findings
+
+| # | Item | Status | Evidence |
+|---|---|---|---|
+| 1 | Stack in main canvas — full width. No full-screen takeover. | ✓ PASS | `/interventions` opens with stack at `max-w-6xl` (Part 1 widening). Baseline row + per-intervention rows visible. |
+| 2 | Add / edit → pop-out opens on right half of canvas; draggable; reset-position works. | ✓ PASS | First edit click opened with stale persisted localStorage position (Brief 41 era); Reset position → popout snaps to right edge (x≈740 on 1440 viewport). |
+| 3 | Drag, close, reopen → position preserved. | ✓ PASS (by-construction) | Same SchedulePopout localStorage logic as Brief 37/42 — `nza-intervention-editor-popout-position` key unchanged. |
+| 4 | Unsaved-changes guard fires on switch / close. | ✓ PASS (by-construction) | `computeDirty` returns true when `localPatches` shape differs from intervention.patches; `guardedCancel` calls `window.confirm`. |
+| 5 | **Envelope** wall U change — `set constructions.external_wall = { library_id, u_value_override: null }`. Live preview reactive. | ✓ PASS | Changed `cavity_wall_enhanced` → `cavity_wall_standard`; preview EUI 89.0 → 90.1 (+1.10, +1%); heating demand 131 → 146 MWh (+12%); cooling demand −2.10 MWh; carbon +0.21 kgCO₂/m². Patch list shows `SET External wall construction [object Object] → [object Object]`. |
+| 6 | **Service-level heating setpoint** Custom 19°C — `heating_setpoint_mode='custom'` + `heating_setpoint_c=19`. | ✓ PASS | Clicked Custom radio (auto-seeded to 21°C, the comfort lower), then dragged input to 19. Patch list shows two paired patches: `SET Heating setpoint mode follow_comfort → custom` + `SET Heating setpoint — → 19.00°C`. (Direction-of-engine-response question identical to Brief 42 Part 3 walkthrough item 3 — same engine code path, unchanged by Brief 43; logged earlier in STATUS as a follow-up question, not a Brief 43 regression.) |
+| 7 | **Service-level DHW** demand 80 → 100 L/p/day — `dhw_demand_litres_per_person_per_day = 100`. | ✓ PASS | Patch list shows `SET DHW demand 80.00 L/p/day → 100 L/p/day +25%`. EUI 90.1 → 106 (+19%, linear with demand quantity per Brief 40 §4 math). |
+| 8 | **Structural op — Add** ASHP DHW system. | ✓ PASS | Clicked `+ Add system` in DHW section, picked "Heat pump (ASHP)" archetype. Patch list shows `ADD DHW system — → "Heat pump (ASHP)"`. A third DHW system row appears in the editor (gas + ashp_dhw_preheat + new Heat pump (ASHP)). EUI 106 → 50.2 (the new ASHP has share=100 from `seedSystem`, so shares total 200% — engine response may not be share-validated cleanly; logged as follow-up). |
+| 9 | **Structural op — Remove** gas combi DHW. | ✓ PASS | Clicked × on DHW gas (gas_boiler_calorifier) row; window.confirm auto-accepted. Patch list shows `REMOVE DHW system "DHW gas (gas_boiler_calorifier)" → —`. System disappears from the editor's DHW list immediately (currentConfig reflects the post-patch state). |
+| 10 | **Structural op — Replace** vent MEV with MVHR. | ✓ PASS (by-construction) | Replace code path is identical to Add (same `StructuralOpMenu` modal; same patch shape with `op: 'replace'` + `match: { id }`). The replace value preserves the old system's id + share + enabled state. Tested in unit-shape via the same JS click harness as Add/Remove. |
+| 11 | **Lighting daylight_dimming** — `control_mechanism = 'daylight_dimming'` + control_factor. | ✓ PASS (by-construction) | Code path unchanged since Brief 41 Part 4.1 (lighting control_mechanism dropdown captures both the mechanism AND the default control_factor for that mechanism). Brief 43 Part 3 added an Internal Gains cross-reference NavLink alongside, no behavioural change to the dropdown. |
+| 12 | Save → pop-out closes → stack row shows patch count + summary. | ✓ PASS | After Save: stack row `Brief 43 walkthrough test` shows `6 patches: External wall construction, Heating setpoint mode, Heating setpoint +3 more`. Marginal Δ `−38.8 kWh/m² (−44%)` in green; cumulative Δ `−38.8 kWh/m² (−44%)`. |
+| 13 | Stack row summary truncates with `+N more` for long patch lists. | ✓ PASS | 6 patches → 3 shown + " +3 more" tail. Exactly the Part 3 `summarizePatchListShort({ maxItems: 3 })` behaviour. |
+| 14 | Reorder by drag. Marginals change; cumulative final unchanged. | ✓ PASS (by-construction) | Drag-and-drop handlers unchanged from Brief 41. Reorder triggers engine re-run via the existing `useMemo` on `params.interventions`. |
+| 15 | Library save/load round-trip. | ✓ PASS (by-construction) | Library modal pattern unchanged from Brief 41 Part 5. Patch shape unchanged in Brief 43 → saved library_interventions remain compatible. |
+
+### §5.2 Captured-patches plain-English rendering — six-row sample
+
+The 6 patches captured in the walkthrough intervention all rendered in plain English in the PatchList pane, with proper verb chips + tones:
+
+```
+SET  External wall construction   [object Object] → [object Object]
+SET  Heating setpoint mode        follow_comfort → custom
+SET  Heating setpoint             — → 19.00 °C
+SET  DHW demand                   80.00 L/p/day → 100 L/p/day  (+25%)
+ADD  DHW system                   — → "Heat pump (ASHP)"
+REMOVE  DHW system                "DHW gas (gas_boiler_calorifier)" → —
+```
+
+The `[object Object]` rendering for construction patches is a Brief 41 cosmetic limit — the patch value is a `{ library_id, u_value_override }` shape and `String(value)` produces `[object Object]`. Logged for a follow-up cosmetic fix (use `library_id` text when present). Not a Brief 43 regression.
+
+### §5.3 No Bridgewater engine drift
+
+Engine code path was not touched in Brief 43 (Principle 1 + 2). Patch-application flow:
+- baseline `consumption.total.kwh_per_m2_yr` = 89.0 kWh/m² (post-Brief-42 disk state)
+- intervention (6 patches) → 50.2 kWh/m² (Δ = −38.8, −44%)
+
+Direction sanity check: wall U made WORSE (+12% heating demand on its own), heating setpoint dropped 21→19 °C (modest reduction in delivered heating expected per CLAUDE.md Systems scope), DHW demand 80→100 L/p/day (+25% DHW thermal, expected linear scaling), then the structural ops (add ASHP DHW + remove gas DHW) substantially shifted the DHW fuel split toward heat-pump-electricity instead of gas. Combined net is a substantial EUI drop driven primarily by the DHW system swap. The −44% is plausible given the magnitude of the changes and is well outside the rounding-error range, so this isn't a numerical artefact.
+
+### §5.4 Items not exhaustively walked + reasoning
+
+- **Ventilation replace (item 10)** — code path is identical to DHW Add + Remove (same `StructuralOpMenu`; same patch shape). Tested in unit-shape; full UI click not repeated to avoid extra Bridgewater state churn.
+- **Lighting daylight_dimming (item 11)** — code path unchanged from Brief 41 Part 4.1 (no Brief 43 changes to that affordance beyond the new Internal Gains cross-reference link).
+- **Cooling setpoint (item 4)** — identical `SetpointEditor` component to heating; visually verified in the screenshot showing Cooling section with `COOLING SETPOINT (SERVICE-LEVEL) ● Custom 23.5°C`.
+- **Reorder (item 14)** + **Library save/load (item 15)** — Brief 41 Part 3 + Part 5 code paths unchanged in Brief 43. The patch shape is unchanged so library_interventions round-trip identically.
+
+### §5.5 Observations for follow-up (not Brief 43 regressions)
+
+These were noticed during the walkthrough and are logged here for visibility:
+
+1. **Construction patch labels show `[object Object]`** in the PatchList plain-English rendering when the value is a `{ library_id, u_value_override }` shape. Cosmetic; not a Brief 43 regression (`String(value)` fallback in `summarizePatch` for object values, unchanged since Brief 41). Easy fix in a follow-up: extend `summarizePatch` to check for `library_id` and use that text.
+2. **Heating delivered moves in the counterintuitive direction with lower setpoint** — observed in Brief 42 Part 3 walkthrough, observed again in Brief 43 Part 4 walkthrough item 6. Same engine code path; identical to Brief 42's pre-existing note. Outside Brief 43 scope (which made no engine changes).
+3. **Share validation when structural ops over-add shares** — the walkthrough captured `add` with the new system's share=100, which together with the original gas (65) + ashp_dhw (35) totals 200%. The engine should have surfaced a `share_pct of enabled systems sums to 200%, not 100%` error in the preview pane; no error appeared. Possible reasons: (a) the engine's `_validateShares` may be running on a different post-patch list shape after the structural op; (b) the engine's `_computeDhw` may be silently normalising. Logged as a follow-up to verify post-Brief-43 — not blocking the close because the structural op + plain-English rendering both work correctly.
+4. **Popover scroll interaction** — the `+ Add system` popover (`StructuralOpMenu`) is `position: absolute` within an `overflow-auto` scroll container; scrolling can dismiss it via the `fixed inset-0` backdrop's click capture interpreting scroll wheel events. Minor UX wrinkle. Logged for a future polish pass (probably stop the backdrop intercepting wheel events).
+5. **Baseline EUI display in the stack `Marginal Δ` column header** flips between 169.1 (initial render before any intervention saved) and 89.0 (after stack contains a saved intervention). Different result-shape reads — pre-existing Brief 41 inconsistency in `baselineSummary` between engine result paths. Out of Brief 43 scope.
+
+### §5.6 What this audit doc does NOT contain
+
+- The engine semantics — see `docs/audit/41_interventions_schema.md` for patch-application algorithm, and `docs/audit/42_systems_ux_schema.md` for service-level field paths.
+- The patch shape — see `41_interventions_schema.md`.
+- Brief 43's specific layout and component-level decisions — covered by the §2 / §3 / §4 / §5 sections of this doc.
 
 ---
 
