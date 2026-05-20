@@ -20,6 +20,7 @@ import {
   v40VentilationToV25List,
   v40ThinBlockToKwh,
 } from './systemsEngine.js'   // Brief 40 Part 2 + Part 5b (2026-05-19)
+import { runInterventionStack as _runInterventionStack } from './interventionsEngine.js'  // Brief 41 Part 2
 import {
   buildUkGridYearlyTrajectory,
   ukGridIntensityForYear,
@@ -5355,7 +5356,26 @@ function _buildHeatBalance({
  * @returns {object} Same structure as calculateInstantDegreeDay + monthly breakdown,
  *                   plus `state` and `mode` metadata fields.
  */
-export function calculateInstant(building = {}, constructions = {}, systems = {}, libraryData = {}, weatherData = null, hourlySolar = null, scheduleProfiles = null, options = {}) {
+/**
+ * Brief 41 Part 2 — Interventions wiring.
+ *
+ * The historical `calculateInstant` body is renamed to
+ * `_calculateInstantBaseline` so the engine can be invoked N+1 times
+ * by `runInterventionStack` (once for baseline + once per enabled
+ * intervention). The exported `calculateInstant` at the bottom of this
+ * file (a) computes the baseline result by delegating to
+ * `_calculateInstantBaseline`, (b) if `building.interventions` is
+ * non-empty and `options._skipInterventions !== true`, runs the stack
+ * and attaches the result to `consumption.interventions`. The
+ * `_skipInterventions` flag is set when the stack runner re-invokes
+ * the engine on a transformed config, so the inner calls don't recurse
+ * into another stack.
+ *
+ * Result shape consumers (existing Sankey / Heat Balance / Live
+ * Results) read baseline numbers unchanged; the intervention-specific
+ * comparison view (Part 5) reads from `consumption.interventions`.
+ */
+function _calculateInstantBaseline(building = {}, constructions = {}, systems = {}, libraryData = {}, weatherData = null, hourlySolar = null, scheduleProfiles = null, options = {}) {
   // Mode strings match the state contract's `mode` field exactly:
   //   'envelope-only' (State 1) | 'envelope-gains' (State 2) |
   //   'envelope-gains-operation' (State 2.5) | 'full' (State 3, default).
@@ -5994,4 +6014,54 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
     _inputs: { u_wall, u_roof, u_floor, u_glaz, ach, is_mvhr, heat_recovery, lpd, cop_heating, cop_cooling,
                sh_sys_key, sc_sys_key, vent_sys_key, dhw_prim_key },
   }
+}
+
+// ── Brief 41 Part 2 — Interventions stack dispatch ────────────────────
+//
+// Public `calculateInstant` wraps the baseline calculator. When the
+// project has interventions to run, the stack runner invokes the same
+// baseline calculator N+1 times (once for baseline + once per enabled
+// intervention) over patched copies of the engine inputs. The patched
+// inputs do NOT mutate the caller's objects — runInterventionStack
+// deep-clones via applyPatch.
+//
+// Recursion guard: `options._skipInterventions = true` is passed when
+// the stack runner re-invokes the engine on a transformed config, so
+// the inner calls don't recurse into another stack pass.
+//
+// Attachment point: `result.consumption.interventions` when consumption
+// exists, otherwise `result.interventions`. Existing Sankey / Heat
+// Balance / Live Results read baseline numbers unchanged; only the
+// intervention-specific comparison view (Part 5) reads from this slot.
+// When no interventions are present the slot is absent.
+
+export function calculateInstant(building = {}, constructions = {}, systems = {}, libraryData = {}, weatherData = null, hourlySolar = null, scheduleProfiles = null, options = {}) {
+  const result = _calculateInstantBaseline(building, constructions, systems, libraryData, weatherData, hourlySolar, scheduleProfiles, options)
+
+  if (options && options._skipInterventions === true) return result
+  if (!building || !Array.isArray(building.interventions) || building.interventions.length === 0) return result
+
+  // Build the engine-input quartet that patches are applied against.
+  const baselineConfig = { building, constructions, systems, libraryData }
+  const runEngine = (cfg) => _calculateInstantBaseline(
+    cfg.building ?? building,
+    cfg.constructions ?? constructions,
+    cfg.systems ?? systems,
+    cfg.libraryData ?? libraryData,
+    weatherData,
+    hourlySolar,
+    scheduleProfiles,
+    { ...options, _skipInterventions: true },
+  )
+
+  const stack = _runInterventionStack(baselineConfig, building.interventions, runEngine, libraryData)
+
+  if (result && typeof result === 'object') {
+    if (result.consumption && typeof result.consumption === 'object') {
+      result.consumption = { ...result.consumption, interventions: stack }
+    } else {
+      result.interventions = stack
+    }
+  }
+  return result
 }

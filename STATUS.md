@@ -1,6 +1,70 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-20 — Brief 41 Part 1: Interventions module demolition + data model
+## 🚧 Session 2026-05-20 — Brief 41 Part 2: Interventions engine + stack runner
+
+**State:** `commit_in_flight` — Brief 41 Part 2.
+
+**Prior HEAD:** `2279bb6` (Brief 41 Part 1 close).
+
+### What landed in Part 2
+
+**New engine module:** `frontend/src/utils/interventionsEngine.js`. Implements the Notion design note §1–2 Pattern Y over the engine quartet `{building, constructions, systems, libraryData}`. Public API: `parsePath`, `navigateToParent`, `resolveValue`, `applyPatch`, `applyIntervention`, `runInterventionStack`, `computeDelta`, `migratePatch`. Internal helpers: `navigateToArray`, `libraryLookup`, `deepClone`, `deltaRecord`, `pickNumber`, `_serviceDelta`, `_envelopeDelta`.
+
+**Path-parsing supports:** dot notation with `[index]` and `[id=value]` (and the generic `[key=value]`) array addressing. `[id=value]` is preferred over `[index]` for stable-ID arrays (Brief 40 systems, schedules, operable openings, profiles) per audit doc §5 — reordering doesn't break the patch.
+
+**Deep-clone:** `structuredClone` with JSON.parse(JSON.stringify) fallback for older runtimes. Every `applyPatch` clones the input before mutating; the baseline is never touched. This is the invariant that lets the caller compute marginal vs cumulative correctly.
+
+**Op semantics implemented:** `set` (mutate field), `add` (push to array), `remove` (splice matching entry), `replace` (overwrite matching entry). All four return the original config unchanged on path-resolution failure with a `patch_application_error` console warning — never throw.
+
+**Library-aware value resolution:** patches with `source: 'library'` and `value: { library_ref: 'lib_id' }` resolve via `libraryLookup` which searches across `libraryData.constructions`, `libraryData.system_templates`, `libraryData.schedules`, `libraryData.library_systems`, `libraryData.library_schedules`, and `libraryData.library_interventions`. First match by `.id` wins. Unresolved library refs return the config unchanged with a warning.
+
+**Disabled-intervention semantics:** A disabled intervention does NOT advance the rolling config. A row is still emitted with `enabled: false`, `result` pointing to the previous rolling state, and a `marginal_delta` of zero. Subsequent enabled interventions compute their marginal against the previous **enabled** state — matching Notion §10 worked example.
+
+**Delta computation:** `computeDelta` returns a structured object covering headline (EUI, total delivered, carbon), demand-side (heating/cooling), per-service delivered+demand for all six services, per-fuel (electricity/gas/oil/district heat), and per-envelope-term (wall/roof/ground/glazing/infiltration/permanent vents/thermal bridges/solar). Per-metric `pickNumber` walks a candidate-path list to absorb shape variation across engine paths; null records appear when both ends are missing (the comparison view shows `—`).
+
+**Schema-flexibility scaffolding:** `migratePatch(patch, fromVersion, toVersion)` ships as a no-op passthrough. Future briefs that change `building_config` schema in a way that touches existing patch paths must replace the body with a dispatch table — per Notion §7 and CLAUDE.md Process Rule 7 (documentation hygiene as part of the same commit).
+
+**Wiring into `instantCalc.js`:** Historical `calculateInstant` body renamed to non-exported `_calculateInstantBaseline` (signature unchanged). New `export function calculateInstant(...)` wraps the baseline calculator: computes baseline, then if `building.interventions` is non-empty and `options._skipInterventions !== true`, runs the stack via `runInterventionStack`. The `runEngine` callback re-invokes `_calculateInstantBaseline` with `_skipInterventions: true` to prevent infinite recursion. Stack result attached to `result.consumption.interventions` (when consumption exists) or `result.interventions` (degree-day fallback / envelope-only / envelope-gains paths). All 17 existing call sites of `calculateInstant` continue to work unchanged.
+
+**Documentation.** Audit doc §8 (Engine implementation — 4 subsections: module shape, rolling-config + disabled-row semantics, computeDelta shape, instantCalc.js wiring) and §9 (Sanity tests — full 13-row results table) updated in this commit. CLAUDE.md unchanged (Interventions scope already covered in Part 1).
+
+### Sanity tests — 13/13 PASS
+
+Run via `import('/src/utils/interventionsEngine.js')` in the browser with a deterministic mock `runEngine` over synthetic configs. Full table in audit doc §9. Headlines:
+
+- **A: Empty stack** → baseline only, 0 intervention rows ✓
+- **B: `set building.infiltration_ach 0.5 → 0.2`** → heating demand 38.00 → 26.00 MWh, Δ −12.00 ✓
+- **B.1: Baseline not mutated** → `cfg.building.infiltration_ach` still 0.5 post-run ✓
+- **C: Order-dependence** — plant marginal electricity Δ smaller after fabric (less demand to convert): after-A −27.44, alone −33.85 ✓
+- **C.1: Stacked cumulative monotonically improves EUI** → cumul A −1.69, B −7.18 ✓
+- **D: Disabled-A → B marginal === B-against-baseline** (skip-in-chain semantics): −12.000 ≡ −12.000 ✓
+- **D.1: Disabled row carries `enabled: false`** ✓
+- **D.2: Disabled row marginal Δ === 0** ✓
+- **E: Library `add` op** — `lib_systems_immersion` resolves + pushed to DHW array → delivered_mwh 10 ✓
+- **E.1: `resolveValue` returns library object intact** ✓
+- **`parsePath` id-match** — `[id=gas_boiler_1]` parsed as `{kind:'match', key:'id', value:'gas_boiler_1'}` ✓
+- **`computeDelta` arithmetic** — 100 → 75 = Δ−25 / Δ%−25 ✓
+- **`migratePatch` no-op stub** — `from === to` passthrough ✓
+
+### Live integration probe — Bridgewater params via React context
+
+With empty `params.interventions`, `result.consumption.interventions` absent — zero engine overhead. Injecting a single-patch intervention (`set building.infiltration_ach = 0.2`) attaches the slot with the expected row shape (`id`, `enabled: true`, `result`, `marginal_delta`, `cumulative_delta`). EUI numeric verification against real weather deferred to Part 5 walkthrough.
+
+### What did NOT change in Part 2
+
+- No envelope physics changes. Rule 14 did not fire.
+- No new UI module (Part 3).
+- No editor pop-out (Part 4) or comparison view (Part 5).
+- No backend changes.
+- Brief 40's deferred Issues #18 and #19 remain deferred.
+
+### Next
+
+Part 3 — UI shell: `InterventionsModule.jsx`, `InterventionStackView.jsx`, `InterventionRow.jsx`. New `/interventions` route + sidebar entry between Systems and Results. Stack view shows baseline + per-intervention rows with marginal + cumulative deltas, enabled toggle, drag-and-drop reorder, "+ Add intervention" CTA. Editor pop-out is Part 4.
+
+---
+
+## ✅ Session 2026-05-20 — Brief 41 Part 1: Interventions module demolition + data model
 
 **State:** `commit_in_flight` — Brief 41 Part 1.
 

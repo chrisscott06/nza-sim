@@ -355,35 +355,164 @@ documented so future briefs can register migrations against it.
 
 ---
 
-## §8 — Engine integration
+## §8 — Engine integration (Brief 41 Part 2)
 
-Part 2 wires `runInterventionStack` into `instantCalc.js`. When
-`params.interventions.length > 0` (and at least one is enabled), the
-engine populates `consumption.interventions` with the result shape
-from §6's `runInterventionStack`. Existing Sankey / Heat Balance /
-Live Results read baseline numbers unchanged; the intervention-
-specific comparison view (Part 5) reads from
-`consumption.interventions`.
+Part 2 implements the algorithms from §6 in
+`frontend/src/utils/interventionsEngine.js` and wires them into
+`frontend/src/utils/instantCalc.js` via a wrapper around the existing
+top-level `calculateInstant` export.
+
+### §8.1 — Engine module shape
+
+`interventionsEngine.js` exports (in order of use):
+
+| Function | Purpose |
+|---|---|
+| `parsePath(path)` | Tokenises a dot-notation path with `[index]` / `[id=value]` array addressing into ordered segments. |
+| `navigateToParent(root, segments)` | Walks to the parent container of the leaf; returns `{container, leafKey}` for set/replace, or `{null, null}` on failure. |
+| `resolveValue(value, source, libraryData)` | Library-aware value resolution. `source === 'library'` triggers `libraryLookup(value.library_ref, libraryData)`; inline values pass through. |
+| `applyPatch(config, patch, libraryData)` | Deep-clones config (uses `structuredClone` with JSON fallback), parses path, resolves value, executes op (`set` / `add` / `remove` / `replace`). Returns the original config unchanged on any failure with a `patch_application_error` console warning. NEVER mutates the input. |
+| `applyIntervention(config, intervention, libraryData)` | Applies every patch in order. Returns config unchanged if `intervention.enabled === false`. |
+| `runInterventionStack(baselineConfig, interventions, runEngine, libraryData)` | Builds the rolling cumulative config list, runs `runEngine` on each, returns `{baseline, interventions: [{id, enabled, result, marginal_delta, cumulative_delta}, ...]}`. |
+| `computeDelta(fromResult, toResult)` | Structured delta object (see §8.3). |
+| `migratePatch(patch, fromVersion, toVersion)` | Schema-migration scaffolding; Part 2 stub is a no-op passthrough. |
+
+Internal helpers: `navigateToArray`, `libraryLookup`, `deepClone`, `deltaRecord`, `pickNumber`, `_serviceDelta`, `_envelopeDelta`.
+
+### §8.2 — Rolling-config + disabled-row semantics
+
+The stack walks `interventions` once, maintaining a rolling cumulative
+config:
+- For each ENABLED intervention the rolling config advances (patches
+  applied on top of the previous rolling config).
+- For each DISABLED intervention the rolling config does NOT advance.
+  A row is still emitted with `enabled: false`, pointing to the
+  previous rolling-config index.
+
+This produces the per-row contract from Notion §10:
+- Subsequent enabled interventions compute their marginal against the
+  PREVIOUS ENABLED state — disabled entries skip in the chain.
+- Disabled rows have `marginal_delta` of all zeros (their result is
+  identical to the previous rolling state).
+- Cumulative deltas are always vs baseline (rolling index 0).
+
+### §8.3 — `computeDelta` result shape
+
+```
+{
+  // Headline
+  eui_kwh_per_m2:      { from, to, delta, delta_pct } | null,
+  total_delivered_mwh: { from, to, delta, delta_pct } | null,
+  carbon_kgco2_per_m2: { from, to, delta, delta_pct } | null,
+  // Demand-side
+  heating_demand_mwh:  { from, to, delta, delta_pct } | null,
+  cooling_demand_mwh:  { from, to, delta, delta_pct } | null,
+  // Per-service delivered (Brief 40 / v40 + v25 engine paths)
+  per_service: {
+    heating:     { delivered_mwh, demand_mwh },
+    cooling:     { delivered_mwh, demand_mwh },
+    dhw:         { delivered_mwh, demand_mwh },
+    ventilation: { delivered_mwh, demand_mwh },
+    lighting:    { delivered_mwh, demand_mwh },
+    small_power: { delivered_mwh, demand_mwh },
+  },
+  // Per-fuel
+  per_fuel: { electricity_mwh, gas_mwh, oil_mwh, district_heat_mwh },
+  // Per-envelope-term (Building module integrand)
+  per_envelope: { wall_loss_mwh, roof_loss_mwh, ground_loss_mwh, glazing_loss_mwh,
+                  infiltration_loss_mwh, permanent_vent_loss_mwh,
+                  thermal_bridge_loss_mwh, solar_gain_mwh },
+}
+```
+
+`pickNumber` walks a candidate-path list per metric to absorb minor
+shape variation across engine paths (degree-day, envelope-only,
+envelope-gains, State 3). When neither path resolves to a finite
+number, the metric's record slot is `null` — the Part 5 comparison
+view shows `—` rather than crashing.
+
+### §8.4 — `instantCalc.js` wiring
+
+The historical `calculateInstant` function body (lines 5358–6016 in
+the file's Part 1 state) was renamed to a non-exported
+`_calculateInstantBaseline` of identical signature. A new
+`export function calculateInstant(...)` appended after that body
+wraps the baseline calculator:
+
+1. Call `_calculateInstantBaseline(...)` to compute the baseline
+   result.
+2. If `options._skipInterventions === true` OR `building.interventions`
+   is empty/absent, return the baseline result unchanged.
+3. Otherwise build the engine quartet `{building, constructions,
+   systems, libraryData}` and call `runInterventionStack(...)` with a
+   `runEngine` callback that re-invokes
+   `_calculateInstantBaseline(...)` on the transformed config,
+   carrying `weatherData`, `hourlySolar`, `scheduleProfiles`, and
+   `options` (with `_skipInterventions: true` to prevent infinite
+   recursion).
+4. Attach the stack result to `result.consumption.interventions`
+   (when `consumption` exists) or `result.interventions` (degree-day
+   fallback / envelope-only / envelope-gains paths that don't
+   populate consumption).
+
+The 17 existing call sites of `calculateInstant` see no API change;
+their pre-Brief-41 behaviour is preserved because all pre-Brief-41
+projects load with `interventions: []` (the empty-stack guard returns
+the baseline result early). The new code path runs only when the user
+has authored interventions in the stack.
 
 Per Brief 41 brief §"What MUST NOT happen": no envelope physics
-changes, no Rule 14 fire (the engine path that runs cumulative state
-calls the existing engine entry points, not the envelope-physics
-helpers directly).
+changes, no Rule 14 fire (the wrapper calls existing engine entry
+points, never the envelope-physics helpers directly).
 
 ---
 
-## §9 — Sanity tests (filled in Part 2)
+## §9 — Sanity tests (Brief 41 Part 2 — run + recorded)
 
-Part 2 documents the following synthetic-config sanity tests:
+Brief 41 Part 2 ships 13 synthetic-config sanity tests, all PASS.
+Tests A–E correspond to the brief's §"Test A–E" specification; the
+remainder verify helpers (`parsePath`, `computeDelta`, `migratePatch`)
+plus invariants (baseline-not-mutated, disabled-row contract).
 
-- **Test A — Empty stack:** baseline runs unchanged, `consumption.interventions` empty or null.
-- **Test B — Single set-op patch:** wall U → 0.18; wall losses drop; nothing else moves materially.
-- **Test C — Two interventions, second depends on first:** fabric + heat pump; verify Int 2's marginal is smaller than Int 2 applied to baseline alone.
-- **Test D — Disabled intervention skipped:** mark Int 1 disabled; Int 2's marginal computed against baseline directly.
-- **Test E — Library-referenced patch resolves:** `source: 'library', value: { library_ref: '...' }`; verify resolved values flow into the engine.
+Tests are runnable by importing `interventionsEngine.js` in the
+browser and invoking `runInterventionStack` against synthetic
+`{building, constructions, systems, libraryData}` configs with a
+deterministic mock `runEngine` whose output varies based on the
+config's `infiltration_ach`, `external_wall` choice, and heating
+efficiency. The mock allows assertions on engine orchestration without
+depending on the full instantCalc.js pipeline.
 
-Each test gets a verifiable pass/fail with a hand-calc or sign-of-delta
-check. Documented here after Part 2 lands.
+| # | Name | Expectation | Observed (mock-engine) |
+|---|---|---|---|
+| A | Empty stack | Returns baseline only, `interventions: []` | baseline EUI 8.94, 0 rows ✓ |
+| B | Single `set` patch — `infiltration_ach: 0.5 → 0.2` | Heating demand drops; marginal Δ negative | base 38.00 → 26.00 MWh, Δ −12.00 ✓ |
+| B.1 | Baseline NOT mutated | `cfg.building.infiltration_ach` still 0.5 after run | 0.5 ✓ |
+| C | Order-dependence — plant after fabric vs plant alone | `|electricity Δ|` smaller after fabric (less demand to convert) | after-A −27.44, alone −33.85 ✓ |
+| C.1 | Stacked cumulative monotonically improves EUI | EUI delta more negative after each step | cumul A −1.69, B −7.18 ✓ |
+| D | Disabled-A → B marginal === B-against-baseline | Disabled intervention skips in chain | B-after-disabled-A −12.000 ≡ B-alone −12.000 ✓ |
+| D.1 | Disabled row carries `enabled: false` | Row appears in stack with metadata | true ✓ |
+| D.2 | Disabled row marginal Δ === 0 | Disabled rows produce zero-delta entries | 0 ✓ |
+| E | Library ref → `add` op grows DHW array | Library-resolved object pushed; dhw count 0 → 1 | delivered_mwh 10 ✓ |
+| E.1 | `resolveValue` returns library object intact | Library lookup finds entry by id | `lib_systems_immersion`, share 10 ✓ |
+| — | `parsePath` id-match segment | `[id=gas_boiler_1]` parsed as `{kind:'match', key:'id', value:'gas_boiler_1'}` | 5 segments, match at idx 3 ✓ |
+| — | `computeDelta` arithmetic | 100 → 75 produces Δ=−25, Δ%=−25 | exact ✓ |
+| — | `migratePatch` no-op stub | `from === to` returns patch unchanged | passthrough ✓ |
+
+**Live integration probe (against the actual instantCalc.js wrapper,
+Bridgewater params via React context):** with an empty interventions
+array, `result.consumption.interventions` is absent (no overhead).
+Injecting a one-patch intervention (`set
+building.infiltration_ach = 0.2`) attaches the slot with
+`interventions[0].id === 'live_test_1'`, `enabled: true`, and a
+populated `marginal_delta` / `cumulative_delta` per the §8.3 shape.
+Full numeric verification against real weather happens in the Part 5
+walkthrough on Bridgewater.
+
+**Sanity test source-of-truth:** the test harness lives in the Part 2
+commit message. Future briefs that change the engine contract or audit
+doc §3–§7 should re-run the harness; any of the 13 invariants failing
+means the schema-flexibility discipline (§7) has been violated and a
+patch migration is owed.
 
 ---
 
