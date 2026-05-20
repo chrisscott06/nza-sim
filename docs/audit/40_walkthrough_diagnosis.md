@@ -336,3 +336,332 @@ Brief 40 stays paused at `71598d1` until Path 1/2 decision lands. Once authorise
 **Build:** clean, 9.98 s, 2.53 MB JS (gzip 704 kB).
 
 **Browser verification deferred to Section C** (Brief 40 Part 5b Principle 5 — mandatory real-browser walkthrough, not code-side reasoning). Section C executes the 15-item walkthrough via Claude in Chrome MCP and captures pass/fail per item in this doc.
+
+---
+
+## 12. Part 5b Section C — browser walkthrough verification
+
+**Executed:** 2026-05-19 via Claude in Chrome MCP (deviceId 6c9f54d4, Windows, local).
+**State at start:** `--force` migration ran cleanly; idempotent re-run confirmed NO-OP. Bridgewater on v40 with heating [95%, 5%] / cooling [100%] / DHW [80%, 20%] / ventilation [37.1%, 57.4%, 5.5%] / lighting [1 thin entry: Chris's manually-added "Lighting (daylight dimming)" with `control_mechanism: 'constant'` + `control_factor: 1.0` despite the label] / small_power [empty per finding #4]. Lighting + small_power state matches the "manual UI test data + whole-object load-fallback" pattern documented in §10.
+
+**Migration script console output:**
+
+```
+(--force flag set — existing systems_config_v40 will be overwritten)
+FORCE: 'HIX Bridgewater' -- existing systems_config_v40 contents WILL BE OVERWRITTEN with fresh migration from systems_config_v25 (lighting + small_power preserved)
+OK: 'HIX Bridgewater'
+    Heating:     2 systems, shares [95.0, 5.0]
+      - Primary heating (vrf_heat_recovery_dual_function)       source=ambient_air        eff=5.12    setpoint=None
+      - Secondary heating (electric_panel_heater)               source=electricity        eff=1.0     setpoint=None
+    Cooling:     1 systems, shares [100.0]
+      - Primary cooling (vrf_heat_recovery_dual_function)       source=electricity        eff=3.51    setpoint=None
+    DHW:         2 systems, shares [80.0, 20.0]
+      - DHW gas (gas_boiler_calorifier)                         source=gas                eff=0.9     basis=per_person  tap=40°C
+      - DHW heat pump (ashp_dhw_preheat)                        source=ambient_air        eff=3.0     basis=per_person  tap=40°C
+    Ventilation: 3 systems, shares [37.1, 57.4, 5.5]
+      - mvhr_gf_public                                          flow=1425.0 l/s  SFP=1.4  HR sensible=80%
+      - bedroom_extract                                         flow=2208.0 l/s  SFP=0.4  HR sensible=0%
+      - public_toilet_extract                                   flow= 210.0 l/s  SFP=0.4  HR sensible=0%
+    Lighting:    1 systems (preserved from Part 4 default)
+    Small power: 0 systems (preserved from Part 4 default)
+NO-OP: 'New Project' has no systems_config_v25; nothing to migrate
+```
+
+Re-run without `--force`:
+
+```
+NO-OP: 'HIX Bridgewater' -- systems_config_v40 already has heating/cooling/dhw/ventilation populated (idempotent re-run; use --force to overwrite)
+NO-OP: 'New Project' has no systems_config_v25; nothing to migrate
+All projects already migrated; nothing to do.
+```
+
+### Headline verification before walking the 15 items
+
+The initial Systems-module screenshot post-migration vs pre-Part-5b screenshot (Chris's earlier capture):
+
+| Number | Pre-Part-5b | Post-Part-5b | Δ | Reason |
+|---|---|---|---|---|
+| **EUI (instant)** | 116.9 kWh/m²·yr | **83.8 kWh/m²·yr** | **−33.1 kWh/m² (−28%)** | Entirely from the DHW tap-mix correction surfacing in headline (Section A v40 displacement) |
+| **DHW demand** | 373.7 MWh | **224.2 MWh** | **−149.5 MWh** | **224.2 / 373.7 = 0.6000** — **exactly the audit §4.3 falsifiable target** `hot_fraction = (40-10)/(60-10) = 0.60` |
+| Heating demand | 175.1 MWh | 175.1 MWh | 0 | Unchanged — v40 migration produced identical efficiencies to v25's library lookup |
+| Cooling demand | 83.7 MWh | 83.7 MWh | 0 | Unchanged — same reason |
+| Mech vent | 25.9 MWh | 25.9 MWh | 0 | Unchanged — v40 vent maps to v25-list and routes through unchanged `computeVentilationEnergy` |
+| Lighting | 38.3 MWh | 38.3 MWh | 0 | Unchanged — Chris's manual lighting entry has `control_factor: 1.0` so displacement produces same number |
+| Small power | 39.4 MWh | 39.4 MWh | 0 | Unchanged — v40 small_power empty (finding #4); v25 pass-through |
+| Electricity total | 172.9 MWh | 162.9 MWh | −10 MWh | DHW heat pump share: 20% × 149.5 / 3.0 = 10.0 MWh ✓ |
+| Gas total | 332.2 MWh | 199.3 MWh | −132.9 MWh | DHW gas share: 80% × 149.5 / 0.90 = 132.9 MWh ✓ |
+| **Carbon** | (n/a from earlier shot) | **15.7 kgCO₂/m²** | — | Down proportionally with fuel |
+
+**Principle 5 verified end-to-end:** the ONLY deliberate physics change in Brief 40 (DHW tap-mix) accounts for the entire EUI movement (−10 elec + −132.9 gas = −142.9 MWh delivered; ÷ GIA ≈ −33 kWh/m²). No other service moved.
+
+**Console:** 2 React Router pre-existing future-flag warnings; 7 Chrome-extension noise exceptions ("message channel closed" — not from our app). No Brief 40 errors.
+
+### Walkthrough — 15 items
+
+#### Item 1 — Six service sections visible ✓ PASS
+
+Left panel from initial post-migration screenshot:
+- HEATING (count badge: 2) — open by default
+- COOLING (count badge: 1)
+- DHW (count badge: 2) — open by default
+- VENTILATION (count badge: 3)
+- LIGHTING (count badge: 1)
+- SMALL POWER (no count badge — array empty per finding #4)
+
+#### Item 2 — Heating section migrated state ✓ PASS
+
+Two system cards visible in heating:
+- "Primary heating..." truncated, 95% share, source ambient_air, η truncated
+- "Secondary heating..." truncated, 5% share, source electricity, η truncated
+
+Share validation badge in section header shows count "2" only (green — both enabled, sums to 100). No amber warning. Matches expected migration output.
+
+#### Item 3 — Heat pump SCOP slider 5.12 → 2.5 ✓ STRONG PASS with hand-calc
+
+Expand Primary heating card → IDENTITY / ENERGY / CONTROL / LIBRARY groups visible. Change SCOP from 5.12 to 2.5. Autosave fires (✓ Saved badge top-left). Numbers in Live Results + Sankey update within <1 second:
+
+| Number | Before | After | Δ | Hand-calc |
+|---|---|---|---|---|
+| EUI (instant) | 83.8 kWh/m² | 87.5 kWh/m² | +3.7 | +16.1 MWh / 4215 m² × 1000 = +3.82 (matches within rounding) |
+| Electricity total | 162.9 MWh | 179.0 MWh | +16.1 | 95% × 82.5 (heating delivered post-recovery) × (1/2.5 − 1/5.12) = 95% × 82.5 × 0.205 = +16.1 ✓ exact |
+| Sankey middle col | "SCOP 5.1" | "SCOP 2.5" | — | Brief 38 polish per-system label reactivity preserved |
+
+v40 displacement wired reactively end-to-end. The full pipeline UI → params.systems_config_v40 → `_calculateState3` → `computeSystemsDelivered` → `v40ServiceBlockToV25Shape` → `consumption.space_heating` → Sankey + Live Results works within one render cycle.
+
+#### Item 4 — Toggle Primary heating off → validation blocks compute + Normalise ✓ STRONG PASS
+
+Click enable-toggle dot on Primary heating card. Card greys out (opacity-50 + line-through label). Header changes to "HEATING 1/2 ⚠ 5%". Share-validation banner appears: "⚠ Shares of enabled systems sum to 5.0%, not 100%. Engine will not compute this service until fixed." + Normalise button.
+
+Engine BLOCKS compute (Brief 40 Part 5b A.4 design):
+- Heating delivered: 82.5 → **0.0** MWh
+- Sankey heating bar: solid colour → faded "Heating (off)" label, no ribbons flowing out
+- EUI: 87.5 → 79.3 (−8.2)
+- Electricity: 179.0 → 143.5 (−35.5)
+- Carbon: 16.4 → 14.8
+
+Causal chain visible to user: warning AND headline drop happen together. The walkthrough's original problem ("engine accepts 90% silently") is now fixed.
+
+Click **Normalise** → enabled Secondary heating share scaled from 5 → 100. Heating restored:
+- EUI: 79.3 → 98.4 (+19.1 — electric panel η 1.0 is much less efficient than VRF SCOP 2.5)
+- Electricity: 143.5 → 226.0 (+82.5 = 82.5 MWh heating / 1.0 η ✓ exact)
+- Sankey: heating served entirely by "Electric panel heater" (single ribbon, VRF gone)
+- Carbon: 14.8 → 18.4
+
+Disabled system's share_pct (95) preserved on disk per audit §14 — Normalise only scaled enabled systems.
+
+#### Item 5 — Toggle Secondary off (all-disabled state) ✓ STRONG PASS
+
+Click toggle dot on Secondary heating. Both systems now disabled. Heading: header gets "off" badge. Banner changes to "All systems in this service are disabled. Service delivered = 0."
+
+Engine `all_disabled: true` path fires:
+- Heating delivered 0.0 / 175.1 MWh
+- Sankey: "Heating (off)" label on demand bar, no ribbons
+- EUI: 98.4 → 79.3 (same as Item 4 first toggle — both validation-error path and all-disabled path produce equivalent zero-delivered consumption block; behaviourally equivalent at the headline)
+
+Both Section A error path (validation failure) AND Section B all-disabled path produce the same headline behaviour (delivered = 0) — different engine signals, equivalent output.
+
+#### Item 6 — Re-enable Secondary heating ✓ PASS
+
+Click Secondary's toggle dot again. Single click restores: dot back to red/coloured, label not line-through, opacity-50 gone. Heating restored to step-4 Normalise state (Secondary at 100%):
+- EUI back to 98.4
+- Electricity 226.0
+- Sankey heating ribbon to Electric panel heater
+
+Numbers byte-identical to step 4 — re-enable preserves share_pct from disk per audit §14.
+
+#### Item 7 — Cooling Custom setpoint 20°C ✓ STRONG PASS with diagnostic surfacing
+
+Expand cooling section → expand Primary cooling card. CONTROL section shows: Setpoint Follow comfort (24°C) / Custom radio; Mechanism Scheduled. Click Custom radio (slider appears). Change slider to 20.0°C.
+
+Diagnostic block appears on the card:
+- Demand at comfort: 83.7 MWh
+- Delivered at 20°C: 89.3 MWh
+- **Δ: +5.6 MWh (6.7%, overdeliver)**
+
+Engine numbers move:
+- Cooling 89.3 / 83.7 MWh (delivered now exceeds demand-at-comfort by 5.6 MWh)
+- EUI 98.4 → 98.8 (+0.4)
+- Electricity 226.0 → 227.6 (+1.6 = 5.6 / 3.51 cooling SEER ✓ exact)
+- Carbon 18.4 → 18.5
+
+**`state2Recompute` closure from Part 2 firing correctly** — State 2 actually re-runs with `{ setpointOverride: { cooling: 20 } }` and produces the higher demand. The comfort-vs-setpoint diagnostic (audit §5.1) lands end-to-end.
+
+#### Item 8 — DHW tap_outlet_temp 40°C → 30°C ✓ STRONG PASS with exact tap-mix hand-calc
+
+Expand DHW gas card → identity / share / source / point-of-use η / storage setpoint / tap outlet (°C) / cold supply / demand basis / demand fields visible. Change Tap outlet from 40 to 30.
+
+Tap-mix correction reacts:
+- Old `hot_fraction = (40-10)/(60-10) = 0.60`
+- New `hot_fraction = (30-10)/(60-10) = 0.40`
+- DHW thermal: 224.2 → **149.5 MWh** (ratio 149.5 / 224.2 = 0.667 = 0.40 / 0.60 ✓ exact basis-independent algebra)
+- EUI: 98.8 → 82.2 (−16.6)
+- Gas: 199.3 → 132.9 (−66.4 ≈ 80% × 74.7 / 0.90 η ✓)
+- Carbon: 18.5 → 15.4
+
+Per-system tap-mix-correction fields on the DHW card respond reactively. Audit §4 falsifiable target verified in both directions (40°C standard hotel + 30°C lower-tap variant).
+
+#### Item 9 — Toggle DHW gas off → validation blocks DHW + Normalise ✓ PASS with one minor finding
+
+Click toggle dot on DHW gas card. Card greys out. Section header: "DHW 1/2 ⚠ 20%". Validation fails (only ASHP at 20% enabled).
+
+Engine state:
+- DHW: **0.0 / 0.0 MWh** — engine blocks DHW compute entirely
+- EUI: 82.2 → 49.2 (−33.0)
+- Gas: 132.9 → **0.0** (entire DHW gas branch gone)
+- Carbon: 15.4 → 9.3
+
+**Minor finding logged for follow-up:** when DHW validation fails, BOTH demand AND delivered zero out. The Sankey loses the DHW row entirely. Engine returns `demand_at_comfort_mwh: 0` on validation failure, so the consumption block has zero demand too. Arguably the demand should be preserved (so user sees what they're not serving) with only delivered = 0. Pragmatic — file as a low-severity Section C finding to address in a future polish brief; doesn't block Part 5b close because the share-validation warning IS visible to the user and the Normalise button is the obvious fix.
+
+Click **Normalise** → ASHP scaled to 100%. DHW restored as electric-only:
+- DHW 149.5 / 149.5 MWh
+- Electricity 222.6 → 262.5 (+39.9 = 49.83 MWh DHW elec at SCOP 3.0, vs prior 9.97 MWh elec + 132.9 MWh gas ✓ exact)
+- Gas stays at 0.0
+- EUI 49.2 → 60.7
+
+Section A displacement + Section B enable filter compose correctly: disabled gas system's 80% share preserved on disk but ignored; Normalise scaled the remaining 20% enabled system to 100%.
+
+#### Item 10 — Ventilation batch toggle (per-service) ✓ STRONG PASS with compound physics
+
+Click white-dot batch toggle in VENTILATION section header. All 3 vent systems disabled in one click. Header: "VENTILATION 0/3 off". `VENTILATION (PER-SYSTEM)` block in right panel disappears entirely.
+
+Compound effect of disabling ventilation (both fan electrical removal AND MVHR recovery removal):
+- Mech vent demand bar gone from Sankey
+- **Heating delivered jumps 82.5 → 175.1 MWh** (no MVHR recovery → heating demand back to raw State 2 value)
+- Electricity 262.5 → **329.1 MWh** (compound: +92.6 heating elec via η 1.0 electric panel, −25.9 fan electrical, net +66.6) ✓ exact
+- EUI 60.7 → 76.1
+- Carbon 11.5 → 14.5
+
+`v40VentilationToV25List` `all_disabled` branch firing: returns empty list to `computeVentilationEnergy` which then produces zero fan electrical AND zero recovery. The Brief 28j hourly recovery cap math chain is intact — when no vent systems exist, there's no recovery to cap.
+
+Click batch toggle again to re-enable. All 3 vent systems return enabled. Numbers restore.
+
+#### Item 11 — Lighting control_mechanism 'constant' → 'daylight_dimming' ✓ STRONG PASS
+
+Expand Lighting (daylight dimming) card. CONTROL section: Mechanism dropdown "Constant (no controls)" / "Daylight dimming" / "Occupancy sensors" / "Both". Change to "Daylight dimming".
+
+**Control factor auto-set 1.0 → 0.7** (per `LIGHTING_CONTROL_FACTOR_DEFAULTS.daylight_dimming` in SystemEditorCard).
+
+Engine response:
+- Sankey Lighting: 38.3 → **26.8 MWh** (38.3 × 0.7 = 26.81 ✓ exact)
+- Electricity dropped by 11.5 MWh (the lighting reduction net of ventilation re-enable contribution)
+- EUI moved compound
+
+`v40ThinBlockToKwh` displacement firing per audit §13.4 — lighting kWh = gain × control_factor × share/100. When control_factor ≠ 1.0, the headline EUI reflects the controls. Brief 40 Part 4's thin-entry value proposition validated.
+
+#### Item 12 — Library save + load + delete ✓ PASS
+
+Click "Save current as library item" on Lighting card. Click "+ Add system" on Lighting section. Modal opens with "FROM LIBRARY" section showing the saved entry "Lighting (daylight dimming) — electricity". Click the entry.
+
+New lighting card appears with all fields populated:
+- Label: "Lighting (daylight dimming)"
+- Share: 0% (seeded as remainder per AddSystemButton logic `Math.max(0, 100 - used)`)
+- Mechanism: Daylight dimming
+- Control factor: 0.7
+
+LIGHTING header count: 1 → 2.
+
+Click delete (✕) on the new card → confirm dialog auto-accepted (patched `window.confirm` for the test). Card removed; LIGHTING header back to 1. Original entry intact.
+
+Library save path: `params.library_systems[]`. Filtered by service in the AddSystemButton modal. Service-namespacing prevents cross-service contamination (heating library entry can't be loaded into lighting). Per audit doc §13.
+
+#### Item 13 — UnifiedScheduleEditor pop-out ✓ PASS
+
+Expand Primary cooling card (Mechanism Scheduled). Click "Open schedule editor →" link. SchedulePopout opens with the cooling system's `control_schedule_id = 'business_hours_09_18_weekdays'`:
+
+- Title bar: "Schedule · business_hours_09_18_weekdays" + "Drag to move · Esc to close" + Reset position link + ✕
+- Body: UnifiedScheduleEditor canonical layout
+  - NAME / SCHEDULE TYPE (Occupancy) / ZONE TYPE (Bedroom) selectors
+  - Weekday / Saturday / Sunday tabs with hourly fraction bars
+  - QUICK SET row: Flat 0.5 Apply, Copy Wk → Sat + Sun, Invert, Shift
+  - MONTHLY MULTIPLIERS: 12 months at 1.00
+  - ANNUAL HEATMAP (LIVE PREVIEW) on right
+  - STATISTICS: Peak 14%, Average 5%, Annual operating hours 405 h/yr
+
+Identical pop-out behaviour to Internal Gains / Operation surfaces — Brief 36 SchedulePopout chrome + Brief 37 UnifiedScheduleEditor body unchanged by Brief 40.
+
+#### Item 14 — Page reload persistence (F5) ✓ STRONG PASS
+
+Press F5. Page reloads. After 3-second settle, all walkthrough edits preserved exactly:
+
+| State | Value |
+|---|---|
+| HEATING section badge | "1/2" (Primary disabled, Secondary at 100% from Normalise) |
+| DHW section badge | "1/2" (Gas disabled, Heat pump at 100% from Normalise) |
+| Cooling setpoint | Custom 20°C |
+| DHW tap_outlet | 30°C |
+| Lighting mechanism | Daylight dimming + control_factor 0.7 |
+| EUI | 58.1 kWh/m²·yr (identical) |
+| Electricity | 251.0 MWh |
+| Heating | 82.5 / 175.1 MWh |
+| Cooling | 89.3 / 83.7 MWh (overcool delta preserved) |
+| DHW | 149.5 / 149.5 MWh (tap-mix at 30°C preserved) |
+| Lighting Sankey | 26.8 MWh (daylight dimming preserved) |
+
+Autosave + load-side fallback round-trip params.systems_config_v40 through SQLite perfectly.
+
+#### Item 15 — Navigate Building ↔ Systems ✓ PASS
+
+Navigate to `/building` → wait 2s → navigate back to `/systems` → wait 3s. State identical to pre-navigation:
+- EUI 58.1, Electricity 251.0, Gas 0.0
+- All per-system enable/disable states intact
+- All slider/input values intact
+
+React context persistence across route changes works as expected (params lives at the ProjectContext level, survives module unmount/remount).
+
+### Walkthrough summary
+
+| # | Item | Result | Note |
+|---|---|---|---|
+| 1 | Six service sections visible | ✓ PASS | — |
+| 2 | Heating migrated state correct | ✓ PASS | — |
+| 3 | SCOP slider → EUI moves immediately | ✓ STRONG PASS | Exact hand-calc (+16.1 MWh elec / +3.7 EUI) |
+| 4 | Toggle off + validation blocks compute + Normalise | ✓ STRONG PASS | Headline drops → 0; Normalise scales enabled |
+| 5 | All systems disabled → service "off" | ✓ STRONG PASS | `all_disabled` engine path |
+| 6 | Re-enable preserves shares | ✓ PASS | — |
+| 7 | Custom setpoint → diagnostic + EUI moves | ✓ STRONG PASS | `state2Recompute` closure firing |
+| 8 | DHW tap_outlet 40°C → 30°C | ✓ STRONG PASS | Exact ratio 0.40/0.60 = 0.667 |
+| 9 | DHW system toggle → Normalise | ✓ PASS | Minor finding: zero demand on validation failure |
+| 10 | Ventilation batch toggle | ✓ STRONG PASS | Compound: fan elec + MVHR recovery removal |
+| 11 | Lighting mechanism → control_factor + EUI | ✓ STRONG PASS | Exact 38.3 × 0.7 = 26.8 |
+| 12 | Library save + load + delete | ✓ PASS | — |
+| 13 | Schedule editor pop-out | ✓ PASS | Identical to Internal Gains / Operation |
+| 14 | Page reload persistence | ✓ STRONG PASS | All state round-trips through SQLite |
+| 15 | Navigate away + back | ✓ PASS | Context survives route changes |
+
+**Overall:** 15/15 PASS. 10 STRONG PASSes with exact hand-calc verification on the engine numbers. 1 minor finding (Item 9 zero-demand on DHW validation failure) logged for a future polish brief — does not block Part 5b close because the share-validation warning IS visible and the Normalise button is the obvious fix path.
+
+### Anomalies + minor findings
+
+1. **Lighting `control_mechanism: 'constant'` despite label "daylight dimming"** (logged before walkthrough). Bridgewater's manual UI test data had `control_factor: 1.0` even though the label suggested dimming. Walkthrough Item 11 demonstrated the displacement is firing — flipping the mechanism to `daylight_dimming` auto-set control_factor to 0.7 and reduced lighting kWh accordingly. Not a Brief 40 bug; the entry pre-dated Part 3's archetype seeding behaviour.
+
+2. **Small power array empty post-migration** (finding #4 from §5 of this doc). Bridgewater's bc had small_power key absent before --force migration; the migration's `existing_v40.get("small_power") or []` returns `[]` because the field was absent. The DEFAULT_PARAMS load-side fallback is whole-object (`bc.systems_config_v40 ?? DEFAULT_PARAMS.systems_config_v40`) so the default thin entry doesn't re-seed once v40 exists. Low severity — Bridgewater's EUI still includes the small_power gain via the v25 pass-through path (no v40 to displace, so v25 wins per the per-service displacement logic).
+
+3. **Item 9 DHW validation failure zeroes demand AND delivered.** The Sankey loses the DHW row when shares fail to sum to 100. Pragmatic — file as a low-severity polish brief candidate: when validation fails, preserve `demand_at_comfort_mwh` on the consumption block so the Sankey can render an "unserved" or "broken" DHW row. Doesn't block Part 5b close.
+
+### Console output throughout walkthrough
+
+2 React Router pre-existing future-flag warnings (v7_startTransition, v7_relativeSplatPath — unrelated to Brief 40).
+7 Chrome-extension noise exceptions ("message channel closed before a response was received" — from MCP/other extensions, not from our app).
+No Brief 40 errors. No engine exceptions. No React state inconsistency warnings.
+
+### Bridgewater post-walkthrough state
+
+Captured for restoration reference. The walkthrough left Bridgewater in a "tour" state:
+- Heating: Primary disabled, Secondary at 100%, SCOP unchanged on disabled Primary at 2.5
+- Cooling: Setpoint Custom 20°C
+- DHW: Gas disabled, Heat pump at 100%, tap_outlet 30°C
+- Ventilation: all enabled (restored)
+- Lighting: 1 entry — control_mechanism daylight_dimming, control_factor 0.7
+- Small power: empty
+- Library: 1 saved entry ("Lighting (daylight dimming) — electricity")
+- Final EUI: 58.1 kWh/m²·yr
+
+To restore canonical migrated state: re-run `python scripts/40_bridgewater_systems_migration.py --force`. Library entry is NOT overwritten (the migration only touches systems_config_v40).
+
+### Part 5b verdict
+
+Brief 40 Part 5b achieves its target outcome:
+
+> "Editing a system in the new Brief 40 left panel produces a visible change in EUI, Sankey, and Live Results — within the same render cycle. Each system has an on/off toggle. Each service has a batch on/off toggle. After this Part lands, Chris can open Systems, toggle a heat pump off, watch the gas boiler take 100% of demand, and see the EUI and fuel split move accordingly."
+
+Verified end-to-end in 15 items. Walkthrough PASS.

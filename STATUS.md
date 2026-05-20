@@ -1,5 +1,68 @@
 # NZA SIMULATE — Status
 
+## ✅ Session 2026-05-19 — Brief 40 Part 5b Section C: Browser walkthrough — 15/15 PASS
+
+**State:** `commit_in_flight` — Brief 40 Part 5b Section C + close. Mandatory real-browser walkthrough via Claude in Chrome MCP per Brief Principle 5. Walked Bridgewater through the 15-item checklist; documented every result in `docs/audit/40_walkthrough_diagnosis.md` §12 with screenshots captured per step.
+
+**Pre-walkthrough setup:**
+- Backend reachable (HTTP 200; sees HIX Bridgewater + New Project)
+- Chrome MCP connected (PC, Windows, local — deviceId 6c9f54d4)
+- `python scripts/40_bridgewater_systems_migration.py --force` ran cleanly — Bridgewater's manual UI test data (ashp 90% / gas_boiler 85% / mev 100% / dimming 100%) replaced with the canonical migrated shape (heating [95%, 5%] / cooling [100%] / DHW [80%, 20%] / ventilation [37.1%, 57.4%, 5.5%]). Lighting + small_power preserved
+- Re-run without `--force` → idempotent NO-OP confirmed
+
+**Initial Bridgewater state vs pre-Part-5b baseline (Chris's earlier screenshot):**
+
+| Number | Pre-Part-5b | Post-migration | Δ | Reason |
+|---|---|---|---|---|
+| **EUI** | 116.9 kWh/m² | **83.8 kWh/m²** | **−33.1 (−28%)** | Entirely DHW tap-mix correction surfacing via Section A v40 displacement |
+| **DHW demand** | 373.7 MWh | **224.2 MWh** | **−149.5** | **224.2 / 373.7 = 0.600 exactly** ← audit §4.3 falsifiable target met |
+| Heating | 175.1 | 175.1 | 0 | Unchanged — v40 produces identical efficiencies to v25 library lookup |
+| Cooling | 83.7 | 83.7 | 0 | Same |
+| Mech vent | 25.9 | 25.9 | 0 | v40 vent maps to v25-list and routes through unchanged `computeVentilationEnergy` |
+| Lighting | 38.3 | 38.3 | 0 | Chris's manual entry has control_factor 1.0 → 1:1 with v25 pass-through |
+| Small power | 39.4 | 39.4 | 0 | v40 small_power empty (finding #4); v25 pass-through wins |
+| Electricity | 172.9 | 162.9 | −10.0 | DHW heat pump share: 20% × 149.5 / 3.0 = 10.0 ✓ |
+| Gas | 332.2 | 199.3 | −132.9 | DHW gas share: 80% × 149.5 / 0.90 = 132.9 ✓ |
+
+**Principle 5 verified end-to-end**: the ONLY deliberate physics change in Brief 40 (DHW tap-mix correction) accounts for the entire EUI movement. No other service moved. Audit §4.3's `Bridgewater post = pre × hot_fraction = pre × 0.60` target met exactly.
+
+**15-item walkthrough — all PASS:**
+
+| # | Item | Result |
+|---|---|---|
+| 1 | Six service sections visible | ✓ PASS |
+| 2 | Heating migrated state | ✓ PASS |
+| 3 | SCOP 5.12 → 2.5 | ✓ STRONG PASS — Electricity +16.1 MWh hand-calc exact |
+| 4 | Toggle Primary off + Normalise | ✓ STRONG PASS — share-validation blocks compute; Normalise scales enabled |
+| 5 | Both heating systems off | ✓ STRONG PASS — `all_disabled` engine path |
+| 6 | Re-enable preserves shares | ✓ PASS |
+| 7 | Cooling Custom 20°C + diagnostic | ✓ STRONG PASS — `state2Recompute` closure firing; +5.6 MWh overdeliver |
+| 8 | DHW tap_outlet 40 → 30°C | ✓ STRONG PASS — ratio 0.40/0.60 = 0.667 exact |
+| 9 | DHW gas toggle + Normalise | ✓ PASS — minor finding logged (zero demand on validation fail) |
+| 10 | Ventilation batch toggle | ✓ STRONG PASS — compound physics: fan elec + MVHR recovery removal |
+| 11 | Lighting mechanism daylight_dimming | ✓ STRONG PASS — 38.3 × 0.7 = 26.8 exact |
+| 12 | Library save + load + delete | ✓ PASS — service-namespaced library entries |
+| 13 | UnifiedScheduleEditor pop-out | ✓ PASS — Brief 36/37 chrome unchanged by Brief 40 |
+| 14 | F5 reload persistence | ✓ STRONG PASS — all state round-trips through SQLite |
+| 15 | Navigate Building ↔ Systems | ✓ PASS — React context survives route changes |
+
+**15/15 PASS.** 10 STRONG PASSes with exact hand-calc verification on engine numbers.
+
+**Console:** 2 React Router pre-existing future-flag warnings; 7 Chrome-extension noise exceptions. No Brief 40 errors.
+
+**Three findings logged for follow-up** (none block Part 5b close):
+1. Bridgewater's lighting entry has `control_mechanism: 'constant'` + `control_factor: 1.0` despite "daylight dimming" label — pre-Part-3 manual entry quirk, not a Brief 40 bug. Item 11 walkthrough demonstrated displacement works correctly when mechanism is actually flipped.
+2. Small power array empty post-migration (finding #4 from diagnosis §5) — load-side fallback whole-object semantics. v25 pass-through wins in displacement so EUI unaffected. Future polish.
+3. DHW validation failure zeroes both demand AND delivered → Sankey loses the DHW row entirely. Pragmatically a minor UX gap (the share-validation warning IS visible and the Normalise button is the obvious fix). File as a future polish-brief candidate.
+
+**Walkthrough left Bridgewater in a "tour" state** (Primary heating disabled, cooling Custom 20°C, DHW gas disabled + tap 30°C, lighting daylight dimming, 1 library entry saved). To restore canonical migrated state: re-run `python scripts/40_bridgewater_systems_migration.py --force` (library entry survives — migration only touches systems_config_v40).
+
+**Brief 40 Part 5b complete.** Wiring fix (Section A) + enable toggles (Section B) verified end-to-end. Brief 40's target outcome achieved: editing any system in the new left panel produces a visible change in EUI / Sankey / Live Results within the same render cycle; per-system + per-service enable toggles let the user test interventions without losing share configurations; engine displacement coexists cleanly with v25 fallback for partial migrations.
+
+**Next:** Brief 40 stays open. Part 5c (pop-out refactor for left panel UX — separate small brief) follows when Chris is ready. Then Part 6 close.
+
+---
+
 ## 🟢 Session 2026-05-19 — Brief 40 Part 5b Section B: Per-system and per-service enable toggles
 
 **State:** `commit_in_flight` — Brief 40 Part 5b Section B. Schema gains `enabled: boolean` per system (default true, missing treated as true). DEFAULT_PARAMS seeds `enabled: true` explicitly. Engine filter `_enabledSystems` already plumbed in Section A. UI adds per-system toggle in card chrome + per-service batch toggle in section header. Normalise quick-fix scales enabled systems only; share-validation badge counts enabled systems.
