@@ -235,10 +235,40 @@ const DEFAULT_PARAMS = {
   // counting in the heat balance because lighting heat is upstream of the
   // Systems split. Audit doc §13 "Thin Systems entries — cross-module
   // accounting" documents the wiring.
+  //
+  // Brief 42 Part 1 (2026-05-20) — service-level vs system-level schema
+  // reorganisation. Building-level fields (setpoints, DHW demand + temps)
+  // lift OUT of per-system entries to service-level positions on
+  // `systems_config_v40`. Per-system entries retain only fields that
+  // describe the specific kit installed (source, efficiency, share,
+  // control, enabled). Engine reads service-level (Part 2). Migration
+  // covers Bridgewater's persisted v1 shape via migratePatch +
+  // loader-side lift (Parts 2 + 4).
+  //
+  // Full schema reference: docs/audit/42_systems_ux_schema.md
   systems_config_v40: {
-    heating:     [],
-    cooling:     [],
-    dhw:         [],
+    // ── Heating service ────────────────────────────────────────────
+    // setpoint_mode: 'follow_comfort' uses the comfort band's lower_c at
+    // compute time; 'custom' uses heating_setpoint_c verbatim.
+    heating_setpoint_mode: 'follow_comfort',
+    heating_setpoint_c:    null,
+    heating:               [],
+    // ── Cooling service ────────────────────────────────────────────
+    cooling_setpoint_mode: 'follow_comfort',
+    cooling_setpoint_c:    null,
+    cooling:               [],
+    // ── DHW service ────────────────────────────────────────────────
+    // Building-level demand + temperatures (single source of truth).
+    // Multiple DHW systems share this demand via their share_pct.
+    // Both demand fields kept populated so basis-switching is cheap.
+    dhw_storage_setpoint_c:                60,   // legionella default
+    dhw_tap_outlet_temp_c:                 40,   // hotel default (Brief 40 §2.3)
+    dhw_cold_supply_temp_c:                10,
+    dhw_demand_basis:                      'per_person',
+    dhw_demand_litres_per_person_per_day:  80,
+    dhw_demand_litres_per_m2_per_day:      1.1,
+    dhw:                                   [],
+    // ── Ventilation, Lighting, Small power: per-system only ────────
     ventilation: [],
     lighting: [{
       id:                  'default_lighting',
@@ -253,7 +283,7 @@ const DEFAULT_PARAMS = {
       share_pct:           100,
       capacity_kw:         null,
       notes:               '',
-      enabled:             true,   // Brief 40 Part 5b Section B (2026-05-19)
+      enabled:             true,
     }],
     small_power: [{
       id:                  'default_small_power',
@@ -268,7 +298,7 @@ const DEFAULT_PARAMS = {
       share_pct:           100,
       capacity_kw:         null,
       notes:               '',
-      enabled:             true,   // Brief 40 Part 5b Section B (2026-05-19)
+      enabled:             true,
     }],
   },
   // Brief 40 Part 3 (2026-05-19) — per-project systems library (Brief 37
@@ -285,12 +315,14 @@ const DEFAULT_PARAMS = {
   // documented in docs/audit/41_interventions_schema.md.
   //
   // schema_version stamps the building_config schema version each
-  // intervention's patches were authored against. The first stamped
-  // version is 1 (Brief 41); future briefs that change building_config
-  // schema must increment this AND register a patch-migration function
-  // alongside the schema migration (Notion §7).
+  // intervention's patches were authored against. Monotonically
+  // increases — Brief 41 stamped 1, Brief 42 stamps 2 (service-level
+  // vs system-level reorganisation of systems_config_v40). Future
+  // schema-changing briefs increment by 1 AND register a
+  // migratePatch dispatch alongside the schema change (Notion §7 /
+  // audit doc 42 §6 schema version convention).
   interventions:  [],
-  schema_version: 1,
+  schema_version: 2,
   // Brief 41 Part 5 (2026-05-20) — per-project intervention library.
   // Mirrors Brief 37 (schedules) + Brief 40 (systems) library
   // patterns. Populated by InterventionLibrary "Save to library"

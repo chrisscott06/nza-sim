@@ -167,15 +167,16 @@ which of these scope items they affect.
 - Energy delivered by installed equipment to serve heating, cooling,
   DHW, ventilation, lighting, and small-power demands
 - Per-system: efficiency (SCOP / SEER / combustion η / SFP / recovery
-  effectiveness / DHW point-of-use η), setpoint, control mechanism,
-  share of demand served
+  effectiveness / DHW point-of-use η), control mechanism, share of
+  demand served
 - Proportional split across multiple systems serving the same demand
   (no priority+capacity, no lead/lag, no schedule-based handoff)
 - Comfort-vs-setpoint diagnostic: demand at envelope comfort vs
-  delivered at system setpoint, per service, with the delta exposed
+  delivered at service setpoint, per service, with the delta exposed
 - DHW tap-mix model: the boiler heats only the hot fraction of tap
   consumption, not the total tap litres. `hot_fraction =
-  (tap_outlet_temp − cold_supply_temp) / (setpoint − cold_supply_temp)`
+  (dhw_tap_outlet_temp_c − dhw_cold_supply_temp_c) /
+  (dhw_storage_setpoint_c − dhw_cold_supply_temp_c)`
 - Electrical end-use accounting for lighting and small power (thin
   entries that read the heat gain from Internal Gains and apply any
   controls; no double-counting in the heat balance)
@@ -196,18 +197,57 @@ which of these scope items they affect.
 - Capacity-based or schedule-based system stacking — proportional
   split only
 
-**Per-system setpoint semantics:** `setpoint: null` on a heating /
-cooling system means "follow the comfort band's corresponding
-setpoint" (Building's comfort band drives the demand calculation; the
-system's resolved setpoint drives the delivered calculation). Non-null
-`setpoint` recomputes demand at the system's setpoint so the comfort-
-vs-setpoint diagnostic can surface the delta. This mirrors Brief 42's
-per-opening C_d / flow_mode pattern (per-system null is a flag, not an
-inheritance link — editing a system to a custom setpoint severs the
-relationship).
+**Service-level vs system-level fields (Brief 42, 2026-05-20):**
 
-(Brief 40, May 2026. Full schema and mathematics in
-`docs/audit/40_systems_library_schema.md`.)
+Fields on `systems_config_v40` split into two classes:
+
+- **Service-level (building-level)** fields live directly on
+  `systems_config_v40`, NOT on per-system entries. They describe
+  the project's needs / zone targets. Multiple systems serving the
+  same service share these via their `share_pct`. They are:
+  - `heating_setpoint_mode` (`'follow_comfort'` | `'custom'`) +
+    `heating_setpoint_c` (number | null)
+  - `cooling_setpoint_mode` + `cooling_setpoint_c`
+  - `dhw_storage_setpoint_c`, `dhw_tap_outlet_temp_c`,
+    `dhw_cold_supply_temp_c`
+  - `dhw_demand_basis` (`'per_person'` | `'per_m2'`) +
+    `dhw_demand_litres_per_person_per_day` +
+    `dhw_demand_litres_per_m2_per_day`
+
+- **System-level (per-system)** fields stay on per-system entries
+  in the heating / cooling / dhw / ventilation / lighting /
+  small_power arrays. They describe the specific kit installed:
+  `id`, `label`, `source`, `efficiency_metric`, `share_pct`,
+  `control_mechanism`, `control_schedule_id`, `capacity_kw`,
+  `notes`, `enabled`.
+
+If the engine encounters a per-system instance of a service-level
+field (stale data, hand-edited config), it errors loudly. No silent
+fallbacks. Setpoint resolution:
+
+- `*_setpoint_mode === 'follow_comfort'` → engine uses the comfort
+  band's corresponding setpoint at compute time (lower_c for heating,
+  upper_c for cooling).
+- `*_setpoint_mode === 'custom'` → engine uses `*_setpoint_c`
+  verbatim and recomputes State 2 demand at the custom setpoint so
+  the comfort-vs-setpoint diagnostic can surface the delta.
+
+This mirrors Brief 42's per-opening cd / flow_mode pattern: the
+mode field is a flag, not an inheritance link — editing the
+service to a custom setpoint severs the relationship to the
+comfort band.
+
+The activation-threshold case (UFH primary at 19°C + radiator
+backup below 17°C) is a control-logic difference, not a setpoint
+disagreement. Deferred to a future brief if real client need
+surfaces — would land as an optional per-system
+`activate_below_zone_temp` field, distinct from the service-level
+setpoint.
+
+(Brief 40, May 2026 — original schema in
+`docs/audit/40_systems_library_schema.md`. Brief 42, May 2026 —
+service-level reorganisation in
+`docs/audit/42_systems_ux_schema.md`. Read together.)
 
 ### Interventions module — scope
 

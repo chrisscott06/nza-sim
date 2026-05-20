@@ -28,8 +28,16 @@
  *       → structured delta object covering headline metrics, per-fuel,
  *         per-service, per-envelope-term
  *   migratePatch(patch, fromVersion, toVersion)
- *       → schema-flexibility scaffolding (no-op stub until first
- *         schema_version bump; see audit doc §7)
+ *       → patch | [patch, ...] | { deprecated, reason }
+ *         Brief 42 ships the first real migration (v1→v2 — Systems UX
+ *         service-level vs system-level reorganisation; audit doc
+ *         42_systems_ux_schema.md §7). Future schema-changing briefs
+ *         register additional steps. Chains v1→v2→v3 by sequencing.
+ *   migrateInterventionPatches(intervention, fromVersion, toVersion)
+ *       → walks all patches in an intervention through the migration
+ *         chain, flat-mapping arrays and separating deprecation
+ *         markers into `_deprecated_patches`. Project loader calls
+ *         this when `intervention.schema_version < current_schema_version`.
  *
  * "config" is the engine's quartet { building, constructions, systems,
  * libraryData }. Patch paths address this object as the root — e.g.
@@ -551,22 +559,197 @@ function _envelopeDelta(fromResult, toResult, term) {
 // ── Schema migration scaffolding ──────────────────────────────────────
 
 /**
- * Schema-flexibility discipline (Notion §7 / audit doc §7).
+ * Schema-flexibility discipline (Notion §7 / audit doc 41 §7 / audit
+ * doc 42 §7).
  *
- * Future briefs that change `building_config` schema in a way that
- * touches existing patch paths must register a migration function here.
- * The signature is `(patch, fromVersion, toVersion) → patch | { deprecated, reason }`.
+ * Briefs that change `building_config` schema in a way that touches
+ * existing patch paths register a migration function here. The
+ * signature is:
  *
- * Brief 41 ships this as a no-op stub — no schema migrations exist yet,
- * because schema_version starts at 1 with Brief 41. The first schema
- * change that needs a patch migration will replace this body with a
- * dispatch table.
+ *   migratePatch(patch, fromVersion, toVersion)
+ *     → patch                                        (no change / unrecognised path)
+ *     → [patch, ...]                                 (one v1 patch produces multiple v2 patches)
+ *     → { deprecated: true, reason: '...' }          (no v2 equivalent)
+ *
+ * Migration steps chain: a project at `schema_version: 1` migrating to
+ * `schema_version: 3` runs v1→v2 then v2→v3 in sequence. The patch
+ * returned by step N is the input to step N+1.
+ *
+ * Brief 42 (2026-05-20) registers the v1→v2 step — Systems UX
+ * reorganisation lifts building-level fields (setpoints, DHW demand
+ * + temps) out of per-system entries to service-level positions on
+ * `systems_config_v40`. Pre-v2 patches addressing the per-system
+ * fields get rewritten to the new service-level paths.
  */
+
+// ── Brief 42 v1 → v2 path rewrites ────────────────────────────────────
+//
+// Each entry is { test: RegExp, rewrite: (patch, match) → patch | [patch, ...] | { deprecated, reason } }.
+// The test captures the path-root (`building` or `building_config`) as
+// match[1]; the rewrite preserves that root in the rewritten path so
+// the caller's choice of `building` vs `building_config` is honoured.
+//
+// Heating + cooling setpoint rewrites are multi-emit:
+//   - patch.value === null → single patch setting *_setpoint_mode = 'follow_comfort'
+//                            (no _c patch needed; mode='follow_comfort' means engine
+//                            substitutes comfort band at compute time)
+//   - patch.value non-null → two patches:
+//       (a) *_setpoint_mode = 'custom'
+//       (b) *_setpoint_c    = <value>
+//     emitted mode-first so the value patch is the "last write" (any
+//     subsequent override of just the value path doesn't accidentally
+//     reset mode back to 'follow_comfort').
+//
+// DHW path rewrites are single-emit — no mode flag, just relabel the
+// service-level field.
+const V1_TO_V2_PATCH_MIGRATIONS = [
+  {
+    // heating + cooling per-system setpoint → service-level mode + value
+    test: /^(building(?:_config)?)\.systems_config_v40\.(heating|cooling)\[id=[^\]]+\]\.setpoint$/,
+    rewrite: (patch, m) => {
+      const root = m[1]
+      const service = m[2]   // 'heating' | 'cooling'
+      if (patch.op !== 'set') {
+        return {
+          deprecated: true,
+          reason: `Brief 42 schema_version v1→v2: ${service} setpoint per-system field removed; ${patch.op} op on it is not supported. Re-author intervention against ${root}.systems_config_v40.${service}_setpoint_c.`,
+        }
+      }
+      const baseProps = {
+        source: patch.source ?? 'inline',
+        ...(patch.notes !== undefined ? { notes: patch.notes } : {}),
+      }
+      if (patch.value === null || patch.value === undefined) {
+        // "follow comfort band" intent
+        return [{
+          id: patch.id,
+          op: 'set',
+          path: `${root}.systems_config_v40.${service}_setpoint_mode`,
+          value: 'follow_comfort',
+          ...baseProps,
+        }]
+      }
+      // Custom setpoint value
+      return [
+        {
+          id: `${patch.id}_mode`,
+          op: 'set',
+          path: `${root}.systems_config_v40.${service}_setpoint_mode`,
+          value: 'custom',
+          ...baseProps,
+        },
+        {
+          id: patch.id,
+          op: 'set',
+          path: `${root}.systems_config_v40.${service}_setpoint_c`,
+          value: patch.value,
+          ...baseProps,
+        },
+      ]
+    },
+  },
+  {
+    // DHW per-system setpoint (storage temperature) → service-level
+    test: /^(building(?:_config)?)\.systems_config_v40\.dhw\[id=[^\]]+\]\.setpoint$/,
+    rewrite: (patch, m) => {
+      const root = m[1]
+      if (patch.op !== 'set') {
+        return {
+          deprecated: true,
+          reason: `Brief 42 schema_version v1→v2: DHW storage setpoint moved to service-level; ${patch.op} op on per-system path no longer supported.`,
+        }
+      }
+      return { ...patch, path: `${root}.systems_config_v40.dhw_storage_setpoint_c` }
+    },
+  },
+  {
+    test: /^(building(?:_config)?)\.systems_config_v40\.dhw\[id=[^\]]+\]\.tap_outlet_temp_c$/,
+    rewrite: (patch, m) => ({ ...patch, path: `${m[1]}.systems_config_v40.dhw_tap_outlet_temp_c` }),
+  },
+  {
+    test: /^(building(?:_config)?)\.systems_config_v40\.dhw\[id=[^\]]+\]\.cold_supply_temp_c$/,
+    rewrite: (patch, m) => ({ ...patch, path: `${m[1]}.systems_config_v40.dhw_cold_supply_temp_c` }),
+  },
+  {
+    test: /^(building(?:_config)?)\.systems_config_v40\.dhw\[id=[^\]]+\]\.demand_basis$/,
+    rewrite: (patch, m) => ({ ...patch, path: `${m[1]}.systems_config_v40.dhw_demand_basis` }),
+  },
+  {
+    test: /^(building(?:_config)?)\.systems_config_v40\.dhw\[id=[^\]]+\]\.demand_litres_per_person_per_day$/,
+    rewrite: (patch, m) => ({ ...patch, path: `${m[1]}.systems_config_v40.dhw_demand_litres_per_person_per_day` }),
+  },
+  {
+    test: /^(building(?:_config)?)\.systems_config_v40\.dhw\[id=[^\]]+\]\.demand_litres_per_m2_day$/,
+    rewrite: (patch, m) => ({ ...patch, path: `${m[1]}.systems_config_v40.dhw_demand_litres_per_m2_per_day` }),
+  },
+]
+
+function migrateV1toV2(patch) {
+  if (!patch || typeof patch !== 'object' || typeof patch.path !== 'string') return patch
+  for (const rule of V1_TO_V2_PATCH_MIGRATIONS) {
+    const m = patch.path.match(rule.test)
+    if (m) return rule.rewrite(patch, m)
+  }
+  return patch  // no v1→v2 rewrite applies — patch passes through unchanged
+}
+
 export function migratePatch(patch, fromVersion, toVersion) {
   if (fromVersion === toVersion) return patch
-  // No registered migrations as of Brief 41. Patches authored against
-  // older schemas would silently pass through here today; the
-  // discipline contract is that the schema change which would need a
-  // migration MUST land it in this file alongside the schema change.
-  return patch
+  if (!Number.isInteger(fromVersion) || !Number.isInteger(toVersion)) return patch
+  if (fromVersion > toVersion) return patch   // downgrades not supported
+  let cur = patch
+  for (let v = fromVersion; v < toVersion; v++) {
+    if (v === 1) cur = _applyMigrationStep(cur, migrateV1toV2)
+    // Future schema-changing briefs add cases here:
+    //   else if (v === 2) cur = _applyMigrationStep(cur, migrateV2toV3)
+  }
+  return cur
+}
+
+// Apply a migration step to a single patch OR an array of patches
+// (intermediate result from a prior step). Preserves deprecation
+// markers as-is (caller separates them out).
+function _applyMigrationStep(input, stepFn) {
+  if (Array.isArray(input)) {
+    const out = []
+    for (const p of input) {
+      const r = stepFn(p)
+      if (Array.isArray(r)) out.push(...r)
+      else if (r) out.push(r)
+    }
+    return out
+  }
+  return stepFn(input)
+}
+
+/**
+ * Walk an intervention's `patches` list through the migration chain,
+ * flat-mapping array-returns and separating out deprecation markers.
+ * Returns `{ ...intervention, schema_version: toVersion, patches:
+ * <migrated>, _deprecated_patches?: [...] }`.
+ *
+ * Used by the project loader on load when `intervention.schema_version
+ * < current_schema_version`. Brief 42 Part 2 wires the call site.
+ */
+export function migrateInterventionPatches(intervention, fromVersion, toVersion) {
+  if (!intervention || !Array.isArray(intervention.patches)) return intervention
+  if (fromVersion === toVersion) return intervention
+  const migrated = []
+  const deprecated = []
+  for (const p of intervention.patches) {
+    const r = migratePatch(p, fromVersion, toVersion)
+    if (Array.isArray(r)) {
+      for (const x of r) {
+        if (x && x.deprecated) deprecated.push({ original: p, ...x })
+        else if (x) migrated.push(x)
+      }
+    } else if (r && r.deprecated) {
+      deprecated.push({ original: p, ...r })
+    } else if (r) {
+      migrated.push(r)
+    }
+  }
+  const result = { ...intervention, schema_version: toVersion, patches: migrated }
+  if (deprecated.length > 0) result._deprecated_patches = deprecated
+  return result
 }

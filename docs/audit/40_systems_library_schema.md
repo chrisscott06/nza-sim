@@ -1,5 +1,16 @@
 # Brief 40 — Systems library schema
 
+> **⚠ Partially superseded by Brief 42 (2026-05-20).**
+> Brief 42 lifted building-level fields (setpoints, DHW demand + temperatures) out of per-system entries to service-level positions on `systems_config_v40`. The following per-system fields are NO LONGER on system entries post-Brief-42:
+> - **§1 generic system shape:** `setpoint` removed from the per-system schema for heating / cooling / dhw services
+> - **§2.1 Heating:** `setpoint` moved to `systems_config_v40.heating_setpoint_mode` + `heating_setpoint_c`
+> - **§2.2 Cooling:** `setpoint` moved to `systems_config_v40.cooling_setpoint_mode` + `cooling_setpoint_c`
+> - **§2.3 DHW:** `setpoint`, `tap_outlet_temp_c`, `cold_supply_temp_c`, `demand_basis`, `demand_litres_per_m2_day`, `demand_litres_per_person_per_day` all moved to service-level `dhw_*` fields on `systems_config_v40`
+>
+> The §4 tap-mix math is **unchanged** — same formula, only the field paths it reads from change. The §3 proportional-split math is **unchanged**. The §5 comfort-vs-setpoint diagnostic math is **unchanged** — only the source of `setpoint_i` differs (was per-system; is now service-level resolved once, applied uniformly).
+>
+> Read `docs/audit/42_systems_ux_schema.md` for the post-Brief-42 schema. The two docs together form the current Systems schema reference.
+
 **Status:** Part 1 deliverable (this commit). Canonical design reference for Brief 40 Parts 2–5.
 
 **Linked work:**

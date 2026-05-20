@@ -1,5 +1,78 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-20 — Brief 42 Part 1: Systems UX schema move + patch-migration scaffold
+
+**State:** `commit_in_flight` — Brief 42 Part 1.
+
+**Prior HEAD:** `2bf8f42` (Brief 41 close).
+
+### What landed in Part 1
+
+**Brief file folded in.** `docs/briefs/active/42_systems_ux.md` — Brief 42 verbatim from Downloads. Process Rule 7 / Brief 42 BEFORE-DOING-ANYTHING step 9 satisfied.
+
+**Schema reorganisation in `DEFAULT_PARAMS` (`frontend/src/context/ProjectContext.jsx`).** Building-level fields lifted out of per-system entries to service-level positions on `systems_config_v40`:
+
+- **Heating:** `heating_setpoint_mode` (`'follow_comfort'` | `'custom'`) + `heating_setpoint_c` (number | null). Per-system entries no longer carry `setpoint`.
+- **Cooling:** `cooling_setpoint_mode` + `cooling_setpoint_c`. Per-system entries no longer carry `setpoint`.
+- **DHW:** `dhw_storage_setpoint_c` (default 60), `dhw_tap_outlet_temp_c` (40), `dhw_cold_supply_temp_c` (10), `dhw_demand_basis` (`'per_person'`), `dhw_demand_litres_per_person_per_day` (80), `dhw_demand_litres_per_m2_per_day` (1.1). Per-system entries no longer carry any of these.
+- **Ventilation, lighting, small_power:** unchanged. Thin lighting/small_power seeds preserved.
+
+`schema_version` bumped from `1` (Brief 41) to `2` (Brief 42). Monotonic integer convention — preserved from Brief 41 instead of jumping to "42" as the brief spec text suggested. The audit doc §6 documents the convention divergence so future-me knows: brief numbers ≠ schema_version integers; migratePatch uses the integers.
+
+**`migratePatch` v1 → v2 in `interventionsEngine.js`.** Replaced the Brief 41 no-op stub. Real path-rewrite implementation:
+
+| Pre-v2 path | Post-v2 path |
+|---|---|
+| `building.systems_config_v40.heating[id=*].setpoint` | `building.systems_config_v40.heating_setpoint_mode` + `heating_setpoint_c` (multi-emit per value) |
+| `building.systems_config_v40.cooling[id=*].setpoint` | `cooling_setpoint_mode` + `cooling_setpoint_c` (multi-emit) |
+| `building.systems_config_v40.dhw[id=*].setpoint` | `dhw_storage_setpoint_c` |
+| `building.systems_config_v40.dhw[id=*].tap_outlet_temp_c` | `dhw_tap_outlet_temp_c` |
+| `building.systems_config_v40.dhw[id=*].cold_supply_temp_c` | `dhw_cold_supply_temp_c` |
+| `building.systems_config_v40.dhw[id=*].demand_basis` | `dhw_demand_basis` |
+| `building.systems_config_v40.dhw[id=*].demand_litres_per_person_per_day` | `dhw_demand_litres_per_person_per_day` |
+| `building.systems_config_v40.dhw[id=*].demand_litres_per_m2_day` | `dhw_demand_litres_per_m2_per_day` |
+
+**Heating/cooling setpoint multi-emit logic:**
+- `patch.value === null` → single patch setting `*_setpoint_mode = 'follow_comfort'` (no `_c` patch needed — mode='follow_comfort' substitutes comfort band at compute time)
+- `patch.value` non-null → two patches: `*_setpoint_mode = 'custom'` (first) + `*_setpoint_c = <value>` (second, so any later override of `_c` doesn't accidentally reset mode)
+- `patch.op !== 'set'` → returns `{deprecated: true, reason: '...'}` marker (add/remove/replace on setpoint paths don't make sense)
+
+**Migration chain:** `migratePatch(patch, fromVersion, toVersion)` now supports chained migrations (1 → 2 → 3 ...) — Brief 42 registers the v1 → v2 step; future schema-changing briefs add cases without touching the v1→v2 logic.
+
+**New helper:** `migrateInterventionPatches(intervention, fromVersion, toVersion)` walks all patches in an intervention through the migration chain, flat-mapping array-returns and separating deprecation markers into `_deprecated_patches`. The project loader (Brief 42 Part 2) wires this in `_applyProject` when `intervention.schema_version < current_schema_version`.
+
+**CLAUDE.md Module Scopes Systems amendment.** Added the service-level vs system-level distinction with the full field catalogue (which fields live where, why, and the engine's "errors loudly on stale data" contract). Setpoint resolution semantics updated (`*_setpoint_mode` flag instead of per-system `setpoint: null` flag). UFH + radiator backup activation-threshold case explicitly deferred to a future brief.
+
+**Brief 40 audit doc `docs/audit/40_systems_library_schema.md`** gained a "⚠ Partially superseded by Brief 42" banner at the top, listing the precise sections whose schemas changed and pointing to `42_systems_ux_schema.md` for the post-Brief-42 shape.
+
+**Canonical schema reference:** new `docs/audit/42_systems_ux_schema.md` (~600 lines) — eleven sections: scope of reorganisation, why service-level, post-Brief-42 schema shape, Bridgewater before/after examples (heating + DHW), `DEFAULT_PARAMS` new shape, schema version convention (with monotonic-integer-vs-brief-number divergence note), patch migration tables + multi-emit + deprecation rules + collapse case, engine integration sketch + loader-side migration plan + explicit migration script plan, Bridgewater sanity expectations placeholder (filled in Part 2), UI shape preview (filled in Part 3), out-of-scope items.
+
+`docs/briefs/current.md` repointed to Brief 42 active; sequencing table gained Brief 42 row.
+
+### What did NOT change in Part 1
+
+- **No engine code.** `_computeDhw`, `_computeHeatingOrCooling`, `withMode` allowlist all unchanged. Part 2 ships those.
+- **No UI code.** Part 3 ships the editor rebuild.
+- **No loader-side migration.** The `_applyProject` function still reads `bc.systems_config_v40` as-is. Existing Bridgewater data on disk (schema_version: 1, v1-shape `systems_config_v40`) continues to load and run as before because the engine still reads per-system setpoint / DHW fields in Part 1's window.
+- **No backend changes.**
+- **No envelope physics changes.** Rule 14 did not fire.
+
+### Loader-migration in-flight state
+
+Between Part 1 commit and Part 2 commit, Bridgewater loads with `bc.schema_version: 1` and `bc.systems_config_v40` in v1-shape. The in-memory params has whatever bc has + DEFAULT_PARAMS fallback — DEFAULT_PARAMS provides empty arrays for heating/cooling/dhw (which Bridgewater overrides with its v1-shape arrays). DEFAULT_PARAMS also provides the new service-level fields (heating_setpoint_mode, etc.) — Bridgewater doesn't have these on disk, so the in-memory params gets the defaults. Result: Bridgewater carries BOTH v1 per-system setpoint/demand fields AND v2 service-level defaults. The engine reads per-system fields (works); the v2 service-level defaults are ignored by Part 1's engine. No regression.
+
+This in-flight coexistence is bounded by Part 2's loader migration: when Part 2 lands, the loader lifts v1 per-system fields to service-level positions and strips per-system entries; engine reads service-level cleanly.
+
+### Sanity tests (filled in Part 2)
+
+Per Principle 1 — Bridgewater post-Brief-42 must reproduce pre-Brief-42 (`5835d21`) within 0.5% across all six services. Part 2 hand-migrates a Bridgewater test copy + runs engine + compares.
+
+### Next
+
+Part 2 — Engine reads service-level fields (`_computeDhw`, `_computeHeatingOrCooling`); loader-side migration in `_applyProject` (lifts v1 per-system fields to v2 service-level + strips per-system + bumps in-memory schema_version + calls `migrateInterventionPatches` on each intervention); `withMode` allowlist updated for new field names; Bridgewater hand-migrated sanity tests documented in audit doc §9.
+
+---
+
 ## ✅ Session 2026-05-20 — Brief 41 close: Interventions Module shipped
 
 **State:** `commit_in_flight` — Brief 41 formal close. Conditional-pass walkthrough sign-off from Chris. All substantive code shipped over the preceding commit chain (P1 / P2 / P3 / P4 / P5 / P4.1 corrective / accordion polish); this close commit lands the documentation hygiene: Brief 41 archived, `current.md` repointed, Issues #21 + #22 logged in `29_open_issues.md` for Brief 42 — Systems UX, STATUS.md final report.
