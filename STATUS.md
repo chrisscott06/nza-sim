@@ -1,8 +1,80 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-20 — Brief 42 Part 2: Engine reads service-level + loader migration + Bridgewater sanity 14/14 PASS
+## 🚧 Session 2026-05-20 — Brief 42 Part 3: Systems UX rebuild — ServiceSectionHeader + SystemSummaryRow + SystemEditorPopout
 
-**State:** `commit_in_flight` — Brief 42 Part 2.
+**State:** `commit_in_flight` — Brief 42 Part 3.
+
+**Prior HEAD:** `b852ffe` (Brief 42 Part 2 close).
+
+### What landed in Part 3
+
+**New components in `frontend/src/components/modules/systems/`:**
+
+- **`ServiceSectionHeader.jsx`** — building-level fields editor rendered at the top of each service section. Reads `serviceLevel` (= `systems_config_v40`) and writes via `onUpdateServiceLevel(patch)`. Renders:
+  - **heating / cooling** → `SetpointEditor` with `Follow comfort (X°C)` / `Custom` radios + slider (10–28 / 18–32 °C, step 0.5)
+  - **dhw** → `DHWServiceFields`: Storage / Tap outlet / Cold supply temps, hot-fraction read-out, Demand basis (per person / per m²) + quantity
+  - **ventilation / lighting / small_power** → returns null (no service-level fields)
+
+- **`SystemSummaryRow.jsx`** — compact per-system row replacing the inline-expand `SystemEditorCard` in the left panel. Shape: `● Label  90% | SCOP 2.8 | [✏ Edit]`. Click ● toggles `enabled`; click label or pencil opens the editor pop-out. `headlineEfficiency()` chooses SCOP / SEER / η / SFP·HRE / control-mech label per service.
+
+- **`SystemEditorPopout.jsx`** — wraps Brief 37 `SchedulePopout` chrome (proven draggable / position-persistent pattern). localStorage key: `nza-system-editor-popout-position`. Body is the refactored `SystemEditorCard` with `expanded={true}`; collapse chevron + delete close the pop-out. Solves Issue #22 (editor at full width, decoupled from cramped 300px left panel).
+
+**Refactored `frontend/src/components/modules/systems/SystemEditorCard.jsx`:**
+
+- Building-level field UI groups REMOVED — `SetpointControl` helper + `DHWFields` helper deleted. ENERGY group's DHW path shrinks to just Point-of-use η. CONTROL group's heating/cooling path renders only mechanism + schedule (no setpoint).
+- `useState` import dropped (no longer used).
+- `comfortBand` prop dropped from signature (no longer read inside).
+- Card is now the body content of `SystemEditorPopout`; the collapsed-summary code path is still present (defensive) but unused.
+
+**Rewired `frontend/src/components/modules/SystemsModule.jsx` (InputsColumn):**
+
+- `expandedSystem` (per-system inline expand) → `editingKey` (per-system pop-out target).
+- New `updateServiceLevel(patch)` callback merges shallow patches into `params.systems_config_v40`.
+- For each service section: `ServiceSectionHeader` renders at the top of the open accordion, then a list of `SystemSummaryRow`, then `AddSystemButton`.
+- `SystemEditorPopout` mounted once at the column root, controlled by `editingKey`. Resolves `editingSystem` + `editingEngineSys` + `editingService` + `editingIdx` on every render (single source of truth: `params.systems_config_v40`).
+- `addSystem(service, sys)` now seeds `editingKey` instead of `expandedSystem` so the pop-out opens after add.
+
+### Bridgewater browser verification — engine unchanged
+
+| Metric | Part 2 baseline | Part 3 live |
+|---|---|---|
+| EUI | 69.2 kWh/m²·yr | **69.2** ✓ |
+| Electricity | 174.6 MWh/yr (58%) | **174.6 (58%)** ✓ |
+| Gas | 124.6 MWh/yr (42%) | **124.6 (42%)** ✓ |
+| Heating delivered / demand | 82.5 / 175.1 MWh | **82.5 / 175.1** ✓ |
+| Cooling delivered / demand | 85.8 / 83.7 MWh | **85.8 / 83.7** ✓ |
+| DHW delivered / demand | 149.5 / 149.5 MWh | **149.5 / 149.5** ✓ |
+
+(Part 3 is UI-only — engine code path is untouched since Part 2's b852ffe. Numbers match exactly as expected.)
+
+**Service sections walked:**
+- ✓ Heating — `HEATING SETPOINT` block (Follow comfort 21°C / Custom radios) + two SystemSummaryRows (Primary 95% SCOP 2.8, Secondary 5% COP 1.00) + Add system
+- ✓ Cooling — header collapsed, opens cleanly
+- ✓ DHW — `DHW TEMPERATURES` (storage 60 / tap 30 / cold 10, hot-fraction 40%) + `DHW DEMAND` (per person 80 L/p/day) + two systems (gas 75% η 0.90, ASHP 25% η 2.80)
+- ✓ Ventilation — NO service-level header, three SystemSummaryRows with SFP/HRE headlines
+- ✓ Lighting — collapsed
+- ✓ Small power — collapsed
+
+**Edit pop-out:** Click pencil on first heating row → SystemEditorPopout opens (title "Editing system: Primary heating (vrf_heat_recovery_dual_function)", draggable, Reset position, close ×). Body shows IDENTITY / ENERGY / CONTROL / LIBRARY only — no setpoint group, no DHW temps group. Spec satisfied.
+
+**Build:** `npm run build` clean (no errors / warnings beyond the pre-existing font preloads + bundle-size advisory).
+
+### What did NOT change in Part 3
+
+- **No engine changes.** systemsEngine, ProjectContext, interventionsEngine all untouched since Part 2.
+- **No new schema fields.** Part 3 is pure presentation; Part 1 already shipped the schema.
+- **No backend changes.**
+- **No Part 4 work.** Migration script + walkthrough + close happen next.
+
+### Next: Part 4
+
+Bridgewater migration script (`scripts/42_systems_ux_migration.py` — idempotent, `--force` flag), 12-item walkthrough checklist (heating setpoint custom → engine recompute; DHW basis swap; pop-out drag persistence; etc.), close commit, archive Brief 42 to `docs/briefs/archive/`, resolve Issues #21 + #22.
+
+---
+
+## ✅ Session 2026-05-20 — Brief 42 Part 2: Engine reads service-level + loader migration + Bridgewater sanity 14/14 PASS
+
+**State:** `closed` — Brief 42 Part 2 at `b852ffe`.
 
 **Prior HEAD:** `cbd54fa` (Brief 42 Part 1 close).
 

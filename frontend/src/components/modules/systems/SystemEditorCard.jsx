@@ -1,32 +1,37 @@
 /**
  * SystemEditorCard.jsx — Brief 40 Part 3 (2026-05-19)
+ *                       + Brief 42 Part 3 (2026-05-20)
  *
- * Per-system editor card for the Systems module's new section-list shape.
- * Service-aware fields driven by `system.service` ∈ heating / cooling /
- * dhw / ventilation / lighting / small_power.
+ * Per-system editor card. Service-aware fields driven by
+ * `system.service` ∈ heating / cooling / dhw / ventilation /
+ * lighting / small_power.
  *
- * Card structure (audit doc §2 + brief Part 3 step 3.2):
- *   ┌─ IDENTITY ─────────────────────────┐  label, share
- *   ┌─ ENERGY ───────────────────────────┐  source, efficiency (service-specific shape)
- *   ┌─ CONTROL ──────────────────────────┐  setpoint (heating/cooling), mechanism, schedule
- *   ┌─ DIAGNOSTIC (only when setpoint ≠ comfort) ─┐  demand vs delivered + delta
- *   ┌─ LIBRARY ──────────────────────────┐  save current to library
+ * Brief 42 Part 3 (2026-05-20) — building-level field groups
+ * removed from this card. They now live in `ServiceSectionHeader`
+ * at the top of each service section in the left panel. This card
+ * is the body of `SystemEditorPopout` and shows ONLY system-level
+ * fields:
  *
- * Read-side: `system` is the per-Brief-40 schema object. `engineSystem` is
- * the computed `consumption.brief40.{service}.systems[i]` entry from
- * systemsEngine — carries delivered_mwh / source_energy_mwh / delta_vs_comfort.
- * When `engineSystem` is null the diagnostic block hides.
+ *   ┌─ IDENTITY ─────────┐  label, share
+ *   ┌─ ENERGY ───────────┐  source, efficiency (service-specific shape)
+ *   ┌─ CONTROL ──────────┐  mechanism, schedule (NO setpoint — service-level)
+ *   ┌─ SOURCE (light/sp) ┐  link to Internal Gains read-only
+ *   ┌─ DIAGNOSTIC ───────┐  delta vs comfort (read-only)
+ *   ┌─ LIBRARY ──────────┐  save current to library
+ *
+ * Setpoint resolution: service-level (`{service}_setpoint_mode` +
+ * `{service}_setpoint_c` on `systems_config_v40`). DHW storage/tap/
+ * cold/demand also service-level. The card's CONTROL group renders
+ * mechanism + schedule only.
+ *
+ * Read-side: `system` is the per-Brief-40 schema object (post-Brief-42:
+ * no building-level fields). `engineSystem` is the computed
+ * `consumption.brief40.{service}.systems[i]` entry from systemsEngine.
  *
  * Write-side: `onUpdate(patch)` merges the patch into the system entry
- * (parent maintains the index into `systems_config_v40.{service}[i]` and
- * calls updateParam).
- *
- * Brief 42 per-opening cd / flow_mode pattern reused: `setpoint: null`
- * means "follow comfort band" — a flag, not an inheritance link. Editing
- * to a custom value severs the relationship.
+ * (parent maintains the index into `systems_config_v40.{service}[i]`).
  */
 
-import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 
 // Service colour palette per Brief 37 Part 1 / SYSTEMS_SERVICE_COLOURS
@@ -126,7 +131,6 @@ function heatingEfficiencyLabel(source) {
 export default function SystemEditorCard({
   system,
   engineSystem,
-  comfortBand,
   expanded,
   onToggleExpanded,
   onUpdate,
@@ -272,16 +276,19 @@ export default function SystemEditorCard({
                 min={0.5} max={8.0} step={0.1}
               />
             )}
+            {/*
+              Brief 42 Part 3: DHW storage / tap outlet / cold supply /
+              demand basis / demand quantity REMOVED from this card —
+              they're service-level and live in ServiceSectionHeader at
+              the top of the DHW section.
+            */}
             {service === 'dhw' && (
-              <>
-                <LabeledNumber
-                  label="Point-of-use η"
-                  value={Number(system?.efficiency_metric ?? 0.85)}
-                  onChange={v => onUpdate({ efficiency_metric: v })}
-                  min={0.1} max={6.0} step={0.01}
-                />
-                <DHWFields system={system} onUpdate={onUpdate} accent={accent} />
-              </>
+              <LabeledNumber
+                label="Point-of-use η"
+                value={Number(system?.efficiency_metric ?? 0.85)}
+                onChange={v => onUpdate({ efficiency_metric: v })}
+                min={0.1} max={6.0} step={0.01}
+              />
             )}
             {service === 'ventilation' && (
               <VentilationFields system={system} onUpdate={onUpdate} />
@@ -289,17 +296,12 @@ export default function SystemEditorCard({
           </Group>
         )}
 
-        {/* CONTROL group — service-aware */}
+        {/* CONTROL group — service-aware.
+            Brief 42 Part 3: heating/cooling setpoint REMOVED from this card —
+            it's service-level and lives in ServiceSectionHeader at the top of
+            the heating/cooling sections. Only mechanism + schedule + control
+            factor (lighting/small_power) remain. */}
         <Group title="Control">
-          {service === 'heating' || service === 'cooling' ? (
-            <SetpointControl
-              system={system}
-              service={service}
-              comfortBand={comfortBand}
-              accent={accent}
-              onUpdate={onUpdate}
-            />
-          ) : null}
           <LabeledSelect
             label="Mechanism"
             value={system?.control_mechanism ?? 'constant'}
@@ -482,117 +484,6 @@ function DiagRow({ label, value, strong = false }) {
       <span className="text-mid-grey">{label}</span>
       <span className={`tabular-nums text-right ${strong ? 'font-semibold text-navy' : 'text-navy'}`}>{value}</span>
     </div>
-  )
-}
-
-// ── Heating / cooling setpoint control ───────────────────────────────────────
-
-function SetpointControl({ system, service, comfortBand, accent, onUpdate }) {
-  const isHeating = service === 'heating'
-  const comfortVal = isHeating ? (comfortBand?.lower_c ?? 21) : (comfortBand?.upper_c ?? 24)
-  const followComfort = system?.setpoint == null
-  const currentSetpoint = system?.setpoint ?? comfortVal
-
-  return (
-    <div className="space-y-1">
-      <label className="block text-xxs text-mid-grey">Setpoint</label>
-      <div className="flex items-center gap-1.5 text-xxs">
-        <input
-          type="radio"
-          checked={followComfort}
-          onChange={() => onUpdate({ setpoint: null })}
-          className="flex-shrink-0"
-          style={{ accentColor: accent }}
-        />
-        <span className={followComfort ? 'text-navy' : 'text-mid-grey'}>
-          Follow comfort ({comfortVal}°C)
-        </span>
-      </div>
-      <div className="flex items-center gap-1.5 text-xxs">
-        <input
-          type="radio"
-          checked={!followComfort}
-          onChange={() => onUpdate({ setpoint: comfortVal })}
-          className="flex-shrink-0"
-          style={{ accentColor: accent }}
-        />
-        <span className={!followComfort ? 'text-navy' : 'text-mid-grey'}>Custom</span>
-        {!followComfort && (
-          <>
-            <input
-              type="range"
-              min={isHeating ? 10 : 18}
-              max={isHeating ? 28 : 32}
-              step={0.5}
-              value={Number(currentSetpoint)}
-              onChange={e => onUpdate({ setpoint: Number(e.target.value) })}
-              className="flex-1 h-[3px]"
-              style={{ accentColor: accent }}
-            />
-            <span className="tabular-nums text-navy w-10 text-right">{Number(currentSetpoint).toFixed(1)}°C</span>
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ── DHW-specific extra fields ────────────────────────────────────────────────
-
-function DHWFields({ system, onUpdate, accent }) {
-  const basis = system?.demand_basis ?? 'per_m2'
-  return (
-    <>
-      <LabeledNumber
-        label="Storage setpoint (°C)"
-        value={Number(system?.setpoint ?? 60)}
-        onChange={v => onUpdate({ setpoint: v })}
-        min={45} max={80} step={1}
-      />
-      <LabeledNumber
-        label="Tap outlet (°C)"
-        value={Number(system?.tap_outlet_temp_c ?? 40)}
-        onChange={v => onUpdate({ tap_outlet_temp_c: v })}
-        min={20} max={70} step={1}
-      />
-      <LabeledNumber
-        label="Cold supply (°C)"
-        value={Number(system?.cold_supply_temp_c ?? 10)}
-        onChange={v => onUpdate({ cold_supply_temp_c: v })}
-        min={2} max={20} step={1}
-      />
-      <LabeledSelect
-        label="Demand basis"
-        value={basis}
-        onChange={v => onUpdate({ demand_basis: v })}
-        options={[
-          { value: 'per_m2',     label: 'Per m² (CIBSE TM54 style)' },
-          { value: 'per_person', label: 'Per person (occupancy-driven)' },
-        ]}
-      />
-      {basis === 'per_m2' && (
-        <LabeledNumber
-          label="Demand (L / m² / day)"
-          value={Number(system?.demand_litres_per_m2_day ?? 1.1)}
-          onChange={v => onUpdate({ demand_litres_per_m2_day: v, demand_litres_per_person_per_day: null })}
-          min={0.1} max={10.0} step={0.1}
-        />
-      )}
-      {basis === 'per_person' && (
-        <LabeledNumber
-          label="Demand (L / person / day)"
-          value={Number(system?.demand_litres_per_person_per_day ?? 80)}
-          onChange={v => onUpdate({ demand_litres_per_person_per_day: v, demand_litres_per_m2_day: null })}
-          min={5} max={500} step={5}
-        />
-      )}
-      <p className="text-xxs text-mid-grey/70 leading-tight">
-        Tap-mix correction (Brief 40): the boiler heats only the hot fraction (
-        {(((Number(system?.tap_outlet_temp_c ?? 40) - Number(system?.cold_supply_temp_c ?? 10)) /
-          Math.max(Number(system?.setpoint ?? 60) - Number(system?.cold_supply_temp_c ?? 10), 1)) * 100).toFixed(0)}
-        %) of total tap consumption, not the full tap litres.
-      </p>
-    </>
   )
 }
 

@@ -55,9 +55,17 @@ import SchedulePopout from '../shared/SchedulePopout.jsx'
 // AddSystemButton is the "+ Add system" affordance per section with
 // library + start-blank archetypes. SystemsDiagnosticPanel renders the
 // comfort-vs-setpoint summary table in a new "Diagnostic" centre tab.
-import SystemEditorCard, { SERVICE_COLOURS } from './systems/SystemEditorCard.jsx'
+import { SERVICE_COLOURS } from './systems/SystemEditorCard.jsx'
 import AddSystemButton from './systems/AddSystemButton.jsx'
 import SystemsDiagnosticPanel from './systems/SystemsDiagnosticPanel.jsx'
+// Brief 42 Part 3 (2026-05-20): per-system inline-expand SystemEditorCard
+// replaced with compact SystemSummaryRow + draggable SystemEditorPopout
+// (Issue #22). Building-level fields (heating/cooling setpoint mode +
+// custom value, DHW storage/tap/cold/demand) lifted out of the per-system
+// card and into a per-service ServiceSectionHeader (Issue #21).
+import ServiceSectionHeader from './systems/ServiceSectionHeader.jsx'
+import SystemSummaryRow from './systems/SystemSummaryRow.jsx'
+import SystemEditorPopout from './systems/SystemEditorPopout.jsx'
 
 const SYSTEMS_ACCENT = '#00AEEF'
 import LiveResultsStrip from '../shared/LiveResultsStrip.jsx'
@@ -413,17 +421,29 @@ function InputsColumn({ params, updateParam, consumption, comfortBand, openSched
     return next
   })
 
-  // Per-system expanded state (collapsed by default — only one expanded at a
-  // time, keyed by system id). Keys: `${service}:${systemId}`.
-  const [expandedSystem, setExpandedSystem] = useState(null)
-  const toggleExpanded = (key) => setExpandedSystem(k => k === key ? null : key)
+  // Brief 42 Part 3 (2026-05-20): per-system editing now happens in a
+  // draggable pop-out (SystemEditorPopout), not inline-expand. State is
+  // a single `editingKey` of shape `${service}:${systemId}` — null when
+  // no system is being edited.
+  const [editingKey, setEditingKey] = useState(null)
+  const closeEditor = () => setEditingKey(null)
 
   // ── Write helpers ──────────────────────────────────────────────────────
   // Brief 40 schema: params.systems_config_v40 = { heating: [...], ... }.
+  // Brief 42 (2026-05-20): also carries service-level (building-level)
+  // fields directly on systems_config_v40 — heating/cooling setpoint mode
+  // + custom value, DHW storage/tap/cold/demand. See audit doc 42 §2.
   // Maintain through-updateParam so the engine sees the change reactively.
 
   const writeV40 = (next) => updateParam('systems_config_v40', next)
   const getList = (service) => Array.isArray(v40?.[service]) ? v40[service] : []
+
+  // Brief 42 Part 3 service-level write helper: shallow-merges a patch of
+  // building-level fields into systems_config_v40 (e.g. {
+  // heating_setpoint_mode: 'custom', heating_setpoint_c: 22 }).
+  const updateServiceLevel = (patch) => {
+    writeV40({ ...(v40 ?? {}), ...patch })
+  }
 
   const addSystem = (service, sys) => {
     const list = getList(service)
@@ -433,7 +453,7 @@ function InputsColumn({ params, updateParam, consumption, comfortBand, openSched
     const fresh = { ...sys, share_pct }
     const nextList = [...list, fresh]
     writeV40({ ...(v40 ?? {}), [service]: nextList })
-    setExpandedSystem(`${service}:${fresh.id}`)
+    setEditingKey(`${service}:${fresh.id}`)
   }
 
   const updateSystem = (service, index, patch) => {
@@ -513,6 +533,30 @@ function InputsColumn({ params, updateParam, consumption, comfortBand, openSched
     setServiceEnabled(service, !allEnabled)   // all-on → off; off / mixed → on
   }
 
+  // Brief 42 Part 3: resolve the currently-edited system + its engine row
+  // for SystemEditorPopout. editingKey is `${service}:${systemId}`. We
+  // re-derive on every render so a click → edit → onUpdate path always
+  // reads fresh data (single-source-of-truth: params.systems_config_v40).
+  let editingSystem = null
+  let editingEngineSys = null
+  let editingService = null
+  let editingIdx = -1
+  let editingValid = true
+  if (editingKey) {
+    const [svc, ...rest] = editingKey.split(':')
+    const sysId = rest.join(':')   // ids may contain ':'
+    const list = getList(svc)
+    const idx = list.findIndex((s, i) => (s.id ?? String(i)) === sysId)
+    if (idx >= 0) {
+      editingService = svc
+      editingIdx = idx
+      editingSystem = list[idx]
+      const engineSystems = brief40?.[svc]?.systems ?? []
+      editingEngineSys = engineSystems.find(es => es.id === editingSystem.id) ?? null
+      editingValid = shareValidation(svc).valid
+    }
+  }
+
   return (
     <div className="p-3 space-y-2">
       {SERVICES_IN_ORDER.map(service => {
@@ -520,7 +564,6 @@ function InputsColumn({ params, updateParam, consumption, comfortBand, openSched
         const isOpen = open[service]
         const accent = SERVICE_COLOURS[service] ?? '#00AEEF'
         const { sum, valid, enabledCount, allDisabled } = shareValidation(service)
-        const engineSystems = brief40?.[service]?.systems ?? []
         return (
           <V40SectionHeader
             key={service}
@@ -536,24 +579,26 @@ function InputsColumn({ params, updateParam, consumption, comfortBand, openSched
             shareValid={valid}
             onToggleServiceEnabled={() => toggleServiceEnabled(service)}
           >
+            {/* Brief 42 Part 3: service-level (building-level) field editor
+                rendered above the system list. Returns null for services
+                without building-level fields (ventilation/lighting/small_power). */}
+            <ServiceSectionHeader
+              service={service}
+              serviceLevel={v40}
+              comfortBand={comfortBand}
+              onUpdateServiceLevel={updateServiceLevel}
+            />
+
             {list.length > 0 && (
               <div className="space-y-1.5">
                 {list.map((sys, idx) => {
                   const key = `${service}:${sys.id ?? idx}`
-                  const isExpanded = expandedSystem === key
-                  const engineSys = engineSystems.find(es => es.id === sys.id) ?? null
                   return (
-                    <SystemEditorCard
+                    <SystemSummaryRow
                       key={key}
                       system={sys}
-                      engineSystem={engineSys}
-                      comfortBand={comfortBand}
-                      expanded={isExpanded}
-                      onToggleExpanded={() => toggleExpanded(key)}
-                      onUpdate={(patch) => updateSystem(service, idx, patch)}
-                      onDelete={() => removeSystem(service, idx)}
-                      onSaveToLibrary={saveSystemToLibrary}
-                      openScheduleEditor={openScheduleEditor}
+                      onToggleEnabled={() => updateSystem(service, idx, { enabled: !(sys?.enabled !== false) })}
+                      onEdit={() => setEditingKey(key)}
                       shareInvalid={!valid}
                     />
                   )
@@ -587,6 +632,22 @@ function InputsColumn({ params, updateParam, consumption, comfortBand, openSched
           </V40SectionHeader>
         )
       })}
+
+      {/* Brief 42 Part 3: per-system editor lives in a draggable pop-out.
+          Mounted once at the column root, opened by SystemSummaryRow's
+          edit button. localStorage position key:
+          nza-system-editor-popout-position (set inside SystemEditorPopout). */}
+      <SystemEditorPopout
+        system={editingSystem}
+        engineSystem={editingEngineSys}
+        comfortBand={comfortBand}
+        onUpdate={(patch) => editingIdx >= 0 && updateSystem(editingService, editingIdx, patch)}
+        onDelete={() => editingIdx >= 0 && removeSystem(editingService, editingIdx)}
+        onSaveToLibrary={saveSystemToLibrary}
+        openScheduleEditor={openScheduleEditor}
+        shareInvalid={!editingValid}
+        onClose={closeEditor}
+      />
     </div>
   )
 }
