@@ -368,3 +368,37 @@ By severity (after Brief 30 Phase 1.0 re-diagnosis 2026-05-18):
 | Same class as | Issue #2 (permanent-vent flow_mode dispatch absent in State 2 + inline-legacy — fixed by Brief 39). |
 | Fix delivered | Three-location parity per CLAUDE.md Rule 14: State 1 + State 2 + inline-legacy all dispatch on flow_mode for operable openings. Temperature-mode keeps stack term (height_m retained); always/scheduled modes wind-only. |
 | Cross-references | `docs/audit/41_operable_openings_diagnostic.md` (Part 0 audit), `docs/audit/29_permanent_vent_methodology.md` §"Operable openings: wind-vs-wind+stack physics split by control mode", CLAUDE.md Rule 14 (extended to call out operable openings). |
+
+---
+
+## #18 — DHW validation failure zeroes consumption.dhw.demand_mwh + delivered
+
+| Field | Value |
+|---|---|
+| Module | Systems |
+| Engine | Static (v40 displacement path) |
+| Severity | **S4** — minor UX gap; not wrong-numbers because validation failure correctly blocks compute and the user sees the share-mismatch warning in the section header. The visual that's lost is "demand exists but isn't being served". |
+| Status | **OPEN** — deferred. Logged at Brief 40 Part 5b Section C walkthrough Item 9 (2026-05-19). |
+| Discovered | Brief 40 Part 5b Section C 15-item browser walkthrough on Bridgewater 2026-05-19 (`fb2e439`). |
+| Location | `frontend/src/utils/systemsEngine.js` `_computeDhw` validation-failure return block (~line 295). |
+| Behaviour | When DHW v40 systems' enabled share_pct sum != 100 within ½pp tolerance, `_computeDhw` returns `{ error: '...', demand_at_comfort_mwh: 0, delivered_total_mwh: 0, ...zeros..., systems: [] }`. The v40-to-v25 adapter `v40ServiceBlockToV25Shape` propagates the zeros; `_calculateState3` reads `dhw_demand_displayed_mwh` from `brief40Computed.dhw.demand_at_comfort_mwh` (= 0) and sets `consumption.dhw.demand_mwh = 0`. Sankey's DHW demand bar disappears entirely — both demand AND delivered are zero. |
+| Why this is currently tolerable | (a) The share-validation warning IS visible in the section header (amber badge "⚠ N%"); (b) the Normalise quick-fix is one click; (c) heating + cooling validation-failure cases preserve their headline demand and only zero delivered — DHW is the outlier. |
+| Expected fix | When validation fails, preserve `demand_at_comfort_mwh` from the building's lead DHW physics fields (so user can see "demand X / delivered 0" and understand what's unserved). Roughly five lines in `_computeDhw`'s validation-fail return block. Same pattern should be considered for `_computeHeatingOrCooling` if its current behaviour is also zero-demand (verify before fixing). |
+| Cross-references | `docs/audit/40_walkthrough_diagnosis.md` §12 Item 9 (verbatim findings). |
+
+---
+
+## #19 — DEFAULT_PARAMS systems_config_v40 load-fallback is whole-object
+
+| Field | Value |
+|---|---|
+| Module | Systems / ProjectContext |
+| Engine | n/a (load-side) |
+| Severity | **S4** — minor; no wrong-numbers. Symptom: thin-entry defaults (lighting + small_power Internal-Gains-linked seeds) don't re-apply once a project has any v40 content. |
+| Status | **OPEN** — deferred. Logged at Brief 40 Part 5b diagnosis (2026-05-19). |
+| Discovered | Brief 40 walkthrough diagnostic `d0b8e4b` (finding #4) and Part 5b Section C migration (small_power confirmed empty on Bridgewater after `--force` migration). |
+| Location | `frontend/src/context/ProjectContext.jsx` project-loader at line ~712: `systems_config_v40: bc.systems_config_v40 ?? DEFAULT_PARAMS.systems_config_v40`. |
+| Behaviour | The `??` fallback fires only when `bc.systems_config_v40` is `undefined` or `null`. Once bc has v40 populated (even partially via UI edits or migration), the DEFAULT_PARAMS seed for lighting + small_power doesn't re-apply on load. Bridgewater's small_power array is currently empty for this reason (the field was absent in the pre-migration bc, the migration's `existing_v40.get("small_power") or []` returned empty, and the load-side fallback didn't re-fill from DEFAULT_PARAMS). |
+| Why this is currently tolerable | The v40 displacement check is per-service — when v40.{service} is empty/absent, v25 pass-through wins for that service. Bridgewater's small_power EUI contribution still comes from `state2Result.heat_balance.annual.gains.internal.equipment.kwh` (the v25 path), so the headline EUI is unaffected. The visible gap: the Systems left panel's SMALL POWER section is empty (no card), and the user can't apply controls on small power without manually adding a system. |
+| Expected fix | Per-service load-side merge instead of whole-object fallback. Roughly: read `v40From = bc.systems_config_v40 ?? {}`, build per-service `v40From.{service} ?? DEFAULT_PARAMS.systems_config_v40.{service}`, assemble. Five-line change. Bridgewater post-fix: small_power thin entry re-seeded on next load. |
+| Cross-references | `docs/audit/40_walkthrough_diagnosis.md` §5 (finding #4), §12 Item 1 (post-migration state confirms empty small_power array). |

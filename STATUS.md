@@ -1,5 +1,91 @@
 # NZA SIMULATE — Status
 
+## ✅ Session 2026-05-19 — Brief 40 close: Systems Library Architecture shipped
+
+**State:** `commit_in_flight` — Brief 40 formal close. All substantive code + verification shipped over the preceding commit chain; this close commit lands documentation hygiene: Part 5b brief folded into archive, Brief 40 main archived, current.md repointed, Issues #18/#19 logged in `29_open_issues.md`, STATUS.md close-out summary.
+
+### Final report (per the brief's §"Final report" + Chris's Option A close authorisation)
+
+**1. New origin/main HEAD SHA:** *(captured at push)*
+
+**2. Section A — wiring diagnosis + fix:** Brief 40 Part 5b walkthrough surfaced that v40 ran in *parallel* with v25 on the engine return rather than displacing it for the headline. `consumption.brief40` populated for the new Diagnostic tab + left panel; `consumption.{space_heating,space_cooling,dhw,ventilation,lighting,small_power}` continued to be driven by v25's `computeServiceEnergy` / `computeDhwFuelMix` / `computeVentilationEnergy`. Headline EUI never moved. Section A's fix landed engine-side per-service displacement (Option A from the diagnosis): when `building.systems_config_v40.{service}` is non-empty, `_calculateState3` populates `consumption.{service-block}` from v40 via three new adapters in `systemsEngine.js`:
+- `v40ServiceBlockToV25Shape(brief40Block)` for heating / cooling / DHW
+- `v40VentilationToV25List(brief40VentBlock)` for ventilation — synthesises a v25-shaped list and routes through unchanged `computeVentilationEnergy` so Brief 28j hourly recovery cap math is preserved
+- `v40ThinBlockToKwh(brief40ThinBlock)` for lighting + small_power — extracts delivered electrical kWh with `control_factor × share/100` applied
+- Plus `heatingDemandOverrideMwh` parameter on `computeSystemsDelivered` so v40 heating reads post-MVHR-recovery demand exactly (matches v25)
+
+**3. Service displacement paths changed:** all six — heating, cooling, DHW, ventilation, lighting, small_power. Per-service check fires independently. Partial migrations work (a project can be on v40 for heating + v25 for DHW; engine handles per-service).
+
+**4. Section B — enable toggles wired through schema → engine → UI:**
+- Schema: `enabled: boolean` field per v40 system. Default `true`. Missing field treated as `true` (backward compat with v40 entries that pre-date Part 5b)
+- DEFAULT_PARAMS: `enabled: true` seeded explicitly on the two thin entries
+- Migration script: every migrated system carries `enabled: true` explicitly
+- AddSystemButton: `seedSystem` factory sets `enabled: true` on new systems
+- Engine: `_enabledSystems(systems)` filter in every per-service compute function; share validation operates on enabled systems only; `enabledSystems.length === 0` returns `{all_disabled: true, ...zeros...}`; validation failure returns `{error: '...', ...zeros...}`
+- UI: per-system toggle dot in SystemEditorCard chrome (collapsed + expanded states); per-service batch toggle in V40SectionHeader (right of share-validation badge); share-validation badge shows `N/M` partial counts; "off" badge when all systems disabled
+
+**5. Section C — 15-item browser walkthrough on Bridgewater (via Claude in Chrome MCP):** 15/15 PASS. 10 STRONG PASSes with exact hand-calc verification:
+- Item 3: SCOP 5.12 → 2.5 → +16.1 MWh electricity exact
+- Item 7: Cooling Custom 20°C → +5.6 MWh / 6.7% overdeliver via `state2Recompute` closure
+- Item 8: DHW tap_outlet 40°C → 30°C → ratio 0.40/0.60 = 0.667 exact (basis-independent algebra)
+- Item 10: Ventilation batch-off → +92.6 MWh heating elec (MVHR recovery removal) − 25.9 MWh fan elec = net +66.6 MWh exact
+- Item 11: Lighting daylight_dimming → 38.3 × 0.7 = 26.8 MWh exact
+- Item 14: F5 reload → all state round-trips through SQLite
+- 3 minor findings logged: #18 (DHW validation zeroes demand), #19 (small_power empty after load), lighting label quirk (pre-Part-3 data, not Brief 40 bug)
+
+**6. Bridgewater EUI movement chain (three numbers per the brief):**
+- **Pre-Part-5b:** 116.9 kWh/m²·yr
+- **Post `--force` migration:** 83.8 kWh/m²·yr (−33.1 / −28% — entirely from DHW tap-mix correction surfacing in headline. DHW 373.7 → 224.2 MWh; ratio 224.2/373.7 = 0.600 exactly = `hot_fraction = (40-10)/(60-10)`. Audit §4.3 falsifiable target met.)
+- **After meaningful intervention (heat pump SCOP 5.12 → 2.5):** 87.5 kWh/m²·yr (+3.7 from previous; +16.1 MWh elec / 4215 m² × 1000 = +3.82 within rounding ✓)
+
+All other services unchanged across migration (Principle 5 verified end-to-end: only the deliberate physics change in Brief 40 — DHW tap-mix — moved a headline number).
+
+**7. `docs/briefs/active/` confirmed clean:** only `30_dynamic_engine_rebuild.md` (paused) remains. Brief 40 main + Part 5b brief both in `archive/` with `_COMPLETED` suffix.
+
+**8. CLAUDE.md + STATUS.md current.** Brief 40 Part 1 expanded the Systems "Module scopes" stub to full scope statement (`b3838cd` antecedents). Rule 14 was not extended by Brief 40 (Systems work doesn't touch envelope-physics terms). STATUS.md kept current through every commit per Process Rule 7.
+
+### Documentation hygiene landed in this close commit
+
+- **`docs/briefs/archive/40_part_5b_wiring_and_toggles_COMPLETED.md`** (new): Part 5b brief was originally dropped via Downloads and executed in full but never folded into the repo. Now archived verbatim with a closed header captioning the three closing commits + outcome summary.
+- **`docs/briefs/archive/40_systems_library_architecture_COMPLETED.md`** (git mv from active): Brief 40 main brief moved to archive.
+- **`docs/briefs/current.md`:** `Active` line repointed to "no new brief active"; recent-sequencing table gains Brief 40 archived row + Part 5b archived row with full commit chain.
+- **`docs/audit/29_open_issues.md`:** two new issues logged for future polish:
+  - **#18 — DHW validation failure zeroes consumption.dhw.demand_mwh + delivered** (S4). When DHW shares fail to sum to 100, `_computeDhw` returns zeros for both demand AND delivered. Sankey loses the DHW row entirely. Heating + cooling validation failure cases preserve their headline demand and only zero delivered — DHW is the outlier. Five-line fix in `_computeDhw`'s validation-fail return.
+  - **#19 — DEFAULT_PARAMS systems_config_v40 load-fallback is whole-object** (S4). Once bc has v40 populated (even partially via UI edits or migration), the DEFAULT_PARAMS seed for lighting + small_power doesn't re-apply on load. Bridgewater's small_power is currently empty for this reason. Per-service load-side merge would fix; five-line change.
+
+### Standalone enhancements shipped during the same session (not part of Brief 40 brief scope but in the same Systems module)
+
+| Commit | Title |
+|---|---|
+| `2d9762b` | AddSystemButton archetypes: add VRF (heating + cooling) + DX split (cooling). Refrigerant-based systems alongside wet-system options. |
+| `d3a7f5a` | SystemEditorCard: surface lighting/small_power Internal Gains link. New SOURCE group shows annual gain × control × share = delivered electrical, with link to /gains module. |
+
+### Deferred for future briefs
+
+- **Dual-function linked systems + heat-recovery credit** — Chris's earlier ask to model VRF heat-recovery as a single linked heating+cooling system with recovery between paired demands. Explicit defer: "let's leave VRF heat recovery for now". Candidate for a successor brief.
+- **Issue #18 fix** — `_computeDhw` validation-fail block to preserve demand
+- **Issue #19 fix** — per-service load-side merge for DEFAULT_PARAMS v40 fallback
+
+### Brief 40 done. Ready for Brief 41.
+
+Per Chris's chat-form authorisation 2026-05-19, the next brief in queue is Brief 41 (note: this Brief 41 is a separate brief from the *earlier* Brief 41 — "Operable openings: unified physics" which closed `5bbdbd1` on 2026-05-19). The new Brief 41 scope is TBD at next session.
+
+**Brief 40 close commit chain (chronological):**
+- `2c089e8` — Part 1: Systems library schema documented
+- `94d7288` — Part 2: Systems engine (proportional split + setpoint param + DHW tap-mix)
+- `18d52b7` — Part 3: Systems module UI rebuild
+- `ffced22` — Part 4: Lighting + small_power thin entries
+- `71598d1` — Part 5: Bridgewater migration
+- `d0b8e4b` — Walkthrough diagnosis (read-only audit)
+- `e0dd1af` — Part 5b Section A: engine-side displacement + share validation + --force
+- `b3838cd` — Part 5b Section B: enable toggles
+- `fb2e439` — Part 5b Section C: browser walkthrough 15/15 PASS
+- `2d9762b` — VRF + DX archetypes (standalone enhancement)
+- `d3a7f5a` — SystemEditorCard Internal Gains link (standalone enhancement)
+- *(this commit)* — Brief 40 close: documentation hygiene + archive
+
+---
+
 ## ✅ Session 2026-05-19 — Brief 40 Part 5b Section C: Browser walkthrough — 15/15 PASS
 
 **State:** `commit_in_flight` — Brief 40 Part 5b Section C + close. Mandatory real-browser walkthrough via Claude in Chrome MCP per Brief Principle 5. Walked Bridgewater through the 15-item checklist; documented every result in `docs/audit/40_walkthrough_diagnosis.md` §12 with screenshots captured per step.
