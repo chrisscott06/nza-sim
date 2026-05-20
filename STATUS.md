@@ -1,6 +1,57 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-20 — Brief 41 Part 2: Interventions engine + stack runner
+## 🚧 Session 2026-05-20 — Brief 41 Part 3: Interventions module shell + stack view
+
+**State:** `commit_in_flight` — Brief 41 Part 3.
+
+**Prior HEAD:** `521fbf5` (Brief 41 Part 2 close).
+
+### What landed in Part 3
+
+**New module directory `frontend/src/components/modules/interventions/`** with three React components:
+
+- **`InterventionsModule.jsx`** — page-level. Routes at `/interventions`. Renders header ("Interventions" + subhead), tab switcher (Stack | Comparison-disabled-with-"Part 5"-label), tab content, and the stub editor pop-out. Reads `params.interventions` from `ProjectContext`; calls `calculateInstant(...)` with the engine quartet to retrieve `consumption.interventions` (Part 2 wiring) — passes that to the stack view. Mutates via `updateParam('interventions', ...)` for add / toggle / reorder / delete.
+- **`InterventionStackView.jsx`** — ordered list. Column headers, non-removable Baseline row at top (showing baseline EUI + carbon), per-intervention rows from `InterventionRow`, native HTML5 drag-and-drop for reorder, "+ Add intervention" footer. Empty state when `interventions: []` (large CTA + inline explainer). Computes overridden-patch set (last-write-wins indicator per Notion §10 boundary condition) by walking the list left-to-right for `set` / `replace` path collisions.
+- **`InterventionRow.jsx`** — single row composition: drag handle, enable dot (Brief 40 Part 5b pattern — accent dot when on / grey when off; wrapper `opacity-50` when disabled), label (click → open editor), theme pill (when set), override-warning icon, marginal Δ, cumulative Δ, edit button. Δ cells render EUI changes (kWh/m²·yr + %) with colour coding (green = savings, red = increase, neutral = zero/null).
+
+**Stub editor pop-out** (Part 4 will replace with the full editor): centred modal with label / theme / notes inputs + a placeholder card explaining what Part 4 builds + Delete + Done buttons. "+ Add intervention" creates a fresh intervention via `crypto.randomUUID()`, seeds `enabled: true`, `schema_version: 1`, empty `patches: []`, and opens the stub editor immediately.
+
+**Wiring.**
+
+- `frontend/src/components/layout/Sidebar.jsx` — new `Interventions` entry between Systems and Results, using the `Layers` icon from lucide-react.
+- `frontend/src/App.jsx` — new `/interventions` route mounting `InterventionsModule` inside an ErrorBoundary.
+- `frontend/src/data/moduleThemes.js` — `interventions` theme entry (accent `#E84393` matching the deleted scenarios theme; updated `accentForPath` to map `/interventions`).
+
+**No legacy `scenarios` theme removed** (deferred — `accentForPath` still has the dead branch; harmless and removable in a follow-up cleanup brief).
+
+### Verification (browser MCP on Bridgewater)
+
+1. Sidebar order — Systems → **Interventions** → Results, between divider's top group and Roadmap ✓ (verified via `nav a` href list)
+2. `/interventions` route loads cleanly — no console errors, no error overlay, sidebar + main both render ✓
+3. Module header + subhead + Stack tab + disabled Comparison-(Part 5)-tab + Baseline row + empty state CTA all render ✓
+4. "+ Add your first intervention" creates a fresh intervention with auto-UUID and opens the stub editor with label `New intervention` ✓
+5. Label + theme inputs accept input; persist via `updateParam('interventions', ...)` → ProjectContext autosave ✓
+6. Done closes the editor; intervention appears in the stack with label, theme pill, drag handle, enable dot, edit button ✓
+7. Enable toggle works — title flips between "Disable" / "Enable", row wrapper gets `opacity-50` when disabled ✓
+8. Delete-from-stub-editor removes the row and reverts to the empty state ✓
+9. Marginal Δ / Cumulative Δ cells show "—" in the test (no patches in the stub-created intervention → no engine delta to display; expected) — engine populates real numbers once Part 4 patches land
+
+### What did NOT change in Part 3
+
+- No engine code (Parts 1–2 cover the data model + engine).
+- No editor pop-out logic (Part 4 builds patch capture + live preview).
+- No comparison view (Part 5 builds it; the tab is disabled with a "(Part 5)" label).
+- No library save/load (Part 5).
+- No Rule 14 changes — UI only.
+- Brief 40 deferred Issues #18 and #19 remain deferred.
+
+### Next
+
+Part 4 — Editor pop-out + patch capture + live preview. Replaces the StubEditorPopout with a draggable, persistent-position pop-out (Brief 37 SchedulePopout pattern, key `nza-intervention-editor-popout-position`). Two-column layout: building-view editor (left, wrapping main-app sub-modules in a patch-capture context) + live preview (right, KPI strip + paired Sankeys + patch list updating in real time).
+
+---
+
+## ✅ Session 2026-05-20 — Brief 41 Part 2: Interventions engine + stack runner
 
 **State:** `commit_in_flight` — Brief 41 Part 2.
 

@@ -12,6 +12,7 @@ import {
   BookOpen,
   Cloud,
   Route as RouteIcon,
+  Layers,
 } from 'lucide-react'
 import { accentForPath } from '../../data/moduleThemes.js'
 
@@ -34,6 +35,10 @@ const TOP_ITEMS = [
   { to: '/gains',       icon: Flame,           label: 'Internal Gains' },
   { to: '/operation',   icon: Wind,            label: 'Operation' },
   { to: '/systems',     icon: Thermometer,     label: 'Systems' },
+  // Brief 41 (2026-05-20) — Interventions module. Pattern Y declarative
+  // patches against the baseline; engine runs cumulative state for each
+  // enabled intervention in order.
+  { to: '/interventions', icon: Layers,        label: 'Interventions' },
   { to: '/results',     icon: BarChart3,       label: 'Results' },
   // Brief 28-IM IM-M6: Retrofit Roadmap — sequenced interventions against
   // CRREM 1.5°C target with per-year leave-one-out marginal attribution.

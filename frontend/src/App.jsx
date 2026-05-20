@@ -32,6 +32,9 @@ import LibraryBrowser  from './components/modules/LibraryBrowser.jsx'
 // data/schedulePresets.js and are surfaced as "Apply preset…" inside each
 // gain's ScheduleEditor.
 import InternalGainsModule from './components/modules/gains/InternalGainsModule.jsx'
+// Brief 41 Part 3 (2026-05-20) — Interventions module shell. Pattern Y
+// declarative patches against the baseline.
+import InterventionsModule from './components/modules/interventions/InterventionsModule.jsx'
 import ConsumptionManager from './components/modules/consumption/ConsumptionManager.jsx'
 import CRREMModule from './components/modules/CRREMModule.jsx'
 import WeatherModule from './components/modules/WeatherModule.jsx'
@@ -59,6 +62,7 @@ export default function App() {
                 <Route path="/systems"   element={<ErrorBoundary moduleName="Systems"><SystemsModule /></ErrorBoundary>} />
                 <Route path="/gains"     element={<ErrorBoundary moduleName="Internal Gains"><InternalGainsModule /></ErrorBoundary>} />
                 <Route path="/consumption" element={<ErrorBoundary moduleName="Consumption"><ConsumptionManager /></ErrorBoundary>} />
+                <Route path="/interventions" element={<ErrorBoundary moduleName="Interventions"><InterventionsModule /></ErrorBoundary>} />
                 <Route path="/results"   element={<ErrorBoundary moduleName="Results"><IMResultsModule /></ErrorBoundary>} />
                 <Route path="/roadmap"   element={<ErrorBoundary moduleName="Retrofit Roadmap"><RoadmapModule /></ErrorBoundary>} />
                 <Route path="/results-legacy" element={<ErrorBoundary moduleName="Results Dashboard"><ResultsDashboard /></ErrorBoundary>} />
