@@ -1,5 +1,92 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-20 — Brief 42 Part 2: Engine reads service-level + loader migration + Bridgewater sanity 14/14 PASS
+
+**State:** `commit_in_flight` — Brief 42 Part 2.
+
+**Prior HEAD:** `cbd54fa` (Brief 42 Part 1 close).
+
+### What landed in Part 2
+
+**Engine refactor in `frontend/src/utils/systemsEngine.js`.** Three sub-functions updated to read service-level fields from `systems_config_v40` directly (not from per-system entries):
+
+- **`_resolveSetpoint(serviceLevel, service, comfortBand)`** — signature change. Reads `{service}_setpoint_mode` + `_setpoint_c`. Mode `'follow_comfort'` substitutes the comfort band; mode `'custom'` uses `_c` verbatim. Pre-Brief-42 `system.setpoint` read removed.
+
+- **`_detectStalePerSystemFields(systems, service)`** — new loud-error guard. Catches any v1 building-level field that the loader migration missed (or a hand-edited config introduced). Returns a descriptive error message naming the offending field + system + the v2 service-level path it should have moved to. Engine surfaces it as `consumption.{service}.error`.
+
+- **`_computeHeatingOrCooling(service, systems, serviceLevel, demandAtComfortMwh, comfortBand, state2Recompute)`** — runs the stale-field guard, resolves setpoint ONCE at service level (not per-system), recomputes State 2 demand ONCE when mode is `'custom'` and uses the result for all systems' deliveries. Result block gains `setpoint_mode`, `setpoint_c`, `setpoint_differs_from_comfort` fields.
+
+- **`_computeDhw(systems, serviceLevel, gia, annualOccupantHours)`** — reads `dhw_demand_basis`, `dhw_tap_outlet_temp_c`, `dhw_cold_supply_temp_c`, `dhw_storage_setpoint_c`, `dhw_demand_litres_per_*` directly from service-level. Pre-Brief-42 `systems[0]` reads removed. Stale-field guard runs first.
+
+- **`computeSystemsDelivered`** — passes `cfg` (whole `systems_config_v40`) through to the heating/cooling/dhw sub-functions. Ventilation/lighting/small_power signatures unchanged.
+
+- **Share validation, enable filtering, v25 displacement adapters** — all unchanged.
+
+**`withMode` allowlist in `instantCalc.js`** — no changes required. The new service-level fields nest INSIDE `systems_config_v40`. `withMode` only filters for `envelope-only` / `envelope-gains` modes; State 3 (full mode) sees `building` unchanged with the new fields included.
+
+**Loader-side migration in `frontend/src/context/ProjectContext.jsx`.** New module-level helpers above `ProjectProvider`:
+
+- **`migrateSystemsConfigV40_V1ToV2(rawV40)`** — pure idempotent function. For each of heating / cooling / dhw, finds the lead value (first enabled per-system entry that has the field; falls back to first entry; falls back to DEFAULT_PARAMS value), lifts to service-level position, strips per-system. Heating/cooling setpoint multi-emit: non-null lifts as `mode='custom' + _c=value`; null lifts as `mode='follow_comfort' + _c=null`.
+
+- **`_brief42LoaderMigration(bc)`** — orchestrator. Returns `{ systems_config_v40, interventions, schema_version: 2 }` when `bc.schema_version < 2`, or `null` otherwise. Wraps the systems-config migration + calls `migrateInterventionPatches` (from `interventionsEngine.js`) on each intervention. Idempotent.
+
+- **`_applyProject` integration** — calls `_brief42LoaderMigration(bcRaw)` BEFORE applying bc to React state. Migrated bc flows through the existing field-by-field loader. Bridgewater migrates in memory on first load; autosave persists the v2 shape on next interaction.
+
+`migrateInterventionPatches` imported at top of file (Brief 41 Part 2 helper).
+
+### Bridgewater sanity tests — 14/14 PASS, Δ = 0.00%
+
+**Test methodology:** Roll engine + loader back to Part 1 (pre-Brief-42 state), capture engine output on Bridgewater's CURRENT disk data (v1-shape, schema_version=1). Roll forward to Part 2 (post-Brief-42 engine + loader migration), capture engine output on Bridgewater's migrated in-memory data. Diff.
+
+Bridgewater's current disk state has `schema_version: 1` plus the v1 per-system DHW shape with INCONSISTENT values across the two DHW systems (gas: tap=30 / demand=80; ASHP: tap=40 / demand=105) — exactly the structural ambiguity Issue #21 / Brief 42 is meant to resolve. Pre-Brief-42 engine reads `systems[0]` (gas) as lead; my migration's `leadEnabled = enabledArr[0] ?? arr[0]` rule lifts from the same position. So lead values are identical pre/post.
+
+| Metric | Pre-Brief-42 | Post-Brief-42 | Δ |
+|---|---|---|---|
+| EUI | 68.3 kWh/m² | 68.3 kWh/m² | **0.00%** |
+| Total electricity | 170.678 MWh | 170.678 MWh | **0.00%** |
+| Total gas | 124.559 MWh | 124.559 MWh | **0.00%** |
+| Carbon | 13.45 kgCO₂/m² | 13.45 kgCO₂/m² | **0.00%** |
+| Heating demand / delivered / electricity | 148.5 / 62.382 / 24.284 MWh | 148.5 / 62.382 / 24.284 MWh | **0.00%** |
+| Cooling demand / delivered / electricity | 95.4 / 99.5 / 28.348 MWh | 95.4 / 99.5 / 28.348 MWh | **0.00%** |
+| DHW demand / delivered / gas / elec | 149.471 / 149.471 / 124.559 / 14.397 MWh | 149.471 / 149.471 / 124.559 / 14.397 MWh | **0.00%** |
+| Lighting electricity | 38.268 MWh | 38.268 MWh | **0.00%** |
+| Small power electricity | 39.432 MWh | 39.432 MWh | **0.00%** |
+
+**Principle 1 satisfied** — Brief 42 is a structural reorganisation, not a physics change.
+
+### Side-note on baseline drift
+
+The Brief 41 Part 5 walkthrough STATUS recorded Bridgewater baseline EUI as **58.0 kWh/m²**. Today's pre-Brief-42 engine on Bridgewater produces **68.3 kWh/m²** — a 10.3 kWh/m² shift that PREDATES Brief 42 Part 2. Root cause: Bridgewater's persisted DHW share_pct changed between sessions (current shares: gas 75% / ASHP 25%; walkthrough-era: gas 45% / ASHP 55%). Per-system shares are out of Brief 42 scope. Not a regression — just project-data drift between sessions. Per-system shares stay per-system in v2.
+
+### In-flight state — verified
+
+Browser-verified Bridgewater first-load migration:
+- `params.schema_version: 2` ✓
+- `params.systems_config_v40.heating_setpoint_mode: 'follow_comfort'`, `_c: null` ✓
+- `params.systems_config_v40.cooling_setpoint_mode: 'custom'`, `_c: 22` ✓ (lifted from sys[0].setpoint=22)
+- `dhw_storage_setpoint_c: 60`, `dhw_tap_outlet_temp_c: 30`, `dhw_cold_supply_temp_c: 10`, `dhw_demand_basis: 'per_person'`, `dhw_demand_litres_per_person_per_day: 80` ✓ (all lifted from dhw[0])
+- Per-system entries STRIPPED of building-level fields ✓
+- Loud-error guard inert (no stale fields to detect)
+
+### What did NOT change in Part 2
+
+- **No UI.** Part 3 ships the editor rebuild.
+- **No backend changes.** No `sql_parser.py`, `epjson_assembler.py`, simulation API touched.
+- **No envelope physics.** Rule 14 did not fire.
+- **No new fields** — purely structural moves.
+- **No calibration of post-migration numbers** — they match because the engine logic is unchanged structurally, not because they've been tuned.
+- **No interventions module functional changes** — patches still address the same engine quartet; only addressing migrates via `migrateInterventionPatches`.
+
+### Audit doc
+
+`docs/audit/42_systems_ux_schema.md` §8 (Engine integration) and §9 (Bridgewater sanity tests) populated with the actual code paths, the 14/14 results table, the disagreement-collapse policy on Bridgewater (Part 4 migration script will warn on detected disagreements).
+
+### Next
+
+Part 3 — UI rebuild. `ServiceSectionHeader` per service (building-level fields editable inline at the top of each section), `SystemSummaryRow` per system (compact row with edit button), `SystemEditorPopout` using Brief 37 `SchedulePopout` chrome with key `nza-system-editor-popout-position`, `SystemEditorCard` refactored (building-level field groups removed). Walkthrough sign-off after Part 3 before Part 4 close.
+
+---
+
 ## 🚧 Session 2026-05-20 — Brief 42 Part 1: Systems UX schema move + patch-migration scaffold
 
 **State:** `commit_in_flight` — Brief 42 Part 1.

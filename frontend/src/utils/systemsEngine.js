@@ -89,14 +89,58 @@ function _validateShares(enabledSystems) {
 }
 
 /**
- * Resolve a per-system setpoint: `setpoint: null` → comfort band's
- * corresponding setpoint; non-null → use as-is.
+ * Resolve a service-level setpoint.
+ *
+ * Brief 42 Part 2 (2026-05-20): setpoint moved from per-system to
+ * service-level on `systems_config_v40`. Reads `{service}_setpoint_mode`
+ * + `{service}_setpoint_c` from the service-level block. Mode
+ * `'follow_comfort'` substitutes the comfort band's corresponding
+ * setpoint at compute time; mode `'custom'` uses `_c` verbatim.
+ *
+ * `serviceLevel` is the post-Brief-42 systems_config_v40 (the whole
+ * object — same source as cfg in computeSystemsDelivered). Service
+ * is 'heating' or 'cooling' (DHW has its own service-level fields
+ * handled by _computeDhw directly).
  */
-function _resolveSetpoint(system, service, comfortBand) {
-  if (typeof system?.setpoint === 'number') return system.setpoint
+function _resolveSetpoint(serviceLevel, service, comfortBand) {
+  const mode = serviceLevel?.[`${service}_setpoint_mode`]
+  const value = serviceLevel?.[`${service}_setpoint_c`]
+  if (mode === 'custom' && typeof value === 'number') return value
+  // mode === 'follow_comfort' or unset: use comfort band
   if (service === 'heating') return comfortBand?.lower_c ?? 21
   if (service === 'cooling') return comfortBand?.upper_c ?? 24
-  return null  // DHW: setpoint MUST be set (validated above); ventilation/lighting/small_power: no setpoint
+  return null
+}
+
+/**
+ * Brief 42 Part 2 — engine-side guard against stale data.
+ *
+ * If a per-system entry contains a building-level field (a v1-shape
+ * field that should have been lifted to the service-level position by
+ * the loader migration), the engine errors loudly. No silent fallbacks.
+ *
+ * Returns an error message string when stale data is detected, or null
+ * when the per-system entries are clean.
+ */
+function _detectStalePerSystemFields(systems, service) {
+  if (!Array.isArray(systems)) return null
+  const STALE_FIELDS = {
+    heating: ['setpoint'],
+    cooling: ['setpoint'],
+    dhw:     ['setpoint', 'tap_outlet_temp_c', 'cold_supply_temp_c',
+              'demand_basis', 'demand_litres_per_person_per_day',
+              'demand_litres_per_m2_day'],
+  }
+  const fieldsToCheck = STALE_FIELDS[service] ?? []
+  for (const sys of systems) {
+    if (!sys || typeof sys !== 'object') continue
+    for (const field of fieldsToCheck) {
+      if (field in sys) {
+        return `Stale per-system field '${field}' on '${service}' system '${sys.id ?? sys.label ?? '?'}'. Brief 42 moved this to systems_config_v40.${field === 'setpoint' && service !== 'dhw' ? `${service}_setpoint_c` : (service === 'dhw' ? (field === 'setpoint' ? 'dhw_storage_setpoint_c' : (field === 'demand_litres_per_m2_day' ? 'dhw_demand_litres_per_m2_per_day' : `dhw_${field}`)) : `${service}_${field}`)}. Run the loader migration (Brief 42 Part 2) or scripts/42_systems_ux_migration.py (Brief 42 Part 4) to lift this field to the service-level position.`
+      }
+    }
+  }
+  return null
 }
 
 /**
@@ -138,7 +182,7 @@ function _sourceToFuel(source) {
  *
  * Returns service-level block per §6.
  */
-function _computeHeatingOrCooling(service, systems, demandAtComfortMwh, comfortBand, state2Recompute) {
+function _computeHeatingOrCooling(service, systems, serviceLevel, demandAtComfortMwh, comfortBand, state2Recompute) {
   // Brief 40 Part 5b Section A (2026-05-19): filter enabled first; share
   // validation operates on enabled systems only. A disabled system's share
   // value is preserved on disk but excluded from compute + validation.
@@ -152,6 +196,22 @@ function _computeHeatingOrCooling(service, systems, demandAtComfortMwh, comfortB
       delivered_total_mwh:    0,
       blended_efficiency:     null,
       systems:                [],
+    }
+  }
+
+  // Brief 42 Part 2 (2026-05-20): engine errors loudly when per-system
+  // entries carry building-level fields. Per Principle 2 — no silent
+  // fallbacks. The loader migration (Part 2) or migration script (Part 4)
+  // should have lifted these to the service-level position before the
+  // engine sees them.
+  const staleError = _detectStalePerSystemFields(systems, service)
+  if (staleError) {
+    return {
+      demand_at_comfort_mwh: round_mwh(demandAtComfortMwh),
+      delivered_total_mwh:    0,
+      blended_efficiency:     null,
+      systems:                [],
+      error: staleError,
     }
   }
 
@@ -184,35 +244,38 @@ function _computeHeatingOrCooling(service, systems, demandAtComfortMwh, comfortB
     }
   }
 
-  // Per-system computation with optional setpoint diagnostic recompute
+  // Brief 42 Part 2: setpoint is now service-level, not per-system. All
+  // systems share the same resolved setpoint. The `setpointDiffers` check
+  // becomes a per-service check, not per-system.
+  const setpoint_resolved = _resolveSetpoint(serviceLevel, service, comfortBand)
+  const comfortSetpoint = service === 'heating' ? comfortBand?.lower_c : comfortBand?.upper_c
+  const setpointMode = serviceLevel?.[`${service}_setpoint_mode`] ?? 'follow_comfort'
+  const setpointDiffers = setpointMode === 'custom'
+                          && typeof setpoint_resolved === 'number'
+                          && Math.abs(setpoint_resolved - (comfortSetpoint ?? setpoint_resolved)) > 0.05
+
+  // Diagnostic recompute: when the service-level setpoint differs from
+  // comfort, recompute demand once at the custom setpoint and use that
+  // demand for all systems' deliveries. (Pre-Brief-42 had per-system
+  // recompute — now it's per-service because all systems share the same
+  // setpoint.)
+  let demand_at_service_setpoint_mwh = demandAtComfortMwh
+  if (setpointDiffers && typeof state2Recompute === 'function') {
+    const overrideKey = service === 'heating' ? 'heating' : 'cooling'
+    const recomputed = state2Recompute({ [overrideKey]: setpoint_resolved })
+    demand_at_service_setpoint_mwh = service === 'heating'
+      ? (recomputed?.demand?.heating_demand_mwh ?? demandAtComfortMwh)
+      : (recomputed?.demand?.cooling_demand_mwh ?? demandAtComfortMwh)
+  }
+
+  // Per-system computation
   const out_systems = enabledSystems.map(sys => {
     const share = Number(sys?.share_pct ?? 0) / 100
     const eff   = Number(sys?.efficiency_metric ?? 0)
-    const setpoint_resolved = _resolveSetpoint(sys, service, comfortBand)
 
-    // Setpoint diagnostic: recompute demand at this system's setpoint if it
-    // differs from the comfort band's setpoint. Recompute is *full* — the
-    // closure calls _calculateState2 with setpointOverride; that's where the
-    // setpoint parameterisation work lands (Brief 40 Part 2 step 2.1 + Rule
-    // 14 parity). Skip the recompute when the setpoint matches comfort
-    // (saves a State 2 evaluation per system in the common case).
-    const comfortSetpoint = service === 'heating' ? comfortBand?.lower_c : comfortBand?.upper_c
-    const setpointDiffers = (typeof sys?.setpoint === 'number') && Math.abs(sys.setpoint - comfortSetpoint) > 0.05
-
-    let demand_at_this_setpoint_mwh
-    if (setpointDiffers && typeof state2Recompute === 'function') {
-      const overrideKey = service === 'heating' ? 'heating' : 'cooling'
-      const recomputed = state2Recompute({ [overrideKey]: sys.setpoint })
-      demand_at_this_setpoint_mwh = service === 'heating'
-        ? (recomputed?.demand?.heating_demand_mwh ?? demandAtComfortMwh)
-        : (recomputed?.demand?.cooling_demand_mwh ?? demandAtComfortMwh)
-    } else {
-      demand_at_this_setpoint_mwh = demandAtComfortMwh
-    }
-
-    const delivered_mwh     = demand_at_this_setpoint_mwh * share
+    const delivered_mwh     = demand_at_service_setpoint_mwh * share
     const source_energy_mwh = eff > 0 ? delivered_mwh / eff : 0
-    const delta_vs_comfort_mwh = (demand_at_this_setpoint_mwh - demandAtComfortMwh) * share
+    const delta_vs_comfort_mwh = (demand_at_service_setpoint_mwh - demandAtComfortMwh) * share
     const delta_vs_comfort_pct = demandAtComfortMwh > 0
       ? 100 * delta_vs_comfort_mwh / (demandAtComfortMwh * share)
       : 0
@@ -221,9 +284,12 @@ function _computeHeatingOrCooling(service, systems, demandAtComfortMwh, comfortB
       id:                          sys.id ?? null,
       label:                       sys.label ?? `${service} system`,
       share_pct:                   sys.share_pct ?? 0,
-      setpoint:                    typeof sys?.setpoint === 'number' ? sys.setpoint : null,
+      // Brief 42: setpoint is service-level. Per-system `setpoint` echo on
+      // result rows is the resolved service-level value (kept on result
+      // shape for backward-compat with consumers that read this field).
+      setpoint:                    setpoint_resolved,
       setpoint_resolved,
-      demand_at_this_setpoint_mwh: round_mwh(demand_at_this_setpoint_mwh),
+      demand_at_this_setpoint_mwh: round_mwh(demand_at_service_setpoint_mwh),
       delivered_mwh:               round_mwh(delivered_mwh),
       source_energy_mwh:           round_mwh(source_energy_mwh),
       source_fuel:                 _sourceToFuel(sys.source),
@@ -250,6 +316,10 @@ function _computeHeatingOrCooling(service, systems, demandAtComfortMwh, comfortB
     demand_at_comfort_mwh: round_mwh(demandAtComfortMwh),
     delivered_total_mwh:    round_mwh(delivered_total_mwh),
     blended_efficiency:     blended_efficiency != null ? Math.round(blended_efficiency * 1000) / 1000 : null,
+    // Brief 42 Part 2 — service-level setpoint echo on the service block
+    setpoint_mode:          setpointMode,
+    setpoint_c:             setpoint_resolved,
+    setpoint_differs_from_comfort: setpointDiffers,
     systems:                out_systems,
   }
 }
@@ -258,18 +328,33 @@ function _computeHeatingOrCooling(service, systems, demandAtComfortMwh, comfortB
  * Compute DHW per-system breakdown with tap-mix correction.
  *
  * Inputs:
- *   systems              — array of Brief 40 DHW systems
+ *   systems              — array of Brief 40 DHW systems (per-system entries
+ *                          carry source / efficiency / share / control /
+ *                          enabled only — see Brief 42 service-level move)
+ *   serviceLevel         — the `systems_config_v40` object (so `dhw_*`
+ *                          service-level fields can be read)
  *   gia                  — building GIA (m²), used for 'per_m2' basis
  *   annualOccupantHours  — sum of occupants × hour over the year, used for
  *                          'per_person' basis (read from state2Result)
  *
- * The first system's `demand_basis` + `cold_supply_temp_c` + `setpoint` +
- * `tap_outlet_temp_c` drive the building-level DHW demand math (all DHW
- * systems on a building share the same physical hot water demand; the
- * share_pct splits *delivery* across systems). Per-system efficiency drives
- * source energy.
+ * Service-level fields drive the building DHW demand math:
+ *   - dhw_demand_basis         — 'per_m2' or 'per_person'
+ *   - dhw_demand_litres_per_*  — quantity per basis
+ *   - dhw_storage_setpoint_c   — boiler storage temp (typically 60°C)
+ *   - dhw_cold_supply_temp_c   — mains cold supply (typically 10°C)
+ *   - dhw_tap_outlet_temp_c    — mixed tap outlet (typically 40°C hotel)
+ *
+ * Per-system fields (efficiency_metric, share_pct, source) drive the
+ * source-energy split. All DHW systems share the same building demand;
+ * share_pct splits delivery across them.
  */
-function _computeDhw(systems, gia, annualOccupantHours) {
+function _computeDhw(systems, serviceLevel, gia, annualOccupantHours) {
+  // Brief 42 Part 2 (2026-05-20): DHW building-level fields lifted to
+  // service-level on `systems_config_v40`. Reads from `serviceLevel`
+  // (the post-Brief-42 systems_config_v40 object); per-system entries
+  // no longer carry demand or temperature fields. Engine errors loudly
+  // if it sees stale per-system instances (per Principle 2).
+
   if (!Array.isArray(systems) || systems.length === 0) {
     return {
       demand_basis:             null,
@@ -286,24 +371,39 @@ function _computeDhw(systems, gia, annualOccupantHours) {
     }
   }
 
-  // Brief 40 Part 5b Section A (2026-05-19): filter enabled DHW systems
-  // before validation + compute. Lead system (for building-level DHW
-  // physics fields: demand_basis, tap/cold/setpoint temps) still comes
-  // from systems[0] regardless of enabled flag — those are building-
-  // physical quantities and don't disappear when a system is toggled off.
+  // Brief 42 Part 2: stale-data guard. Per-system entries must NOT carry
+  // building-level fields after the migration. Loud error if violated.
+  const staleError = _detectStalePerSystemFields(systems, 'dhw')
+  if (staleError) {
+    return {
+      demand_basis: null, tap_outlet_temp_c: null, cold_supply_temp_c: null,
+      setpoint: null, hot_fraction: null, boiler_litres_per_day: 0,
+      demand_at_comfort_mwh: 0, delivered_total_mwh: 0, blended_efficiency: null,
+      systems: [],
+      error: staleError,
+      diagnostic: { delivered_no_mix_mwh: 0, delta_mwh: 0, delta_pct: 0 },
+    }
+  }
+
+  // Brief 40 Part 5b Section A: filter enabled DHW systems before
+  // validation + compute. Service-level fields stay available regardless
+  // of enabled state — the building's hot water demand doesn't vanish
+  // when downstream systems toggle off.
   const enabledSystems = _enabledSystems(systems)
+
+  // Brief 42 Part 2: building-level DHW physics fields read from the
+  // service-level block (not from systems[0]).
+  const demand_basis        = serviceLevel?.dhw_demand_basis ?? 'per_m2'
+  const setpoint            = Number(serviceLevel?.dhw_storage_setpoint_c ?? 60)
+  const cold_supply_temp_c  = Number(serviceLevel?.dhw_cold_supply_temp_c ?? 10)
+  const tap_outlet_temp_c   = Number(serviceLevel?.dhw_tap_outlet_temp_c ?? 40)
+
   if (enabledSystems.length === 0) {
     return {
-      demand_basis:             systems[0]?.demand_basis ?? null,
-      tap_outlet_temp_c:        systems[0]?.tap_outlet_temp_c ?? null,
-      cold_supply_temp_c:       systems[0]?.cold_supply_temp_c ?? null,
-      setpoint:                 systems[0]?.setpoint ?? null,
-      hot_fraction:             null,
-      boiler_litres_per_day:    0,
-      demand_at_comfort_mwh:    0,
-      delivered_total_mwh:      0,
-      blended_efficiency:       null,
-      systems:                  [],
+      demand_basis, tap_outlet_temp_c, cold_supply_temp_c, setpoint,
+      hot_fraction: null, boiler_litres_per_day: 0,
+      demand_at_comfort_mwh: 0, delivered_total_mwh: 0, blended_efficiency: null,
+      systems: [],
       all_disabled: true,
       diagnostic: { delivered_no_mix_mwh: 0, delta_mwh: 0, delta_pct: 0 },
     }
@@ -321,32 +421,23 @@ function _computeDhw(systems, gia, annualOccupantHours) {
     }
   }
 
-  // Building-level DHW demand math reads from the FIRST system's params
-  // (these are building-physical quantities, not per-system; the schema
-  // permits per-system editing as a convenience but the building has one
-  // hot water demand). Read from systems[0] (not enabledSystems[0]) so the
-  // physics fields don't vanish when the lead system is toggled off; the
-  // building still has the same tap demand regardless of which downstream
-  // system serves it.
-  const lead = systems[0]
-  const demand_basis        = lead?.demand_basis ?? 'per_m2'
-  const setpoint            = Number(lead?.setpoint ?? 60)
-  const cold_supply_temp_c  = Number(lead?.cold_supply_temp_c ?? 10)
-  const tap_outlet_temp_c   = Number(lead?.tap_outlet_temp_c ?? 40)
-
   const setpoint_minus_cold = Math.max(setpoint - cold_supply_temp_c, 1)
   const hot_fraction        = Math.max(0, Math.min(1, (tap_outlet_temp_c - cold_supply_temp_c) / setpoint_minus_cold))
 
-  // Total tap litres per day depends on basis
+  // Total tap litres per day depends on basis — read from service-level.
   let total_tap_litres_per_day
+  let demand_litres_per_m2_day_used = null
+  let demand_litres_per_person_per_day_used = null
   if (demand_basis === 'per_person') {
-    const litres_per_person_per_day = Number(lead?.demand_litres_per_person_per_day ?? 80)
+    const litres_per_person_per_day = Number(serviceLevel?.dhw_demand_litres_per_person_per_day ?? 80)
+    demand_litres_per_person_per_day_used = litres_per_person_per_day
     // Per-person-day → annual L/yr from occupant-hours: L/yr = L/person/day ÷ 24 h × person·h/yr
     // Equivalent total_tap_litres_per_day = annual_L / 365
     const annual_litres = (annualOccupantHours / 24) * litres_per_person_per_day
     total_tap_litres_per_day = annual_litres / 365
   } else {  // 'per_m2'
-    const litres_per_m2_per_day = Number(lead?.demand_litres_per_m2_day ?? 1.1)
+    const litres_per_m2_per_day = Number(serviceLevel?.dhw_demand_litres_per_m2_per_day ?? 1.1)
+    demand_litres_per_m2_day_used = litres_per_m2_per_day
     total_tap_litres_per_day = litres_per_m2_per_day * gia
   }
 
@@ -366,7 +457,9 @@ function _computeDhw(systems, gia, annualOccupantHours) {
       id:                sys.id ?? null,
       label:             sys.label ?? 'dhw system',
       share_pct:         sys.share_pct ?? 0,
-      setpoint:          Number(sys?.setpoint ?? 60),
+      // Brief 42: storage setpoint is service-level. Per-system echo on
+      // the result row kept for backward-compat (UI / Sankey may consume).
+      setpoint,
       delivered_mwh:     round_mwh(delivered_mwh),
       source_energy_mwh: round_mwh(source_energy_mwh),
       source_fuel:       _sourceToFuel(sys.source),
@@ -398,8 +491,11 @@ function _computeDhw(systems, gia, annualOccupantHours) {
     setpoint,
     hot_fraction:               Math.round(hot_fraction * 10000) / 10000,
     boiler_litres_per_day:      Math.round(boiler_litres_per_day * 100) / 100,
-    demand_litres_per_m2_day:   lead?.demand_litres_per_m2_day ?? null,
-    demand_litres_per_person_per_day: lead?.demand_litres_per_person_per_day ?? null,
+    // Brief 42: legacy aliases for backward compatibility with any
+    // consumer that reads the old field-name shape. Either is null when
+    // the basis doesn't apply.
+    demand_litres_per_m2_day:           demand_litres_per_m2_day_used,
+    demand_litres_per_person_per_day:   demand_litres_per_person_per_day_used,
     demand_at_comfort_mwh:      round_mwh(demand_at_comfort_mwh),
     delivered_total_mwh:        round_mwh(delivered_total_mwh),
     blended_efficiency:         blended_efficiency != null ? Math.round(blended_efficiency * 1000) / 1000 : null,
@@ -606,9 +702,13 @@ export function computeSystemsDelivered({ building, state2Result, comfortBand, s
   const equipmentGainMwh    = (state2Result?.heat_balance?.annual?.gains?.internal?.equipment?.kwh ?? 0) / 1000
 
   // ── Per-service compute ──
-  const heating = _computeHeatingOrCooling('heating', cfg.heating ?? [], heatingDemandMwh, comfortBand, state2Recompute)
-  const cooling = _computeHeatingOrCooling('cooling', cfg.cooling ?? [], coolingDemandMwh, comfortBand, state2Recompute)
-  const dhw     = _computeDhw(cfg.dhw ?? [], gia, annualOccupantHours)
+  // Brief 42 Part 2 (2026-05-20): pass the whole `cfg` (systems_config_v40)
+  // to heating/cooling/dhw so they can read service-level setpoint/demand
+  // fields. ventilation/lighting/small_power don't have service-level
+  // fields and continue to take just the per-system array.
+  const heating = _computeHeatingOrCooling('heating', cfg.heating ?? [], cfg, heatingDemandMwh, comfortBand, state2Recompute)
+  const cooling = _computeHeatingOrCooling('cooling', cfg.cooling ?? [], cfg, coolingDemandMwh, comfortBand, state2Recompute)
+  const dhw     = _computeDhw(cfg.dhw ?? [], cfg, gia, annualOccupantHours)
   const ventilation = _computeVentilation(cfg.ventilation ?? [], gia, peakOccupants)
   const lighting    = _computeThin(cfg.lighting ?? [], lightingGainMwh)
   const small_power = _computeThin(cfg.small_power ?? [], equipmentGainMwh)

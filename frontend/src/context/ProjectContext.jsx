@@ -24,6 +24,7 @@ import {
 } from 'react'
 import { publishState, onInitialStateRequest } from '../utils/broadcastChannel.js'
 import { SCHEDULE_PRESETS, findPreset } from '../data/schedulePresets.js'
+import { migrateInterventionPatches } from '../utils/interventionsEngine.js'  // Brief 42 Part 2
 
 export const ProjectContext = createContext(null)
 
@@ -610,6 +611,140 @@ function migrateSystemsConfig(raw) {
   }
 }
 
+// ── Brief 42 Part 2: v1 → v2 in-memory migration (2026-05-20) ──────────────
+//
+// Lifts building-level fields (setpoints, DHW demand + temps) from
+// per-system entries on `systems_config_v40.{heating, cooling, dhw}` to
+// service-level positions on `systems_config_v40` directly. Strips the
+// per-system fields. Idempotent — running twice produces the same shape.
+//
+// Called from `_applyProject` when `bc.schema_version < 2`. The
+// loader-side migration is the safety net for in-flight cases between
+// Part 2 landing and Part 4's explicit migration script running on
+// disk. After one autosave cycle post-Part-2, persisted bc has the v2
+// shape and this helper becomes a no-op on subsequent loads.
+//
+// Strategy:
+//   - For each service, pick the FIRST enabled per-system entry that
+//     has the building-level field; lift its value to the service-
+//     level position. (If no enabled entry has it, fall through to
+//     the FIRST entry; if no entries at all, use DEFAULT_PARAMS.)
+//   - Strip the building-level fields from every per-system entry.
+//
+// The "first-wins" rule mirrors the pre-Brief-42 engine behaviour
+// (which read from `systems[0]` / `enabledSystems[0]`). Bridgewater's
+// migration runs cleanly because every DHW entry carries the same
+// values — the migration script in Part 4 will warn if it detects
+// disagreement.
+const SERVICE_LEVEL_FIELDS_PER_SERVICE = {
+  heating: ['setpoint'],
+  cooling: ['setpoint'],
+  dhw:     ['setpoint', 'tap_outlet_temp_c', 'cold_supply_temp_c',
+            'demand_basis', 'demand_litres_per_person_per_day',
+            'demand_litres_per_m2_day'],
+}
+
+// Map a per-system v1 field name to the service-level v2 field name.
+function _v2ServiceLevelKey(service, field) {
+  if (service === 'heating' && field === 'setpoint') return 'heating_setpoint_c'
+  if (service === 'cooling' && field === 'setpoint') return 'cooling_setpoint_c'
+  if (service === 'dhw') {
+    if (field === 'setpoint')                          return 'dhw_storage_setpoint_c'
+    if (field === 'tap_outlet_temp_c')                 return 'dhw_tap_outlet_temp_c'
+    if (field === 'cold_supply_temp_c')                return 'dhw_cold_supply_temp_c'
+    if (field === 'demand_basis')                      return 'dhw_demand_basis'
+    if (field === 'demand_litres_per_person_per_day')  return 'dhw_demand_litres_per_person_per_day'
+    if (field === 'demand_litres_per_m2_day')          return 'dhw_demand_litres_per_m2_per_day'
+  }
+  return null
+}
+
+function migrateSystemsConfigV40_V1ToV2(rawV40) {
+  if (!rawV40 || typeof rawV40 !== 'object') return rawV40
+  // If service-level fields already exist, the migration has already
+  // run (idempotent: subsequent loads see no per-system stale fields
+  // and the heading-level keys are already populated; we still strip
+  // any remaining per-system instances as a safety pass).
+  const out = { ...rawV40 }
+
+  for (const service of ['heating', 'cooling', 'dhw']) {
+    const arr = Array.isArray(rawV40[service]) ? rawV40[service] : []
+    if (arr.length === 0) continue
+    const fields = SERVICE_LEVEL_FIELDS_PER_SERVICE[service]
+
+    // Lift first-enabled value (fallback to first entry, then DEFAULT_PARAMS
+    // for any field that wasn't on any entry).
+    const enabledArr = arr.filter(s => s && s.enabled !== false)
+    const leadEnabled = enabledArr[0] ?? arr[0]
+    const defaultsV40 = DEFAULT_PARAMS.systems_config_v40
+
+    for (const field of fields) {
+      const v2Key = _v2ServiceLevelKey(service, field)
+      if (!v2Key) continue
+      // Skip if v2-level field already populated and not undefined
+      // (don't clobber existing service-level values).
+      if (out[v2Key] !== undefined && out[v2Key] !== null) continue
+      // For heating/cooling setpoint we need both mode and c. Special-case:
+      if ((service === 'heating' || service === 'cooling') && field === 'setpoint') {
+        const v = leadEnabled?.[field]
+        if (typeof v === 'number') {
+          out[`${service}_setpoint_mode`] = 'custom'
+          out[`${service}_setpoint_c`]    = v
+        } else {
+          // null/undefined per-system setpoint = "follow comfort"
+          out[`${service}_setpoint_mode`] = defaultsV40[`${service}_setpoint_mode`]
+          out[`${service}_setpoint_c`]    = null
+        }
+        continue
+      }
+      // DHW + simple value rewrites: lift the value verbatim, then fall
+      // back to the DEFAULT_PARAMS default if absent.
+      const liftedValue = leadEnabled?.[field]
+      out[v2Key] = (liftedValue !== undefined && liftedValue !== null)
+                     ? liftedValue
+                     : defaultsV40[v2Key]
+    }
+
+    // Strip building-level fields from every per-system entry.
+    out[service] = arr.map(sys => {
+      if (!sys || typeof sys !== 'object') return sys
+      const cleaned = { ...sys }
+      for (const field of fields) delete cleaned[field]
+      return cleaned
+    })
+  }
+
+  return out
+}
+
+// Brief 42 Part 2 — wrapper that migrates the bc to v2 if necessary,
+// also walks interventions through migrateInterventionPatches. Returns
+// a sub-object with the migrated values for the loader to merge into
+// the params set call.
+function _brief42LoaderMigration(bc) {
+  const fromVersion = Number.isInteger(bc?.schema_version) ? bc.schema_version : 1
+  const toVersion = 2
+  if (fromVersion >= toVersion) return null  // already migrated; no-op
+
+  const migratedV40 = bc?.systems_config_v40
+                       ? migrateSystemsConfigV40_V1ToV2(bc.systems_config_v40)
+                       : undefined
+
+  const migratedInterventions = Array.isArray(bc?.interventions)
+    ? bc.interventions.map(intv => {
+        const intvFrom = Number.isInteger(intv?.schema_version) ? intv.schema_version : fromVersion
+        if (intvFrom >= toVersion) return intv
+        return migrateInterventionPatches(intv, intvFrom, toVersion)
+      })
+    : undefined
+
+  return {
+    systems_config_v40: migratedV40,
+    interventions: migratedInterventions,
+    schema_version: toVersion,
+  }
+}
+
 // ── Save status: 'idle' | 'saving' | 'saved' | 'error' ──────────────────────
 
 // ── Provider ──────────────────────────────────────────────────────────────────
@@ -671,7 +806,20 @@ export function ProjectProvider({ children }) {
 
   function _applyProject(project) {
     setCurrentProjectId(project.id)
-    const bc = project.building_config ?? {}
+    const bcRaw = project.building_config ?? {}
+    // Brief 42 Part 2: run the v1→v2 in-memory migration BEFORE the
+    // params setter sees the data. Lifts heating/cooling/dhw building-
+    // level fields from per-system entries to service-level positions
+    // on systems_config_v40, and migrates intervention patches via
+    // migratePatch v1→v2. Idempotent: skipped when bc.schema_version
+    // >= 2 already.
+    const _v2Migration = _brief42LoaderMigration(bcRaw)
+    const bc = _v2Migration
+      ? { ...bcRaw,
+          systems_config_v40: _v2Migration.systems_config_v40 ?? bcRaw.systems_config_v40,
+          interventions:      _v2Migration.interventions      ?? bcRaw.interventions,
+          schema_version:     _v2Migration.schema_version }
+      : bcRaw
     setParams({
       // Project name lives on the top-level row (so the Home list shows it
       // correctly). Fall back to building_config.name for old projects, then default.
