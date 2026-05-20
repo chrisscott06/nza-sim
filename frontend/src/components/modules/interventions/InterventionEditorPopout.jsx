@@ -1,5 +1,6 @@
 /**
  * InterventionEditorPopout.jsx — Brief 41 Part 4
+ *                              + Brief 43 Part 1 (2026-05-20)
  *
  * Reuses the shared Brief 37 SchedulePopout chrome (draggable,
  * persistent-position, non-blocking) with persistKey
@@ -26,9 +27,21 @@
  *   - If the engine returns a validation error (e.g. shares ≠ 100%
  *     for a service), Save is disabled with the error surfaced in
  *     the preview pane.
+ *
+ * Brief 43 Part 1 (2026-05-20):
+ *   - Default position is right-anchored (`defaultPosition='right'`) so
+ *     the popout opens beside the stack rather than over them.
+ *   - Unsaved-changes guard: closing the popout (via × / Esc / Cancel)
+ *     when the local patches differ from the intervention's persisted
+ *     patches prompts a window.confirm. Switching to a different
+ *     intervention while the popout is dirty is handled by the parent
+ *     (it reads `isDirty` via the `onDirtyChange` callback).
+ *   - `onDirtyChange(boolean)` callback notifies the parent of unsaved
+ *     state changes so the parent can intercept edit-pencil clicks on
+ *     other rows.
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import SchedulePopout from '../../shared/SchedulePopout.jsx'
 import {
   applyIntervention,
@@ -41,6 +54,34 @@ import InterventionEditorPreview from './InterventionEditorPreview.jsx'
 
 const INTERVENTIONS_ACCENT = '#E84393'
 
+// Brief 43 Part 1: compare the local edit state against the persisted
+// intervention to determine if there are unsaved changes. Used by the
+// unsaved-changes guard on close + by the parent's switch-intervention
+// guard. A deep-shape check is sufficient — patch ids are stable and
+// the dedupe logic in capturePatch keeps the list normalised. JSON-
+// stringify comparison is fine for the patch-list shapes we deal with
+// (no circular references, deterministic key order in the shape we emit).
+function computeDirty(intervention, localPatches, localLabel, localTheme, localNotes) {
+  if (!intervention) return false
+  const labelChanged = (intervention.label ?? '') !== (localLabel ?? '').trim() && (localLabel ?? '').trim() !== ''
+  if (labelChanged) return true
+  if ((intervention.theme ?? '') !== (localTheme ?? '')) return true
+  if ((intervention.notes ?? '') !== (localNotes ?? '')) return true
+  const persisted = Array.isArray(intervention.patches) ? intervention.patches : []
+  const local = Array.isArray(localPatches) ? localPatches : []
+  if (persisted.length !== local.length) return true
+  // Compare shape — id may differ on freshly captured patches; compare
+  // path + op + value + match instead.
+  for (let i = 0; i < persisted.length; i++) {
+    const a = persisted[i], b = local[i]
+    if (!a || !b) return true
+    if (a.op !== b.op || a.path !== b.path) return true
+    if (JSON.stringify(a.value ?? null) !== JSON.stringify(b.value ?? null)) return true
+    if (JSON.stringify(a.match ?? null) !== JSON.stringify(b.match ?? null)) return true
+  }
+  return false
+}
+
 export default function InterventionEditorPopout({
   intervention,
   baselineConfig,
@@ -50,6 +91,7 @@ export default function InterventionEditorPopout({
   onSave,
   onCancel,
   onDelete,
+  onDirtyChange,
 }) {
   const isOpen = !!intervention
 
@@ -71,6 +113,21 @@ export default function InterventionEditorPopout({
     setLocalTheme(intervention?.theme ?? '')
     setLocalNotes(intervention?.notes ?? '')
   }, [intervention?.id])
+
+  // Brief 43 Part 1: dirty tracking. Compute on every render, notify
+  // parent on change. Parent uses this to gate switching to a different
+  // intervention while changes are unsaved.
+  const isDirty = useMemo(
+    () => computeDirty(intervention, localPatches, localLabel, localTheme, localNotes),
+    [intervention, localPatches, localLabel, localTheme, localNotes]
+  )
+  const lastDirtyRef = useRef(false)
+  useEffect(() => {
+    if (lastDirtyRef.current !== isDirty) {
+      lastDirtyRef.current = isDirty
+      onDirtyChange?.(isDirty)
+    }
+  }, [isDirty, onDirtyChange])
 
   // Apply the local patches to baseline to get the running edit
   // state — what the editor shows.
@@ -152,13 +209,31 @@ export default function InterventionEditorPopout({
     })
   }
 
+  // Brief 43 Part 1: unsaved-changes guard. Wraps onCancel (Esc / × /
+  // Cancel button); window.confirm if dirty. The switch-intervention
+  // guard lives in the parent — it intercepts edit-pencil clicks on
+  // other rows based on `onDirtyChange` callback.
+  const guardedCancel = () => {
+    if (isDirty) {
+      const patchCount = Array.isArray(localPatches) ? localPatches.length : 0
+      const persistedCount = Array.isArray(intervention?.patches) ? intervention.patches.length : 0
+      const diff = Math.abs(patchCount - persistedCount)
+      const msg = diff > 0
+        ? `Discard ${diff} unsaved patch change${diff === 1 ? '' : 's'}?`
+        : `Discard unsaved changes to label / theme / notes?`
+      if (!window.confirm(msg)) return
+    }
+    onCancel?.()
+  }
+
   return (
     <SchedulePopout
       isOpen={isOpen}
-      onClose={onCancel}
+      onClose={guardedCancel}
       title={`Editing intervention: ${intervention?.label || '(new)'}`}
       accent={INTERVENTIONS_ACCENT}
       persistKey="nza-intervention-editor-popout-position"
+      defaultPosition="right"
     >
       {/* Two-column body + sticky footer */}
       <div className="flex flex-col" style={{ maxHeight: 'calc(100vh - 7rem)' }}>
@@ -226,7 +301,7 @@ export default function InterventionEditorPopout({
           </button>
           <div className="flex items-center gap-2">
             <button
-              onClick={onCancel}
+              onClick={guardedCancel}
               className="px-3 py-1.5 rounded-lg border border-light-grey text-xxs font-medium text-mid-grey hover:bg-off-white transition-colors"
             >
               Cancel

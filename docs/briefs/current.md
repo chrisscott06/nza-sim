@@ -1,6 +1,6 @@
 # Current brief
 
-**Active:** None — `docs/briefs/active/` is empty after Brief 42 close (2026-05-20). Brief 30 (Dynamic engine rebuild) remains paused in archive; eligible for resumption when next Static work cycle is queued. Otherwise awaiting next brief from Chris.
+**Active:** [`active/43_interventions_ux.md`](active/43_interventions_ux.md) — Brief 43 Interventions UX: layout + structural ops + wider field coverage + summary enrichment. Four Parts plus close. UX work on top of an unchanged data model and unchanged engine — no engine changes, no patch shape changes; Brief 42's `migratePatch(patch, 1, 2)` continues to handle persisted library_interventions. Resolves Issue #20 (curated editor scope deferral) via the lighter answer — widen the curated editor rather than wrap arbitrary main-app UI. Notion design notes: https://www.notion.so/365d645e05cc81b79160e49029d2158c (architecture) + https://www.notion.so/366d645e05cc818b8653d51bdf8b4342 (Brief 43 scope). Schema audit doc: [`docs/audit/43_interventions_ux.md`](../audit/43_interventions_ux.md). Authorised end-to-end (Chris asleep; walkthrough self-run by Claude before close per the brief's explicit authorisation).
 
 **Paused (held in archive):** [`archive/30_dynamic_engine_rebuild_PAUSED.md`](archive/30_dynamic_engine_rebuild_PAUSED.md) — Phase 0 + Phase 1.0 complete (commits `8003577` + `cc96815`). Phase 1.1 onwards PAUSED. Dynamic backend code frozen at HEAD `54407e3` (post Brief 31), not deleted. Eligible for resumption when Static work cycle pauses.
 

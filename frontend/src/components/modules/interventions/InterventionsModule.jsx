@@ -1,15 +1,20 @@
 /**
  * InterventionsModule.jsx — Brief 41 Parts 3 + 4 (page-level)
+ *                         + Brief 43 Part 1 (2026-05-20)
  *
  * Routes at /interventions. Composition:
  *   - Header: "Interventions" + subhead
  *   - Tab switcher: Stack | Comparison (Comparison is Part 5)
  *   - Stack tab content: InterventionStackView with baseline +
  *     intervention rows + drag-and-drop + enable toggles + "+ Add"
- *   - Brief 41 Part 4: InterventionEditorPopout (replaces the Part 3
- *     stub). Draggable, two-column layout (curated editor + live
- *     preview) with patch capture and Save / Cancel semantics. Part 5
- *     adds the Comparison full-page view.
+ *   - Brief 41 Part 4: InterventionEditorPopout — draggable, two-
+ *     column body (curated editor + live preview).
+ *   - Brief 43 Part 1: pop-out defaults to right-anchored position so
+ *     the stack in the main canvas remains visible. Switching between
+ *     interventions while the pop-out is dirty fires an unsaved-
+ *     changes guard (window.confirm before discarding).
+ *   - Container max-width bumped from max-w-5xl → max-w-6xl so the
+ *     stack rows have more breathing room beside the pop-out.
  *
  * Data flow:
  *   - Reads `params.interventions` from ProjectContext.
@@ -20,7 +25,7 @@
  *     toggle / reorder / save / delete.
  */
 
-import { useContext, useEffect, useMemo, useState } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { WeatherContext } from '../../../context/WeatherContext.jsx'
 import { useHourlySolar } from '../../../hooks/useHourlySolar.js'
@@ -55,6 +60,15 @@ export default function InterventionsModule() {
   const [editingId, setEditingId] = useState(null)
   const [saveLibId, setSaveLibId] = useState(null)        // id of intervention to save → library
   const [libraryPickerOpen, setLibraryPickerOpen] = useState(false)
+  // Brief 43 Part 1: dirty state surfaced by the editor pop-out via
+  // onDirtyChange. Used to gate switching to a different intervention
+  // and closing the pop-out without saving. Stored in a ref so event
+  // handlers read the freshest value without stale-closure issues
+  // through useState's async update batching.
+  const editorDirtyRef = useRef(false)
+  const handleDirtyChange = useCallback((dirty) => {
+    editorDirtyRef.current = !!dirty
+  }, [])
 
   const interventions = Array.isArray(params?.interventions) ? params.interventions : []
   const libraryInterventions = Array.isArray(params?.library_interventions) ? params.library_interventions : []
@@ -134,8 +148,23 @@ export default function InterventionsModule() {
     updateParam('interventions', next)
   }
 
-  const handleEdit = (id) => setEditingId(id)
-  const handleCloseEditor = () => setEditingId(null)
+  // Brief 43 Part 1: switching to a different intervention while the
+  // editor is dirty fires an unsaved-changes guard. The pop-out's own
+  // onClose guard handles close-without-save; this parent-side guard
+  // handles user-clicks-a-different-edit-pencil-while-popout-is-open.
+  const handleEdit = (id) => {
+    if (editingId && editingId !== id && editorDirtyRef.current) {
+      if (!window.confirm('Discard unsaved changes to the current intervention?')) return
+    }
+    setEditingId(id)
+    // Reset dirty on switch — the popout will re-emit its dirty state
+    // on the new intervention via onDirtyChange.
+    editorDirtyRef.current = false
+  }
+  const handleCloseEditor = () => {
+    setEditingId(null)
+    editorDirtyRef.current = false
+  }
 
   const handleSaveEditing = (updatedIntervention) => {
     if (!editingId) return
@@ -144,6 +173,7 @@ export default function InterventionsModule() {
     )
     updateParam('interventions', next)
     setEditingId(null)
+    editorDirtyRef.current = false
   }
 
   const handleDeleteEditing = () => {
@@ -151,6 +181,7 @@ export default function InterventionsModule() {
     const next = interventions.filter(i => i.id !== editingId)
     updateParam('interventions', next)
     setEditingId(null)
+    editorDirtyRef.current = false
   }
 
   const editing = editingId ? interventions.find(i => i.id === editingId) : null
@@ -206,7 +237,10 @@ export default function InterventionsModule() {
 
   return (
     <div className="min-h-screen bg-off-white">
-      <div className="max-w-5xl mx-auto px-6 py-6 space-y-6">
+      {/* Brief 43 Part 1: container widened from max-w-5xl → max-w-6xl
+          so the stack rows have more breathing room while the editor
+          pop-out sits to the right. */}
+      <div className="max-w-6xl mx-auto px-6 py-6 space-y-6">
         {/* Header */}
         <div>
           <div className="flex items-center gap-2">
@@ -270,7 +304,10 @@ export default function InterventionsModule() {
       </div>
 
       {/* Brief 41 Part 4 — draggable editor pop-out with patch capture
-          + live preview. Replaces the Part 3 stub. */}
+          + live preview. Brief 43 Part 1: default position is now
+          right-anchored (set inside InterventionEditorPopout); the
+          onDirtyChange callback feeds the parent's switch-intervention
+          unsaved-changes guard. */}
       <InterventionEditorPopout
         intervention={editing}
         baselineConfig={baselineConfig}
@@ -280,6 +317,7 @@ export default function InterventionsModule() {
         onSave={handleSaveEditing}
         onCancel={handleCloseEditor}
         onDelete={handleDeleteEditing}
+        onDirtyChange={handleDirtyChange}
       />
 
       {/* Brief 41 Part 5 — library save/load modals */}

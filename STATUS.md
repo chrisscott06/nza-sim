@@ -1,5 +1,48 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-20 — Brief 43 Part 1: Interventions layout refactor — stack in main view, pop-out beside
+
+**State:** `commit_in_flight` — Brief 43 Part 1.
+
+**Prior HEAD:** `db7d7a4` (Brief 42 close).
+
+**Brief 43 scope** (4 Parts + close, authorised end-to-end with Claude running the walkthrough since Chris is asleep): UX work on top of an unchanged data model and unchanged engine. No patch-shape changes, no engine changes.
+
+### What landed in Part 1
+
+**`frontend/src/components/shared/SchedulePopout.jsx`** — added `defaultPosition` prop with three accepted values: `'center'` (default, backward-compatible), `'right'` (right-anchored at `x = window.innerWidth - POPOUT_WIDTH - 20`), or an explicit `{x, y}` object. The first-open positioning + reset-position link both honour the new prop.
+
+**`frontend/src/components/modules/interventions/InterventionEditorPopout.jsx`** — passes `defaultPosition="right"` so the editor opens to the right of the stack (no longer center-overlay). Added a `computeDirty` helper that compares the local edit state against the intervention's persisted shape (patches, label, theme, notes). An `onDirtyChange(boolean)` callback notifies the parent of unsaved-state transitions. A new `guardedCancel` wrapper triggers `window.confirm` before discarding unsaved changes via × / Esc / Cancel.
+
+**`frontend/src/components/modules/interventions/InterventionsModule.jsx`** — main container widened from `max-w-5xl` → `max-w-6xl` (stack rows breathe with popout beside). New `editorDirtyRef` + `handleDirtyChange` accept dirty-state updates from the popout. `handleEdit(newId)` checks dirty before switching to a different intervention; fires `window.confirm` if dirty.
+
+### Visual change
+
+| Before | After |
+|---|---|
+| Stack constrained to ~64 rem centred column | Stack at ~72 rem centred column |
+| Editor pop-out opens centred over the stack | Editor pop-out opens right-anchored beside the stack (x ≈ 420 on 1440 px viewport) |
+| × / Esc / Cancel silently discards unsaved patches | × / Esc / Cancel prompts "Discard N unsaved patches?" before discarding |
+| Click another row's edit pencil silently switches | Click another row's edit pencil prompts before switching if dirty |
+
+### What did NOT change in Part 1
+
+- No data model changes.
+- No engine changes (`applyPatch`, `applyIntervention`, `runInterventionStack`, `computeDelta` untouched).
+- No editor body content changes — `InterventionEditorBuildingView` + `InterventionEditorPreview` + `PatchList` unchanged. Two-column layout inside the 1000 px popout unchanged.
+- No patch-shape changes. Brief 41's library_interventions remain valid.
+- No new editor affordances — structural ops + service-level patches + summary land in Parts 2 + 3.
+
+### Audit doc
+
+New: [`docs/audit/43_interventions_ux.md`](docs/audit/43_interventions_ux.md) — §2 captures Part 1.
+
+### Next
+
+Part 2 — structural ops (add / remove / replace systems within an intervention) in the curated editor.
+
+---
+
 ## ✅ Session 2026-05-20 — Brief 42 close: Systems UX shipped (Parts 1-4)
 
 **State:** `closed` — Brief 42 archived to `docs/briefs/archive/42_systems_ux_COMPLETED.md`. `docs/briefs/active/` is empty.

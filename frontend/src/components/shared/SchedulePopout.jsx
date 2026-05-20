@@ -55,24 +55,46 @@ function defaultCentredPosition() {
   return { x, y }
 }
 
+// Brief 43 Part 1 (2026-05-20): right-anchored default position for the
+// Interventions editor pop-out. The stack lives in the main canvas; the
+// pop-out sits beside it. Pinned to the right edge with a 20 px margin
+// so on a 1440 px viewport the popout starts at x≈420 (1000 px wide
+// popout + 20 px margin).
+function defaultRightPosition() {
+  if (typeof window === 'undefined') return { x: 400, y: 60 }
+  const x = Math.max(20, window.innerWidth - POPOUT_WIDTH - 20)
+  const y = 60
+  return { x, y }
+}
+
+function resolveDefaultPosition(preset) {
+  if (preset && typeof preset === 'object' && typeof preset.x === 'number' && typeof preset.y === 'number') {
+    return preset
+  }
+  if (preset === 'right')  return defaultRightPosition()
+  if (preset === 'center') return defaultCentredPosition()
+  return defaultCentredPosition()
+}
+
 export default function SchedulePopout({
   isOpen,
   onClose,
   title = 'Schedule editor',
   accent = '#8B5CF6',
   persistKey = 'nza-schedule-popout-position',
+  defaultPosition = 'center',   // Brief 43 Part 1: 'center' | 'right' | {x,y}
   children,
 }) {
-  const [position, setPosition] = useState(() => loadPosition(persistKey) ?? defaultCentredPosition())
+  const [position, setPosition] = useState(() => loadPosition(persistKey) ?? resolveDefaultPosition(defaultPosition))
   const dragOriginRef = useRef(null)   // { startX, startY, offsetX, offsetY }
   const [dragging, setDragging] = useState(false)
 
-  // Re-centre on first open if no persisted position. (Position is sticky
-  // across opens once the user has dragged it once.)
+  // Re-apply the default position on first open if no persisted position.
+  // (Position is sticky across opens once the user has dragged it once.)
   useEffect(() => {
     if (!isOpen) return
     if (!loadPosition(persistKey)) {
-      setPosition(defaultCentredPosition())
+      setPosition(resolveDefaultPosition(defaultPosition))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
@@ -133,10 +155,10 @@ export default function SchedulePopout({
   }, [dragging, persistKey, position])
 
   const resetPosition = useCallback(() => {
-    const def = defaultCentredPosition()
+    const def = resolveDefaultPosition(defaultPosition)
     setPosition(def)
     savePosition(persistKey, def)
-  }, [persistKey])
+  }, [persistKey, defaultPosition])
 
   if (!isOpen) return null
 
