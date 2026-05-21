@@ -1,8 +1,83 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-21 — Brief 44 Part 2: Diagnostic 248% bug fix + cosmetic fixes (construction patches, baselineSummary)
+## 🚧 Session 2026-05-21 — Brief 44 Part 3: Profiles rebuilt as shared `InteractiveProfileVisualiser`
 
-**State:** `commit_in_flight` — Brief 44 Part 2.
+**State:** `commit_in_flight` — Brief 44 Part 3.
+
+**Prior HEAD:** `3f1bb0b` (Brief 44 Part 2 — Diagnostic 248% fix + cosmetic).
+
+### What landed
+
+**New shared component:** `frontend/src/components/shared/InteractiveProfileVisualiser/InteractiveProfileVisualiser.jsx`. Single canonical time-profile component for all modules; used by Systems Profiles tab now, Building / Internal Gains / Operation in Part 5.
+
+**Component API:**
+
+```jsx
+<InteractiveProfileVisualiser
+  layers={[
+    { id: 'electricity', label: 'Electricity total', colour: '#ECB01F', daily_kwh: [365] },
+    { id: 'gas',         label: 'Gas total',         colour: '#DC2626', daily_kwh: [365] },
+    { id: 'heating',     label: 'Heating delivered', colour: '#F87171', daily_kwh: [365] },
+    ...
+  ]}
+  weather={{ t_out_c: [365], wind_ms: [365], ghi_w_per_m2: [365] }}
+  defaultLayerIds={['electricity']}
+  defaultMode="single_line"
+  height={420}
+/>
+```
+
+### Default behaviour (simple by default)
+
+- 1 layer only (`defaultLayerIds`).
+- `single_line` chart mode.
+- `Year` time axis.
+- All weather overlays off.
+
+User opts INTO additional layers, modes, time zoom, weather. Eleven-layers-default-on is gone.
+
+### Controls
+
+- **Time axis:** Year / Quarter / Month / Day. Contextual picker (quarter dropdown, month dropdown, day input). Y-axis rescales to fit.
+- **Chart mode:** Single line / Stacked area / Small multiples.
+- **Layer toggles:** chip-with-colour-swatch per layer; click to add/remove.
+- **Weather toggles:** Outdoor temp / Wind speed / Solar GHI — independent; renders as thin trace BENEATH the primary chart, NOT on the same axis.
+
+### Bridgewater browser verification
+
+| Step | Result |
+|---|---|
+| Default view: single line, year axis, electricity total | ✓ Yellow trace ~30 kW year-round with summer cooling peaks |
+| Toggle Gas total | ✓ Second line appears |
+| Stacked area mode | ✓ Yellow base (electricity) + red (gas) ~60-120 kW |
+| Zoom to Quarter Q1 | ✓ Time axis rescales Jan 1 – Mar 30; y rescales; winter gas peaks visible |
+| Enable Outdoor temp overlay | ✓ Thin grey trace in separate strip beneath chart — NOT on same axis |
+
+### Reactivity
+
+Props-driven: ProjectContext → calculateInstant → consumption → SystemsProfiles → InteractiveProfileVisualiser → Recharts. Any upstream edit (setpoint, U-value, system toggle) re-runs the engine and triggers re-render in the same cycle.
+
+### What did NOT change
+
+- No engine changes.
+- `WeatherSynchronisedProfile` left in place (other consumers may use it; cleanup deferred to Part 5 if not needed).
+- Day-scrub at hourly resolution NOT implemented (engine doesn't expose per-service hourly arrays for all services yet — only heating has `heating_demand_hourly_kwh`). V1 ships daily-mean only; full hourly day-scrub is a future exposure.
+
+### Files touched
+
+- `frontend/src/components/shared/InteractiveProfileVisualiser/InteractiveProfileVisualiser.jsx` (new)
+- `frontend/src/components/modules/SystemsModule.jsx` — `SystemsProfiles` rebuilt
+- `docs/audit/44_visualisation_audit.md` — appended §9
+
+### Next
+
+Part 4 — reactivity sweep across all tabs (per Part 1 audit findings); Monthly cosmetic fix (numbers vs month labels); Schedule decision (rewire to v40 or remove per Part 1 finding).
+
+---
+
+## ✅ Session 2026-05-21 — Brief 44 Part 2: Diagnostic 248% bug fix + cosmetic fixes (construction patches, baselineSummary)
+
+**State:** `closed` — Brief 44 Part 2 at `3f1bb0b`.
 
 **Prior HEAD:** `67b805e` (Brief 44 Part 1 audit).
 

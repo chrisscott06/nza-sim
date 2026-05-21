@@ -416,9 +416,92 @@ Construction patches now render as `"cavity_wall_enhanced → cavity_wall_standa
 
 ---
 
-## §9 — Part 3 — Profiles rebuild (placeholder)
+## §9 — Part 3 — Profiles rebuild (2026-05-21)
 
-To be filled.
+### §9.1 New shared component
+
+`frontend/src/components/shared/InteractiveProfileVisualiser/InteractiveProfileVisualiser.jsx` — single canonical time-profile component. Used by Systems Profiles in this Part; Building / Internal Gains / Operation in Part 5.
+
+### §9.2 Component API
+
+```jsx
+<InteractiveProfileVisualiser
+  layers={[
+    { id: 'electricity', label: 'Electricity total', colour: '#ECB01F', daily_kwh: [365] },
+    { id: 'gas',         label: 'Gas total',         colour: '#DC2626', daily_kwh: [365] },
+    { id: 'heating',     label: 'Heating delivered', colour: '#F87171', daily_kwh: [365] },
+    ...
+  ]}
+  weather={{ t_out_c: [365], wind_ms: [365], ghi_w_per_m2: [365] }}
+  defaultLayerIds={['electricity']}
+  defaultMode="single_line"
+  module="systems"
+  height={420}
+  caption="..."
+/>
+```
+
+Each layer provides `daily_kwh` — 365 daily totals (kWh/day). The component converts to average kW per day (÷ 24) for display. Weather arrays are at daily resolution.
+
+### §9.3 Default behaviour (Brief 44 Principle 3: simple by default)
+
+- **Layer**: only `defaultLayerIds` selected. For Systems: `['electricity']` (the single most-summarising signal).
+- **Chart mode**: `single_line`. Clean trace.
+- **Time axis**: `year`. Full 365-point window.
+- **Weather overlays**: all off.
+
+The user opts INTO additional layers, modes, time zoom, weather strips. Eleven layers default-on (the pre-Brief-44 behaviour) is gone.
+
+### §9.4 Controls
+
+| Control | Options | Behaviour |
+|---|---|---|
+| Time axis | Year / Quarter / Month / Day | Zoom rescales the y-axis to fit; quarter picker, month picker, day input appear contextually |
+| Chart mode | Single line / Stacked area / Small multiples | Single = one line per active layer; Stacked = additive composition; Small multiples = each layer as its own mini-chart in a grid |
+| Layer toggles | one chip per layer, with colour swatch | click to add/remove a layer from the chart |
+| Weather toggles | Outdoor temp / Wind speed / Solar GHI | independent; rendered as a separate thin trace strip beneath the primary chart |
+
+### §9.5 Bridgewater browser verification
+
+| Verification step | Result |
+|---|---|
+| Default view: single line, year axis, electricity total | ✓ Yellow trace ~30 kW average year-round with summer cooling-driven peaks ~45 kW |
+| Toggle Gas total layer on | ✓ Second yellow-red line appears |
+| Switch to Stacked area mode | ✓ Layers stack: yellow base (electricity) + red on top (gas) totalling ~60-120 kW |
+| Zoom to Quarter Q1 | ✓ Time axis rescales to Jan 1 – Mar 30; y-axis rescales (~0-120 kW); shows winter gas demand peaks |
+| Enable Outdoor temp overlay | ✓ Thin grey trace appears in a separate panel beneath the primary chart, NOT on the same axis |
+| Caption rendered | ✓ "Daily mean of the engine's 8760-hour pass. Toggle layers..." |
+
+### §9.6 Reactivity
+
+The visualiser is purely props-driven. The data flow:
+
+```
+ProjectContext (params) → calculateInstant() → consumption.* → SystemsProfiles
+  → layers={[{daily_kwh: dpEng.fuel_kwh_per_day.electricity, ...}]}
+    → InteractiveProfileVisualiser → useMemo(data, [layers, weather, window])
+      → Recharts re-renders on data change
+```
+
+Any upstream edit (setpoint, system efficiency, wall U, etc.) updates `params` → re-runs engine via `calculateInstant` in `SystemsModule.useMemo` (line 138) → produces new `result` → `SystemsProfiles` receives new `result` prop → new `layers` array → visualiser's `useMemo` recomputes → Recharts re-renders. All within the same render cycle.
+
+### §9.7 Performance
+
+V1 ships at daily resolution (365 points). Recharts handles this comfortably; year view renders smoothly with up to 8 active layers in stacked-area mode.
+
+Day-level resolution would require hourly arrays (8760 points). The engine exposes `state2Result.demand.heating_demand_hourly_kwh` (line 3032 in instantCalc.js) for heating only. Other services aren't hourly-exposed yet. Brief 44 §3.6 day-scrubber is therefore PARTIALLY supported in V1: the Day-view time axis renders a single point (the daily total) — not a 24-hour scrub line. Full hourly day-scrub waits for an engine-side exposure of hourly arrays per service, which is out of Brief 44 scope.
+
+### §9.8 Files touched in Part 3
+
+- `frontend/src/components/shared/InteractiveProfileVisualiser/InteractiveProfileVisualiser.jsx` (new)
+- `frontend/src/components/modules/SystemsModule.jsx` — `SystemsProfiles` rebuilt to wrap the new visualiser
+
+### §9.9 What Part 3 did NOT change
+
+- No engine changes.
+- `WeatherSynchronisedProfile.jsx` left in place (still potentially used by other modules; cleanup is Part 5 territory if Building/IG/Operation don't end up using it).
+- Hourly day-scrub deferred (V1 daily-mean only).
+- Brush + drag-window selection deferred (Recharts has `<Brush>`; could be added in a polish pass).
 
 ---
 

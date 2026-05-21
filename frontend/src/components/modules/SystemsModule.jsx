@@ -37,6 +37,11 @@ import { calculateInstant } from '../../utils/instantCalc.js'
 import { SCHEDULES, allScheduleNames } from '../../utils/scheduleLibrary.js'
 import { SYSTEM_TEMPLATES_LIBRARY } from '../../data/systemTemplatesLibrary.js'
 import WeatherSynchronisedProfile from '../profiles/WeatherSynchronisedProfile.jsx'
+// Brief 44 Part 3 (2026-05-21): rebuilt Profiles tab uses the shared
+// InteractiveProfileVisualiser. WeatherSynchronisedProfile import retained
+// for other consumers (none in SystemsModule itself) — could be pruned
+// in a later cleanup pass.
+import InteractiveProfileVisualiser from '../shared/InteractiveProfileVisualiser/InteractiveProfileVisualiser.jsx'
 // Brief 37 Part 3 (2026-05-18): legacy profiles/ScheduleEditor replaced
 // by UnifiedScheduleEditor inside the existing SchedulePopout (Brief 36
 // Part 3). Library save flow lifted into saveScheduleToProject below.
@@ -1437,57 +1442,61 @@ function SystemsRejection({ consumption, sysCfg }) {
    CENTRE — PROFILES
    ─────────────────────────────────────────────────────────────────────── */
 function SystemsProfiles({ result }) {
+  // Brief 44 Part 3 (2026-05-21): rebuilt as InteractiveProfileVisualiser.
+  // Default view: total electricity, year axis, single line. User opts
+  // into additional layers, chart modes, weather overlays, time zoom.
+  //
+  // The old WeatherSynchronisedProfile rendered 11 layers at once across
+  // three weather strips — illegible at a glance. The new visualiser
+  // follows Brief 44 Principle 3: simple by default, layered by choice.
   const dpEng = result?.energy_use?.daily_profiles ?? result?.consumption?.daily_profiles
-  const dpFab = result?.daily_profiles   // State 2 weather strip on result.daily_profiles
+  const dpFab = result?.daily_profiles
   if (!dpEng) {
     return <div className="h-full flex items-center justify-center text-mid-grey text-xxs">Engine profile data not yet available.</div>
   }
+
+  // Weather strip: convert daily sums → daily means (divide by 24).
   const w = dpFab?.weather ?? {}
-  const t_out_mean_c    = (w.t_out_sum_c ?? []).map(v => v / 24)
-  const wind_mean_ms    = (w.wind_sum_ms ?? []).map(v => v / 24)
-  const ghi_mean_w_m2   = (w.ghi_sum_w_per_m2 ?? []).map(v => v / 24)
+  const t_out_c        = (w.t_out_sum_c ?? []).map(v => v / 24)
+  const wind_ms        = (w.wind_sum_ms ?? []).map(v => v / 24)
+  const ghi_w_per_m2   = (w.ghi_sum_w_per_m2 ?? []).map(v => v / 24)
 
-  const stacks = [
-    { key: 'heating',  label: 'Heating delivered',     color: '#DC2626', daily_kwh: dpEng.delivered_kwh_per_day?.heating },
-    { key: 'cooling',  label: 'Cooling delivered',     color: '#00AEEF', daily_kwh: dpEng.delivered_kwh_per_day?.cooling },
-    { key: 'dhw',      label: 'DHW delivered',         color: '#EC4899', daily_kwh: dpEng.delivered_kwh_per_day?.dhw },
-    { key: 'fans',     label: 'Fan power',             color: '#14B8A6', daily_kwh: dpEng.delivered_kwh_per_day?.fans },
-    { key: 'lighting', label: 'Lighting',              color: '#F59E0B', daily_kwh: dpEng.delivered_kwh_per_day?.lighting },
-    { key: 'sp',       label: 'Small power',           color: '#8B5CF6', daily_kwh: dpEng.delivered_kwh_per_day?.small_power },
+  // Layers — module-specific data feeds. Total electricity is the default
+  // single signal (most-summarising shape for a Systems-page user).
+  const layers = [
+    { id: 'electricity', label: 'Electricity total', colour: '#ECB01F', daily_kwh: dpEng.fuel_kwh_per_day?.electricity ?? [] },
+    { id: 'gas',         label: 'Gas total',         colour: '#DC2626', daily_kwh: dpEng.fuel_kwh_per_day?.gas ?? [] },
+    { id: 'heating',     label: 'Heating delivered', colour: '#F87171', daily_kwh: dpEng.delivered_kwh_per_day?.heating ?? [] },
+    { id: 'cooling',     label: 'Cooling delivered', colour: '#00AEEF', daily_kwh: dpEng.delivered_kwh_per_day?.cooling ?? [] },
+    { id: 'dhw',         label: 'DHW delivered',     colour: '#EC4899', daily_kwh: dpEng.delivered_kwh_per_day?.dhw ?? [] },
+    { id: 'fans',        label: 'Fan power',         colour: '#14B8A6', daily_kwh: dpEng.delivered_kwh_per_day?.fans ?? [] },
+    { id: 'lighting',    label: 'Lighting',          colour: '#FBBF24', daily_kwh: dpEng.delivered_kwh_per_day?.lighting ?? [] },
+    { id: 'small_power', label: 'Small power',       colour: '#8B5CF6', daily_kwh: dpEng.delivered_kwh_per_day?.small_power ?? [] },
   ]
-  const lines = [
-    { key: 'elec', label: 'Electricity (kW)', color: '#ECB01F', daily_kwh: dpEng.fuel_kwh_per_day?.electricity },
-    { key: 'gas',  label: 'Gas (kW)',         color: '#DC2626', daily_kwh: dpEng.fuel_kwh_per_day?.gas, dashed: true },
-  ]
-  const primary = {
-    title: 'Hourly system output and energy use',
-    unit:  'kW',
-    stacks,
-    lines,
-  }
 
-  // Brief 28-IM-Polish POL-M2.
   const sumArr = (a) => Array.isArray(a) ? a.reduce((s, v) => s + (v ?? 0), 0) : 0
   const totalElecKwh = sumArr(dpEng.fuel_kwh_per_day?.electricity)
   const totalGasKwh  = sumArr(dpEng.fuel_kwh_per_day?.gas)
   const gia = result?.metadata?.gia_m2 ?? result?.heat_balance?.metadata?.gia_m2 ?? 0
+
   return (
-    <div className="w-full h-full flex flex-col">
-      <div className="flex-shrink-0 flex items-center justify-between gap-2 px-4 pt-2 pb-1">
+    <div className="w-full h-full flex flex-col overflow-auto p-3">
+      <div className="flex-shrink-0 flex items-center justify-between gap-2 mb-2">
         <EnginePill mode="static" />
         <div className="flex items-center gap-2">
           <ChartTotalsBadge label="Σ elec" value_kwh={totalElecKwh} gia_m2={gia} />
           <ChartTotalsBadge label="Σ gas"  value_kwh={totalGasKwh}  gia_m2={gia} />
         </div>
       </div>
-      <div className="flex-1 min-h-0">
-        <WeatherSynchronisedProfile
-          primary={primary}
-          weather={{ t_out_mean_c, wind_mean_ms, ghi_mean_w_per_m2: ghi_mean_w_m2 }}
-          height={540}
-          caption={'Daily mean of the 8760-hour engine pass. Stacked area = per-service DELIVERED output (kW); line overlays = fuel CONSUMED per carrier (kW, dashed for gas). Heating + cooling traces follow the weather; DHW + fans + lighting + small power are V1 flat daily-shares pending hourly profile capture. Outdoor weather context below.'}
-        />
-      </div>
+      <InteractiveProfileVisualiser
+        layers={layers}
+        weather={{ t_out_c, wind_ms, ghi_w_per_m2 }}
+        defaultLayerIds={['electricity']}
+        defaultMode="single_line"
+        module="systems"
+        height={420}
+        caption="Daily mean of the engine's 8760-hour pass. Toggle layers to compare service deliveries against carrier fuel; switch to Stacked area for cumulative composition or Small multiples for parallel views. Year / Quarter / Month / Day zoom rescales the y-axis to fit."
+      />
     </div>
   )
 }
