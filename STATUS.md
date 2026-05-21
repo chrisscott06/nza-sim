@@ -1,8 +1,68 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-21 — Brief 45 Part 3b: Auto-rebalance partner shares
+## ✅ Session 2026-05-21 — Brief 45 CLOSED: Interventions + Systems UX polish
 
-**State:** `commit_in_flight` — Brief 45 Part 3b (amendment to Part 3).
+**State:** `closed` — Brief 45 close commit.
+
+**Prior HEAD:** `7c50925` (Brief 45 Part 3b).
+
+### Final shape (four substantive Parts + 3b amendment + close)
+
+- **Part 1** (`811056a`) — icon swap (Trash2 / ArrowLeftRight), tooltip cleanup, Replace popover positioning via `placement` prop. Steps 1.2 (layout) and 1.3 (sidebar reposition) were already shipped by Brief 43 Part 1 / Brief 41 Part 3; no code change needed (documented at audit doc §1.1).
+- **Part 2** (`7464409`) — `InterventionRow` split into 4 delta columns (Marg ΔEUI / Marg ΔCO₂ / Cum ΔEUI / Cum ΔCO₂); empty-intervention "—"; Duplicate button (lucide:Copy) with `handleDuplicate(id)` deep-cloning patches with fresh UUIDs + `(copy)` suffix + insert-below.
+- **Part 3** (`072d3d2`) — new `EUIWaterfall.jsx` mounted at top of Comparison tab; new `ServiceSplitBar.jsx` per service in Systems left panel; inline share slider in `SystemSummaryRow` (`w-20 h-[3px]` accent-coloured); Sankey hover tooltip noted as substantially shipped by Brief 44 Part 5 follow-up `f85cb38`.
+- **Part 3b** (`7c50925`) — `handleShareChange(service, idx, nextSharePct)` helper auto-rebalances partner enabled systems pro-rata so the slider maintains the sum=100% invariant on drag (no more two-slider matching friction).
+- **Part 4 close** (this commit) — instrumentation removed at Brief 44 close; 13-item walkthrough run on Bridgewater (all PASS); brief archived; current.md repointed; STATUS.md final.
+
+### Engine spot-check at close (Bridgewater, post Part-3b auto-rebalance)
+
+| Metric | Current | Brief 44 close target | Δ |
+|---|---:|---:|---:|
+| EUI | 121.7 kWh/m²·yr | 121.7 | **0.00 %** ✓ |
+| Electricity | 283.1 MWh | 283.053 | <0.02 % ✓ |
+| Gas | 242.9 MWh | 242.891 | <0.01 % ✓ |
+| Carbon today | 22.8 kgCO₂/m² | 22.8 | exact ✓ |
+| Heating delivered | 28.8 MWh | 28.767 | exact ✓ |
+| Cooling delivered | 148.3 MWh | 148.300 | exact ✓ |
+| DHW delivered | 336.3 MWh | 336.311 | exact ✓ |
+
+Well within 0.1 % target. No engine path touched by Brief 45 — values match by construction once Part 3b's auto-rebalance restored DHW shares from a drifted state (gas 26/ASHP 74 from prior sessions → back to gas 65/ASHP 35 in one slider drag).
+
+### Issues retained for Brief 47 housekeeping bundle
+
+- **Issue #24** trio in `docs/audit/29_open_issues.md`: heat_gas_share defensive guard + inline-legacy 'full' consolidation + LiveResultsPanel heating denominator inconsistency. None blocking; bundled for Brief 47 follow-up brief.
+- Brief 44 perf-polish candidates: React.memo on consumption-driven children (~5% additional cost), patches-empty intervention short-circuit (closes /interventions outlier), engine-output reference stability.
+- **Sankey per-system share_pct enhancement** — current Sankey hover tooltip from Brief 44 Part 5 follow-up shows demand → SCOP → fuel; could be enhanced to surface the per-service share for multi-system services. Low-priority follow-up.
+- Brief 45 Part 4 walkthrough noted the cross-route EUI baseline reading drift (/systems 121.7 vs /interventions baseline 122.3 — same engine field, different `comfort_band` propagation in the call signatures). Pre-existing, same family as Issue #24 (c).
+
+### Files touched in close commit
+
+- `docs/audit/45_ux_polish.md` — §4 Part 4 walkthrough filled
+- `docs/briefs/active/45_ux_polish.md` → `docs/briefs/archive/45_ux_polish_COMPLETED.md`
+- `docs/briefs/current.md` — repointed
+- `STATUS.md` — this section
+
+### What was NOT changed in Brief 45
+
+- Engine: untouched across all four Parts.
+- Data model: untouched. Schema (Brief 42 v40) unchanged.
+- `ComparisonView.jsx` 4-column KPI strip: pre-existing from Brief 41 Part 5; Part 3 only added the EUIWaterfall above it.
+- `ServiceSectionHeader.jsx`: untouched. ServiceSplitBar mounts in `SystemsModule.jsx` per-service body instead, keeping the header focused on building-level fields.
+- Engine validation rule (sum of enabled shares = 100%): Part 3b changed the UI behaviour to maintain the invariant on drag, but the engine still refuses to compute when the invariant breaks (e.g., post-toggle scenarios — Normalise button remains the recovery surface).
+
+### Cleanup deferred
+
+The Brief 43 walkthrough test (copy) intervention I created during Item 7 verification is still in Bridgewater's stack. Chris can delete it via the (copy) row's edit pencil → Delete intervention (one click + confirm). Not a Brief 45 deliverable.
+
+### Next
+
+Brief 47 (housekeeping bundle) when authorised — Issue #24 polish trio + perf-polish items + Sankey per-system share + cross-route EUI harmonisation. `docs/briefs/current.md` currently shows no active brief — awaiting Chris's next direction.
+
+---
+
+## ✅ Session 2026-05-21 — Brief 45 Part 3b: Auto-rebalance partner shares
+
+**State:** `closed` — Brief 45 Part 3b at `7c50925`.
 
 **Prior HEAD:** `072d3d2` (Brief 45 Part 3).
 

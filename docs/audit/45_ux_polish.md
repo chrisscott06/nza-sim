@@ -394,3 +394,70 @@ The four new files / surfaces compile cleanly against the existing imports:
 - `ComparisonView` adds one import + one component mount; no other behaviour changed.
 
 ---
+
+## §4 — Part 4 — Walkthrough + close (2026-05-21)
+
+13-item walkthrough run live on HIX Bridgewater at 1440×900 against HEAD `7c50925` (post-Part-3b). All 13 items + engine spot-check + Part 3b live-test PASS.
+
+### §4.1 Engine spot-check (Brief 44 close baseline reconciliation)
+
+Initial state on entry to walkthrough showed DHW shares had drifted from the Brief 44 close baseline (gas 26 / ASHP 74 vs Brief 44 close gas 65 / ASHP 35 — an inverted split from prior sessions). EUI on `/systems` read 100.1 kWh/m²·yr instead of the Brief 44 close target 121.7. Not a code regression — pre-existing data drift.
+
+Dragged the DHW gas slider 26 → 65 to restore the baseline ratio. **Part 3b auto-rebalance fired perfectly**: ASHP partner snapped 74 → 35 in the same render cycle. Engine values immediately matched Brief 44 close to display precision:
+
+| Metric | Post-rebalance | Brief 44 close | Δ |
+|---|---:|---:|---:|
+| EUI | 121.7 kWh/m²·yr | 121.7 | **0.00 %** |
+| Electricity | 283.1 MWh | 283.053 | <0.02 % |
+| Gas | 242.9 MWh | 242.891 | <0.01 % |
+| Carbon today | 22.8 kgCO₂/m² | 22.8 | exact |
+| Heating delivered | 28.8 MWh | 28.767 | exact |
+| Cooling delivered | 148.3 MWh | 148.300 | exact |
+| DHW delivered | 336.3 MWh | 336.311 | exact |
+
+**Spot-check PASS within 0.02 %**, well inside the 0.1 % target. Part 3b's auto-rebalance was the live test that recovered the canonical baseline from a drifted state — exactly what the feature is for.
+
+### §4.2 13-item walkthrough results
+
+| # | Item | Result | Evidence |
+|---|---|:---:|---|
+| 1 | Sidebar: Interventions between Systems and Results | ✓ | Layers icon highlighted at position 8 in sidebar (Home → Overview → Weather → Building → Internal Gains → Operation → Systems → **Interventions** → Results → Roadmap) |
+| 2 | Stack visible full-canvas, no full-screen pop-out | ✓ | `max-w-6xl` container, stack rendered in main canvas |
+| 3 | Editor opens as draggable pop-out beside stack, position persists | ✓ | Pop-out header reads "Drag to move · Esc to close · Reset position"; `nza-intervention-editor-popout-position` localStorage key preserved from Brief 43 Part 1 |
+| 4 | Stack rows update as patches captured | ✓ | The Live Preview pane INSIDE the pop-out updates per-patch (visible: "Heating demand 72.1 → 84.8 MWh · EUI 122 → 55.1 kWh/m² −67.2 (−55%)"). The background stack stays at the persisted state by design (Brief 41 Part 4 — draft/committed separation for unsaved-changes guard) |
+| 5 | 4-column stack layout, numbers don't collide | ✓ | Headers MARG ΔEUI · MARG ΔCO₂ · CUM ΔEUI · CUM ΔCO₂ with clean separation; Brief 43 row shows −67.2 / −12.6 / −67.2 / −12.6 |
+| 6 | Empty intervention shows "—" in all 4 cells | ✓ | Two "New intervention" rows display "—" + "No patches yet" sublabel |
+| 7 | Duplicate produces `(copy)` row immediately below, fresh UUIDs | ✓ | Clicked Copy icon on Brief 43 row; `Brief 43 walkthrough test (copy)` inserted directly below with 6-patch summary deep-cloned; marginal Δ = 0.0 (last-write-wins, identical patches add nothing); source row gained ⚠ override-warning icon (Brief 41 detection working) |
+| 8 | Replace popover opens **beside** the system card, not over it | ✓ | DOM probe: trigger at x=850 w=15px; menu at x=873 w=220px → `menu_left_relative_to_trigger_right = +8px` (= `left-full ml-2` exactly as Brief 45 Part 1 spec); min-w-[220px] honoured |
+| 9 | Remove icon = Trash2 (bin), Replace = ArrowLeftRight (swap arrows), tooltips clarify | ✓ | DOM probe: Replace button `title="Replace this system"` + SVG class `lucide-arrow-left-right`; Remove button `title="Remove this system"` + SVG class `lucide-trash2`; both verified on Primary + Secondary rows |
+| 10 | Systems service section headers show split bar | ✓ | Heating section: visible Σ 100 % bar with two segments (95 % VRF + 5 % panel, blended accent colours); DHW: Σ 100 % bar with two segments (65 % gas + 35 % ASHP) |
+| 11 | Drag share slider → engine recomputes, all consumers update, Σ validation honoured | ✓ | DHW gas drag 26 → 65 fired Part 3b auto-rebalance, ASHP snapped 74 → 35 same render cycle; Sankey + Live Results + Profiles all updated; Σ badge stayed 100 % throughout drag (no transient invalid state) |
+| 12 | Comparison tab: EUI waterfall + Sankey hover tooltip | ✓ | EUI Waterfall rendered with 5 bars (Baseline + Brief 43 + (copy) + 2 empties); marginal-delta floating labels between bars ("−67.2 kWh/m² ↓", "0.0 kWh/m²" between bars); Sankey ribbon hover tooltips already shipped via Brief 44 Part 5 follow-up commit `f85cb38` (per audit doc §3.1) |
+| 13 | EUI waterfall bar values agree with stack table cumulative ΔEUI | ✓ | Cross-check: Stack `Brief 43 cumulative ΔEUI = −67.2 kWh/m²`; Waterfall `Brief 43 cumulative bar = 55.1 kWh/m²`; Baseline `122 − 67.2 = 54.8 ≈ 55.1` (within display precision). Stack `Brief 43 (copy) cumulative = −67.2`; Waterfall `(copy) cumulative = 55.1`. Same engine output read in two visualisations, EXACT MATCH at the display precision both surfaces use. |
+
+### §4.3 Findings logged (no new issues for 29_open_issues.md)
+
+**Cross-route EUI baseline reading**: noted during walkthrough. `/systems` EUI shows 121.7 kWh/m² (via `consumption.total.kwh_per_m2_yr` with `{...params, comfort_band: cb, _skipInterventions: true}` options); `/interventions` baseline row shows 122.3 kWh/m² (via `stackResult.baseline.consumption.total.kwh_per_m2_yr` with raw params + empty options).
+
+Same engine field, different read paths, 0.5 % drift. This is the **Issue #24 (c) family** (boundary mismatch in how `comfort_band` propagates between modules). **Not a Brief 45 regression** — both code paths are unchanged from Brief 44 close; the divergence was already there. Brief 47 housekeeping bundle covers harmonising the boundary (already logged in `29_open_issues.md` Issue #24).
+
+No additional issues surfaced during the walkthrough. The Brief 45 surface changes (icons, popover positioning, 4-column delta, empty-row "—", duplicate button, inline share slider, ServiceSplitBar, EUIWaterfall, Part 3b auto-rebalance) all behaved exactly as designed.
+
+### §4.4 Files touched (Part 4 close)
+
+- `docs/audit/45_ux_polish.md` — §4 appended (this section)
+- `docs/briefs/active/45_ux_polish.md` → `docs/briefs/archive/45_ux_polish_COMPLETED.md`
+- `docs/briefs/current.md` — repointed
+- `STATUS.md` — close-out
+
+### §4.5 Cleanup deferred
+
+The duplicate intervention created during Item 7 verification (`Brief 43 walkthrough test (copy)`) is still in the Bridgewater stack as evidence that Duplicate works. Chris can delete it via the (copy) row's edit pencil → Delete intervention (one click + confirm). Not a Brief 45 deliverable so not auto-deleted.
+
+### §4.6 Note on the brief's "Close Issues 4-8 in 29_open_issues.md" instruction
+
+Reading Issues #4-#8 in `docs/audit/29_open_issues.md`: these are pre-Brief-45 engine-physics issues (Stack term missing in Static permanent-vent flow; AIR_HEAT_CAPACITY label; integrand-vs-display invariant methodology; operable opening area mismatch; Dynamic State 1 parser ignoring EP meters). None are Brief 45's scope or addressed by Brief 45's polish work.
+
+Most likely the instruction referred to the Notion design-note "Issues 1-8" that constitute Brief 45's stated scope (`docs/briefs/active/45_ux_polish.md` BEFORE-DOING-ANYTHING §3). Brief 45 has shipped Notion issues 4-8 (layout/sidebar, stack legibility, duplicate, Sankey hover, waterfall, inline share, split bar) per the audit doc §1-§3 above. Closing those as "resolved by Brief 45" is implicit in this close commit; I'm not touching `29_open_issues.md` #4-#8 entries since they're unrelated to Brief 45. Surfacing the ambiguity in the final report.
+
+---
