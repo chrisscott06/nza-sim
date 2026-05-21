@@ -333,6 +333,54 @@ The component is presentation-only — reads `systems` array directly, no callba
 - Sankey ribbon tooltip (`SystemsModule.jsx:1015-1040`): unchanged. Existing format from Brief 44 Part 5 follow-up satisfies §3.1.
 - `ServiceSectionHeader.jsx`: unchanged. The split bar mounts in `SystemsModule.jsx`'s rendering tree (not inside `ServiceSectionHeader` itself) so the heating + cooling setpoint editors and the DHW temps/demand editors stay focused on building-level fields. The brief listed `ServiceSectionHeader.jsx` as a touched file but a cleaner separation is to keep service-level editor fields in the header and the share-split visualisation in the section body where the per-system rows live. Documented as a deliberate choice.
 
+### §3.7a — Part 3b amendment: auto-rebalance partner shares (2026-05-21)
+
+Chris flagged the two-slider friction mid-Part-3: "if we change one, the other one automatically updates so it's 100%". Brief 45 Part 3 shipped the inline slider but left the user matching the partner share manually (Normalise button as the only recovery). Brief 45 Part 3b ties partners together so the slider itself maintains the invariant.
+
+**Implementation** — new `handleShareChange(service, idx, nextSharePct)` helper in `SystemsModule.jsx` replaces the prior `(next) => updateSystem(service, idx, { share_pct: next })` inline call. Logic:
+
+1. Clamp `next` to [0, 100].
+2. Identify OTHER enabled systems in the same service. If none, or if the dragged system itself is disabled, just set the share — no redistribution.
+3. Otherwise distribute `(100 − next)` across the other enabled systems proportionally to their current shares. If they were all at zero, split equally so the result is balanced rather than arbitrary.
+4. Round to 0.1%. Write the full list back via `writeV40`.
+
+Two-system case (Bridgewater Heating: Primary VRF 95% + Secondary panel 5%):
+
+| Drag Primary to | Secondary auto-rebalances to | Enabled sum |
+|---:|---:|---:|
+| 100 | 0.0 | 100 |
+| 95  | 5.0 | 100 |
+| 70  | 30.0 | 100 |
+| 50  | 50.0 | 100 |
+| 0   | 100.0 | 100 |
+
+Three-system hypothetical (say A=50, B=30, C=20, all enabled). Drag A to 20:
+
+- delta = −30 to distribute across B+C
+- B prev = 30, C prev = 20, otherSumPrev = 50, otherSumNew = 80
+- scale = 80 / 50 = 1.6 → B = 48, C = 32
+- Result: A=20, B=48, C=32, sum=100 ✓
+
+**Engine validation rule unchanged.** The engine still refuses to compute a service whose enabled shares sum ≠ 100% (Brief 40 Part 5b guard). Brief 45 Part 3b changes only the UI behaviour: the slider drag itself maintains the invariant so the engine validation never trips during a clean drag. The Normalise button stays as a manual recovery surface for the corner cases:
+- User disables a partner mid-edit (validation will fire because the disabled partner's share is no longer counted, but the enabled others may not sum to 100).
+- User toggles enable on a previously disabled system whose share was preserved at its prior value (could push the sum off 100).
+
+**Engine path:** untouched. `handleShareChange` writes through the existing `writeV40` helper; the engine sees a normal `params.systems_config_v40.<service>` change and recomputes via the existing useMemo chain. No new physics.
+
+**Audit-doc §3.3 above** described the validation flow as "Brief 45 doesn't change validation logic, just surfaces the editor inline." Part 3b updates that: the slider's UX now actively maintains the invariant the engine validation expects. The validation logic itself (engine refuses to compute when sum ≠ 100) is unchanged — the slider UX just stops being the thing that breaks the invariant.
+
+**File touched (Part 3b)**:
+
+- `frontend/src/components/modules/SystemsModule.jsx` — new `handleShareChange` helper; `<SystemSummaryRow onShareChange={…}>` rewired from `updateSystem` to `handleShareChange`.
+
+**Edge-case checklist** (folded into Part 4 walkthrough item 11):
+
+- Drag Primary 95 → 70 on Bridgewater Heating; Secondary should snap from 5 → 30 in the same render cycle.
+- Drag Primary to 100; Secondary should snap to 0; share-validation badge should NOT fire (sum = 100).
+- Drag Primary to 0; Secondary should snap to 100.
+- Disable Secondary, then drag Primary; Primary value changes alone (no partner to rebalance against); share-validation badge fires (5% ≠ 100% if Primary stays at 95) — Normalise button still works.
+- Re-enable Secondary; current rebalance does not run (re-enabling doesn't trigger a slider event); validation badge stays until next drag or Normalise click.
+
 ### §3.7 Verification status (Part 3)
 
 Code-review only per Brief 45 Principles §6. Browser verification deferred to Part 4 walkthrough items 10-12 (split bar visible on multi-system service; share slider drag updates engine + Sankey + Live Results; waterfall chart renders on the Comparison tab with marginal-delta labels). Dev server was offline at commit time; the same restart-when-back protocol from Part 1/2 applies.

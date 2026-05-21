@@ -1,8 +1,51 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-21 — Brief 45 Part 3: Sankey hover + EUI waterfall + inline share + split bar
+## 🚧 Session 2026-05-21 — Brief 45 Part 3b: Auto-rebalance partner shares
 
-**State:** `commit_in_flight` — Brief 45 Part 3.
+**State:** `commit_in_flight` — Brief 45 Part 3b (amendment to Part 3).
+
+**Prior HEAD:** `072d3d2` (Brief 45 Part 3).
+
+### What landed (Part 3b)
+
+Chris flagged mid-Part-3: "if we change one [system's share], the other one automatically updates so it's 100%? It's so counterintuitive trying to match up two sliders." Part 3 shipped the inline slider but left the user matching the partner share manually (the existing Normalise button as the only recovery surface). Part 3b ties the partners together so the slider itself maintains the invariant.
+
+New `handleShareChange(service, idx, nextSharePct)` helper in `SystemsModule.jsx`:
+
+- Clamps next to [0, 100].
+- Identifies OTHER enabled systems in the same service.
+- Distributes (100 − next) across them proportionally to their current shares (equal split if they were all at zero).
+- Rounds to 0.1%, writes full list back via the existing `writeV40` helper.
+- Disabled target / single-enabled-system / disabled partners — graceful fallback to plain "just set the share" (no redistribute) so the recovery paths still work.
+
+`<SystemSummaryRow onShareChange={…}>` rewired from the simple `updateSystem(service, idx, { share_pct: next })` to `handleShareChange(service, idx, next)`.
+
+Two-system case (Bridgewater Heating: Primary VRF 95 + Secondary panel 5): drag Primary to 70 → Secondary snaps to 30 in the same render cycle. Engine sees a valid sum=100 from the drag-start, no validation badge flashes.
+
+Engine validation rule unchanged. Engine still refuses to compute when enabled shares ≠ 100% (Brief 40 Part 5b guard). Normalise button stays as recovery for the cases the slider can't handle (post-toggle scenarios where re-enabling a system pushes the sum off 100).
+
+### Files touched (Part 3b)
+
+- `frontend/src/components/modules/SystemsModule.jsx`
+- `docs/audit/45_ux_polish.md` (§3.7a appended)
+- `STATUS.md` (this section)
+
+### What did NOT change (Part 3b)
+
+- Engine: untouched. Engine validation rule unchanged.
+- Data model: untouched. `share_pct` field still the per-system field it was.
+- `SystemSummaryRow.jsx`: untouched. The slider interface stayed the same; the change is purely in the parent's response.
+- Normalise button: still works for the toggle-enable recovery cases the slider can't handle.
+
+### Next
+
+Part 4 — walkthrough + close. The two-slider friction Chris just flagged is now fixed; Part 4 walkthrough item 11 picks up the validation that drag-one-share auto-rebalances the partner cleanly (no badge flash, sum stays 100%).
+
+---
+
+## ✅ Session 2026-05-21 — Brief 45 Part 3: Sankey hover + EUI waterfall + inline share + split bar
+
+**State:** `closed` — Brief 45 Part 3 at `072d3d2`.
 
 **Prior HEAD:** `7464409` (Brief 45 Part 2).
 

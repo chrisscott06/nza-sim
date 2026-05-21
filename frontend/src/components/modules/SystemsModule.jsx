@@ -506,6 +506,83 @@ function InputsColumn({ params, updateParam, consumption, comfortBand, openSched
     return { sum, valid: Math.abs(sum - 100) < 0.5, allCount: list.length, enabledCount: enabledList.length, allDisabled: false }
   }
 
+  // Brief 45 Part 3b (2026-05-21): auto-rebalance partner shares when the
+  // user drags one system's share slider. Prior to this change, dragging
+  // Primary heating from 95 → 70 would leave Secondary at 5, breaking
+  // share validation (95% ≠ 100%) until the user manually matched the
+  // partner slider or clicked Normalise. The two-sliders-must-match
+  // friction Chris flagged.
+  //
+  // Behaviour:
+  //   - Target system: clamps `next` to [0, 100], writes share_pct = next.
+  //   - Other ENABLED systems in the same service: absorb the negated
+  //     delta proportionally to their current shares so the enabled sum
+  //     stays at 100%.
+  //   - Disabled systems: untouched on disk.
+  //   - Edge cases:
+  //       · Single enabled system (no partner): just set the share —
+  //         user must re-enable a partner or use Normalise to recover
+  //         a valid sum.
+  //       · Editing a disabled system's share: just set the value (the
+  //         engine ignores disabled systems for sum-validation anyway).
+  //       · Other enabled systems all at 0 before: split (100 − next)
+  //         equally across them so the result is balanced rather than
+  //         arbitrary.
+  //       · Target moves to 100: other enabled systems all go to 0.
+  //       · Target moves to 0: other enabled systems share 100 pro-rata
+  //         to their previous shares (or equally if they were all 0).
+  //
+  // Engine validation rule unchanged — engine still refuses to compute
+  // a service whose enabled shares sum ≠ 100%. The Normalise button
+  // remains as a manual recovery surface. Brief 45 Part 3b only changes
+  // the inline-slider UX so the SLIDER itself maintains the invariant.
+  const handleShareChange = (service, idx, nextSharePct) => {
+    const list = getList(service)
+    const target = list[idx]
+    if (!target) return
+    const next = Math.max(0, Math.min(100, Number(nextSharePct) || 0))
+    const prev = Number(target.share_pct ?? 0)
+    if (Math.abs(next - prev) < 0.01) return
+
+    const round1 = (v) => Math.round(v * 10) / 10
+    const targetEnabled = target?.enabled !== false
+
+    // If the dragged system is disabled, or no other enabled partners
+    // exist, just set the share without redistributing.
+    const otherEnabledIndices = list
+      .map((s, i) => (i !== idx && s?.enabled !== false) ? i : -1)
+      .filter(i => i >= 0)
+    if (!targetEnabled || otherEnabledIndices.length === 0) {
+      const nextList = list.map((s, i) => i === idx ? { ...s, share_pct: round1(next) } : s)
+      writeV40({ ...(v40 ?? {}), [service]: nextList })
+      return
+    }
+
+    // Distribute (100 − next) across the other enabled systems
+    // proportionally to their current shares. If they were all at 0,
+    // split equally.
+    const otherSharesPrev = otherEnabledIndices.map(i => Number(list[i].share_pct ?? 0))
+    const otherSumPrev = otherSharesPrev.reduce((s, v) => s + v, 0)
+    const otherSumNew = Math.max(0, 100 - next)
+
+    let otherSharesNew
+    if (otherSumPrev > 0) {
+      const scale = otherSumNew / otherSumPrev
+      otherSharesNew = otherSharesPrev.map(v => v * scale)
+    } else {
+      const per = otherSumNew / otherEnabledIndices.length
+      otherSharesNew = otherEnabledIndices.map(() => per)
+    }
+
+    const nextList = list.map((s, i) => {
+      if (i === idx) return { ...s, share_pct: round1(next) }
+      const pos = otherEnabledIndices.indexOf(i)
+      if (pos === -1) return s   // disabled or somehow filtered out
+      return { ...s, share_pct: round1(otherSharesNew[pos]) }
+    })
+    writeV40({ ...(v40 ?? {}), [service]: nextList })
+  }
+
   // Normalise scales ENABLED systems proportionally to sum 100; disabled
   // systems' shares are untouched on disk.
   const normaliseShares = (service) => {
@@ -619,7 +696,11 @@ function InputsColumn({ params, updateParam, consumption, comfortBand, openSched
                       system={sys}
                       onToggleEnabled={() => updateSystem(service, idx, { enabled: !(sys?.enabled !== false) })}
                       onEdit={() => setEditingKey(key)}
-                      onShareChange={(next) => updateSystem(service, idx, { share_pct: next })}
+                      // Brief 45 Part 3b (2026-05-21): handleShareChange
+                      // auto-rebalances the other enabled systems in this
+                      // service so the enabled sum stays at 100% without
+                      // the user matching two sliders manually.
+                      onShareChange={(next) => handleShareChange(service, idx, next)}
                       shareInvalid={!valid}
                     />
                   )
