@@ -1,8 +1,74 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-21 — Brief 44 Part 5: Cross-module rollout of `InteractiveProfileVisualiser`
+## ✅ Session 2026-05-21 — Brief 44 CLOSED: Visualisation + reactivity audit and rebuild
 
-**State:** `commit_in_flight` — Brief 44 Part 5.
+**State:** `closed` — Brief 44 close commit.
+
+**Prior HEAD:** `b556b63` (Brief 44 Part 5d — performance fix D.1 + D.2, 12× speed-up on /systems).
+
+### Final shape (six Parts + three follow-ups, all shipped)
+
+- **Part 1** (`67b805e`): Visualisation audit — read-only diagnostic of every Systems / Building / IG / Operation tab. Brief 44 audit doc `docs/audit/44_visualisation_audit.md` §1–§8.
+- **Part 2** (`3f1bb0b`): Diagnostic 248% over-delivery bug fixed via MVHR boundary alignment.
+- **Part 3** (`55e5123`): Profiles rebuilt as shared `InteractiveProfileVisualiser` (simple-by-default, layered-by-choice).
+- **Part 4** (`7428f0d`): Reactivity sweep + Monthly cosmetic fix (stacked-height maxBar) + Schedule rewired to v40 per-system arrays.
+- **Part 5** (`2212263`): Cross-module rollout — Building + Operation adopt the shared visualiser. Internal Gains deferred by design (own canvas-based editor — audit §11.3).
+- **Part 5 follow-ups** (`f85cb38`): MVHR proportional scaling at low setpoints + Sankey hover tooltips + colour palette discipline + Y-axis alignment between primary chart and weather strip.
+- **Part 3 mid-audit** (`13aeb98`): read-only data wiring verification — three issues from Chris's browser observations all resolved (gas trace was visual illusion, heating disappearing was Part 2 MVHR over-subtraction now fixed, visualiser confirmed presentation-only).
+- **Part 5b** (`3b2c4cc`): three-edit verification protocol paused at baseline divergence — surfaced Issue #23 (Profiles "Σ elec" 305.9 MWh vs engine 283.053 MWh).
+- **Part 5c** (`a22c061`): Issue #23 fixed — `daily_profiles.fuel_kwh_per_day.electricity` rescales heating/cooling demand-shaped daily arrays to v40 actual-delivered totals; `circulation_pump_kwh / 365` added to DHW elec term. Four-way agreement confirmed across baseline + T1 (VRF off) + T2 (share 95→50) + T3 (DHW tap 40→50).
+- **Part 5d** (`b556b63`): performance fix — `_skipInterventions: true` at 14 consumer-route call sites + `calculateInstant` dedupes the top-level baseline by pulling from `stack.baseline` + early-return tightened to "any enabled". /systems edit cost 6.3s → 0.54s (~12× speed-up). All engine values unchanged.
+- **Part 6 close** (this commit): instrumentation removed (`window.__nza_engine_result`, `window.__nza_perf`, `_perfPush`, `systems_renders` counter), 15-item walkthrough run on Bridgewater (all PASS), Brief 44 archived, current.md repointed, STATUS.md final.
+
+### Issues resolved by Brief 44
+
+- **Issue #23** (Profiles annual electricity badge over-counts when heating delivered < demand) — FIXED by Part 5c.
+
+### Issues retained for Brief 47 housekeeping bundle
+
+- **Issue #24** (heat_gas_share defensive guard + inline-legacy 'full' consolidation + LiveResultsPanel heating denominator inconsistency) — three boundary-mismatch-family items; logged as deferred polish, none blocking.
+- **Brief 47 perf follow-ups:** React.memo on `consumption`-driven children (~5% additional cost), patches-empty intervention short-circuit (closes the /interventions outlier), reference stability on engine output.
+
+### Perf landed
+
+| Route | N=3 enabled, post-Part-5d | Target | Verdict |
+|---|---:|---:|:---:|
+| /systems edit | 537 ms (cold), 425 ms (warm) | ≤700 ms | ✓ |
+| /interventions edit (median) | 4,990 ms | ≤5,500 ms | ✓ |
+| /systems edit, N=0 all-disabled | 501 ms | ≤700 ms | ✓ |
+
+### Bridgewater engine canonical (unchanged across Parts 5c → 5d → close)
+
+- Heating delivered: 28.767 MWh
+- Cooling delivered: 148.300 MWh
+- DHW delivered: 336.311 MWh
+- Total electricity: 283.053 MWh
+- Total gas: 242.891 MWh
+- EUI: 121.7 kWh/m²·yr · Carbon today: 22.8 kgCO₂/m²·yr · CRREM 1.5°C target 184 kWh/m²·yr
+
+### Files touched in close commit
+
+- `frontend/src/components/modules/SystemsModule.jsx` — removed `window.__nza_engine_result` exposure + `systems_renders` counter
+- `frontend/src/utils/instantCalc.js` — removed `_perfPush` function + all instrumentation hooks; `calculateInstant` collapsed back to the production shape (D.2 dedupe preserved)
+- `docs/audit/44_visualisation_audit.md` — §12 Part 6 walkthrough filled
+- `docs/briefs/active/44_visualisation_audit.md` → `docs/briefs/archive/44_visualisation_audit_COMPLETED.md`
+- `docs/briefs/current.md` — repointed to next active brief
+- `STATUS.md` — this section
+
+### Next
+
+Brief 47 (housekeeping bundle) when authorised. Three threads:
+1. **Issue #24** items (heat_gas_share guard, inline-legacy consolidation, LiveResultsPanel denominator alignment).
+2. **Perf polish** (React.memo on consumption-driven children, empty-intervention short-circuit, engine-output reference stability).
+3. Anything else surfaced between now and then.
+
+`docs/briefs/current.md` currently shows no active brief — awaiting Chris's next direction.
+
+---
+
+## ✅ Session 2026-05-21 — Brief 44 Part 5: Cross-module rollout of `InteractiveProfileVisualiser`
+
+**State:** `closed` — Brief 44 Part 5 at `2212263`.
 
 **Prior HEAD:** `7428f0d` (Brief 44 Part 4 — Schedule rewire + Monthly fix).
 

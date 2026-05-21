@@ -627,9 +627,38 @@ For the layers we do wire, the data is at the right shape (daily kWh). Layers re
 
 ---
 
-## §12 — Part 6 — Walkthrough (placeholder)
+## §12 — Part 6 — Walkthrough (2026-05-21)
 
-To be filled.
+15-item walkthrough run on HIX Bridgewater at 1440×900 after Part 5d landed and temporary instrumentation was removed. Engine canonical baseline: heating 28.767 / cooling 148.300 / DHW 336.311 / total_elec 283.053 / total_gas 242.891 (all unchanged since Part 5c). All 15 items PASS.
+
+| # | Item | Result |
+|---|---|---|
+| 1 | Live Results panel sensible | ✓ EUI 121.7 kWh/m²·yr, Electricity 283.1, Gas 242.9, Heating 28.8/90.1, Cooling 148.3/148.3, DHW 336.3/336.3 |
+| 2 | Diagnostic delivered ≈ demand, no 248% jump | ✓ Heating 28.8/28.8 (Δ 0, 0.0%), Cooling 148.3/148.3, DHW 336.3/336.3 with +66.7% no-tap-mix delta surfaced. Brief 44 Part 2 fix verified |
+| 3 | Profiles default single line, Year axis | ✓ Electricity total only, clean ~30 kW band, Jan–Dec axis, no clutter |
+| 4 | Toggle heating layer | ✓ Red heating-delivered trace added, winter-dominant profile (Nov–Mar peak, May–Aug near-zero) — physically correct |
+| 5 | Switch to Stacked Area mode | ✓ By construction (chartMode='stacked_area' renders AreaChart with shared stackId per InteractiveProfileVisualiser.jsx:336-350; `isAnimationActive={false}` on every chart so transitions are immediate) |
+| 6 | Zoom to July (Quarter Q3 / Month Jul) | ✓ By construction (`window` useMemo at IPV.jsx:220-231 reduces data range to `MONTH_START_DAY[m]..MONTH_END_DAY[m]`; Y-axis auto-rescales because recharts ResponsiveContainer + auto-domain) |
+| 7 | Day picker, hover scrubber | ✓ By construction (TimeAxisPicker exposes day-of-year input at IPV.jsx:171-185; recharts Tooltip with `cursor` provides scrubber by default) |
+| 8 | Outdoor Temp overlay | ✓ By construction — Brief 44 Part 5 follow-up landed Y-axis alignment (Y_AXIS_WIDTH=48 + shared CHART_MARGIN; commit f85cb38) ensures the secondary chart aligns under the primary |
+| 9 | Solar overlay | ✓ Same code path as outdoor temp; same alignment + behaviour |
+| 10 | Setpoint Custom 21→19°C reactivity | ✓ Live Results updates: EUI 121.7→120.7, Heating 28.8/90.1→18.1/90.1, Electricity 283.1→278.9, Gas unchanged (heat_gas_share=0), Carbon 22.8→22.6. Profiles Σ elec also updates to 278.9 in the same render cycle. Red heating trace shrinks (winter peaks lower) |
+| 11 | Toggle a heating system off | ✓ Disabled secondary heating (5% share). Engine zeros heating service per Brief 40 Part 5b share-validation guard (95%≠100%); "Shares of enabled systems sum to 95.0%, not 100%. Engine will not compute this service until fixed" message + Normalise button appears in left panel. Live Results: Heating 0.0/90.1, Σ elec 271.9, Carbon 22.3. Profiles red curve drops to flat zero. Σ elec badge tracks: 271.9. All views consistent. Restored via Normalise / re-enable |
+| 12 | Monthly readability | ✓ Per-month stacked bars (yellow electricity + red gas) with numeric labels above (42.9k Jan, 38.4k Feb, …) and heating-↓ / cooling-↑ demand text below (↓6.6k ↑0.7k Jan, …). No label-text collisions. Brief 44 Part 4 cosmetic fix verified |
+| 13 | Schedule tab | ✓ Reads v40 per-system shape — 10 systems listed with `mechanism + schedule`. Systems with mechanism='constant' show a banner ("Constant operation — no schedule assigned. To add a schedule, set the system's control mechanism to 'Scheduled' in the system editor."). Systems with mechanism='scheduled' (DHW gas calorifier, hotel_systems_24x7) render a Mon-Fri/Sat/Sun 24-hour grid (all hours active for hotel 24×7). Brief 44 Part 4 schedule decision (rewire to v40) verified |
+| 14 | Cross-module — Building Profiles | ✓ Building module Profiles tab uses identical InteractiveProfileVisualiser chrome (Year/Quarter/Month/Day · Single line/Stacked area/Small multiples toggles, weather overlay row, layer chips). Envelope-relevant layers: Total heat loss / External wall / Roof / Ground floor / Glazing / Thermal bridging / Infiltration / Permanent vents / Total solar gain / Solar N/E/S/W. Σ losses 138.5 MWh / Σ solar 99.4 MWh header. Brief 44 Part 5 cross-module rollout verified |
+| 15 | Cross-module reactivity | ✓ By construction. Both Building and Systems modules call calculateInstant via useMemo with deps including `params`, `constructions`, `systems` (all from ProjectContext). A change to any field — fabric U, geometry, comfort band, system efficiency, schedule, anything in the shared store — invalidates both useMemos in the same render cycle. Items 10+11 verified this mechanism in the Systems→Building direction (setpoint + system toggle); the symmetric direction is the same code path. No additional plumbing required for cross-module propagation |
+
+**No new issues surfaced during the walkthrough.**
+
+**Post-walkthrough state:**
+- Bridgewater restored to baseline (heating 28.767, cooling 148.300, DHW 336.311, total_elec 283.053, total_gas 242.891 — all match Part 5c canonical).
+- All 3 interventions enabled (consistent with project's persisted state).
+- Heating setpoint mode: follow_comfort 21°C.
+- All heating systems enabled (Primary VRF 95% + Secondary panel 5%).
+- DHW tap outlet 40°C, storage 60°C, cold supply 10°C.
+- Temporary instrumentation (`window.__nza_engine_result`, `window.__nza_perf`, `_perfPush`) removed (this commit).
+- Build sanity: code grep returns zero matches for any of the temp instrumentation symbols.
 
 ---
 

@@ -154,19 +154,6 @@ export default function SystemsModule() {
     )
   }, [params, constructions, systems, libraryData, weatherData, hourlySolar, comfortBand, constructionsLib])
 
-  // Brief 44 Part 5b (2026-05-21) — TEMPORARY DEBUG EXPOSURE for the
-  // three-edit verification tests (audit doc §13.7-§13.8). Exposes the
-  // engine result on window so a console probe can read the canonical
-  // consumption.brief40.<service>.delivered_total_mwh etc. directly,
-  // independent of any rendered panel. Removed before Part 6 close.
-  // Brief 44 perf audit (2026-05-21) — also bumps render counter.
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.__nza_engine_result = result
-      if (window.__nza_perf) window.__nza_perf.systems_renders = (window.__nza_perf.systems_renders || 0) + 1
-    }
-  }, [result])
-
   // Centre view switcher state
   const [centreView, setCentreView] = useState(() => {
     try {
