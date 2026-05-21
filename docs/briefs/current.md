@@ -1,6 +1,6 @@
 # Current brief
 
-**Active:** _(none — awaiting next direction)_
+**Active:** [`active/46_interventions_editor_rebuild.md`](active/46_interventions_editor_rebuild.md) — Brief 46 Interventions editor full rebuild. Six substantive Parts plus close. Capture context architecture + reuse main-app controls inside the editor; full deletion of the old curated editor at Part 5. No engine changes, no data model changes. Plough-through authorisation; walkthrough sign-off after Part 5 before Part 6 close.
 
 Brief 45 (Interventions + Systems UX polish) closed 2026-05-21 — see [`archive/45_ux_polish_COMPLETED.md`](archive/45_ux_polish_COMPLETED.md) and STATUS.md.
 

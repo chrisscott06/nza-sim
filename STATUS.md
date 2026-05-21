@@ -1,5 +1,68 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-21 — Brief 46 Part 1: capture context architecture + editor shell
+
+**State:** `commit_in_flight` — Brief 46 Part 1.
+
+**Prior HEAD:** `d4a3d31` (Brief 45 close).
+
+### What landed (Part 1)
+
+Brief 46 opens — full intervention editor rebuild. Six substantive Parts plus close. UI rebuild on the stable Brief 41 patch model + engine; no engine changes, no data model changes.
+
+Part 1 lands the architectural foundation. Five new files; no behavioural change to any existing path; old editor remains the default entry point through Parts 1–4.
+
+**`frontend/src/context/InterventionCaptureContext.jsx`** (new) — the central architectural piece. Wraps the editor subtree. Exposes:
+- `isCapturing` flag (true inside editor, false everywhere else)
+- `currentPatches` running list
+- `capturePatch(patch | (path, op, value, source?))` — two call forms
+- `revertPatch(patchId)`, `resetPatches()`
+- Default value when no provider mounted: `isCapturing: false` + no-op mutators (callers don't crash if accidentally called outside the editor)
+- Dedupe reuses Brief 41's `patchCapture.capturePatch` helper
+
+**`frontend/src/hooks/useProjectMutation.js`** (new) — the single mutation entry point that Building / IG / Operation / Systems components will use instead of calling `updateParam` / `updateConstruction` / `updateSystem` directly. Routing rules:
+- Capture mode (`isCapturing: true`): calls `capturePatch({ path, op, value, source: 'inline' })`. Does NOT write through to project state.
+- Main-app mode: parses path, routes to ProjectContext's appropriate mutator. Strips Brief-41 `building.` prefix convention. Top-level writes go through `updateParam(top, value)`. Deep-path writes flagged as Part 1 stub (Parts 2-4 wire the proper helper).
+- Add / remove / replace ops in main-app mode flagged as Part 1 stub; Systems-module helpers keep using their existing mutators until Part 4.
+
+**`frontend/src/components/modules/interventions/EditorNav.jsx`** (new) — left collapsible nav. Four sections (Building / Internal Gains / Operation / Systems) each with subsections. Patch-presence dots indicate where captures are. Section accent colours match main-app module accents.
+
+**`frontend/src/components/modules/interventions/EditorFooter.jsx`** (new) — sticky footer. Label input + Σ patches counter + EUI baseline → preview pill + ΔEUI pill + ΔCO₂ pill + Cancel + Save buttons. Reads patch count from capture context. Save disabled if label empty.
+
+**`frontend/src/components/modules/interventions/InterventionEditorV2.jsx`** (new) — the editor shell. Wraps SchedulePopout (Brief 37 pattern, `defaultPosition='right'`, `nza-intervention-editor-popout-position` localStorage key preserved). Layout: EditorNav (left) + EditorPaneBody (right) + EditorFooter (bottom). Wraps the body in `InterventionCaptureProvider`. Runs `runInterventionStack([thisIntervention])` to compute live preview EUI / carbon for the footer.
+
+Part 1 right pane shows placeholder content ("Wired in Part X"). Parts 2-4 swap each section's branch for the real composer (`BuildingSection` / `InternalGainsSection` / `OperationSection` / `SystemsSection`).
+
+### Files touched (Part 1)
+
+- `frontend/src/context/InterventionCaptureContext.jsx` (new)
+- `frontend/src/hooks/useProjectMutation.js` (new)
+- `frontend/src/components/modules/interventions/EditorNav.jsx` (new)
+- `frontend/src/components/modules/interventions/EditorFooter.jsx` (new)
+- `frontend/src/components/modules/interventions/InterventionEditorV2.jsx` (new)
+- `docs/audit/46_interventions_editor_rebuild.md` (new)
+- `docs/briefs/active/46_interventions_editor_rebuild.md` (new — brief on disk)
+- `docs/briefs/current.md` — repointed to Brief 46
+- `STATUS.md` — this section
+
+### What did NOT change (Part 1)
+
+- Engine: untouched.
+- Data model: untouched. Patch shape, intervention shape, project state schema unchanged.
+- Main-app behaviour: untouched. `useProjectMutation` exists but no Building / IG / Operation / Systems component calls it yet (Parts 2-4 refactor those callers).
+- Old editor: untouched and operational. `InterventionsModule.jsx` still routes the edit pencil + add intervention button to the old `InterventionEditorPopout.jsx`.
+- V2 is unreachable from the UI in Part 1 — by design. Browser verification at Part 2 (Building wired) is the first place the new editor surfaces in a user flow.
+
+### Verification
+
+Code-review only per Brief 46 Principle §10 (browser verification mandatory at Parts 3, 4, 5, 6). Part 1 ships architectural-only scope; no behavioural change provable from new-files-only diff. Dev server will catch any syntax / import issues at Part 2 boot.
+
+### Next
+
+Part 2 — wire Building module controls inside the capture context. Refactor Building's mutation entry points (`updateParam` for `length` / `width` / `num_floors` / `wwr` / `orientation` / `q50` / etc., `updateConstruction` for fabric, etc.) to `useProjectMutation`. Create `BuildingSection.jsx` composer. Browser-verify on Bridgewater: wall U change captures as a patch, footer ΔEUI moves, revert works.
+
+---
+
 ## ✅ Session 2026-05-21 — Brief 45 CLOSED: Interventions + Systems UX polish
 
 **State:** `closed` — Brief 45 close commit.
