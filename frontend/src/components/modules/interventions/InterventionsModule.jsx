@@ -193,6 +193,35 @@ export default function InterventionsModule() {
     editorDirtyRef.current = false
   }
 
+  // Brief 45 Part 2 (2026-05-21): duplicate an intervention. Deep-clones
+  // patches with fresh UUIDs (each patch gets a new id so patchCapture's
+  // dedupe logic doesn't collide with the source), appends "(copy)" to
+  // the label, inserts the duplicate immediately below the source row.
+  // The engine re-runs naturally as the interventions array updates via
+  // updateParam, producing fresh marginal/cumulative deltas for the new
+  // row.
+  const handleDuplicate = (id) => {
+    const sourceIdx = interventions.findIndex(i => i.id === id)
+    if (sourceIdx === -1) return
+    const source = interventions[sourceIdx]
+    const newPatchId = () => `patch_${(typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2)}`
+    const duplicated = {
+      ...source,
+      id: newId('int'),
+      label: `${source.label ?? 'Intervention'} (copy)`,
+      enabled: source.enabled !== false,
+      patches: Array.isArray(source.patches)
+        ? source.patches.map(p => ({ ...p, id: newPatchId() }))
+        : [],
+    }
+    const next = [
+      ...interventions.slice(0, sourceIdx + 1),
+      duplicated,
+      ...interventions.slice(sourceIdx + 1),
+    ]
+    updateParam('interventions', next)
+  }
+
   const editing = editingId ? interventions.find(i => i.id === editingId) : null
 
   // ── Library save / load ─────────────────────────────────────────────
@@ -302,6 +331,7 @@ export default function InterventionsModule() {
             onEdit={handleEdit}
             onAdd={handleAdd}
             onSaveToLibrary={handleSaveToLibrary}
+            onDuplicate={handleDuplicate}
           />
         )}
         {tab === 'comparison' && (

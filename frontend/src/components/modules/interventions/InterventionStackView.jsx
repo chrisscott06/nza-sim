@@ -65,6 +65,12 @@ function computeOverriddenSet(interventions) {
 }
 
 function BaselineRow({ baselineSummary }) {
+  // Brief 45 Part 2 (2026-05-21): baseline row now matches the
+  // intervention row's four-column delta shape:
+  //   Marginal ΔEUI | Marginal ΔCO₂ | Cumulative ΔEUI | Cumulative ΔCO₂
+  // For the baseline row, marginal/cumulative is meaningless — show the
+  // baseline EUI + carbon values in the cumulative slots, dash in the
+  // marginal slots. Column widths track InterventionRow's w-24 spec.
   return (
     <div className="flex items-center gap-3 px-3 py-2 rounded-lg border border-light-grey bg-off-white">
       <span className="w-3.5" /> {/* drag-handle column spacer */}
@@ -73,13 +79,16 @@ function BaselineRow({ baselineSummary }) {
         <span className="text-caption text-navy font-semibold">Baseline</span>
         <span className="text-xxs text-mid-grey">starting point — toggle interventions below to test what-ifs</span>
       </div>
-      <div className="flex-shrink-0 w-28 text-right text-xxs text-mid-grey tabular-nums">
+      <div className="flex-shrink-0 w-24 text-right text-xxs text-mid-grey/50">—</div>
+      <div className="flex-shrink-0 w-24 text-right text-xxs text-mid-grey/50">—</div>
+      <div className="flex-shrink-0 w-24 text-right text-xxs text-mid-grey tabular-nums">
         {baselineSummary?.eui != null ? `${baselineSummary.eui.toFixed(1)} kWh/m²` : '—'}
       </div>
-      <div className="flex-shrink-0 w-28 text-right text-xxs text-mid-grey">
+      <div className="flex-shrink-0 w-24 text-right text-xxs text-mid-grey tabular-nums">
         {baselineSummary?.carbon != null ? `${baselineSummary.carbon.toFixed(1)} kgCO₂/m²` : '—'}
       </div>
       <span className="w-5" />  {/* save-button column spacer */}
+      <span className="w-5" />  {/* duplicate-button column spacer (Brief 45 Part 2) */}
       <span className="w-5" />  {/* edit-button column spacer */}
     </div>
   )
@@ -118,6 +127,7 @@ export default function InterventionStackView({
   onEdit,
   onAdd,
   onSaveToLibrary,
+  onDuplicate,           // Brief 45 Part 2
 }) {
   const [draggingId, setDraggingId] = useState(null)
   const [hoverId,    setHoverId]    = useState(null)
@@ -172,6 +182,10 @@ export default function InterventionStackView({
   const stackRows = Array.isArray(stackResult?.interventions) ? stackResult.interventions : []
 
   // Column headers
+  // Brief 45 Part 2 (2026-05-21): two Δ columns expanded to four —
+  // Marginal ΔEUI / Marginal ΔCO₂ / Cumulative ΔEUI / Cumulative ΔCO₂.
+  // Widths track InterventionRow's w-24 spec. Extra w-5 spacer added
+  // for the new Duplicate button.
   return (
     <div className="space-y-2">
       {/* Column headers */}
@@ -179,8 +193,11 @@ export default function InterventionStackView({
         <span className="w-3.5" />
         <span className="w-3" />
         <span className="flex-1 text-xxs text-mid-grey uppercase tracking-wider font-medium">Label</span>
-        <span className="flex-shrink-0 w-28 text-right text-xxs text-mid-grey uppercase tracking-wider font-medium">Marginal Δ</span>
-        <span className="flex-shrink-0 w-28 text-right text-xxs text-mid-grey uppercase tracking-wider font-medium">Cumulative Δ</span>
+        <span className="flex-shrink-0 w-24 text-right text-xxs text-mid-grey uppercase tracking-wider font-medium" title="Marginal change in EUI vs the previous enabled state">Marg ΔEUI</span>
+        <span className="flex-shrink-0 w-24 text-right text-xxs text-mid-grey uppercase tracking-wider font-medium" title="Marginal change in carbon intensity vs the previous enabled state">Marg ΔCO₂</span>
+        <span className="flex-shrink-0 w-24 text-right text-xxs text-mid-grey uppercase tracking-wider font-medium" title="Cumulative change in EUI vs baseline">Cum ΔEUI</span>
+        <span className="flex-shrink-0 w-24 text-right text-xxs text-mid-grey uppercase tracking-wider font-medium" title="Cumulative change in carbon intensity vs baseline">Cum ΔCO₂</span>
+        <span className="w-5" />
         <span className="w-5" />
         <span className="w-5" />
       </div>
@@ -197,13 +214,14 @@ export default function InterventionStackView({
           <InterventionRow
             key={intervention.id}
             intervention={intervention}
-            marginalDelta={row?.marginal_delta?.eui_kwh_per_m2 ?? null}
-            cumulativeDelta={row?.cumulative_delta?.eui_kwh_per_m2 ?? null}
+            marginalDeltaFull={row?.marginal_delta ?? null}
+            cumulativeDeltaFull={row?.cumulative_delta ?? null}
             overridden={overridden.has(intervention.id)}
             baselineConfig={baselineConfig}
             onToggleEnabled={() => onToggleEnabled?.(intervention.id)}
             onEdit={() => onEdit?.(intervention.id)}
             onSaveToLibrary={() => onSaveToLibrary?.(intervention.id)}
+            onDuplicate={() => onDuplicate?.(intervention.id)}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDrop={handleDrop}

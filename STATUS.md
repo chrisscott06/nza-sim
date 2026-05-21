@@ -1,8 +1,45 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-21 — Brief 45 Part 1: Interventions UX layout + icons + popover
+## 🚧 Session 2026-05-21 — Brief 45 Part 2: Stack legibility + duplicate intervention
 
-**State:** `commit_in_flight` — Brief 45 Part 1.
+**State:** `commit_in_flight` — Brief 45 Part 2.
+
+**Prior HEAD:** `811056a` (Brief 45 Part 1).
+
+### What landed (Part 2)
+
+- **Marginal/Cumulative split** in `InterventionRow.jsx`. Pre-Brief-45 each side was one `w-28` cell rendering `±X.X kWh/m² (±YY%)` as a single string — the source of Chris's "−63.1 kWh/m² (−52%)−63.1 kWh/m² (−52%)" rendering. Post-Brief-45: four `w-24` cells (Marginal ΔEUI · Marginal ΔCO₂ · Cumulative ΔEUI · Cumulative ΔCO₂). Number + unit per cell, percent moves to the cell's `title` tooltip. Engine already returns both records (`marginal_delta.eui_kwh_per_m2` + `marginal_delta.carbon_kgco2_per_m2`); pre-Brief-45 only the EUI record was wired.
+- **Empty-intervention "—"** treatment in `InterventionRow.jsx`. When `intervention.patches.length === 0`, the four delta cells render "—" with `text-mid-grey/40` + tooltip "No patches yet" via a new `forceEmpty` prop on `<DeltaCell>`. Engine semantics unchanged (still returns zero deltas for the empty case); the change is purely presentational so the empty row reads as a placeholder rather than "applied, zero effect".
+- **Duplicate intervention button** in `InterventionRow.jsx` (lucide:Copy, between Save-to-library and Edit). `InterventionsModule.handleDuplicate(id)` deep-clones the source's `patches` with fresh `patch_<uuid>` ids, generates a new `int_<uuid>` for the duplicate, suffixes the label with `(copy)`, and inserts the row immediately below the source via array slice. Engine re-runs naturally via the existing useMemo chain.
+- **Column headers** in `InterventionStackView.jsx` updated to 4 Δ headers (Marg ΔEUI / Marg ΔCO₂ / Cum ΔEUI / Cum ΔCO₂) with `title` tooltips, plus an extra `w-5` spacer for the new Duplicate column.
+- **BaselineRow** updated to match the 4-column shape — marginal slots show "—" (no concept of marginal vs baseline), cumulative slots pin the baseline EUI + CO₂ values.
+
+`ComparisonView.jsx` already used a 4-column KPI strip with separate EUI and Carbon rows (Brief 41 Part 5 design) — no Part 2 code change needed there.
+
+### Files touched (Part 2)
+
+- `frontend/src/components/modules/interventions/InterventionRow.jsx`
+- `frontend/src/components/modules/interventions/InterventionStackView.jsx`
+- `frontend/src/components/modules/interventions/InterventionsModule.jsx`
+- `docs/audit/45_ux_polish.md` — §2 appended
+- `STATUS.md` — this section
+
+### What did NOT change (Part 2)
+
+- Engine: untouched. `computeDelta` already returned both EUI and CO₂ records.
+- Data model: untouched. Patch shape and id format unchanged.
+- `ComparisonView.jsx`: untouched. Existing 4-column KPI strip already aligned.
+- `InterventionEditorPopout.jsx`: untouched. Editor pop-out is independent of row layout.
+
+### Next
+
+Part 3 — Sankey hover tooltip + EUI waterfall in Comparison + inline share editing in SystemSummaryRow + visual split indicator on service section headers.
+
+---
+
+## ✅ Session 2026-05-21 — Brief 45 Part 1: Interventions UX layout + icons + popover
+
+**State:** `closed` — Brief 45 Part 1 at `811056a`.
 
 **Prior HEAD:** `7c4c59a` (Brief 44 close).
 
