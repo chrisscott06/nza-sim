@@ -270,11 +270,33 @@ function _computeHeatingOrCooling(service, systems, serviceLevel, demandAtComfor
     // `demandAtComfortMwh` is the POST-MVHR-recovery demand on the heating
     // side (caller passes `heatingDemandOverrideMwh = raw − MVHR offset`,
     // see instantCalc.js line 4131). The state-2 recompute returns RAW
-    // demand at the new setpoint (no MVHR applied). Subtract the same
-    // recovery offset so both demand values are at the same boundary —
-    // the Diagnostic Δ then measures only the setpoint shift, not the
-    // MVHR contribution. (Cooling passes recoveryOffsetMwh=0; no shift.)
-    demand_at_service_setpoint_mwh = Math.max(0, rawDemandAtSetpointMwh - (recoveryOffsetMwh || 0))
+    // demand at the new setpoint (no MVHR applied). To put both values on
+    // the same boundary we subtract a recovery offset from the recomputed
+    // value too.
+    //
+    // Brief 44 Part 5 follow-up (2026-05-21) — Constant offset over-
+    // subtracts at low setpoints. The MVHR recovery scales with heating
+    // demand (Brief 28j's hourly cap ensures recovery ≤ per-hour demand).
+    // At setpoint 19°C (vs comfort 21°C) raw demand is smaller; subtracting
+    // the larger offset sized at the comfort baseline clipped to 0 →
+    // "Heating (off)" in the Sankey for Bridgewater. The proportional
+    // scaling below preserves the boundary alignment while respecting
+    // that lower-demand settings have lower recovery.
+    //
+    // offsetRatio ≈ recovery_offset / raw_state2_at_comfort
+    // ≈ 0.68 for Bridgewater (61.3 / 90.1)
+    // → post-recovery at setpoint = raw_at_setpoint × (1 − 0.68)
+    //                            = raw_at_setpoint × 0.32
+    // (Cooling passes recoveryOffsetMwh=0; no shift.)
+    let scaledOffset = 0
+    if (service === 'heating' && recoveryOffsetMwh && recoveryOffsetMwh > 0) {
+      const rawAtComfortMwh = demandAtComfortMwh + recoveryOffsetMwh
+      const offsetRatio = rawAtComfortMwh > 0
+        ? recoveryOffsetMwh / rawAtComfortMwh
+        : 0
+      scaledOffset = offsetRatio * rawDemandAtSetpointMwh
+    }
+    demand_at_service_setpoint_mwh = Math.max(0, rawDemandAtSetpointMwh - scaledOffset)
   }
 
   // Per-system computation

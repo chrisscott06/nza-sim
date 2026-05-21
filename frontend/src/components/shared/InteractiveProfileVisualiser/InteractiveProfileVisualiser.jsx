@@ -277,6 +277,15 @@ export default function InteractiveProfileVisualiser({
   const primaryHeight = weatherOverlays.size > 0 ? Math.max(180, height - 110) : height
   const weatherHeight = 80
   const xKey = 'label'
+  // Brief 44 follow-up (2026-05-21): explicit Y-axis width so the
+  // primary chart and the weather strip line up vertically. Without
+  // this, Recharts auto-sizes each chart's YAxis based on its own
+  // tick label widths — the weather strip ends up narrower (~28 px)
+  // while the primary's auto-width is ~40-48 px depending on data.
+  // The mismatch makes the X axes drift horizontally. Pinning both to
+  // 48 px guarantees the plot areas align.
+  const Y_AXIS_WIDTH = 48
+  const CHART_MARGIN = { top: 8, right: 8, bottom: 4, left: 0 }
 
   // Tooltip formatter — show kW per layer, plus weather context
   const tooltipFormatter = (value, name) => {
@@ -327,10 +336,10 @@ export default function InteractiveProfileVisualiser({
     if (chartMode === 'stacked_area') {
       return (
         <ResponsiveContainer width="100%" height={primaryHeight}>
-          <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 4, left: 0 }}>
+          <AreaChart data={data} margin={CHART_MARGIN}>
             <CartesianGrid stroke="#E5E7EB" strokeDasharray="2 2" vertical={false} />
             <XAxis dataKey={xKey} tick={{ fontSize: 10, fill: '#6B7280' }} interval={Math.max(1, Math.floor(data.length / 12))} />
-            <YAxis tick={{ fontSize: 10, fill: '#6B7280' }} label={{ value: 'kW', angle: -90, position: 'insideLeft', fontSize: 10, fill: '#6B7280', offset: 0 }} />
+            <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10, fill: '#6B7280' }} label={{ value: 'kW', angle: -90, position: 'insideLeft', fontSize: 10, fill: '#6B7280', offset: 0 }} />
             <Tooltip formatter={tooltipFormatter} contentStyle={{ fontSize: 11 }} labelStyle={{ fontSize: 11 }} />
             <Legend wrapperStyle={{ fontSize: 10 }} />
             {selectedLayers.map(l => (
@@ -344,10 +353,10 @@ export default function InteractiveProfileVisualiser({
     // single_line (default)
     return (
       <ResponsiveContainer width="100%" height={primaryHeight}>
-        <LineChart data={data} margin={{ top: 8, right: 8, bottom: 4, left: 0 }}>
+        <LineChart data={data} margin={CHART_MARGIN}>
           <CartesianGrid stroke="#E5E7EB" strokeDasharray="2 2" vertical={false} />
           <XAxis dataKey={xKey} tick={{ fontSize: 10, fill: '#6B7280' }} interval={Math.max(1, Math.floor(data.length / 12))} />
-          <YAxis tick={{ fontSize: 10, fill: '#6B7280' }} label={{ value: 'kW', angle: -90, position: 'insideLeft', fontSize: 10, fill: '#6B7280', offset: 0 }} />
+          <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 10, fill: '#6B7280' }} label={{ value: 'kW', angle: -90, position: 'insideLeft', fontSize: 10, fill: '#6B7280', offset: 0 }} />
           <Tooltip formatter={tooltipFormatter} contentStyle={{ fontSize: 11 }} labelStyle={{ fontSize: 11 }} />
           <Legend wrapperStyle={{ fontSize: 10 }} />
           {selectedLayers.map(l => (
@@ -364,9 +373,9 @@ export default function InteractiveProfileVisualiser({
     return (
       <div className="mt-2 border border-light-grey rounded bg-off-white/30 p-1">
         <ResponsiveContainer width="100%" height={weatherHeight}>
-          <LineChart data={data} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
+          <LineChart data={data} margin={CHART_MARGIN}>
             <XAxis dataKey={xKey} tick={{ fontSize: 9, fill: '#9CA3AF' }} interval={Math.max(1, Math.floor(data.length / 12))} />
-            <YAxis tick={{ fontSize: 9, fill: '#9CA3AF' }} width={28} />
+            <YAxis width={Y_AXIS_WIDTH} tick={{ fontSize: 9, fill: '#9CA3AF' }} />
             <Tooltip formatter={tooltipFormatter} contentStyle={{ fontSize: 11 }} labelStyle={{ fontSize: 11 }} />
             {overlays.map(w => (
               <Line key={w.id} type="monotone" dataKey={w.dataKey} name={w.label} stroke={w.colour} strokeWidth={1} dot={false} isAnimationActive={false} />

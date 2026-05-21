@@ -827,6 +827,38 @@ function SystemsSankey({ consumption, sysCfg, sysCfgV40 }) {
     return branches
   }
 
+  // 2026-05-21 — Brief 44 Part 5 follow-up. The v25 fuel_mix path
+  // (above) over-attributes delivered to gas on Bridgewater (80/20 v25
+  // vs 65/35 v40), producing hover tooltips like "269 MWh ÷ 0.90 =
+  // 242.9" where the math doesn't actually balance (269 / 0.9 = 298,
+  // not 242.9). When the engine's brief40.dhw.systems block is
+  // present, build branches directly from per-system delivered_mwh +
+  // source_energy_mwh + efficiency so tooltips read true.
+  function branchesFromV40Dhw(brief40Dhw) {
+    if (!brief40Dhw || !Array.isArray(brief40Dhw.systems) || brief40Dhw.systems.length === 0) {
+      return null
+    }
+    const out = []
+    for (const s of brief40Dhw.systems) {
+      const delivered_mwh = s.delivered_mwh ?? 0
+      const fuel_mwh      = s.source_energy_mwh ?? 0
+      if (delivered_mwh < 0.01 && fuel_mwh < 0.01) continue
+      const fuel = s.source_fuel ?? 'electricity'
+      out.push({
+        role: out.length === 0 ? 'primary' : 'secondary',
+        fuel,
+        delivered_mwh,
+        fuel_mwh,
+        efficiency: s.efficiency ?? (fuel_mwh > 0 ? delivered_mwh / fuel_mwh : 1),
+        // Carry the per-system label so the Sankey label loop can use it
+        // directly without re-matching by fuel.
+        v40_id:    s.id,
+        v40_label: s.label,
+      })
+    }
+    return out.length > 0 ? out : null
+  }
+
   function branchesElectricOneToOne(mwh) {
     if (!mwh || mwh < 0.01) return []
     return [{ role: 'primary', fuel: 'electricity', delivered_mwh: mwh, fuel_mwh: mwh, efficiency: 1 }]
@@ -849,12 +881,18 @@ function SystemsSankey({ consumption, sysCfg, sysCfgV40 }) {
       key: 'dhw', label: 'DHW',
       demand:    c.dhw?.demand_mwh    ?? 0,
       delivered: c.dhw?.delivered_mwh ?? 0,
-      branches:  branchesFromFuelMix(
-        c.dhw?.delivered_mwh ?? 0,
-        c.dhw?.electricity_mwh ?? 0,
-        c.dhw?.gas_mwh ?? 0,
-        dhwMix,
-      ),
+      // Prefer the v40 per-system branches when available (post-Brief-42
+      // engine output via consumption.brief40.dhw.systems). This keeps the
+      // delivered split + per-system efficiency + fuel attribution all
+      // sourced from the same per-system calculation, so the Sankey
+      // hover tooltips show math that actually balances.
+      branches:  branchesFromV40Dhw(c.brief40?.dhw)
+                 ?? branchesFromFuelMix(
+                      c.dhw?.delivered_mwh ?? 0,
+                      c.dhw?.electricity_mwh ?? 0,
+                      c.dhw?.gas_mwh ?? 0,
+                      dhwMix,
+                    ),
     },
     {
       key: 'fans', label: 'Mech vent',
@@ -924,60 +962,77 @@ function SystemsSankey({ consumption, sysCfg, sysCfgV40 }) {
         const cfg = br.role === 'secondary' ? sysCfg.cooling?.secondary : sysCfg.cooling?.primary
         br.sysName = fmtSys(cfg?.library_id ?? '')
         br.effText = hasEffChange ? `EER ${eff.toFixed(1)}` : null
-      } else if (it.key === 'dhw' && isMultiBranch) {
-        br.sysName = br.fuel === 'electricity' ? 'ASHP' : 'Gas boiler'
-        // 2026-05-21 fix: read the per-system efficiency directly from the
-        // post-Brief-42 v40 config, NOT from delivered/fuel. The v25
-        // `fuel_mix_applied` carries different fractions than the v40
-        // per-system computation, which scrambled the eff label
-        // (gas boiler labelled SCOP 1.1 instead of η 0.9; ASHP labelled
-        // SCOP 1.4 instead of 2.5). Match branch.fuel → system.source.
-        const v40DhwSystems = Array.isArray(sysCfgV40?.dhw) ? sysCfgV40.dhw : []
-        const isGasSrc = (s) => s === 'gas' || s === 'oil' || s === 'biomass' || s === 'district_heating'
-        const matchedV40 = v40DhwSystems.find(s => {
-          if (s?.enabled === false) return false
-          if (br.fuel === 'electricity') return s?.source === 'ambient_air'
-                                           || s?.source === 'ambient_ground'
-                                           || s?.source === 'electricity'
-                                           || s?.source === 'solar_thermal_assisted'
-          if (br.fuel === 'gas')         return isGasSrc(s?.source)
-          return false
-        })
-        const effFromConfig = Number(matchedV40?.efficiency_metric ?? NaN)
-        if (Number.isFinite(effFromConfig) && effFromConfig > 0) {
-          br.effText = effFromConfig >= 1
-            ? `SCOP ${effFromConfig.toFixed(1)}`
-            : `${Math.round(effFromConfig * 100)}% eff`
-          br.efficiency = effFromConfig
-          // Use the v40 system's label when available so users see e.g.
-          // "DHW gas (gas_boiler_calorifier)" instead of generic "Gas boiler".
-          if (matchedV40?.label) br.sysName = matchedV40.label
-        } else {
-          br.effText = effText   // fallback to derived eff when no v40 match
-        }
       } else if (it.key === 'dhw') {
-        // Single-branch DHW: prefer v40 lead system label + efficiency
-        // when available, fall back to v25.
-        const v40DhwSystems = Array.isArray(sysCfgV40?.dhw) ? sysCfgV40.dhw : []
-        const leadV40 = v40DhwSystems.find(s => s?.enabled !== false) ?? v40DhwSystems[0]
-        const effFromConfig = Number(leadV40?.efficiency_metric ?? NaN)
-        if (leadV40?.label) {
-          br.sysName = leadV40.label
+        // 2026-05-21 fix (Brief 44 Part 5 follow-up). When the v40 branch
+        // builder ran (branchesFromV40Dhw), each branch already carries
+        // its v40_label + v40_id + accurate efficiency. Prefer that.
+        // Fall back to per-fuel-source v40 config lookup (legacy path
+        // for v25-fuel-mix branches), and to v25 sysCfg as a last
+        // resort for pre-Brief-42 projects.
+        if (br.v40_label || br.v40_id) {
+          br.sysName = br.v40_label ?? br.v40_id
+          br.effText = br.efficiency >= 1
+            ? `SCOP ${br.efficiency.toFixed(1)}`
+            : `${Math.round(br.efficiency * 100)}% eff`
         } else {
-          br.sysName = fmtSys(sysCfg.dhw?.primary?.library_id ?? '')
-        }
-        if (Number.isFinite(effFromConfig) && effFromConfig > 0) {
-          br.effText = effFromConfig >= 1
-            ? `SCOP ${effFromConfig.toFixed(1)}`
-            : `${Math.round(effFromConfig * 100)}% eff`
-          br.efficiency = effFromConfig
-        } else {
-          br.effText = effText
+          // Legacy v25-fuel-mix branch path
+          const v40DhwSystems = Array.isArray(sysCfgV40?.dhw) ? sysCfgV40.dhw : []
+          const isGasSrc = (s) => s === 'gas' || s === 'oil' || s === 'biomass' || s === 'district_heating'
+          const matchedV40 = v40DhwSystems.find(s => {
+            if (s?.enabled === false) return false
+            if (br.fuel === 'electricity') return s?.source === 'ambient_air'
+                                             || s?.source === 'ambient_ground'
+                                             || s?.source === 'electricity'
+                                             || s?.source === 'solar_thermal_assisted'
+            if (br.fuel === 'gas')         return isGasSrc(s?.source)
+            return false
+          })
+          const effFromConfig = Number(matchedV40?.efficiency_metric ?? NaN)
+          if (Number.isFinite(effFromConfig) && effFromConfig > 0) {
+            br.efficiency = effFromConfig
+            br.effText = effFromConfig >= 1
+              ? `SCOP ${effFromConfig.toFixed(1)}`
+              : `${Math.round(effFromConfig * 100)}% eff`
+            br.sysName = matchedV40?.label
+                       ?? (isMultiBranch ? (br.fuel === 'electricity' ? 'ASHP' : 'Gas boiler')
+                                          : fmtSys(sysCfg.dhw?.primary?.library_id ?? ''))
+          } else {
+            br.effText = effText
+            br.sysName = isMultiBranch
+              ? (br.fuel === 'electricity' ? 'ASHP' : 'Gas boiler')
+              : fmtSys(sysCfg.dhw?.primary?.library_id ?? '')
+          }
         }
       } else {
         br.sysName = null
         br.effText = null
       }
+
+      // 2026-05-21 — Brief 44 Part 5 follow-up: hover tooltip on each Sankey
+      // ribbon so the user can verify the math (demand × efficiency =
+      // fuel). Per Chris's request: "demand X kWh based on a SCOP of 2.5;
+      // electricity used = X / 2.5". Format:
+      //   <System name>
+      //   Demand (delivered):  X.X MWh
+      //   <Efficiency label>:  N.NN  (SCOP / SEER / η / EER)
+      //   Fuel consumed:       D / E = F.F MWh <fuel name>
+      // SVG <title> renders as a native browser tooltip; no JS hover state
+      // needed.
+      const deliveredMwh = br.delivered_mwh
+      const fuelMwh      = br.fuel_mwh
+      const effForLabel  = br.efficiency
+      const fuelName     = br.fuel === 'electricity' ? 'electricity' : (br.fuel === 'gas' ? 'gas' : 'fuel')
+      const effLabel = it.key === 'space_cooling'
+        ? (effForLabel >= 1 ? `SEER ${effForLabel.toFixed(2)}` : `η ${effForLabel.toFixed(2)}`)
+        : (effForLabel >= 1 ? `SCOP ${effForLabel.toFixed(2)}` : `η ${effForLabel.toFixed(2)}`)
+      const nameStr = br.sysName ?? `${it.label} (${br.role ?? 'primary'})`
+      const calcStr = effForLabel > 0
+        ? `${deliveredMwh.toFixed(1)} MWh ÷ ${effForLabel.toFixed(2)} = ${fuelMwh.toFixed(1)} MWh ${fuelName}`
+        : `${deliveredMwh.toFixed(1)} MWh delivered`
+      br.tooltip = `${nameStr}
+Demand (delivered):  ${deliveredMwh.toFixed(1)} MWh
+${effLabel}
+Fuel consumed:  ${calcStr}`
     }
   }
 
@@ -1121,7 +1176,14 @@ function SystemsSankey({ consumption, sysCfg, sysCfgV40 }) {
                 d={ribbonPath(leftX1, br.srcY0, br.srcY1, rightX0, br.tgtY0, br.tgtY1)}
                 fill={colour} fillOpacity={0.50}
                 stroke={colour} strokeOpacity={0.20} strokeWidth={0.5}
-              />
+                style={{ cursor: 'help' }}
+              >
+                {/* 2026-05-21 — Brief 44 Part 5 follow-up: native SVG tooltip
+                    on hover. Shows demand × efficiency = fuel math so the
+                    user can verify e.g. ASHP DHW: 117.7 MWh ÷ 2.5 = 47.1
+                    MWh electricity. */}
+                {br.tooltip && <title>{br.tooltip}</title>}
+              </path>
             )
           })
         })}
@@ -1464,10 +1526,23 @@ function SystemsProfiles({ result }) {
 
   // Layers — module-specific data feeds. Total electricity is the default
   // single signal (most-summarising shape for a Systems-page user).
+  //
+  // Colour discipline: FUEL carriers (electricity, gas) get warm "fuel"
+  // hues — amber + deep red. DELIVERED services get the canonical service
+  // hues from SERVICE_COLOURS (red = heating, cyan = cooling, pink = DHW,
+  // teal = ventilation, amber = lighting, violet = small power). The
+  // heating-delivered red and gas red are intentionally NOT identical
+  // hues (heating = #DC2626 canonical service red, gas = #991B1B darker
+  // burgundy fuel red) so a user toggling both layers can distinguish
+  // the seasonal heating thermal trace from the flat DHW-gas-fuel trace.
+  // (Pre-fix Brief 44 Part 3 used a light coral #F87171 for heating and
+  // #DC2626 for gas — too similar; Chris flagged them as visually
+  // "aligned" when in fact one was flat and the other strongly
+  // seasonal.)
   const layers = [
     { id: 'electricity', label: 'Electricity total', colour: '#ECB01F', daily_kwh: dpEng.fuel_kwh_per_day?.electricity ?? [] },
-    { id: 'gas',         label: 'Gas total',         colour: '#DC2626', daily_kwh: dpEng.fuel_kwh_per_day?.gas ?? [] },
-    { id: 'heating',     label: 'Heating delivered', colour: '#F87171', daily_kwh: dpEng.delivered_kwh_per_day?.heating ?? [] },
+    { id: 'gas',         label: 'Gas total',         colour: '#991B1B', daily_kwh: dpEng.fuel_kwh_per_day?.gas ?? [] },
+    { id: 'heating',     label: 'Heating delivered', colour: '#DC2626', daily_kwh: dpEng.delivered_kwh_per_day?.heating ?? [] },
     { id: 'cooling',     label: 'Cooling delivered', colour: '#00AEEF', daily_kwh: dpEng.delivered_kwh_per_day?.cooling ?? [] },
     { id: 'dhw',         label: 'DHW delivered',     colour: '#EC4899', daily_kwh: dpEng.delivered_kwh_per_day?.dhw ?? [] },
     { id: 'fans',        label: 'Fan power',         colour: '#14B8A6', daily_kwh: dpEng.delivered_kwh_per_day?.fans ?? [] },
