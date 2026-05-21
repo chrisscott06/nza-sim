@@ -254,6 +254,92 @@ This is provable by code reading: the hook's main-app branches for each key clas
 - `docs/audit/46_interventions_editor_rebuild.md` — §2 appended (this section)
 - `STATUS.md` — Part 2a section
 
+### §2.6a Part 2b — composer scaffold + indicator + dev toggle (2026-05-21)
+
+Per Chris's Option A directive ("extract BuildingDefinition's inline subsections as named exports — cleanest long-term; set the precedent for Part 3 IG") and the self-contained constraint ("each subsection must own its own state, labels, memoisation — no prop-drilling from BuildingDefinition that BuildingSection has to fake"), Part 2b splits into two sub-deliverables for verification rigour:
+
+**Part 2b (this commit) — composer scaffold + reusable indicator + dev entry point:**
+
+1. **`PatchedInputBadge.jsx`** — visible-change indicator component. Wraps any input; reads `useHasPatchOnPath(path)`; renders a small accent dot when a patch exists. Click reverts via `useRevertPathPatch(path)`. Outside the capture context (no patch or no provider), renders children unmodified — main-app behaviour unchanged. Pattern reused by InternalGainsSection / OperationSection / SystemsSection in Parts 3–4.
+
+2. **`BuildingSection.jsx`** — scaffold composer for the editor's right pane. Reads the active subsection (`building.air_permeability` / `building.orientation` / `building.glazing` / `building.fabric` / `building.shading`) and renders a labelled placeholder. The placeholder explicitly references the Part 2c extraction work + the Part 2a refactor of mutation entry points.
+
+3. **`?editor=v2` dev toggle** in `InterventionsModule.jsx` — appending `?editor=v2` to the `/interventions` URL routes the editor pop-out to `InterventionEditorV2` (the new shell from Part 1) instead of the old `InterventionEditorPopout`. Default remains the old editor. Toggle removed at Part 5 when V2 becomes the only entry point.
+
+4. **`InterventionEditorV2.jsx`** updated to import + dispatch `BuildingSection` when `active` starts with `building.`. IG / Operation / Systems still show the placeholder.
+
+**Part 2c (next session) — actual section extractions:**
+
+Mechanical refactor of `BuildingDefinition.jsx`'s `InputsColumn` function (lines 549–1012). The five inline subsections currently sharing the InputsColumn's state become named exports in a new file `frontend/src/components/modules/building/buildingSections.jsx`:
+
+- **`GeometrySection`** — owns `orientationLocked` state. Reads `params` from ProjectContext. Mutations via `useProjectMutation`.
+- **`GlazingSection`** — owns `wwrMemory` state + `toggleWindowInclude` / `setWwrFor` handlers. Self-contained per-face include/restore logic.
+- **`ShadingSection`** — owns `shadingMemory` state + `toggleShadingInclude` / `setShadingFor` handlers.
+- **`OpeningsSection`** — owns `louvreMemory` state + `toggleLouvreInclude` / `setLouvreFor` / `setFacadeCd` / `setFacadeFlowMode` handlers. Plus site_exposure dropdown.
+- **`FabricSection`** — accepts `library` as a prop (constructions library — single fetch at the page level avoids duplicates). Uses `updateConstruction` from ProjectContext directly (delegate-to-existing-helpers per Q2). The Brief 46 Part 5 design lets capture mode go through the construction picker too — `updateConstruction` becomes `mutate('constructions.<key>', value)` at that point.
+
+Already-standalone components keep their interfaces:
+- **`ThermalBridgesPanel`** — already a separate self-contained component. No extraction needed.
+- **`Airtightness`** — already a separate component; the `onChange={(v) => mutate('building.fabric', { air_permeability_q50: v })}` callback is the integration point — works in both contexts via Part 2a's refactor.
+- **`ComfortBandLeftPanel`** — already a separate component using `useContext(ProjectContext)`. Needs the same refactor pattern as Part 2a (replace `setComfortBand` direct call with `mutate('comfort_band.<key>', value)`) — done in Part 2a (commit `34c5c3c`).
+
+After Part 2c, `BuildingDefinition.jsx`'s `InputsColumn` becomes a thin assembler:
+
+```jsx
+function InputsColumn({ library, onInspectConstruction, liveResult }) {
+  const [openSection, setOpenSection] = useState('geometry')
+  const accordionProps = (id) => ({
+    isOpen: openSection === id,
+    onToggle: () => setOpenSection(prev => prev === id ? null : id),
+  })
+  return (
+    <div>
+      <GeometrySection {...accordionProps('geometry')} />
+      <GlazingSection {...accordionProps('glazing')} />
+      <ShadingSection {...accordionProps('shading')} />
+      <OpeningsSection {...accordionProps('openings')} />
+      <FabricSection library={library} onInspectConstruction={onInspectConstruction} {...accordionProps('fabric')} />
+      <ThermalBridgesPanel engineResult={liveResult} {...accordionProps('thermal_bridges')} />
+      <Airtightness q50={…} onChange={(v) => mutate('building.fabric', { air_permeability_q50: v })} {...accordionProps('airtightness')} />
+      <ComfortBandLeftPanel {...accordionProps('comfort')} />
+    </div>
+  )
+}
+```
+
+`BuildingSection.jsx` (in the editor) becomes:
+
+```jsx
+export default function BuildingSection({ active }) {
+  if (active === 'building.air_permeability') return <Airtightness ... />
+  if (active === 'building.orientation') return <GeometrySection />
+  if (active === 'building.glazing') return <GlazingSection />
+  if (active === 'building.fabric') return <FabricSection ... />
+  if (active === 'building.shading') return <ShadingSection />
+  return null
+}
+```
+
+Two contexts, same components, different mutation routing via the capture context — Brief 46 Principle 3 in action.
+
+### §2.6b Verification status (Part 2b)
+
+**Browser verification deferred** — dev server was offline (curl exit 7) when this commit landed. Chris's verification anchor (Bridgewater baseline EUI 121.7 within 0.1%) holds **by construction** for Part 2b:
+
+- `PatchedInputBadge`: pure presentation; reads from capture context, no engine path touched.
+- `BuildingSection`: placeholder; renders text only, no controls, no mutations, no engine path touched.
+- `InterventionsModule.jsx` dev toggle: adds an alternative editor entry point gated on `?editor=v2` URL param. Default behaviour is unchanged (the URL doesn't have that param in normal use). Even when the toggle fires, the new editor opens but isn't wired to any mutations beyond Part 1's shell — the engine path stays unchanged.
+- `InterventionEditorV2`: imports `BuildingSection` but doesn't render any new mutations from it (placeholder content).
+
+The 33-site Part 2a refactor was provably identical-by-construction (each `mutate(...)` call dispatches in the hook to the exact `updateParam`/`setComfortBand` shape the component used to call). Combined with Part 2b's placeholder-only additions, the engine output values on Bridgewater baseline are unchanged from Brief 45 close (`d4a3d31` → `34c5c3c` → `<this commit>`).
+
+**Live confirmation when dev server is up** (one-line check):
+- Load Bridgewater on `/systems`, read EUI from the right-rail Live Results panel. Expect **121.7 kWh/m²·yr** ± 0.1%.
+- Visit `/interventions?editor=v2` to confirm the new editor opens and the Building section's nav renders.
+- Test main-app Building edit (e.g. q50 slider on `/building`) — confirm it still updates the engine result (Live Results EUI changes).
+
+Surfacing the verification gap explicitly per Chris's Part 2a directive that "verification rigour matters more than speed".
+
 ### §2.6 Verification status (Part 2a)
 
 Code-review only. Main-app behaviour provable by construction (the hook translates `mutate(...)` calls back to the exact `updateParam(...)` / `setComfortBand(...)` shapes that components used to make). Capture mode is provably correct by the hook's verbatim path-pass-through to `capturePatch`.

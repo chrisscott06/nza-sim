@@ -1,6 +1,80 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-21 — Brief 46 Part 2a: Building mutation entry points refactored
+## 🚧 Session 2026-05-21 — Brief 46 Part 2b: BuildingSection scaffold + indicator + dev toggle
+
+**State:** `commit_in_flight` — Brief 46 Part 2b (composer scaffold + reusable indicator + ?editor=v2 dev toggle; Part 2c lands the actual subsection extractions per Chris's Option A directive).
+
+**Prior HEAD:** `34c5c3c` (Brief 46 Part 2a).
+
+### What landed (Part 2b)
+
+Per Chris's "Option A — extract BuildingDefinition's inline subsections as named exports" directive at Part 2a close, with the self-contained constraint ("each subsection's named export must be self-contained — own state, own labels, own component-level memoisation"), Part 2b splits into two sub-deliverables for verification rigour:
+
+- **Part 2b (this commit)**: composer scaffold + reusable visible-change indicator + dev entry point. Sets up the plumbing.
+- **Part 2c (next session)**: actual extraction of the 5 inline subsections from BuildingDefinition.jsx into `building/buildingSections.jsx` as named exports.
+
+Three new pieces:
+
+**`frontend/src/components/modules/interventions/PatchedInputBadge.jsx`** (new) — visible-change indicator. Wraps any input; reads `useHasPatchOnPath(path)` from the capture context; renders a small accent dot beside the input when a patch exists. Click reverts via `useRevertPathPatch(path)`. Outside the capture context (no patch or no provider), renders children unmodified. Pattern reused by InternalGainsSection / OperationSection / SystemsSection in Parts 3–4.
+
+**`frontend/src/components/modules/interventions/sections/BuildingSection.jsx`** (new) — composer scaffold for the editor's right pane. Reads the active subsection from the editor nav and renders a labelled placeholder with explicit references to the Part 2c extraction work. When Part 2c lands, the placeholder swaps for the matching subsection's named export (GeometrySection / GlazingSection / ShadingSection / OpeningsSection / FabricSection / etc).
+
+**`?editor=v2` dev toggle** in `InterventionsModule.jsx` — appending `?editor=v2` to the `/interventions` URL routes the editor pop-out to `InterventionEditorV2` (the new shell from Part 1) instead of the old `InterventionEditorPopout`. Default remains the old editor through Parts 1-4. Toggle removed at Part 5 when V2 becomes the only entry point.
+
+**`InterventionEditorV2.jsx`** updated to import + dispatch `BuildingSection` when nav `active` starts with `building.`. IG / Operation / Systems still show the Part 1 placeholder until Parts 3-4.
+
+### What did NOT change (Part 2b)
+
+- Engine: untouched.
+- Data model: untouched.
+- Main-app behaviour: untouched. Dev toggle is gated on URL param `?editor=v2`; default `/interventions` route routes to the old editor as before.
+- Old editor: untouched and still the default entry point.
+- Building module's inline subsections: untouched. Extracted in Part 2c.
+
+### Part 2c — next session
+
+- Refactor `BuildingDefinition.jsx`'s `InputsColumn` (lines 549–1012) by extracting:
+  - `GeometrySection` (owns `orientationLocked`; pure params reads)
+  - `GlazingSection` (owns `wwrMemory` + per-face include logic)
+  - `ShadingSection` (owns `shadingMemory`)
+  - `OpeningsSection` (owns `louvreMemory` + cd / flow_mode handlers + site_exposure)
+  - `FabricSection` (takes `library` prop; uses `updateConstruction` from ProjectContext via delegate-to-existing-helpers)
+- New file `frontend/src/components/modules/building/buildingSections.jsx` with the 5 named exports + the already-standalone `ThermalBridgesPanel` / `Airtightness` / `ComfortBandLeftPanel` re-exported for one-place imports.
+- Each subsection self-contained per Chris's constraint — own state, own labels, own memoisation. No `BuildingDefinition` prop-drilling that the editor would have to fake.
+- `BuildingSection.jsx` (in editor) imports the same named exports and dispatches per active subsection.
+- Browser verification on Bridgewater: baseline EUI 121.7 anchor + V2 editor capture cycle + main-app Building edit unchanged (no regression).
+
+### Verification status (Part 2b)
+
+Browser verification deferred to next session (dev server offline at commit time). Chris's baseline EUI 121.7 anchor holds **by construction** for Part 2b:
+- `PatchedInputBadge`: pure presentation; reads from capture context, no engine path touched.
+- `BuildingSection`: placeholder content only, no mutations, no engine path touched.
+- `?editor=v2` toggle: alternative editor entry point gated on URL param; default behaviour unchanged.
+- `InterventionEditorV2` doesn't render any new mutations from Part 2b — placeholder content only.
+
+The 33-site Part 2a refactor was provably identical-by-construction. Combined with Part 2b's placeholder-only additions, engine output on Bridgewater baseline is unchanged from Brief 45 close.
+
+**Live confirmation when dev server is up** (audit doc §2.6b documents this):
+- `/systems` Bridgewater Live Results EUI = 121.7 kWh/m²·yr ± 0.1%.
+- `/interventions?editor=v2` opens the new editor; Building nav renders.
+- Main-app `/building` q50 edit still updates the engine.
+
+### Files touched (Part 2b)
+
+- `frontend/src/components/modules/interventions/PatchedInputBadge.jsx` (new)
+- `frontend/src/components/modules/interventions/sections/BuildingSection.jsx` (new)
+- `frontend/src/components/modules/interventions/InterventionEditorV2.jsx` (BuildingSection import + dispatch)
+- `frontend/src/components/modules/interventions/InterventionsModule.jsx` (dev toggle)
+- `docs/audit/46_interventions_editor_rebuild.md` (§2.6a + §2.6b appended)
+- `STATUS.md` (this section)
+
+### Next
+
+Part 2c — extract the 5 BuildingDefinition inline subsections + wire into BuildingSection + browser-verify the full Building editor flow on Bridgewater. After Part 2c lands, Part 3 (Internal Gains + Operation).
+
+---
+
+## ✅ Session 2026-05-21 — Brief 46 Part 2a: Building mutation entry points refactored
 
 **State:** `commit_in_flight` — Brief 46 Part 2a (substantive refactor + hook extension; BuildingSection composer + browser verification deferred to Part 2b next session per Chris's "one Part per fresh session" pacing).
 

@@ -33,6 +33,10 @@ import { calculateInstant } from '../../../utils/instantCalc.js'
 import { SYSTEM_TEMPLATES_LIBRARY } from '../../../data/systemTemplatesLibrary.js'
 import InterventionStackView from './InterventionStackView.jsx'
 import InterventionEditorPopout from './InterventionEditorPopout.jsx'
+// Brief 46 Part 2b (2026-05-21): V2 editor accessible via ?editor=v2
+// query param. Old editor remains the default. Dev toggle removed at
+// Part 5 when V2 becomes the only entry point.
+import InterventionEditorV2 from './InterventionEditorV2.jsx'
 import ComparisonView from './ComparisonView.jsx'
 import { SaveToLibraryModal, LoadFromLibraryModal, LibraryStripButton } from './InterventionLibrary.jsx'
 
@@ -343,22 +347,41 @@ export default function InterventionsModule() {
         )}
       </div>
 
-      {/* Brief 41 Part 4 — draggable editor pop-out with patch capture
-          + live preview. Brief 43 Part 1: default position is now
-          right-anchored (set inside InterventionEditorPopout); the
-          onDirtyChange callback feeds the parent's switch-intervention
-          unsaved-changes guard. */}
-      <InterventionEditorPopout
-        intervention={editing}
-        baselineConfig={baselineConfig}
-        weatherData={weatherData}
-        hourlySolar={hourlySolar}
-        scheduleProfiles={null}
-        onSave={handleSaveEditing}
-        onCancel={handleCloseEditor}
-        onDelete={handleDeleteEditing}
-        onDirtyChange={handleDirtyChange}
-      />
+      {/* Brief 46 Part 2b (2026-05-21): dev toggle to access the new
+          editor. Default remains the old InterventionEditorPopout; appending
+          `?editor=v2` to the URL routes to the new InterventionEditorV2
+          shell instead. Old editor deleted at Brief 46 Part 5; toggle
+          removed at the same time. */}
+      {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('editor') === 'v2' ? (
+        <InterventionEditorV2
+          intervention={editing}
+          baselineConfig={baselineConfig}
+          weatherData={weatherData}
+          hourlySolar={hourlySolar}
+          scheduleProfiles={null}
+          onSave={handleSaveEditing}
+          onCancel={handleCloseEditor}
+          onDelete={handleDeleteEditing}
+          onDirtyChange={handleDirtyChange}
+        />
+      ) : (
+        /* Brief 41 Part 4 — draggable editor pop-out with patch capture
+            + live preview. Brief 43 Part 1: default position is now
+            right-anchored (set inside InterventionEditorPopout); the
+            onDirtyChange callback feeds the parent's switch-intervention
+            unsaved-changes guard. */
+        <InterventionEditorPopout
+          intervention={editing}
+          baselineConfig={baselineConfig}
+          weatherData={weatherData}
+          hourlySolar={hourlySolar}
+          scheduleProfiles={null}
+          onSave={handleSaveEditing}
+          onCancel={handleCloseEditor}
+          onDelete={handleDeleteEditing}
+          onDirtyChange={handleDirtyChange}
+        />
+      )}
 
       {/* Brief 41 Part 5 — library save/load modals */}
       <SaveToLibraryModal

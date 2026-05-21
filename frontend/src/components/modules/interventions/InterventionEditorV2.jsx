@@ -53,6 +53,11 @@ import { runInterventionStack } from '../../../utils/interventionsEngine.js'
 import { calculateInstant } from '../../../utils/instantCalc.js'
 import EditorNav from './EditorNav.jsx'
 import EditorFooter from './EditorFooter.jsx'
+// Brief 46 Part 2b (2026-05-21): right-pane section composers.
+// Building composer scaffolded; subsection content lands in Part 2c
+// once BuildingDefinition's inline subsections are extracted as named
+// exports.
+import BuildingSection from './sections/BuildingSection.jsx'
 
 const INTERVENTIONS_ACCENT = '#E84393'
 
@@ -104,13 +109,18 @@ function EditorPaneBody({ active }) {
       </div>
     )
   }
-  // Part 1 placeholder. Parts 2-4 swap each branch for the matching
-  // section composer.
+  // Brief 46 Part 2b (2026-05-21): Building composer wired. Other
+  // modules' composers (InternalGainsSection / OperationSection /
+  // SystemsSection) land in Parts 3-4.
+  if (active.startsWith('building.')) {
+    return <BuildingSection active={active} />
+  }
+  // Parts 3-4 placeholder.
   return (
     <div className="h-full p-4">
       <p className="text-caption font-semibold text-navy mb-1">{labelFor(active)}</p>
       <p className="text-xxs text-mid-grey">
-        This section is a placeholder in Brief 46 Part 1. Wired in Part {partFor(active)}.
+        This section is a placeholder in Brief 46 Part 2b. Wired in Part {partFor(active)}.
       </p>
     </div>
   )
