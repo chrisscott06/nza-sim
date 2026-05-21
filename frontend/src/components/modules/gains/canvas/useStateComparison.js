@@ -69,15 +69,16 @@ export function useStateComparison() {
     const cb = comfortBand ?? { lower_c: 20, upper_c: 26 }
     const buildingWithComfort = { ...params, comfort_band: cb }
 
+    // Brief 44 Part 5d (2026-05-21): _skipInterventions per perf audit D.1.
     const state1 = calculateInstant(
       buildingWithComfort, constructions ?? {}, systems ?? {}, libraryData,
       weatherData, hourlySolar, null,
-      { mode: 'envelope-only', comfortBand: cb },
+      { mode: 'envelope-only', comfortBand: cb, _skipInterventions: true },
     )
     const state2 = calculateInstant(
       buildingWithComfort, constructions ?? {}, systems ?? {}, libraryData,
       weatherData, hourlySolar, null,
-      { mode: 'envelope-gains', comfortBand: cb },
+      { mode: 'envelope-gains', comfortBand: cb, _skipInterventions: true },
     )
 
     return { state1, state2, ready: true, libraryLoading: false }

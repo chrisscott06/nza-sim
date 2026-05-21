@@ -30,7 +30,8 @@ export default function HeatBalanceTab() {
 
   const liveResult = useMemo(() => {
     if (weatherCtx?.weatherData && weatherCtx?.hourlySolar) {
-      return calculateInstant(params || {}, constructions || {}, systems || {}, {}, weatherCtx.weatherData, weatherCtx.hourlySolar)
+      // Brief 44 Part 5d (2026-05-21): _skipInterventions per perf audit D.1.
+      return calculateInstant(params || {}, constructions || {}, systems || {}, {}, weatherCtx.weatherData, weatherCtx.hourlySolar, null, { _skipInterventions: true })
     }
     return calculateInstantDegreeDay(params || {}, constructions || {}, systems || {}, {})
   }, [params, constructions, systems, weatherCtx?.weatherData, weatherCtx?.hourlySolar])

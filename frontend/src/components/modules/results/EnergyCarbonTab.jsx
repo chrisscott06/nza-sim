@@ -192,7 +192,8 @@ export default function EnergyCarbonTab() {
       const r = calculateInstant(
         building, constructions || {}, {}, libraryData,
         weatherCtx.weatherData, hourlySolar, null,
-        { comfortBand: comfortBand ?? { lower_c: 20, upper_c: 26 } },
+        // Brief 44 Part 5d (2026-05-21): _skipInterventions per perf audit D.1.
+        { comfortBand: comfortBand ?? { lower_c: 20, upper_c: 26 }, _skipInterventions: true },
       )
       setEngineError(null)
       return r

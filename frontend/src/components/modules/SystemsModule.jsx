@@ -146,7 +146,11 @@ export default function SystemsModule() {
     return calculateInstant(
       { ...params, comfort_band: cb }, constructions ?? {}, systems ?? {},
       libraryData, weatherData, hourlySolar, null,
-      { mode: 'full', comfortBand: cb, engine: 'v2.5' },
+      // Brief 44 Part 5d (2026-05-21): _skipInterventions:true — this
+      // route doesn't consume consumption.interventions.*; skipping
+      // the stack runner cuts the per-edit cost from ~6.3s (N=3) to
+      // ~550 ms (perf audit §14 / D.1).
+      { mode: 'full', comfortBand: cb, engine: 'v2.5', _skipInterventions: true },
     )
   }, [params, constructions, systems, libraryData, weatherData, hourlySolar, comfortBand, constructionsLib])
 

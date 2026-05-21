@@ -289,7 +289,8 @@ export default function SystemsLiveResults({ libraryData = {}, scheduleProfiles 
   const hourlySolar = useHourlySolar(weatherData, orientationDeg)
 
   const result = useMemo(
-    () => calculateInstant(params, constructions, systems, libraryData, weatherData, hourlySolar, scheduleProfiles),
+    // Brief 44 Part 5d (2026-05-21): _skipInterventions per perf audit D.1.
+    () => calculateInstant(params, constructions, systems, libraryData, weatherData, hourlySolar, scheduleProfiles, { _skipInterventions: true }),
     [params, constructions, systems, libraryData, weatherData, hourlySolar, scheduleProfiles]
   )
 

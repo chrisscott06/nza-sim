@@ -283,7 +283,8 @@ export default function OperationModule() {
     return calculateInstant(
       { ...params, comfort_band: cb }, constructions ?? {}, systems ?? {},
       libraryData, weatherData, hourlySolar, null,
-      { mode: 'envelope-gains', comfortBand: cb },
+      // Brief 44 Part 5d (2026-05-21): _skipInterventions per perf audit D.1.
+      { mode: 'envelope-gains', comfortBand: cb, _skipInterventions: true },
     )
   }, [params, constructions, systems, libraryData, weatherData, hourlySolar, comfortBand])
 

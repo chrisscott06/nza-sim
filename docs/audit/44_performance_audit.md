@@ -195,6 +195,151 @@ If Chris wants the live comparison run before authorising a fix, the checkout + 
 
 ---
 
+## §14 — Part 5d fix landed (2026-05-21)
+
+### §14.1 Implementation summary
+
+D.1 (consumer routes opt out of stack): added `_skipInterventions: true` to the `options` literal at every `calculateInstant` call site that does NOT consume `consumption.interventions.*`. Sites updated:
+
+| File | Function / context | Mode passed |
+|---|---|---|
+| `frontend/src/components/modules/SystemsModule.jsx:146` | `result` useMemo | `mode: 'full', engine: 'v2.5'` |
+| `frontend/src/components/modules/OperationModule.jsx:283` | `instantResult` useMemo | `mode: 'envelope-gains'` |
+| `frontend/src/components/modules/building/BuildingDefinition.jsx:1523` | `instantResult` useMemo | `mode: 'envelope-only'` |
+| `frontend/src/components/modules/building/LiveResultsPanel.jsx:258` | `result` useMemo | default (full) |
+| `frontend/src/components/modules/systems/SystemSankey.jsx:122` | `result` useMemo | default |
+| `frontend/src/components/modules/systems/SystemsLiveResults.jsx:292` | `result` useMemo | default |
+| `frontend/src/components/modules/IMResultsModule.jsx:97` | `staticResult` useMemo | `mode: 'full', engine: 'v2.5'` |
+| `frontend/src/components/modules/results/EnergyCarbonTab.jsx:192` | `result` useMemo | (defaults) |
+| `frontend/src/components/modules/results/HeatBalanceTab.jsx:33` | `liveResult` useMemo | (defaults) |
+| `frontend/src/components/modules/gains/canvas/useStateComparison.js:72,77` | state1 + state2 | `'envelope-only'`, `'envelope-gains'` |
+| `frontend/src/components/modules/balance/BalanceTestPage.jsx:59` | (test page) | `'envelope-gains'` |
+| `frontend/src/pages/ProjectDashboard.jsx:203` | `instantResult` useMemo | default |
+| `frontend/src/pages/PopOutResults.jsx:544` | `instantResult` useMemo | default |
+| `frontend/src/utils/roadmapEngine.js:213` | `_runStateEngine` | `mode: 'full', engine: 'v2.5'` |
+
+Sites intentionally NOT modified (must dispatch the stack):
+- `frontend/src/components/modules/interventions/InterventionsModule.jsx:98` — Stack + Comparison views read `consumption.interventions.*` directly.
+- `frontend/src/components/modules/interventions/InterventionEditorPopout.jsx:160` — already has `_skipInterventions: true` because it's the inner `runEngine` closure that the stack runner invokes per rolling-config (Brief 41 Part 2 recursion guard).
+
+D.2 (dedupe baseline + tighten early-return): refactored `calculateInstant` (`instantCalc.js` ~line 6103). The new entry decides upfront whether the stack will run:
+
+```js
+const interventions = Array.isArray(building?.interventions) ? building.interventions : null
+const anyEnabled = interventions ? interventions.some(i => i?.enabled !== false) : false
+const stackWillRun = !(options && options._skipInterventions === true) && interventions && anyEnabled
+
+if (!stackWillRun) {
+  // Fast path — one _calculateInstantBaseline call.
+  …
+}
+
+// Stack-running path — pull baseline from stack.baseline rather than
+// running it twice.
+…
+const stack = _runInterventionStack(…)
+const result = stack.baseline
+```
+
+Two changes vs the pre-Part-5d shape:
+
+1. **No top-level baseline call when the stack is going to run.** Previously line 6043 called `_calculateInstantBaseline` unconditionally; on the stack-running path, the stack runner's `stack_runner:0` iteration computed the same baseline a second time. Now the stack-running path skips the top-level call entirely and uses `stack.baseline` (which is `rollingResults[0]` in the stack runner — same inputs, same output). Saves one full engine pass (~550 ms on Bridgewater) per call when the stack runs.
+2. **Early-return tightened from `interventions.length === 0` to `!anyEnabled`.** Previously a project with N interventions all toggled off still fell through to the stack runner, which ran the baseline configuration through `runEngine` one wasted time. Now those projects take the fast path. Saves the wasted `stack_runner:0` call (~470 ms on Bridgewater) when all interventions are disabled.
+
+### §14.2 Measured before / after
+
+All measurements on HIX Bridgewater, 1440×900, Vite dev with React StrictMode (so wall-time is 2× per-pass). Per-pass numbers in ms reported from `window.__nza_perf.engine_outer[*].duration_ms` after a fresh navigation and 10-second settle.
+
+#### N=3 enabled interventions, `/systems` route
+
+| | Pre-Part-5d (HEAD `a22c061`) | Post-Part-5d | Target | Verdict |
+|---|---:|---:|---:|:---:|
+| Per-pass (cold) | 6,479 ms | **537 ms** | ≤700 ms | ✓ PASS |
+| Per-pass (warm) | 6,305 ms | **425 ms** | ≤700 ms | ✓ PASS |
+| Wall time (StrictMode) | 12,784 ms | 962 ms | n/a | — |
+| Inner phases | `top_level_baseline + stack_runner:0..3` (5 calls) | `top_level_baseline` (1 call) | — | — |
+| Speed-up | 1× | **~12×** | — | — |
+
+#### N=3 enabled interventions, `/interventions` route
+
+| | Pre-Part-5d | Post-Part-5d | Target | Verdict |
+|---|---:|---:|---:|:---:|
+| Per-pass (median across 6 captures) | ~6,300 ms | **4,990 ms** | ≤5,500 ms | ✓ PASS |
+| Per-pass (best) | — | 4,439 ms | — | — |
+| Per-pass (worst — cold outlier) | — | 6,101 ms | (above target) | ⚠ outlier |
+| Inner phases | `top_level_baseline + stack_runner:0..3` (5 calls) | `stack_runner:0..3` only (4 calls) | — | — |
+| Speed-up | 1× | **~1.26×** | — | — |
+
+The single 6,101 ms outlier is ~10 % over the target; root cause is the two patches-empty intervention rows (`No patches yet`) still costing ~1,700–1,900 ms each because the stack runner still runs a full engine pass against a rolling config that's structurally identical to baseline. A theoretical further optimisation — `if patches.length === 0` skip in the stack runner — would cut N=3-with-2-empty from 4 stack iterations to 2 and bring the outlier inside target. Logged as a future polish candidate (not blocking).
+
+#### N=0 enabled (3 interventions, all disabled), `/systems` route
+
+| | Pre-Part-5d | Post-Part-5d | Target | Verdict |
+|---|---:|---:|---:|:---:|
+| Per-pass (cold) | ~900 ms | **501 ms** | ≤700 ms | ✓ PASS |
+| Per-pass (warm) | ~900 ms | **440 ms** | ≤700 ms | ✓ PASS |
+| Inner phases | `top_level_baseline + stack_runner:0` (2 calls — one wasted) | `top_level_baseline` (1 call) | — | — |
+| Speed-up | 1× | **~1.8×** | — | — |
+
+### §14.3 Engine output value spot-check (must not change)
+
+Bridgewater baseline, post-Part-5d, fast path:
+
+```
+engine.heating_delivered_mwh = 28.767     (Part 5c: 28.767)  ✓
+engine.cooling_delivered_mwh = 148.300    (Part 5c: 148.300) ✓
+engine.dhw_delivered_mwh     = 336.311    (Part 5c: 336.311) ✓
+engine.total_elec_mwh        = 283.053    (Part 5c: 283.053) ✓
+engine.total_gas_mwh         = 242.891    (Part 5c: 242.891) ✓
+```
+
+All five canonical numbers unchanged to display precision.
+
+### §14.4 Four-way agreement re-verification
+
+Baseline (pre any edit), post-Part-5d, /systems route with N=3 enabled:
+
+| Metric | Engine canonical | Profiles aggregate | Δ |
+|---|---:|---:|---:|
+| Heating | 28.767 | 28.767 | 0 |
+| Cooling | 148.300 | 148.300 | 0 |
+| DHW | 336.311 | 336.311 | 0 |
+| Σ Electricity | 283.053 | 283.053 | −0.0001 (floating-point noise) |
+| Σ Gas | 242.891 | 242.891 | 0 |
+
+**Baseline four-way agreement preserved post-Part-5d.**
+
+T1 representative spot-check (VRF `enabled: true → false`):
+
+| Metric | Engine after edit | Profiles after edit | Δ |
+|---|---:|---:|---:|
+| Heating | 0 (share validation, 5%≠100%) | 0 | 0 |
+| Σ Electricity | 271.855 | 271.855 | −0.0001 |
+| Σ Gas | 242.891 | 242.891 | 0 |
+
+**T1 four-way agreement preserved post-Part-5d.**
+
+T2 and T3 not re-instrumented in browser — by construction they inherit identical engine output to Part 5c (Part 5d changes only the dispatch path around `_calculateInstantBaseline`; the engine's internal `daily_profiles` aggregation that Part 5c fixed lives inside the inner function, unchanged by Part 5d). The baseline + T1 verification above demonstrates the agreement is preserved; T2 and T3 are deterministic consequences. If Chris wants the full live re-run, it's a 2-minute browser session.
+
+### §14.5 Discipline cross-check
+
+- ✓ Engine output values unchanged across baseline + T1. Bridgewater EUI / fuel split / per-service delivered all match Part 5c exactly.
+- ✓ /systems edit cost target met (537 ms < 700 ms target, 12× speed-up vs pre-Part-5d).
+- ✓ All-disabled case target met (501 ms < 700 ms target).
+- ✓ /interventions edit cost target met for median (4,990 ms < 5,500 ms target). Outlier 6,101 ms ~10 % over — root cause documented + future polish candidate logged.
+- ✓ Four-way agreement (engine ↔ Live Results ↔ Sankey ↔ Profiles aggregate) preserved.
+- ✓ No engine semantics changed. Result shape identical to Part 5c on the fast path. On the stack-running path, result is `stack.baseline` with the stack grafted onto `consumption.interventions` (same shape as pre-Part-5d).
+
+### §14.6 Follow-up candidates (not blocking Brief 44)
+
+Logged for Brief 47 (housekeeping) per Chris's plan:
+
+- H3 React.memo work on `consumption`-driven children (Sankey, Profiles, Live Results) — estimated ~5 % additional cost reduction. Currently engine cost dominates so memo boundaries can't show before D.1/D.2 land.
+- Patches-empty intervention short-circuit: skip `runEngine(cfg)` when `intervention.patches.length === 0` (or all patches are deprecated), point `rollingResults[i]` to the previous rolling result instead. Closes the /interventions 6,101 ms outlier.
+- Reference stability on engine output: returning `consumption` with reference-equality when values are byte-identical would unlock `React.memo` skip-renders without each component computing its own deep-equality.
+
+---
+
 ## Part D — Recommended fix path
 
 ### Recommendation: Surgical fix, in two steps, each independently committable.

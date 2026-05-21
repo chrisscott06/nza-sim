@@ -200,7 +200,8 @@ export default function ProjectDashboard() {
   const instantResult = useMemo(() => {
     if (!params || !constructions || !systems) return null
     try {
-      return calculateInstant(params, constructions, systems, {}, weatherData, hourlySolar)
+      // Brief 44 Part 5d (2026-05-21): _skipInterventions per perf audit D.1.
+      return calculateInstant(params, constructions, systems, {}, weatherData, hourlySolar, null, { _skipInterventions: true })
     } catch { return null }
   }, [params, constructions, systems, weatherData, hourlySolar])
 

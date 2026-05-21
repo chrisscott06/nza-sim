@@ -541,6 +541,7 @@ export default function PopOutResults() {
   const instantResult = useMemo(() => {
     if (!state?.building) return null
     try {
+      // Brief 44 Part 5d (2026-05-21): _skipInterventions per perf audit D.1.
       return calculateInstant(
         state.building,
         state.constructions ?? {},
@@ -549,6 +550,7 @@ export default function PopOutResults() {
         weatherData,
         hourlySolar,
         state.schedules ?? null,
+        { _skipInterventions: true },
       )
     } catch (e) {
       console.warn('[PopOut] instantCalc failed:', e)

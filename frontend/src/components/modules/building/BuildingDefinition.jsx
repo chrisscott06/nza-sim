@@ -1520,9 +1520,11 @@ export default function BuildingDefinition() {
   // purely envelope-vs-weather. Comfort band drives the demand derivation
   // (Part 1) at the lower/upper bound rather than against system setpoints.
   const instantResult = useMemo(
+    // Brief 44 Part 5d (2026-05-21): _skipInterventions per perf audit D.1.
     () => calculateInstant(params, constructions, systems, libraryData, weatherData, hourlySolar, null, {
       mode: 'envelope-only',
       comfortBand,
+      _skipInterventions: true,
     }),
     [params, constructions, systems, libraryData, weatherData, hourlySolar, comfortBand]
   )

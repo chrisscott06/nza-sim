@@ -6102,25 +6102,54 @@ function _perfPush(kind, durationMs, meta) {
 
 export function calculateInstant(building = {}, constructions = {}, systems = {}, libraryData = {}, weatherData = null, hourlySolar = null, scheduleProfiles = null, options = {}) {
   const _tOuter0 = (typeof performance !== 'undefined') ? performance.now() : 0
-  const _tInner0 = (typeof performance !== 'undefined') ? performance.now() : 0
-  const result = _calculateInstantBaseline(building, constructions, systems, libraryData, weatherData, hourlySolar, scheduleProfiles, options)
-  _perfPush('inner', (typeof performance !== 'undefined') ? performance.now() - _tInner0 : 0, {
-    phase: 'top_level_baseline',
-    n_interventions: Array.isArray(building?.interventions) ? building.interventions.length : 0,
-    skipped: !!(options && options._skipInterventions),
-    route: typeof location !== 'undefined' ? location.pathname : '?',
-  })
 
-  if (options && options._skipInterventions === true) {
-    _perfPush('outer', (typeof performance !== 'undefined') ? performance.now() - _tOuter0 : 0, { reentry_skip: true })
+  // Brief 44 Part 5d (2026-05-21) — D.2.
+  //
+  // Decide upfront whether the intervention stack runs. If it does, the
+  // stack runner's iter-0 call computes the baseline; running another
+  // baseline at the top of this function would duplicate that work
+  // (the perf audit measured this as the "wasted top-level baseline",
+  // ~550 ms per call on Bridgewater). So:
+  //
+  //   - If _skipInterventions, or building has no interventions array,
+  //     or no intervention has enabled !== false:
+  //       → fast path. One baseline call, return.
+  //
+  //   - Otherwise (stack is going to run):
+  //       → skip the top-level baseline. Let the stack runner produce
+  //         baseline at iter 0 (rollingResults[0] = baseline). Attach
+  //         that as the outer `result` and graft the stack onto it.
+  //
+  // The tightened early-return uses .some(enabled !== false) so a
+  // params.interventions list full of disabled entries (e.g. user
+  // disabled all rows in /interventions) also takes the fast path.
+
+  const interventions = Array.isArray(building?.interventions) ? building.interventions : null
+  const anyEnabled = interventions ? interventions.some(i => i?.enabled !== false) : false
+  const stackWillRun = !(options && options._skipInterventions === true) && interventions && anyEnabled
+
+  if (!stackWillRun) {
+    const _tInner = (typeof performance !== 'undefined') ? performance.now() : 0
+    const result = _calculateInstantBaseline(building, constructions, systems, libraryData, weatherData, hourlySolar, scheduleProfiles, options)
+    _perfPush('inner', (typeof performance !== 'undefined') ? performance.now() - _tInner : 0, {
+      phase: 'top_level_baseline',
+      n_interventions: interventions ? interventions.length : 0,
+      n_enabled: interventions ? interventions.filter(i => i?.enabled !== false).length : 0,
+      skipped: !!(options && options._skipInterventions),
+      route: typeof location !== 'undefined' ? location.pathname : '?',
+    })
+    _perfPush('outer', (typeof performance !== 'undefined') ? performance.now() - _tOuter0 : 0, {
+      n_interventions: interventions ? interventions.length : 0,
+      n_enabled: interventions ? interventions.filter(i => i?.enabled !== false).length : 0,
+      fast_path: true,
+      reentry_skip: !!(options && options._skipInterventions),
+      route: typeof location !== 'undefined' ? location.pathname : '?',
+    })
     return result
   }
-  if (!building || !Array.isArray(building.interventions) || building.interventions.length === 0) {
-    _perfPush('outer', (typeof performance !== 'undefined') ? performance.now() - _tOuter0 : 0, { n_interventions: 0 })
-    return result
-  }
 
-  // Build the engine-input quartet that patches are applied against.
+  // Stack-running path. The stack runner produces baseline at iter 0;
+  // we pull baseline from there and use it as the outer `result`.
   const baselineConfig = { building, constructions, systems, libraryData }
   let _stackCallCount = 0
   const runEngine = (cfg) => {
@@ -6143,7 +6172,12 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
     return r
   }
 
-  const stack = _runInterventionStack(baselineConfig, building.interventions, runEngine, libraryData)
+  const stack = _runInterventionStack(baselineConfig, interventions, runEngine, libraryData)
+
+  // Pull baseline from stack.baseline (rollingResults[0]) — same input,
+  // same output, but already computed inside the stack runner. Saves the
+  // redundant ~550 ms top-level baseline call (perf audit D.2).
+  const result = stack.baseline
 
   if (result && typeof result === 'object') {
     if (result.consumption && typeof result.consumption === 'object') {

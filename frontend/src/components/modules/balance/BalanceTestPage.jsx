@@ -59,7 +59,8 @@ export default function BalanceTestPage() {
       return calculateInstant(
         params || {}, constructions || {}, systems || {}, libraryData,
         weatherData, hourlySolar, null,
-        { mode: 'envelope-gains' },
+        // Brief 44 Part 5d (2026-05-21): _skipInterventions per perf audit D.1.
+        { mode: 'envelope-gains', _skipInterventions: true },
       )
     }
     return calculateInstantDegreeDay(params || {}, constructions || {}, systems || {}, libraryData)

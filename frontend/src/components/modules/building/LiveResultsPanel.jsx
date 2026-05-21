@@ -255,7 +255,8 @@ export default function LiveResultsPanel({ libraryData = {}, onSankeyExpand }) {
   const hourlySolar = useHourlySolar(weatherData, orientationDeg)
 
   const result = useMemo(
-    () => calculateInstant(params, constructions, systems, libraryData, weatherData, hourlySolar),
+    // Brief 44 Part 5d (2026-05-21): _skipInterventions per perf audit D.1.
+    () => calculateInstant(params, constructions, systems, libraryData, weatherData, hourlySolar, null, { _skipInterventions: true }),
     [params, constructions, systems, libraryData, weatherData, hourlySolar]
   )
 

@@ -97,7 +97,8 @@ export default function IMResultsModule() {
     return calculateInstant(
       { ...params, comfort_band: cb }, constructions ?? {}, systems ?? {},
       libraryData, weatherData, hourlySolar, null,
-      { mode: 'full', comfortBand: cb, engine: 'v2.5' },
+      // Brief 44 Part 5d (2026-05-21): _skipInterventions per perf audit D.1.
+      { mode: 'full', comfortBand: cb, engine: 'v2.5', _skipInterventions: true },
     )
   }, [params, constructions, systems, libraryData, weatherData, hourlySolar, comfortBand])
 

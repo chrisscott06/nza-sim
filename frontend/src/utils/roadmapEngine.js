@@ -218,7 +218,10 @@ function _runEngine(state, constructions, systems, weatherData, hourlySolar, lib
     weatherData,
     hourlySolar,
     null,
-    { mode: 'full', comfortBand, engine: 'v2.5' },
+    // Brief 44 Part 5d (2026-05-21): _skipInterventions per perf audit D.1.
+    // Roadmap composes its own intervention-like patches per state; it does
+    // not consume consumption.interventions.* from the engine result.
+    { mode: 'full', comfortBand, engine: 'v2.5', _skipInterventions: true },
   )
   return {
     elec_mwh: r?.consumption?.total?.electricity_mwh ?? 0,
