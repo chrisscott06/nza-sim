@@ -309,7 +309,7 @@ export default function SystemsModule() {
               </div>
             )}
             {consumption && centreView === 'sankey' && (
-              <SystemsSankey consumption={consumption} sysCfg={sysCfg} />
+              <SystemsSankey consumption={consumption} sysCfg={sysCfg} sysCfgV40={params?.systems_config_v40} />
             )}
             {consumption && centreView === 'profiles' && (
               <SystemsProfiles result={result} />
@@ -729,7 +729,7 @@ function fmtSys(s) {
     .replace(/^\w/, ch => ch.toUpperCase())
 }
 
-function SystemsSankey({ consumption, sysCfg }) {
+function SystemsSankey({ consumption, sysCfg, sysCfgV40 }) {
   // Three-column Sankey per Chris's walkthrough call (2026-05-19, second
   // iteration):
   //   LEFT   — Demand bars (Heating, Cooling, DHW, Mech vent, Lighting, SP)
@@ -920,10 +920,54 @@ function SystemsSankey({ consumption, sysCfg }) {
         br.effText = hasEffChange ? `EER ${eff.toFixed(1)}` : null
       } else if (it.key === 'dhw' && isMultiBranch) {
         br.sysName = br.fuel === 'electricity' ? 'ASHP' : 'Gas boiler'
-        br.effText = effText
+        // 2026-05-21 fix: read the per-system efficiency directly from the
+        // post-Brief-42 v40 config, NOT from delivered/fuel. The v25
+        // `fuel_mix_applied` carries different fractions than the v40
+        // per-system computation, which scrambled the eff label
+        // (gas boiler labelled SCOP 1.1 instead of η 0.9; ASHP labelled
+        // SCOP 1.4 instead of 2.5). Match branch.fuel → system.source.
+        const v40DhwSystems = Array.isArray(sysCfgV40?.dhw) ? sysCfgV40.dhw : []
+        const isGasSrc = (s) => s === 'gas' || s === 'oil' || s === 'biomass' || s === 'district_heating'
+        const matchedV40 = v40DhwSystems.find(s => {
+          if (s?.enabled === false) return false
+          if (br.fuel === 'electricity') return s?.source === 'ambient_air'
+                                           || s?.source === 'ambient_ground'
+                                           || s?.source === 'electricity'
+                                           || s?.source === 'solar_thermal_assisted'
+          if (br.fuel === 'gas')         return isGasSrc(s?.source)
+          return false
+        })
+        const effFromConfig = Number(matchedV40?.efficiency_metric ?? NaN)
+        if (Number.isFinite(effFromConfig) && effFromConfig > 0) {
+          br.effText = effFromConfig >= 1
+            ? `SCOP ${effFromConfig.toFixed(1)}`
+            : `${Math.round(effFromConfig * 100)}% eff`
+          br.efficiency = effFromConfig
+          // Use the v40 system's label when available so users see e.g.
+          // "DHW gas (gas_boiler_calorifier)" instead of generic "Gas boiler".
+          if (matchedV40?.label) br.sysName = matchedV40.label
+        } else {
+          br.effText = effText   // fallback to derived eff when no v40 match
+        }
       } else if (it.key === 'dhw') {
-        br.sysName = fmtSys(sysCfg.dhw?.primary?.library_id ?? '')
-        br.effText = effText
+        // Single-branch DHW: prefer v40 lead system label + efficiency
+        // when available, fall back to v25.
+        const v40DhwSystems = Array.isArray(sysCfgV40?.dhw) ? sysCfgV40.dhw : []
+        const leadV40 = v40DhwSystems.find(s => s?.enabled !== false) ?? v40DhwSystems[0]
+        const effFromConfig = Number(leadV40?.efficiency_metric ?? NaN)
+        if (leadV40?.label) {
+          br.sysName = leadV40.label
+        } else {
+          br.sysName = fmtSys(sysCfg.dhw?.primary?.library_id ?? '')
+        }
+        if (Number.isFinite(effFromConfig) && effFromConfig > 0) {
+          br.effText = effFromConfig >= 1
+            ? `SCOP ${effFromConfig.toFixed(1)}`
+            : `${Math.round(effFromConfig * 100)}% eff`
+          br.efficiency = effFromConfig
+        } else {
+          br.effText = effText
+        }
       } else {
         br.sysName = null
         br.effText = null
