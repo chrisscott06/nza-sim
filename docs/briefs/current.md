@@ -1,6 +1,6 @@
 # Current brief
 
-**Active:** None — `docs/briefs/active/` is empty after Brief 43 close (2026-05-20). Brief 30 (Dynamic engine rebuild) remains paused in archive; eligible for resumption when next Static work cycle is queued. Otherwise awaiting next brief from Chris.
+**Active:** [`active/44_visualisation_audit.md`](active/44_visualisation_audit.md) — Brief 44 Visualisation + reactivity audit and rebuild. Six Parts plus close. Part 1 audit ships a comprehensive diagnostic doc at [`docs/audit/44_visualisation_audit.md`](../audit/44_visualisation_audit.md); subsequent Parts fix the Diagnostic 248% over-delivery bug (Part 2), rebuild Profiles as a shared `InteractiveProfileVisualiser` (Part 3), reactivity sweep + Monthly cosmetic + Schedule decision (Part 4), cross-module rollout to Building / Internal Gains / Operation (Part 5), walkthrough + close (Part 6). Authorised end-to-end (no per-Part sign-off pauses; walkthrough sign-off after Part 5 before Part 6 close). Notion design note: https://www.notion.so/367d645e05cc81af93d7fc57bfc45faf.
 
 **Paused (held in archive):** [`archive/30_dynamic_engine_rebuild_PAUSED.md`](archive/30_dynamic_engine_rebuild_PAUSED.md) — Phase 0 + Phase 1.0 complete (commits `8003577` + `cc96815`). Phase 1.1 onwards PAUSED. Dynamic backend code frozen at HEAD `54407e3` (post Brief 31), not deleted. Eligible for resumption when Static work cycle pauses.
 

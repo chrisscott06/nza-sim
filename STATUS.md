@@ -1,5 +1,43 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-21 — Brief 44 Part 1: Visualisation + reactivity audit (read-only diagnostic)
+
+**State:** `commit_in_flight` — Brief 44 Part 1.
+
+**Prior HEAD:** `8cb329e` (post Brief 43 close + Systems Sankey DHW label fix).
+
+### What landed in Part 1
+
+**New audit doc: `docs/audit/44_visualisation_audit.md`** — comprehensive read-only diagnostic covering:
+
+- **§1 Tab inventory** — every Systems tab (Sankey / Profiles / Schedule / Monthly / Rejection / Diagnostic / Summary) catalogued with data source + computation + reactivity + design intent vs current state + gap. Plus Building / Operation / Internal Gains / Interventions module-level coverage.
+
+- **§2 Diagnostic 248% over-delivery — root-cause investigation.** Three hypotheses ranked:
+  - H1 (most likely): `_calculateState2` setpoint-override path has mixed-semantics references (e.g. `T_op_prev` initial uses `comfortBand.lower_c` not `effectiveLowerC`; comfort-hour counters use `comfortBand.lower_c` not effective). Compound effects could produce the observed 248% jump.
+  - H2: arithmetic in `_computeHeatingOrCooling` — unlikely on code-trace inspection.
+  - H3: `comfortBand` cross-mutation between baseline and recompute calls — possible.
+  - Recommended Part 2 investigation: instrument `_calculateState2` with hourly logging of `effectiveLowerC`, `T_op`, `heating_Wh_at_setpoint`, `acc_heating_demand_Wh`. Diff baseline vs override. Identify divergent hour, fix surgically.
+
+- **§3 Schedule tab data-source diagnosis.** Tab reads `sysCfg = params.systems_config_v25` paths (`.heating?.schedule_ref`, etc.) — these are pre-Brief-42 shape. Post-Brief-42 the canonical config is v40 per-system arrays with `control_schedule_id`. Verdict: **mixed/partial → effectively hardcoded** (always-on default kicks in for projects without v25 schedule_ref). Part 4 decision: rewire to v40 per-system schedules.
+
+- **§4 `[object Object]` construction-patch rendering.** Root cause: `summarizePatch` falls through to `String(value)` for object-valued patches; construction shape `{library_id, u_value_override}` stringifies as `[object Object]`. Part 2 fix: detect known object shapes and render `"<library_id> (U override <X>)"`.
+
+- **§5 `baselineSummary` flip in InterventionsModule.** Root cause: multi-path fallback in `baselineSummary` `useMemo` walks 7 candidate result-shape paths; initial render with no saved interventions reads the legacy `baseline.eui_kWh_m2` path (169.1) while post-save reads canonical `stackResult.baseline.consumption.total.kwh_per_m2_yr` (89.0). Recommended fix: drop the multi-path fallback; trust `consumption.total.kwh_per_m2_yr` as canonical.
+
+- **§7 Summary** — bugs / inconsistencies / missing features cleanly bucketed; Part 2-6 ordering recommended.
+
+### What Part 1 did NOT do
+
+- No code changes (read-only audit per Brief 44 §1 principle).
+- Did not instrument the engine yet (Part 2 will, if needed).
+- Did not exhaustively cover Internal Gains / Operation tabs (representative coverage only; Part 5 covers the rest during cross-module rollout).
+
+### Next
+
+Part 2 — instrument + fix the Diagnostic 248% bug; fix `[object Object]` construction summarisation; fix `baselineSummary` flip. Part 2 commit message will document the actual root cause from instrumentation + verify against the 6-row setpoint matrix (21/21.5/22/19/25/16 °C) for monotonic deltas.
+
+---
+
 ## ✅ Session 2026-05-20 — Brief 43 close: Interventions UX shipped (Parts 1-4)
 
 **State:** `closed` — Brief 43 archived to `docs/briefs/archive/43_interventions_ux_COMPLETED.md`. `docs/briefs/active/` is empty.
