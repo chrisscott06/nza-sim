@@ -6039,24 +6039,65 @@ function _calculateInstantBaseline(building = {}, constructions = {}, systems = 
 // intervention-specific comparison view (Part 5) reads from this slot.
 // When no interventions are present the slot is absent.
 
-export function calculateInstant(building = {}, constructions = {}, systems = {}, libraryData = {}, weatherData = null, hourlySolar = null, scheduleProfiles = null, options = {}) {
-  const result = _calculateInstantBaseline(building, constructions, systems, libraryData, weatherData, hourlySolar, scheduleProfiles, options)
+// Brief 44 perf audit (2026-05-21) — TEMPORARY instrumentation.
+// Records every calculateInstant call + every _calculateInstantBaseline
+// call (inside stack runner) in window.__nza_perf. Removed at Part 6 close.
+function _perfPush(kind, durationMs, meta) {
+  if (typeof window === 'undefined' || typeof performance === 'undefined') return
+  if (!window.__nza_perf) {
+    window.__nza_perf = {
+      engine_outer: [],   // calculateInstant outer-call durations
+      engine_inner: [],   // _calculateInstantBaseline durations (inner, includes stack-runner calls)
+      systems_renders: 0,
+      reset() { this.engine_outer = []; this.engine_inner = []; this.systems_renders = 0 },
+    }
+  }
+  if (kind === 'outer') window.__nza_perf.engine_outer.push({ duration_ms: durationMs, ...meta })
+  else if (kind === 'inner') window.__nza_perf.engine_inner.push({ duration_ms: durationMs, ...meta })
+}
 
-  if (options && options._skipInterventions === true) return result
-  if (!building || !Array.isArray(building.interventions) || building.interventions.length === 0) return result
+export function calculateInstant(building = {}, constructions = {}, systems = {}, libraryData = {}, weatherData = null, hourlySolar = null, scheduleProfiles = null, options = {}) {
+  const _tOuter0 = (typeof performance !== 'undefined') ? performance.now() : 0
+  const _tInner0 = (typeof performance !== 'undefined') ? performance.now() : 0
+  const result = _calculateInstantBaseline(building, constructions, systems, libraryData, weatherData, hourlySolar, scheduleProfiles, options)
+  _perfPush('inner', (typeof performance !== 'undefined') ? performance.now() - _tInner0 : 0, {
+    phase: 'top_level_baseline',
+    n_interventions: Array.isArray(building?.interventions) ? building.interventions.length : 0,
+    skipped: !!(options && options._skipInterventions),
+    route: typeof location !== 'undefined' ? location.pathname : '?',
+  })
+
+  if (options && options._skipInterventions === true) {
+    _perfPush('outer', (typeof performance !== 'undefined') ? performance.now() - _tOuter0 : 0, { reentry_skip: true })
+    return result
+  }
+  if (!building || !Array.isArray(building.interventions) || building.interventions.length === 0) {
+    _perfPush('outer', (typeof performance !== 'undefined') ? performance.now() - _tOuter0 : 0, { n_interventions: 0 })
+    return result
+  }
 
   // Build the engine-input quartet that patches are applied against.
   const baselineConfig = { building, constructions, systems, libraryData }
-  const runEngine = (cfg) => _calculateInstantBaseline(
-    cfg.building ?? building,
-    cfg.constructions ?? constructions,
-    cfg.systems ?? systems,
-    cfg.libraryData ?? libraryData,
-    weatherData,
-    hourlySolar,
-    scheduleProfiles,
-    { ...options, _skipInterventions: true },
-  )
+  let _stackCallCount = 0
+  const runEngine = (cfg) => {
+    const _t = (typeof performance !== 'undefined') ? performance.now() : 0
+    const r = _calculateInstantBaseline(
+      cfg.building ?? building,
+      cfg.constructions ?? constructions,
+      cfg.systems ?? systems,
+      cfg.libraryData ?? libraryData,
+      weatherData,
+      hourlySolar,
+      scheduleProfiles,
+      { ...options, _skipInterventions: true },
+    )
+    _perfPush('inner', (typeof performance !== 'undefined') ? performance.now() - _t : 0, {
+      phase: 'stack_runner',
+      stack_iter: _stackCallCount++,
+      route: typeof location !== 'undefined' ? location.pathname : '?',
+    })
+    return r
+  }
 
   const stack = _runInterventionStack(baselineConfig, building.interventions, runEngine, libraryData)
 
@@ -6067,5 +6108,11 @@ export function calculateInstant(building = {}, constructions = {}, systems = {}
       result.interventions = stack
     }
   }
+  _perfPush('outer', (typeof performance !== 'undefined') ? performance.now() - _tOuter0 : 0, {
+    n_interventions: building.interventions.length,
+    n_enabled: building.interventions.filter(i => i?.enabled !== false).length,
+    stack_calls: _stackCallCount,
+    route: typeof location !== 'undefined' ? location.pathname : '?',
+  })
   return result
 }
