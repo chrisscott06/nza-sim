@@ -630,3 +630,211 @@ For the layers we do wire, the data is at the right shape (daily kWh). Layers re
 ## §12 — Part 6 — Walkthrough (placeholder)
 
 To be filled.
+
+---
+
+## §13 — Part 3 mid-audit (2026-05-21) — data wiring verification
+
+**Status: READ-ONLY AUDIT. No fixes during this audit. Findings surfaced to Chris before resuming code.**
+
+Triggered by three Chris observations from interactive review:
+1. Gas trace in Profiles appears to follow heating demand profile
+2. Heating disappearing from Sankey
+3. Deeper concern: "I would like a full audit to make sure that it's not creating new calculation engines with gas heating, like it needs to be following the system's panel on the left. I think it's just making up its own stuff, and I'm really nervous."
+
+### §13.1 — Layer data sources (Issue 1 audit)
+
+**Every layer in the Systems Profiles visualiser, with the exact JS expression evaluated at render time.** Source: `SystemsModule.jsx` lines 1515-1551.
+
+```js
+const dpEng = result?.energy_use?.daily_profiles ?? result?.consumption?.daily_profiles
+```
+
+| Layer id | Label | Engine path |
+|---|---|---|
+| `electricity` | Electricity total | `dpEng.fuel_kwh_per_day.electricity` (FUEL side) |
+| `gas`         | Gas total          | `dpEng.fuel_kwh_per_day.gas` (FUEL side) |
+| `heating`     | Heating delivered  | `dpEng.delivered_kwh_per_day.heating` (DELIVERED side) |
+| `cooling`     | Cooling delivered  | `dpEng.delivered_kwh_per_day.cooling` (DELIVERED side) |
+| `dhw`         | DHW delivered      | `dpEng.delivered_kwh_per_day.dhw` (DELIVERED side) |
+| `fans`        | Fan power          | `dpEng.delivered_kwh_per_day.fans` (DELIVERED side) |
+| `lighting`    | Lighting           | `dpEng.delivered_kwh_per_day.lighting` (DELIVERED side) |
+| `small_power` | Small power        | `dpEng.delivered_kwh_per_day.small_power` (DELIVERED side) |
+
+**Verdict: layer paths are correct.** Gas is read from the FUEL side (`fuel_kwh_per_day.gas`), not the demand side. Heating is read from the DELIVERED side (`delivered_kwh_per_day.heating`). These are TWO DIFFERENT engine arrays.
+
+### §13.2 — How the engine populates `fuel_kwh_per_day.gas`
+
+Source: `instantCalc.js` lines 4485-4488 (inside `_calculateState3`, inside the `daily_profiles` IIFE):
+
+```js
+const gas_daily = heating_daily_delivered.map((d, _i) =>
+  (d / heat_scop_eff) * heat_gas_share
+  + (dhw.fuel_split.gas ? (dhw.fuel_split.gas.primary_mwh + dhw.fuel_split.gas.secondary_mwh) * 1000 / 365 : 0),
+)
+```
+
+The engine's `gas_daily` per-day formula is:
+
+```
+gas_daily[day] = (heating_delivered[day] / heating_blended_SCOP) × heating_gas_share
+               + (annual DHW gas total / 365)
+```
+
+Two terms:
+1. **Heating gas component**: scales with `heating_daily_delivered[day]` SHAPE (degree-day weather pattern). Gated by `heating_gas_share` — the fraction of heating fuel that's gas.
+2. **DHW gas component**: flat daily share of the annual DHW gas total.
+
+**This is architecturally sound — gas accumulator includes heating gas IFF the building has gas heating, otherwise zero.** A building with a gas boiler would correctly show weather-shaped gas; a building with electric heating shows DHW-only flat gas.
+
+#### §13.2.1 — `heat_gas_share` derivation (lines 4474-4478)
+
+```js
+const heat_elec_share = heating.total_perf.fuel_mwh > 0
+  ? ((heating.fuel_split.electricity?.primary_mwh ?? 0)
+   + (heating.fuel_split.electricity?.secondary_mwh ?? 0))
+    / heating.total_perf.fuel_mwh
+  : 0
+const heat_gas_share = 1 - heat_elec_share
+```
+
+`heating` is `heating_v40_block ?? heating_v25` (line 4165). For Bridgewater (post-Brief-42, v40 populated), the v40 adapter `v40ServiceBlockToV25Shape` (in `systemsEngine.js` line 851) walks `brief40.heating.systems` and populates `fuel_split[fuel].{primary_mwh, secondary_mwh}` by source-fuel mapping:
+
+- Primary VRF (source: `ambient_air`) → `_sourceToFuel('ambient_air')` → `'electricity'` → contributes to `fuel_split.electricity.primary_mwh`
+- Secondary panel (source: `electricity`) → `'electricity'` → contributes to `fuel_split.electricity.secondary_mwh`
+
+So for Bridgewater all-electric heating: `fuel_split.electricity.primary_mwh + .secondary_mwh = total_perf.fuel_mwh` → `heat_elec_share = 1.0` → `heat_gas_share = 0` → `gas_daily[i] = 0 + DHW_gas_flat = constant 665 kWh/day year-round`.
+
+#### §13.2.2 — Failure mode worth noting (NOT triggering on Bridgewater today)
+
+If `heating.total_perf.fuel_mwh` is 0 but `heating.total_perf.delivered_mwh > 0` (degenerate case — engine returns zero fuel for non-zero delivery), then:
+- `heat_elec_share` falls through to the `: 0` branch → 0
+- `heat_gas_share` = 1 − 0 = **1**
+- gas_daily would then accumulate ALL heating-driven term
+
+Possible trigger: if v40 systems list is non-empty but every system has `enabled: false` AND there's still a non-zero `demand_at_comfort_mwh` AND the adapter returns `total_perf.fuel_mwh = 0`. Bridgewater is not in this state today (both heating systems enabled). **Logged as a defensive-coding follow-up** — not a Brief 44 regression; pre-existing engine behaviour.
+
+### §13.3 — Bridgewater ground-truth (Issue 1 falsifiability)
+
+With the Sankey hover tooltips I added in `f85cb38`, the engine annual values for Bridgewater (heating Custom 19°C) are:
+
+| Source | Value | Path |
+|---|---|---|
+| Heating delivered (total) | 18.1 MWh | sum of brief40.heating.systems[].delivered_mwh |
+| Heating fuel (total) | 7.1 MWh | sum of brief40.heating.systems[].source_energy_mwh — ALL electric |
+| heating blended SCOP | 2.55 | 18.1 / 7.1 |
+| heat_elec_share | 1.0 | electricity / total = 7.1 / 7.1 |
+| heat_gas_share | 0.0 | 1 − 1.0 |
+| DHW gas annual | 242.9 MWh | brief40.dhw.systems[gas].source_energy_mwh |
+| Implied gas_daily[d] | 0 × X + 665 kWh/day | constant year-round |
+| Implied gas annual | 665 × 365 = 242.7 MWh | matches `Σ gas = 242.9 MWh` (within rounding) |
+
+**Conclusion (Issue 1): the engine's `gas_daily` array for Bridgewater is mathematically a flat line at ~665 kWh/day.** The visual perception of "gas tracking heating demand" in the chart was an illusion caused by similar reddish colours (heating delivered `#F87171` light coral; gas total `#DC2626` deep red). Fixed in `f85cb38` by repaletting heating delivered to `#DC2626` (canonical service red) and gas total to `#991B1B` (darker burgundy).
+
+**Wired data IS engine data, not fabricated.** Confirmed.
+
+### §13.4 — Was Sankey touched in Part 3? (Issue 2 scope-creep check)
+
+Git history of changes to `SystemsModule.jsx` since Brief 44 Part 3 commit `55e5123`:
+
+| Commit | Brief | Sankey touched? | What |
+|---|---|---|---|
+| `55e5123` | Part 3 | NO | `SystemsProfiles` rewritten only |
+| `7428f0d` | Part 4 | NO | `SystemsSchedule` rewired to v40; `SystemsMonthly` `maxBar` fix |
+| `f85cb38` | Part 5 follow-up | **YES** | `branchesFromV40Dhw` (new helper); DHW label loop reads `br.v40_label`; ribbon `<title>` SVG tooltips with cursor:'help' |
+
+**Heating ribbon code UNCHANGED:** the heating branches come from `branchesFromPerfPair(c.space_heating?.primary, c.space_heating?.secondary)` (line 840 in current file) — this expression was already present pre-Part-3 and was not edited in any of the Part 3/4/5 commits.
+
+The Sankey changes in `f85cb38` are scoped to DHW (new v40 branch builder + label lookup) and ribbon hover tooltips (purely additive). No structural change to heating rendering.
+
+### §13.5 — Why "heating disappeared from Sankey" was actually observed
+
+Bridgewater's heating section was at `mode='custom', heating_setpoint_c=19` (from yesterday's setpoint-walk testing). At that setpoint:
+
+- Brief 44 Part 2 fix (`3f1bb0b`) subtracted a CONSTANT MVHR offset (sized at comfort baseline ≈ 61 MWh) from the recomputed raw demand at 19°C.
+- Raw demand at 19°C is smaller than at comfort 21°C; the constant offset over-subtracted → `Math.max(0, raw − offset)` clipped to 0.
+- Engine returned `heating.delivered_total_mwh = 0`.
+- The Sankey item shape `branchesFromPerfPair(...)` produced ZERO branches with `delivered_mwh > 0.01` → no ribbons rendered.
+- The demand bar still rendered (90.1 MWh demand from raw State 2) — the `(off)` label fired via `it.isUnserved = it.demand > 0.01 && it.delivered < 0.01`.
+
+**The Sankey was correctly reflecting the engine output** — engine said "demand exists, delivered is zero" → Sankey said "(off)" with demand bar + no ribbons. The bug was in the ENGINE's MVHR offset application (Brief 44 Part 2 fix had a secondary defect at low setpoints), not in the Sankey rendering.
+
+**Fix shipped in `f85cb38`**: scale the recovery offset proportionally to the demand ratio rather than subtracting the comfort-baseline offset whole. After fix, Bridgewater shows heating delivered = 18.1 MWh at Custom 19°C (with `consumption.brief40.heating.delivered_total_mwh = 18.1`). Sankey ribbons render correctly; `(off)` label gone.
+
+**Conclusion (Issue 2): Sankey rendering was always correct. The "disappearance" reflected the engine output, which itself was wrong due to my Part 2 fix's secondary bug. That fix is now corrected.**
+
+### §13.6 — `InteractiveProfileVisualiser` is presentation-only (Issue 3 verification)
+
+Source: `frontend/src/components/shared/InteractiveProfileVisualiser/InteractiveProfileVisualiser.jsx`.
+
+**Every numerical operation in the component (grep'd line by line):**
+
+| Line | Expression | Classification |
+|---|---|---|
+| 88-92 | `n.toFixed(0/1/2/3)` | Formatting |
+| 89-91 | `Math.abs(n) >= 100/10/1` | Formatting threshold |
+| 240 | `kwAvg = layer.daily_kwh[d] / 24` | **kWh/day → kW conversion (unit conversion only)** |
+| 277 | `Math.max(180, height - 110)` | Layout pixel math |
+| 287-288 | `Y_AXIS_WIDTH = 48` constants | Layout |
+| 313 | `Math.min(3, selectedLayers.length)` | Grid columns |
+| 341, 358, 377 | `Math.floor(data.length / 12)` | X-axis tick spacing |
+
+**No physics in the visualiser. Zero instances of:**
+- ❌ SCOP application
+- ❌ Efficiency division (other than the trivial ÷24 for unit conversion)
+- ❌ Fuel-mix logic
+- ❌ Setpoint-based recompute
+- ❌ Engine recomputation of any kind
+- ❌ Wiring back to engine inputs
+
+The component reads `daily_kwh: [365]` arrays from props, converts each to kW (dividing by 24 hours), and renders. It does not modify, augment, or fabricate values.
+
+**Conclusion (Issue 3 visualiser purity): VERIFIED. The visualiser is presentation-only.**
+
+### §13.7 — Engine-source-of-truth verification — proposed deliberate-edit tests
+
+Brief 44 Part 3 mid-audit calls for three deliberate edits with three-way numerical comparison (Profiles ↔ Sankey ↔ Live Results). Surface for Chris's review before running. Proposed protocol:
+
+**Pre-edit baseline (current state, heating mode follow_comfort 21°C):**
+- Capture: Live Results EUI, Heating delivered/demand, Cooling delivered/demand, DHW delivered/demand, Electricity total, Gas total.
+- Capture: Sankey tooltip values per branch.
+- Capture: Profiles annual totals (Σ elec, Σ gas badges).
+
+**Test 1: Toggle VRF heat pump from `enabled: true` to `enabled: false`.**
+- Expectation: heating delivered drops to ~5% of comfort demand (only secondary remains). All three panels show the same.
+- If any panel diverges, identify which is wrong (engine is canonical).
+
+**Test 2: Change Primary heating share from 95% to 50%.**
+- Expectation: blended SCOP shifts; heating fuel slightly changes (secondary at η 1.0 vs primary at SCOP 2.8). All three panels show consistent new totals.
+
+**Test 3: Change DHW tap outlet temp from 30°C to 50°C.**
+- Expectation: hot fraction rises from 40% to 80%; DHW thermal delivered approximately doubles; gas approximately doubles; all three panels track.
+
+**These tests CAN be run with the current code (no fixes needed during this audit).** Results would be appended to this section under §13.8. Awaiting Chris's go-ahead before running.
+
+### §13.8 — Three-edit test results (placeholder — pending Chris's sign-off to run)
+
+Awaiting Chris's sign-off on §13.7 protocol before running.
+
+### §13.9 — Summary of findings
+
+| Issue | Status | Evidence |
+|---|---|---|
+| 1. Gas trace tracks heating | **Visual illusion, not data bug** (palette fix `f85cb38`). Engine `gas_daily` is mathematically flat 665 kWh/day for Bridgewater because `heat_gas_share = 0` (all heating is electric). | §13.1–§13.3 |
+| 2. Heating disappearing from Sankey | **Sankey was correctly reflecting the engine.** Root cause was my Part 2 MVHR-offset over-subtraction at low setpoints (Custom 19°C). Fixed in `f85cb38` (proportional scaling). Sankey was untouched in heating-ribbon code. | §13.4–§13.5 |
+| 3. "Making up its own stuff" | **Not happening.** `InteractiveProfileVisualiser` is presentation-only — only kWh→kW conversion (÷24) plus formatting + layout pixel math. Zero physics calls. | §13.6 |
+| Three-edit tests | **Pending Chris's go-ahead.** Protocol drafted in §13.7. | §13.7 |
+
+### §13.10 — Recommended fix paths (none required for §13.1-§13.6)
+
+The three observations all resolve to "engine working correctly, visualiser presentation-only, prior Part 2 secondary bug already fixed". **No new code fixes required** beyond what's already shipped in `f85cb38`.
+
+**Defensive-coding follow-up logged in §13.2.2:** the `heat_gas_share` derivation has a degenerate-case failure mode (when `heating.total_perf.fuel_mwh = 0` but delivered > 0). Not triggering on Bridgewater. Worth a small guard clause in a future engine pass.
+
+### §13.11 — Discipline confirmed
+
+- ✓ Read-only audit (no fixes during this section)
+- ✓ Numerical engine values documented against rendered values
+- ✓ Recommended verification (§13.7) drafted but not run pending Chris's sign-off
+- ✓ Visualiser purity verified line-by-line
+- ✓ Engine code paths traced with file:line references
