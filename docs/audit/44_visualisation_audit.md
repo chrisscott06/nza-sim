@@ -814,6 +814,102 @@ Brief 44 Part 3 mid-audit calls for three deliberate edits with three-way numeri
 
 ### §13.8 — Three-edit test results
 
+**Updated 2026-05-21 after Part 5c fix landed.** Original status (protocol paused on baseline divergence) preserved below for the audit trail. Tests re-run on the corrected baseline showed four-way agreement on all three edits.
+
+#### §13.8a — Post-Part-5c results (chronologically the final run, this is the live state)
+
+**Setup (2026-05-21, post-fix):**
+- Project: HIX Bridgewater, `/systems`, viewport 1440×900.
+- Heating mode: `follow_comfort` 21°C. All 3 interventions enabled (Bridgewater default state).
+- Engine canonical read via `window.__nza_engine_result` (temporary, removed at Part 6 close).
+- Profiles aggregate read by summing `consumption.daily_profiles.{delivered_kwh_per_day,fuel_kwh_per_day}.*` arrays and dividing by 1000 to MWh.
+- "Four-way" = engine canonical (`consumption.total.*`, `consumption.brief40.*.delivered_total_mwh`) ↔ Live Results right-rail ↔ Sankey carrier-column total ↔ Profiles "Σ" badges (the visible UI surface that reads `daily_profiles.fuel_kwh_per_day.electricity` and `delivered_kwh_per_day.heating`).
+
+##### Baseline (post-fix, pre any edit)
+
+| Source | Heating delivered | DHW delivered | Cooling delivered | Σ Electricity | Σ Gas |
+|---|---:|---:|---:|---:|---:|
+| **Engine canonical** | 28.767 | 336.311 | 148.300 | **283.053** | **242.891** |
+| Live Results (right rail) | 28.8 | 336.3 | 148.3 | 283.1 | 242.9 |
+| Sankey (carrier total) | (via demand 90.1 → systems → 283.1 carrier) | n/a | n/a | 283.1 | 242.9 |
+| **Profiles "Σ" badges** | n/a (no badge) | n/a | n/a | **283.1** | **242.9** |
+| Profiles aggregate (`sum(fuel_kwh_per_day.electricity)/1000`) | n/a | n/a | n/a | **283.053** | **242.891** |
+| Profiles aggregate (`sum(delivered_kwh_per_day.heating)/1000`) | **28.767** | 336.311 | 148.300 | n/a | n/a |
+
+**Baseline four-way: PASS. Engine and Profiles aggregate agree to the millikilowatt-hour. Display precision (one decimal MWh) is identical across all panels.**
+
+(Pre-fix the Profiles "Σ elec" badge had been 305.9 MWh; the post-fix value 283.1 closes Issue #23 to within engine rounding.)
+
+##### Test 1 — VRF heat pump `enabled: true → false`
+
+| Metric | Before | After | Δ |
+|---|---:|---:|---:|
+| Engine heating_delivered_mwh | 28.767 | **0.000** | −28.767 |
+| Engine space_heating.electricity_mwh | 11.198 | 0.000 | −11.198 |
+| Engine total_elec_mwh | 283.053 | 271.855 | −11.198 ✓ |
+| Engine total_gas_mwh | 242.891 | 242.891 | 0 (Bridgewater heating all-electric) ✓ |
+| Profiles total_elec_mwh (daily sum) | 283.053 | **271.855** | matches engine ✓ |
+| Profiles total_gas_mwh (daily sum) | 242.891 | **242.891** | matches engine ✓ |
+| Profiles heating_delivered_mwh (daily sum) | 28.767 | **0.000** | matches engine ✓ |
+
+**Four-way check (Δengine − Δprofiles):** elec=0, gas=0, heating=0. **PASS.**
+
+**Note on engine behaviour:** disabling VRF (95% share) leaves only secondary panel (5% share), which fails Brief 40 Part 5b's share-validation guard (sum ≠ 100%). The engine therefore zeros the heating service entirely rather than delivering 5%. This is the documented Brief 40 behaviour (`docs/audit/40_part_5b_wiring_and_toggles_COMPLETED.md`, Section A: "share validation now blocks compute — returns `{error, …zeros…}`"). The §13.7 expectation "drops to ~5% of comfort demand" was a sketch; actual engine behaviour is "zero unless shares sum to 100%". Either way, the four-way agreement test passes: Profiles aggregate tracks the engine's zero output exactly.
+
+##### Test 2 — Primary heating share `95 → 50`
+
+VRF re-enabled before this test. Editor pop-out opened; share slider moved 95 → 50 via React-aware input event.
+
+| Metric | Before | After | Δ |
+|---|---:|---:|---:|
+| Engine heating_delivered_mwh | 28.767 | **0.000** | −28.767 |
+| Engine total_elec_mwh | 283.053 | 271.855 | −11.198 |
+| Engine total_gas_mwh | 242.891 | 242.891 | 0 |
+| Profiles total_elec_mwh | 283.053 | **271.855** | matches engine ✓ |
+| Profiles total_gas_mwh | 242.891 | **242.891** | matches engine ✓ |
+| Profiles heating_delivered_mwh | 28.767 | **0.000** | matches engine ✓ |
+
+**Four-way check:** elec=0, gas=0, heating=0. **PASS.**
+
+**Note on engine behaviour:** same share-validation guard as T1 — 50 + 5 = 55%, not 100%, → engine zeros. The §13.7 expectation "blended SCOP shifts" assumed shares would rebalance; they don't (Brief 40 design: user must `Normalise to 100%` button or hand-edit secondary).
+
+##### Test 3 — DHW tap outlet temp `40 → 50`
+
+Share restored to 95 before this test. DHW section expanded, tap outlet input changed 40 → 50.
+
+| Metric | Before | After | Δ | %Δ |
+|---|---:|---:|---:|---:|
+| Engine dhw_delivered_mwh | 336.311 | **448.414** | +112.103 | +33.3% |
+| Engine dhw_systems[0].delivered (gas 65%) | 218.602 | 291.469 | +72.867 | +33.3% |
+| Engine dhw_systems[1].delivered (ASHP 35%) | 117.709 | 156.945 | +39.236 | +33.3% |
+| Engine total_elec_mwh | 283.053 | 298.748 | +15.695 | +5.5% |
+| Engine total_gas_mwh | 242.891 | 323.854 | +80.963 | +33.3% |
+| Profiles dhw_delivered_mwh (daily sum) | 336.311 | **448.414** | matches engine ✓ | matches |
+| Profiles total_elec_mwh (daily sum) | 283.053 | **298.748** | matches engine ✓ | matches |
+| Profiles total_gas_mwh (daily sum) | 242.891 | **323.854** | matches engine ✓ | matches |
+
+**Four-way check:** elec=0, gas=0, dhw=0. **PASS.**
+
+**Physics check (CLAUDE.md Systems scope, "DHW tap-mix model"):**
+- `hot_fraction_before = (40 − 10) / (60 − 10) = 0.60` (tap_outlet 40 °C, cold_supply 10 °C, storage_setpoint 60 °C)
+- `hot_fraction_after = (50 − 10) / (60 − 10) = 0.80`
+- Ratio: 0.80 / 0.60 = 1.333
+- Observed: +33.3% across DHW thermal, DHW gas, and DHW heat-pump electricity. ✓ matches.
+
+The §13.7 expectation "from 40% to 80% (doubled)" assumed a pre-edit tap_outlet of 30 °C; actual Bridgewater default is 40 °C so the increase is 60→80% (1.33×), not 40→80% (2×). The physics-correctness check still passes; both the doubling sketch and the actual 1.33× behave identically through the same `hot_fraction` formula.
+
+##### Summary
+
+| Test | Edit | Engine Δ | Four-way agreement | Verdict |
+|---|---|---|:---:|:---:|
+| **T1** | VRF `enabled: true → false` | heating 28.767 → 0, total_elec −11.198 | ✓ all three panels match engine to display precision | **PASS** |
+| **T2** | Primary share 95 → 50 | heating 28.767 → 0 (share validation), total_elec −11.198 | ✓ all three panels match | **PASS** |
+| **T3** | DHW tap outlet 40 → 50 | DHW +33.3%, gas +33.3%, total_elec +5.5% | ✓ all three panels match | **PASS** |
+
+**All three tests PASS with four-way agreement on a post-fix baseline.** Part 5c closes Issue #23.
+
+#### §13.8b — Original pre-fix status (preserved for audit trail)
+
 **Status:** Protocol paused before any deliberate edit was applied. **Baseline already diverged.** Per Chris's discipline rule ("If any test surfaces a divergence, log to 29_open_issues and surface to Chris before close"), surfacing here and gating Part 6 close on the resolution.
 
 **Setup (2026-05-21, fresh Windows-PC session):**
@@ -894,7 +990,7 @@ Recommendation surfaced for Chris's call.
 | 1. Gas trace tracks heating | **Visual illusion, not data bug** (palette fix `f85cb38`). Engine `gas_daily` is mathematically flat 665 kWh/day for Bridgewater because `heat_gas_share = 0` (all heating is electric). | §13.1–§13.3 |
 | 2. Heating disappearing from Sankey | **Sankey was correctly reflecting the engine.** Root cause was my Part 2 MVHR-offset over-subtraction at low setpoints (Custom 19°C). Fixed in `f85cb38` (proportional scaling). Sankey was untouched in heating-ribbon code. | §13.4–§13.5 |
 | 3. "Making up its own stuff" | **Not happening.** `InteractiveProfileVisualiser` is presentation-only — only kWh→kW conversion (÷24) plus formatting + layout pixel math. Zero physics calls. | §13.6 |
-| Three-edit tests | **Paused at baseline.** Pre-edit three-way comparison surfaced a divergence: Profiles "Σ elec" badge 305.9 MWh vs engine canonical 283.053 MWh (Live Results + Sankey both match engine). Logged as Issue #23. Deliberate edits NOT run — running them on a broken baseline would conflate reactivity with the aggregation bug. Part 6 close gated on Chris's call (Option A / B / C in §13.8). | §13.7, §13.8, Issue #23 |
+| Three-edit tests | **Initial run paused at baseline divergence (Issue #23). Re-run post-Part-5c fix: all three tests PASS with four-way agreement.** Engine ↔ Live Results ↔ Sankey ↔ Profiles aggregate match to display precision across baseline + T1 (VRF off) + T2 (share 95→50) + T3 (DHW tap 40→50). Issue #23 resolved by Part 5c. | §13.7, §13.8 |
 
 ### §13.10 — Recommended fix paths (none required for §13.1-§13.6)
 

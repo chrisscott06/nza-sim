@@ -4441,23 +4441,57 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
         const heat_h = state2Result.demand?.heating_demand_hourly_kwh ?? null
         const cool_h = state2Result.demand?.cooling_demand_hourly_kwh ?? null
 
-        const heating_daily_delivered = _z()
-        const cooling_daily_delivered = _z()
+        // Step 1 — bucket the hourly DEMAND series to daily. These arrays
+        // carry the demand-at-envelope-comfort integrand (Bridgewater
+        // baseline: ~90.1 MWh heating, ~148.3 MWh cooling at follow_comfort
+        // 21°C). They are NOT yet the systems-delivered values; the v40
+        // engine may deliver less than demand when systems are
+        // capacity-limited or set at a custom setpoint below the comfort
+        // band (per Brief 42's comfort-vs-setpoint diagnostic).
+        const heating_demand_daily = _z()
+        const cooling_demand_daily = _z()
         if (heat_h) {
-          const scop = heating.total_perf.delivered_mwh > 0 && heating.total_perf.fuel_mwh > 0
-            ? heating.total_perf.delivered_mwh / heating.total_perf.fuel_mwh : 1
           for (let h = 0; h < Math.min(8760, heat_h.length); h++) {
             const d = Math.min(364, Math.floor(h / 24))
-            heating_daily_delivered[d] += (sys.heating?.enabled === false ? 0 : heat_h[h])
+            heating_demand_daily[d] += (sys.heating?.enabled === false ? 0 : heat_h[h])
           }
-          void scop  // not used in delivered (delivered === demand when enabled); SCOP only changes the fuel side
         }
         if (cool_h) {
           for (let h = 0; h < Math.min(8760, cool_h.length); h++) {
             const d = Math.min(364, Math.floor(h / 24))
-            cooling_daily_delivered[d] += (sys.cooling?.enabled === false ? 0 : cool_h[h])
+            cooling_demand_daily[d] += (sys.cooling?.enabled === false ? 0 : cool_h[h])
           }
         }
+
+        // Step 2 (Brief 44 Part 5c, 2026-05-21 — Issue #23 fix) — rescale
+        // the demand-shaped daily arrays to the v40 systems-delivered
+        // annual totals, preserving the temporal shape. Reuses the Brief
+        // 40 Part 5b adapter pattern: trust the v40 per-system totals
+        // (consumption.brief40.{service}.delivered_total_mwh) as the
+        // canonical "what the systems actually delivered" number. On
+        // Bridgewater baseline this scales heating 90.099 → 28.767 MWh
+        // (factor ~0.319) and cooling 148.347 → 148.300 MWh (factor
+        // ~0.9997). Downstream fuel formulas then produce annual
+        // electricity matching consumption.total.electricity_mwh.
+        //
+        // Pre-Brief-40 / v25-only fallback: heating.total_perf.delivered_mwh
+        // already carries the v25 delivered value, identical to brief40's
+        // figure when both paths agree.
+        const _scaleArr = (arr, actualMwh) => {
+          const sumMwh = arr.reduce((s, x) => s + x, 0) / 1000
+          if (!Number.isFinite(actualMwh) || sumMwh <= 0) return arr.slice()
+          const scale = actualMwh / sumMwh
+          return arr.map(d => d * scale)
+        }
+        const heating_actual_delivered_mwh = brief40Computed?.heating?.delivered_total_mwh
+          ?? heating.total_perf.delivered_mwh
+          ?? 0
+        const cooling_actual_delivered_mwh = brief40Computed?.cooling?.delivered_total_mwh
+          ?? cooling.total_perf.delivered_mwh
+          ?? 0
+        const heating_daily_delivered = _scaleArr(heating_demand_daily, heating_actual_delivered_mwh)
+        const cooling_daily_delivered = _scaleArr(cooling_demand_daily, cooling_actual_delivered_mwh)
+
         // DHW: flat daily share (sum across year ÷ 365). Fan: same flat
         // approximation. Lighting + small_power: same.
         const dhw_daily = _z().map(() => dhw.total_perf.delivered_mwh * 1000 / 365)
@@ -4465,8 +4499,9 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
         const light_daily = _z().map(() => lighting_kwh / 365)
         const sp_daily    = _z().map(() => equipment_kwh / 365)
         // Per-carrier daily totals (kWh). Heating + cooling shape comes
-        // from the per-hour demand series; gas + DHW + fan + lighting +
-        // sp use flat daily shares.
+        // from the per-hour demand series scaled to the v40-delivered
+        // annual total (Step 2 above); gas + DHW + fan + lighting + sp
+        // use flat daily shares.
         const heat_scop_eff = heating.total_perf.fuel_mwh > 0
           ? heating.total_perf.delivered_mwh / heating.total_perf.fuel_mwh : 1
         const cool_seer_eff = cooling.total_perf.fuel_mwh > 0
@@ -4476,10 +4511,19 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
             / heating.total_perf.fuel_mwh
           : 0
         const heat_gas_share  = 1 - heat_elec_share
+        // Brief 44 Part 5c (2026-05-21) — DHW circulation pump is a
+        // flat 8760 h baseload (line ~4191) that the engine adds to
+        // elec_dhw_total and surfaces under consumption.dhw.electricity_mwh
+        // + total.electricity_mwh. Pre-fix, the daily formula only
+        // accumulated primary + secondary system fuel, missing the
+        // ~1.05 MWh/yr pump term on Bridgewater. Adding circulation_pump
+        // here closes the residual gap so the daily integral reconciles
+        // exactly to consumption.total.electricity_mwh.
         const elec_daily = heating_daily_delivered.map((d, i) =>
           (d / heat_scop_eff) * heat_elec_share
           + cooling_daily_delivered[i] / cooling_seer_eff_safe(cool_seer_eff)
           + (dhw.fuel_split.electricity ? (dhw.fuel_split.electricity.primary_mwh + dhw.fuel_split.electricity.secondary_mwh) * 1000 / 365 : 0)
+          + (circulation_pump_kwh / 365)
           + fan_daily[i] + light_daily[i] + sp_daily[i],
         )
         const gas_daily = heating_daily_delivered.map((d, _i) =>
