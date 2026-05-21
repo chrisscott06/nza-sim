@@ -567,9 +567,63 @@ No further reactivity fixes needed in Part 4. The brief's "reactivity sweep" tas
 
 ---
 
-## §11 — Part 5 — Cross-module rollout (placeholder)
+## §11 — Part 5 — Cross-module rollout (2026-05-21)
 
-To be filled.
+### §11.1 Building module integration
+
+`BuildingDefinition.jsx` `BuildingProfilesView` now wraps `InteractiveProfileVisualiser` instead of `WeatherSynchronisedProfile`. The State 1 envelope-only `daily_profiles.heat_loss_kwh` per-element arrays + `solar_transmission_kwh_per_facade` arrays map naturally to the new component's `layers={[...]}` API.
+
+Default layer: `total_loss` — a synthesised daily sum across all seven envelope-loss elements (external wall, roof, ground floor, glazing, thermal bridging, infiltration, permanent vents). Provides one informative signal for the default view.
+
+Optional layers (user opts in):
+- External wall / Roof / Ground floor / Glazing / Thermal bridging / Infiltration / Permanent vents
+- Total solar gain (synthesised: sum across facades) + Solar N / E / S / W
+
+Σ losses + Σ solar totals badges preserved from the pre-Brief-44 chrome (top-right).
+
+Browser-verified at 1440×900: default single line shows total fabric loss with strong seasonal pattern (~30 kW winter peaks, ~7 kW summer trough). Toggling layers + chart modes + time-axis zoom all work.
+
+### §11.2 Operation module integration
+
+`OperationModule.jsx` `OperationProfilesView` now wraps the shared visualiser. Layers include the seven envelope elements PLUS one layer per operable opening (`<opening name> (natvent)`) derived from `instantResult.losses_at_setpoint.natural_ventilation[i].daily_heat_loss_kwh`.
+
+Default layer: `total_loss` — same shape as Building (consistent UX across the two envelope-focused modules).
+
+The pre-Brief-44 chrome's `focusOpeningId` mechanism is preserved in the caption text — when an opening is selected in the left panel, the caption notes its mode, open-hours, average flow, and avg ΔT. Bridgewater browser-verified with the "New door (north)" opening selected: the per-opening layer renders correctly and the focus caption surfaces "(mode: scheduled, 2349 open-hours/yr, avg flow 499 L/s when open, avg ΔT 29.2 K)".
+
+Σ fabric loss + Σ natvent totals badges preserved.
+
+### §11.3 Internal Gains module — DEFERRED
+
+The Internal Gains module already has its own purpose-built canvas-based visualisation system: `LoadShapeView`, `MonthlyView`, `ThreeDView`, `HeatBalanceView`. These are tightly coupled to the per-profile editing affordances (occupancy density, lighting LPD, equipment EPD with schedules) and the canvas-style schedule editor.
+
+Adopting the generic `InteractiveProfileVisualiser` here would either:
+- Replace LoadShapeView entirely (large refactor, removes purpose-built affordances)
+- Add it as a parallel view (creates two ways to do the same thing)
+
+Decision: **DEFER**. The Internal Gains canvas is bespoke and serves its purpose well. Brief 44's cross-module rollout adopts the visualiser where modules currently lack a comparable time-profile abstraction (Systems / Building / Operation). If a future brief wants Internal Gains' time-profile views to share the canonical visualiser, that's a separate refactor.
+
+Brief 44 §6 ("One canonical visualiser, many module-specific data sources") is satisfied for the three modules where the time-profile view was the dominant time-series surface. Internal Gains keeps its own canvas — by design.
+
+### §11.4 What about engine-side data exposure?
+
+Brief 44 §5.2 mentions Internal Gains layers like "Occupancy gain (W/m²) / Lighting gain (W/m²) / Equipment gain (W/m²)". These are not currently exposed as 365-point daily arrays in `daily_profiles` — only as annual totals via `heat_balance.annual.gains.internal.*`.
+
+Similarly, §5.3 mentions Operation layers like "Effective ventilation rate (ACH)" — exposed only as engine-result aggregates, not daily arrays.
+
+For the layers we do wire, the data is at the right shape (daily kWh). Layers requiring engine-side daily exposure (effective ACH, internal-gain breakdown) are deferred to a future engine-side brief that exposes the appropriate hourly/daily arrays.
+
+### §11.5 Files touched in Part 5
+
+- `frontend/src/components/modules/building/BuildingDefinition.jsx` — `BuildingProfilesView` rewritten
+- `frontend/src/components/modules/OperationModule.jsx` — `OperationProfilesView` rewritten
+- `docs/audit/44_visualisation_audit.md` — this §11
+
+### §11.6 What Part 5 did NOT do
+
+- Did not touch Internal Gains (kept its bespoke canvas; documented as a design decision).
+- Did not remove `WeatherSynchronisedProfile` (used elsewhere; cleanup is a future pass).
+- Did not expose new engine-side daily arrays (out of Brief 44 scope; logged for future engine brief).
 
 ---
 

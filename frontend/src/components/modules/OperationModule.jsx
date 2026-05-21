@@ -41,6 +41,9 @@ import { SCHEDULES, allScheduleNames } from '../../utils/scheduleLibrary.js'
 import BuildingViewer3D from './building/BuildingViewer3D.jsx'
 import HeatBalance from './balance/HeatBalance.jsx'
 import WeatherSynchronisedProfile from '../profiles/WeatherSynchronisedProfile.jsx'
+// Brief 44 Part 5 (2026-05-21) — Operation module adopts the shared
+// InteractiveProfileVisualiser for its profile-over-time tab.
+import InteractiveProfileVisualiser from '../shared/InteractiveProfileVisualiser/InteractiveProfileVisualiser.jsx'
 // Brief 37 Part 3 (2026-05-18): the legacy profiles/ScheduleEditor was
 // previously hosted inside an inset-0 fixed modal — Operation's "stuck"
 // editor (Brief 36 Part 3 fixed Systems' equivalent but missed this one).
@@ -623,35 +626,43 @@ function OperationProfilesView({ instantResult, openings, selectedOpeningId }) {
   const wind_mean_ms    = (w?.wind_sum_ms ?? []).map(v => v / 24)
   const ghi_mean_w_m2   = (w?.ghi_sum_w_per_m2 ?? []).map(v => v / 24)
 
-  // Stack: same fabric stack as Building Profiles, with the FOCUS opening
-  // added as its own coloured stack on top (so the user can see the door
-  // contribution to total daily loss).
-  const stacks = [
-    { key: 'wall',  label: 'External wall',    color: '#6B7280', daily_kwh: losses?.external_wall },
-    { key: 'roof',  label: 'Roof',             color: '#9CA3AF', daily_kwh: losses?.roof },
-    { key: 'floor', label: 'Ground floor',     color: '#D1D5DB', daily_kwh: losses?.ground_floor },
-    { key: 'glaz',  label: 'Glazing',          color: '#4B5563', daily_kwh: losses?.glazing },
-    { key: 'tb',    label: 'Thermal bridging', color: '#475569', daily_kwh: losses?.thermal_bridging },
-    { key: 'leak',  label: 'Infiltration',     color: '#7DD3FC', daily_kwh: losses?.fabric_leakage },
-    { key: 'pvent', label: 'Permanent vents',  color: '#0EA5E9', daily_kwh: losses?.permanent_vents },
+  // Brief 44 Part 5 (2026-05-21) — Operation Profiles uses the shared
+  // InteractiveProfileVisualiser. Default layer: total envelope loss
+  // (Operation users care first about the BUILDING-side aggregate; the
+  // per-opening breakdown layers in via the toggle chips). Each operable
+  // opening's daily natural-ventilation loss appears as its own layer.
+
+  const elements = [losses?.external_wall, losses?.roof, losses?.ground_floor,
+                    losses?.glazing, losses?.thermal_bridging, losses?.fabric_leakage,
+                    losses?.permanent_vents]
+  const elementLen = Array.isArray(elements[0]) ? elements[0].length : 0
+  const total_loss_daily_kwh = elementLen > 0
+    ? Array.from({ length: elementLen }, (_, d) =>
+        elements.reduce((s, arr) => s + (arr?.[d] ?? 0), 0))
+    : []
+
+  // Operable openings — one layer per opening with non-empty per-day data
+  const openingLayers = nv
+    .filter(n => Array.isArray(n?.daily_heat_loss_kwh) && n.daily_heat_loss_kwh.length > 0)
+    .map((n, i) => ({
+      id: `opening_${n.id}`,
+      label: `${n.name || n.id} (natvent)`,
+      colour: ['#DC2626', '#F97316', '#A855F7', '#0EA5E9', '#22C55E', '#EAB308'][i % 6],
+      daily_kwh: n.daily_heat_loss_kwh,
+    }))
+
+  const layers = [
+    { id: 'total_loss',   label: 'Total envelope loss', colour: '#1F2937', daily_kwh: total_loss_daily_kwh },
+    { id: 'wall',         label: 'External wall',       colour: '#6B7280', daily_kwh: losses?.external_wall ?? [] },
+    { id: 'roof',         label: 'Roof',                colour: '#9CA3AF', daily_kwh: losses?.roof ?? [] },
+    { id: 'floor',        label: 'Ground floor',        colour: '#D1D5DB', daily_kwh: losses?.ground_floor ?? [] },
+    { id: 'glazing',      label: 'Glazing',             colour: '#4B5563', daily_kwh: losses?.glazing ?? [] },
+    { id: 'tb',           label: 'Thermal bridging',    colour: '#475569', daily_kwh: losses?.thermal_bridging ?? [] },
+    { id: 'infiltration', label: 'Infiltration',        colour: '#7DD3FC', daily_kwh: losses?.fabric_leakage ?? [] },
+    { id: 'permvent',     label: 'Permanent vents',     colour: '#0EA5E9', daily_kwh: losses?.permanent_vents ?? [] },
+    ...openingLayers,
   ]
-  if (focusEngine?.daily_heat_loss_kwh) {
-    stacks.push({
-      key: `nv_${focusEngine.id}`,
-      label: `${focusEngine.name || focusEngine.id} (natvent)`,
-      color: '#DC2626',
-      daily_kwh: focusEngine.daily_heat_loss_kwh,
-    })
-  }
 
-  const primary = {
-    title: 'Hourly heat loss at setpoint (with operable openings)',
-    unit:  'kW',
-    stacks,
-    lines: [],
-  }
-
-  // Brief 28-IM-Polish POL-M2: chart consistency rules — pill + totals.
   const sumArr = (a) => Array.isArray(a) ? a.reduce((s, v) => s + (v ?? 0), 0) : 0
   const totalLossKwh =
       sumArr(losses?.external_wall) + sumArr(losses?.roof) + sumArr(losses?.ground_floor)
@@ -660,27 +671,28 @@ function OperationProfilesView({ instantResult, openings, selectedOpeningId }) {
   const totalNvKwh = nv.reduce((s, n) => s + (n.heat_loss_kwh ?? 0), 0)
   const gia = instantResult?.heat_balance?.metadata?.gia_m2 ?? instantResult?.metadata?.gia_m2 ?? 0
 
+  const captionWithFocus = focusEngine
+    ? `Toggle individual envelope elements + operable openings to drill down. Focus opening: ${focusEngine.name || focusEngine.id} (mode: ${focusEngine.mode}, ${focusEngine.open_hours} open-hours/yr, avg flow ${focusEngine.avg_flow_when_open_l_s} L/s when open, avg ΔT ${focusEngine.avg_dT_when_open_k} K).`
+    : 'Toggle individual envelope elements + operable openings to drill down. Add operable openings in the left panel to see their per-opening natural-ventilation contribution as a separate layer.'
+
   return (
-    <div className="w-full h-full flex flex-col">
-      <div className="flex-shrink-0 flex items-center justify-between gap-2 px-4 pt-2 pb-1">
+    <div className="w-full h-full flex flex-col overflow-auto p-3">
+      <div className="flex-shrink-0 flex items-center justify-between gap-2 mb-2">
         <EnginePill mode="static" />
         <div className="flex items-center gap-2">
           <ChartTotalsBadge label="Σ fabric loss" value_kwh={totalLossKwh} gia_m2={gia} />
           <ChartTotalsBadge label="Σ natvent"     value_kwh={totalNvKwh}   gia_m2={gia} />
         </div>
       </div>
-      <div className="flex-1 min-h-0">
-        <WeatherSynchronisedProfile
-          primary={primary}
-          weather={{ t_out_mean_c, wind_mean_ms, ghi_mean_w_per_m2: ghi_mean_w_m2 }}
-          height={540}
-          caption={
-            focusEngine
-              ? `Daily mean of the 8760-hour State 2 trace. The red layer is the per-opening natural-ventilation loss from ${focusEngine.name || focusEngine.id} (mode: ${focusEngine.mode}, ${focusEngine.open_hours} open-hours/yr, avg flow ${focusEngine.avg_flow_when_open_l_s} L/s when open, avg ΔT ${focusEngine.avg_dT_when_open_k} K). Click an opening in the left panel to overlay a different one.`
-              : 'Add an operable opening to see its hourly contribution overlaid on the fabric stack.'
-          }
-        />
-      </div>
+      <InteractiveProfileVisualiser
+        layers={layers}
+        weather={{ t_out_c: t_out_mean_c, wind_ms: wind_mean_ms, ghi_w_per_m2: ghi_mean_w_m2 }}
+        defaultLayerIds={['total_loss']}
+        defaultMode="single_line"
+        module="operation"
+        height={420}
+        caption={captionWithFocus}
+      />
     </div>
   )
 }

@@ -16,6 +16,9 @@ import BuildingViewer3D from './BuildingViewer3D.jsx'
 import ExpandedSankeyOverlay from './ExpandedSankeyOverlay.jsx'
 import HeatBalance from '../balance/HeatBalance.jsx'
 import WeatherSynchronisedProfile from '../../profiles/WeatherSynchronisedProfile.jsx'
+// Brief 44 Part 5 (2026-05-21) — Building module adopts the shared
+// InteractiveProfileVisualiser for its profile-over-time tab.
+import InteractiveProfileVisualiser from '../../shared/InteractiveProfileVisualiser/InteractiveProfileVisualiser.jsx'
 import ConstructionInspector from '../../library/ConstructionInspector.jsx'
 // Brief 28-IM-Polish (Bug 2.1, Bug 2.6, §4.1, §4.2, IA 3.1, IA 3.2):
 //   - ThermalBridgesPanel: building-level TB section in left column
@@ -1155,47 +1158,60 @@ function BuildingProfilesView({ instantResult }) {
       sumArr(solar?.north) + sumArr(solar?.east) + sumArr(solar?.south) + sumArr(solar?.west)
   const gia = instantResult?.heat_balance?.metadata?.gia_m2 ?? instantResult?.metadata?.gia_m2 ?? 0
 
-  // Primary pane: stacked area of fabric + ventilation + thermal-bridging
-  // heat losses, with solar transmission per facade as line overlays
-  // (NOT stacked — these are gains, shown to give visual context for the
-  // gain/loss daily balance).
-  const primary = {
-    title: 'Hourly heat loss at setpoint',
-    unit:  'kW',
-    stacks: [
-      { key: 'wall',  label: 'External wall',    color: '#6B7280', daily_kwh: losses?.external_wall },
-      { key: 'roof',  label: 'Roof',             color: '#9CA3AF', daily_kwh: losses?.roof },
-      { key: 'floor', label: 'Ground floor',     color: '#D1D5DB', daily_kwh: losses?.ground_floor },
-      { key: 'glaz',  label: 'Glazing',          color: '#4B5563', daily_kwh: losses?.glazing },
-      { key: 'tb',    label: 'Thermal bridging', color: '#475569', daily_kwh: losses?.thermal_bridging },
-      { key: 'leak',  label: 'Infiltration',     color: '#7DD3FC', daily_kwh: losses?.fabric_leakage },
-      { key: 'pvent', label: 'Permanent vents',  color: '#0EA5E9', daily_kwh: losses?.permanent_vents },
-    ],
-    lines: [
-      { key: 'sol_n', label: 'Solar N',  color: '#FCD34D', daily_kwh: solar?.north },
-      { key: 'sol_e', label: 'Solar E',  color: '#F59E0B', daily_kwh: solar?.east },
-      { key: 'sol_s', label: 'Solar S',  color: '#D97706', daily_kwh: solar?.south },
-      { key: 'sol_w', label: 'Solar W',  color: '#F59E0B', daily_kwh: solar?.west, dashed: true },
-    ],
-  }
+  // Brief 44 Part 5 (2026-05-21) — Building Profiles uses the shared
+  // InteractiveProfileVisualiser. Simple by default: single layer
+  // "Total heat loss" (synthesised by summing per-element losses);
+  // user opts into individual envelope elements + solar gains.
+
+  // Synthesise "Total heat loss" as a daily-sum across all envelope
+  // elements so the user gets one informative signal as the default.
+  const elements = [losses?.external_wall, losses?.roof, losses?.ground_floor,
+                    losses?.glazing, losses?.thermal_bridging, losses?.fabric_leakage,
+                    losses?.permanent_vents]
+  const total_loss_daily_kwh = (Array.isArray(elements[0]) ? elements[0].length : 0) > 0
+    ? Array.from({ length: elements[0].length }, (_, d) =>
+        elements.reduce((s, arr) => s + (arr?.[d] ?? 0), 0))
+    : []
+  const total_solar_daily_kwh = (Array.isArray(solar?.north) ? solar.north.length : 0) > 0
+    ? Array.from({ length: solar.north.length }, (_, d) =>
+        (solar.north?.[d] ?? 0) + (solar.east?.[d] ?? 0)
+      + (solar.south?.[d] ?? 0) + (solar.west?.[d] ?? 0))
+    : []
+
+  const layers = [
+    { id: 'total_loss',   label: 'Total heat loss',   colour: '#1F2937', daily_kwh: total_loss_daily_kwh },
+    { id: 'wall',         label: 'External wall',    colour: '#6B7280', daily_kwh: losses?.external_wall ?? [] },
+    { id: 'roof',         label: 'Roof',             colour: '#9CA3AF', daily_kwh: losses?.roof ?? [] },
+    { id: 'floor',        label: 'Ground floor',     colour: '#D1D5DB', daily_kwh: losses?.ground_floor ?? [] },
+    { id: 'glazing',      label: 'Glazing',          colour: '#4B5563', daily_kwh: losses?.glazing ?? [] },
+    { id: 'tb',           label: 'Thermal bridging', colour: '#475569', daily_kwh: losses?.thermal_bridging ?? [] },
+    { id: 'infiltration', label: 'Infiltration',     colour: '#7DD3FC', daily_kwh: losses?.fabric_leakage ?? [] },
+    { id: 'permvent',     label: 'Permanent vents',  colour: '#0EA5E9', daily_kwh: losses?.permanent_vents ?? [] },
+    { id: 'total_solar',  label: 'Total solar gain', colour: '#D97706', daily_kwh: total_solar_daily_kwh },
+    { id: 'solar_n',      label: 'Solar N',          colour: '#FCD34D', daily_kwh: solar?.north ?? [] },
+    { id: 'solar_e',      label: 'Solar E',          colour: '#FBBF24', daily_kwh: solar?.east ?? [] },
+    { id: 'solar_s',      label: 'Solar S',          colour: '#F59E0B', daily_kwh: solar?.south ?? [] },
+    { id: 'solar_w',      label: 'Solar W',          colour: '#EAB308', daily_kwh: solar?.west ?? [] },
+  ]
 
   return (
-    <div className="w-full h-full flex flex-col">
-      <div className="flex-shrink-0 flex items-center justify-between gap-2 px-4 pt-2 pb-1">
+    <div className="w-full h-full flex flex-col overflow-auto p-3">
+      <div className="flex-shrink-0 flex items-center justify-between gap-2 mb-2">
         <EnginePill mode="static" />
         <div className="flex items-center gap-2">
           <ChartTotalsBadge label="Σ losses" value_kwh={totalLossKwh} gia_m2={gia} />
           <ChartTotalsBadge label="Σ solar"  value_kwh={totalSolarKwh} gia_m2={gia} />
         </div>
       </div>
-      <div className="flex-1 min-h-0">
-        <WeatherSynchronisedProfile
-          primary={primary}
-          weather={{ t_out_mean_c, wind_mean_ms, ghi_mean_w_per_m2: ghi_mean_w_m2 }}
-          height={520}
-          caption={'Daily mean of the 8760-hour engine trace. Hover for synchronised values across all four panes. Heat loss stacked by element (positive = loss to outside); solar transmission per facade overlaid as lines (line height = mean kW into zone). Outdoor weather context below: dry-bulb °C, wind m/s, global horizontal solar W/m².'}
-        />
-      </div>
+      <InteractiveProfileVisualiser
+        layers={layers}
+        weather={{ t_out_c: t_out_mean_c, wind_ms: wind_mean_ms, ghi_w_per_m2: ghi_mean_w_m2 }}
+        defaultLayerIds={['total_loss']}
+        defaultMode="single_line"
+        module="building"
+        height={420}
+        caption="Per-element envelope heat losses (positive = loss to outside) and solar transmission per facade. Default: total heat loss across all envelope terms. Toggle individual elements to drill down; switch to Stacked area for compositional view; zoom by quarter/month/day. Weather strip overlays outdoor temp / wind / solar."
+      />
     </div>
   )
 }

@@ -1,8 +1,40 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-21 — Brief 44 Part 4: Reactivity sweep + Monthly cosmetic + Schedule rewire to v40
+## 🚧 Session 2026-05-21 — Brief 44 Part 5: Cross-module rollout of `InteractiveProfileVisualiser`
 
-**State:** `commit_in_flight` — Brief 44 Part 4.
+**State:** `commit_in_flight` — Brief 44 Part 5.
+
+**Prior HEAD:** `7428f0d` (Brief 44 Part 4 — Schedule rewire + Monthly fix).
+
+### What landed
+
+**Building module Profiles tab** rewritten to wrap `InteractiveProfileVisualiser`. Default layer: synthesised `total_loss` (daily sum across 7 envelope elements). User opts in to wall / roof / ground floor / glazing / thermal bridging / infiltration / permanent vents + per-facade solar gain. Σ losses + Σ solar totals badges preserved. Browser-verified.
+
+**Operation module Profiles tab** rewritten to wrap the shared visualiser. Default layer: `total_loss`. PLUS one layer per operable opening (e.g. `New door (north) (natvent)` from `daily_heat_loss_kwh`). Focus-opening caption preserved. Σ fabric loss + Σ natvent badges preserved. Browser-verified.
+
+**Internal Gains module — DEFERRED by design.** Has its own purpose-built canvas-based visualisation (LoadShapeView, MonthlyView, ThreeDView, HeatBalanceView) tightly coupled to per-profile editing affordances. Documented in audit §11.3 as a deliberate scope decision. Brief 44 §6 ("one canonical visualiser, many data sources") is satisfied for the three modules that share a time-profile abstraction (Systems / Building / Operation).
+
+### Files touched
+
+- `frontend/src/components/modules/building/BuildingDefinition.jsx`
+- `frontend/src/components/modules/OperationModule.jsx`
+- `docs/audit/44_visualisation_audit.md` — appended §11
+
+### What did NOT change
+
+- Internal Gains module (deferred, see above).
+- `WeatherSynchronisedProfile.jsx` (still referenced elsewhere; cleanup is future).
+- No engine-side data exposure changes (out of Brief 44 scope).
+
+### Next
+
+Part 6 — Bridgewater walkthrough (15-item checklist) + close + Brief 44 archived.
+
+---
+
+## ✅ Session 2026-05-21 — Brief 44 Part 4: Reactivity sweep + Monthly cosmetic + Schedule rewire to v40
+
+**State:** `closed` — Brief 44 Part 4 at `7428f0d`.
 
 **Prior HEAD:** `55e5123` (Brief 44 Part 3 — InteractiveProfileVisualiser).
 
