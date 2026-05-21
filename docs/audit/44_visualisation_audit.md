@@ -812,9 +812,80 @@ Brief 44 Part 3 mid-audit calls for three deliberate edits with three-way numeri
 
 **These tests CAN be run with the current code (no fixes needed during this audit).** Results would be appended to this section under §13.8. Awaiting Chris's go-ahead before running.
 
-### §13.8 — Three-edit test results (placeholder — pending Chris's sign-off to run)
+### §13.8 — Three-edit test results
 
-Awaiting Chris's sign-off on §13.7 protocol before running.
+**Status:** Protocol paused before any deliberate edit was applied. **Baseline already diverged.** Per Chris's discipline rule ("If any test surfaces a divergence, log to 29_open_issues and surface to Chris before close"), surfacing here and gating Part 6 close on the resolution.
+
+**Setup (2026-05-21, fresh Windows-PC session):**
+- Project: HIX Bridgewater, route `/systems`, viewport 1440×900.
+- Heating mode: `follow_comfort` 21°C.
+- Engine exposure: `window.__nza_engine_result` from `SystemsModule.jsx:158-162` (temporary; flagged for removal at Part 6 close).
+- Capture mechanism: Claude in Chrome MCP `javascript_tool` + DOM screenshots.
+
+**Baseline engine values (canonical):**
+
+```
+consumption.brief40.heating.delivered_total_mwh   = 28.767
+consumption.space_heating.delivered_mwh           = 28.767   (v25 mirror — agrees)
+consumption.space_heating.electricity_mwh         = 11.198
+consumption.brief40.heating.systems[0] (VRF 95%)  = 27.329 MWh delivered
+consumption.brief40.heating.systems[1] (panel 5%) =  1.438 MWh delivered
+
+consumption.brief40.cooling.delivered_total_mwh   = 148.300
+consumption.space_cooling.delivered_mwh           = 148.300
+
+consumption.brief40.dhw.delivered_total_mwh       = 336.311
+consumption.brief40.dhw.systems[0] (gas 65%)      = 218.602 MWh delivered
+consumption.brief40.dhw.systems[1] (ASHP 35%)     = 117.709 MWh delivered
+
+consumption.total.electricity_mwh                 = 283.053
+consumption.total.gas_mwh                         = 242.891
+```
+
+**Baseline panel readings:**
+
+| Panel | Heating delivered | Heating demand | Electricity total | Gas total |
+|---|---:|---:|---:|---:|
+| **Live Results (right rail)** | 28.8 MWh | 90.1 MWh | **283.1 MWh** | 242.9 MWh |
+| **Sankey (centre)** — system → carrier columns balance | 28.8 (heating-branch widths) | 90.1 (demand column) | **283.1 MWh** (carrier total) | 242.9 MWh (carrier total) |
+| **Profiles "Σ" badges (centre, Profiles tab)** | n/a | n/a (daily integral 90.099 MWh — see below) | **305.9 MWh** | 242.9 MWh |
+| **Engine canonical** | 28.767 | 90.099 (`daily_profiles.delivered_kwh_per_day.heating` sum) | **283.053** | 242.891 |
+
+**Result: Live Results ↔ Sankey ↔ engine agree. Profiles electricity badge disagrees by 22.8 MWh.**
+
+The Profiles "Σ elec" badge reads from `daily_profiles.fuel_kwh_per_day.electricity` (sum = 305.890 MWh per `window.__nza_engine_result`). Live Results and Sankey carrier total read from `consumption.total.electricity_mwh` (= 283.053). Same canonical engine result object, two different code paths, divergent totals.
+
+**Arithmetic:** Daily fuel formula in `instantCalc.js:~4485` is shaped as `heating_demand_daily / heat_scop_eff × heat_elec_share + …`. On Bridgewater, `heat_elec_share = 1.0`, `heat_scop_eff = 2.569` blended. The variable carries the **demand-at-comfort** daily array (annual = 90.099 MWh), not the v40 systems-delivered daily array (annual = 28.767 MWh). So the daily fuel integral implicitly assumes full demand is met:
+
+```
+profile_elec_from_heating = 90.099 / 2.569      = 35.07 MWh   (used by Profiles badge)
+engine_elec_from_heating  = 28.767 / 2.569      = 11.20 MWh   (≈ space_heating.electricity_mwh 11.198)
+                                       difference =  23.87 MWh
+profile − live_results badges                   =  22.84 MWh   (residual ≈ blended-SCOP rounding + 0.047 MWh cooling demand-vs-delivered)
+```
+
+**Three-way agreement: FAIL.** Two panels (Live Results, Sankey) agree with engine canonical. One panel (Profiles electricity badge) over-counts by the heating demand-vs-delivered gap. Gas is unaffected because `heat_gas_share = 0` on Bridgewater (per §13.2.1).
+
+**This is a baseline divergence — no edit applied.** The three deliberate-edit tests (toggle VRF / share 95→50 / DHW tap 30→50) are NOT run, because:
+
+1. The protocol's three-way comparison is meaningful only if all three panels agree on the baseline. They don't.
+2. Running the edits with a known-broken Profiles badge would conflate the bug-under-test (reactivity) with the bug-under-investigation (demand-vs-delivered profile aggregation). Both reactivity and the underlying number would fail, and we couldn't distinguish reactivity-not-wired from baseline-wrong.
+3. Chris's discipline rule is unambiguous: surface divergence first.
+
+**Logged as Issue #23** in `docs/audit/29_open_issues.md` with three suggested fix paths and a recommendation (path (b): reshape daily profile to use v40 per-system delivered).
+
+**Brief 44 Part 6 close: gated.** Options for the gate:
+- **Option A** — Fix Issue #23 inside Brief 44 (option (b) on the recommendation). Adds one Part to Brief 44; pushes the close by one commit. Profiles badge re-tests to 283.1 MWh; the three-edit tests can then run cleanly.
+- **Option B** — Defer Issue #23 to Brief 45 with the engine-rationalisation work already discussed in §13.2.2 (`heat_gas_share` defensive guard) and the inline-legacy 'full' code path consolidation flagged in Brief 39's audit doc §"Calculation flow map". Close Brief 44 with the divergence explicitly noted in the close commit, and re-state in Profiles UI ("Σ elec at demand" + a footnote pointer) as a holding cosmetic until Brief 45 lands.
+- **Option C** — Accept that the Profiles "Σ" badge measures something different (demand-side electricity if heating fully met) and re-label it explicitly. The 22.8 MWh number becomes a meaningful surface ("how much electricity *would* be drawn if heating capacity caught up to demand") rather than a bug. UI-only change.
+
+Recommendation surfaced for Chris's call.
+
+**Discipline cross-check (per §13.11):**
+- ✓ Engine value treated as canonical.
+- ✓ Two panels agreeing with each other but disagreeing with engine = bug, not consensus — the bug is *Profiles disagrees with engine*, even though Profiles' number is internally consistent with daily integration assuming demand is fully met.
+- ✓ No fix applied during the audit. Divergence logged + surfaced.
+- ✓ Test pause is the correct action, not a workaround.
 
 ### §13.9 — Summary of findings
 
@@ -823,7 +894,7 @@ Awaiting Chris's sign-off on §13.7 protocol before running.
 | 1. Gas trace tracks heating | **Visual illusion, not data bug** (palette fix `f85cb38`). Engine `gas_daily` is mathematically flat 665 kWh/day for Bridgewater because `heat_gas_share = 0` (all heating is electric). | §13.1–§13.3 |
 | 2. Heating disappearing from Sankey | **Sankey was correctly reflecting the engine.** Root cause was my Part 2 MVHR-offset over-subtraction at low setpoints (Custom 19°C). Fixed in `f85cb38` (proportional scaling). Sankey was untouched in heating-ribbon code. | §13.4–§13.5 |
 | 3. "Making up its own stuff" | **Not happening.** `InteractiveProfileVisualiser` is presentation-only — only kWh→kW conversion (÷24) plus formatting + layout pixel math. Zero physics calls. | §13.6 |
-| Three-edit tests | **Pending Chris's go-ahead.** Protocol drafted in §13.7. | §13.7 |
+| Three-edit tests | **Paused at baseline.** Pre-edit three-way comparison surfaced a divergence: Profiles "Σ elec" badge 305.9 MWh vs engine canonical 283.053 MWh (Live Results + Sankey both match engine). Logged as Issue #23. Deliberate edits NOT run — running them on a broken baseline would conflate reactivity with the aggregation bug. Part 6 close gated on Chris's call (Option A / B / C in §13.8). | §13.7, §13.8, Issue #23 |
 
 ### §13.10 — Recommended fix paths (none required for §13.1-§13.6)
 
