@@ -505,9 +505,65 @@ Day-level resolution would require hourly arrays (8760 points). The engine expos
 
 ---
 
-## §10 — Part 4 — Reactivity, Monthly, Schedule (placeholder)
+## §10 — Part 4 — Reactivity sweep + Monthly cosmetic + Schedule decision (2026-05-21)
 
-To be filled.
+### §10.1 Schedule tab — rewired to v40
+
+Per Part 1 audit §3, the Schedule tab was reading pre-Brief-42 v25 paths (`sysCfg.heating?.schedule_ref` etc.) and falling back to `'always_on'` for v40-migrated projects — synthetic-looking data masquerading as real. **Rewired to read `params.systems_config_v40` per-system arrays directly.**
+
+New behaviour:
+
+- One row per system across all six v40 services (heating / cooling / DHW / ventilation / lighting / small_power), labelled `<Service>: <system label>`.
+- Each row shows the system's `control_mechanism` (constant / scheduled / weather_compensation / occupancy_driven) and, when set, its `control_schedule_id`.
+- **Schedule grid rendered ONLY when** mechanism is non-constant AND a schedule reference resolves through `params.schedules` → `SCHEDULES` library.
+- Constant-mechanism systems show a banner: "Constant operation — no schedule assigned. To add a schedule, set the system's control mechanism to 'Scheduled'".
+- Missing schedule reference shows an amber warning: "Schedule reference \"<id>\" not found in project library".
+- Bridgewater browser-verified: 10 rows surfaced (5 systems × multiple services); DHW gas (mechanism: scheduled, schedule_id: hotel_systems_24x7) shows a real 24/7 grid; other systems correctly show the constant-operation banner.
+
+Legacy v25 fallback path retained for pre-Brief-42 projects only — if no `sysCfgV40` is supplied, the original v25-shape rows render.
+
+### §10.2 Monthly tab — overflow + label-collision fixes
+
+Per Part 1 audit §7.2 and Chris's original observation, the Monthly tab's numbers (`↓20.5k ↑0.7k`) collided with month labels. Root cause discovered in Part 4: **`maxBar` was being computed across all four arrays independently** (`Math.max(...elecM, ...gasM, ...heatDemandM, ...coolDemandM, 1)`). The gas + electricity sub-bars STACK inside a 200 px wrapper; when their SUM exceeded the maxBar value (which could happen when heating demand was the largest single value), the stacked sub-bars overflowed the wrapper into the label area below.
+
+Fix:
+```js
+const maxStack = Math.max(...elecM.map((e, i) => (e + gasM[i])), 1)
+```
+`maxBar` is now the maximum of `(elec + gas)` per month — the actual stacked height. The sub-bars are guaranteed to fit within the 200 px wrapper. Month labels and demand indicators sit cleanly below.
+
+Layout also restructured:
+- Total label (e.g. "60.8k") ABOVE bar.
+- Stacked bar (electricity bottom + gas top) within fixed 200 px wrapper.
+- Month label BELOW bar.
+- Demand indicators on ONE combined line (`↓<heat> ↑<cool>`) below the month label.
+- Full numerical detail moved to the column's `title` attribute (hover tooltip): electricity / gas / heating demand / cooling demand kWh values.
+
+Bridgewater browser-verified at 1440×900: 12-bar chart legible end-to-end; bars correctly capped to the wrapper; labels below; no overlap.
+
+### §10.3 Reactivity sweep
+
+Per Part 1 audit, no tab was identified as broken on reactivity — every tab reads either `consumption.*` (the engine output) or `params.*` (the configuration), both of which flow through React Context and `useMemo` chains that re-fire on upstream edits.
+
+Verified by spot-check during Part 2-4 development:
+- Heating-setpoint slider in left panel → Sankey EUI updates immediately (Brief 44 Part 2 falsifiability matrix proved this end-to-end).
+- Heating-setpoint slider → Diagnostic table re-computes within the same render cycle (Part 2).
+- Heating-setpoint slider → Profiles new visualiser re-renders within the same render cycle (Part 3 — confirmed via setpoint changes during walkthrough).
+- DHW tap-outlet change → DHW Sankey labels update + Monthly bars re-aggregate.
+- System enable toggle → Live Results right panel updates + Schedule tab row visibility changes.
+
+No further reactivity fixes needed in Part 4. The brief's "reactivity sweep" task was essentially a confirmation; with the engine output flowing through canonical paths and tab components reading from props (not stale closures), the architecture is reactive by construction.
+
+### §10.4 Files touched in Part 4
+
+- `frontend/src/components/modules/SystemsModule.jsx` — `SystemsSchedule` rewired to read v40; `SystemsMonthly` `maxBar` fix + layout cleanup
+- `docs/audit/44_visualisation_audit.md` — this §10
+
+### §10.5 What Part 4 did NOT do
+
+- No engine changes.
+- No new tabs / no removed tabs (Schedule kept and made real; not removed).
+- No cross-module rollout — Part 5 does that.
 
 ---
 

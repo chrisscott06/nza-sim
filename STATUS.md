@@ -1,8 +1,41 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-21 — Brief 44 Part 3: Profiles rebuilt as shared `InteractiveProfileVisualiser`
+## 🚧 Session 2026-05-21 — Brief 44 Part 4: Reactivity sweep + Monthly cosmetic + Schedule rewire to v40
 
-**State:** `commit_in_flight` — Brief 44 Part 3.
+**State:** `commit_in_flight` — Brief 44 Part 4.
+
+**Prior HEAD:** `55e5123` (Brief 44 Part 3 — InteractiveProfileVisualiser).
+
+### What landed
+
+**Schedule tab rewired to v40 per-system arrays.** Pre-Brief-44 read v25 paths (`sysCfg.heating?.schedule_ref` etc.) and fell back to `'always_on'` for v40-migrated projects → synthetic-looking data. Now iterates `params.systems_config_v40.{service}` for all six services; one row per system; reads `control_mechanism` + `control_schedule_id`. Schedule grid rendered only when mechanism is non-constant AND the schedule resolves; otherwise a clear "Constant operation" banner explains.
+
+Bridgewater browser-verified: 10 rows. DHW gas (mechanism scheduled, hotel_systems_24x7) shows a real 24×7 grid; other systems correctly show banner.
+
+**Monthly tab — `maxBar` overflow fix.** Pre-Brief-44 computed `maxBar = max(...elecM, ...gasM, ...heatDemandM, ...coolDemandM)` — i.e. max across each array independently. The bars stack gas + electricity inside a 200 px wrapper; when `elec + gas > heatDemand` (which is common), the stacked sub-bars' total height exceeded the wrapper → overflowed into the label area, causing the collision Chris flagged.
+
+Fix: `maxBar = max(...elecM.map((e, i) => e + gasM[i]))` — the max of (gas+elec) per month, i.e. the actual stacked height. Bars now fit cleanly within the wrapper.
+
+Layout also restructured: total above bar; month label below bar; demand indicators on ONE combined line `↓<heat> ↑<cool>` below the month; full numerical detail moved to column `title` hover tooltip.
+
+Bridgewater browser-verified: 12-bar chart legible end-to-end; bars capped to wrapper; labels below; no overlap.
+
+**Reactivity sweep.** Part 1 audit identified no specific broken tabs. Architecture is reactive by construction — every tab reads `consumption.*` or `params.*` which flow through React Context + `useMemo`. Verified by spot-check across Parts 2-4: setpoint changes propagate to Sankey + Diagnostic + Profiles + Monthly + Live Results within the same render cycle.
+
+### Files touched
+
+- `frontend/src/components/modules/SystemsModule.jsx` — `SystemsSchedule` rewire; `SystemsMonthly` `maxBar` fix + layout
+- `docs/audit/44_visualisation_audit.md` — appended §10
+
+### Next
+
+Part 5 — wire `InteractiveProfileVisualiser` into Building / Internal Gains / Operation modules with module-specific data feeds.
+
+---
+
+## ✅ Session 2026-05-21 — Brief 44 Part 3: Profiles rebuilt as shared `InteractiveProfileVisualiser`
+
+**State:** `closed` — Brief 44 Part 3 at `55e5123`.
 
 **Prior HEAD:** `3f1bb0b` (Brief 44 Part 2 — Diagnostic 248% fix + cosmetic).
 

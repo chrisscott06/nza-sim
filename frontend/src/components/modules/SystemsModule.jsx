@@ -322,6 +322,7 @@ export default function SystemsModule() {
             {consumption && centreView === 'schedule' && (
               <SystemsSchedule
                 sysCfg={sysCfg}
+                sysCfgV40={params?.systems_config_v40}
                 params={params}
                 openScheduleEditor={openScheduleEditor}
               />
@@ -1503,24 +1504,59 @@ function SystemsProfiles({ result }) {
 
 /* ───────────────────────────────────────────────────────────────────────────
    CENTRE — SCHEDULE (per-system grids with edit button)
-   ─────────────────────────────────────────────────────────────────────── */
-function SystemsSchedule({ sysCfg, params, openScheduleEditor }) {
+   Brief 44 Part 4 (2026-05-21) — rewired to v40 per-system arrays. The
+   pre-Brief-44 implementation read `sysCfg.heating?.schedule_ref` etc.
+   from systems_config_v25 — post-Brief-42 the canonical schema is v40
+   per-system arrays with `control_schedule_id`. On v40-migrated projects
+   the v25 schedule_ref is absent → silent fallback to 'always_on' →
+   grid showed a flat always-on shape that LOOKED like real data. This
+   was the "hardcoded data masquerading as real" case Brief 44 flagged
+   for removal-or-rewire. Rewired to v40.
+   ─────────────────────────────────────────────────────────────────── */
+function SystemsSchedule({ sysCfg, sysCfgV40, params, openScheduleEditor }) {
+  // V40 per-system rows. When v40 is present, use it as the source of
+  // truth; v25 schedule_ref is the legacy fallback for pre-Brief-42
+  // projects only.
   const rows = []
-  const add = (id, label, schedule_ref, enabled) => rows.push({ id, label, schedule_ref, enabled })
-  add('heating', 'Heating',  sysCfg.heating?.schedule_ref ?? 'always_on', sysCfg.heating?.enabled !== false)
-  add('cooling', 'Cooling',  sysCfg.cooling?.schedule_ref ?? 'always_on', sysCfg.cooling?.enabled !== false)
-  add('dhw',     'DHW',      sysCfg.dhw?.schedule_ref ?? 'always_on',     sysCfg.dhw?.enabled !== false)
-  for (const v of (sysCfg.ventilation ?? [])) {
-    add(v.id ?? v.name ?? 'vent', `Vent: ${v.name ?? v.id ?? '?'}`, v.schedule_ref ?? 'always_on', v.enabled !== false)
+  const SERVICE_LABELS = {
+    heating: 'Heating', cooling: 'Cooling', dhw: 'DHW',
+    ventilation: 'Vent', lighting: 'Lighting', small_power: 'Small power',
+  }
+
+  if (sysCfgV40 && typeof sysCfgV40 === 'object') {
+    for (const service of ['heating', 'cooling', 'dhw', 'ventilation', 'lighting', 'small_power']) {
+      const list = Array.isArray(sysCfgV40[service]) ? sysCfgV40[service] : []
+      for (const sys of list) {
+        if (!sys) continue
+        rows.push({
+          id:           `${service}:${sys.id ?? sys.label ?? 'unknown'}`,
+          label:        `${SERVICE_LABELS[service]}: ${sys.label ?? sys.id ?? '(unnamed)'}`,
+          schedule_ref: sys.control_schedule_id ?? null,
+          mechanism:    sys.control_mechanism ?? 'constant',
+          enabled:      sys.enabled !== false,
+          service,
+        })
+      }
+    }
+  } else {
+    // Legacy v25 fallback — pre-Brief-42 projects only
+    const add = (id, label, schedule_ref, enabled, service) =>
+      rows.push({ id, label, schedule_ref, enabled, service, mechanism: null })
+    add('heating', 'Heating',  sysCfg.heating?.schedule_ref ?? null, sysCfg.heating?.enabled !== false, 'heating')
+    add('cooling', 'Cooling',  sysCfg.cooling?.schedule_ref ?? null, sysCfg.cooling?.enabled !== false, 'cooling')
+    add('dhw',     'DHW',      sysCfg.dhw?.schedule_ref ?? null,     sysCfg.dhw?.enabled !== false, 'dhw')
+    for (const v of (sysCfg.ventilation ?? [])) {
+      add(v.id ?? v.name ?? 'vent', `Vent: ${v.name ?? v.id ?? '?'}`, v.schedule_ref ?? null, v.enabled !== false, 'ventilation')
+    }
   }
 
   const resolveSched = (name) => {
+    if (!name) return null
     const proj = (params?.schedules ?? []).find(s => s?.name === name || s?.id === name)
     if (proj) return proj
-    return SCHEDULES[name] ?? { day_types: { weekday: Array(24).fill(0), saturday: Array(24).fill(0), sunday: Array(24).fill(0) } }
+    return SCHEDULES[name] ?? null
   }
 
-  // Brief 28-IM-Polish POL-M2.
   return (
     <div className="w-full h-full overflow-auto p-4 space-y-3">
       <div className="flex items-start justify-between gap-2 flex-wrap">
@@ -1531,16 +1567,23 @@ function SystemsSchedule({ sysCfg, params, openScheduleEditor }) {
           </div>
           <p className="text-xxs text-mid-grey mt-0.5">
             Per-system schedule visualisation. Each row shows Mon–Fri / Sat / Sun
-            hour-of-day fractions for the assigned schedule. The "✏️ Edit" button
-            opens the shared schedule editor; saving updates the project's
-            schedule library and any other system referencing that schedule
-            will recompute immediately.
+            hour-of-day fractions for the system's `control_schedule_id`. Systems
+            with `control_mechanism = 'constant'` (no schedule) show a banner
+            instead of a grid. The "✏️ Edit" button opens the shared schedule
+            editor; saving updates the project's schedule library and any other
+            system referencing that schedule will recompute immediately.
           </p>
         </div>
         <div className="text-xxs text-mid-grey tabular-nums flex-shrink-0">{rows.length} systems</div>
       </div>
+      {rows.length === 0 && (
+        <div className="bg-off-white/40 border border-dashed border-light-grey rounded p-4 text-xxs text-mid-grey italic max-w-3xl">
+          No systems configured yet. Add systems in the left panel.
+        </div>
+      )}
       {rows.map(r => {
         const sched = resolveSched(r.schedule_ref)
+        const isConstant = r.mechanism === 'constant' || (!r.schedule_ref && !sched)
         return (
           <div key={r.id} className={`bg-white border border-light-grey rounded p-3 max-w-3xl ${r.enabled ? '' : 'opacity-60'}`}>
             <div className="flex items-baseline justify-between mb-2 gap-3">
@@ -1549,18 +1592,40 @@ function SystemsSchedule({ sysCfg, params, openScheduleEditor }) {
                 {!r.enabled && <span className="text-xxs text-amber-700">(OFF)</span>}
               </div>
               <div className="flex items-center gap-2 text-xxs text-mid-grey flex-shrink-0">
-                <span>schedule: <span className="text-navy">{r.schedule_ref}</span></span>
-                <button
-                  onClick={() => openScheduleEditor(r.schedule_ref)}
-                  className="px-2 py-0.5 rounded border border-light-grey text-mid-grey hover:text-cyan-700 hover:border-cyan-700"
-                >
-                  ✏️ Edit
-                </button>
+                {r.mechanism && (
+                  <span>mechanism: <span className="text-navy">{r.mechanism}</span></span>
+                )}
+                {r.schedule_ref && (
+                  <span>schedule: <span className="text-navy">{r.schedule_ref}</span></span>
+                )}
+                {r.schedule_ref && (
+                  <button
+                    onClick={() => openScheduleEditor(r.schedule_ref)}
+                    className="px-2 py-0.5 rounded border border-light-grey text-mid-grey hover:text-cyan-700 hover:border-cyan-700"
+                  >
+                    ✏️ Edit
+                  </button>
+                )}
               </div>
             </div>
-            <ScheduleGrid label="Mon–Fri" hours={sched.day_types?.weekday ?? Array(24).fill(0)} />
-            <ScheduleGrid label="Sat"     hours={sched.day_types?.saturday ?? Array(24).fill(0)} />
-            <ScheduleGrid label="Sun"     hours={sched.day_types?.sunday ?? Array(24).fill(0)} />
+            {isConstant && (
+              <p className="text-xxs text-mid-grey/80 italic">
+                Constant operation — no schedule assigned. To add a schedule, set the system's
+                control mechanism to "Scheduled" in the system editor.
+              </p>
+            )}
+            {!isConstant && sched && (
+              <>
+                <ScheduleGrid label="Mon–Fri" hours={sched.day_types?.weekday ?? Array(24).fill(0)} />
+                <ScheduleGrid label="Sat"     hours={sched.day_types?.saturday ?? Array(24).fill(0)} />
+                <ScheduleGrid label="Sun"     hours={sched.day_types?.sunday ?? Array(24).fill(0)} />
+              </>
+            )}
+            {!isConstant && !sched && r.schedule_ref && (
+              <p className="text-xxs text-amber-700">
+                Schedule reference "{r.schedule_ref}" not found in project library.
+              </p>
+            )}
           </div>
         )
       })}
@@ -1619,7 +1684,17 @@ function SystemsMonthly({ consumption, result }) {
   const heatDemandM = toMonth(dpEng.delivered_kwh_per_day?.heating)
   const coolDemandM = toMonth(dpEng.delivered_kwh_per_day?.cooling)
 
-  const maxBar = Math.max(...elecM, ...gasM, ...heatDemandM, ...coolDemandM, 1)
+  // Brief 44 Part 4: the bar wrapper is 200px tall and the gas+elec
+  // sub-bars STACK inside it. maxBar must be the max of (elec+gas) per
+  // month — not the max across each array independently — otherwise the
+  // stacked bars overflow the wrapper (gas/max * 200 + elec/max * 200
+  // can exceed 200 if max < gas+elec). The pre-Brief-44 version used
+  // max across all 4 arrays, which overflowed for any month where the
+  // sum gas+elec exceeded any single array's max — bars then extended
+  // BELOW the wrapper into the month-label area, causing the collision
+  // Chris flagged.
+  const maxStack = Math.max(...elecM.map((e, i) => (e + gasM[i])), 1)
+  const maxBar = maxStack   // alias kept for readability of the per-bar math
 
   return (
     <div className="w-full h-full overflow-auto p-4">
@@ -1642,26 +1717,45 @@ function SystemsMonthly({ consumption, result }) {
         demand <span className="text-blue-600">●</span> for visual demand-vs-energy
         comparison.
       </p>
+      {/* Brief 44 Part 4 (2026-05-21) — cosmetic restructure. The pre-Brief-44
+          layout stacked four text labels under each bar (total / month name /
+          heating demand / cooling demand). At narrow column widths these
+          collide. New layout: total ABOVE bar; month label BELOW bar; heating
+          + cooling demand combined into one short "↓X ↑Y" line below the
+          month — only visible when above the threshold. Hover the bar for
+          full numerical context via tooltip. */}
       <div className="flex items-end gap-2 max-w-5xl" style={{ height: 260 }}>
-        {months.map((m, i) => (
-          <div key={m} className="flex-1 flex flex-col items-center gap-1">
-            <div className="text-xxs text-mid-grey tabular-nums">
-              {(elecM[i] + gasM[i]) > 1000 ? ((elecM[i]+gasM[i])/1000).toFixed(1)+'k' : Math.round(elecM[i] + gasM[i])}
+        {months.map((m, i) => {
+          const total = elecM[i] + gasM[i]
+          const totalLabel = total > 1000 ? `${(total / 1000).toFixed(1)}k` : `${Math.round(total)}`
+          const tooltip =
+            `${m}\n` +
+            `Electricity: ${Math.round(elecM[i])} kWh\n` +
+            `Gas: ${Math.round(gasM[i])} kWh\n` +
+            `Heating demand: ${Math.round(heatDemandM[i])} kWh\n` +
+            `Cooling demand: ${Math.round(coolDemandM[i])} kWh`
+          return (
+            <div key={m} className="flex-1 flex flex-col items-center gap-1 min-w-0" title={tooltip}>
+              <div className="text-xxs text-mid-grey tabular-nums leading-none">{totalLabel}</div>
+              <div className="w-full" style={{ height: 200 }}>
+                <div className="w-full" style={{ height: `${(gasM[i] / maxBar) * 200}px`, backgroundColor: FUEL_COLOURS.gas, opacity: 0.85 }} />
+                <div className="w-full" style={{ height: `${(elecM[i] / maxBar) * 200}px`, backgroundColor: FUEL_COLOURS.electricity, opacity: 0.85 }} />
+              </div>
+              <div className="text-xxs text-mid-grey font-medium leading-none">{m}</div>
+              {/* Demand indicators — combined onto one short line so they
+                  can't collide with the month label. Tooltip on the column
+                  shows the exact figures. */}
+              <div className="text-xxs tabular-nums leading-none flex items-center gap-1">
+                {heatDemandM[i] > 100 && (
+                  <span style={{ color: '#DC2626' }}>↓{Math.round(heatDemandM[i] / 1000) >= 1 ? `${(heatDemandM[i] / 1000).toFixed(1)}k` : Math.round(heatDemandM[i])}</span>
+                )}
+                {coolDemandM[i] > 100 && (
+                  <span style={{ color: '#00AEEF' }}>↑{Math.round(coolDemandM[i] / 1000) >= 1 ? `${(coolDemandM[i] / 1000).toFixed(1)}k` : Math.round(coolDemandM[i])}</span>
+                )}
+              </div>
             </div>
-            <div className="w-full" style={{ height: 200 }}>
-              <div className="w-full" style={{ height: `${(gasM[i] / maxBar) * 200}px`, backgroundColor: FUEL_COLOURS.gas, opacity: 0.85 }} title={`Gas ${Math.round(gasM[i])} kWh`} />
-              <div className="w-full" style={{ height: `${(elecM[i] / maxBar) * 200}px`, backgroundColor: FUEL_COLOURS.electricity, opacity: 0.85 }} title={`Electricity ${Math.round(elecM[i])} kWh`} />
-            </div>
-            <div className="text-xxs text-mid-grey">{m}</div>
-            {/* Demand line indicators below */}
-            <div className="text-xxs tabular-nums" style={{ color: '#DC2626' /* heating red */ }}>
-              {heatDemandM[i] > 100 ? `↓${Math.round(heatDemandM[i])}` : ''}
-            </div>
-            <div className="text-xxs tabular-nums" style={{ color: '#00AEEF' /* cooling cyan */ }}>
-              {coolDemandM[i] > 100 ? `↑${Math.round(coolDemandM[i])}` : ''}
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
       <div className="flex items-center gap-4 mt-4 text-xxs text-mid-grey">
         <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-sm" style={{ backgroundColor: FUEL_COLOURS.electricity }} /> Electricity ({consumption.total?.electricity_mwh?.toFixed(1)} MWh/yr)</div>
