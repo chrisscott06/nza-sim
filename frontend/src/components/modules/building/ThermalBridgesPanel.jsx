@@ -23,6 +23,7 @@
 
 import { useContext, useState } from 'react'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
+import { useProjectMutation } from '../../../hooks/useProjectMutation.js'
 import {
   JUNCTION_LABELS,
   ISO14683_DEFAULT_PSI,
@@ -38,7 +39,11 @@ const MODE_OPTIONS = [
 ]
 
 export default function ThermalBridgesPanel({ engineResult, isOpen, onToggle }) {
-  const { params, updateParam } = useContext(ProjectContext)
+  const { params } = useContext(ProjectContext)
+  // Brief 46 Part 2 (2026-05-21): mutations routed through useProjectMutation
+  // so this panel works both in the main Building module AND inside the
+  // intervention editor's BuildingSection.
+  const { mutate } = useProjectMutation()
   const [expanded, setExpanded] = useState(false)
   // Brief 33 follow-up (UX nit, 2026-05-18): section header is now a
   // click target that collapses/expands the body, matching every other
@@ -67,10 +72,10 @@ export default function ThermalBridgesPanel({ engineResult, isOpen, onToggle }) 
     const next = { ...cfg, mode }
     if (mode === 'iso14683_auto' && next.multiplier == null) next.multiplier = 1.0
     if (mode === 'manual_h_tb' && next.h_tb_W_per_K == null) next.h_tb_W_per_K = engineHTB || 50
-    updateParam('thermal_bridges', next)
+    mutate('building.thermal_bridges', next)
   }
-  const setMultiplier = (m) => updateParam('thermal_bridges', { ...cfg, mode: 'iso14683_auto', multiplier: m })
-  const setHtbManual  = (v) => updateParam('thermal_bridges', { ...cfg, mode: 'manual_h_tb', h_tb_W_per_K: v })
+  const setMultiplier = (m) => mutate('building.thermal_bridges', { ...cfg, mode: 'iso14683_auto', multiplier: m })
+  const setHtbManual  = (v) => mutate('building.thermal_bridges', { ...cfg, mode: 'manual_h_tb', h_tb_W_per_K: v })
 
   const currentMode       = cfg.mode ?? engineMode ?? 'iso14683_auto'
   const currentMultiplier = currentMode === 'iso14683_auto'

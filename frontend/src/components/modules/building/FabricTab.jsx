@@ -1,5 +1,6 @@
 import { useContext, useEffect, useMemo, useState } from 'react'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
+import { useProjectMutation } from '../../../hooks/useProjectMutation.js'
 
 const ELEMENTS = [
   { key: 'external_wall', label: 'External Wall',  types: ['wall'] },
@@ -268,7 +269,15 @@ function achLabel(ach) {
 }
 
 export default function FabricTab({ onDetailChange }) {
-  const { constructions: selected, updateConstruction, params, updateParam } = useContext(ProjectContext)
+  const { constructions: selected, updateConstruction, params } = useContext(ProjectContext)
+  // Brief 46 Part 2 (2026-05-21): mutations routed through useProjectMutation
+  // so this panel works both in the main Building module AND inside the
+  // intervention editor's BuildingSection. `updateConstruction` retained
+  // for the construction-picker callsites which use that ProjectContext
+  // helper directly until Part 4's broader audit; the only updateParam
+  // call site in this file is the air-permeability slider below, which
+  // routes through `mutate`.
+  const { mutate } = useProjectMutation()
 
   const [library, setLibrary]   = useState([])
   const [loading, setLoading]   = useState(true)
@@ -352,7 +361,7 @@ export default function FabricTab({ onDetailChange }) {
             max={2.0}
             step={0.05}
             value={params?.infiltration_ach ?? 0.5}
-            onChange={e => updateParam('infiltration_ach', parseFloat(e.target.value))}
+            onChange={e => mutate('building.infiltration_ach', parseFloat(e.target.value))}
             className="flex-1 accent-teal"
           />
           <span className="text-caption font-semibold text-navy w-14 text-right">

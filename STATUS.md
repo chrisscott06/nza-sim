@@ -1,8 +1,64 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-21 — Brief 46 Part 1: capture context architecture + editor shell
+## 🚧 Session 2026-05-21 — Brief 46 Part 2a: Building mutation entry points refactored
 
-**State:** `commit_in_flight` — Brief 46 Part 1.
+**State:** `commit_in_flight` — Brief 46 Part 2a (substantive refactor + hook extension; BuildingSection composer + browser verification deferred to Part 2b next session per Chris's "one Part per fresh session" pacing).
+
+**Prior HEAD:** `dd330e8` (Brief 46 Part 1).
+
+### What landed (Part 2a)
+
+Chris's three Part 1 architectural questions resolved (audit doc §1.8):
+- Q1: schedule-popout nesting deferred to Part 3.
+- Q2: **delegate-to-existing-helpers** for main-app mode (no generic deep-merge; the asymmetry between capture and main-app modes IS the correct design).
+- Q3: visible-change indicator via `useHasPatchOnPath(path)` from the capture context.
+
+Hook extended (`useProjectMutation.js`):
+- New `BUILDING_DEEP_MERGE_KEYS` set (wwr, window_count, location, shading_overhang, shading_fin, openings) for 2-segment dispatch. `mutate('building.wwr.north', 0.4)` → main-app: `updateParam('wwr', { north: 0.4 })`; capture: patch at `building.wwr.north`.
+- New `useHasPatchOnPath(path)` hook — true if a patch exists at that path in the active capture context. For visible-change indicator UI in Part 2b.
+- New `useRevertPathPatch()` hook — returns a revert-by-path function. For click-to-revert on indicators.
+- Routing rules: top-level Building writes via `updateParam`; constructions/comfort_band via dedicated helpers; deeper paths flagged for Part 4 (`systems_config_v40.*` branch).
+
+All 33 Building mutation entry points refactored to `mutate(path, value)`:
+- `BuildingDefinition.jsx` — 19 sites (wwr ×3, shading × combined, openings ×4, geometry ×5, window_count, fabric q50, comfort_band lower + upper)
+- `GeometryTab.jsx` — 10 sites (name, dimensions ×4, orientation, wwr ×4, location ×3)
+- `ThermalBridgesPanel.jsx` — 3 sites (mode + multiplier + manual H_TB)
+- `FabricTab.jsx` — 1 site (infiltration_ach)
+- Grep confirms zero `updateParam(` or `setComfortBand(` remain in Building components.
+
+`updateConstruction(...)` call sites untouched in 2a — those use the dedicated `updateConstruction` ProjectContext helper, which is the delegate-to-existing-helper for that slice. Capture-mode access via Part 2b BuildingSection composer when the construction picker is exposed inside the editor.
+
+### What did NOT change (Part 2a)
+
+- Engine: untouched.
+- Data model: untouched.
+- Main-app behaviour: provably identical pre/post refactor by construction (each `mutate(path, value)` call dispatches in the hook to the exact `updateParam` / `setComfortBand` shape that the component used to call directly).
+- Old editor: untouched and still the default entry point.
+- V2 editor: still unreachable from UI in Part 2a. Wired in Part 2b via dev toggle.
+
+### Files touched (Part 2a)
+
+- `frontend/src/hooks/useProjectMutation.js`
+- `frontend/src/components/modules/building/BuildingDefinition.jsx`
+- `frontend/src/components/modules/building/GeometryTab.jsx`
+- `frontend/src/components/modules/building/ThermalBridgesPanel.jsx`
+- `frontend/src/components/modules/building/FabricTab.jsx`
+- `docs/audit/46_interventions_editor_rebuild.md` — §2 appended
+- `STATUS.md` — this section
+
+### Next (Part 2b — next session)
+
+- `BuildingSection.jsx` composer that renders Building controls inside V2's right pane per active subsection. Audit doc recommends extracting BuildingDefinition's subsections (Option A) — surface to Chris at Part 2b open.
+- Visible-change indicator UI wrapping each Building input.
+- Dev toggle in `InterventionsModule.jsx` (`?editor=v2`) to access V2.
+- Browser verification on Bridgewater: main-app q50 edit unchanged (no regression); V2 editor opens, captures Building patches, footer ΔEUI tracks, revert works, save/reopen round-trip clean.
+- Bridgewater baseline EUI 121.7 must hold (Brief 46 Principle 8).
+
+---
+
+## ✅ Session 2026-05-21 — Brief 46 Part 1: capture context architecture + editor shell
+
+**State:** `closed` — Brief 46 Part 1 at `dd330e8`.
 
 **Prior HEAD:** `d4a3d31` (Brief 45 close).
 

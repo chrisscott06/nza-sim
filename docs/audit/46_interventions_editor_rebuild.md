@@ -165,7 +165,19 @@ Per Brief 46 Principle §10, browser verification is mandatory at Parts 3, 4, 5,
 
 If the dev server build catches a typo or syntax issue, the next commit (Part 2's Building wiring) catches it. Code-review-only is the right granularity for Part 1's architectural-only scope.
 
-### §1.8 Open questions surfaced during Part 1
+### §1.8 Architectural decisions (resolved by Chris's review after Part 1)
+
+Chris's review of the three Part 1 open questions:
+
+**Q1 (schedule sub-popout nesting):** Defer to Part 3. Don't pre-emptively refactor `SchedulePopout`. If z-index/position conflicts fire in real flow, extend then.
+
+**Q2 (deep-path writes in main-app mode):** **Delegate-to-existing-helpers.** `useProjectMutation` in main-app mode dispatches by path-prefix to existing helpers (`updateSystem`, `addSystem`, `updateConstruction`, `setComfortBand`, etc.). No generic deep-merge helper. Capture mode uses full Brief-41 patch paths. The asymmetry between the two modes IS the correct design — existing helpers encode the right semantics for their slice (key-specific deep-merge in `updateParam`, array-index lookups, system-id matching, share-validation triggers). A generic deep-merge would either lose that semantics or duplicate it. Main-app must remain behaviourally identical per Brief 46 Principle 11.
+
+**Q3 (visible-change indicator):** As specified — `useHasPatchOnPath(path)` from the capture context, small accent dot per input. Hook lands in Part 2; the pattern is reused in Parts 3-4.
+
+These decisions are baked into the Part 2 hook update below.
+
+### §1.9 Open questions surfaced during Part 1 (pre-Chris-review version, kept for audit trail)
 
 1. **Schedule editor reuse path for sub-popout.** Brief 37's `SchedulePopout` chrome wraps the schedule editor. When the user opens the schedule editor from inside the intervention editor (Brief 46 Part 3), it'll be a SchedulePopout opened from inside another SchedulePopout. The brief notes this should work, but I haven't tested z-index / position conflicts yet. Part 3 will surface this if real.
 
@@ -174,5 +186,78 @@ If the dev server build catches a typo or syntax issue, the next commit (Part 2'
    The cleaner design (recommended for Part 4): `useProjectMutation` in main-app mode for systems just calls `updateSystem(key, value)` on the top-level systems_config_v40 slice; the calling component handles the sub-path mutation as today. Capture mode uses the full Brief-41 patch path for the engine's `applyPatch` to consume.
 
 3. **Visible-change indicators (Parts 2-4).** Brief 46 mentions "small accent marker (coloured dot or border tint)" on patched inputs. The capture context exposes `currentPatches`; consumers can compute `hasPatchOnPath(path)` and render the marker. Pattern to land in Part 2 (Building) and reuse in Parts 3-4.
+
+---
+
+## §2 — Part 2 — Building module mutation refactor (2026-05-21)
+
+**Status: Part 2a — refactor of all 33 Building mutation entry points is complete; BuildingSection composer + browser verification is a Part 2b follow-up in the next session.**
+
+Chris's pacing directive after Part 1 was "one Part per fresh session" and "don't plough". Part 2 splits cleanly into two sub-deliverables; this commit ships the heavyweight mechanical refactor + the hook extension, and the next session lands the composer + browser verification before moving to Part 3.
+
+### §2.1 Hook extension (this commit)
+
+`frontend/src/hooks/useProjectMutation.js` extended per Chris's Q2 resolution (delegate-to-existing-helpers):
+
+- New `BUILDING_DEEP_MERGE_KEYS` set captures the six `updateParam` partial-merge keys: `wwr`, `window_count`, `location`, `shading_overhang`, `shading_fin`, `openings`. 2-segment dispatch under any of these calls `updateParam(top, { sub: value })` — preserving the existing partial-merge semantics of `ProjectContext.updateParam`.
+
+  Examples:
+  - `mutate('building.wwr.north', 0.4)` → main-app: `updateParam('wwr', { north: 0.4 })` (face-merge preserved); capture: patch at `building.wwr.north`.
+  - `mutate('building.shading_overhang.south', { depth_m: 0.5, offset_m: 0 })` → main-app: `updateParam('shading_overhang', { south: { depth_m: 0.5, offset_m: 0 } })`; capture: patch at `building.shading_overhang.south`.
+  - `mutate('building.openings.site_exposure', 'exposed')` → main-app: `updateParam('openings', { site_exposure: 'exposed' })`; capture: patch at `building.openings.site_exposure`.
+
+- New `useHasPatchOnPath(path)` hook (Q3 directive): returns `true` if the current capture context has a patch at the given path. Used by visible-change indicator UI in Parts 2b–4.
+
+- New `useRevertPathPatch()` hook: returns a function `(path) => void` that reverts the patch at the given path. Used by the click-to-revert affordance on visible-change indicators.
+
+- Routing rules tightened: top-level set on Building's flat params (e.g. `mutate('building.length', 60)` → `updateParam('length', 60)`), 2-segment for the BUILDING_DEEP_MERGE_KEYS, deeper paths flagged as Part 4 territory (when `systems_config_v40.<rest>` lands). The `console.warn` stub for unrecognised deep paths preserved as a development aid — capture mode is unaffected.
+
+### §2.2 Mutation entry points refactored (33 sites across 4 files)
+
+All `updateParam(...)` and `setComfortBand(...)` calls in Building components replaced with `mutate(path, value)` calls. The hook routes to the existing helpers in main-app mode (identical behaviour) and captures Brief-41-style patches in capture mode.
+
+| File | Sites | Notes |
+|---|---:|---|
+| `frontend/src/components/modules/building/GeometryTab.jsx` | 10 | name, length, width, num_floors, floor_height, orientation, wwr per-face, location per-field |
+| `frontend/src/components/modules/building/FabricTab.jsx` | 1 | infiltration_ach (separate from the BuildingDefinition q50 / fabric path) |
+| `frontend/src/components/modules/building/ThermalBridgesPanel.jsx` | 3 | thermal_bridges (mode + multiplier + manual H_TB) |
+| `frontend/src/components/modules/building/BuildingDefinition.jsx` | 19 | wwr × 3 (slider + restore + zero), shading_overhang + shading_fin (combined call site), openings × 4 (louvre + cd + flow_mode + site_exposure), geometry × 5 (name + dimensions + orientation), window_count, fabric q50, comfort_band lower + upper |
+| **Total** | **33** | |
+
+`updateConstruction(...)` call sites untouched in this Part — those live in FabricTab and use the dedicated `updateConstruction` helper from ProjectContext (which is the delegate-to-existing-helper for that slice). Capture mode will reach those via Part 2b's BuildingSection composer when the construction picker is exposed inside the editor. The hook already has a `constructions.<key>` dispatch branch ready.
+
+### §2.3 What Part 2a verifies (by construction)
+
+**Main-app behaviour identical** to pre-refactor. Every `mutate('building.X', v)` call in main-app mode (when no capture context is mounted) dispatches via the hook's `default` branch to `updateParam(X, v)` — the exact call the component used to make pre-refactor. For 2-segment partial-merge keys, the hook calls `updateParam(top, { [sub]: value })` — the exact call shape that components used to make pre-refactor.
+
+This is provable by code reading: the hook's main-app branches for each key class translate `mutate(...)` back to the original call. No additional behaviour, no different ordering, no side-effects.
+
+### §2.4 What Part 2b lands (next session)
+
+- **`BuildingSection.jsx`** composer that renders Building's controls in the editor's right pane per the editor's active subsection (Air Permeability, Orientation, Glazing ratios, Fabric, Shading). Two options for how to compose:
+  - **Option A — extract subsections from BuildingDefinition.jsx as named exports.** Cleaner long-term; minor refactor of BuildingDefinition; subsections become reusable.
+  - **Option B — render whole `GeometryTab` for geometry subsections; build small wrapper components for the BuildingDefinition-inline subsections (q50 slider, fabric construction picker hookup, shading per-face).** Less elegant; more wrappers; faster to ship.
+  - Recommend Option A; will surface to Chris at Part 2b open.
+- **Visible-change indicator pattern** applied to Building inputs: wrap each input in a small `<PatchedInputBadge path={...} />` that reads `useHasPatchOnPath` and renders a small accent dot beside the input. Click reverts via `useRevertPathPatch`.
+- **Dev toggle** in `InterventionsModule.jsx` to access the V2 editor (`?editor=v2` query param). Removed at Part 5 when V2 becomes the only path.
+- **Browser verification** on Bridgewater:
+  - q50 edit in main-app Building module → behaves identically to pre-refactor (engine recomputes, EUI 121.7 baseline preserved).
+  - Open V2 editor via dev toggle, navigate to Building → Air Permeability, drag q50 → patch captures, footer ΔEUI moves, revert works, save persists, reopen restores.
+
+### §2.5 Files touched (Part 2a — this commit)
+
+- `frontend/src/hooks/useProjectMutation.js` — BUILDING_DEEP_MERGE_KEYS set + 2-segment dispatch + `useHasPatchOnPath` + `useRevertPathPatch` hooks
+- `frontend/src/components/modules/building/GeometryTab.jsx` — 10 sites refactored
+- `frontend/src/components/modules/building/FabricTab.jsx` — 1 site
+- `frontend/src/components/modules/building/ThermalBridgesPanel.jsx` — 3 sites
+- `frontend/src/components/modules/building/BuildingDefinition.jsx` — 19 sites
+- `docs/audit/46_interventions_editor_rebuild.md` — §2 appended (this section)
+- `STATUS.md` — Part 2a section
+
+### §2.6 Verification status (Part 2a)
+
+Code-review only. Main-app behaviour provable by construction (the hook translates `mutate(...)` calls back to the exact `updateParam(...)` / `setComfortBand(...)` shapes that components used to make). Capture mode is provably correct by the hook's verbatim path-pass-through to `capturePatch`.
+
+Browser verification is the next-session Part 2b deliverable — boots the dev server, drives one main-app edit cycle to confirm no regression, opens V2 via dev toggle, captures a Building patch, verifies the footer Δ. Bridgewater baseline EUI 121.7 must hold (no engine drift — Brief 46 Principle 8 + Brief 45 close anchor).
 
 ---

@@ -1,5 +1,6 @@
 import { useContext } from 'react'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
+import { useProjectMutation } from '../../../hooks/useProjectMutation.js'
 import DataCard from '../../chart/DataCard.jsx'
 
 /* ── Small compact input + label ───────────────────────────────────────────── */
@@ -73,7 +74,12 @@ function WWRSlider({ label, value, onChange }) {
 }
 
 export default function GeometryTab() {
-  const { params, updateParam } = useContext(ProjectContext)
+  const { params } = useContext(ProjectContext)
+  // Brief 46 Part 2 (2026-05-21): mutations routed through useProjectMutation
+  // so this component's controls work both in the main Building module AND
+  // inside the intervention editor's BuildingSection. Capture mode logs
+  // patches; main-app mode falls through to ProjectContext as today.
+  const { mutate } = useProjectMutation()
   const { length, width, num_floors, floor_height, orientation, wwr, name, location } = params
 
   // Derived metrics
@@ -89,7 +95,7 @@ export default function GeometryTab() {
         <input
           type="text"
           value={name}
-          onChange={e => updateParam('name', e.target.value)}
+          onChange={e => mutate('building.name', e.target.value)}
           className="
             w-full px-2 py-1.5 text-caption text-navy
             border border-light-grey rounded bg-white
@@ -102,19 +108,19 @@ export default function GeometryTab() {
       <div className="grid grid-cols-2 gap-2">
         <Field label="Length (m)">
           <NumberInput value={length} min={1} max={500} step={1}
-            onChange={v => updateParam('length', v)} />
+            onChange={v => mutate('building.length', v)} />
         </Field>
         <Field label="Width (m)">
           <NumberInput value={width} min={1} max={500} step={1}
-            onChange={v => updateParam('width', v)} />
+            onChange={v => mutate('building.width', v)} />
         </Field>
         <Field label="Floors">
           <NumberInput value={num_floors} min={1} max={20} step={1}
-            onChange={v => updateParam('num_floors', v)} />
+            onChange={v => mutate('building.num_floors', v)} />
         </Field>
         <Field label="Floor height (m)">
           <NumberInput value={floor_height} min={2.0} max={6.0} step={0.1}
-            onChange={v => updateParam('floor_height', v)} />
+            onChange={v => mutate('building.floor_height', v)} />
         </Field>
       </div>
 
@@ -124,7 +130,7 @@ export default function GeometryTab() {
           <input
             type="range" min={0} max={359} step={1}
             value={orientation}
-            onChange={e => updateParam('orientation', Number(e.target.value))}
+            onChange={e => mutate('building.orientation', Number(e.target.value))}
             className="flex-1 h-[3px]"
             style={{ accentColor: '#2B2A4C' }}
           />
@@ -141,7 +147,7 @@ export default function GeometryTab() {
               key={dir}
               label={dir[0].toUpperCase()}
               value={wwr[dir]}
-              onChange={v => updateParam('wwr', { [dir]: v })}
+              onChange={v => mutate(`building.wwr.${dir}`, v)}
             />
           ))}
         </div>
@@ -155,7 +161,7 @@ export default function GeometryTab() {
             <input
               type="text"
               value={location?.name ?? ''}
-              onChange={e => updateParam('location', { name: e.target.value })}
+              onChange={e => mutate('building.location.name', e.target.value)}
               className="w-full px-2 py-1.5 text-caption text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-teal transition-colors"
             />
           </Field>
@@ -164,14 +170,14 @@ export default function GeometryTab() {
               <NumberInput
                 value={location?.latitude ?? 51.127}
                 min={-90} max={90} step={0.001}
-                onChange={v => updateParam('location', { latitude: v })}
+                onChange={v => mutate('building.location.latitude', v)}
               />
             </Field>
             <Field label="Longitude">
               <NumberInput
                 value={location?.longitude ?? -2.992}
                 min={-180} max={180} step={0.001}
-                onChange={v => updateParam('location', { longitude: v })}
+                onChange={v => mutate('building.location.longitude', v)}
               />
             </Field>
           </div>

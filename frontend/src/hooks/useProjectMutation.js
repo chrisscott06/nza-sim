@@ -106,6 +106,30 @@ function secondKey(path) {
   return null
 }
 
+// ── Building's deep-merge keys ──────────────────────────────────────────
+//
+// `ProjectContext.updateParam` performs partial-merge for these keys
+// (e.g. `updateParam('wwr', { north: 0.4 })` merges into the existing
+// `params.wwr` object rather than replacing). Components historically
+// rely on this — they pass partials, not full objects.
+//
+// Brief 46 Part 2 delegate-to-existing-helpers design: when the hook
+// receives a 2-segment path under one of these keys (e.g.
+// `building.wwr.north`), it routes to `updateParam(top, { sub: value })`
+// — exactly the partial-merge call shape that components used pre-
+// refactor. The capture-mode side uses the verbatim deep path; the
+// engine's applyPatch handles the deep navigation correctly. The
+// asymmetry between the two modes IS the design — see audit doc 46
+// §1.8 question 2 (delegate-to-existing-helpers, no generic deep-merge).
+const BUILDING_DEEP_MERGE_KEYS = new Set([
+  'wwr',                  // per-face glazing ratio
+  'window_count',         // per-face window count
+  'location',             // per-field location (name / latitude / longitude)
+  'shading_overhang',     // per-face overhang (depth_m / offset_m)
+  'shading_fin',          // per-face fin (left_depth_m / right_depth_m)
+  'openings',             // per-face opening fields (louvre_area_m2 / cd / flow_mode etc) + site_exposure
+])
+
 // ── Hook ────────────────────────────────────────────────────────────────
 
 /**
@@ -113,6 +137,18 @@ function secondKey(path) {
  * single entry point components use; `isCapturing` lets callers branch
  * on whether they're inside an intervention editor (e.g. to render
  * visible-change indicators).
+ *
+ * Capture-mode call: every path captured verbatim as a Brief-41 patch.
+ * Main-app call: dispatched by path-prefix to the appropriate existing
+ * ProjectContext helper (`updateParam`, `updateConstruction`,
+ * `setComfortBand`, and — when Part 4 lands — `updateSystem`).
+ *
+ * The asymmetry is the point. Existing helpers encode the right
+ * semantics for their slice (key-specific deep-merge in `updateParam`,
+ * array-index lookups, system-id matching, share-validation triggers).
+ * A generic deep-merge would either lose that semantics or duplicate
+ * it. Main-app must remain behaviourally identical per Brief 46
+ * Principle 11 (no main-app behavioural changes).
  */
 export function useProjectMutation() {
   const capture = useInterventionCapture()
@@ -137,26 +173,24 @@ export function useProjectMutation() {
     const stripped = stripBuildingPrefix(path)
     const top = topKey(stripped)
 
-    // Add / remove / replace ops on arrays require deep manipulation.
-    // Brief 46 Part 1 lands `set` as the common case; structural ops
-    // (op !== 'set') are flagged as "use ProjectContext.updateSystem or
-    // similar directly for now" — the relevant callers are within
-    // Systems module helpers that already do that work (addSystem,
-    // removeSystem, etc.) and Part 4 will refactor them to call this
-    // hook with the array op + deep-merge helper.
+    // Structural ops on arrays (`add` / `remove` / `replace`) in
+    // main-app mode aren't routable through a generic helper — each
+    // module exposes its own structural mutator (`addSystem`,
+    // `removeSystem`, etc.). Brief 46 Part 4 will add a
+    // `systems_config_v40` branch that routes structural ops to those
+    // helpers. Until then, surface the limitation in dev console.
     if (op !== 'set') {
-      // Part 1: signal the limitation in dev console.
-      // Part 4 will replace this branch with a deep array op helper.
       if (typeof console !== 'undefined') {
         console.warn(
           `[useProjectMutation] op='${op}' on path '${stripped}' in main-app mode is not yet routable; ` +
-          `the calling component should continue to use its existing ProjectContext mutator directly until Brief 46 Part 4 lands the array-op helper. Patch path captured verbatim by the patch model.`
+          `caller should keep using its existing structural mutator (addSystem / removeSystem / etc.) ` +
+          `until Brief 46 Part 4 lands the systems_config_v40 branch. Capture-mode is unaffected.`
         )
       }
       return
     }
 
-    // Dispatch by top-level path key.
+    // Dispatch by top-level path key — delegate-to-existing-helpers.
     switch (top) {
       case 'constructions': {
         const key = secondKey(stripped)
@@ -172,41 +206,86 @@ export function useProjectMutation() {
           projectCtx.setComfortBand({ [key]: value })
           return
         }
-        // Setting the whole comfort_band:
         if (!key && projectCtx.setComfortBand) {
           projectCtx.setComfortBand(value)
           return
         }
         break
       }
-      // Single-segment top-level writes via updateParam.
-      // Multi-segment paths like `systems_config_v40.heating[id=X]…`
-      // fall through to updateParam(top, deepMerge(...)) — the
-      // deep-merge helper lands in Part 4. For Part 1, we delegate to
-      // updateParam at the top level for paths that are exactly the
-      // top key, and surface a console.warn for deeper paths so it's
-      // visible during the refactor in Parts 2-4.
       default: {
+        // Building's deep-merge keys: 2-segment dispatch.
+        // `mutate('building.wwr.north', 0.4)` → `updateParam('wwr', { north: 0.4 })`.
+        // This preserves updateParam's partial-merge semantics so behaviour
+        // matches existing main-app calls exactly.
+        if (BUILDING_DEEP_MERGE_KEYS.has(top)) {
+          const sub = secondKey(stripped)
+          if (sub != null) {
+            projectCtx.updateParam?.(top, { [sub]: value })
+            return
+          }
+          // No sub-key — whole top-level write (rare, but supported):
+          projectCtx.updateParam?.(top, value)
+          return
+        }
+
         // Exact top-level write (e.g. `length`, `width`, `orientation`,
-        // `wwr`, `interventions`, `library_systems`, etc.):
+        // `q50`, `infiltration_ach`, `thermal_bridges`, `fabric`,
+        // `interventions`, `library_systems`, etc.):
         if (stripped === top) {
           projectCtx.updateParam?.(top, value)
           return
         }
-        // Deeper write — Part 1 stub.
+
+        // Deeper write that's not in the known dispatch tables. Part 4
+        // adds `systems_config_v40.*` branch. Until then, the caller
+        // should use the appropriate ProjectContext helper directly.
         if (typeof console !== 'undefined') {
           console.warn(
-            `[useProjectMutation] deep path '${stripped}' in main-app mode: ` +
-            `Part 1 stub — refactor target. Falling back to updateParam('${top}', value) ` +
-            `with the FULL value assumed to be the new top-level slice. ` +
-            `Parts 2-4 wire the deep-merge helper. Capture-mode is unaffected.`
+            `[useProjectMutation] deep path '${stripped}' in main-app mode is not routable: ` +
+            `top key '${top}' is not in BUILDING_DEEP_MERGE_KEYS and doesn't have a dedicated dispatch. ` +
+            `The calling component should call its existing ProjectContext mutator directly. ` +
+            `Capture-mode is unaffected (patch captured verbatim).`
           )
         }
-        projectCtx.updateParam?.(top, value)
         return
       }
     }
   }, [capture, projectCtx])
 
   return useMemo(() => ({ mutate, isCapturing: !!capture?.isCapturing }), [mutate, capture])
+}
+
+// ── Helper: hasPatchOnPath ──────────────────────────────────────────────
+
+/**
+ * Hook: returns true if the currently-mounted capture context has a
+ * captured patch at the given path. Used by the visible-change
+ * indicator pattern in Building / IG / Operation / Systems composers
+ * (Brief 46 Parts 2-4 step 2.4 / 3.6 / 4.6). Renders a small accent
+ * dot next to inputs with a patch; click reverts.
+ *
+ * Path matching is exact-match against `patch.path`. Components that
+ * write to a deep path should query the same deep path (e.g.
+ * `useHasPatchOnPath('building.wwr.north')`).
+ */
+export function useHasPatchOnPath(path) {
+  const capture = useInterventionCapture()
+  return useMemo(() => {
+    if (!capture?.isCapturing || !Array.isArray(capture.currentPatches)) return false
+    return capture.currentPatches.some(p => p?.path === path)
+  }, [capture, path])
+}
+
+/**
+ * Hook: returns a function that reverts the patch at a given path.
+ * Components use it for the click-to-revert affordance on visible-
+ * change indicators.
+ */
+export function useRevertPathPatch() {
+  const capture = useInterventionCapture()
+  return useCallback((path) => {
+    if (!capture?.isCapturing || !Array.isArray(capture.currentPatches)) return
+    const patch = capture.currentPatches.find(p => p?.path === path)
+    if (patch?.id) capture.revertPatch(patch.id)
+  }, [capture])
 }

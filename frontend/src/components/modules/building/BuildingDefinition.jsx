@@ -38,6 +38,7 @@ import ComfortDemandCard from '../../shared/ComfortDemandCard.jsx'
 // axis with gains UP and losses DOWN. Replaces the bottom-anchored stack.
 import DivergingMonthlyChart from '../../shared/DivergingMonthlyChart.jsx'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
+import { useProjectMutation } from '../../../hooks/useProjectMutation.js'
 import { SimulationContext } from '../../../context/SimulationContext.jsx'
 import { useWeather } from '../../../context/WeatherContext.jsx'
 import { useHourlySolar } from '../../../hooks/useHourlySolar.js'
@@ -546,7 +547,14 @@ function Airtightness({ q50, derivedN50, derivedOperational, onChange, isOpen, o
 }
 
 function InputsColumn({ library, onInspectConstruction, liveResult }) {
-  const { params, updateParam, constructions, updateConstruction } = useContext(ProjectContext)
+  const { params, constructions, updateConstruction } = useContext(ProjectContext)
+  // Brief 46 Part 2 (2026-05-21): updateParam calls in this component
+  // refactored to mutate(...) so the controls work both in the main
+  // Building module AND inside the intervention editor's BuildingSection.
+  // updateConstruction is retained for the fabric construction-picker
+  // call sites which use that ProjectContext helper directly (delegate-
+  // to-existing-helpers per Brief 46 Q2 design).
+  const { mutate } = useProjectMutation()
   const { length, width, num_floors, floor_height, orientation, wwr, name, infiltration_ach, window_count } = params
   const ach = infiltration_ach ?? 0.5
   // Brief 28-IM Bug 2: q50-derived airtightness. Engine returns operational/
@@ -595,23 +603,23 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
 
   const setWwrFor = (face, v) => {
     if (v > 0) setWwrMemory(m => ({ ...m, [face]: v }))
-    updateParam('wwr', { [face]: v })
+    mutate(`building.wwr.${face}`, v)
   }
   const toggleWindowInclude = (face, include) => {
     const current = wwr?.[face] ?? 0
     if (include) {
       const restore = wwrMemory[face] > 0 ? wwrMemory[face] : 0.25
-      updateParam('wwr', { [face]: restore })
+      mutate(`building.wwr.${face}`, restore)
     } else {
       if (current > 0) setWwrMemory(m => ({ ...m, [face]: current }))
-      updateParam('wwr', { [face]: 0 })
+      mutate(`building.wwr.${face}`, 0)
     }
   }
 
   const setShadingFor = (face, v) => {
     if (v > 0) setShadingMemory(m => ({ ...m, [face]: v }))
-    updateParam('shading_overhang', { [face]: { depth_m: v, offset_m: 0 } })
-    updateParam('shading_fin',      { [face]: { left_depth_m: v, right_depth_m: v } })
+    mutate(`building.shading_overhang.${face}`, { depth_m: v, offset_m: 0 })
+    mutate(`building.shading_fin.${face}`,      { left_depth_m: v, right_depth_m: v })
   }
   const toggleShadingInclude = (face, include) => {
     const current = Math.max(
@@ -642,7 +650,7 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
 
   const setLouvreFor = (face, v) => {
     if (v > 0) setLouvreMemory(m => ({ ...m, [face]: v }))
-    updateParam('openings', { [face]: { louvre_area_m2: v } })
+    mutate(`building.openings.${face}`, { louvre_area_m2: v })
   }
   const toggleLouvreInclude = (face, include) => {
     const current = Number(openings?.[face]?.louvre_area_m2 ?? 0)
@@ -669,10 +677,10 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
   const cwp = cwProvenance(site_exposure)
 
   const setFacadeCd = (face, v) => {
-    updateParam('openings', { [face]: { cd: v } })
+    mutate(`building.openings.${face}`, { cd: v })
   }
   const setFacadeFlowMode = (face, v) => {
-    updateParam('openings', { [face]: { flow_mode: v } })
+    mutate(`building.openings.${face}`, { flow_mode: v })
   }
 
   const anyOpenings = ['north','south','east','west'].some(f =>
@@ -719,23 +727,23 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
             <input
               type="text"
               value={name}
-              onChange={e => updateParam('name', e.target.value)}
+              onChange={e => mutate('building.name', e.target.value)}
               className="w-full px-2 py-1 text-caption text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-teal transition-colors"
             />
           </Field>
 
           <div className="grid grid-cols-2 gap-1.5 mb-2">
             <Field label="Length (m)">
-              <NumberInput value={length} min={1} max={500} onChange={v => updateParam('length', v)} />
+              <NumberInput value={length} min={1} max={500} onChange={v => mutate('building.length', v)} />
             </Field>
             <Field label="Width (m)">
-              <NumberInput value={width} min={1} max={500} onChange={v => updateParam('width', v)} />
+              <NumberInput value={width} min={1} max={500} onChange={v => mutate('building.width', v)} />
             </Field>
             <Field label="Floors">
-              <NumberInput value={num_floors} min={1} max={20} onChange={v => updateParam('num_floors', v)} />
+              <NumberInput value={num_floors} min={1} max={20} onChange={v => mutate('building.num_floors', v)} />
             </Field>
             <Field label="Floor height (m)">
-              <NumberInput value={floor_height} min={2.0} max={6.0} step={0.1} onChange={v => updateParam('floor_height', v)} />
+              <NumberInput value={floor_height} min={2.0} max={6.0} step={0.1} onChange={v => mutate('building.floor_height', v)} />
             </Field>
           </div>
 
@@ -744,7 +752,7 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
               <input
                 type="range" min={0} max={359} step={1}
                 value={orientation}
-                onChange={e => updateParam('orientation', Number(e.target.value))}
+                onChange={e => mutate('building.orientation', Number(e.target.value))}
                 disabled={orientationLocked}
                 className="flex-1 h-[3px] accent-navy disabled:opacity-30"
               />
@@ -802,7 +810,7 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
                   value={window_count?.[fac.key]}
                   defaultValue={fac.defaultCount}
                   disabled={!included}
-                  onCommit={n => updateParam('window_count', { [fac.key]: n })}
+                  onCommit={n => mutate(`building.window_count.${fac.key}`, n)}
                   title={`${facadeLabel(fac.num, orientation)} window count`}
                 />
                 <span className={`text-xxs w-4 ${included ? 'text-mid-grey' : 'text-light-grey'}`}>win</span>
@@ -875,7 +883,7 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
             </div>
             <select
               value={site_exposure}
-              onChange={e => updateParam('openings', { site_exposure: e.target.value })}
+              onChange={e => mutate('building.openings.site_exposure', e.target.value)}
               className="w-full px-2 py-1 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-teal cursor-pointer"
               title="Wind-pressure coefficient: sheltered = 0.05, normal = 0.10, exposed = 0.20"
             >
@@ -987,7 +995,7 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
           q50={q50}
           derivedN50={derivedN50}
           derivedOperational={derivedOperational}
-          onChange={(v) => updateParam('fabric', { air_permeability_q50: v })}
+          onChange={(v) => mutate('building.fabric', { air_permeability_q50: v })}
           {...accordionProps('airtightness')}
         />
 
@@ -1021,7 +1029,7 @@ function ComfortBandLeftPanel({ isOpen, onToggle }) {
           <input
             type="range" min={12} max={26} step={0.5}
             value={lo}
-            onChange={e => setComfortBand({ lower_c: parseFloat(e.target.value) })}
+            onChange={e => mutate('comfort_band.lower_c', parseFloat(e.target.value))}
             className="w-full h-[3px] accent-navy"
           />
         </div>
@@ -1033,7 +1041,7 @@ function ComfortBandLeftPanel({ isOpen, onToggle }) {
           <input
             type="range" min={20} max={32} step={0.5}
             value={hi}
-            onChange={e => setComfortBand({ upper_c: parseFloat(e.target.value) })}
+            onChange={e => mutate('comfort_band.upper_c', parseFloat(e.target.value))}
             className="w-full h-[3px] accent-navy"
           />
         </div>
