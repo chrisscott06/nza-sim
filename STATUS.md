@@ -1,8 +1,49 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-21 — Brief 45 Part 2: Stack legibility + duplicate intervention
+## 🚧 Session 2026-05-21 — Brief 45 Part 3: Sankey hover + EUI waterfall + inline share + split bar
 
-**State:** `commit_in_flight` — Brief 45 Part 2.
+**State:** `commit_in_flight` — Brief 45 Part 3.
+
+**Prior HEAD:** `7464409` (Brief 45 Part 2).
+
+### What landed (Part 3)
+
+Four sub-items per the brief — two new shared components, one row-level inline editor, one Comparison-tab waterfall, plus a documentation note on the Sankey item that was substantially already shipped.
+
+**3.1 Sankey hover tooltip — substantially already shipped** by Brief 44 Part 5 follow-up commit `f85cb38`. `SystemsModule.SystemsSankey` ribbons already carry SVG `<title>` tooltips with the demand → efficiency → fuel calculation chain ("Demand (delivered): X.X MWh · SCOP N.NN · Fuel consumed: X.X MWh ÷ N.NN = Y.Y MWh electricity"). No code change in Part 3. Per-service multi-system `share_pct` enhancement logged as a Brief 47 polish candidate. Audit doc §3.1 documents the existing tooltip coverage.
+
+**3.2 EUI waterfall — new `EUIWaterfall.jsx`** in `frontend/src/components/modules/interventions/`. Renders Baseline → after-each-intervention cumulative EUI as horizontal bars with marginal-delta labels floating between adjacent bars. Reads `stackResult.baseline` and `stackResult.interventions[i].result` for cumulative; `stackResult.interventions[i].marginal_delta.eui_kwh_per_m2.delta` for the floating labels. Disabled interventions render muted ("disabled — skipped"), empty interventions render muted ("no patches"). Mounted at the top of `ComparisonView`.
+
+**3.3 Inline share editing** in `SystemSummaryRow.jsx`. New `onShareChange(nextPct)` prop. Adds a `w-20 h-[3px]` range slider between the label and the share-percent badge, accent-coloured per service, only rendered when `onShareChange` is provided and the system is enabled. Drag fires `updateSystem(service, idx, { share_pct: next })` in `SystemsModule.jsx`, the existing `useMemo` chain re-runs `calculateInstant`, all consumers (Live Results, Sankey, Profiles, Monthly, Diagnostic) update in the same render cycle. Share % badge pinned to `w-9 text-right` so the column stays stable while the slider moves.
+
+**3.4 Visual split indicator — new `ServiceSplitBar.jsx`** in `frontend/src/components/modules/systems/`. Renders the share split across a service's systems as one horizontal bar with per-system segments (sized by `share_pct`, coloured by service accent blended progressively with white for multi-system services). Disabled systems render with a CSS diagonal-hatch background. Trailing "Σ N%" badge tints amber when enabled-shares ≠ 100%. Mounted in `SystemsModule.jsx` per-service body, above the system rows.
+
+### Files touched (Part 3)
+
+- `frontend/src/components/modules/interventions/EUIWaterfall.jsx` (new)
+- `frontend/src/components/modules/systems/ServiceSplitBar.jsx` (new)
+- `frontend/src/components/modules/systems/SystemSummaryRow.jsx`
+- `frontend/src/components/modules/SystemsModule.jsx` (import + ServiceSplitBar mount + onShareChange wire)
+- `frontend/src/components/modules/interventions/ComparisonView.jsx` (import + EUIWaterfall mount)
+- `docs/audit/45_ux_polish.md` (§3 appended)
+- `STATUS.md` (this section)
+
+### What did NOT change (Part 3)
+
+- Engine: untouched.
+- Data model: untouched.
+- Sankey ribbon tooltip code: unchanged — existing Brief 44 Part 5 follow-up format already satisfies §3.1.
+- `ServiceSectionHeader.jsx`: unchanged — split bar mounts in `SystemsModule`'s render tree instead, so the header stays focused on building-level fields (setpoint mode, DHW temps, demand basis).
+
+### Next
+
+Part 4 — walkthrough + close. 12-item Bridgewater walkthrough including items 1-9 from Brief 45 Parts 1-3 that ship "code-review only" (icons, popover positioning, stack columns, empty-row, duplicate, split bar, share slider, waterfall). Final report 12 fields. Brief 45 archived; STATUS.md final.
+
+---
+
+## ✅ Session 2026-05-21 — Brief 45 Part 2: Stack legibility + duplicate intervention
+
+**State:** `closed` — Brief 45 Part 2 at `7464409`.
 
 **Prior HEAD:** `811056a` (Brief 45 Part 1).
 

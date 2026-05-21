@@ -1,16 +1,33 @@
 /**
  * SystemSummaryRow.jsx — Brief 42 Part 3 (2026-05-20)
+ *                     + Brief 45 Part 3 (2026-05-21)
  *
  * Compact per-system row rendered inside each service section in the
- * Systems module's left panel. Per Brief 42 §3.2:
+ * Systems module's left panel.
  *
+ * Pre-Brief-45 (Brief 42 Part 3 §3.2):
  *   ● Label                          90% | SCOP 2.8 | [⚙ Edit]
+ *
+ * Brief 45 Part 3 (2026-05-21) — share editable inline:
+ *   ● Label    [─────●─────] 90%  | SCOP 2.8 | [⚙ Edit]
+ *
+ * The user can drag the share slider directly in the summary row
+ * without opening the pop-out. The pencil still opens the full editor
+ * for the other per-system fields (label, source, efficiency, control
+ * mechanism, etc).
  *
  * Click the edit button → opens `SystemEditorPopout` (full editor in
  * a draggable pop-out). Click the enable dot → toggles `enabled`.
  *
  * Building-level fields are NOT shown here — they live in the
  * `ServiceSectionHeader` block above the row list.
+ *
+ * Brief 45 Part 3: `onShareChange(newSharePct)` callback fires on every
+ * drag update so the engine re-runs via the parent's existing useMemo
+ * chain. Validation (sum of enabled shares = 100%) stays in the
+ * section-header surface — this row's `shareInvalid` flag tints the
+ * share badge amber when the section is out of balance, the slider's
+ * own colour stays neutral so the user can move it cleanly.
  */
 
 import { Pencil } from 'lucide-react'
@@ -49,11 +66,12 @@ function headlineEfficiency(system) {
   return null
 }
 
-export default function SystemSummaryRow({ system, onToggleEnabled, onEdit, shareInvalid = false }) {
+export default function SystemSummaryRow({ system, onToggleEnabled, onEdit, onShareChange, shareInvalid = false }) {
   const service = system?.service ?? 'heating'
   const accent = SERVICE_COLOURS[service] ?? '#00AEEF'
   const isEnabled = system?.enabled !== false
   const headline = headlineEfficiency(system)
+  const sharePct = Number(system?.share_pct ?? 0)
 
   return (
     <div
@@ -86,14 +104,41 @@ export default function SystemSummaryRow({ system, onToggleEnabled, onEdit, shar
         </span>
       </button>
 
+      {/* Brief 45 Part 3 (2026-05-21): inline share slider. Drag updates
+          share_pct via onShareChange; the engine re-runs through the
+          parent's existing useMemo chain. accentColor matches the service
+          accent. stopPropagation on the slider's click + mousedown so the
+          drag doesn't fall through to the row's edit-on-click affordance.
+          Slider hidden when system is disabled — the disabled row's
+          opacity-50 wrapper would mute it anyway, and a disabled system's
+          share isn't editable until the user re-enables it. Slider also
+          hidden when onShareChange is not provided (graceful fallback for
+          any caller that hasn't been migrated). */}
+      {onShareChange && isEnabled && (
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={sharePct}
+          onChange={(e) => onShareChange(Number(e.target.value))}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          className="flex-shrink-0 w-20 h-[3px] cursor-pointer"
+          style={{ accentColor: accent }}
+          title={`Share: ${sharePct}% of ${service} demand`}
+        />
+      )}
+
       {/* Share — Brief 42 Part 4 conditional-pass review: bumped from
           text-mid-grey to text-navy font-medium. Share is the single most-
           edited per-system field; needing to open the pop-out just to read
-          it was friction. */}
-      <span className={`flex-shrink-0 text-xxs tabular-nums font-medium ${
+          it was friction. Brief 45 Part 3: pinned to w-9 so the share %
+          width stays stable as the slider above it moves. */}
+      <span className={`flex-shrink-0 text-xxs tabular-nums font-medium w-9 text-right ${
         shareInvalid && isEnabled ? 'text-amber-600' : (isEnabled ? 'text-navy' : 'text-mid-grey')
       }`}>
-        {Number(system?.share_pct ?? 0)}%
+        {sharePct}%
       </span>
 
       {/* Headline efficiency — bumped from text-mid-grey/80 to text-mid-grey

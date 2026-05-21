@@ -70,6 +70,8 @@ import SystemsDiagnosticPanel from './systems/SystemsDiagnosticPanel.jsx'
 // card and into a per-service ServiceSectionHeader (Issue #21).
 import ServiceSectionHeader from './systems/ServiceSectionHeader.jsx'
 import SystemSummaryRow from './systems/SystemSummaryRow.jsx'
+// Brief 45 Part 3 (2026-05-21): per-service share split visualisation.
+import ServiceSplitBar from './systems/ServiceSplitBar.jsx'
 import SystemEditorPopout from './systems/SystemEditorPopout.jsx'
 
 const SYSTEMS_ACCENT = '#00AEEF'
@@ -601,6 +603,14 @@ function InputsColumn({ params, updateParam, consumption, comfortBand, openSched
 
             {list.length > 0 && (
               <div className="space-y-1.5">
+                {/* Brief 45 Part 3 (2026-05-21): per-service share split
+                    visualisation. Renders the share allocation across
+                    all systems in this service (including disabled,
+                    shown hatched) as a single horizontal bar so the
+                    user can read the split at a glance without summing
+                    individual rows mentally. */}
+                <ServiceSplitBar service={service} systems={list} />
+
                 {list.map((sys, idx) => {
                   const key = `${service}:${sys.id ?? idx}`
                   return (
@@ -609,6 +619,7 @@ function InputsColumn({ params, updateParam, consumption, comfortBand, openSched
                       system={sys}
                       onToggleEnabled={() => updateSystem(service, idx, { enabled: !(sys?.enabled !== false) })}
                       onEdit={() => setEditingKey(key)}
+                      onShareChange={(next) => updateSystem(service, idx, { share_pct: next })}
                       shareInvalid={!valid}
                     />
                   )

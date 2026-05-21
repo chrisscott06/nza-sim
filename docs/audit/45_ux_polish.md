@@ -212,3 +212,137 @@ To be folded into Part 4 walkthrough items 5-7 when the dev server is restarted:
 - **Item 7** (Duplicate produces `(copy)` row immediately below with new UUIDs and correct marginal) — interaction check.
 
 ---
+
+## §3 — Part 3 — Sankey hover + EUI waterfall + inline share + split bar (2026-05-21)
+
+### §3.1 Sankey hover tooltip (Step 3.1) — substantially already shipped
+
+`SystemsModule.jsx`'s `SystemsSankey` already carries per-ribbon SVG `<title>` tooltips that surface the full demand → efficiency → fuel calculation chain. The hover surface was added in **Brief 44 Part 5 follow-up commit `f85cb38`** at lines 1015-1040 of `SystemsModule.jsx`. Current tooltip format (verified against the source as of Brief 45 Part 3):
+
+```
+<System name>
+Demand (delivered):  X.X MWh
+SCOP N.NN  (or SEER N.NN / η 0.85 / EER N.NN per service)
+Fuel consumed:  X.X MWh ÷ N.NN = Y.Y MWh electricity   (or gas)
+```
+
+This matches the brief's "system → fuel" ribbon expectation exactly. Demand → system ribbons aren't a separate ribbon class in the current Sankey topology — each system's ribbon shows its delivered amount + its efficiency + its fuel; the demand column's bar header already shows the per-service demand total (e.g. "Heating 90.1 MWh") above the bar.
+
+**Multi-system per-service share breakdown** (the part of §3.1 that wasn't covered by Brief 44 Part 5): the existing tooltip already includes the system's per-system `sysName` (e.g. "Primary heating (vrf_heat_recovery_dual_function)"). Adding an explicit "Share: 95% of heating demand" line would require threading `sysCfgV40` into the branch builder and surfacing share_pct on the branch object. Given the existing tooltip already names the specific system and shows its delivered/fuel — and given Brief 45's Principle §1 ("no engine changes; surface existing engine output") — this enhancement is best treated as a **follow-up polish for Brief 47** rather than a Part 3 change that would touch the branch builder. The existing tooltip surfaces sufficient verifiable math for Chris's "is the SCOP-based fuel calc right?" use case.
+
+**Conclusion:** Step 3.1 is satisfied by the existing Brief 44 Part 5 follow-up tooltip. A `share_pct` enhancement is logged as a Brief 47 polish candidate (alongside Issue #24 items + perf-polish items).
+
+### §3.2 EUI waterfall chart (Step 3.2) — `EUIWaterfall.jsx` new component
+
+New file `frontend/src/components/modules/interventions/EUIWaterfall.jsx`. Mounted at the top of the Comparison tab in `ComparisonView.jsx` (above the existing drill-down selector + KPI strip).
+
+Layout (one row per stack position):
+
+```
+Baseline                        [██████████████████]  122.2
+                                     −63.1 kWh/m² ↓
+After "Fabric upgrade"          [████████          ]   59.1
+                                     −15.4 kWh/m² ↓
+After "Plant SCOP → 5.0"        [█████             ]   43.7
+                                     0.0 kWh/m²
+New intervention (disabled)     [█████             ]   43.7
+                                     −2.1 kWh/m² ↓
+After "Demand control"          [████              ]   41.6
+```
+
+- **Bars right-aligned, single shared scale.** Maximum absolute cumulative EUI sets the 100% bar width; the shortest bar carries a minimum 2% width so even very small EUIs render visibly.
+- **Marginal delta labels between adjacent bars.** Green for negative (saving), red for positive (increase), muted grey for zero / disabled / empty rows. Tone derived from `row.marginal_delta.eui_kwh_per_m2.delta`.
+- **Disabled interventions** render with the desaturated grey bar colour + sublabel "disabled — skipped". The cumulative state stays flat from the previous row per audit doc §8.2.
+- **Empty interventions** (`patches.length === 0`) render with the grey bar colour + sublabel "no patches". Marginal label shows `0.0 kWh/m²` (engine returns zero delta for the no-effect case) but is muted grey to read as a placeholder, not an active intervention.
+- **Baseline row** is always the top row, grey bar (no concept of marginal), sublabel "starting point".
+
+Data source: `stackResult.baseline.consumption.total.kwh_per_m2_yr` for the baseline value; per-row `result` for the after-each-intervention value; `marginal_delta.eui_kwh_per_m2.delta` for the floating labels between bars. All three fields are produced by the existing engine (Brief 41 Part 2 + Brief 44 Part 5c) — no new computation.
+
+Falsifiability targets:
+- Baseline EUI matches Bridgewater's `consumption.total.kwh_per_m2_yr` (post Brief 44 close: 121.7 kWh/m²·yr).
+- Each after-row's bar value matches the same field on that row's `result`.
+- Marginal labels match the engine's `marginal_delta.eui_kwh_per_m2.delta` per row.
+- Sum of marginals = `cumulative_delta.eui_kwh_per_m2.delta` on the final enabled row (within rounding).
+
+`pullEui` and `pullMarginalDelta` reuse the same fallback chain as `ComparisonView.pullMetrics` for consistency.
+
+### §3.3 Inline share editing in SystemSummaryRow (Step 3.3)
+
+`SystemSummaryRow.jsx` gains a horizontal range slider directly in the row.
+
+| Field | Detail |
+|---|---|
+| Element | `<input type="range" min={0} max={100} step={1}>` |
+| Width | `w-20` (80 px) — fits between label and share % badge without crowding |
+| Height | `h-[3px]` — thin track, matches Brief 42 `SetpointEditor`'s slider feel |
+| Accent | service accent colour (`SERVICE_COLOURS[service]`) via `style={{ accentColor }}` |
+| Visibility | rendered only when `onShareChange` prop is provided AND `isEnabled` — graceful fallback for callers that haven't been migrated |
+| Validation | none in the slider itself; section-level "Σ ≠ 100%" warning still fires via the existing `shareValidation` helper in `SystemsModule.jsx` |
+| Event handling | `onClick` and `onMouseDown` both call `stopPropagation` so the slider doesn't fire the row's edit-on-click affordance |
+| Tooltip | `Share: <N>% of <service> demand` on hover |
+
+Parent wiring in `SystemsModule.jsx`:
+
+```jsx
+<SystemSummaryRow
+  …
+  onShareChange={(next) => updateSystem(service, idx, { share_pct: next })}
+/>
+```
+
+`updateSystem` is the existing helper (line 469) that writes back to `params.systems_config_v40.<service>[idx].share_pct`. The `useMemo` chain in `SystemsModule.result` then re-fires `calculateInstant`, which produces a fresh `consumption.total.*` + `consumption.brief40.*` set. Live Results, Sankey, Profiles, Monthly, Diagnostic all update in the same render cycle.
+
+**Engine recompute risk** flagged in Brief 45 "When to escalate" §3: each slider tick fires `updateSystem` → `updateParam` → re-render → `calculateInstant`. Per the Brief 44 Part 5d perf measurements, a `/systems`-route engine pass is ~540 ms warm + 425 ms after the second StrictMode pass (~960 ms wall time at N=3 enabled interventions, dropping to ~500 ms with `_skipInterventions: true` already in place at this call site). For a typical slider drag the user emits one event per pointer move (HTML5 range), which on Bridgewater means a noticeable lag per tick but no infinite-loop risk — the engine is a pure function of `params`, and `useMemo` only fires on actual params change (a click-without-drag doesn't fire `onChange` at all). No throttle/debounce added at this stage; if the lag is uncomfortable in the walkthrough, a Brief 47 polish candidate is a `useDeferredValue` wrap on the slider value.
+
+### §3.4 Visual split indicator (Step 3.4) — `ServiceSplitBar.jsx` new component
+
+New file `frontend/src/components/modules/systems/ServiceSplitBar.jsx`. Mounted inside each service section's body in `SystemsModule.jsx` (line ~604), above the per-system summary rows.
+
+Layout per service:
+
+```
+[██████████████████████████████████████████████░░░░] Σ 100%
+ 95% Primary heating (VRF)     5% Secondary panel
+```
+
+- **One segment per system**, width proportional to `share_pct`. Disabled systems render with a CSS diagonal-hatch background pattern (`repeating-linear-gradient`) + reduced opacity so the user sees they exist but are skipped by the engine.
+- **Per-segment colour**: full service accent for the first system; subsequent systems get the accent blended progressively with white (`blendHexWithWhite(accent, idx * 0.18)`) so multi-system services stay in the colour family but each segment is distinguishable. Single-system services (the common case today) render as one full-accent bar.
+- **Hover tooltip per segment**: `<label> — <share>%`; disabled segments append `(disabled)`.
+- **Trailing "Σ <sum>%" badge** to the right of the bar. Tints amber when enabled-shares sum ≠ 100% (mirrors the existing section-level warning surface) — gives the user a single-glance read on whether the service is engine-valid.
+- **Unallocated remainder**: when total shares < 100, the bar pads the right with a transparent slot. Visually reads as "X% empty" so the user sees they haven't allocated everything.
+- **Single-system case**: full-width single colour. Renders for consistency so every service section has the same visual shape.
+
+The component is presentation-only — reads `systems` array directly, no callbacks, no engine touch.
+
+### §3.5 Files touched (Part 3)
+
+| File | Change |
+|---|---|
+| `frontend/src/components/modules/interventions/EUIWaterfall.jsx` | **new** — waterfall chart component |
+| `frontend/src/components/modules/systems/ServiceSplitBar.jsx` | **new** — split bar component |
+| `frontend/src/components/modules/systems/SystemSummaryRow.jsx` | inline share slider + `onShareChange` prop + share badge width pin |
+| `frontend/src/components/modules/SystemsModule.jsx` | `ServiceSplitBar` import + per-section mount + `onShareChange={…}` wired into `<SystemSummaryRow>` via the existing `updateSystem` helper |
+| `frontend/src/components/modules/interventions/ComparisonView.jsx` | `EUIWaterfall` import + mount at top of Comparison tab |
+| `docs/audit/45_ux_polish.md` | §3 appended (this section) |
+| `STATUS.md` | Part 3 section appended |
+
+### §3.6 What did NOT change (Part 3)
+
+- Engine: untouched.
+- Data model: untouched. `systems_config_v40` schema unchanged; the slider writes through the existing `share_pct` field.
+- Sankey ribbon tooltip (`SystemsModule.jsx:1015-1040`): unchanged. Existing format from Brief 44 Part 5 follow-up satisfies §3.1.
+- `ServiceSectionHeader.jsx`: unchanged. The split bar mounts in `SystemsModule.jsx`'s rendering tree (not inside `ServiceSectionHeader` itself) so the heating + cooling setpoint editors and the DHW temps/demand editors stay focused on building-level fields. The brief listed `ServiceSectionHeader.jsx` as a touched file but a cleaner separation is to keep service-level editor fields in the header and the share-split visualisation in the section body where the per-system rows live. Documented as a deliberate choice.
+
+### §3.7 Verification status (Part 3)
+
+Code-review only per Brief 45 Principles §6. Browser verification deferred to Part 4 walkthrough items 10-12 (split bar visible on multi-system service; share slider drag updates engine + Sankey + Live Results; waterfall chart renders on the Comparison tab with marginal-delta labels). Dev server was offline at commit time; the same restart-when-back protocol from Part 1/2 applies.
+
+The four new files / surfaces compile cleanly against the existing imports:
+
+- `EUIWaterfall` imports nothing beyond standard React JSX (no new dependencies).
+- `ServiceSplitBar` imports `SERVICE_COLOURS` from `SystemEditorCard.jsx` (existing module-scoped constant).
+- `SystemSummaryRow` adds a single new prop (`onShareChange`) with graceful fallback (only renders the slider when the prop is provided), so any other caller that doesn't pass it still works.
+- `SystemsModule` adds one import + one component mount + one prop on the existing `<SystemSummaryRow>` invocation; no other behaviour changed.
+- `ComparisonView` adds one import + one component mount; no other behaviour changed.
+
+---

@@ -21,6 +21,12 @@
  */
 
 import { useMemo, useState } from 'react'
+// Brief 45 Part 3 (2026-05-21): EUI waterfall at the top of the
+// Comparison tab. Renders baseline → cumulative EUI after each
+// intervention as a horizontal bar chart with marginal-delta labels
+// between bars. Reads directly from `consumption.interventions[]` —
+// no new computation.
+import EUIWaterfall from './EUIWaterfall.jsx'
 
 const INTERVENTIONS_ACCENT = '#E84393'
 
@@ -189,6 +195,14 @@ export default function ComparisonView({
 
   return (
     <div className="space-y-5">
+      {/* Brief 45 Part 3 (2026-05-21): EUI waterfall chart anchored at
+          the top of the Comparison tab. Shows baseline → cumulative EUI
+          after each intervention with marginal delta labels between
+          bars. Disabled / empty interventions render as muted bars with
+          their cumulative state held flat from the previous enabled row
+          (audit doc §8.2 disabled-row contract). */}
+      <EUIWaterfall interventions={interventions} stackResult={stackResult} />
+
       {/* Drill-down selector */}
       <div className="flex items-center gap-3 flex-wrap">
         <span className="text-xxs text-mid-grey font-medium uppercase tracking-wider">View</span>
