@@ -1,6 +1,6 @@
 # Current brief
 
-**Active:** _(none — awaiting next direction)_
+**Active:** [`active/45_ux_polish.md`](active/45_ux_polish.md) — Brief 45 Interventions + Systems UX polish. Four substantive Parts plus close. UI polish on the stable Brief 41/42/43/44 foundation; no engine or data model changes. Plough-through authorisation; walkthrough sign-off after Part 3 before Part 4 close.
 
 Brief 44 (Visualisation + reactivity audit and rebuild) closed 2026-05-21 — see [`archive/44_visualisation_audit_COMPLETED.md`](archive/44_visualisation_audit_COMPLETED.md) and STATUS.md.
 

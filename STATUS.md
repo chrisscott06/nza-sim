@@ -1,5 +1,46 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-21 — Brief 45 Part 1: Interventions UX layout + icons + popover
+
+**State:** `commit_in_flight` — Brief 45 Part 1.
+
+**Prior HEAD:** `7c4c59a` (Brief 44 close).
+
+### What landed
+
+Brief 45 opens — UI polish on the stable Brief 41/42/43/44 foundation. Part 1 lands:
+
+- **Brief file on disk** at `docs/briefs/active/45_ux_polish.md` per Process Rule 7.
+- **Icon clarification** in `InterventionEditorBuildingView.jsx`:
+  - Remove `X → Trash2` (bin).
+  - Replace `Repeat → ArrowLeftRight` (swap arrows).
+  - Tooltips simplified ("Remove this system" / "Replace this system").
+- **Replace popover positioning fix.** `StructuralOpMenu` gains a `placement` prop. The Replace affordance now passes `placement='right'` — the picker opens to the right of the tiny Replace icon (`left-full top-0 ml-2 min-w-[220px]`) instead of stretching below it and overlapping the system card. The Add affordance keeps the default `below` placement (full-width drop-down).
+
+**Steps 1.2 (layout — stack in main canvas + draggable popout-right) and 1.3 (sidebar — Interventions between Systems and Results) were already shipped** — by Brief 43 Part 1 (`e06cc90`) and Brief 41 Part 3 (`3a860d6`) respectively. Reconciliation pass at audit-doc §1.1 confirms.
+
+### Files touched
+
+- `frontend/src/components/modules/interventions/InterventionEditorBuildingView.jsx`
+- `docs/audit/45_ux_polish.md` (new)
+- `docs/briefs/active/45_ux_polish.md` (new — brief on disk)
+- `docs/briefs/current.md` — pointer
+- `STATUS.md` — this section
+
+### What did NOT change
+
+- Engine: untouched.
+- Data model: untouched. Patch shape and `StructuralOpMenu` `onPick` contract unchanged.
+- `SystemSummaryRow.jsx`: no Remove/Replace icons exist there. Structural ops live in the intervention editor by design.
+- Sidebar code: no reorder needed.
+- `InterventionsModule.jsx` layout: no change.
+
+### Next
+
+Part 2 — Stack row legibility (split ΔEUI/ΔCO₂ columns, empty-row "—", duplicate intervention button) + Comparison view KPI alignment.
+
+---
+
 ## ✅ Session 2026-05-21 — Brief 44 CLOSED: Visualisation + reactivity audit and rebuild
 
 **State:** `closed` — Brief 44 close commit.

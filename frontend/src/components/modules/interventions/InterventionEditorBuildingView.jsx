@@ -33,7 +33,7 @@
  */
 
 import { useState } from 'react'
-import { ChevronDown, ChevronRight, Plus, X, Repeat } from 'lucide-react'
+import { ChevronDown, ChevronRight, Plus, Trash2, ArrowLeftRight } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { newPatchId } from './patchCapture.js'
 import { BLANK_ARCHETYPES, seedSystem } from '../systems/AddSystemButton.jsx'
@@ -259,13 +259,24 @@ function ServiceLevelHeader({ service, currentConfig, capture }) {
 // + the blank archetypes from BLANK_ARCHETYPES. Calls onPick(seededSystem)
 // with a fully-formed system entry; the caller wraps it in the
 // appropriate add or replace patch.
-function StructuralOpMenu({ service, librarySystems, onPick, onClose }) {
+//
+// Brief 45 Part 1 (2026-05-21): `placement` prop chooses the menu's
+// position relative to its anchor. Default `below` matches the Add
+// system button (full-width drop-down below). `right` anchors the menu
+// to the right of the trigger with a `min-w` so a tiny Replace icon
+// (≈14 px) doesn't collapse the menu to its parent's width. The system
+// card on the left then stays visible while the user picks a
+// replacement.
+function StructuralOpMenu({ service, librarySystems, onPick, onClose, placement = 'below' }) {
   const archetypes = BLANK_ARCHETYPES[service] ?? []
   const filteredLibrary = (librarySystems ?? []).filter(s => s?.service === service)
+  const positionClasses = placement === 'right'
+    ? 'left-full top-0 ml-2 min-w-[220px]'
+    : 'left-0 right-0 mt-1'
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-light-grey rounded shadow-lg p-2 space-y-2 max-h-[400px] overflow-y-auto">
+      <div className={`absolute z-50 ${positionClasses} bg-white border border-light-grey rounded shadow-lg p-2 space-y-2 max-h-[400px] overflow-y-auto`}>
         {filteredLibrary.length > 0 && (
           <div>
             <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1">From library</p>
@@ -372,14 +383,15 @@ function ReplaceSystemAffordance({ service, oldSystem, librarySystems, onCapture
         type="button"
         onClick={() => setOpen(o => !o)}
         className="flex-shrink-0 p-0.5 rounded text-mid-grey hover:text-amber-700 hover:bg-amber-50 transition-colors"
-        title="Replace this system with a different one"
+        title="Replace this system"
       >
-        <Repeat size={11} />
+        <ArrowLeftRight size={11} />
       </button>
       {open && (
         <StructuralOpMenu
           service={service}
           librarySystems={librarySystems}
+          placement="right"
           onPick={({ value, source }) => {
             const idPreserved = {
               ...value,
@@ -434,9 +446,9 @@ function ServiceBlock({ system, service, capture, librarySystems }) {
           type="button"
           onClick={handleRemove}
           className="flex-shrink-0 p-0.5 rounded text-mid-grey hover:text-red-600 hover:bg-red-50 transition-colors"
-          title="Remove this system from the intervention"
+          title="Remove this system"
         >
-          <X size={11} />
+          <Trash2 size={11} />
         </button>
         <span className="text-xxs text-mid-grey/60 truncate max-w-[110px]" title={sysId}>{sysId}</span>
       </div>
