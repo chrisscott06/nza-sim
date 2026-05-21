@@ -4143,10 +4143,14 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
   // v40 path: build the brief40 block ONCE here so the v25-shape adapters
   // (heating/cooling/DHW) and the consumption.brief40 attachment can both
   // consume it. Pass heating_demand_mwh (post-recovery) so v40 matches v25's
-  // post-recovery demand exactly.
+  // post-recovery demand exactly. Also pass effective_recovery_mwh so the
+  // engine can apply the same offset when it recomputes State 2 at a custom
+  // heating setpoint (Brief 44 Part 2 — boundary alignment fix for the
+  // Diagnostic 248% over-delivery bug).
   const brief40Computed = computeSystemsDelivered({
     building, state2Result, comfortBand, state2Recompute,
     heatingDemandOverrideMwh: heating_demand_mwh,
+    heatingRecoveryOffsetMwh: effective_recovery_mwh,
   })
 
   // Per-service displacement: when v40.{service} is non-empty, v40 wins.

@@ -314,6 +314,37 @@ export function summarizePatch(patch, baselineConfig, libraryData) {
           pct: null, tone: 'neutral',
         }
       }
+      // Brief 44 Part 2 (2026-05-21) — object-valued patches need a
+      // human-readable rendering. The fall-through to fmtNum below
+      // produced "[object Object]" for construction patches
+      // ({library_id, u_value_override}). Recognised object shapes:
+      //   - construction: { library_id, u_value_override? } →
+      //       "cavity_wall_enhanced" or
+      //       "cavity_wall_enhanced (U override 0.18)"
+      //   - ventilation efficiency_metric: handled by path-level handlers
+      //     in pathLabel; never reaches this branch.
+      // Fallback for any other object: a short JSON-stringified preview.
+      const renderObj = (obj) => {
+        if (obj == null) return '—'
+        if (typeof obj !== 'object') return String(obj)
+        if (typeof obj.library_id === 'string') {
+          if (typeof obj.u_value_override === 'number') {
+            return `${obj.library_id} (U override ${obj.u_value_override.toFixed(2)})`
+          }
+          return obj.library_id
+        }
+        // Generic object fallback — keep it short
+        const json = JSON.stringify(obj)
+        return json.length > 50 ? json.slice(0, 47) + '...' : json
+      }
+      if (typeof valueAfter === 'object' || typeof valueBefore === 'object') {
+        return {
+          label, verb: 'set',
+          before: renderObj(valueBefore),
+          after:  renderObj(valueAfter),
+          pct: null, tone: 'neutral',
+        }
+      }
       // Numeric
       const bn = Number(valueBefore), an = Number(valueAfter)
       const pct = Number.isFinite(bn) && Number.isFinite(an) ? fmtPct(bn, an) : null

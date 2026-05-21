@@ -108,14 +108,23 @@ export default function InterventionsModule() {
   const baselineSummary = useMemo(() => {
     const baseline = stackResult?.baseline ?? engineResult
     if (!baseline) return null
-    // Accept State 3 (consumption.total.kwh_per_m2_yr / results.energy.kwh_per_m2_yr /
-    // energy_use.totals.eui_kwh_per_m2), degree-day fallback (eui_kWh_m2),
-    // and historical eui_kWh_per_m2 / results_summary shapes.
-    const eui    = baseline.consumption?.total?.kwh_per_m2_yr ?? baseline.results?.energy?.kwh_per_m2_yr ?? baseline.energy_use?.totals?.eui_kwh_per_m2 ?? baseline.eui_kwh_per_m2 ?? baseline.eui_kWh_per_m2 ?? baseline.eui_kWh_m2 ?? baseline.results_summary?.eui_kWh_per_m2 ?? null
-    const carbon = baseline.carbon_kg_co2_per_m2 ?? baseline.results?.carbon?.today?.kgCO2_per_m2_yr ?? baseline.carbon_kgco2_per_m2 ?? baseline.carbon_kgCO2_m2 ?? baseline.consumption?.carbon_kgco2_per_m2 ?? null
+    // Brief 44 Part 2 (2026-05-21): the canonical result shape post-
+    // Brief-28-IM-Polish IA 3.2 is `consumption.total.kwh_per_m2_yr` and
+    // `carbon_kg_co2_per_m2`. The previous multi-path fallback walked
+    // seven candidate paths and the legacy `eui_kWh_m2` won at initial
+    // render (no saved interventions yet → engineResult fallback),
+    // while the canonical path won post-save (stackResult.baseline has
+    // consumption.total populated). The 169.1 → 89.0 flip Chris reported
+    // in the Brief 43 walkthrough was exactly this. Drop the legacy
+    // fallbacks and trust the canonical path; display "—" when not
+    // available rather than reading stale alternate shapes.
+    const euiRaw    = baseline.consumption?.total?.kwh_per_m2_yr
+    const carbonRaw = baseline.carbon_kg_co2_per_m2
+                     ?? baseline.results?.carbon?.today?.kgCO2_per_m2_yr   // Brief 28f shape — still in use for carbon
+                     ?? baseline.consumption?.carbon_kgco2_per_m2
     return {
-      eui:    Number.isFinite(eui)    ? Number(eui)    : null,
-      carbon: Number.isFinite(carbon) ? Number(carbon) : null,
+      eui:    Number.isFinite(euiRaw)    ? Number(euiRaw)    : null,
+      carbon: Number.isFinite(carbonRaw) ? Number(carbonRaw) : null,
     }
   }, [stackResult, engineResult])
 

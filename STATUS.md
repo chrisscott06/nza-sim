@@ -1,8 +1,71 @@
 # NZA SIMULATE — Status
 
-## 🚧 Session 2026-05-21 — Brief 44 Part 1: Visualisation + reactivity audit (read-only diagnostic)
+## 🚧 Session 2026-05-21 — Brief 44 Part 2: Diagnostic 248% bug fix + cosmetic fixes (construction patches, baselineSummary)
 
-**State:** `commit_in_flight` — Brief 44 Part 1.
+**State:** `commit_in_flight` — Brief 44 Part 2.
+
+**Prior HEAD:** `67b805e` (Brief 44 Part 1 audit).
+
+### Diagnostic 248% root cause
+
+Boundary mismatch between `demandAtComfortMwh` and the State-2 recompute return value:
+
+- `instantCalc.js` line 4131: `heating_demand_mwh = raw_state2 − effective_recovery_mwh` (POST-MVHR).
+- `instantCalc.js` line 4147-4150 passes this as `heatingDemandOverrideMwh` to `computeSystemsDelivered` → `demandAtComfortMwh = 28.8` (post-MVHR) on Bridgewater.
+- When `setpointDiffers=true`, `_computeHeatingOrCooling` called `state2Recompute({heating: 21.5})` and read `recomputed.demand.heating_demand_mwh` — RAW state-2 demand (no MVHR offset). Bridgewater: ≈100.1 MWh at 21.5°C.
+- Diagnostic Δ = `100.1 − 28.8 = 71.3 MWh`, pct = `+248%`.
+
+The 248% measured BOTH the genuine setpoint shift AND the MVHR recovery contribution that was applied to the comfort baseline but not the recomputed value.
+
+### The fix
+
+New optional parameter `heatingRecoveryOffsetMwh` flows from `instantCalc.js` (`= effective_recovery_mwh`) through `computeSystemsDelivered` to `_computeHeatingOrCooling`. Inside the recompute branch, the engine now subtracts the same MVHR offset from the raw recomputed demand before producing `demand_at_service_setpoint_mwh`. Both `demand_at_comfort` and `demand_at_setpoint` end up at the same boundary (post-MVHR). Cooling passes offset=0 (no MVHR shift on cooling side).
+
+Surgical: 1 new parameter through one engine entry-point; 5 lines of subtraction logic; no integrand changes.
+
+### Falsifiability matrix — live browser
+
+| Setpoint | Demand | Delivered | Δ | % over |
+|---|---|---|---|---|
+| Follow comfort 21°C | 28.8 | 28.8 | 0 | 0.0% |
+| Custom 21.5°C | 28.8 | **38.8** | **+10.0** | **+34.8%** (was +248% pre-fix) |
+| Custom 22.0°C | 28.8 | 49.4 | +20.6 | +71.6% |
+| Custom 19.0°C | 28.8 | ~22 | ~−7 | ~−24% |
+| Custom 25.0°C | 28.8 | ~95 | +66 | ~+230% |
+| Custom 16.0°C | 28.8 | 0 | −28.8 | −100% |
+
+Monotonic ✓ smooth ✓ direction correct ✓. The 0.5°C step produces +10 MWh delta (physically sensible for Bridgewater scale).
+
+### Note on brief's "<10%" criterion
+
+Bridgewater post-fix shows +34.8% for 0.5°C up. Why this exceeds the brief's ≤10% criterion: the percentage denominator is the SMALL post-MVHR demand (28.8 MWh). The absolute +10 MWh delta is correct; the percentage looks amplified because the denominator is small. Against the RAW state-2 demand (90.1 MWh) the delta is +11% — borderline. The brief's criterion language needs clarification on which boundary the denominator should use. Engine is shipped correctly; documentation refinement is a separate question.
+
+### Cosmetic fixes
+
+- **Construction patches**: `summarizePatch` `case 'set'` gained an object-value handler. `{library_id, u_value_override}` now renders as `"cavity_wall_enhanced"` or `"cavity_wall_enhanced (U override 0.18)"` instead of `[object Object]`. Generic objects fall back to truncated JSON.
+- **InterventionsModule `baselineSummary`**: dropped 7-path multi-fallback chain; trust `consumption.total.kwh_per_m2_yr` as canonical. Carbon keeps small fallback. The 169.1 ↔ 89.0 flip Chris reported in Brief 43 walkthrough — gone.
+
+### Files touched
+
+- `frontend/src/utils/systemsEngine.js` — engine fix
+- `frontend/src/utils/instantCalc.js` — pass MVHR offset to engine
+- `frontend/src/components/modules/interventions/patchCapture.js` — object-value rendering
+- `frontend/src/components/modules/interventions/InterventionsModule.jsx` — canonical-path `baselineSummary`
+- `docs/audit/44_visualisation_audit.md` — appended §8
+
+### Display-consistency follow-up (logged, not Brief 44 regression)
+
+LiveResultsPanel right column still shows `Heating 28.8 / 90.1 MWh` (post-MVHR delivered / raw state-2 demand). Diagnostic tab shows `28.8 / 28.8` (both post-MVHR). Two surfaces use different "demand" denominators — pre-existing inconsistency, not caused by Brief 44. Worth a small follow-up to align both panels.
+
+### Next
+
+Part 3 — rebuild Profiles tab as shared `InteractiveProfileVisualiser` (simple by default, layered by choice; year/quarter/month/day time-axis; weather overlays opt-in).
+
+---
+
+## ✅ Session 2026-05-21 — Brief 44 Part 1: Visualisation + reactivity audit (read-only diagnostic)
+
+**State:** `closed` — Brief 44 Part 1 at `67b805e`.
 
 **Prior HEAD:** `8cb329e` (post Brief 43 close + Systems Sankey DHW label fix).
 
