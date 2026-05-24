@@ -1,5 +1,30 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-22 — Brief 46 Part 5: delete old editor + rename V2 → canonical
+
+**State:** `commit_in_flight` — Brief 46 Part 5 (tidy-up).
+
+### What landed (Part 5)
+
+- **Deleted** `frontend/src/components/modules/interventions/InterventionEditorPopout.jsx` (pre-Brief-46 version, unreachable from the UI since Part 2c-pre).
+- **Renamed via `git mv`** `InterventionEditorV2.jsx` → `InterventionEditorPopout.jsx` so the canonical name is restored. Git history preserved via --follow.
+- **Updated** the renamed file's header docstring (no longer describes the V2 build intermediate state); `export default function InterventionEditorV2` → `InterventionEditorPopout`; console.warn label updated.
+- **Updated** `InterventionsModule.jsx` import + mount JSX + surrounding comments.
+- **Updated** `EditorNav.jsx` / `EditorFooter.jsx` / `sections/BuildingSection.jsx` comment references.
+
+localStorage position key (`nza-intervention-editor-popout-position`) preserved verbatim — existing users' last-known popout position carries over from the pre-Brief-46 editor.
+
+### Verification
+
+- `npm run build` clean (3206+ modules).
+- No engine-path code touched; this Part is pure file rename + delete + docstring polish.
+
+### Next: Part 6 — walkthrough + close
+
+Surface to Chris for the full 3-intervention walkthrough on Bridgewater. Per Chris's authorisation: "Each Part still one commit with STATUS + audit-doc updates per Process Rule 7. Browser verification at each Part per the brief. I'll do the full 3-intervention walkthrough at Part 6."
+
+---
+
 ## 🚧 Session 2026-05-22 — Brief 46 Part 4: Systems editor section wired
 
 **State:** `commit_in_flight` — Brief 46 Part 4 (Systems composer + writeV40 routing).

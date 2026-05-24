@@ -1,85 +1,143 @@
 /**
- * InterventionEditorPopout.jsx — Brief 41 Part 4
- *                              + Brief 43 Part 1 (2026-05-20)
+ * InterventionEditorPopout.jsx — the canonical intervention editor.
  *
- * Reuses the shared Brief 37 SchedulePopout chrome (draggable,
- * persistent-position, non-blocking) with persistKey
- * 'nza-intervention-editor-popout-position'.
+ * Built across Brief 46 Parts 1 → 5 (2026-05-21 → 2026-05-22). During
+ * the build it lived as `InterventionEditorV2.jsx` to avoid colliding
+ * with the pre-Brief-46 editor (also named InterventionEditorPopout
+ * before the rebuild). Brief 46 Part 5 deleted the old file and
+ * renamed V2 → canonical name; this file is what opens on every
+ * "Add intervention" / edit-pencil click.
  *
- * Two-column body:
- *   - Left: InterventionEditorBuildingView (curated patch-capture editor)
- *   - Right: InterventionEditorPreview (KPI strip + heat-balance bars + patch list)
- * Sticky footer: Cancel + Save buttons.
+ * Layout (inside a draggable SchedulePopout):
  *
- * Local state pattern:
- *   - `(localPatches, setLocalPatches)` accumulates captures.
- *   - Each capture dedupe-appends via patchCapture.capturePatch.
- *   - currentConfig = applyIntervention(baselineConfig, { ...intervention, patches: localPatches })
- *     is the running edit state shown to the user.
- *   - interventionResult = engine(currentConfig) — re-runs on every
- *     localPatches change via useMemo.
+ *   ┌────────────────────────────────────────────────────────────┐
+ *   │ Header: "Editing intervention: <label>" · Drag · Reset · ×  │
+ *   ├──────────┬─────────────────────────────────────────────────┤
+ *   │ EditorNav│ EditorPane                                       │
+ *   │ (left,   │   Dispatches by active subsection to:            │
+ *   │ collapse)│     building.*  → BuildingSection      (Part 2c) │
+ *   │          │     gains.*     → InternalGainsSection (Part 3)  │
+ *   │ Building │     operation.* → OperationSection     (Part 3)  │
+ *   │ IG       │     systems.*   → SystemsSection       (Part 4)  │
+ *   │ Operation│                                                  │
+ *   │ Systems  │                                                  │
+ *   ├──────────┴─────────────────────────────────────────────────┤
+ *   │ EditorFooter: label · Σ patches · EUI · Δ · Cancel · Save   │
+ *   └────────────────────────────────────────────────────────────┘
  *
- * Save semantics:
- *   - Save commits localPatches into the intervention via onSave callback
- *     (parent writes back to params.interventions).
- *   - Cancel discards localPatches; intervention reverts to its
- *     pre-edit state.
- *   - If the engine returns a validation error (e.g. shares ≠ 100%
- *     for a service), Save is disabled with the error surfaced in
- *     the preview pane.
+ * Architecture (Brief 46 Part 1, refined through Part 4):
+ *   - Wraps the entire body in `<InterventionCaptureProvider>` so any
+ *     `useProjectMutation` call from within routes to capture mode.
+ *     Each section composer mounts the SAME components the main app
+ *     uses for that module's left column — Brief 46 Principle 3.
+ *     No parallel UI implementations.
+ *   - Local state owns the editing label. Patch state is owned by the
+ *     capture context.
+ *   - Runs the engine on `baseline + currentPatches` to compute the
+ *     preview EUI / carbon for the footer. The Brief 41 Part 2
+ *     `runInterventionStack` is reused — single-intervention path.
  *
- * Brief 43 Part 1 (2026-05-20):
- *   - Default position is right-anchored (`defaultPosition='right'`) so
- *     the popout opens beside the stack rather than over them.
- *   - Unsaved-changes guard: closing the popout (via × / Esc / Cancel)
- *     when the local patches differ from the intervention's persisted
- *     patches prompts a window.confirm. Switching to a different
- *     intervention while the popout is dirty is handled by the parent
- *     (it reads `isDirty` via the `onDirtyChange` callback).
- *   - `onDirtyChange(boolean)` callback notifies the parent of unsaved
- *     state changes so the parent can intercept edit-pencil clicks on
- *     other rows.
+ * Position persistence: `nza-intervention-editor-popout-position`
+ * localStorage key (preserved from Brief 41 Part 4 — the pre-Brief-46
+ * editor's key, so existing users' last-known position carries over).
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import SchedulePopout from '../../shared/SchedulePopout.jsx'
-import {
-  applyIntervention,
-  runInterventionStack,
-} from '../../../utils/interventionsEngine.js'
+import { InterventionCaptureProvider } from '../../../context/InterventionCaptureContext.jsx'
+import { runInterventionStack } from '../../../utils/interventionsEngine.js'
 import { calculateInstant } from '../../../utils/instantCalc.js'
-import { capturePatch, newPatchId, removePatch } from './patchCapture.js'
-import InterventionEditorBuildingView from './InterventionEditorBuildingView.jsx'
-import InterventionEditorPreview from './InterventionEditorPreview.jsx'
+import EditorNav from './EditorNav.jsx'
+import EditorFooter from './EditorFooter.jsx'
+// Brief 46 Part 2b (2026-05-21): right-pane section composers scaffolded.
+// Brief 46 Part 2c (2026-05-22): Building composer wired to real
+// extracted subsections.
+// Brief 46 Part 3 (2026-05-22): Internal Gains + Operation composers
+// wired — IG mounts the same OccupancySection / LightingSection /
+// EquipmentSection that the main /gains page renders; Operation
+// mounts OpeningRow lists with Add buttons.
+// Brief 46 Part 4 (2026-05-22): Systems composer mounts the same
+// InputsColumn that the main /systems page renders — service
+// accordions + SystemSummaryRows + SystemEditorPopout, all routing
+// through useProjectMutation for capture-mode dispatch.
+import BuildingSection       from './sections/BuildingSection.jsx'
+import InternalGainsSection  from './sections/InternalGainsSection.jsx'
+import OperationSection      from './sections/OperationSection.jsx'
+import SystemsSection        from './sections/SystemsSection.jsx'
 
 const INTERVENTIONS_ACCENT = '#E84393'
 
-// Brief 43 Part 1: compare the local edit state against the persisted
-// intervention to determine if there are unsaved changes. Used by the
-// unsaved-changes guard on close + by the parent's switch-intervention
-// guard. A deep-shape check is sufficient — patch ids are stable and
-// the dedupe logic in capturePatch keeps the list normalised. JSON-
-// stringify comparison is fine for the patch-list shapes we deal with
-// (no circular references, deterministic key order in the shape we emit).
-function computeDirty(intervention, localPatches, localLabel, localTheme, localNotes) {
-  if (!intervention) return false
-  const labelChanged = (intervention.label ?? '') !== (localLabel ?? '').trim() && (localLabel ?? '').trim() !== ''
-  if (labelChanged) return true
-  if ((intervention.theme ?? '') !== (localTheme ?? '')) return true
-  if ((intervention.notes ?? '') !== (localNotes ?? '')) return true
-  const persisted = Array.isArray(intervention.patches) ? intervention.patches : []
-  const local = Array.isArray(localPatches) ? localPatches : []
-  if (persisted.length !== local.length) return true
-  // Compare shape — id may differ on freshly captured patches; compare
-  // path + op + value + match instead.
-  for (let i = 0; i < persisted.length; i++) {
-    const a = persisted[i], b = local[i]
-    if (!a || !b) return true
-    if (a.op !== b.op || a.path !== b.path) return true
-    if (JSON.stringify(a.value ?? null) !== JSON.stringify(b.value ?? null)) return true
-    if (JSON.stringify(a.match ?? null) !== JSON.stringify(b.match ?? null)) return true
+function pickFirst(result, paths) {
+  if (!result) return null
+  for (const path of paths) {
+    let cur = result
+    for (const seg of path.split('.')) {
+      if (cur == null) break
+      cur = cur[seg]
+    }
+    if (Number.isFinite(cur)) return cur
   }
-  return false
+  return null
+}
+
+function pullEui(result) {
+  return pickFirst(result, [
+    'consumption.total.kwh_per_m2_yr',
+    'results.energy.kwh_per_m2_yr',
+    'energy_use.totals.eui_kwh_per_m2',
+  ])
+}
+
+function pullCarbon(result) {
+  return pickFirst(result, [
+    'carbon_kg_co2_per_m2',
+    'results.carbon.today.kgCO2_per_m2_yr',
+    'consumption.carbon_kgco2_per_m2',
+  ])
+}
+
+/**
+ * EditorPaneBody — renders the right-pane content based on the active
+ * section selection. Part 1 ships placeholders; Parts 2-4 add the real
+ * section composers (BuildingSection / InternalGainsSection /
+ * OperationSection / SystemsSection).
+ */
+function EditorPaneBody({ active }) {
+  if (!active) {
+    return (
+      <div className="h-full flex items-center justify-center text-xxs text-mid-grey p-6 text-center">
+        <div>
+          <p className="mb-1">Select a section from the left.</p>
+          <p className="text-mid-grey/70">
+            Building, Internal Gains, Operation, and Systems each expose the same controls available in the main app. Every change here is captured as a patch against the baseline.
+          </p>
+        </div>
+      </div>
+    )
+  }
+  // Brief 46 Part 2c (Building) + Part 3 (IG + Operation) + Part 4
+  // (Systems) all wired.
+  if (active.startsWith('building.'))  return <BuildingSection      active={active} />
+  if (active.startsWith('gains.'))     return <InternalGainsSection active={active} />
+  if (active.startsWith('operation.')) return <OperationSection     active={active} />
+  if (active.startsWith('systems.'))   return <SystemsSection       active={active} />
+  return (
+    <div className="h-full flex items-center justify-center p-6">
+      <div className="max-w-sm w-full rounded border border-dashed border-light-grey bg-off-white/30 p-6 text-center">
+        <p className="text-xxs text-mid-grey/80 mb-2">{labelFor(active)}</p>
+        <p className="text-caption font-medium text-navy mb-1">Not yet wired</p>
+        <p className="text-xxs text-mid-grey">
+          This section will be wired into the new editor in a later step.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function labelFor(active) {
+  // Best-effort cosmetic — later parts will replace this with section-specific headers.
+  const parts = (active ?? '').split('.')
+  return parts.map(p => p.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())).join(' · ')
 }
 
 export default function InterventionEditorPopout({
@@ -95,58 +153,26 @@ export default function InterventionEditorPopout({
 }) {
   const isOpen = !!intervention
 
-  // Local edit state — initialised from the intervention's existing
-  // patches. Updates on capture / remove. On Save, the parent
-  // persists this back into params.interventions.
+  // Local label / theme / notes state. Patches state lives in the
+  // capture context provider below.
+  const [localLabel, setLocalLabel] = useState(intervention?.label ?? '')
   const [localPatches, setLocalPatches] = useState(intervention?.patches ?? [])
-  const [localLabel,   setLocalLabel]   = useState(intervention?.label ?? '')
-  const [localTheme,   setLocalTheme]   = useState(intervention?.theme ?? '')
-  const [localNotes,   setLocalNotes]   = useState(intervention?.notes ?? '')
 
-  // Reset local state whenever a different intervention is opened.
-  // Using `intervention?.id` as the dependency so the reset fires
-  // when the editor is opened on a different row.
+  // Reset local label + patches when intervention id changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useMemo(() => {
-    setLocalPatches(intervention?.patches ?? [])
+  useEffect(() => {
     setLocalLabel(intervention?.label ?? '')
-    setLocalTheme(intervention?.theme ?? '')
-    setLocalNotes(intervention?.notes ?? '')
+    setLocalPatches(intervention?.patches ?? [])
   }, [intervention?.id])
 
-  // Brief 43 Part 1: dirty tracking. Compute on every render, notify
-  // parent on change. Parent uses this to gate switching to a different
-  // intervention while changes are unsaved.
-  const isDirty = useMemo(
-    () => computeDirty(intervention, localPatches, localLabel, localTheme, localNotes),
-    [intervention, localPatches, localLabel, localTheme, localNotes]
-  )
-  const lastDirtyRef = useRef(false)
-  useEffect(() => {
-    if (lastDirtyRef.current !== isDirty) {
-      lastDirtyRef.current = isDirty
-      onDirtyChange?.(isDirty)
-    }
-  }, [isDirty, onDirtyChange])
+  // Active section selection (left nav → right pane).
+  const [active, setActive] = useState(null)
 
-  // Apply the local patches to baseline to get the running edit
-  // state — what the editor shows.
-  const currentConfig = useMemo(() => {
-    if (!baselineConfig) return null
-    if (!intervention) return baselineConfig
-    const editIntervention = {
-      ...intervention,
-      enabled: true,
-      patches: localPatches,
-    }
-    return applyIntervention(baselineConfig, editIntervention, baselineConfig?.libraryData)
-  }, [baselineConfig, intervention, localPatches])
-
-  // Run the engine on baseline + on intervention to produce the
-  // delta surface for the preview pane.
-  const { baselineResult, interventionResult, validationError } = useMemo(() => {
+  // Compute the preview engine result. Single-intervention stack run
+  // — same code path as the old editor's preview (Brief 41 Part 4).
+  const { baselineEui, baselineCarbon, previewEui, previewCarbon } = useMemo(() => {
     if (!baselineConfig || !intervention) {
-      return { baselineResult: null, interventionResult: null, validationError: null }
+      return { baselineEui: null, baselineCarbon: null, previewEui: null, previewCarbon: null }
     }
     try {
       const editIntervention = {
@@ -154,7 +180,7 @@ export default function InterventionEditorPopout({
         enabled: true,
         patches: localPatches,
       }
-      const stackOut = runInterventionStack(
+      const stack = runInterventionStack(
         baselineConfig,
         [editIntervention],
         (cfg) => calculateInstant(
@@ -164,194 +190,108 @@ export default function InterventionEditorPopout({
         ),
         baselineConfig.libraryData,
       )
-      const baseline    = stackOut.baseline
-      const interventionR = stackOut.interventions[0]?.result
-      // Check engine for share-validation errors (Brief 40 Part 5b
-      // returns { error: '...' } when shares don't sum to 100%).
-      const findError = (r) => {
-        if (!r || !r.consumption) return null
-        for (const k of ['space_heating', 'space_cooling', 'dhw', 'ventilation']) {
-          if (r.consumption[k]?.error) return r.consumption[k].error
-        }
-        return null
-      }
+      const baseline = stack.baseline
+      const after    = stack.interventions[0]?.result
       return {
-        baselineResult: baseline,
-        interventionResult: interventionR,
-        validationError: findError(interventionR),
+        baselineEui:    pullEui(baseline),
+        baselineCarbon: pullCarbon(baseline),
+        previewEui:     pullEui(after),
+        previewCarbon:  pullCarbon(after),
       }
     } catch (err) {
       console.warn('[InterventionEditorPopout] preview engine threw:', err)
-      return { baselineResult: null, interventionResult: null, validationError: String(err?.message ?? err) }
+      return { baselineEui: null, baselineCarbon: null, previewEui: null, previewCarbon: null }
     }
   }, [baselineConfig, intervention, localPatches, weatherData, hourlySolar, scheduleProfiles])
 
-  // ── Capture / mutate handlers ──────────────────────────────────────
+  // Dirty tracking — compares localPatches + localLabel against the
+  // persisted intervention. Parent uses it for the switch-intervention
+  // guard. Simple shape check; Brief 46 Part 5 can tighten if needed.
+  const isDirty = useMemo(() => {
+    if (!intervention) return false
+    if ((intervention.label ?? '') !== (localLabel ?? '').trim() && (localLabel ?? '').trim() !== '') return true
+    const persisted = Array.isArray(intervention.patches) ? intervention.patches : []
+    if (persisted.length !== localPatches.length) return true
+    for (let i = 0; i < persisted.length; i++) {
+      const a = persisted[i], b = localPatches[i]
+      if (!a || !b) return true
+      if (a.op !== b.op || a.path !== b.path) return true
+      if (JSON.stringify(a.value ?? null) !== JSON.stringify(b.value ?? null)) return true
+      if (JSON.stringify(a.match ?? null) !== JSON.stringify(b.match ?? null)) return true
+    }
+    return false
+  }, [intervention, localLabel, localPatches])
 
-  const capture = (newPatch) => {
-    setLocalPatches(prev => capturePatch(prev, newPatch))
-  }
-  const handleRemovePatch = (id) => {
-    setLocalPatches(prev => removePatch(prev, id))
-  }
+  useEffect(() => {
+    onDirtyChange?.(isDirty)
+  }, [isDirty, onDirtyChange])
 
-  // Brief 43 Part 2: Normalise quick-fix. Parses the engine's
-  // share-validation error to identify the offending service, then
-  // captures `set` patches on each enabled system in that service to
-  // scale their shares proportionally to 100%. Mirrors the Brief 40
-  // Part 5b Normalise pattern but lifted into intervention-authoring
-  // time (the patches are captured against the intervention, not
-  // committed to the baseline).
-  const handleNormaliseShares = () => {
-    if (!validationError) return
-    const m = validationError.match(/for service '([^']+)'/)
-    if (!m) return
-    const service = m[1]
-    const list = currentConfig?.building?.systems_config_v40?.[service] ?? []
-    if (!Array.isArray(list) || list.length === 0) return
-    const enabledIndices = list.map((s, i) => s?.enabled !== false ? i : -1).filter(i => i >= 0)
-    if (enabledIndices.length === 0) return
-    const enabledSum = enabledIndices.reduce((s, i) => s + Number(list[i].share_pct ?? 0), 0)
-    enabledIndices.forEach(i => {
-      const sys = list[i]
-      const cur = Number(sys.share_pct ?? 0)
-      const next = enabledSum > 0
-        ? Math.round((cur / enabledSum) * 100 * 10) / 10
-        : Math.round((100 / enabledIndices.length) * 10) / 10
-      capture({
-        id: newPatchId(),
-        op: 'set',
-        path: `building.systems_config_v40.${service}[id=${sys.id}].share_pct`,
-        value: next,
-        source: 'inline',
-      })
-    })
-  }
-
-  // ── Save / Cancel ──────────────────────────────────────────────────
-
-  const canSave = !validationError && !!localLabel?.trim()
+  // Save / Cancel handlers.
+  const canSave = !!(localLabel ?? '').trim()
   const handleSave = () => {
     if (!canSave) return
     onSave?.({
       ...intervention,
       label: localLabel.trim(),
-      theme: localTheme?.trim() || null,
-      notes: localNotes ?? '',
       patches: localPatches,
     })
   }
-
-  // Brief 43 Part 1: unsaved-changes guard. Wraps onCancel (Esc / × /
-  // Cancel button); window.confirm if dirty. The switch-intervention
-  // guard lives in the parent — it intercepts edit-pencil clicks on
-  // other rows based on `onDirtyChange` callback.
-  const guardedCancel = () => {
+  const handleCancel = () => {
     if (isDirty) {
-      const patchCount = Array.isArray(localPatches) ? localPatches.length : 0
-      const persistedCount = Array.isArray(intervention?.patches) ? intervention.patches.length : 0
-      const diff = Math.abs(patchCount - persistedCount)
-      const msg = diff > 0
-        ? `Discard ${diff} unsaved patch change${diff === 1 ? '' : 's'}?`
-        : `Discard unsaved changes to label / theme / notes?`
-      if (!window.confirm(msg)) return
+      if (!window.confirm('Discard unsaved changes to this intervention?')) return
     }
     onCancel?.()
+  }
+
+  // Re-seed local patches when capture context emits onChange.
+  // The provider lifts its local state into our localPatches so the
+  // engine recompute fires inside this component's useMemo above.
+  const handleCapturedPatchesChange = (nextPatches) => {
+    setLocalPatches(nextPatches)
   }
 
   return (
     <SchedulePopout
       isOpen={isOpen}
-      onClose={guardedCancel}
+      onClose={handleCancel}
       title={`Editing intervention: ${intervention?.label || '(new)'}`}
       accent={INTERVENTIONS_ACCENT}
       persistKey="nza-intervention-editor-popout-position"
       defaultPosition="right"
     >
-      {/* Two-column body + sticky footer */}
-      <div className="flex flex-col" style={{ maxHeight: 'calc(100vh - 7rem)' }}>
-        {/* Identity row (always visible) */}
-        <div className="flex-shrink-0 border-b border-light-grey bg-off-white/40 px-4 py-3 space-y-2">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xxs font-medium text-mid-grey uppercase tracking-wider mb-1">Label *</label>
-              <input
-                type="text"
-                value={localLabel}
-                onChange={(e) => setLocalLabel(e.target.value)}
-                placeholder="e.g. Fabric upgrade — south retrofit"
-                className="w-full px-2 py-1 rounded border border-light-grey text-xxs text-navy focus:outline-none focus:border-navy"
-              />
-            </div>
-            <div>
-              <label className="block text-xxs font-medium text-mid-grey uppercase tracking-wider mb-1">Theme</label>
-              <input
-                type="text"
-                value={localTheme}
-                onChange={(e) => setLocalTheme(e.target.value)}
-                placeholder="e.g. Ventilation strategy, Phase 1"
-                className="w-full px-2 py-1 rounded border border-light-grey text-xxs text-navy focus:outline-none focus:border-navy"
-              />
+      <InterventionCaptureProvider
+        intervention={{ ...intervention, patches: localPatches }}
+        baselineConfig={baselineConfig}
+        onChange={handleCapturedPatchesChange}
+      >
+        <div className="flex flex-col" style={{ height: 'calc(100vh - 7rem)', maxHeight: 'calc(100vh - 7rem)' }}>
+          {/* Body: left nav + right pane */}
+          <div className="flex-1 min-h-0 flex">
+            <EditorNav
+              active={active}
+              onActiveChange={setActive}
+              currentPatches={localPatches}
+            />
+            <div className="flex-1 min-w-0 overflow-auto">
+              <EditorPaneBody active={active} />
             </div>
           </div>
-        </div>
 
-        {/* Editor + preview */}
-        <div className="flex-1 overflow-auto px-4 py-4">
-          <div className="grid grid-cols-2 gap-4">
-            {/* Left: editor */}
-            <div>
-              <p className="text-xxs font-semibold text-mid-grey uppercase tracking-wider mb-2">Edit (each change captured as a patch)</p>
-              <InterventionEditorBuildingView
-                currentConfig={currentConfig}
-                libraryData={baselineConfig?.libraryData}
-                capture={capture}
-              />
-            </div>
-            {/* Right: live preview */}
-            <div>
-              <p className="text-xxs font-semibold text-mid-grey uppercase tracking-wider mb-2">Live preview (intervention vs baseline)</p>
-              <InterventionEditorPreview
-                baselineResult={baselineResult}
-                interventionResult={interventionResult}
-                patches={localPatches}
-                baselineConfig={baselineConfig}
-                libraryData={baselineConfig?.libraryData}
-                onRemovePatch={handleRemovePatch}
-                validationError={validationError}
-                onNormaliseShares={handleNormaliseShares}
-              />
-            </div>
-          </div>
+          {/* Footer */}
+          <EditorFooter
+            label={localLabel}
+            onLabelChange={setLocalLabel}
+            baselineEui={baselineEui}
+            baselineCarbon={baselineCarbon}
+            previewEui={previewEui}
+            previewCarbon={previewCarbon}
+            onCancel={handleCancel}
+            onSave={handleSave}
+            canSave={canSave}
+            saveDisabledReason={!canSave ? 'Label is required' : null}
+          />
         </div>
-
-        {/* Footer */}
-        <div className="flex-shrink-0 border-t border-light-grey bg-white px-4 py-2.5 flex items-center justify-between">
-          <button
-            onClick={onDelete}
-            className="px-3 py-1.5 rounded-lg border border-light-grey text-xxs font-medium text-red-600 hover:bg-red-50 transition-colors"
-          >
-            Delete intervention
-          </button>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={guardedCancel}
-              className="px-3 py-1.5 rounded-lg border border-light-grey text-xxs font-medium text-mid-grey hover:bg-off-white transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={!canSave}
-              className="px-4 py-1.5 rounded-lg text-white text-xxs font-medium hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ backgroundColor: INTERVENTIONS_ACCENT }}
-              title={!canSave ? (validationError ?? 'Label is required') : 'Save changes to intervention'}
-            >
-              Save intervention
-            </button>
-          </div>
-        </div>
-      </div>
+      </InterventionCaptureProvider>
     </SchedulePopout>
   )
 }

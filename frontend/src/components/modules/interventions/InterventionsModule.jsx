@@ -32,14 +32,12 @@ import { useHourlySolar } from '../../../hooks/useHourlySolar.js'
 import { calculateInstant } from '../../../utils/instantCalc.js'
 import { SYSTEM_TEMPLATES_LIBRARY } from '../../../data/systemTemplatesLibrary.js'
 import InterventionStackView from './InterventionStackView.jsx'
-// Brief 46 Part 2c-pre (2026-05-22): InterventionEditorV2 is now the
-// only editor that opens on Add intervention / edit pencil. The old
-// InterventionEditorPopout.jsx file stays in the repo as reference
-// until Brief 46 Part 5's deletion sweep, but is no longer imported
-// and no longer reachable from the UI. The previous ?editor=v2 URL
-// toggle has been removed entirely — Chris's review flow is "open the
-// model and click Add intervention normally", not URL toggles.
-import InterventionEditorV2 from './InterventionEditorV2.jsx'
+// Brief 46 Part 5 (2026-05-22): the pre-Brief-46 InterventionEditorPopout
+// has been deleted; the new V2-built editor (built across Parts 1–4)
+// was renamed to InterventionEditorPopout.jsx as the canonical name.
+// This import opens the rebuilt editor on every "Add intervention" /
+// edit-pencil click.
+import InterventionEditorPopout from './InterventionEditorPopout.jsx'
 import ComparisonView from './ComparisonView.jsx'
 import { SaveToLibraryModal, LoadFromLibraryModal, LibraryStripButton } from './InterventionLibrary.jsx'
 
@@ -350,14 +348,12 @@ export default function InterventionsModule() {
         )}
       </div>
 
-      {/* Brief 46 Part 2c-pre (2026-05-22): InterventionEditorV2 is the
-          sole editor that opens. The ?editor=v2 URL toggle has been
-          removed. The old InterventionEditorPopout.jsx file stays in
-          the repo as reference until Brief 46 Part 5's deletion sweep
-          but is no longer imported. Sections not yet wired (Building
-          subsections + IG / Operation / Systems) show a clear
-          "Not yet wired — coming later" placeholder in the right pane. */}
-      <InterventionEditorV2
+      {/* Brief 46 Part 5 (2026-05-22): the rebuilt InterventionEditorPopout
+          (built across Parts 1–4, renamed from V2 at Part 5) opens on
+          every Add intervention / edit-pencil click. All four sections
+          (Building / IG / Operation / Systems) wire to the same
+          components the main app pages render — Brief 46 Principle 3. */}
+      <InterventionEditorPopout
         intervention={editing}
         baselineConfig={baselineConfig}
         weatherData={weatherData}

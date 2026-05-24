@@ -576,3 +576,31 @@ Every mutation across all four sections funnels through `useProjectMutation.muta
 - Bridgewater anchor (current drifted baseline 130.1 kWh/m²·yr) live confirmation deferred to Chris's Part 6 walkthrough.
 
 ---
+
+## §2.11 Part 5 — delete old editor + rename V2 (2026-05-22)
+
+Tidy-up Part: drop the pre-Brief-46 `InterventionEditorPopout.jsx` (unreachable from the UI since Part 2c-pre swapped V2 to default), and rename `InterventionEditorV2.jsx` → `InterventionEditorPopout.jsx` to take the canonical name.
+
+### §2.11.1 What changed
+
+| Operation | File |
+|---|---|
+| Deleted | `frontend/src/components/modules/interventions/InterventionEditorPopout.jsx` (pre-Brief-46 version — ~700 lines of old editor + curated-control UI replaced by the section composers) |
+| Renamed | `InterventionEditorV2.jsx` → `InterventionEditorPopout.jsx` (canonical name) |
+| Updated | The renamed file's header docstring (now describes the final shape, not the "V2 build" intermediate state); `export default function InterventionEditorV2` → `export default function InterventionEditorPopout`; `console.warn('[InterventionEditorV2] …')` → `[InterventionEditorPopout]` |
+| Updated | `InterventionsModule.jsx` — `import InterventionEditorV2` → `import InterventionEditorPopout`; mount JSX `<InterventionEditorV2 …/>` → `<InterventionEditorPopout …/>`; surrounding comment block updated to reflect Part 5 close |
+| Updated | `EditorNav.jsx` / `EditorFooter.jsx` / `sections/BuildingSection.jsx` — comment references to "InterventionEditorV2" replaced with "InterventionEditorPopout" |
+
+### §2.11.2 Verification
+
+- `git mv` preserves history. The renamed file's `git log --follow` shows the full Part 1 → 4 build history.
+- Old file's deletion confirmed via `git rm`. No surviving import of the deleted file (`grep -r "InterventionEditorPopout"` returns only the renamed file + its callers + the deleted file's name in commit history).
+- `npm run build` clean (3206+ modules).
+- localStorage position key (`nza-intervention-editor-popout-position`) preserved verbatim across the rename — existing users' last-known popout position carries over.
+- Bridgewater anchor invariance: no engine-path code touched; this Part is pure file rename + delete + docstring polish.
+
+### §2.11.3 What remains (Part 6 only)
+
+The full 3-intervention walkthrough on Bridgewater per Chris's directive. Surface for sign-off.
+
+---

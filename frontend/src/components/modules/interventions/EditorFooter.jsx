@@ -8,7 +8,7 @@
  *     engine results the parent passes in via props)
  *   - Cancel + Save buttons (parent handles persistence)
  *
- * Parent (`InterventionEditorV2`) is responsible for:
+ * Parent (`InterventionEditorPopout`) is responsible for:
  *   - Running the engine on `baseline + currentPatches` to produce the
  *     preview metrics (`previewEui`, `previewCarbon`)
  *   - Computing the deltas vs baseline (this component formats them)

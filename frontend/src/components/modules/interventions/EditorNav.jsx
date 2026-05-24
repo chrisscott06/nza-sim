@@ -15,7 +15,7 @@
  * pane on the right. Click the section header to expand/collapse the
  * subsection list.
  *
- * Active selection state lives in the parent (`InterventionEditorV2`)
+ * Active selection state lives in the parent (`InterventionEditorPopout`)
  * via `active` and `onActiveChange` props. `active` is a string like
  * `'building.fabric'` or `'systems.heating'`. The parent renders the
  * matching section's component in the right pane.

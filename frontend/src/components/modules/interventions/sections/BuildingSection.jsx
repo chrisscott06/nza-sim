@@ -25,7 +25,7 @@
  * picker. We fetch it once per composer instance — a separate fetch
  * from the main `/building` page's load, because the editor opens
  * over a different route. Cheap enough; if it shows up in perf
- * traces, Part 5 can hoist this to `InterventionEditorV2` and pass
+ * traces, a follow-up can hoist this to `InterventionEditorPopout` and pass
  * down as a prop.
  */
 
