@@ -54,6 +54,7 @@ import EditorNav from './EditorNav.jsx'
 import EditorFooter from './EditorFooter.jsx'
 import PatchedProjectContextProvider from './PatchedProjectContextProvider.jsx'
 import { EditorChromeProvider } from './EditorChromeContext.jsx'
+import ChangeList from './ChangeList.jsx'
 // Brief 46 Part 2b (2026-05-21): right-pane section composers scaffolded.
 // Brief 46 Part 2c (2026-05-22): Building composer wired to real
 // extracted subsections.
@@ -317,6 +318,7 @@ export default function InterventionEditorPopout({
             localLabel={localLabel}
             setLocalLabel={setLocalLabel}
             localPatches={localPatches}
+            baselineConfig={baselineConfig}
             baselineEui={baselineEui}
             baselineCarbon={baselineCarbon}
             previewEui={previewEui}
@@ -347,6 +349,7 @@ function EditorBody({
   active, setActive,
   localLabel, setLocalLabel,
   localPatches,
+  baselineConfig,
   baselineEui, baselineCarbon, previewEui, previewCarbon,
   handleCancel, handleSave, canSave,
 }) {
@@ -529,6 +532,15 @@ function EditorBody({
             <EditorPaneBody active={active} />
           </div>
         </div>
+
+        {/* Brief 47 Part 2.1 (2026-05-24): always-visible change list.
+            Mounted above the footer so it's visible regardless of which
+            section is active in the right pane. Part 3 may relocate it
+            as part of the inputs-left / visualiser-right restructure. */}
+        <ChangeList
+          baselineConfig={baselineConfig}
+          libraryData={baselineConfig?.libraryData}
+        />
 
         {/* Footer */}
         <EditorFooter

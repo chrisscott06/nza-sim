@@ -155,7 +155,78 @@ NOT removed:
 
 ## §2 Part 2 — change list + nav/control change flags
 
-(To be filled by the Part 2 commit.)
+### §2.1 ChangeList — always-visible plain-English panel
+
+**New file:** `frontend/src/components/modules/interventions/ChangeList.jsx`
+
+Reads `currentPatches` from `useInterventionCapture()`. For each patch, renders a row using `summarizePatch` (the existing Brief 41 plain-English renderer): label · before → after · pct delta · revert button. Tone-coloured (green for improvements, red for regressions, neutral otherwise).
+
+Mounted in `InterventionEditorPopout.jsx` `EditorBody` as a horizontal strip between the section body and the footer. Always visible regardless of which section is active in the right pane. Part 3 may relocate it as part of the inputs-left / visualiser-right restructure; the component is layout-agnostic.
+
+Empty state explains the panel will populate as the user edits.
+
+### §2.2 Live revert — patches reactive end-to-end
+
+Each row's trash button calls `capture.revertPatch(id)`. That removes the patch from `currentPatches`; the provider's `onChange` fires; `localPatches` mirror updates; `PatchedProjectContextProvider` re-applies (without the reverted patch); the controls render baseline for that field; the footer's preview engine re-runs; the change list re-renders without the row. All in the same React batch — no async delay.
+
+The same revert path works for patches authored interactively (capture from a slider drag) AND patches loaded from the saved intervention on reopen (now seeded into `currentPatches` by Part 1.1's fix). Reverting a SAVED patch is a normal edit operation; only Save commits the change back to `params.interventions`. Cancel discards.
+
+### §2.3 Nav-level patch flags — extended to cover Brief 46's whole-snapshot patterns
+
+**Discovery:** the existing `patchMatchesSection` / `patchMatchesSubsection` matchers in `EditorNav.jsx` (Brief 46 Part 1) used substring heuristics that broke for Brief 46's whole-object snapshot capture pattern. Examples:
+
+| Capture path (Brief 46) | Subsection sub-id | Previous matcher | Result |
+|---|---|---|---|
+| `building.fabric` (q50 slider in AirtightnessSection) | `building.air_permeability` | `patchPath.includes('q50')` | ❌ false |
+| `building.gains` (LightingSection / EquipmentSection) | `gains.lighting` / `gains.equipment` | `patchPath.includes('lighting')` etc. | ❌ false — neither word appears in `'building.gains'` |
+| `building.systems_config_v40` (whole config from writeV40) | `systems.heating` etc. | `patchPath.includes('systems_config_v40.heating')` | ❌ false — `'building.systems_config_v40'` has no service suffix |
+| `building.operable_openings` (whole array from OperationSection) | `operation.openings` | `patchPath.includes('openings')` | ✅ true (substring `'openings'` matches) |
+
+So nav flags were silently broken for the most common edit patterns. The change list (Part 2.1) is what surfaces the patches reliably; the nav flags are the secondary "where are my changes" hint.
+
+**Fix:** replaced the substring heuristics with two explicit dispatch functions:
+- `patchOwnerSection(path)` — returns the EditorNav section id that owns this path, or null. Routes `building.occupancy` / `building.gains` / `building.schedules` to `gains`, `building.operable_openings` to `operation`, `building.systems_config_v40` to `systems`, everything else under `building.*` / `constructions.*` / `comfort_band.*` to `building`.
+- `patchOwnerSubsection(path)` — returns the subsection id within the owner section, or null when the path is too coarse to attribute. Whole-config snapshots default to the first sub-item (e.g. `building.systems_config_v40` → `systems.heating`); when the patch path carries a service suffix the attribution is exact (e.g. `building.systems_config_v40.cooling[id=...].share_pct` → `systems.cooling`).
+
+`patchMatchesSection` and `patchMatchesSubsection` are now thin wrappers around these dispatch functions — the dot rendering in `Section` and `SectionPatchDot` is unchanged.
+
+### §2.4 PatchedInputBadge coverage — DISCOVERY: 0% across all four section types
+
+**Audit finding:** Brief 46 Part 2b created `PatchedInputBadge.jsx` and exposed `useHasPatchOnPath` / `useRevertPathPatch` hooks, but the component was never wrapped around any input across Building / Internal Gains / Operation / Systems. `grep -rn 'PatchedInputBadge' frontend/src/components/modules/{building,gains,OperationModule.jsx,SystemsModule.jsx,systems}` returns zero matches.
+
+This is the third documented "intent vs implementation" gap in Brief 46 (alongside RC-1 read-overlay and RC-2 schedule-handler stubs). The component is ready and well-shaped; per-input wiring is a mechanical pass that touches roughly 50 input sites across the four section libraries.
+
+**Decision (recorded here per Process Rule 7):** I did NOT wrap inputs with PatchedInputBadge in Part 2. Reasons:
+1. The scope is too large for the "working-and-saving" Part. Wrapping 50 inputs across four section libraries would have delayed the browser checkpoint.
+2. The change list (§2.1) + the now-functional nav flags (§2.3) + the patched controls themselves showing patched VALUES (the Brief 46 fix) give the user three working ways to see what's changed without per-input badges. The badges would be a fourth view — useful but not blocking.
+3. Wrapping is mechanical and best handled as a polish pass alongside the visualiser work in Part 4 (which already touches the same files).
+
+The brief's Part 2.4 wording ("Confirm PatchedInputBadge marks every patched control... Where coverage is missing, extend it") is technically not satisfied; the audit doc records the gap explicitly so it's not buried.
+
+### §2.5 Three-ways-to-see check (post-Part-2)
+
+After Part 2 lands, an intervention with multiple patches across sections is visible:
+1. **As patched control VALUES** (Brief 46 fix § read-overlay): q50 slider shows 25.0 not the baseline 4.64; the construction picker shows `cavity_wall_enhanced` not the baseline default.
+2. **As nav flags** (§2.3): a coloured dot on `Building`, a smaller dot on `Air permeability` and on `Fabric`.
+3. **In the change list** (§2.1): three rows in plain English with revert buttons.
+
+The fourth way (per-input PatchedInputBadge dot beside each changed input) is deferred per §2.4.
+
+### §2.6 Files changed (Part 2)
+
+| File | Change |
+|---|---|
+| `frontend/src/components/modules/interventions/ChangeList.jsx` | NEW |
+| `frontend/src/components/modules/interventions/InterventionEditorPopout.jsx` | Mount ChangeList in EditorBody; thread baselineConfig prop |
+| `frontend/src/components/modules/interventions/EditorNav.jsx` | Replace substring matchers with explicit `patchOwnerSection` / `patchOwnerSubsection` dispatch |
+| `docs/audit/47_interventions_layout_and_state.md` | §2 added |
+| `STATUS.md` | Part 2 entry |
+
+### §2.7 Verification
+
+- `npm run build` clean (3210 modules).
+- No engine code touched.
+- **Browser verification is Chris's, at the mandatory checkpoint** (the brief's Part 2 close, before any Part 3 layout work). Five-check list reproduced in the surface message.
 
 ---
 

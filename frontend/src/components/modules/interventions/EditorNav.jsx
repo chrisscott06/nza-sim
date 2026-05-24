@@ -84,48 +84,94 @@ const SECTIONS = [
 ]
 
 /**
- * Check whether a patch path falls under a section / subsection id.
+ * Brief 47 Part 2.3 (2026-05-24): nav-level patch flags.
  *
- * The id-to-patch-prefix mapping is conventional:
- *   building.air_permeability → 'building.q50' OR 'building.air_permeability'
- *   building.fabric           → 'constructions.*'
- *   gains.occupancy           → 'building.internal_gains.occupancy.*'
- *   operation.openings        → 'building.openings.*' OR 'building.natural_ventilation.*'
- *   systems.heating           → 'building.systems_config_v40.heating.*'
+ * `patchOwnerSection(path)` returns the EditorNav section id that owns
+ * this patch path — `building` / `gains` / `operation` / `systems` — or
+ * null if no owner.
  *
- * Parts 2-4 may tighten these prefixes as the section composers land.
- * Part 1 just uses the leading path token for a coarse-grained match —
- * good enough for the patch-presence dots.
+ * `patchOwnerSubsection(path)` returns the subsection id within the
+ * owner section, or null if the path is too coarse to attribute (the
+ * change list still surfaces these — the nav-flag heuristic is best-
+ * effort).
+ *
+ * Brief 46 (Parts 2c-4) captured most edits as WHOLE-OBJECT/ARRAY
+ * snapshots — `building.fabric`, `building.occupancy`, `building.gains`,
+ * `building.systems_config_v40`, `building.operable_openings`,
+ * `building.schedules` — so the matcher routes those whole-snapshot
+ * paths to the appropriate subsection (e.g. `building.fabric` ⇒
+ * `building.air_permeability`, since AirtightnessSection captures
+ * fabric.air_permeability_q50 by replacing the whole fabric object).
+ *
+ * The previous Brief 46 matcher used substring heuristics that broke
+ * for these whole-snapshot paths (e.g. `'building.fabric'.includes(
+ * 'q50')` = false). Replaced here with explicit prefix/equality rules.
  */
+function patchOwnerSection(path) {
+  if (typeof path !== 'string') return null
+  // Internal Gains-owned paths
+  if (path === 'building.occupancy' || path.startsWith('building.occupancy.')) return 'gains'
+  if (path === 'building.gains'     || path.startsWith('building.gains.'))     return 'gains'
+  // Operation-owned paths
+  if (path === 'building.operable_openings' || path.startsWith('building.operable_openings.')) return 'operation'
+  // Systems-owned paths
+  if (path === 'building.systems_config_v40' || path.startsWith('building.systems_config_v40.')) return 'systems'
+  // Schedules: attributed to gains (occupancy/lighting/equipment use
+  // schedules) but Operation + Systems also reference schedule_refs;
+  // the change list disambiguates by content.
+  if (path === 'building.schedules' || path.startsWith('building.schedules.')) return 'gains'
+  // Building-owned (catch-all): everything else under building.* + the
+  // constructions slice + comfort_band (lives in the Building section
+  // even though its capture path is top-level).
+  if (path.startsWith('building.'))      return 'building'
+  if (path === 'constructions'           || path.startsWith('constructions.')) return 'building'
+  if (path === 'comfort_band'            || path.startsWith('comfort_band.'))  return 'building'
+  return null
+}
+
+function patchOwnerSubsection(path) {
+  if (typeof path !== 'string') return null
+  // Building subsections
+  if (path === 'building.fabric' || path.startsWith('building.fabric.')) return 'building.air_permeability'  // q50 lives in fabric
+  if (path === 'constructions'   || path.startsWith('constructions.'))   return 'building.fabric'
+  if (path.startsWith('building.wwr')          || path.startsWith('building.window_count')) return 'building.glazing'
+  if (path.startsWith('building.shading_overhang') || path.startsWith('building.shading_fin')) return 'building.shading'
+  if (path === 'building.orientation'  || path.startsWith('building.orientation.'))  return 'building.orientation'
+  if (path === 'building.length' || path === 'building.width' || path === 'building.num_floors' ||
+      path === 'building.floor_height' || path === 'building.name') return 'building.orientation'
+  // openings.* (permanent vents — Building) maps loosely; defer attribution
+  // since the EditorNav's Building section doesn't expose Permanent
+  // openings as a sub-item (yet). Section-level dot still fires via
+  // patchOwnerSection.
+  if (path.startsWith('building.openings')) return null
+  // Internal Gains subsections
+  if (path === 'building.occupancy' || path.startsWith('building.occupancy.')) return 'gains.occupancy'
+  if (path.startsWith('building.gains.lighting'))  return 'gains.lighting'
+  if (path.startsWith('building.gains.equipment')) return 'gains.equipment'
+  // Whole-gains snapshot — can't disambiguate; default to lighting (more common edit).
+  if (path === 'building.gains') return 'gains.lighting'
+  // Schedules whole-snapshot — best-effort to occupancy.
+  if (path === 'building.schedules' || path.startsWith('building.schedules.')) return 'gains.occupancy'
+  // Operation subsections
+  if (path === 'building.operable_openings' || path.startsWith('building.operable_openings.')) return 'operation.openings'
+  // Systems subsections — service-keyed
+  if (path.startsWith('building.systems_config_v40.heating'))     return 'systems.heating'
+  if (path.startsWith('building.systems_config_v40.cooling'))     return 'systems.cooling'
+  if (path.startsWith('building.systems_config_v40.dhw'))         return 'systems.dhw'
+  if (path.startsWith('building.systems_config_v40.ventilation')) return 'systems.ventilation'
+  if (path.startsWith('building.systems_config_v40.lighting'))    return 'systems.lighting'
+  if (path.startsWith('building.systems_config_v40.small_power')) return 'systems.small_power'
+  // Whole-systems_config_v40 snapshot — can't disambiguate; default heating.
+  if (path === 'building.systems_config_v40') return 'systems.heating'
+  return null
+}
+
 function patchMatchesSection(patchPath, sectionId) {
-  if (typeof patchPath !== 'string') return false
-  if (sectionId === 'building') return patchPath.startsWith('building.') || patchPath.startsWith('constructions.')
-  if (sectionId === 'gains')    return patchPath.includes('internal_gains') || patchPath.includes('schedules.')
-  if (sectionId === 'operation') return patchPath.includes('openings') || patchPath.includes('natural_ventilation') || patchPath.includes('permanent_vent')
-  if (sectionId === 'systems')  return patchPath.includes('systems_config_v40') || patchPath.includes('systems.')
-  return false
+  return patchOwnerSection(patchPath) === sectionId
 }
 
 function patchMatchesSubsection(patchPath, subId) {
-  if (typeof patchPath !== 'string') return false
-  // Subsection ids encode the path prefix in a coarse-grained way.
-  // E.g. 'systems.heating' → matches paths containing 'systems_config_v40.heating'.
-  if (subId.startsWith('systems.')) {
-    const service = subId.slice('systems.'.length)
-    return patchPath.includes(`systems_config_v40.${service}`)
-  }
-  if (subId === 'building.fabric') return patchPath.startsWith('constructions.')
-  if (subId === 'building.air_permeability') return patchPath.includes('q50') || patchPath.includes('air_permeability')
-  if (subId === 'building.orientation') return patchPath.endsWith('.orientation') || patchPath.includes('building.orientation')
-  if (subId === 'building.glazing') return patchPath.includes('wwr') || patchPath.includes('glazing_ratio')
-  if (subId === 'building.shading') return patchPath.includes('overhang') || patchPath.includes('shading')
-  if (subId === 'gains.occupancy') return patchPath.includes('occupancy') || (patchPath.includes('schedules.') && patchPath.includes('occ'))
-  if (subId === 'gains.lighting') return patchPath.includes('lighting') && !patchPath.includes('systems_config_v40')
-  if (subId === 'gains.equipment') return patchPath.includes('equipment')
-  if (subId === 'operation.openings') return patchPath.includes('natural_ventilation') || (patchPath.includes('openings') && !patchPath.includes('permanent'))
-  if (subId === 'operation.thresholds') return patchPath.includes('threshold')
-  if (subId === 'operation.permanent_vent') return patchPath.includes('permanent_vent') || patchPath.includes('openings.cd')
-  return false
+  return patchOwnerSubsection(patchPath) === subId
 }
 
 function SectionPatchDot({ active, accent }) {

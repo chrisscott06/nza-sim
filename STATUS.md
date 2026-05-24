@@ -1,5 +1,33 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-24 — Brief 47 Part 2: change list + nav-flag matcher rewrite
+
+**State:** `commit_in_flight` — Part 2 one commit per discipline. Next step is the **mandatory browser-verification checkpoint** before any Part 3 layout work.
+
+### What landed (Part 2)
+
+**New: `ChangeList.jsx`** — always-visible plain-English panel of every captured patch. One row per patch using `summarizePatch` (Brief 41 renderer): label · before → after · pct delta · revert button. Mounted in `EditorBody` between the section body and the footer; visible regardless of which section is active in the right pane.
+
+**Live revert** — each row's trash button calls `capture.revertPatch(id)` → currentPatches shrinks → patched provider re-applies → control returns to baseline → footer EUI re-runs → row disappears. All same React batch.
+
+**Nav flags — matcher rewrite.** The Brief 46 `patchMatchesSection` / `patchMatchesSubsection` substring heuristics silently failed for Brief 46's whole-object snapshot capture pattern (`building.fabric`, `building.gains`, `building.systems_config_v40`, etc.). Replaced with explicit `patchOwnerSection` + `patchOwnerSubsection` dispatch that handles both Brief-41-shape granular paths AND the whole-snapshot paths Parts 2c-4 actually capture.
+
+### Honest gap recorded in audit doc
+
+**PatchedInputBadge** (Brief 46 Part 2b component): zero adoption across all four section types. The component is ready; per-input wrapping never happened in Brief 46. Brief 47 Part 2.4 asked to "confirm and extend coverage" — coverage is 0%, full wrapping is ~50 sites across the section libraries, too big to cram into Part 2. Deferred to Part 4 polish (alongside visualiser work). The three other ways to see changes (patched control values, nav flags, change list) are all working post-Part-2.
+
+### Verification
+
+- `npm run build` clean.
+- Engine untouched. Bridgewater anchor (~121.7) holds by construction.
+- **Browser verification: Chris runs the mandatory five-check list now** (the brief's Part 2 checkpoint). The seven items the brief specifies are reproduced in the surface message.
+
+### What's next
+
+Part 3 (layout restructure) waits on Chris's browser-checkpoint sign-off.
+
+---
+
 ## 🚀 Brief 46 — CLOSED 2026-05-24
 
 Six substantive Parts + the inert-controls read-overlay fix shipped across `dd330e8` → `70514e6`. Capture-context architecture (Brief 46 Part 1), Building/IG/Operation/Systems section composers (Parts 2c/3/4), old-editor deletion + V2-rename (Part 5), read-overlay layer (post-walkthrough fix). All four sections now share the "two contexts, one implementation" pattern — main app pages and intervention editor mount the SAME components; mutations route automatically by InterventionCaptureProvider presence on the ancestor tree.
