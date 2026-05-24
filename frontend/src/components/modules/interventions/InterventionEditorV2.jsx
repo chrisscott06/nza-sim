@@ -53,11 +53,16 @@ import { runInterventionStack } from '../../../utils/interventionsEngine.js'
 import { calculateInstant } from '../../../utils/instantCalc.js'
 import EditorNav from './EditorNav.jsx'
 import EditorFooter from './EditorFooter.jsx'
-// Brief 46 Part 2b (2026-05-21): right-pane section composers.
-// Building composer scaffolded; subsection content lands in Part 2c
-// once BuildingDefinition's inline subsections are extracted as named
-// exports.
-import BuildingSection from './sections/BuildingSection.jsx'
+// Brief 46 Part 2b (2026-05-21): right-pane section composers scaffolded.
+// Brief 46 Part 2c (2026-05-22): Building composer wired to real
+// extracted subsections.
+// Brief 46 Part 3 (2026-05-22): Internal Gains + Operation composers
+// wired — IG mounts the same OccupancySection / LightingSection /
+// EquipmentSection that the main /gains page renders; Operation
+// mounts OpeningRow lists with Add buttons.
+import BuildingSection       from './sections/BuildingSection.jsx'
+import InternalGainsSection  from './sections/InternalGainsSection.jsx'
+import OperationSection      from './sections/OperationSection.jsx'
 
 const INTERVENTIONS_ACCENT = '#E84393'
 
@@ -109,14 +114,11 @@ function EditorPaneBody({ active }) {
       </div>
     )
   }
-  // Brief 46 Part 2b (2026-05-21): Building composer wired.
-  // Brief 46 Part 2c-pre (2026-05-22): IG / Operation / Systems
-  // composers show a clear "not yet wired — coming later" placeholder
-  // so the V2 editor is the sole editor reachable from the UI even
-  // before those sections' controls are extracted.
-  if (active.startsWith('building.')) {
-    return <BuildingSection active={active} />
-  }
+  // Brief 46 Part 2c (Building) + Part 3 (IG + Operation) wired.
+  // Systems composer lands in Part 4.
+  if (active.startsWith('building.'))  return <BuildingSection      active={active} />
+  if (active.startsWith('gains.'))     return <InternalGainsSection active={active} />
+  if (active.startsWith('operation.')) return <OperationSection     active={active} />
   return (
     <div className="h-full flex items-center justify-center p-6">
       <div className="max-w-sm w-full rounded border border-dashed border-light-grey bg-off-white/30 p-6 text-center">

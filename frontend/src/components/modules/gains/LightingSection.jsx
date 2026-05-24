@@ -12,6 +12,7 @@
 
 import { useContext, useCallback } from 'react'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
+import { useProjectMutation } from '../../../hooks/useProjectMutation.js'
 import MultiProfileList from './MultiProfileList.jsx'
 import { lightingTemplatesFor, buildingTypeOf } from '../../../data/loadTypeLibrary.js'
 import { GAIN_COLOURS } from './gainColours.js'
@@ -29,7 +30,14 @@ export default function LightingSection({
   activeProfileId,
   onSelectProfile,
 }) {
-  const { params, updateParam } = useContext(ProjectContext)
+  // Brief 46 Part 3 (2026-05-22): mutations routed through
+  // useProjectMutation so this section works both in the main /gains
+  // page AND inside the intervention editor's InternalGainsSection.
+  // mutate('building.gains', wholeGainsObj) falls through to
+  // updateParam('gains', wholeGainsObj) in main-app mode and lands a
+  // single-path patch in capture mode.
+  const { params } = useContext(ProjectContext)
+  const { mutate } = useProjectMutation()
   const lighting = params?.gains?.lighting
   const profiles = lighting?.profiles ?? []
   const buildingType = buildingTypeOf(params)
@@ -37,11 +45,11 @@ export default function LightingSection({
   const l = annual?.lighting
 
   const handleProfilesChange = useCallback((nextProfiles) => {
-    updateParam('gains', {
+    mutate('building.gains', {
       ...(params?.gains ?? {}),
       lighting: { ...(params?.gains?.lighting ?? {}), profiles: nextProfiles },
     })
-  }, [params, updateParam])
+  }, [params, mutate])
 
   const renderDetail = (profile) => {
     const mag = profile.magnitude

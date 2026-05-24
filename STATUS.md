@@ -1,5 +1,30 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-22 — Brief 46 Part 3: Internal Gains + Operation editor sections wired
+
+**State:** `commit_in_flight` — Brief 46 Part 3 (IG + Operation composers + mutation routing).
+
+### What landed (Part 3)
+
+- **Gains sections** (`OccupancySection` / `LightingSection` / `EquipmentSection`) now route mutations through `useProjectMutation` (was direct `updateParam`). Identity-by-construction in main-app mode; whole-block snapshot capture in editor mode.
+- **OperationModule** `writeList` routes through `useProjectMutation`; helpers (`OPENING_TYPE_OPTIONS` / `nextId` / `newOpening` / `facadeLabelByKey` / `OpeningRow` / `deepMergeOpening`) exported so the editor composer reuses the same implementations.
+- **New `interventions/sections/InternalGainsSection.jsx`** — dispatches `gains.occupancy` / `gains.lighting` / `gains.equipment` to the existing IG sections. Annual readouts degrade to "—" until preview engine result is wired (Part 6 decision).
+- **New `interventions/sections/OperationSection.jsx`** — `operation.openings` mounts the same OpeningRow list + Add buttons as the main page. `operation.thresholds` + `operation.permanent_vent` are placeholders pointing back to the openings subsection / Building module respectively (per CLAUDE.md Module scopes).
+- **InterventionEditorV2** `EditorPaneBody` dispatches to all three composers (Building / IG / Operation).
+
+Schedule sub-popout deferred per Brief 46 Part 1 Q1 directive — schedule editing remains on the main pages; editor captures the resulting params.
+
+### Verification
+
+- `npm run build` clean (3206 modules).
+- No engine-path code touched. Mutation refactor preserves the exact `updateParam(target, value)` shape in main-app mode via the dispatch table.
+
+### Next: Part 4 — Systems
+
+Wire SystemsModule's per-system editor + structural ops (add/remove/replace) + service-level patches + inline share patches. This is the largest Part — Brief 42 service-level reorganisation + Brief 40 structural ops both surface here.
+
+---
+
 ## 🚧 Session 2026-05-22 — Brief 46 Part 2c: Building subsections extracted as self-contained named exports
 
 **State:** `commit_in_flight` — Brief 46 Part 2c (Option A extraction of GeometrySection / GlazingSection / ShadingSection / OpeningsSection / FabricSection + AirtightnessSection / ComfortBandSection from `BuildingDefinition.jsx`'s monolithic `InputsColumn`).

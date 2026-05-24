@@ -7,6 +7,7 @@
 
 import { useContext, useCallback } from 'react'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
+import { useProjectMutation } from '../../../hooks/useProjectMutation.js'
 import MultiProfileList from './MultiProfileList.jsx'
 import { equipmentTemplatesFor, buildingTypeOf } from '../../../data/loadTypeLibrary.js'
 import { GAIN_COLOURS } from './gainColours.js'
@@ -23,7 +24,10 @@ export default function EquipmentSection({
   activeProfileId,
   onSelectProfile,
 }) {
-  const { params, updateParam } = useContext(ProjectContext)
+  // Brief 46 Part 3 (2026-05-22): routed through useProjectMutation —
+  // see OccupancySection / LightingSection for the rationale.
+  const { params } = useContext(ProjectContext)
+  const { mutate } = useProjectMutation()
   const equipment = params?.gains?.equipment
   const profiles = equipment?.profiles ?? []
   const buildingType = buildingTypeOf(params)
@@ -31,11 +35,11 @@ export default function EquipmentSection({
   const e = annual?.equipment
 
   const handleProfilesChange = useCallback((nextProfiles) => {
-    updateParam('gains', {
+    mutate('building.gains', {
       ...(params?.gains ?? {}),
       equipment: { ...(params?.gains?.equipment ?? {}), profiles: nextProfiles },
     })
-  }, [params, updateParam])
+  }, [params, mutate])
 
   const renderDetail = (profile) => {
     const baseStr = profile.baseload  ? `${profile.baseload.value}`  : '?'

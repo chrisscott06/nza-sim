@@ -456,3 +456,50 @@ Same component, same JSX, same state, two routings determined by whether an `Int
 - **Bridgewater anchor:** Live confirmation deferred to Chris's Part 6 walkthrough. Drift triggered by Part 2c would have to come from one of: (a) extraction breaking a useState init expression, (b) a missed prop wiring, (c) the ComfortBandSection mutate-bug fix changing baseline (it doesn't — the previous codepath either no-op'd silently or crashed; persisted comfort band on Bridgewater is unchanged). All three guarded by self-contained-section design + identity-preserving extraction.
 
 ---
+
+## §2.9 Part 3 — Internal Gains + Operation wiring (2026-05-22)
+
+### §2.9.1 Internal Gains
+
+The Internal Gains module already lived in `frontend/src/components/modules/gains/` as separate `OccupancySection.jsx` / `LightingSection.jsx` / `EquipmentSection.jsx` files (the Brief 27 split landed long before Brief 46). Part 3's work was:
+
+- **Refactor the three sections' mutations through `useProjectMutation`.** Each section had a `patchOccupancy` / `handleProfilesChange` callback that wrote via `updateParam('occupancy' | 'gains', wholeObject)`. The Part 3 refactor changes the inner call to `mutate('building.occupancy', wholeObject)` / `mutate('building.gains', wholeObject)`. Main-app mode falls through to the original `updateParam(…)` shape (identity-by-construction). Capture mode lands a single patch at `building.occupancy` / `building.gains` carrying the whole-block snapshot; the patchCapture dedupe replaces the patch at the same path on each subsequent edit (last write wins — correct for whole-snapshot patches).
+- **Create `interventions/sections/InternalGainsSection.jsx`** — a composer that dispatches by active subsection to the same three section components. `annual` is passed as `null` (the live engine readout at the top of each section degrades to "—" when no engine result is available; wiring the editor's preview engine result through here is a Part 6 walkthrough decision). `onEditSchedule` is a no-op for now — schedule sub-popout is deferred per Brief 46 Q1.
+- **Lighting + Equipment** need `activeProfileId` / `onSelectProfile` for the multi-profile UI. The composer owns this state at its level (one selection per subsection mount; resets on subsection switch, which is acceptable since most users only edit one profile per intervention).
+
+### §2.9.2 Operation
+
+`OperationModule.jsx` is 1365 lines and structurally complex (3-column layout, 5 centre tabs, per-opening editor cards). Part 3's work was:
+
+- **Refactor `writeList(next)` through `useProjectMutation`.** Was `updateParam('operable_openings', next)`; now `mutate('building.operable_openings', next)`. Adds/edits/deletes through `addOpening` / `updateOpening` / `deleteOpening` all route through this single function, so all three now capture as whole-array patches. Identity-by-construction in main-app mode.
+- **Export `OPENING_TYPE_OPTIONS`, `nextId`, `newOpening`, `facadeLabelByKey`, `OpeningRow`, `deepMergeOpening`** from `OperationModule.jsx`. They were previously module-private; nothing in the main app cares whether they're exported (the main module's render path uses them in-file). The editor's `OperationSection` composer imports them.
+- **Create `interventions/sections/OperationSection.jsx`** — composer that mounts an opening editor for the `operation.openings` subsection. Renders the same `OpeningRow` per-opening cards plus the Add buttons + facade-chip strip that the main `/operation` left column shows. Mutations go through the same `mutate('building.operable_openings', wholeArray)` path; main-app and capture modes share the OpeningRow implementation. Schedule editor is a no-op (Q1 deferred); the user can still edit schedules on the main page and the resulting params are reflected in the editor's capture.
+- **`operation.thresholds` / `operation.permanent_vent`** — placeholders. The thresholds nav item is redundant once the openings list is present (each OpeningRow's expanded editor already exposes `open_above_zone_c` / `hysteresis_c` / `require_outside_cooler` under its Control block). The permanent_vent nav item is misplaced per CLAUDE.md Module scopes (permanent vents are Building scope, not Operation). Part 5 will decide whether to consolidate or drop these nav items.
+
+### §2.9.3 Two contexts, one implementation — proven for IG + Operation
+
+The same `OccupancySection` / `LightingSection` / `EquipmentSection` / `OpeningRow` components render in:
+- **Main `/gains` and `/operation` pages** — mutations go through `mutate()` → `updateParam()` (capture context is absent on the ancestor tree → `isCapturing === false` → main-app fallthrough).
+- **Editor's right pane** — mutations go through `mutate()` → `capturePatch()` (the `InterventionCaptureProvider` is on the ancestor tree → `isCapturing === true` → patch capture).
+
+No parallel UI implementations, no drift risk between main app and editor. This was the Brief 46 Principle 3 goal: "reuse main-app input controls inside the capture context — do not build parallel UI."
+
+### §2.9.4 What's NOT done in Part 3
+
+- Schedule sub-popout (Q1 directive defers it). Schedules edit on the main `/gains` and `/operation` pages; editor captures the resulting params.
+- Wire the editor's preview engine result through to IG sections' live readouts (the Annual / Per m² / Peak figures at the top of each section). Currently degrades to "—" because `annual` is `null`. One-line fix at Part 6 if Chris wants it.
+- Per-opening structural ops in the capture context (add / remove). Currently captured as whole-array snapshots through `writeList`. This is correct semantically — the intervention IS the new array shape — but Brief 41's intended patch shapes for structural ops are `op: 'add' | 'remove' | 'replace'` with array-element paths. Part 4 lands that for Systems (where it matters most for share+adoption patterns) and may sweep back to Operation if needed.
+
+### §2.9.5 Files changed (Part 3)
+
+| File | Change |
+|---|---|
+| `frontend/src/components/modules/gains/OccupancySection.jsx` | `patchOccupancy` routes through `useProjectMutation` |
+| `frontend/src/components/modules/gains/LightingSection.jsx` | `handleProfilesChange` routes through `useProjectMutation` |
+| `frontend/src/components/modules/gains/EquipmentSection.jsx` | `handleProfilesChange` routes through `useProjectMutation` |
+| `frontend/src/components/modules/OperationModule.jsx` | `writeList` routes through `useProjectMutation`; helpers exported |
+| `frontend/src/components/modules/interventions/sections/InternalGainsSection.jsx` | NEW — IG composer dispatching to existing sections |
+| `frontend/src/components/modules/interventions/sections/OperationSection.jsx` | NEW — Operation composer mounting OpeningRow list |
+| `frontend/src/components/modules/interventions/InterventionEditorV2.jsx` | EditorPaneBody dispatches `gains.*` + `operation.*` |
+
+---

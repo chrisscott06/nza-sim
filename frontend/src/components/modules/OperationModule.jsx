@@ -33,6 +33,7 @@
 import { useContext, useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { ProjectContext } from '../../context/ProjectContext.jsx'
+import { useProjectMutation } from '../../hooks/useProjectMutation.js'
 import { useUI } from '../../context/UIContext.jsx'
 import { WeatherContext } from '../../context/WeatherContext.jsx'
 import { useHourlySolar } from '../../hooks/useHourlySolar.js'
@@ -76,7 +77,7 @@ function facadeLabel(facadeNumber, orientationDeg) {
   const compass = directions[Math.round(trueAngle / 45) % 8]
   return `F${facadeNumber} (${compass})`
 }
-function facadeLabelByKey(key, orientationDeg) {
+export function facadeLabelByKey(key, orientationDeg) {
   const fac = FACADES.find(f => f.key === key)
   return fac ? facadeLabel(fac.num, orientationDeg) : key
 }
@@ -98,7 +99,9 @@ const SCHEDULE_OPTIONS = [
 // (more conservative, the safe assumption without explicit topology).
 // defaultCw retired: site exposure (C_w) is building-wide and lives on
 // openings.site_exposure (resolved in instantCalc.js's siteExposureCw).
-const OPENING_TYPE_OPTIONS = [
+// Brief 46 Part 3 (2026-05-22): exported so the editor's
+// OperationSection composer can reuse the same opening-type catalogue.
+export const OPENING_TYPE_OPTIONS = [
   { value: 'door',   label: 'Door',   defaultArea: 4.0,  defaultHeight: 2.0, defaultCd: 0.60, defaultFlowMode: 'cross'        },
   { value: 'window', label: 'Window', defaultArea: 1.5,  defaultHeight: 1.2, defaultCd: 0.55, defaultFlowMode: 'single_sided' },
   { value: 'vent',   label: 'Vent',   defaultArea: 0.5,  defaultHeight: 0.5, defaultCd: 0.40, defaultFlowMode: 'single_sided' },
@@ -119,8 +122,12 @@ const CENTRE_TABS = [
   { id: 'summary',      label: 'Summary' },
 ]
 
+// Brief 46 Part 3 (2026-05-22): exported alongside OPENING_TYPE_OPTIONS
+// + newOpening + facadeLabelByKey + OpeningRow so the editor's
+// OperationSection composer can mount the same opening editor as the
+// main /operation page.
 // Generate a stable, human-readable id for a new opening.
-function nextId(existing, type, facade) {
+export function nextId(existing, type, facade) {
   const base = `${facade}_${type}`
   const seen = new Set((existing ?? []).map(o => o?.id).filter(Boolean))
   if (!seen.has(base)) return base
@@ -131,7 +138,7 @@ function nextId(existing, type, facade) {
   return `${base}_${Date.now()}`
 }
 
-function newOpening(type, facade) {
+export function newOpening(type, facade) {
   const t = OPENING_TYPE_OPTIONS.find(o => o.value === type) ?? OPENING_TYPE_OPTIONS[1]
   return {
     id:                    null,  // filled in by caller via nextId()
@@ -182,7 +189,13 @@ function fetchLibraryData() {
 }
 
 export default function OperationModule() {
+  // Brief 46 Part 3 (2026-05-22): writeList routed through
+  // useProjectMutation so the OperationSection editor composer can
+  // capture operable_openings as patches. updateParam('schedules', …)
+  // stays direct because schedule editing isn't yet captured as a
+  // patch (Brief 46 Q1 schedule sub-popout is deferred).
   const { params, constructions, systems, comfortBand, updateParam } = useContext(ProjectContext)
+  const { mutate } = useProjectMutation()
   const { weatherData } = useContext(WeatherContext)
   const { selectedOpeningId, setSelectedOpeningId, clearSelection } = useUI()
 
@@ -295,7 +308,11 @@ export default function OperationModule() {
   }, [openings.length, params])
 
   // ── List ops (always overwrite operable_openings wholesale) ────────────
-  const writeList = (next) => updateParam('operable_openings', next)
+  // Brief 46 Part 3: route through mutate() so the OperationSection
+  // editor composer captures the whole-array patch. In main-app mode
+  // this falls through to `updateParam('operable_openings', next)` —
+  // identity-by-construction.
+  const writeList = (next) => mutate('building.operable_openings', next)
 
   const addOpening = (type, facade) => {
     const entry = { ...newOpening(type, facade), id: nextId(openings, type, facade) }
@@ -1021,8 +1038,11 @@ function OperationSummaryView({ instantResult, openings, orientation }) {
   )
 }
 
-/* ── Per-opening collapsible row (preserved from Gate E5a) ───────────── */
-function OpeningRow({ opening, selected, orientation, onSelect, onUpdate, onDelete, openScheduleEditor, allSched }) {
+/* ── Per-opening collapsible row (preserved from Gate E5a) ─────────────
+ * Brief 46 Part 3 (2026-05-22): exported so the editor's OperationSection
+ * composer can reuse the same per-opening editor as the main page.
+ */
+export function OpeningRow({ opening, selected, orientation, onSelect, onUpdate, onDelete, openScheduleEditor, allSched }) {
   const [expanded, setExpanded] = useState(false)
   // Brief 41 Part 4 (2026-05-19): showAdvanced state retired — it gated the
   // per-opening Cd / Cw sliders, which were dropped from the schema in
@@ -1317,7 +1337,7 @@ function LabeledCheckbox({ label, checked, onChange, hint }) {
 
 /* ── deepMergeOpening: merge partial updates into an opening with the
        nested `control` object handled correctly. ────────────────────────── */
-function deepMergeOpening(current, partial) {
+export function deepMergeOpening(current, partial) {
   const out = { ...current, ...partial }
   if (partial.control) {
     out.control = { ...(current.control ?? {}), ...partial.control }

@@ -19,6 +19,7 @@
 
 import { useContext, useCallback } from 'react'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
+import { useProjectMutation } from '../../../hooks/useProjectMutation.js'
 import MiniProfile from './MiniProfile.jsx'
 import { GAIN_COLOURS } from './gainColours.js'
 
@@ -90,13 +91,23 @@ const DENSITY_BASIS_OPTIONS = [
 
 // ── Main section ─────────────────────────────────────────────────────────────
 export default function OccupancySection({ annual, onEditSchedule }) {
-  const { params, updateParam } = useContext(ProjectContext)
+  // Brief 46 Part 3 (2026-05-22): mutations routed through
+  // useProjectMutation so this section works both in the main /gains
+  // page AND inside the intervention editor's InternalGainsSection. In
+  // main-app mode mutate('building.occupancy', wholeObj) falls through
+  // to updateParam('occupancy', wholeObj) — identity-by-construction.
+  // In capture mode it captures a patch at path 'building.occupancy';
+  // subsequent edits replace the patch at the same path (last write
+  // wins via patchCapture dedupe), so the patch always holds the
+  // latest snapshot of the occupancy block.
+  const { params } = useContext(ProjectContext)
+  const { mutate } = useProjectMutation()
   const occ = params?.occupancy ?? {}
   const p = annual?.people
 
   const patchOccupancy = useCallback((patch) => {
-    updateParam('occupancy', { ...occ, ...patch })
-  }, [occ, updateParam])
+    mutate('building.occupancy', { ...occ, ...patch })
+  }, [occ, mutate])
 
   const setDensityValue = (v) => {
     patchOccupancy({ density: { ...(occ.density ?? {}), value: v ?? 0 } })
