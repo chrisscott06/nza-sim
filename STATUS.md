@@ -1,5 +1,51 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-22 — Brief 46 Part 2c: Building subsections extracted as self-contained named exports
+
+**State:** `commit_in_flight` — Brief 46 Part 2c (Option A extraction of GeometrySection / GlazingSection / ShadingSection / OpeningsSection / FabricSection + AirtightnessSection / ComfortBandSection from `BuildingDefinition.jsx`'s monolithic `InputsColumn`).
+
+**Authorisation:** Chris green-lit Parts 2c → 3 → 4 → 5 end-to-end with no per-Part sign-off pauses. Surface at Part 6 walkthrough only. Escalation triggers active: (a) a control resists capture-context wrapping, or (b) code-introduced engine anchor drift (data-state drift OK).
+
+### What landed (Part 2c)
+
+**New file `frontend/src/components/modules/building/buildingSections.jsx`** (~700 lines) holds:
+
+- Five self-contained section exports per Chris's Option A constraint ("own state, own labels, own component-level memoisation"): `GeometrySection` (orientationLocked), `GlazingSection` (wwrMemory), `ShadingSection` (shadingMemory), `OpeningsSection` (louvreMemory + per-facade cd/flow_mode + site exposure), `FabricSection` (library + onInspectConstruction props, uses updateConstruction directly per Q2 delegate-to-existing-helpers).
+- `AirtightnessSection` (reads q50 itself from `params.fabric`; liveResult optional prop for derived n50/operational badges).
+- `ComfortBandSection` (now uses `useProjectMutation` — fixes a Part 2a regression where `mutate(…)` was called without the hook being in scope; the ReferenceError would have fired on any comfort-slider drag, which Chris hadn't tried on the affected build).
+- Re-export of `ThermalBridgesPanel` so all left-column sections come from one import.
+- Shared visual primitives (CollapsibleSection, Field, NumberInput, CompassRose, UValueBadge, ConstructionSelect, WindowCountInput, LouvreAreaInput, FACADES, facadeLabel, CONSTRUCTION_ELEMENTS, etc.) moved with them.
+
+**`BuildingDefinition.jsx`** shrinks from 1655 lines to 612 lines. `InputsColumn` is now a ~30-line thin assembler — owns the single-expand accordion state + module header, forwards `accordionProps(id)` to each section.
+
+**`interventions/sections/BuildingSection.jsx`** dispatches by active subsection to the same named exports:
+
+```jsx
+{active === 'building.orientation'      && <GeometrySection   defaultOpen />}
+{active === 'building.glazing'          && <GlazingSection    defaultOpen />}
+{active === 'building.shading'          && <ShadingSection    defaultOpen />}
+{active === 'building.air_permeability' && <AirtightnessSection defaultOpen />}
+{active === 'building.fabric'           && <FabricSection library={…} … />}
+```
+
+Fabric subsection fetches `/api/library/constructions` once per composer instance; will hoist to `InterventionEditorV2` as a baselineConfig prop if perf shows the duplicate fetch costs.
+
+### Two contexts, one implementation
+
+Same `<GeometrySection />` renders in main `/building` page (mutate → ProjectContext) and in the editor's right pane (mutate → captured patch via `useInterventionCapture`). Brief 46 Principle 3 in action — no parallel UI implementations, no drift risk between main app and editor.
+
+### Verification
+
+- `npm run build` clean (3204 modules).
+- No engine-path code touched. Every mutation that used to call `updateParam(…)` directly now calls `mutate(…)` via the Q2 dispatch table that translates back to identical `updateParam` shapes. Part 2a's 33-site refactor proved identity-by-construction; Part 2c moves call sites, not call shapes.
+- Bridgewater anchor (current drift baseline 130.1 kWh/m²·yr; restore-to-121.7 is Chris's separate concern per Part 2c-pre) will be confirmed live at Part 6 walkthrough.
+
+### Next: Part 3 — Internal Gains + Operation
+
+Wire IG (Occupancy / Lighting / Equipment) + Operation (Operable openings / Control thresholds / Permanent vent flow) sections through the same extraction pattern. Schedule editor opens as a nested SchedulePopout — per Brief 46 Part 1 Q1 directive, deferred from Part 1 to Part 3.
+
+---
+
 ## 🚧 Session 2026-05-22 — Brief 46 Part 2c-pre: V2 editor becomes default, `?editor=v2` toggle removed
 
 **State:** `commit_in_flight` — Brief 46 Part 2c-pre (small step per Chris's directive: swap V2 to default, remove URL toggle, surface "not yet wired" placeholders for unbuilt sections). Old editor file stays in the repo as reference until Brief 46 Part 5's deletion sweep.

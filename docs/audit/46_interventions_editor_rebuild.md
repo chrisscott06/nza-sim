@@ -387,3 +387,72 @@ Three-check run against the actual `nza-sim` dev server on 5176 (frontend) / 800
 Mechanical extraction per §2.6 — the five Building subsections (Geometry / Glazing / Shading / Openings / Fabric) become self-contained named exports in `frontend/src/components/modules/building/buildingSections.jsx`. `BuildingSection.jsx` swaps its placeholder for the real subsection components. Engine path is untouched.
 
 ---
+
+## §2.8 Part 2c — Building subsection extraction (2026-05-22)
+
+Chris green-lit the Parts 2c → 6 sweep with no per-Part sign-off pauses; surface only at Part 6 walkthrough. This Part lands the five Building subsection extractions per Option A.
+
+### §2.8.1 New file: `frontend/src/components/modules/building/buildingSections.jsx`
+
+All five inline subsections from `BuildingDefinition.jsx`'s `InputsColumn` (lines 549–1012 in the old file) extracted as self-contained named exports per Chris's Option A constraint ("own state, own labels, own component-level memoisation"):
+
+- **`GeometrySection`** — owns `orientationLocked`. Reads `params` from ProjectContext, mutations via `useProjectMutation`.
+- **`GlazingSection`** — owns `wwrMemory` + `setWwrFor` / `toggleWindowInclude` per-face restore logic. Same hook for mutations.
+- **`ShadingSection`** — owns `shadingMemory` + `setShadingFor` / `toggleShadingInclude` for the 4-edge reveal frame.
+- **`OpeningsSection`** — owns `louvreMemory` + `setLouvreFor` / `toggleLouvreInclude` / `setFacadeCd` / `setFacadeFlowMode`. Site exposure dropdown is in the same section (Brief 42 Part 4 building-wide remnant).
+- **`FabricSection`** — accepts `library` + `onInspectConstruction` as props. Uses `updateConstruction` directly from ProjectContext (delegate-to-existing-helpers per Q2; library-aware components like ConstructionInspector already share this call site, so the `{library_id, u_value_override, g_value_override}` patch shape stays stable).
+
+Already-standalone components kept and re-exported from the same file for one-place imports:
+
+- **`AirtightnessSection`** — formerly the inline `Airtightness` function in BuildingDefinition.jsx. Now reads q50 from `params.fabric` itself (no parent prop-drilling). Takes `liveResult` as an optional prop for the derived n50 / operational ACH display rows; degrades to "—" when not provided (e.g. in editor mode before the preview engine result is wired to the right pane).
+- **`ComfortBandSection`** — formerly `ComfortBandLeftPanel`. Routes through `useProjectMutation` (`mutate('comfort_band.lower_c', …)` / `mutate('comfort_band.upper_c', …)`). Brief 46 Part 2a previously refactored the writes to use mutate() but neglected to import the hook — a now-extinct codepath that called `mutate(…)` while only `setComfortBand` was in scope. The ReferenceError fired only on the first slider drag, which Chris had not yet attempted on the affected build (q50 anchor verification used `mutate('building.fabric', …)` from the Airtightness slider, which DOES have the hook in scope). Quietly fixed during this extraction; no separate Part needed.
+- **`ThermalBridgesPanel`** — kept in its own file (`./ThermalBridgesPanel.jsx`) since it was already standalone; re-exported from `buildingSections.jsx` so all left-column sections come from one import source.
+
+Shared visual primitives (`CollapsibleSection`, `Field`, `NumberInput`, `CompassRose`, `UValueBadge`, `ConstructionSelect` + `_resolveChoice`, `WindowCountInput`, `LouvreAreaInput`, `achLabel`, `facadeLabel`, `FACADES`, `CONSTRUCTION_ELEMENTS`, MIN/MAX constants, `BUILDING_ACCENT`) moved with them — they were previously module-scoped in BuildingDefinition.jsx and needed by the sections.
+
+### §2.8.2 `BuildingDefinition.jsx` is now a thin assembler
+
+`InputsColumn` shrinks from ~460 lines to ~30 lines. It owns:
+
+- The single-expand accordion state (only one section open at a time across the panel).
+- The module header (← Overview link + "Building" subtitle + warm-earth accent stripe).
+- An `accordionProps(id)` forwarder so each section gets `{ isOpen, onToggle }` without each section re-implementing accordion management.
+
+The eight sections (Geometry / Glazing / Shading / Openings / Fabric / Thermal bridges / Airtightness / Comfort band) mount in the same order they used to, with the same warm-earth header treatment. Default behaviour is unchanged.
+
+File shrinks from 1655 lines to 612 lines. The ~440 deleted lines are now the ~700 lines of `buildingSections.jsx` (net +260 because the section JSDoc + self-contained boilerplate add a bit, but the duplication footprint across the editor + main app is eliminated).
+
+### §2.8.3 `interventions/sections/BuildingSection.jsx` dispatches to the same exports
+
+Editor composer is now real code, not placeholder:
+
+```jsx
+{active === 'building.orientation'      && <GeometrySection   defaultOpen />}
+{active === 'building.glazing'          && <GlazingSection    defaultOpen />}
+{active === 'building.shading'          && <ShadingSection    defaultOpen />}
+{active === 'building.air_permeability' && <AirtightnessSection defaultOpen />}
+{active === 'building.fabric'           && (
+  <FabricSection library={library} onInspectConstruction={() => {}} defaultOpen />
+)}
+```
+
+Fabric subsection fetches `/api/library/constructions` once per composer instance — separate from the `/building` page's fetch because the editor opens over a different route. Cheap; will hoist to `InterventionEditorV2` as a baselineConfig prop if perf shows the duplicate fetch costs.
+
+Unmapped subsection ids (Openings / Comfort / TB — not in EditorNav's Building list per Brief 33 scope-statement constraints) fall through to a "Not yet wired" card. Parts 3–5 may decide whether some of these surface here or remain on the Operation side.
+
+### §2.8.4 Two contexts, one implementation — capture routing demonstrated
+
+The single-source-of-truth design pays off here:
+
+- Main `/building` page renders `<GeometrySection />` → mutate() writes to ProjectContext via `updateParam`.
+- Editor's right pane (inside `<InterventionCaptureProvider>`) renders the SAME `<GeometrySection />` → mutate() writes to `capturePatch(…)` and the patch lands in the intervention's `patches[]`.
+
+Same component, same JSX, same state, two routings determined by whether an `InterventionCaptureProvider` is on the ancestor tree. Brief 46 Principle 3 in action.
+
+### §2.8.5 Verification
+
+- **Build:** `npm run build` clean (3204 modules, no errors).
+- **Engine invariance:** No engine-path code touched. Every mutation that used to call `updateParam(…)` / `setComfortBand(…)` directly now calls `mutate(…)` — and `useProjectMutation` dispatches `mutate('building.X', value)` back to the exact `updateParam` call shape (per the Q2 delegate-to-existing-helpers design in §1.8 Q2). The 33-site Part 2a refactor proved this identity-by-construction. Part 2c moves the call sites but not the call shapes.
+- **Bridgewater anchor:** Live confirmation deferred to Chris's Part 6 walkthrough. Drift triggered by Part 2c would have to come from one of: (a) extraction breaking a useState init expression, (b) a missed prop wiring, (c) the ComfortBandSection mutate-bug fix changing baseline (it doesn't — the previous codepath either no-op'd silently or crashed; persisted comfort band on Bridgewater is unchanged). All three guarded by self-contained-section design + identity-preserving extraction.
+
+---
