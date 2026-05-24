@@ -1,5 +1,44 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-22 — Brief 46 Part 6 fix: inert-controls read-overlay (Direction A)
+
+**State:** `commit_in_flight` — single-commit fix per Chris's directive.
+
+### Context
+
+Brief 46 Parts 2c-5 shipped the new editor with mutations routing through `useProjectMutation` → `capturePatch`. Browser walkthrough revealed all section controls were inert: sliders snap back, toggles don't move, add/delete don't register, schedule editors don't open. Root cause documented in `docs/audit/46_inert_controls_diagnosis.md`: the capture context captured WRITES but the section components still READ from baseline ProjectContext, so React's controlled-input pattern reverted every edit on next render. Verification gap acknowledged — Parts 2c-5 ran build + code-review only, never exercised the editor in a browser.
+
+Chris's call: Direction A — layer a read-overlay on top of Parts 2c-5 (don't revert). Wire RC-2 schedule handlers (no longer stubs). One commit, browser-only verification.
+
+### What landed (fix)
+
+- **NEW `PatchedProjectContextProvider.jsx`** — nests a second `<ProjectContext.Provider>` inside the editor subtree. Returns `applyIntervention(baselineConfig, currentPatches)` as `params` / `constructions` / `systems`; `comfortBand` merged separately (applyIntervention doesn't walk `comfort_band` paths). `updateParam` / `updateConstruction` / `setComfortBand` overridden to route through capture (with library_*/interventions passthrough).
+- **NEW `EditorChromeContext.jsx`** — exposes three schedule-editor open handlers to deeply-nested section composers.
+- **MODIFIED `InterventionEditorPopout.jsx`** — render tree now: SchedulePopout → InterventionCaptureProvider → PatchedProjectContextProvider → EditorBody (with EditorChromeProvider + nested SchedulePopout for schedule editing).
+- **MODIFIED `InternalGainsSection.jsx`** — `onEditSchedule` routes to chrome handlers (Occupancy → embedded schedule; Lighting/Equipment → profile-0 embedded schedule, multi-profile follow-up).
+- **MODIFIED `OperationSection.jsx`** — `openScheduleEditor` + `allSched` props wire to chrome / patched `params.schedules`.
+- **MODIFIED `SystemsSection.jsx`** — `openScheduleEditor` wires to `chrome.openNamedScheduleEditor`.
+
+### Verification
+
+`npm run build` clean (3209 modules). **No browser verification done by me.**
+
+Per Chris's directive, the five browser checks are his to run:
+
+1. Drag q50 in editor's Building → Air permeability — value holds, footer Δ moves
+2. Open Occupancy schedule editor — opens, edits capture
+3. Add a system in editor's Systems — appears in the list
+4. Delete a system — it goes
+5. Toggle a system — it stays
+
+### Known gaps (documented in audit doc §8.5)
+
+- Engine preview doesn't honour comfort_band patches (slider holds, but EUI delta doesn't reflect setpoint change — pre-existing).
+- IG Lighting/Equipment schedule editor wires only profile-0; multi-profile resolution is follow-up.
+- Whole-object/array patches preserved from Parts 2c-4 (not granular Brief-41-shape paths).
+
+---
+
 ## 🚧 Session 2026-05-22 — Brief 46 Part 5: delete old editor + rename V2 → canonical
 
 **State:** `commit_in_flight` — Brief 46 Part 5 (tidy-up).

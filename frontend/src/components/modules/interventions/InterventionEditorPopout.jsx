@@ -42,13 +42,18 @@
  * editor's key, so existing users' last-known position carries over).
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import SchedulePopout from '../../shared/SchedulePopout.jsx'
-import { InterventionCaptureProvider } from '../../../context/InterventionCaptureContext.jsx'
+import UnifiedScheduleEditor from '../../shared/scheduleEditor/UnifiedScheduleEditor.jsx'
+import { ProjectContext } from '../../../context/ProjectContext.jsx'
+import { InterventionCaptureProvider, useInterventionCapture } from '../../../context/InterventionCaptureContext.jsx'
 import { runInterventionStack } from '../../../utils/interventionsEngine.js'
 import { calculateInstant } from '../../../utils/instantCalc.js'
+import { useProjectMutation } from '../../../hooks/useProjectMutation.js'
 import EditorNav from './EditorNav.jsx'
 import EditorFooter from './EditorFooter.jsx'
+import PatchedProjectContextProvider from './PatchedProjectContextProvider.jsx'
+import { EditorChromeProvider } from './EditorChromeContext.jsx'
 // Brief 46 Part 2b (2026-05-21): right-pane section composers scaffolded.
 // Brief 46 Part 2c (2026-05-22): Building composer wired to real
 // extracted subsections.
@@ -264,34 +269,282 @@ export default function InterventionEditorPopout({
         baselineConfig={baselineConfig}
         onChange={handleCapturedPatchesChange}
       >
-        <div className="flex flex-col" style={{ height: 'calc(100vh - 7rem)', maxHeight: 'calc(100vh - 7rem)' }}>
-          {/* Body: left nav + right pane */}
-          <div className="flex-1 min-h-0 flex">
-            <EditorNav
-              active={active}
-              onActiveChange={setActive}
-              currentPatches={localPatches}
-            />
-            <div className="flex-1 min-w-0 overflow-auto">
-              <EditorPaneBody active={active} />
-            </div>
-          </div>
-
-          {/* Footer */}
-          <EditorFooter
-            label={localLabel}
-            onLabelChange={setLocalLabel}
+        {/* Brief 46 Part 6 fix (2026-05-22): the PatchedProjectContextProvider
+            overlays applyIntervention(baseline, currentPatches) on top of
+            the outer ProjectContext so the section composers' reads
+            reflect the captured state. Without this layer the controls
+            render baseline values + write to capture — sliders snap back
+            and lists don't update. See docs/audit/46_inert_controls_diagnosis.md
+            for the diagnosis. */}
+        <PatchedProjectContextProvider baselineConfig={baselineConfig}>
+          <EditorBody
+            active={active}
+            setActive={setActive}
+            localLabel={localLabel}
+            setLocalLabel={setLocalLabel}
+            localPatches={localPatches}
             baselineEui={baselineEui}
             baselineCarbon={baselineCarbon}
             previewEui={previewEui}
             previewCarbon={previewCarbon}
-            onCancel={handleCancel}
-            onSave={handleSave}
+            handleCancel={handleCancel}
+            handleSave={handleSave}
             canSave={canSave}
-            saveDisabledReason={!canSave ? 'Label is required' : null}
           />
-        </div>
+        </PatchedProjectContextProvider>
       </InterventionCaptureProvider>
     </SchedulePopout>
+  )
+}
+
+/**
+ * EditorBody — body of the editor pop-out. Lifted out of the main
+ * component so it can sit INSIDE PatchedProjectContextProvider and
+ * use the patched ProjectContext via hooks (`useContext(ProjectContext)`
+ * + `useProjectMutation` from within the schedule-editor wiring).
+ *
+ * Owns the nested schedule editor's state (editingSchedule + the
+ * three open-handlers exposed via EditorChromeProvider). On save the
+ * handlers route through `useProjectMutation.mutate(...)` which lands
+ * in capture (because the EditorBody renders inside both the capture
+ * provider and the patched provider — `isCapturing === true`).
+ */
+function EditorBody({
+  active, setActive,
+  localLabel, setLocalLabel,
+  localPatches,
+  baselineEui, baselineCarbon, previewEui, previewCarbon,
+  handleCancel, handleSave, canSave,
+}) {
+  // Read patched ProjectContext (so seeding from current state reflects
+  // any prior captured edits — e.g. user adds a schedule patch, closes
+  // the editor, reopens it; the new schedule body is what we seed from).
+  const { params } = useContext(ProjectContext)
+  const { mutate } = useProjectMutation()
+
+  // Nested schedule editor state. Shape:
+  //   { kind: 'occupancy', schedule }
+  //   { kind: 'gains-profile', category, profileIdx, schedule }
+  //   { kind: 'named', name, schedule }
+  // `schedule` is the working draft mutated by UnifiedScheduleEditor's
+  // onChange — committed via the save handler when the user clicks Save.
+  const [editingSchedule, setEditingSchedule] = useState(null)
+
+  // Seed helpers. Each opens the schedule editor with the right shape.
+  const openOccupancyScheduleEditor = useCallback(() => {
+    const sched = params?.occupancy?.schedule ?? null
+    if (!sched) {
+      console.warn('[InterventionEditorPopout] occupancy schedule missing on params')
+      return
+    }
+    setEditingSchedule({
+      kind: 'occupancy',
+      schedule: {
+        name:                'occupancy',
+        display_name:        'Occupancy',
+        schedule_type:       'occupancy',
+        zone_type:           params?.occupancy?.zone_type ?? 'bedroom',
+        weekday:             [...(sched.weekday ?? [])],
+        saturday:            [...(sched.saturday ?? [])],
+        sunday:              [...(sched.sunday ?? [])],
+        monthly_multipliers: [...(sched.monthly_multipliers ?? Array(12).fill(1))],
+        exceptions:          Array.isArray(sched.exceptions) ? [...sched.exceptions] : [],
+      },
+    })
+  }, [params])
+
+  const openGainsProfileScheduleEditor = useCallback((category, profileIdx) => {
+    const profile = params?.gains?.[category]?.profiles?.[profileIdx] ?? null
+    if (!profile) {
+      console.warn(`[InterventionEditorPopout] ${category} profile[${profileIdx}] not found`)
+      return
+    }
+    const sched = profile.schedule ?? null
+    if (!sched) {
+      console.warn(`[InterventionEditorPopout] ${category} profile[${profileIdx}] has no embedded schedule`)
+      return
+    }
+    setEditingSchedule({
+      kind: 'gains-profile',
+      category,
+      profileIdx,
+      schedule: {
+        name:                profile.id ?? `${category}_${profileIdx}`,
+        display_name:        profile.label ?? `${category} profile ${profileIdx + 1}`,
+        schedule_type:       category,
+        zone_type:           'bedroom',
+        weekday:             [...(sched.weekday ?? [])],
+        saturday:            [...(sched.saturday ?? [])],
+        sunday:              [...(sched.sunday ?? [])],
+        monthly_multipliers: [...(sched.monthly_multipliers ?? Array(12).fill(1))],
+        exceptions:          Array.isArray(sched.exceptions) ? [...sched.exceptions] : [],
+      },
+    })
+  }, [params])
+
+  const openNamedScheduleEditor = useCallback((scheduleName) => {
+    const existing = (params?.schedules ?? []).find(s => s?.name === scheduleName || s?.id === scheduleName)
+    setEditingSchedule({
+      kind: 'named',
+      name: scheduleName,
+      schedule: existing
+        ? {
+            id:                  existing.id ?? scheduleName,
+            name:                existing.name ?? scheduleName,
+            display_name:        existing.display_name ?? scheduleName,
+            schedule_type:       existing.schedule_type ?? 'occupancy',
+            zone_type:           existing.zone_type ?? 'bedroom',
+            weekday:             [...(existing.weekday ?? [])],
+            saturday:            [...(existing.saturday ?? [])],
+            sunday:              [...(existing.sunday ?? [])],
+            monthly_multipliers: [...(existing.monthly_multipliers ?? Array(12).fill(1))],
+            exceptions:          Array.isArray(existing.exceptions) ? [...existing.exceptions] : [],
+          }
+        : {
+            id:                  scheduleName,
+            name:                scheduleName,
+            display_name:        scheduleName,
+            schedule_type:       'occupancy',
+            zone_type:           'bedroom',
+            weekday:             Array(24).fill(0.5),
+            saturday:            Array(24).fill(0.5),
+            sunday:              Array(24).fill(0.5),
+            monthly_multipliers: Array(12).fill(1),
+            exceptions:          [],
+          },
+    })
+  }, [params])
+
+  const closeScheduleEditor = useCallback(() => setEditingSchedule(null), [])
+
+  // Save handler — branches by editingSchedule.kind. Captures via mutate
+  // (which routes through the surrounding InterventionCaptureProvider).
+  const saveSchedule = useCallback(() => {
+    if (!editingSchedule) return
+    const draft = editingSchedule.schedule
+    if (editingSchedule.kind === 'occupancy') {
+      // Replace params.occupancy.schedule. Capture whole-occupancy patch.
+      const occ = params?.occupancy ?? {}
+      const nextOcc = {
+        ...occ,
+        schedule: {
+          weekday:             draft.weekday  ?? [],
+          saturday:            draft.saturday ?? [],
+          sunday:              draft.sunday   ?? [],
+          monthly_multipliers: draft.monthly_multipliers ?? Array(12).fill(1),
+          exceptions:          Array.isArray(draft.exceptions) ? draft.exceptions : [],
+        },
+      }
+      mutate('building.occupancy', nextOcc)
+    } else if (editingSchedule.kind === 'gains-profile') {
+      const { category, profileIdx } = editingSchedule
+      const gains = params?.gains ?? {}
+      const cat = gains[category] ?? {}
+      const profiles = Array.isArray(cat.profiles) ? cat.profiles : []
+      const nextProfiles = profiles.map((p, i) => i === profileIdx
+        ? { ...p, schedule: {
+            weekday:             draft.weekday  ?? [],
+            saturday:            draft.saturday ?? [],
+            sunday:              draft.sunday   ?? [],
+            monthly_multipliers: draft.monthly_multipliers ?? Array(12).fill(1),
+            exceptions:          Array.isArray(draft.exceptions) ? draft.exceptions : [],
+          } }
+        : p,
+      )
+      mutate('building.gains', { ...gains, [category]: { ...cat, profiles: nextProfiles } })
+    } else if (editingSchedule.kind === 'named') {
+      // Update params.schedules[] — replace by name or append.
+      const list = Array.isArray(params?.schedules) ? params.schedules : []
+      const slugName = (draft.name ?? draft.id ?? editingSchedule.name).toLowerCase().replace(/\s+/g, '_')
+      const entry = {
+        id:                  slugName,
+        name:                slugName,
+        display_name:        draft.display_name ?? draft.name ?? slugName,
+        schedule_type:       draft.schedule_type ?? 'occupancy',
+        zone_type:           draft.zone_type ?? 'bedroom',
+        weekday:             draft.weekday  ?? [],
+        saturday:            draft.saturday ?? [],
+        sunday:              draft.sunday   ?? [],
+        monthly_multipliers: draft.monthly_multipliers ?? Array(12).fill(1),
+        exceptions:          Array.isArray(draft.exceptions) ? draft.exceptions : [],
+      }
+      const idx = list.findIndex(s => s?.id === slugName || s?.name === slugName)
+      const next = idx >= 0 ? list.map((s, i) => i === idx ? entry : s) : [...list, entry]
+      mutate('building.schedules', next)
+    }
+    setTimeout(() => setEditingSchedule(null), 200)
+  }, [editingSchedule, params, mutate])
+
+  const chromeValue = useMemo(() => ({
+    openOccupancyScheduleEditor,
+    openGainsProfileScheduleEditor,
+    openNamedScheduleEditor,
+  }), [openOccupancyScheduleEditor, openGainsProfileScheduleEditor, openNamedScheduleEditor])
+
+  return (
+    <EditorChromeProvider value={chromeValue}>
+      <div className="flex flex-col" style={{ height: 'calc(100vh - 7rem)', maxHeight: 'calc(100vh - 7rem)' }}>
+        {/* Body: left nav + right pane */}
+        <div className="flex-1 min-h-0 flex">
+          <EditorNav
+            active={active}
+            onActiveChange={setActive}
+            currentPatches={localPatches}
+          />
+          <div className="flex-1 min-w-0 overflow-auto">
+            <EditorPaneBody active={active} />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <EditorFooter
+          label={localLabel}
+          onLabelChange={setLocalLabel}
+          baselineEui={baselineEui}
+          baselineCarbon={baselineCarbon}
+          previewEui={previewEui}
+          previewCarbon={previewCarbon}
+          onCancel={handleCancel}
+          onSave={handleSave}
+          canSave={canSave}
+          saveDisabledReason={!canSave ? 'Label is required' : null}
+        />
+      </div>
+
+      {/* Nested schedule editor — floats above the intervention editor.
+          Uses a distinct persistKey so its drag position doesn't shadow
+          the main app's schedule popout. */}
+      <SchedulePopout
+        isOpen={!!editingSchedule}
+        onClose={closeScheduleEditor}
+        title={editingSchedule
+          ? `Schedule · ${editingSchedule.schedule?.display_name ?? editingSchedule.schedule?.name ?? 'untitled'}`
+          : 'Schedule editor'}
+        accent={INTERVENTIONS_ACCENT}
+        persistKey="nza-intervention-editor-schedule-popout"
+      >
+        {editingSchedule && (
+          <UnifiedScheduleEditor
+            schedule={editingSchedule.schedule}
+            onChange={(next) => setEditingSchedule(prev => prev ? { ...prev, schedule: { ...prev.schedule, ...next } } : prev)}
+            accent={INTERVENTIONS_ACCENT}
+            mode="library"
+            enableExceptions
+            contextLabel={editingSchedule.schedule?.display_name ?? editingSchedule.schedule?.name ?? ''}
+            libraryMeta={{
+              name:           editingSchedule.schedule?.display_name ?? editingSchedule.schedule?.name ?? '',
+              schedule_type:  editingSchedule.schedule?.schedule_type ?? 'occupancy',
+              zone_type:      editingSchedule.schedule?.zone_type ?? 'bedroom',
+              onNameChange:   (v) => setEditingSchedule(prev => prev ? { ...prev, schedule: { ...prev.schedule, display_name: v } } : prev),
+              onTypeChange:   (v) => setEditingSchedule(prev => prev ? { ...prev, schedule: { ...prev.schedule, schedule_type: v } } : prev),
+              onZoneChange:   (v) => setEditingSchedule(prev => prev ? { ...prev, schedule: { ...prev.schedule, zone_type: v } } : prev),
+              onSave:         saveSchedule,
+              saving:         false,
+              saveCta:        'Save to intervention',
+            }}
+          />
+        )}
+      </SchedulePopout>
+    </EditorChromeProvider>
   )
 }

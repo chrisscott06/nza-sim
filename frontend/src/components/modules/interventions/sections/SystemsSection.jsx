@@ -51,6 +51,7 @@
 
 import { useContext } from 'react'
 import { ProjectContext } from '../../../../context/ProjectContext.jsx'
+import { useEditorChrome } from '../EditorChromeContext.jsx'
 import { InputsColumn } from '../../SystemsModule.jsx'
 
 const ACCENT = '#DC2626'  // matches EditorNav systems accent
@@ -66,6 +67,7 @@ const SUBSECTION_LABELS = {
 
 export default function SystemsSection({ active }) {
   const { params, updateParam, comfortBand } = useContext(ProjectContext)
+  const chrome = useEditorChrome()
   const label = SUBSECTION_LABELS[active] ?? active
 
   return (
@@ -80,7 +82,7 @@ export default function SystemsSection({ active }) {
         updateParam={updateParam}
         consumption={null}
         comfortBand={comfortBand}
-        openScheduleEditor={() => {}}
+        openScheduleEditor={chrome.openNamedScheduleEditor}
       />
     </div>
   )

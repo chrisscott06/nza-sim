@@ -40,6 +40,7 @@ import { useContext, useState } from 'react'
 import { ProjectContext } from '../../../../context/ProjectContext.jsx'
 import { useUI } from '../../../../context/UIContext.jsx'
 import { useProjectMutation } from '../../../../hooks/useProjectMutation.js'
+import { useEditorChrome } from '../EditorChromeContext.jsx'
 import {
   OPENING_TYPE_OPTIONS,
   OpeningRow,
@@ -71,6 +72,7 @@ function OpeningsEditor() {
   const { mutate } = useProjectMutation()
   const { selectedOpeningId, setSelectedOpeningId, clearSelection } = useUI()
   const [pendingType, setPendingType] = useState(null)
+  const chrome = useEditorChrome()
 
   const openings = Array.isArray(params?.operable_openings) ? params.operable_openings : []
   const orientation = Number(params?.orientation ?? 0)
@@ -148,8 +150,8 @@ function OpeningsEditor() {
               onSelect={() => setSelectedOpeningId(o.id)}
               onUpdate={(partial) => updateOpening(o.id, partial)}
               onDelete={() => deleteOpening(o.id)}
-              openScheduleEditor={() => {}}
-              allSched={[]}
+              openScheduleEditor={chrome.openNamedScheduleEditor}
+              allSched={Array.isArray(params?.schedules) ? params.schedules : []}
             />
           ))}
         </div>

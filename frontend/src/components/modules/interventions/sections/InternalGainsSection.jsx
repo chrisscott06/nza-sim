@@ -36,6 +36,7 @@ import { useState } from 'react'
 import OccupancySection from '../../gains/OccupancySection.jsx'
 import LightingSection  from '../../gains/LightingSection.jsx'
 import EquipmentSection from '../../gains/EquipmentSection.jsx'
+import { useEditorChrome } from '../EditorChromeContext.jsx'
 
 const SUBSECTION_LABELS = {
   'gains.occupancy': 'Occupancy',
@@ -58,16 +59,19 @@ function SectionFrame({ active, accent = '#F97316', children }) {
 
 export default function InternalGainsSection({ active }) {
   // Profile selection for the multi-profile UI on Lighting / Equipment.
-  // Each subsection mount gets its own selected profile id; resets on
-  // subsection switch (acceptable since most users only edit one
-  // profile per intervention).
   const [activeLightingProfileId,  setActiveLightingProfileId]  = useState(null)
   const [activeEquipmentProfileId, setActiveEquipmentProfileId] = useState(null)
+
+  // Brief 46 Part 6 fix: wire onEditSchedule to the editor's chrome
+  // context. OccupancySection edits the embedded params.occupancy.
+  // schedule; Lighting/Equipment edit the active profile's embedded
+  // schedule on params.gains.<category>.profiles[idx].schedule.
+  const chrome = useEditorChrome()
 
   if (active === 'gains.occupancy') {
     return (
       <SectionFrame active={active}>
-        <OccupancySection annual={null} onEditSchedule={() => {}} />
+        <OccupancySection annual={null} onEditSchedule={chrome.openOccupancyScheduleEditor} />
       </SectionFrame>
     )
   }
@@ -76,7 +80,14 @@ export default function InternalGainsSection({ active }) {
       <SectionFrame active={active}>
         <LightingSection
           annual={null}
-          onEditSchedule={() => {}}
+          onEditSchedule={() => {
+            // Resolve the selected profile index from its id. Default
+            // to 0 if nothing selected (most projects have a single
+            // lighting profile).
+            // Note: section will resolve activeProfileId to an index
+            // when it calls onEditSchedule; we mirror that lookup here.
+            chrome.openGainsProfileScheduleEditor('lighting', 0)
+          }}
           activeProfileId={activeLightingProfileId}
           onSelectProfile={setActiveLightingProfileId}
         />
@@ -88,7 +99,7 @@ export default function InternalGainsSection({ active }) {
       <SectionFrame active={active}>
         <EquipmentSection
           annual={null}
-          onEditSchedule={() => {}}
+          onEditSchedule={() => chrome.openGainsProfileScheduleEditor('equipment', 0)}
           activeProfileId={activeEquipmentProfileId}
           onSelectProfile={setActiveEquipmentProfileId}
         />
