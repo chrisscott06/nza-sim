@@ -503,3 +503,76 @@ No parallel UI implementations, no drift risk between main app and editor. This 
 | `frontend/src/components/modules/interventions/InterventionEditorV2.jsx` | EditorPaneBody dispatches `gains.*` + `operation.*` |
 
 ---
+
+## §2.10 Part 4 — Systems wiring (2026-05-22)
+
+### §2.10.1 Refactor `InputsColumn.writeV40` through `useProjectMutation`
+
+SystemsModule.jsx's `InputsColumn` already centralised every Systems mutation through a single `writeV40(next)` helper — add/update/remove (structural ops), share-change with auto-rebalance partners, normalise shares, service-level setpoint/DHW updates, setServiceEnabled (per-service batch toggle), and the per-system enable toggle on each SystemSummaryRow all route through this one function. Brief 45 Part 3b's auto-rebalance and Brief 42 Part 3's service-level lift had already consolidated this.
+
+Part 4 changes:
+```js
+const writeV40 = (next) => updateParam('systems_config_v40', next)
+```
+to:
+```js
+const writeV40 = (next) => mutate('building.systems_config_v40', next)
+```
+
+Main-app fallthrough in `useProjectMutation`: strips the `building.` prefix → falls into the "exact top-level write" branch → calls `updateParam('systems_config_v40', next)`. Exact identity to the pre-refactor call shape. Bridgewater anchor invariance holds by construction.
+
+Capture mode: every write lands a single patch at `building.systems_config_v40` carrying the whole-config snapshot. patchCapture dedupe replaces the patch each time so the latest snapshot wins. This is the same whole-object pattern Parts 3 (IG / Operation) used, and the same justification: a Systems intervention IS the "set systems to this configuration" pattern. The Brief 41-shape granular patches (e.g. `building.systems_config_v40.heating[id=sys_x].share_pct`) remain a future iteration if interventions need to compose more flexibly with each other across systems_config_v40 changes.
+
+### §2.10.2 Export `InputsColumn` + create `SystemsSection.jsx`
+
+`InputsColumn` is now exported from `SystemsModule.jsx`. The editor composer `interventions/sections/SystemsSection.jsx` mounts it directly:
+
+```jsx
+<InputsColumn
+  params={params}
+  updateParam={updateParam}
+  consumption={null}
+  comfortBand={comfortBand}
+  openScheduleEditor={() => {}}
+/>
+```
+
+Pulls `params` / `updateParam` / `comfortBand` from ProjectContext (the editor sits inside the same ProjectContext tree as the rest of the app — Brief 46 Part 1's `InterventionCaptureProvider` is layered between, not a replacement).
+
+Why we don't dispatch to a focused per-service editor (e.g. `systems.heating → HeatingEditor` only): InputsColumn is a single-expand accordion that manages cross-service share + service-level state coherently. Splitting it would either duplicate the share-validation / normalise helpers six times or lift them into a parent that defeats the self-containment design. The user clicks "Cooling" in the editor nav and sees the same InputsColumn (with Heating expanded by default) — they then click the Cooling accordion to switch. Small UX cost; Part 5 can add `initialOpenService` if Chris's walkthrough flags it as friction.
+
+Structural ops are preserved verbatim — `addSystem` / `updateSystem` / `removeSystem` all funnel through `writeV40`, which now routes through the capture context. The `SystemEditorPopout` (per-system editor) opens inside the editor's right pane via the same `editingKey` state held in InputsColumn; SchedulePopout's `defaultPosition='right'` means it lands in a sensible spot relative to the intervention editor's own pop-out (no z-index conflict caught in build / static analysis; Chris's walkthrough at Part 6 confirms live behaviour).
+
+### §2.10.3 Library save + schedule save remain direct
+
+`saveSystemToLibrary` uses `updateParam('library_systems', …)` direct — library entries are global, not per-intervention. Capturing a "save to library" action as an intervention patch would be wrong semantics (the library is shared across all projects' interventions; an intervention shouldn't modify it).
+
+Schedule editing remains on the main pages per Brief 46 Q1. The editor captures the resulting `params.systems_config_v40` snapshot which carries `control_schedule_id` references; if the user edits the actual schedule body, that's a `params.schedules[]` mutation not currently routed through `mutate()`. The Brief 46 Q1 schedule sub-popout (lands later) will surface schedule edits as captured patches.
+
+### §2.10.4 Two contexts, one implementation — verified across all four sections
+
+Brief 46 Principle 3 now applies uniformly:
+
+- **Building** (Part 2c): GeometrySection / GlazingSection / ShadingSection / OpeningsSection / FabricSection / AirtightnessSection / ComfortBandSection — same components in main `/building` left column AND editor right pane.
+- **Internal Gains** (Part 3): OccupancySection / LightingSection / EquipmentSection — same components in main `/gains` AND editor.
+- **Operation** (Part 3): OpeningRow list + Add buttons — same components in main `/operation` AND editor.
+- **Systems** (Part 4): InputsColumn (the whole left-column 6-service accordion) — same component in main `/systems` AND editor.
+
+Every mutation across all four sections funnels through `useProjectMutation.mutate(path, value)`. Main-app mode dispatches to the appropriate ProjectContext helper via the Q2 delegate-to-existing-helpers table. Capture mode lands a whole-snapshot patch at the path. Bridgewater anchor invariance is identity-preserving in main-app mode for every refactored call site.
+
+### §2.10.5 Files changed (Part 4)
+
+| File | Change |
+|---|---|
+| `frontend/src/components/modules/SystemsModule.jsx` | `InputsColumn` exported; `writeV40` routes through `useProjectMutation` |
+| `frontend/src/components/modules/interventions/sections/SystemsSection.jsx` | NEW — Systems composer mounting InputsColumn |
+| `frontend/src/components/modules/interventions/InterventionEditorV2.jsx` | EditorPaneBody dispatches `systems.*` to SystemsSection |
+
+### §2.10.6 Verification
+
+- `npm run build` clean (3206+ modules).
+- No engine-path code touched. `writeV40` retains its main-app call shape verbatim via the Q2 dispatch.
+- The Brief 45 Part 3b auto-rebalance + Brief 42 service-level lift + Brief 40 structural ops all continue to work in main-app mode because they all go through `writeV40` — they don't care whether the inner call is `updateParam` or `mutate`.
+- Bridgewater anchor (current drifted baseline 130.1 kWh/m²·yr) live confirmation deferred to Chris's Part 6 walkthrough.
+
+---

@@ -1,5 +1,33 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-22 — Brief 46 Part 4: Systems editor section wired
+
+**State:** `commit_in_flight` — Brief 46 Part 4 (Systems composer + writeV40 routing).
+
+### What landed (Part 4)
+
+- **SystemsModule.InputsColumn `writeV40`** routes through `useProjectMutation` — every Systems mutation (add/update/remove, share-change with auto-rebalance, normalise, service-level setpoint/DHW, batch service-enable, per-system enable) funnels through this one helper, so a single refactor captures all of them. Path is `building.systems_config_v40` per Brief 41 patch-convention; main-app mode strips the prefix → updateParam('systems_config_v40', next) → identity-by-construction.
+- **`InputsColumn` exported** from SystemsModule.jsx.
+- **New `interventions/sections/SystemsSection.jsx`** — mounts InputsColumn directly with params/updateParam/comfortBand from ProjectContext. All 6 service accordions render; user clicks the relevant one (Heating opens by default). SystemEditorPopout opens inside the editor for per-system editing.
+- **InterventionEditorV2** `EditorPaneBody` dispatches `systems.*` to SystemsSection.
+
+Library save (`saveSystemToLibrary` → `updateParam('library_systems', …)`) stays direct — library entries are global, not per-intervention. Schedule edits remain on the main pages per Q1.
+
+### Verification
+
+- `npm run build` clean (3206+ modules).
+- All four sections (Building / IG / Operation / Systems) now share the "two contexts, one implementation" pattern. Brief 46 Principle 3 verified.
+
+### Next: Part 5 — delete old editor + rename V2
+
+`InterventionEditorPopout.jsx` is unreachable from the UI since Part 2c-pre. Part 5 removes the file from the repo and renames `InterventionEditorV2.jsx` → `InterventionEditorPopout.jsx` (the canonical name per Brief 46 Part 1's plan). Imports + comments updated.
+
+### Then: Part 6 — walkthrough + close
+
+Surface to Chris for the full 3-intervention walkthrough at Part 6.
+
+---
+
 ## 🚧 Session 2026-05-22 — Brief 46 Part 3: Internal Gains + Operation editor sections wired
 
 **State:** `commit_in_flight` — Brief 46 Part 3 (IG + Operation composers + mutation routing).

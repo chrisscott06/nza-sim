@@ -31,6 +31,7 @@
 import { useContext, useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { ProjectContext } from '../../context/ProjectContext.jsx'
+import { useProjectMutation } from '../../hooks/useProjectMutation.js'
 import { WeatherContext } from '../../context/WeatherContext.jsx'
 import { useHourlySolar } from '../../hooks/useHourlySolar.js'
 import { calculateInstant } from '../../utils/instantCalc.js'
@@ -410,7 +411,22 @@ const SERVICE_LABEL_BY_KEY = {
   small_power: 'Small power',
 }
 
-function InputsColumn({ params, updateParam, consumption, comfortBand, openScheduleEditor }) {
+/**
+ * InputsColumn — Brief 40 v40 systems editor. Brief 46 Part 4
+ * (2026-05-22) exported so the editor's SystemsSection composer can
+ * mount the same per-service editor; writeV40 routes through
+ * useProjectMutation so capture mode lands a whole-`systems_config_v40`
+ * snapshot patch on every edit (add/update/remove/share/normalise/
+ * service-level all share the same writeV40 path).
+ *
+ * Library save (saveSystemToLibrary) and schedule save still write
+ * directly via updateParam — those targets aren't intervention-
+ * patch-shaped (library is global, schedules are deferred per Q1).
+ */
+export function InputsColumn({ params, updateParam, consumption, comfortBand, openScheduleEditor }) {
+  // Brief 46 Part 4 (2026-05-22): mutate replaces direct updateParam
+  // for writeV40 so the editor's capture context routes the patch.
+  const { mutate } = useProjectMutation()
   // Brief 40 v40 array shape lives at params.systems_config_v40.{service}: []
   const v40 = params?.systems_config_v40 ?? null
 
@@ -447,7 +463,13 @@ function InputsColumn({ params, updateParam, consumption, comfortBand, openSched
   // + custom value, DHW storage/tap/cold/demand. See audit doc 42 §2.
   // Maintain through-updateParam so the engine sees the change reactively.
 
-  const writeV40 = (next) => updateParam('systems_config_v40', next)
+  // Brief 46 Part 4: route through mutate so capture mode captures
+  // the whole systems_config_v40 as a single patch. The 'building.'
+  // prefix is the Brief 41 patch-path convention (see audit doc 41
+  // §4 + useProjectMutation hook docstring); main-app mode strips
+  // the prefix and falls through to updateParam('systems_config_v40',
+  // next) — exact identity to the pre-refactor call shape.
+  const writeV40 = (next) => mutate('building.systems_config_v40', next)
   const getList = (service) => Array.isArray(v40?.[service]) ? v40[service] : []
 
   // Brief 42 Part 3 service-level write helper: shallow-merges a patch of

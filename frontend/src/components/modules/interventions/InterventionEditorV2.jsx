@@ -60,9 +60,14 @@ import EditorFooter from './EditorFooter.jsx'
 // wired — IG mounts the same OccupancySection / LightingSection /
 // EquipmentSection that the main /gains page renders; Operation
 // mounts OpeningRow lists with Add buttons.
+// Brief 46 Part 4 (2026-05-22): Systems composer mounts the same
+// InputsColumn that the main /systems page renders — service
+// accordions + SystemSummaryRows + SystemEditorPopout, all routing
+// through useProjectMutation for capture-mode dispatch.
 import BuildingSection       from './sections/BuildingSection.jsx'
 import InternalGainsSection  from './sections/InternalGainsSection.jsx'
 import OperationSection      from './sections/OperationSection.jsx'
+import SystemsSection        from './sections/SystemsSection.jsx'
 
 const INTERVENTIONS_ACCENT = '#E84393'
 
@@ -114,11 +119,12 @@ function EditorPaneBody({ active }) {
       </div>
     )
   }
-  // Brief 46 Part 2c (Building) + Part 3 (IG + Operation) wired.
-  // Systems composer lands in Part 4.
+  // Brief 46 Part 2c (Building) + Part 3 (IG + Operation) + Part 4
+  // (Systems) all wired.
   if (active.startsWith('building.'))  return <BuildingSection      active={active} />
   if (active.startsWith('gains.'))     return <InternalGainsSection active={active} />
   if (active.startsWith('operation.')) return <OperationSection     active={active} />
+  if (active.startsWith('systems.'))   return <SystemsSection       active={active} />
   return (
     <div className="h-full flex items-center justify-center p-6">
       <div className="max-w-sm w-full rounded border border-dashed border-light-grey bg-off-white/30 p-6 text-center">
