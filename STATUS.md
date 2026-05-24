@@ -1,5 +1,47 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-22 — Brief 46 Part 2c-pre: V2 editor becomes default, `?editor=v2` toggle removed
+
+**State:** `commit_in_flight` — Brief 46 Part 2c-pre (small step per Chris's directive: swap V2 to default, remove URL toggle, surface "not yet wired" placeholders for unbuilt sections). Old editor file stays in the repo as reference until Brief 46 Part 5's deletion sweep.
+
+**Prior HEAD:** Brief 46 Part 2b (`commit_in_flight` carried over from 2026-05-21 session — local commit done, pushed at this commit).
+
+### What landed (Part 2c-pre)
+
+- **`frontend/src/components/modules/interventions/InterventionsModule.jsx`** — removed `import InterventionEditorPopout`; removed the `?editor=v2` URL-param conditional. `<InterventionEditorV2 />` now mounts unconditionally as the sole intervention editor. Header comment updated to explain Part 2c-pre intent.
+- **`frontend/src/components/modules/interventions/sections/BuildingSection.jsx`** — placeholder content replaced with a compact, centred "Not yet wired — Building · {label} controls will appear here in a later step" card. The Part 2b scaffold's long-form prose (referencing commit `34c5c3c` + the Part 2c extraction plan) was moved to the audit doc — user-facing placeholders should not lecture the user about which Part wires what.
+- **`frontend/src/components/modules/interventions/InterventionEditorV2.jsx`** — non-Building branch of `EditorPaneBody` (IG / Operation / Systems) now renders a centred "Not yet wired" card with the active subsection's label as context. Removed the `partFor()` helper (no longer referenced).
+
+### Three-check engine anchor before the swap
+
+Ran on the actual `nza-sim` dev server on 5176/8002 (tab title confirmed "NZA Simulate" before the check). The first check is the canonical regression anchor:
+
+- **/systems Live Results EUI:** **130.1 kWh/m²·yr**, NOT Brief 45 close's 121.7.
+- **Diagnosis:** data state drift, not engine regression. Heating shares drifted 95/5 → 92/8; DHW shares reverse-solved from current fuel split to ~80/20 (was 65/35 at Brief 45 close). Per-system math reconciles on the current params.
+- **Chris's call:** proceed with the V2-as-default swap; restoring the Brief 45 share values is a separate concern. Future per-Part regression anchors use 130.1 until Chris explicitly restores Brief 45 shares.
+
+The swap doesn't change the engine path — both editors only run the engine when the user saves a patch, and the V2 right pane is placeholder-only for every section, so no patches can be captured from V2 yet → no engine impact possible from the swap itself.
+
+### What did NOT change (Part 2c-pre)
+
+- Engine: untouched.
+- Data model: untouched.
+- Main-app behaviour: untouched.
+- Old editor file (`InterventionEditorPopout.jsx`): untouched. Stays in the repo as reference; deletion is a Brief 46 Part 5 deliverable.
+- Building module's inline subsections: untouched. Extraction is Part 2c proper, queued for next session.
+- The V2 shell, EditorNav, EditorFooter, capture context, useProjectMutation hook, PatchedInputBadge: all unchanged from Part 2b.
+
+### Next session — Part 2c proper
+
+Per the user directive "Commit, push, and stop — don't start Part 2c," Chris will review by opening the model and clicking "Add intervention" normally, then green-light (or course-correct) before Part 2c begins.
+
+When Part 2c begins:
+- Refactor `BuildingDefinition.jsx`'s `InputsColumn` (lines 549–1012) by extracting GeometrySection / GlazingSection / ShadingSection / OpeningsSection / FabricSection into `frontend/src/components/modules/building/buildingSections.jsx` as self-contained named exports (own state, own labels, own memoisation per Chris's Option A constraint).
+- `BuildingSection.jsx` (in editor) swaps placeholder for `{active === 'building.X' && <XSection />}` dispatch.
+- Verify Bridgewater baseline EUI = current anchor ± 0.1%.
+
+---
+
 ## 🚧 Session 2026-05-21 — Brief 46 Part 2b: BuildingSection scaffold + indicator + dev toggle
 
 **State:** `commit_in_flight` — Brief 46 Part 2b (composer scaffold + reusable indicator + ?editor=v2 dev toggle; Part 2c lands the actual subsection extractions per Chris's Option A directive).

@@ -109,35 +109,31 @@ function EditorPaneBody({ active }) {
       </div>
     )
   }
-  // Brief 46 Part 2b (2026-05-21): Building composer wired. Other
-  // modules' composers (InternalGainsSection / OperationSection /
-  // SystemsSection) land in Parts 3-4.
+  // Brief 46 Part 2b (2026-05-21): Building composer wired.
+  // Brief 46 Part 2c-pre (2026-05-22): IG / Operation / Systems
+  // composers show a clear "not yet wired — coming later" placeholder
+  // so the V2 editor is the sole editor reachable from the UI even
+  // before those sections' controls are extracted.
   if (active.startsWith('building.')) {
     return <BuildingSection active={active} />
   }
-  // Parts 3-4 placeholder.
   return (
-    <div className="h-full p-4">
-      <p className="text-caption font-semibold text-navy mb-1">{labelFor(active)}</p>
-      <p className="text-xxs text-mid-grey">
-        This section is a placeholder in Brief 46 Part 2b. Wired in Part {partFor(active)}.
-      </p>
+    <div className="h-full flex items-center justify-center p-6">
+      <div className="max-w-sm w-full rounded border border-dashed border-light-grey bg-off-white/30 p-6 text-center">
+        <p className="text-xxs text-mid-grey/80 mb-2">{labelFor(active)}</p>
+        <p className="text-caption font-medium text-navy mb-1">Not yet wired</p>
+        <p className="text-xxs text-mid-grey">
+          This section will be wired into the new editor in a later step.
+        </p>
+      </div>
     </div>
   )
 }
 
 function labelFor(active) {
-  // Best-effort cosmetic — Parts 2-4 will replace this with section-specific headers.
+  // Best-effort cosmetic — later parts will replace this with section-specific headers.
   const parts = (active ?? '').split('.')
   return parts.map(p => p.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())).join(' · ')
-}
-
-function partFor(active) {
-  if (active?.startsWith('building.')) return 2
-  if (active?.startsWith('gains.'))    return 3
-  if (active?.startsWith('operation.')) return 3
-  if (active?.startsWith('systems.'))  return 4
-  return '?'
 }
 
 export default function InterventionEditorV2({

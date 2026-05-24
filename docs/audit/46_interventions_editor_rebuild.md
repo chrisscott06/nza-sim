@@ -347,3 +347,43 @@ Code-review only. Main-app behaviour provable by construction (the hook translat
 Browser verification is the next-session Part 2b deliverable — boots the dev server, drives one main-app edit cycle to confirm no regression, opens V2 via dev toggle, captures a Building patch, verifies the footer Δ. Bridgewater baseline EUI 121.7 must hold (no engine drift — Brief 46 Principle 8 + Brief 45 close anchor).
 
 ---
+
+## §2.7 Part 2c-pre — V2 editor becomes the default (2026-05-22)
+
+Narrow scope per Chris's directive: switch the new V2 editor to be the sole editor that opens on "Add intervention" / the edit pencil, remove the `?editor=v2` URL toggle entirely, and surface clear "not yet wired — coming later" placeholders for every section that doesn't have its real controls extracted yet. Old editor file stays in the repo as reference until Brief 46 Part 5's deletion sweep.
+
+Rationale (Chris's words, paraphrased): URL toggles are the wrong review surface — the previous toggle attempt sent a check into the wrong app's router on port 5173 (IVG ESG Tool, not nza-sim). Review by opening the model and clicking "Add intervention" normally is the truthful flow.
+
+### §2.7.1 Engine anchor check (pre-switch)
+
+Three-check run against the actual `nza-sim` dev server on 5176 (frontend) / 8002 (backend) — tab title confirmed "NZA Simulate" before checks ran:
+
+- **/systems Live Results EUI:** 130.1 kWh/m²·yr (not the Brief 45 close anchor of 121.7).
+- **Diagnosis:** data state drift since Brief 45 close, not engine regression. Heating shares drifted 95/5 → 92/8 between sessions; DHW shares reverse-solved from the current fuel split to ~80/20 (was 65/35 at Brief 45 close). Current numbers are internally consistent with current params — re-running the engine yields the same number, and per-system math reconciles.
+- **Chris's call:** override the "restore shares first" recommendation, proceed with the V2-as-default swap. Restoring the anchor is a separate concern that the V2 swap doesn't make harder. Future per-Part anchor checks will use the post-drift 130.1 baseline until Chris explicitly restores Brief 45 shares.
+
+### §2.7.2 Code changes
+
+- **`frontend/src/components/modules/interventions/InterventionsModule.jsx`** — removed `import InterventionEditorPopout`; removed the URL-param toggle conditional; `InterventionEditorV2` is now mounted unconditionally as the sole intervention editor. Header comment updated to explain Part 2c-pre intent.
+- **`frontend/src/components/modules/interventions/sections/BuildingSection.jsx`** — placeholder copy replaced with a compact "Not yet wired — Building · {label} controls will appear here in a later step" card. Removed the Part 2b scaffold's long-form explanation (which referenced `34c5c3c` and the Part 2c extraction plan) — that detail belongs in this audit doc, not the user-facing placeholder.
+- **`frontend/src/components/modules/interventions/InterventionEditorV2.jsx`** — non-Building branch of `EditorPaneBody` (IG / Operation / Systems) now renders a centred "Not yet wired" card with the active subsection label as context, replacing the "Wired in Part N" placeholder. Removed the `partFor()` helper (no longer referenced).
+
+### §2.7.3 Engine-path invariance argument
+
+- `InterventionsModule.jsx` change is a render-tree shape change: instead of rendering the old `InterventionEditorPopout` when `?editor=v2` is absent, the V2 editor renders unconditionally. The old editor file is untouched (still in the repo, just unimported). No engine path is touched by either editor for *uncaptured* mutations — both editors only run the engine when the user actually saves a patch. With the V2 editor's right pane being placeholder-only for every section, no patches can be captured from the V2 UI yet — so no engine impact possible from the V2 swap.
+- The Bridgewater baseline EUI is unchanged from Part 2b at 130.1 (the current drifted anchor) because the engine path is identical to Part 2b's engine path. Verifying in the browser after this commit is therefore the same number; the difference is the user can now click "Add intervention" and the V2 shell opens instead of the old editor.
+
+### §2.7.4 What Chris reviews next session
+
+- Open `localhost:5176`, navigate to `/interventions`.
+- Click "Add intervention" or the edit pencil on an existing intervention.
+- The V2 shell opens (right-anchored draggable popout, EditorNav on left, EditorPaneBody on right, EditorFooter at bottom). No more URL toggle required.
+- Click through the EditorNav sections — Building subsections show "Not yet wired" placeholders; IG / Operation / Systems show "Not yet wired" cards.
+- Cancel / Save / label edit / patch count / EUI preview all work as Part 1 / 2a established (label-only changes still mark the editor dirty, save returns the intervention to the parent stack).
+- The old editor is unreachable from the UI as of this commit — the only way to see it again is to revert this commit.
+
+### §2.7.5 What Part 2c does (next session, after Chris green-lights)
+
+Mechanical extraction per §2.6 — the five Building subsections (Geometry / Glazing / Shading / Openings / Fabric) become self-contained named exports in `frontend/src/components/modules/building/buildingSections.jsx`. `BuildingSection.jsx` swaps its placeholder for the real subsection components. Engine path is untouched.
+
+---

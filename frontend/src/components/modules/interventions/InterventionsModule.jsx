@@ -32,10 +32,13 @@ import { useHourlySolar } from '../../../hooks/useHourlySolar.js'
 import { calculateInstant } from '../../../utils/instantCalc.js'
 import { SYSTEM_TEMPLATES_LIBRARY } from '../../../data/systemTemplatesLibrary.js'
 import InterventionStackView from './InterventionStackView.jsx'
-import InterventionEditorPopout from './InterventionEditorPopout.jsx'
-// Brief 46 Part 2b (2026-05-21): V2 editor accessible via ?editor=v2
-// query param. Old editor remains the default. Dev toggle removed at
-// Part 5 when V2 becomes the only entry point.
+// Brief 46 Part 2c-pre (2026-05-22): InterventionEditorV2 is now the
+// only editor that opens on Add intervention / edit pencil. The old
+// InterventionEditorPopout.jsx file stays in the repo as reference
+// until Brief 46 Part 5's deletion sweep, but is no longer imported
+// and no longer reachable from the UI. The previous ?editor=v2 URL
+// toggle has been removed entirely — Chris's review flow is "open the
+// model and click Add intervention normally", not URL toggles.
 import InterventionEditorV2 from './InterventionEditorV2.jsx'
 import ComparisonView from './ComparisonView.jsx'
 import { SaveToLibraryModal, LoadFromLibraryModal, LibraryStripButton } from './InterventionLibrary.jsx'
@@ -347,41 +350,24 @@ export default function InterventionsModule() {
         )}
       </div>
 
-      {/* Brief 46 Part 2b (2026-05-21): dev toggle to access the new
-          editor. Default remains the old InterventionEditorPopout; appending
-          `?editor=v2` to the URL routes to the new InterventionEditorV2
-          shell instead. Old editor deleted at Brief 46 Part 5; toggle
-          removed at the same time. */}
-      {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('editor') === 'v2' ? (
-        <InterventionEditorV2
-          intervention={editing}
-          baselineConfig={baselineConfig}
-          weatherData={weatherData}
-          hourlySolar={hourlySolar}
-          scheduleProfiles={null}
-          onSave={handleSaveEditing}
-          onCancel={handleCloseEditor}
-          onDelete={handleDeleteEditing}
-          onDirtyChange={handleDirtyChange}
-        />
-      ) : (
-        /* Brief 41 Part 4 — draggable editor pop-out with patch capture
-            + live preview. Brief 43 Part 1: default position is now
-            right-anchored (set inside InterventionEditorPopout); the
-            onDirtyChange callback feeds the parent's switch-intervention
-            unsaved-changes guard. */
-        <InterventionEditorPopout
-          intervention={editing}
-          baselineConfig={baselineConfig}
-          weatherData={weatherData}
-          hourlySolar={hourlySolar}
-          scheduleProfiles={null}
-          onSave={handleSaveEditing}
-          onCancel={handleCloseEditor}
-          onDelete={handleDeleteEditing}
-          onDirtyChange={handleDirtyChange}
-        />
-      )}
+      {/* Brief 46 Part 2c-pre (2026-05-22): InterventionEditorV2 is the
+          sole editor that opens. The ?editor=v2 URL toggle has been
+          removed. The old InterventionEditorPopout.jsx file stays in
+          the repo as reference until Brief 46 Part 5's deletion sweep
+          but is no longer imported. Sections not yet wired (Building
+          subsections + IG / Operation / Systems) show a clear
+          "Not yet wired — coming later" placeholder in the right pane. */}
+      <InterventionEditorV2
+        intervention={editing}
+        baselineConfig={baselineConfig}
+        weatherData={weatherData}
+        hourlySolar={hourlySolar}
+        scheduleProfiles={null}
+        onSave={handleSaveEditing}
+        onCancel={handleCloseEditor}
+        onDelete={handleDeleteEditing}
+        onDirtyChange={handleDirtyChange}
+      />
 
       {/* Brief 41 Part 5 — library save/load modals */}
       <SaveToLibraryModal
