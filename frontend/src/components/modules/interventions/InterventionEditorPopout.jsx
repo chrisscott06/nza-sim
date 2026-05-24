@@ -72,6 +72,19 @@ import SystemsSection        from './sections/SystemsSection.jsx'
 
 const INTERVENTIONS_ACCENT = '#E84393'
 
+/**
+ * Deep-clone the saved patches before seeding either localPatches (here)
+ * or currentPatches (CaptureProvider). Brief 47 Part 1.2: editing must
+ * not mutate the persisted intervention until Save.
+ */
+function cloneIncomingPatches(patches) {
+  if (!Array.isArray(patches)) return []
+  if (typeof structuredClone === 'function') {
+    try { return structuredClone(patches) } catch { /* fall through */ }
+  }
+  return JSON.parse(JSON.stringify(patches))
+}
+
 function pickFirst(result, paths) {
   if (!result) return null
   for (const path of paths) {
@@ -158,16 +171,30 @@ export default function InterventionEditorPopout({
 }) {
   const isOpen = !!intervention
 
-  // Local label / theme / notes state. Patches state lives in the
-  // capture context provider below.
+  // Local label state. Patches state is owned by the capture context
+  // provider below; we keep a mirror in `localPatches` (updated via the
+  // provider's onChange) only because the preview engine useMemo needs
+  // a stable dependency to recompute on.
+  //
+  // Brief 47 Part 1.1 + 1.2 (2026-05-24): localPatches seeded from a
+  // DEEP CLONE of intervention.patches so the preview engine on first
+  // render sees the saved patches, not []. The provider below ALSO
+  // seeds its currentPatches from intervention.patches directly — the
+  // two seeds are independent but agree on initial value. The deep
+  // clone protects the persisted intervention from accidental mutation.
   const [localLabel, setLocalLabel] = useState(intervention?.label ?? '')
-  const [localPatches, setLocalPatches] = useState(intervention?.patches ?? [])
+  const [localPatches, setLocalPatches] = useState(
+    () => cloneIncomingPatches(intervention?.patches)
+  )
 
-  // Reset local label + patches when intervention id changes.
+  // Reset local label + patches when intervention id changes (editor
+  // switches to a different row without unmounting). Close-then-reopen
+  // of the same intervention id remounts via SchedulePopout's
+  // unmount-when-closed pattern, so the useState initialisers re-run.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     setLocalLabel(intervention?.label ?? '')
-    setLocalPatches(intervention?.patches ?? [])
+    setLocalPatches(cloneIncomingPatches(intervention?.patches))
   }, [intervention?.id])
 
   // Active section selection (left nav → right pane).
@@ -264,8 +291,15 @@ export default function InterventionEditorPopout({
       persistKey="nza-intervention-editor-popout-position"
       defaultPosition="right"
     >
+      {/* Brief 47 Part 1.1 (2026-05-24): pass `intervention` DIRECTLY,
+          not `{ ...intervention, patches: localPatches }`. The spread
+          caused the reopen bug: on the render where this provider first
+          mounted, localPatches was [] (the seeding useEffect hadn't
+          fired yet) so currentPatches initialised to []. By passing
+          `intervention` directly the provider's useState reads
+          intervention.patches at mount, which is the saved patches. */}
       <InterventionCaptureProvider
-        intervention={{ ...intervention, patches: localPatches }}
+        intervention={intervention}
         baselineConfig={baselineConfig}
         onChange={handleCapturedPatchesChange}
       >

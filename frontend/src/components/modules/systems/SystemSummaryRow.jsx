@@ -30,7 +30,7 @@
  * own colour stays neutral so the user can move it cleanly.
  */
 
-import { Pencil } from 'lucide-react'
+import { Pencil, Trash2 } from 'lucide-react'
 import { SERVICE_COLOURS } from './SystemEditorCard.jsx'
 
 function headlineEfficiency(system) {
@@ -66,7 +66,7 @@ function headlineEfficiency(system) {
   return null
 }
 
-export default function SystemSummaryRow({ system, onToggleEnabled, onEdit, onShareChange, shareInvalid = false }) {
+export default function SystemSummaryRow({ system, onToggleEnabled, onEdit, onShareChange, onDelete, shareInvalid = false }) {
   const service = system?.service ?? 'heating'
   const accent = SERVICE_COLOURS[service] ?? '#00AEEF'
   const isEnabled = system?.enabled !== false
@@ -160,6 +160,26 @@ export default function SystemSummaryRow({ system, onToggleEnabled, onEdit, onSh
       >
         <Pencil size={11} />
       </button>
+
+      {/* Brief 47 Part 1.3 (2026-05-24): list-level delete affordance.
+          Trash icon, confirm-before-delete (system removal is destructive
+          and affects share validation across the service). Renders only
+          when onDelete is provided so existing callers that haven't been
+          migrated stay safe. */}
+      {onDelete && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            const label = system?.label ?? '(unnamed system)'
+            if (window.confirm(`Delete system "${label}"?`)) onDelete()
+          }}
+          className="flex-shrink-0 p-1 rounded hover:bg-red-50 text-mid-grey hover:text-red-600 transition-colors"
+          title="Delete this system"
+        >
+          <Trash2 size={11} />
+        </button>
+      )}
     </div>
   )
 }

@@ -126,8 +126,8 @@ export default function InterventionStackView({
   onReorder,
   onEdit,
   onAdd,
-  onSaveToLibrary,
   onDuplicate,           // Brief 45 Part 2
+  onDelete,              // Brief 47 Part 1.3
 }) {
   const [draggingId, setDraggingId] = useState(null)
   const [hoverId,    setHoverId]    = useState(null)
@@ -184,8 +184,11 @@ export default function InterventionStackView({
   // Column headers
   // Brief 45 Part 2 (2026-05-21): two Δ columns expanded to four —
   // Marginal ΔEUI / Marginal ΔCO₂ / Cumulative ΔEUI / Cumulative ΔCO₂.
-  // Widths track InterventionRow's w-24 spec. Extra w-5 spacer added
-  // for the new Duplicate button.
+  // Widths track InterventionRow's w-24 spec.
+  // Brief 47 Part 1 (2026-05-24): Save-to-library button removed (library
+  // feature cut entirely); Delete button added. Header spacer count is
+  // still 3 (Duplicate / Edit / Delete) but the slot that used to belong
+  // to Save now belongs to Delete.
   return (
     <div className="space-y-2">
       {/* Column headers */}
@@ -220,8 +223,8 @@ export default function InterventionStackView({
             baselineConfig={baselineConfig}
             onToggleEnabled={() => onToggleEnabled?.(intervention.id)}
             onEdit={() => onEdit?.(intervention.id)}
-            onSaveToLibrary={() => onSaveToLibrary?.(intervention.id)}
             onDuplicate={() => onDuplicate?.(intervention.id)}
+            onDelete={() => onDelete?.(intervention.id)}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDrop={handleDrop}

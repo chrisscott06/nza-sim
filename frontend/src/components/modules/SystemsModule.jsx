@@ -723,6 +723,13 @@ export function InputsColumn({ params, updateParam, consumption, comfortBand, op
                       // service so the enabled sum stays at 100% without
                       // the user matching two sliders manually.
                       onShareChange={(next) => handleShareChange(service, idx, next)}
+                      // Brief 47 Part 1.3 (2026-05-24): list-level delete
+                      // affordance — same `removeSystem` helper the
+                      // pop-out's onDelete uses. In the main /systems
+                      // page this writes through to ProjectContext; in
+                      // the intervention editor it routes via
+                      // writeV40 → mutate → capturePatch (Brief 46 Part 4).
+                      onDelete={() => removeSystem(service, idx)}
                       shareInvalid={!valid}
                     />
                   )

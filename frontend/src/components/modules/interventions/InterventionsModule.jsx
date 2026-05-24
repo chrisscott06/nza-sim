@@ -39,7 +39,11 @@ import InterventionStackView from './InterventionStackView.jsx'
 // edit-pencil click.
 import InterventionEditorPopout from './InterventionEditorPopout.jsx'
 import ComparisonView from './ComparisonView.jsx'
-import { SaveToLibraryModal, LoadFromLibraryModal, LibraryStripButton } from './InterventionLibrary.jsx'
+// Brief 47 Part 1 (2026-05-24): Library feature cut entirely per design
+// note. InterventionLibrary.jsx no longer imported — its components
+// (SaveToLibraryModal / LoadFromLibraryModal / LibraryStripButton)
+// have been removed from the render tree. Within-project persistence +
+// reopen-seeding makes the library pointless.
 
 const INTERVENTIONS_ACCENT = '#E84393'
 const CURRENT_SCHEMA_VERSION = 1   // Mirrors DEFAULT_PARAMS.schema_version
@@ -63,8 +67,8 @@ export default function InterventionsModule() {
 
   const [tab, setTab] = useState('stack')   // 'stack' | 'comparison'
   const [editingId, setEditingId] = useState(null)
-  const [saveLibId, setSaveLibId] = useState(null)        // id of intervention to save → library
-  const [libraryPickerOpen, setLibraryPickerOpen] = useState(false)
+  // Brief 47 Part 1: library state (saveLibId / libraryPickerOpen) removed
+  // — library feature cut. See ImportantLibrary removal at line ~32.
   // Brief 43 Part 1: dirty state surfaced by the editor pop-out via
   // onDirtyChange. Used to gate switching to a different intervention
   // and closing the pop-out without saving. Stored in a ref so event
@@ -76,7 +80,10 @@ export default function InterventionsModule() {
   }, [])
 
   const interventions = Array.isArray(params?.interventions) ? params.interventions : []
-  const libraryInterventions = Array.isArray(params?.library_interventions) ? params.library_interventions : []
+  // Brief 47 Part 1: libraryInterventions reads removed — library cut.
+  // The params.library_interventions field is left in DEFAULT_PARAMS for
+  // backwards compatibility (existing projects may carry library entries
+  // from Brief 41–46 era); no UI surface reads or writes them now.
 
   // Fetch constructions library (same pattern as SystemsModule).
   const [constructionsLib, setConstructionsLib] = useState([])
@@ -229,41 +236,31 @@ export default function InterventionsModule() {
 
   const editing = editingId ? interventions.find(i => i.id === editingId) : null
 
-  // ── Library save / load ─────────────────────────────────────────────
-
-  const handleSaveToLibrary = (id) => setSaveLibId(id)
-  const handleCloseSaveLib = () => setSaveLibId(null)
-  const handleConfirmSaveLib = (libraryEntry) => {
-    updateParam('library_interventions', [...libraryInterventions, libraryEntry])
-    setSaveLibId(null)
-  }
-  const handleOpenLibrary = () => setLibraryPickerOpen(true)
-  const handleCloseLibrary = () => setLibraryPickerOpen(false)
-  const handleLoadFromLibrary = (libEntry) => {
-    // Create a fresh intervention from the library entry — give it a
-    // new top-level id so the user can have multiple instances of the
-    // same library entry in the stack. Patches are deep-copied at save
-    // time (in SaveToLibraryModal); we shallow-copy here.
-    const fresh = {
-      id: newId('int'),
-      label: libEntry.library_label || libEntry.label || 'Loaded intervention',
-      notes: libEntry.notes ?? '',
-      theme: libEntry.theme ?? null,
-      enabled: true,
-      capex_gbp: libEntry.capex_gbp ?? null,
-      schema_version: libEntry.schema_version ?? CURRENT_SCHEMA_VERSION,
-      patches: Array.isArray(libEntry.patches)
-        ? libEntry.patches.map(p => ({ ...p, id: `patch_${(typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2)}` }))
-        : [],
+  // Brief 47 Part 1.3 (2026-05-24): list-level delete handler. Trash
+  // icon on each stack row invokes this. Confirm-before-delete because
+  // interventions can be expensive to rebuild. Closes the editor pop-out
+  // if the deleted intervention is currently being edited.
+  const handleListDelete = (id) => {
+    const target = interventions.find(i => i.id === id)
+    const label = target?.label || '(unnamed intervention)'
+    const patchCount = Array.isArray(target?.patches) ? target.patches.length : 0
+    const msg = patchCount > 0
+      ? `Delete "${label}" (${patchCount} patch${patchCount === 1 ? '' : 'es'})? This cannot be undone.`
+      : `Delete "${label}"?`
+    if (!window.confirm(msg)) return
+    const next = interventions.filter(i => i.id !== id)
+    updateParam('interventions', next)
+    if (editingId === id) {
+      setEditingId(null)
+      editorDirtyRef.current = false
     }
-    updateParam('interventions', [...interventions, fresh])
-    setLibraryPickerOpen(false)
-  }
-  const handleDeleteFromLibrary = (libId) => {
-    updateParam('library_interventions', libraryInterventions.filter(e => e.id !== libId))
   }
 
-  const saveLibIntervention = saveLibId ? interventions.find(i => i.id === saveLibId) : null
+  // Brief 47 Part 1 (2026-05-24): library save / load handlers removed.
+  // The InterventionLibrary.jsx components (SaveToLibraryModal,
+  // LoadFromLibraryModal, LibraryStripButton) are no longer mounted
+  // anywhere. params.library_interventions stays in the schema for
+  // backwards compatibility but is no longer read or written by any UI.
 
   // Engine quartet that patches address as their root — built once per
   // render. The editor pop-out passes this to runInterventionStack +
@@ -299,7 +296,8 @@ export default function InterventionsModule() {
           </p>
         </div>
 
-        {/* Tab switcher + library button */}
+        {/* Tab switcher. Brief 47 Part 1 (2026-05-24): LibraryStripButton
+            removed — library feature cut entirely per design note. */}
         <div className="flex items-center justify-between border-b border-light-grey">
           <div className="flex items-center gap-1">
             <button
@@ -319,9 +317,6 @@ export default function InterventionsModule() {
               Comparison
             </button>
           </div>
-          <div className="pb-1">
-            <LibraryStripButton libraryCount={libraryInterventions.length} onClick={handleOpenLibrary} />
-          </div>
         </div>
 
         {/* Tab content */}
@@ -335,8 +330,8 @@ export default function InterventionsModule() {
             onReorder={handleReorder}
             onEdit={handleEdit}
             onAdd={handleAdd}
-            onSaveToLibrary={handleSaveToLibrary}
             onDuplicate={handleDuplicate}
+            onDelete={handleListDelete}
           />
         )}
         {tab === 'comparison' && (
@@ -365,20 +360,7 @@ export default function InterventionsModule() {
         onDirtyChange={handleDirtyChange}
       />
 
-      {/* Brief 41 Part 5 — library save/load modals */}
-      <SaveToLibraryModal
-        open={!!saveLibIntervention}
-        intervention={saveLibIntervention}
-        onClose={handleCloseSaveLib}
-        onSave={handleConfirmSaveLib}
-      />
-      <LoadFromLibraryModal
-        open={libraryPickerOpen}
-        libraryEntries={libraryInterventions}
-        onClose={handleCloseLibrary}
-        onLoad={handleLoadFromLibrary}
-        onDelete={handleDeleteFromLibrary}
-      />
+      {/* Brief 47 Part 1 (2026-05-24): library save/load modals removed. */}
     </div>
   )
 }

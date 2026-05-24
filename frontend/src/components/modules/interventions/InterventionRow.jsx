@@ -43,7 +43,7 @@
  * X" (last-write-wins per audit doc §6 boundary condition).
  */
 
-import { GripVertical, Pencil, AlertTriangle, Save, Copy } from 'lucide-react'
+import { GripVertical, Pencil, AlertTriangle, Copy, Trash2 } from 'lucide-react'
 import { summarizePatchListShort } from './patchCapture.js'
 
 const INTERVENTIONS_ACCENT = '#E84393'
@@ -88,8 +88,8 @@ export default function InterventionRow({
   baselineConfig,
   onToggleEnabled,
   onEdit,
-  onSaveToLibrary,
   onDuplicate,              // Brief 45 Part 2
+  onDelete,                 // Brief 47 Part 1.3 — list-level delete affordance
   onDragStart,
   onDragOver,
   onDrop,
@@ -219,15 +219,9 @@ export default function InterventionRow({
         <DeltaCell record={cumCarbon} unit=" kgCO₂/m²" muted={!isEnabled} forceEmpty={isEmpty} />
       </div>
 
-      {/* Save to library */}
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); onSaveToLibrary?.() }}
-        className="flex-shrink-0 p-1 rounded hover:bg-light-grey/40 transition-colors text-mid-grey"
-        title="Save this intervention to library"
-      >
-        <Save size={12} />
-      </button>
+      {/* Brief 47 Part 1 (2026-05-24): Save-to-library button removed per
+          design note — the library feature is cut entirely (within-
+          project persistence + reopen-seeding makes it pointless). */}
 
       {/* Brief 45 Part 2: Duplicate */}
       <button
@@ -247,6 +241,18 @@ export default function InterventionRow({
         title="Edit this intervention"
       >
         <Pencil size={12} />
+      </button>
+
+      {/* Brief 47 Part 1.3 (2026-05-24): list-level delete affordance.
+          Trash icon, confirm-before-delete (interventions can be
+          expensive to rebuild). Hover red so it reads as destructive. */}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onDelete?.() }}
+        className="flex-shrink-0 p-1 rounded hover:bg-red-50 transition-colors text-mid-grey hover:text-red-600"
+        title="Delete this intervention"
+      >
+        <Trash2 size={12} />
       </button>
     </div>
   )

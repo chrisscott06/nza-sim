@@ -1,5 +1,49 @@
 # NZA SIMULATE — Status
 
+## 🚀 Brief 46 — CLOSED 2026-05-24
+
+Six substantive Parts + the inert-controls read-overlay fix shipped across `dd330e8` → `70514e6`. Capture-context architecture (Brief 46 Part 1), Building/IG/Operation/Systems section composers (Parts 2c/3/4), old-editor deletion + V2-rename (Part 5), read-overlay layer (post-walkthrough fix). All four sections now share the "two contexts, one implementation" pattern — main app pages and intervention editor mount the SAME components; mutations route automatically by InterventionCaptureProvider presence on the ancestor tree.
+
+Brief 46 archived → `docs/briefs/archive/46_interventions_editor_rebuild_COMPLETED.md`.
+
+The reopen-bug + library-cut + delete-affordances surfaced during Brief 46's Bridgewater walkthrough are picked up by Brief 47.
+
+---
+
+## 🚧 Session 2026-05-24 — Brief 47 Part 1: reopen-seed fix + list-level deletes + library removal
+
+**State:** `commit_in_flight` — Brief 47 Part 1 done in a single commit per discipline.
+
+### What landed (Part 1)
+
+**Reopen bug fix.** Root cause traced in `docs/audit/47_interventions_layout_and_state.md` §1.1: Brief 46 mounted the capture provider with `intervention={{ ...intervention, patches: localPatches }}` — the spread wrapped the saved patches with the editor's local mirror. `localPatches` was `[]` on the render where the provider first mounted (its seeding useEffect was queued for after-render). The provider's `useState` initialiser read `localPatches = []` → `currentPatches = []` → patched config reverted to baseline → controls rendered baseline. The subsequent useEffect re-seed didn't fire because `interventionId` hadn't changed.
+
+Fix: pass `intervention` directly (no spread). The provider's `useState` initialiser now reads `intervention.patches` from props at mount-time — the saved patches. Plus deep-clone the seed (structuredClone with JSON fallback) so editing doesn't mutate the persisted intervention until Save.
+
+**List-level deletes (visible up front).**
+- `InterventionRow` gains a Trash2 button with confirm-before-delete dialog (label + patch count). `handleListDelete` in `InterventionsModule` filters from `params.interventions` + closes the editor if the deleted intervention was being edited.
+- `SystemSummaryRow` gains a Trash2 button (`onDelete` prop). `InputsColumn` wires to existing `removeSystem(service, idx)` helper. In main `/systems` mode this is identity-by-construction; in the intervention editor it routes via Brief 46's `writeV40 → mutate → capturePatch`.
+
+**Library removal (intervention library).** Per Brief 47 design note: cut entirely.
+- `InterventionLibrary.jsx` deleted via `git rm`.
+- `InterventionsModule.jsx` cleaned of all library imports/state/handlers/JSX (top-of-page button + bottom-of-page modals + library_interventions reads/writes + 7 handlers).
+- `InterventionRow` / `InterventionStackView` `onSaveToLibrary` prop chain removed.
+- `params.library_interventions` field LEFT in DEFAULT_PARAMS for backwards compatibility (no UI surface reads or writes it now).
+- Systems library (`params.library_systems`, save-to-library on system editor pop-out) UNTOUCHED — Brief 47 is scoped to the intervention library. UnifiedScheduleEditor's `libraryMeta` naming overlap is incidental — the component is the schedule editor, not the cut library.
+
+### Verification
+
+- `npm run build` clean.
+- Engine unchanged; no `instantCalc.js` / engine files touched.
+- **Browser verification deferred to the mandatory checkpoint after Part 2 per the brief.** Part 2 lands next (change list + nav/control flags), then surface to Chris.
+
+### What's NOT in Part 1
+
+- Change list component, nav flags, control flag coverage — Part 2.
+- Layout restructure, draggable-off-screen pop-outs, visualiser views — Parts 3–4.
+
+---
+
 ## 🚧 Session 2026-05-22 — Brief 46 Part 6 fix: inert-controls read-overlay (Direction A)
 
 **State:** `commit_in_flight` — single-commit fix per Chris's directive.

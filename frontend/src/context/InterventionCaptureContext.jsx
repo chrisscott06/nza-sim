@@ -64,6 +64,23 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, useEffect } from 'react'
 import { capturePatch as patchCaptureMerge, newPatchId, removePatch } from '../components/modules/interventions/patchCapture.js'
 
+/**
+ * Deep-clone an array of patches. Brief 47 Part 1.2: the seed must be a
+ * COPY of the saved patches so editing in the editor doesn't mutate the
+ * persisted intervention until Save. Cancel discards cleanly.
+ *
+ * structuredClone where available; JSON fallback otherwise (patches are
+ * pure JSON-shaped objects per Brief 41 schema, so the fallback is safe
+ * — no Dates, no Maps, no functions in the patch shape).
+ */
+function cloneSavedPatches(patches) {
+  if (!Array.isArray(patches)) return []
+  if (typeof structuredClone === 'function') {
+    try { return structuredClone(patches) } catch { /* fall through */ }
+  }
+  return JSON.parse(JSON.stringify(patches))
+}
+
 // ── Context shape ────────────────────────────────────────────────────────
 
 /**
@@ -126,19 +143,37 @@ export function InterventionCaptureProvider({
 }) {
   const interventionId = intervention?.id ?? null
 
-  // Seed local state from the intervention's current patches when the
+  // Seed local state from the intervention's saved patches when the
   // provider mounts or the intervention id changes (i.e. editor switches
   // to a different row). Stored in state, not derived, so user captures
   // accumulate locally until Save.
+  //
+  // Brief 47 Part 1.1 + 1.2 (2026-05-24): the seed reads
+  // `intervention.patches` directly from props. The parent must pass
+  // `intervention` directly (NOT `{...intervention, patches: localPatches}`)
+  // so that on the render where this provider first mounts, the saved
+  // patches are visible. Brief 46's `{ ...intervention, patches:
+  // localPatches }` spread caused the reopen bug — `localPatches` was []
+  // on the first render where this provider mounted, so currentPatches
+  // initialised to [] and the read-overlay had nothing to apply. The
+  // useEffect re-seed below ran after-render but didn't fire because
+  // `interventionId` hadn't changed.
+  //
+  // The seed is a DEEP CLONE of the saved patches so editing here doesn't
+  // mutate the persisted intervention until Save. Cancel discards cleanly.
   const [currentPatches, setCurrentPatches] = useState(
-    Array.isArray(intervention?.patches) ? intervention.patches : []
+    () => cloneSavedPatches(intervention?.patches)
   )
 
-  // Re-seed when intervention id changes. The previous editor used
-  // useMemo with no return for this side effect; useEffect is cleaner.
+  // Re-seed when intervention id changes (editor switches to a different
+  // row WITHOUT unmounting — e.g. user clicks edit pencil on intervention
+  // B while editor is open on A). Close-then-reopen of the same id is
+  // handled by SchedulePopout's unmount-when-closed pattern: the
+  // CaptureProvider remounts and the useState initialiser above re-runs
+  // with the fresh `intervention.patches`.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    setCurrentPatches(Array.isArray(intervention?.patches) ? intervention.patches : [])
+    setCurrentPatches(cloneSavedPatches(intervention?.patches))
   }, [interventionId])
 
   // Notify the consumer on every patches change so it can mark dirty,

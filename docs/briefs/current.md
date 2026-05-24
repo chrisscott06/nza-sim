@@ -1,6 +1,8 @@
 # Current brief
 
-**Active:** [`active/46_interventions_editor_rebuild.md`](active/46_interventions_editor_rebuild.md) — Brief 46 Interventions editor full rebuild. Six substantive Parts plus close. Capture context architecture + reuse main-app controls inside the editor; full deletion of the old curated editor at Part 5. No engine changes, no data model changes. Plough-through authorisation; walkthrough sign-off after Part 5 before Part 6 close.
+**Active:** [`active/47_interventions_layout_and_state.md`](active/47_interventions_layout_and_state.md) — Brief 47 Interventions module: faithful state display + inputs-left / visualiser-right layout. Five substantive Parts + close. Builds directly on Brief 46's capture-context plumbing. UI only — no data model or engine changes. Mandatory browser-verification checkpoint after Part 2 before any Part 3 layout work begins.
+
+Brief 46 (Interventions editor full rebuild) closed 2026-05-24 — see [`archive/46_interventions_editor_rebuild_COMPLETED.md`](archive/46_interventions_editor_rebuild_COMPLETED.md) and STATUS.md. The capture-context architecture + read-overlay layer (the inert-controls fix at HEAD `70514e6`) are the foundation Brief 47 builds on.
 
 Brief 45 (Interventions + Systems UX polish) closed 2026-05-21 — see [`archive/45_ux_polish_COMPLETED.md`](archive/45_ux_polish_COMPLETED.md) and STATUS.md.
 
@@ -8,9 +10,9 @@ Brief 45 (Interventions + Systems UX polish) closed 2026-05-21 — see [`archive
 
 This pointer file is updated each time a brief in `active/` closes or a new brief opens.
 
-## Pending candidates for Brief 47 (housekeeping bundle)
+## Pending candidates for a future housekeeping brief
 
-Logged from Briefs 44 + 45 close. Awaiting Chris's authorisation:
+Logged from Briefs 44 + 45 close. Not picked up by Brief 47 (which is interventions-UX-focused):
 
 1. **Issue #24 polish trio** ([`docs/audit/29_open_issues.md`](../audit/29_open_issues.md)):
    - `heat_gas_share` defensive guard (`instantCalc.js:4474`).
@@ -30,4 +32,4 @@ All four threads target overlapping engine + UI surfaces; bundling lets a single
 
 ## Recent brief sequencing (last ~7 days)
 
-See STATUS.md for full Brief 45 close-out + Brief 44 close-out earlier. Prior closed briefs (Brief 42 / Brief 43 / Brief 41 / etc.) catalogued in `docs/briefs/archive/`.
+See STATUS.md for full Brief 46 close-out + Brief 45 close-out + Brief 44 close-out. Prior closed briefs (Brief 42 / Brief 43 / Brief 41 / etc.) catalogued in `docs/briefs/archive/`.
