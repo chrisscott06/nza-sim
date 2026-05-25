@@ -11,17 +11,17 @@
     "continuous_fan_mwh": 17.4762
   },
   "state_A_mvhr_on": {
-    "sh_demand_mwh": 90.3,
-    "sh_delivered_mwh": 90.3,
-    "sh_electricity_mwh": 38.055,
+    "sh_demand_mwh": 95.2,
+    "sh_delivered_mwh": 95.2,
+    "sh_electricity_mwh": 40.12,
     "sh_gas_mwh": 0,
-    "sh_recovery_off_mwh": 61.419,
+    "sh_recovery_off_mwh": 63.204,
     "vent_fan_kwh": 25948.9,
-    "vent_recovery_mwh": 61.419,
+    "vent_recovery_mwh": 63.204,
     "vent_recovery_theo": 111.27,
-    "elec_total_kwh": 309882.1,
+    "elec_total_kwh": 311261.1,
     "gas_total_kwh": 242891,
-    "eui": 127.9,
+    "eui": 128.2,
     "s2_vent_loss_kwh": null,
     "s2_raw": {
       "external_wall": {
@@ -158,13 +158,13 @@
     }
   },
   "deltas": {
-    "heating_delivered_mwh": -18.599999999999994,
-    "heating_electricity_mwh": -7.838999999999999,
-    "total_electricity_mwh": -22.315199999999955,
+    "heating_delivered_mwh": -23.5,
+    "heating_electricity_mwh": -9.903999999999996,
+    "total_electricity_mwh": -23.694199999999952,
     "mvhr_fan_mwh": 17.476200000000002
   },
   "verdict": "UNCLEAR (results don't fit any of H1/H2/H3 cleanly)",
   "reasoning": [
-    "Δ heating electricity = -7.8 MWh — outside the expected range of either H1 (~16–22) or H2 (~0). Manual re-investigation needed."
+    "Δ heating electricity = -9.9 MWh — outside the expected range of either H1 (~16–22) or H2 (~0). Manual re-investigation needed."
   ]
 }

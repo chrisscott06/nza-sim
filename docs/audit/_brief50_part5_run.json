@@ -1,27 +1,27 @@
 {
   "A": {
     "fan_mwh": 25.948900000000002,
-    "recovery": 61.419,
-    "sh_demand": 90.3,
-    "sh_deliv": 90.3,
-    "sh_elec": 38.055,
-    "elec_total": 309.8821,
-    "eui": 127.9
+    "recovery": 63.204,
+    "sh_demand": 95.2,
+    "sh_deliv": 95.2,
+    "sh_elec": 40.12,
+    "elec_total": 311.2611,
+    "eui": 128.2
   },
   "B": {
     "fan_mwh": 0,
     "recovery": 0,
-    "sh_demand": 90.3,
-    "sh_deliv": 90.3,
-    "sh_elec": 38.055,
-    "elec_total": 283.9332,
-    "eui": 121.9
+    "sh_demand": 71.7,
+    "sh_deliv": 71.7,
+    "sh_elec": 30.216,
+    "elec_total": 279.0942,
+    "eui": 120.8
   },
   "diff": {
     "fan_mwh": -25.948900000000002,
-    "recovery": -61.419,
-    "sh_deliv": 0,
-    "eui": -6
+    "recovery": -63.204,
+    "sh_deliv": -23.5,
+    "eui": -7.3999999999999915
   },
   "pass": true,
   "demand_didnt_change_because": "State 2 reads v25 ventilation directly (instantCalc.js L2530); v25 entry was not touched. Separate bug from Part 5 scope."

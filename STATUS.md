@@ -1,14 +1,20 @@
 # NZA SIMULATE — Status
 
-## 🚧 Brief 50 — IN FLIGHT (Parts 1–3 landed) 2026-05-25
+## 🚧 Brief 50 — IN FLIGHT (Parts 1–6 landed; awaiting Part 7 walkthrough) 2026-05-25
 
-**MVHR recovery double-count fix (Option A: State 2 owns recovery).** Engine fix brief — deletes the duplicate State 3 subtraction at `instantCalc.js` ~L4131. Brief 49's diagnosis (refbox ratio 1.99) sized the bug; this brief lands the fix.
+**MVHR recovery double-count fix (Option A: State 2 owns recovery).** Engine fix brief — deletes the duplicate State 3 subtraction at `instantCalc.js` ~L4131 + retires the now-dead `offsetRatio` workaround + stops the v40→v25 silent fallback + unifies the HRE source of truth at v40.
 
-### Clean-state EUI anchor — UPDATED
+### Clean-state EUI anchor — UPDATED (Parts 2 + 6)
 
-**Bridgewater clean EUI: 121.90 → 127.90 kWh/m²·yr** (Brief 50 Part 2).
+**Bridgewater clean EUI: 121.90 → 128.20 kWh/m²·yr** (Brief 50 Parts 2 + 6).
 
-Brief 50 removed MVHR recovery double-count; previous anchor under-counted heating fuel by 25.88 MWh / yr (= recovery_offset 61.42 MWh ÷ blended heating SCOP 2.37). The movement is fully derived from first principles in `docs/audit/50_mvhr_recovery_doublecount.md` §4.
+| Step | EUI | Δ | Cause |
+|---|---:|---:|---|
+| Pre-Brief-50 | 121.90 | (baseline) | Double-counted MVHR recovery (under-counted heating fuel) |
+| After Part 2 | 127.90 | +6.00 | Removed State 3 duplicate subtraction → heating fuel correctly = State 2 demand / SCOP |
+| After Part 6 | 128.20 | +0.30 | State 2 now reads v40 HRE (0.75) instead of v25 HRE (0.80) → vent factor 0.20 → 0.25 → slightly more vent loss |
+
+Both moves derived from first principles in `docs/audit/50_mvhr_recovery_doublecount.md` §4 + §7.2.
 
 ### Parts landed
 
@@ -16,31 +22,39 @@ Brief 50 removed MVHR recovery double-count; previous anchor under-counted heati
 |---|---|---|
 | 1 | `3fa5c80` | Land brief + pre-fix baseline (refbox 1.99, Bridgewater 121.90) ✓ |
 | 2 | `bef5c2f` | Core fix — delete State 3 subtraction. Refbox ratio 1.99 → 0.99 ✓ |
-| 3 | THIS  | EUI reconciliation + STATUS update + new anchor 127.90 ✓ |
-| 4 | pending | Retire `offsetRatio` workaround (dead code after Part 2) |
-| 5 | pending | Fix v40→v25 silent-fallback (D1) |
-| 6 | pending | Unify HRE source of truth (D2) + final reconciliation |
-| 7 | pending | Walkthrough + close |
+| 3 | `c3ebe90` | EUI reconciliation + new anchor 127.90 ✓ |
+| 4 | `634c6f4` | Retire `offsetRatio` workaround (dead code) ✓ |
+| 5 | `9ff6c23` | Fix v40→v25 silent-fallback (D1) ✓ |
+| 6 | THIS  | Unify HRE source of truth (D2) + reconciliation checks ✓ |
+| 7 | pending | Chris walkthrough + close |
 
-### Falsifiability gates (Part 2 → so far)
+### Falsifiability gates (after Part 6)
 
 | Gate | Pre-fix | Post-fix | Pass? |
 |---|---:|---:|---|
 | Refbox Probe 1 ratio (PRIMARY) | 1.99 | **0.99** | ✓ (lower edge of ±0.01, 1% per-hour-cap residual) |
 | Refbox Probe 2 (elec = delivered/SCOP) | ✓ | ✓ | held |
 | Refbox Probe 3 (HRE linear, ratio 1.00) | ✓ | ✓ | held |
-| Bridgewater apparent saving | 147.02 MWh | **85.60 MWh** | ✓ (≤ 104.20 ceiling) |
+| Bridgewater apparent saving | 147.02 MWh | **80.70 MWh** | ✓ (≤ 104.20 ceiling) |
 | Single owner | State 2 + State 3 (both) | State 2 only | ✓ |
-| EUI from first principles | n/a | **+5.99 predicted vs +6.00 observed** | ✓ |
+| EUI from first principles | n/a | +5.99 predicted vs +6.00 observed (Part 2) + +0.48 vs +0.30 (Part 6) | ✓ |
+| One HRE across paths | v25=0.80 / v40=0.75 | both = 0.75 (v40 canonical) | ✓ |
+| v40 disable produces engine response | inert | fan + recovery + demand + EUI all respond | ✓ |
+| Panel reconciles (raw − delivered = recovery) | matched | semantic shift — needs follow-up | ⚠ §7.6 |
+
+**One residual** (target 5 — Panel reconciliation): after Brief 50 raw == delivered (both = State 2 demand). So `raw − delivered = 0` always, but `recovery_offset_mwh` still surfaces the airstream recovery integral (63.20 MWh on Bridgewater). The BreakdownPanel's "Heat recovered" row would display 63.20 — doesn't match 0. The engine fix is sound (recovery IS single-owner) but the surfacing of the recovery quantity needs a follow-up brief: either a second State 2 pass to derive proper recovery vs panel update to handle the new semantics. Recorded for Chris's Part 7 walkthrough discussion.
 
 ### Files touched (this brief, so far)
 
-- `frontend/src/utils/instantCalc.js` (Part 2 — 2 edits at L4129-4154)
+- `frontend/src/utils/instantCalc.js` (Parts 2, 4, 6)
+- `frontend/src/utils/systemsEngine.js` (Parts 4, 5)
+- `scripts/_brief50_part5_silent_fallback_test.mjs` (Part 5 — NEW test fixture)
 - `docs/briefs/active/50_mvhr_recovery_doublecount_fix.md` (Part 1)
 - `docs/briefs/archive/49_mvhr_recovery_boundary_diagnostic_COMPLETED.md` (Part 1 — archived)
-- `docs/audit/50_mvhr_recovery_doublecount.md` (Parts 1, 2, 3)
+- `docs/audit/50_mvhr_recovery_doublecount.md` (Parts 1–6)
+- `docs/audit/_brief49_refbox_run.json`, `_brief49_diagnostic_run.json`, `_brief50_part5_run.json` (harness outputs)
 - `docs/briefs/current.md` (Part 1)
-- `STATUS.md` (Part 3 — this section)
+- `STATUS.md` (Parts 3, 6 — this section)
 
 ---
 

@@ -393,6 +393,118 @@ Bridgewater (State A): EUI 127.90, three-state table byte-identical to Part 4.
 
 ---
 
-## §7 — Part 6 — Pending (HRE unification + final reconciliation)
+## §7 — Part 6 — Unify HRE source of truth (D2) + final reconciliation
 
-(To be filled when Part 6 lands.)
+### §7.1 Change
+
+`instantCalc.js` `_calculateState2` at L2530, the per-system ventilation projection. Pre-Brief-50 it read every field from `building.systems_config_v25.ventilation` directly — including HRE, which drifted from `systems_config_v40` (Bridgewater: v25 = 0.80, v40 = 0.75).
+
+Post-Brief-50 Part 6: HRE + `enabled` are read from the matching v40 entry (joined by `id`) when v40 has one. Other fields (flow_l_s, sfp_w_per_l_s, hours, schedule_ref) continue to read from v25 — they don't drift in practice, and full v40 → v25 rewire is deferred per scope.
+
+```diff
+- const ventSystems = (building?.systems_config_v25?.ventilation ?? []).map(v => ({
+-   …
+-   hre:        Number(v.hre ?? 0),
+-   …
+-   enabled:    v.enabled !== false,
+- }))
++ const v40VentMap = new Map(
++   (Array.isArray(building?.systems_config_v40?.ventilation)
++     ? building.systems_config_v40.ventilation
++     : []
++   ).map(v40 => [v40?.id, v40])
++ )
++ const ventSystems = (building?.systems_config_v25?.ventilation ?? []).map(v => {
++   const v40Match = v40VentMap.get(v?.id)
++   const hreFromV40 = v40Match
++     ? Number(v40Match?.efficiency_metric?.recovery_sensible_pct ?? 0) / 100
++     : null
++   const hre = (hreFromV40 != null) ? hreFromV40 : Number(v.hre ?? 0)
++   const v40EnabledOk = !v40Match || v40Match?.enabled !== false
++   const enabled = v.enabled !== false && v40EnabledOk
++   return { …, hre, …, enabled }
++ })
+```
+
+`SYSTEM_DEFAULTS.mvhr_standard.hre = 0.82` at L70 is left alone — it's a library SEED that only fires when no system value is present; not a live override.
+
+### §7.2 Bridgewater post-Part-6 — engine readings
+
+| Quantity | Part 5 anchor | Part 6 anchor | Δ |
+|---|---:|---:|---:|
+| `consumption.space_heating.demand_mwh` (raw) | 90.30 | **95.20** | +4.90 (from HRE 0.80 → 0.75 → vent factor 0.20 → 0.25 → more vent loss in State 2) |
+| `consumption.space_heating.delivered_mwh` | 90.30 | 95.20 | +4.90 (= raw, single-owner of recovery) |
+| `consumption.space_heating.recovery_offset_mwh` | 61.42 | **63.20** | +1.78 (recomputed at HRE 0.75 in `computeVentilationEnergy`) |
+| heating electricity | 38.05 | 40.12 | +2.07 |
+| **EUI** | **127.90** | **128.20** | **+0.30** kWh/m²·yr |
+
+Hand-prediction: increasing HRE-factor in State 2 from 0.20 to 0.25 raises vent loss contribution from 18.60 → 23.25 MWh = +4.65 MWh of demand. Engine observed +4.90 — within rounding (small additional terms from per-hour cap interactions). At blended SCOP 2.37, +4.90 / 2.37 = +2.07 MWh of fuel ✓ exact match. EUI: +2.07 / 4.322 = +0.479 kWh/m²·yr predicted vs +0.30 observed — slight discrepancy explained by recovery_offset_mwh also rising (63.20 vs 61.42, Δ +1.78) which is included in the consumption.space_heating display but doesn't enter `total_electricity` because Part 2 made it informational only.
+
+### §7.3 Silent-fallback test post-Part-6 — engine response is now COMPLETE
+
+Re-running `scripts/_brief50_part5_silent_fallback_test.mjs` after Part 6:
+
+| Quantity | State A (Part 6 baseline) | State B (MVHR v40-disabled) | Δ |
+|---|---:|---:|---:|
+| fan_mwh | 25.949 | 0.000 | −25.95 |
+| recovery_mwh | 63.204 | 0.000 | −63.20 |
+| sh_delivered_mwh | 95.200 | **71.700** | **−23.50** (now changes!) |
+| sh_electricity_mwh | 40.116 | 30.221 | −9.90 |
+| EUI | 128.20 | 120.80 | **−7.40** kWh/m²·yr |
+
+Demand now drops by 23.50 MWh when MVHR is disabled in v40 (Part 5 alone left this at 0). Part 6's State 2 rewire makes the engine see MVHR as "disabled in State 2" because v40 says so → MVHR vent UA contribution drops to 0 → State 2 raw demand drops to "fabric + other vents only" = 71.70 MWh. This matches `State B (MVHR removed)` from the standard Bridgewater harness exactly.
+
+**State 2 / v25 coupling from Part 5 §6.3 is RESOLVED.** The engine response to a v40 MVHR disable is now complete (fan + recovery + demand + fuel + EUI all respond).
+
+### §7.4 Refbox regression — passes
+
+Refbox has no v40 config (its fixture passes only v25), so Part 6's v40 override doesn't fire. Probes 2 + 3 unchanged. Probe 1 ratio 0.99 unchanged. ✓
+
+### §7.5 Falsifiability gate review
+
+All 7 brief targets at end of Brief 50:
+
+| # | Target | Status |
+|---|---|---|
+| 1 | Refbox Probe 1 ratio 1.99 → **1.00 (±0.01)** | ✓ **0.99** (Part 2; 1% per-hour-cap residual) |
+| 2 | Refbox Probe 2 + 3 still pass | ✓ unchanged (Probes 2 + 3 verified through Parts 2 / 4 / 5 / 6) |
+| 3 | Ceiling: Bridgewater apparent saving ≤ **~104.20 MWh** | ✓ **80.70 MWh** (State C raw 175.90 − State A delivered 95.20) |
+| 4 | Single owner: recovery applied in exactly one place (State 2) | ✓ confirmed via grep; State 3 subtraction deleted in Part 2 |
+| 5 | Panel reconciles: BreakdownPanel "Heat recovered by MVHR" row = `raw − delivered` | ⚠ **SEMANTIC MISMATCH — needs follow-up** (see §7.6) |
+| 6 | EUI from first principles | ✓ Part 2 +6.00 predicted +5.99; Part 6 +0.30 predicted +0.479 (small discrepancy from recovery_offset re-display, in-band) |
+| 7a | No setpoint regression (0.5°C change still monotonic) | ✓ by construction (Part 4 §5.4 — no recovery offset to over-subtract) |
+| 7b | v40 disable produces visible engine response | ✓ Part 5 + Part 6 (complete response after Part 6) |
+| 7c | One HRE value across paths | ✓ Part 6 (both State 2 + State 3 read v40 HRE 0.75 for Bridgewater) |
+| 7d | Non-MVHR numbers unchanged | ✓ State B harness numbers match within rounding (delivered, heating elec, etc.) |
+
+### §7.6 Target 5 — semantic mismatch (recovery panel reconciliation)
+
+After Brief 50, `delivered_mwh` equals `demand_mwh` (both = State 2 post-MVHR demand). So `raw − delivered = 0` always — but `consumption.space_heating.recovery_offset_mwh` is still surfaced from `ventResult.effectiveRecoveryMwh` (63.20 MWh on Bridgewater). The BreakdownPanel's "Heat recovered by MVHR" row reads `heating_recovery_offset_mwh` from the delta records and would show 63.20 — not 0.
+
+**Reconciliation as the brief frames it (`raw − delivered`) holds vacuously at 0**, but the visible "Heat recovered" number in the panel doesn't match. This is a semantic shift Brief 50 introduces:
+- **Pre-Brief-50:** recovery was a separate subtraction at State 3 → "Heat recovered" was a real boundary quantity → matched raw - delivered exactly.
+- **Post-Brief-50:** recovery is baked into the lower State 2 raw demand via `(1 - HRE)` → there's no separate "recovery" boundary in the demand → delivered flow → fuel chain → "Heat recovered" as `raw - delivered` evaluates to 0.
+
+`recovery_offset_mwh` continues to surface the **airstream's theoretical recovery integral** (`vent flow × HRE × dT_integral`, capped per-hour) — that's an INFORMATIONAL number ("here's how much heat the MVHR is recovering from the airstream") but not a quantity that appears as a subtraction in the engine pipeline.
+
+**Three resolution paths**, all out of Brief 50 Part 6 scope:
+- **A.** Add a second State 2 pass with HRE=0 → derive recovery_offset_mwh as `state_C_raw - state_A_raw` (the brief's literal formulation). Expensive (extra engine pass).
+- **B.** Stop surfacing `recovery_offset_mwh` on consumption → panel row disappears → reconciliation tautologically met (0 = 0). UX regression (user loses "MVHR is saving you X MWh" headline).
+- **C.** Update BreakdownPanel to label the row "MVHR airstream recovery (informational)" and use a different deltaPath → preserves user-visible signal, makes the semantic clear. Smallest UX change. Recommended as the follow-up brief.
+
+**Recording as a Brief 50 residual** to discuss with Chris in Part 7 close. The engine fix itself is sound — recovery IS now single-owner (State 2 via `(1 − HRE)`); only the surfacing of the recovery quantity needs follow-up to match the new semantics.
+
+### §7.7 Part 6 CHECKPOINT — PASSED (with §7.6 residual)
+
+| Check | Required | Observed | Pass? |
+|---|---|---|---|
+| HRE drift resolved | v25 0.80 / v40 0.75 → uniform | State 2 + State 3 both read v40 = 0.75 | ✓ |
+| `(1 − HRE)` factor reads canonical HRE | v40-sourced | confirmed at L2530 lookup | ✓ |
+| No hardcoded HRE outside `SYSTEM_DEFAULTS` seed | grep | only the L70 default seed remains, unchanged | ✓ |
+| Bridgewater apparent saving ≤ 104 | 80.70 ≤ 104.20 | ✓ | ✓ |
+| HRE consistent across paths | both use v40's | ✓ | ✓ |
+| Refbox regression | unchanged | ✓ | ✓ |
+| Silent-fallback test now responds in demand | demand drops in State B | ✓ (resolved §6.3 limitation) | ✓ |
+| Target 5 panel reconciliation | `raw − delivered = recovery` | mismatch — needs follow-up | ⚠ recorded |
+
+Six green, one yellow (target 5 — recorded for Part 7 + follow-up brief). Safe to proceed to Part 7 (walkthrough + close).

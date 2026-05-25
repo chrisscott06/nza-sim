@@ -2527,22 +2527,56 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   // line: flow × ρCp × (1 − HRE) × max(0, T_heat − T_out). No netting
   // across systems; transparent per-system reporting. Fan electricity
   // computed alongside for State 3 / Energy display use.
-  const ventSystems = (building?.systems_config_v25?.ventilation ?? []).map(v => ({
-    name:       v.name ?? v.id ?? v.library_id ?? '?',
-    library_id: v.library_id,
-    flow_l_s:   Number(v.flow_l_s ?? v.flow_L_s ?? 0),
-    hre:        Number(v.hre ?? 0),
-    sfp:        Number(v.sfp_w_per_l_s ?? v.sfp ?? 0),
-    hours:      Number(v.hours ?? 8760),
-    schedule_ref: v.schedule_ref ?? 'always_on',
-    // Brief 28-IM IM-M4.5 Phase 2: carry `enabled` through so the State 2
-    // mech vent loss loop (line ~2566) AND computeVentilationEnergy (called
-    // from State 3 with the same projected ventSystems shape) can both
-    // honour the per-system disable flag. Pre-fix this was projected out
-    // and the engine saw `undefined`, defeating every `if (vs.enabled ===
-    // false) continue` guard downstream.
-    enabled:    v.enabled !== false,
-  }))
+  //
+  // Brief 50 Part 6 (2026-05-25) — HRE + enabled now read from v40 when
+  // a matching entry exists. The v40 system config is the user-facing
+  // source of truth; pre-Brief-50 State 2 read v25's HRE directly, which
+  // drifted from v40 (Bridgewater: v25 HRE = 0.80, v40 HRE = 0.75). Now:
+  //  - HRE: v40.efficiency_metric.recovery_sensible_pct / 100 when v40
+  //    has a matching id and is enabled; else fall back to v25's v.hre.
+  //  - enabled: v25.enabled !== false AND (no v40 match OR v40 entry
+  //    enabled). Disabling MVHR in v40 propagates to State 2 — the
+  //    `(1 − HRE)` factor stops applying and State 2 raw demand jumps
+  //    to "no recovery" levels, matching what State 3 (via the v40
+  //    adapter) already does.
+  //
+  // Other fields (flow_l_s, sfp_w_per_l_s, hours, schedule_ref) continue
+  // to read from v25. They drift less than HRE in practice; if drift
+  // appears in those fields, expand this override or rewire State 2 to
+  // read v40 ventilation completely (architectural change deferred).
+  const v40VentMap = new Map(
+    (Array.isArray(building?.systems_config_v40?.ventilation)
+      ? building.systems_config_v40.ventilation
+      : []
+    ).map(v40 => [v40?.id, v40])
+  )
+  const ventSystems = (building?.systems_config_v25?.ventilation ?? []).map(v => {
+    const v40Match = v40VentMap.get(v?.id)
+    // HRE: v40 wins when v40 entry exists; else v25 fallback.
+    const hreFromV40 = v40Match
+      ? Number(v40Match?.efficiency_metric?.recovery_sensible_pct ?? 0) / 100
+      : null
+    const hre = (hreFromV40 != null) ? hreFromV40 : Number(v.hre ?? 0)
+    // Enabled: both v25 and v40 must agree the system is enabled.
+    const v40EnabledOk = !v40Match || v40Match?.enabled !== false
+    const enabled = v.enabled !== false && v40EnabledOk
+    return {
+      name:       v.name ?? v.id ?? v.library_id ?? '?',
+      library_id: v.library_id,
+      flow_l_s:   Number(v.flow_l_s ?? v.flow_L_s ?? 0),
+      hre,
+      sfp:        Number(v.sfp_w_per_l_s ?? v.sfp ?? 0),
+      hours:      Number(v.hours ?? 8760),
+      schedule_ref: v.schedule_ref ?? 'always_on',
+      // Brief 28-IM IM-M4.5 Phase 2: carry `enabled` through so the State 2
+      // mech vent loss loop (line ~2566) AND computeVentilationEnergy (called
+      // from State 3 with the same projected ventSystems shape) can both
+      // honour the per-system disable flag. Pre-fix this was projected out
+      // and the engine saw `undefined`, defeating every `if (vs.enabled ===
+      // false) continue` guard downstream.
+      enabled,
+    }
+  })
   // Per-system UA (W/K). Schedule_factor = hours/8760 (proportional approx;
   // schedule-profile-aware integration is a future refinement).
   const ventUA = ventSystems.map(v => {
