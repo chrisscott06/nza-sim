@@ -1,5 +1,5 @@
 /**
- * BreakdownPanel.jsx — Brief 48 Part 2 (2026-05-25) + Part 3 (chain context)
+ * BreakdownPanel.jsx — Brief 48 Part 2 (2026-05-25) + Parts 3 + 4
  *
  * Per-intervention audit-trail panel. The diagnostic instrument the brief
  * calls for — surfaces the engine's working-out as plain-language rows so
@@ -313,6 +313,116 @@ function Section({ title, rows, deltaObj }) {
 const INTERVENTIONS_ACCENT = '#E84393'
 
 /**
+ * Matrix view (Part 4) — whole-stack overview. Rows = interventions,
+ * columns = key metrics, cells = tone-coloured Δ. Reuses the same per-row
+ * marginal_delta / cumulative_delta records that Trail mode reads — just
+ * laid out as rows-of-metrics instead of one-intervention's-rows-of-metrics.
+ *
+ * Same framing toggle applies: the active framing decides whether each
+ * cell shows the marginal Δ (vs step above) or the cumulative Δ (vs
+ * original baseline).
+ *
+ * Click a row to make it the selected intervention so the user can flip
+ * back to Trail and read the audit trail of that row in one click.
+ */
+const MATRIX_COLUMNS = [
+  { key: 'heat',  label: 'Heat',   deltaPath: 'heating_post_mvhr_demand_mwh', unit: 'mwh' },
+  { key: 'cool',  label: 'Cool',   deltaPath: 'cooling_demand_mwh',           unit: 'mwh' },
+  { key: 'dhw',   label: 'Hot wtr', deltaPath: 'per_service.dhw.demand_mwh',  unit: 'mwh' },
+  { key: 'elec',  label: 'Elec',   deltaPath: 'per_fuel.electricity_mwh',     unit: 'mwh' },
+  { key: 'gas',   label: 'Gas',    deltaPath: 'per_fuel.gas_mwh',             unit: 'mwh' },
+  { key: 'eui',   label: 'EUI',    deltaPath: 'eui_kwh_per_m2',               unit: 'kwh_per_m2_yr' },
+  { key: 'co2',   label: 'CO₂',    deltaPath: 'carbon_kgco2_per_m2',          unit: 'kgco2_per_m2_yr' },
+]
+
+function MatrixCell({ deltaObj, col }) {
+  const rec = pickDelta(deltaObj, col.deltaPath)
+  const v = rec?.delta
+  const threshold = NOISE_THRESHOLD[col.unit] ?? 0.05
+  if (v == null || !Number.isFinite(v) || Math.abs(v) < threshold) {
+    return <td className="px-2 py-1.5 text-right text-xxs tabular-nums text-mid-grey/30">—</td>
+  }
+  const tone = deltaTone(v, col.unit)
+  return (
+    <td className={`px-2 py-1.5 text-right text-xxs tabular-nums font-medium ${TONE[tone]}`}>
+      {fmtDelta(v, col.unit)}
+    </td>
+  )
+}
+
+function MatrixView({ interventions, stackInterventions, framing, selectedId, onSelectId }) {
+  if (!interventions || interventions.length === 0) {
+    return (
+      <div className="p-6 text-center text-xxs italic text-mid-grey">
+        Add interventions to populate the matrix.
+      </div>
+    )
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[640px]">
+        <thead className="sticky top-0 bg-white z-10">
+          <tr className="border-b border-light-grey/60">
+            <th className="text-left font-medium text-xxs uppercase tracking-wider text-mid-grey/70 pl-3 pr-2 pb-1.5 pt-1">
+              Intervention
+            </th>
+            {MATRIX_COLUMNS.map(c => (
+              <th
+                key={c.key}
+                className="text-right font-medium text-xxs uppercase tracking-wider text-mid-grey/70 px-2 pb-1.5 pt-1"
+                title={`${c.label} — ${unitLabel(c.unit)}`}
+              >
+                {c.label}
+              </th>
+            ))}
+            <th className="text-left font-normal text-xxs normal-case pl-2 pb-1.5 pt-1 text-mid-grey/40">
+              unit
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {interventions.map((iv, idx) => {
+            const row = stackInterventions?.[idx] ?? null
+            const deltaObj = framing === 'marginal' ? row?.marginal_delta : row?.cumulative_delta
+            const disabled = iv?.enabled === false
+            const isSelected = selectedId && iv?.id === selectedId
+            return (
+              <tr
+                key={iv?.id ?? idx}
+                className={`border-t border-light-grey/40 cursor-pointer transition-colors ${
+                  isSelected ? 'bg-off-white/70' : 'hover:bg-off-white/30'
+                }`}
+                onClick={() => onSelectId?.(iv?.id)}
+              >
+                <td className="pl-3 pr-2 py-1.5 text-xxs">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-mid-grey/70 tabular-nums">{idx + 1}.</span>
+                    <span className={`truncate ${disabled ? 'text-mid-grey/60 italic' : 'text-navy'}`}>
+                      {iv?.label || '(unnamed)'}{disabled ? ' · off' : ''}
+                    </span>
+                  </div>
+                </td>
+                {MATRIX_COLUMNS.map(c => (
+                  <MatrixCell key={c.key} deltaObj={deltaObj} col={c} />
+                ))}
+                <td className="pl-2 py-1.5 text-xxs text-mid-grey/40 whitespace-nowrap">
+                  {/* leave blank — each column has its own unit; the
+                      header tooltip carries it. This column is just
+                      padding-right symmetry with the Trail table. */}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      <p className="mt-3 px-3 text-xxs italic text-mid-grey/70 leading-relaxed">
+        Click a row to make it the selected intervention; flip back to Trail for its full audit. Cells show Δ versus the chosen framing; below-threshold values render as "—".
+      </p>
+    </div>
+  )
+}
+
+/**
  * Compact one-line summary of an intervention's marginal headline,
  * used inside the chain block for predecessor / successor rows. Picks
  * the single biggest mover; if none, returns "no significant change".
@@ -366,6 +476,7 @@ export default function BreakdownPanel({
   // view that answers Finding D's reorder question). User can switch to
   // "vs original building" for the cumulative-from-baseline view.
   const [framing, setFraming] = useState('marginal')   // 'marginal' | 'cumulative'
+  const [mode, setMode] = useState('trail')            // 'trail' | 'matrix' (Part 4)
   const [showDetail, setShowDetail] = useState(true)   // Level 2 expand
   const [showChain, setShowChain] = useState(true)     // Level 3 expand
 
@@ -383,7 +494,7 @@ export default function BreakdownPanel({
   const marginalDelta = selectedRow?.marginal_delta ?? null
   const cumulativeDelta = selectedRow?.cumulative_delta ?? null
 
-  // ── Empty states ──
+  // ── Empty state — no interventions in the stack at all. ──
   if (list.length === 0) {
     return (
       <div className="h-full flex items-center justify-center p-6 text-center">
@@ -391,18 +502,6 @@ export default function BreakdownPanel({
           <p className="text-caption font-semibold text-navy mb-1">No interventions yet</p>
           <p className="text-xxs text-mid-grey">
             Add an intervention in the stack on the left to start auditing what the engine does step-by-step.
-          </p>
-        </div>
-      </div>
-    )
-  }
-  if (!selected) {
-    return (
-      <div className="h-full flex items-center justify-center p-6 text-center">
-        <div className="max-w-sm">
-          <p className="text-caption font-semibold text-navy mb-1">No intervention selected</p>
-          <p className="text-xxs text-mid-grey">
-            Pick an intervention from the dropdown to see its audit trail.
           </p>
         </div>
       </div>
@@ -416,10 +515,8 @@ export default function BreakdownPanel({
     : 'Total change from the unedited project baseline, including everything above this intervention.'
 
   // ── Chain context: find immediate predecessor + all successors. ──
-  // The predecessor is the previous ENABLED intervention (disabled rows
-  // pass through with zero marginal — semantically the same as not
-  // being there for the marginal baseline). If none enabled above, the
-  // predecessor is the original project baseline.
+  // Only meaningful in Trail mode with a selected row. Pre-compute so
+  // the JSX below stays readable; the Trail block guards on `selected`.
   let predecessorIdx = -1
   for (let i = selectedIdx - 1; i >= 0; i--) {
     if (list[i]?.enabled !== false) { predecessorIdx = i; break }
@@ -432,137 +529,190 @@ export default function BreakdownPanel({
     successors.push({ idx: i, intervention: list[i], row: stack[i] })
   }
 
+  // Header copy varies by mode.
+  const headerTitle = mode === 'matrix'
+    ? 'Whole-stack overview'
+    : (selected ? (selected.label || '(unnamed intervention)') : 'No intervention selected')
+  const headerSub = mode === 'matrix'
+    ? `Matrix · ${list.length} intervention${list.length === 1 ? '' : 's'} · ${framingLabel}`
+    : (selected ? `${selectedIdx + 1} of ${list.length} · Audit trail · ${framingLabel}` : 'Pick one from the dropdown above')
+
   return (
     <div className="h-full overflow-auto">
       <div className="p-4 space-y-4">
-        {/* Header — intervention name + framing toggle */}
+        {/* Header — title + mode toggle + framing toggle */}
         <div className="flex items-start justify-between gap-3 pb-3 border-b border-light-grey">
           <div className="min-w-0">
-            <p className="text-caption font-semibold text-navy truncate">{selected.label || '(unnamed intervention)'}</p>
-            <p className="text-xxs text-mid-grey italic mt-0.5">
-              {selectedIdx + 1} of {list.length} · Audit trail · {framingLabel}
+            <p className="text-caption font-semibold text-navy truncate">{headerTitle}</p>
+            <p className="text-xxs text-mid-grey italic mt-0.5">{headerSub}</p>
+          </div>
+          <div className="flex-shrink-0 flex items-center gap-2">
+            {/* Mode toggle — Trail / Matrix (Part 4) */}
+            <div
+              className="flex items-center gap-0.5 text-xxs bg-off-white/60 rounded p-0.5"
+              role="radiogroup"
+              aria-label="View mode"
+            >
+              <button
+                type="button"
+                onClick={() => setMode('trail')}
+                className={`px-2 py-1 rounded transition-colors ${
+                  mode === 'trail' ? 'bg-white text-navy font-medium shadow-sm' : 'text-mid-grey hover:text-navy'
+                }`}
+                title="Audit trail for one intervention"
+                role="radio"
+                aria-checked={mode === 'trail'}
+              >
+                Trail
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('matrix')}
+                className={`px-2 py-1 rounded transition-colors ${
+                  mode === 'matrix' ? 'bg-white text-navy font-medium shadow-sm' : 'text-mid-grey hover:text-navy'
+                }`}
+                title="Whole-stack matrix — every intervention × key metrics"
+                role="radio"
+                aria-checked={mode === 'matrix'}
+              >
+                Matrix
+              </button>
+            </div>
+            {/* Framing toggle — one selected, the other available; not two
+                competing equal columns (brief §UX). Applies in both modes. */}
+            <div
+              className="flex items-center gap-0.5 text-xxs bg-off-white/60 rounded p-0.5"
+              role="radiogroup"
+              aria-label="Comparison framing"
+            >
+              <button
+                type="button"
+                onClick={() => setFraming('marginal')}
+                className={`px-2 py-1 rounded transition-colors ${
+                  framing === 'marginal' ? 'bg-white text-navy font-medium shadow-sm' : 'text-mid-grey hover:text-navy'
+                }`}
+                title="Marginal — each row vs the step above it"
+                role="radio"
+                aria-checked={framing === 'marginal'}
+              >
+                vs step above
+              </button>
+              <button
+                type="button"
+                onClick={() => setFraming('cumulative')}
+                className={`px-2 py-1 rounded transition-colors ${
+                  framing === 'cumulative' ? 'bg-white text-navy font-medium shadow-sm' : 'text-mid-grey hover:text-navy'
+                }`}
+                title="Cumulative — each row vs the unedited baseline"
+                role="radio"
+                aria-checked={framing === 'cumulative'}
+              >
+                vs original
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {mode === 'matrix' ? (
+          <MatrixView
+            interventions={list}
+            stackInterventions={stack}
+            framing={framing}
+            selectedId={selectedId}
+            onSelectId={onSelectId}
+          />
+        ) : !selected ? (
+          <div className="px-2 py-6 text-center">
+            <p className="text-xxs text-mid-grey italic">
+              Pick an intervention from the dropdown to see its audit trail — or switch to Matrix to see the whole stack at a glance.
             </p>
           </div>
-          {/* Framing toggle — one selected, the other available; not two
-              competing equal columns (brief §UX). */}
-          <div
-            className="flex-shrink-0 flex items-center gap-0.5 text-xxs bg-off-white/60 rounded p-0.5"
-            role="radiogroup"
-            aria-label="Comparison framing"
-          >
-            <button
-              type="button"
-              onClick={() => setFraming('marginal')}
-              className={`px-2 py-1 rounded transition-colors ${
-                framing === 'marginal'
-                  ? 'bg-white text-navy font-medium shadow-sm'
-                  : 'text-mid-grey hover:text-navy'
-              }`}
-              title="Marginal — this intervention's contribution on top of everything above it"
-              role="radio"
-              aria-checked={framing === 'marginal'}
-            >
-              vs step above
-            </button>
-            <button
-              type="button"
-              onClick={() => setFraming('cumulative')}
-              className={`px-2 py-1 rounded transition-colors ${
-                framing === 'cumulative'
-                  ? 'bg-white text-navy font-medium shadow-sm'
-                  : 'text-mid-grey hover:text-navy'
-              }`}
-              title="Cumulative — total change from the unedited baseline"
-              role="radio"
-              aria-checked={framing === 'cumulative'}
-            >
-              vs original
-            </button>
-          </div>
-        </div>
+        ) : (
+          <>
+            {/* Level 1 — Headline */}
+            <Headline marginalDelta={activeDelta} />
 
-        {/* Level 1 — Headline */}
-        <Headline marginalDelta={activeDelta} />
-
-        {/* Level 2 — Audit trail expand */}
-        <div className="pt-1">
-          <button
-            type="button"
-            onClick={() => setShowDetail(s => !s)}
-            className="flex items-center gap-1.5 text-xxs text-mid-grey hover:text-navy transition-colors"
-            aria-expanded={showDetail}
-          >
-            {showDetail ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-            {showDetail ? 'Hide details' : 'Show details'}
-          </button>
-          {showDetail && (
-            <div className="mt-2 pt-2 border-t border-light-grey/60">
-              <Section title="Demand side · what the building needs" rows={ROWS.demand} deltaObj={activeDelta} />
-              <Section title="Delivered by systems"                  rows={ROWS.delivered} deltaObj={activeDelta} />
-              <Section title="Fuel consumed"                          rows={ROWS.fuel} deltaObj={activeDelta} />
-              <Section title="Headline impact"                         rows={ROWS.headline} deltaObj={activeDelta} />
-              <p className="mt-4 px-2 text-xxs italic text-mid-grey/70 leading-relaxed">
-                {framingHint}
-              </p>
+            {/* Level 2 — Audit trail expand */}
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => setShowDetail(s => !s)}
+                className="flex items-center gap-1.5 text-xxs text-mid-grey hover:text-navy transition-colors"
+                aria-expanded={showDetail}
+              >
+                {showDetail ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                {showDetail ? 'Hide details' : 'Show details'}
+              </button>
+              {showDetail && (
+                <div className="mt-2 pt-2 border-t border-light-grey/60">
+                  <Section title="Demand side · what the building needs" rows={ROWS.demand} deltaObj={activeDelta} />
+                  <Section title="Delivered by systems"                  rows={ROWS.delivered} deltaObj={activeDelta} />
+                  <Section title="Fuel consumed"                          rows={ROWS.fuel} deltaObj={activeDelta} />
+                  <Section title="Headline impact"                         rows={ROWS.headline} deltaObj={activeDelta} />
+                  <p className="mt-4 px-2 text-xxs italic text-mid-grey/70 leading-relaxed">
+                    {framingHint}
+                  </p>
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        {/* Level 3 — Chain context */}
-        {(predecessor || successors.length > 0) && (
-          <div className="pt-1">
-            <button
-              type="button"
-              onClick={() => setShowChain(s => !s)}
-              className="flex items-center gap-1.5 text-xxs text-mid-grey hover:text-navy transition-colors"
-              aria-expanded={showChain}
-            >
-              {showChain ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-              {showChain ? 'Hide chain context' : 'Show chain context'}
-            </button>
-            {showChain && (
-              <div className="mt-2 pt-2 border-t border-light-grey/60 space-y-1">
-                {predecessor ? (
-                  <ChainRow
-                    idx={predecessorIdx}
-                    intervention={predecessor}
-                    summary={`This row's marginal is computed on top of: ${summariseMarginal(predecessorRow?.cumulative_delta)}`}
-                    direction="up"
-                    onClick={() => onSelectId?.(predecessor.id)}
-                  />
-                ) : (
-                  <div className="px-2 py-1.5">
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="text-xxs text-mid-grey uppercase tracking-wider">Above</span>
-                      <span className="text-xxs italic text-mid-grey">Project baseline (no enabled interventions above this row)</span>
-                    </div>
+            {/* Level 3 — Chain context */}
+            {(predecessor || successors.length > 0) && (
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowChain(s => !s)}
+                  className="flex items-center gap-1.5 text-xxs text-mid-grey hover:text-navy transition-colors"
+                  aria-expanded={showChain}
+                >
+                  {showChain ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                  {showChain ? 'Hide chain context' : 'Show chain context'}
+                </button>
+                {showChain && (
+                  <div className="mt-2 pt-2 border-t border-light-grey/60 space-y-1">
+                    {predecessor ? (
+                      <ChainRow
+                        idx={predecessorIdx}
+                        intervention={predecessor}
+                        summary={`This row's marginal is computed on top of: ${summariseMarginal(predecessorRow?.cumulative_delta)}`}
+                        direction="up"
+                        onClick={() => onSelectId?.(predecessor.id)}
+                      />
+                    ) : (
+                      <div className="px-2 py-1.5">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-xxs text-mid-grey uppercase tracking-wider">Above</span>
+                          <span className="text-xxs italic text-mid-grey">Project baseline (no enabled interventions above this row)</span>
+                        </div>
+                      </div>
+                    )}
+                    {successors.length === 0 ? (
+                      <div className="px-2 py-1.5">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-xxs text-mid-grey uppercase tracking-wider">Below</span>
+                          <span className="text-xxs italic text-mid-grey">Bottom of the stack — nothing flows downstream from this row.</span>
+                        </div>
+                      </div>
+                    ) : (
+                      successors.map(s => (
+                        <ChainRow
+                          key={s.intervention?.id ?? s.idx}
+                          idx={s.idx}
+                          intervention={s.intervention}
+                          summary={summariseMarginal(s.row?.marginal_delta)}
+                          direction="down"
+                          onClick={() => onSelectId?.(s.intervention?.id)}
+                        />
+                      ))
+                    )}
+                    <p className="mt-2 px-2 text-xxs italic text-mid-grey/70 leading-relaxed">
+                      Click a row to navigate. Successor rows show their own marginal — your edits to this intervention flow into the state they're computed against.
+                    </p>
                   </div>
                 )}
-                {successors.length === 0 ? (
-                  <div className="px-2 py-1.5">
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="text-xxs text-mid-grey uppercase tracking-wider">Below</span>
-                      <span className="text-xxs italic text-mid-grey">Bottom of the stack — nothing flows downstream from this row.</span>
-                    </div>
-                  </div>
-                ) : (
-                  successors.map(s => (
-                    <ChainRow
-                      key={s.intervention?.id ?? s.idx}
-                      idx={s.idx}
-                      intervention={s.intervention}
-                      summary={summariseMarginal(s.row?.marginal_delta)}
-                      direction="down"
-                      onClick={() => onSelectId?.(s.intervention?.id)}
-                    />
-                  ))
-                )}
-                <p className="mt-2 px-2 text-xxs italic text-mid-grey/70 leading-relaxed">
-                  Click a row to navigate. Successor rows show their own marginal — your edits to this intervention flow into the state they're computed against.
-                </p>
               </div>
             )}
-          </div>
+          </>
         )}
       </div>
     </div>
