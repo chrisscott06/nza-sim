@@ -1,0 +1,172 @@
+{
+  "project_id": "14b4a5b1-8c73-4acb-8b65-1d22f05ec969",
+  "project_name": "HIX Bridgewater",
+  "mvhr_ids_toggled": [
+    "vent_mvhr_gf_public"
+  ],
+  "hand_calc_inputs": {
+    "SFP_W_per_l_s": 1.4,
+    "flow_l_s": 1425,
+    "HRE": 0.75,
+    "continuous_fan_mwh": 17.4762
+  },
+  "state_A_mvhr_on": {
+    "sh_demand_mwh": 90.3,
+    "sh_delivered_mwh": 28.881,
+    "sh_electricity_mwh": 12.171,
+    "sh_gas_mwh": 0,
+    "sh_recovery_off_mwh": 61.419,
+    "vent_fan_kwh": 25948.9,
+    "vent_recovery_mwh": 61.419,
+    "vent_recovery_theo": 111.27,
+    "elec_total_kwh": 283998.1,
+    "gas_total_kwh": 242891,
+    "eui": 121.9,
+    "s2_vent_loss_kwh": null,
+    "s2_raw": {
+      "external_wall": {
+        "kwh": 73442.7,
+        "kwh_per_m2": 16.99,
+        "area_m2": 1900
+      },
+      "roof": {
+        "kwh": 35789.7,
+        "kwh_per_m2": 8.28,
+        "area_m2": 864
+      },
+      "ground_floor": {
+        "kwh": 31017.9,
+        "kwh_per_m2": 7.18,
+        "area_m2": 864
+      },
+      "glazing": {
+        "kwh": 174517.3,
+        "kwh_per_m2": 40.38,
+        "area_m2": 452
+      },
+      "thermal_bridging": {
+        "kwh": 10430.2,
+        "kwh_per_m2": 2.41
+      },
+      "fabric_leakage": {
+        "kwh": 87355.5,
+        "kwh_per_m2": 20.21,
+        "ach": 0.06934098639455782
+      },
+      "permanent_vents": {
+        "kwh": 26197.4,
+        "kwh_per_m2": 6.06
+      }
+    }
+  },
+  "state_B_mvhr_off": {
+    "sh_demand_mwh": 71.7,
+    "sh_delivered_mwh": 71.7,
+    "sh_electricity_mwh": 30.216,
+    "sh_gas_mwh": 0,
+    "sh_recovery_off_mwh": 0,
+    "vent_fan_kwh": 8472.7,
+    "vent_recovery_mwh": 0,
+    "vent_recovery_theo": 0,
+    "elec_total_kwh": 287566.9,
+    "gas_total_kwh": 242891,
+    "eui": 122.7,
+    "s2_vent_loss_kwh": null,
+    "s2_raw": {
+      "external_wall": {
+        "kwh": 73442.7,
+        "kwh_per_m2": 16.99,
+        "area_m2": 1900
+      },
+      "roof": {
+        "kwh": 35789.7,
+        "kwh_per_m2": 8.28,
+        "area_m2": 864
+      },
+      "ground_floor": {
+        "kwh": 31017.9,
+        "kwh_per_m2": 7.18,
+        "area_m2": 864
+      },
+      "glazing": {
+        "kwh": 174517.3,
+        "kwh_per_m2": 40.38,
+        "area_m2": 452
+      },
+      "thermal_bridging": {
+        "kwh": 10430.2,
+        "kwh_per_m2": 2.41
+      },
+      "fabric_leakage": {
+        "kwh": 87355.5,
+        "kwh_per_m2": 20.21,
+        "ach": 0.06934098639455782
+      },
+      "permanent_vents": {
+        "kwh": 26197.4,
+        "kwh_per_m2": 6.06
+      }
+    }
+  },
+  "state_C_hre_zero": {
+    "sh_demand_mwh": 175.9,
+    "sh_delivered_mwh": 175.9,
+    "sh_electricity_mwh": 74.129,
+    "sh_gas_mwh": 0,
+    "sh_recovery_off_mwh": 0,
+    "vent_fan_kwh": 25948.9,
+    "vent_recovery_mwh": 0,
+    "vent_recovery_theo": 0,
+    "elec_total_kwh": 337127.1,
+    "gas_total_kwh": 242891,
+    "eui": 134.2,
+    "s2_vent_loss_kwh": null,
+    "s2_raw": {
+      "external_wall": {
+        "kwh": 73442.7,
+        "kwh_per_m2": 16.99,
+        "area_m2": 1900
+      },
+      "roof": {
+        "kwh": 35789.7,
+        "kwh_per_m2": 8.28,
+        "area_m2": 864
+      },
+      "ground_floor": {
+        "kwh": 31017.9,
+        "kwh_per_m2": 7.18,
+        "area_m2": 864
+      },
+      "glazing": {
+        "kwh": 174517.3,
+        "kwh_per_m2": 40.38,
+        "area_m2": 452
+      },
+      "thermal_bridging": {
+        "kwh": 10430.2,
+        "kwh_per_m2": 2.41
+      },
+      "fabric_leakage": {
+        "kwh": 87355.5,
+        "kwh_per_m2": 20.21,
+        "ach": 0.06934098639455782
+      },
+      "permanent_vents": {
+        "kwh": 26197.4,
+        "kwh_per_m2": 6.06
+      }
+    }
+  },
+  "deltas": {
+    "heating_delivered_mwh": 42.819,
+    "heating_electricity_mwh": 18.045,
+    "total_electricity_mwh": 3.5688000000000466,
+    "mvhr_fan_mwh": 17.476200000000002
+  },
+  "verdict": "H1 (display + fuel both correct; total-elec flatness is real cancellation)",
+  "reasoning": [
+    "Δ heating electricity = 18.0 MWh ≈ recovery_eff / SCOP. Heating fuel correctly responds to MVHR toggle.",
+    "MVHR fan 17.5 MWh matches hand-calc 17.5 MWh — fan side correct too.",
+    "Δ heating elec (18.0) ≈ MVHR fan (17.5) — they cancel, explaining total Δ ≈ 0."
+  ]
+}

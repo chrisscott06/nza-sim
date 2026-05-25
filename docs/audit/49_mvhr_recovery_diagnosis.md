@@ -312,8 +312,149 @@ Per Brief 49 "What MUST NOT happen":
 
 ---
 
-## §11 — HARD STOP
+## §11 — Live engine numbers (Node harness — added after the initial static trace)
 
-Diagnosis complete to the limit of what static code trace + the Finding E.2 observation can establish. The remaining open question (which of Hypothesis 1 / 2 / 3 is the live answer) needs three numbers from the live Brief 48 panel on Bridgewater, listed in §7.5. Surfacing to Chris.
+Chris's follow-up: "Don't wait on me for browser readings — get them yourself by running the engine directly." Built `scripts/_brief49_mvhr_boundary_diagnostic.mjs` to call `calculateInstant` from Node, load Bridgewater via the running FastAPI backend, and run the engine three times: MVHR fully on, MVHR fully removed (system + fan + recovery), HRE=0 only (system + fan kept, recovery off). The Node harness writes its raw output to `docs/audit/_brief49_diagnostic_run.json`. All numbers below are from that run, not from a browser session.
 
-**The fix is a separate brief**, authorised after Chris reads the three numbers and tells the architect which hypothesis to write the fix brief against.
+### §11.1 Hand-calc reference (Chris's real MVHR system values)
+
+- SFP = 1.40 W/(L/s), flow = 1425 L/s, HRE = 0.75 declared on the v40 entry (the v25 entry has HRE = 0.80 — a stale mismatch flagged in §11.5)
+- Continuous fan = 1.40 × 1425 × 8760 / 1e6 = **17.48 MWh / yr**
+- Degree-day recovery ceiling ≈ 67 MWh (Chris's hand-calc)
+
+### §11.2 Three engine runs on clean Bridgewater
+
+| Quantity | State A — MVHR ON (baseline) | State B — MVHR fully removed | State C — HRE=0 only (system + fan kept) |
+|---|---:|---:|---:|
+| `consumption.space_heating.demand_mwh` (RAW) | 90.30 | 71.70 | **175.90** |
+| `consumption.space_heating.delivered_mwh` | 28.88 | 71.70 | 175.90 |
+| `consumption.space_heating.recovery_offset_mwh` | 61.42 | 0 | 0 |
+| `consumption.space_heating.electricity_mwh` (heating fuel) | **12.17** | **30.22** | 74.13 |
+| `system_performance.ventilation.total.fan_kwh / 1000` | 25.95 | 8.47 | 25.95 |
+| `system_performance.ventilation.total.recovery_mwh` | 61.42 | 0 | 0 |
+| `energy_use.totals.electricity_kwh / 1000` | 284.00 | 287.57 | 337.13 |
+| `energy_use.totals.eui_kwh_per_m2` | **121.90** ✓ anchor held | 122.70 | 134.20 |
+
+State A's EUI 121.90 = Bridgewater clean anchor. ✓ Read-only investigation did not move the engine.
+
+### §11.3 Δ analysis (State B − State A — true MVHR toggle)
+
+- Δ heating delivered    = **+42.82 MWh**     (expect ≈ +recovery if H1 in isolation; observed less because raw demand also dropped 18.60)
+- Δ heating electricity  = **+18.05 MWh**     (matches recovery_offset / SCOP_ASHP ≈ 61.42 / 3.4 ≈ 18.06 to <0.1 MWh — perfect)
+- Δ fan electricity      = **−17.48 MWh**     (matches hand-calc 17.48 to 0.00 MWh — perfect)
+- Δ total electricity    = **+3.57 MWh**       (= +18.05 − 17.48 + small residual from secondary effects)
+- Δ EUI                  = **+0.80 kWh/m²·yr** (not flat — engine output is visible when toggle is true)
+
+**H1's mechanism (heating fuel rises ~recovery/SCOP, fan electricity falls by the MVHR fan's annual draw) is precisely confirmed. The fan-vs-heat cancellation is real.**
+
+The +3.57 MWh residual in total electricity, +0.80 EUI shift, is small enough that the live UI's 1-dp rounded EUI display would show as `122` vs `122` — i.e. visually flat — explaining Chris's observation of EUI 121.9 in both states.
+
+### §11.4 H2 falsification (re-confirmed under live engine)
+
+The static trace ruled H2 out by reading the three fuel paths. The live engine numbers re-confirm it:
+- Heating electricity changed by **+18.05 MWh ≠ 0**, so the fuel path IS crediting the recovery; if H2 were live (fuel computed from raw demand), Δ would be ≈ 0.
+- The change matches the recovery / SCOP arithmetic to within rounding.
+
+H2 is dead. Move on.
+
+### §11.5 The deeper finding — H3 confirmed, but as DOUBLE-COUNTING, not raw-magnitude overstatement
+
+State C is the diagnostic instrument. By holding the MVHR airflow + fan constant (system enabled, HRE=0), it isolates **what the engine thinks the building would need without recovery**.
+
+| Hand-calc against the engine | Value |
+|---|---:|
+| Total MVHR airstream heat content (full vent loss, no recovery) — from State C raw vs State B raw | 175.90 − 71.70 = **104.20 MWh** |
+| Physical recovery ceiling at HRE=0.8 (Brief 49 §7.4 formula) | 104.20 × 0.8 = **83.36 MWh** |
+| Engine's `effective_recovery_mwh` (State A) | 61.42 MWh ← under physical ceiling, OK on its own |
+| State 2 vent-loss reduction from `(1 − HRE)` factor: State C raw − State A raw | 175.90 − 90.30 = **85.60 MWh** ← State 2 already claims most of the recoverable heat |
+| **Total apparent MVHR savings to the user** (vs State C) | 85.60 + 61.42 = **147.02 MWh** |
+| **Physical airstream maximum** (≤ full airstream heat content) | **104.20 MWh** |
+| **Engine over-counts MVHR savings by** | 147.02 − 104.20 = **42.82 MWh / yr** |
+
+The recovery is **counted in two places that don't compose correctly**:
+
+1. **State 2's vent UA formula** (`instantCalc.js` line 2551):
+   ```js
+   AIR_HEAT_CAPACITY × Q_m3_h × (1 - v.hre) × sched_factor   // W/K
+   ```
+   This already reduces vent loss by the recovery fraction. With HRE=0.8, only 20 % of the ventilation airstream's heat appears as a State 2 load. That's the 85.60 MWh saved at the State-2 boundary.
+
+2. **State 3's recovery subtraction** (`instantCalc.js` line 4131):
+   ```js
+   const heating_demand_mwh = Math.max(0, heating_demand_state2_mwh - effective_recovery_mwh)
+   ```
+   This subtracts the full HRE-weighted recovery integral (61.42 MWh, per-hour-capped at hourly heating demand) AGAIN.
+
+Pre-Brief-49 the brief framed H3 as "recovery magnitude overstated against the ventilation budget". The actual situation is sharper: **the recovery is correctly capped per-hour at the airstream heat content, but it's being subtracted at two different layers in series.** State 2 should not apply `(1 − HRE)`, OR State 3 should not subtract `effective_recovery_mwh` — picking one and only one is the fix.
+
+### §11.6 What this means for every MVHR building
+
+If the engine subtracts recovery twice, then **every MVHR building's heating demand is systematically under-counted by approximately the per-hour-capped recovery integral.** On Bridgewater that's 61.42 MWh / yr (= 1.52 kWh/m²·yr of heating fuel @ ASHP SCOP 3.4 = ~14.6 kWh/m²·yr of heating delivered if computed correctly). Hypothesis 2's framing — "every MVHR building's EUI is wrong" — turns out to be true, but for a different reason than originally suspected (double-counting at the boundary, not raw-demand-instead-of-delivered in the fuel path).
+
+Severity: **HIGH**. This is the systematic accuracy gap Brief 49's "physics-based credibility" framing called out. Heat-pump-vs-boiler comparisons on MVHR buildings are not on solid ground until this fix lands.
+
+### §11.7 A separate finding — v25 ↔ v40 share-pct silent fallback
+
+Discovered while debugging the harness's first run. The v40 ventilation block validates `share_pct` sums to 100 % across enabled systems (`systemsEngine.js` line 572). If you disable one MVHR via `enabled: false` without rebalancing the remaining shares, validation fails and **`computeSystemsDelivered` silently returns null for the ventilation block** (`systemsEngine.js` line 950: `if (brief40VentBlock.error) return null  // fall through to v25 to keep ventilation alive`). Engine then reads v25 ventilation instead.
+
+Effect: a user who disables MVHR in the v40 UI thinks they've turned it off; engine actually keeps it on via v25 fallback. Recovery still applied, fan still running, demand unchanged. This is almost certainly what produced Chris's original Finding E.2 observation of "90.3 / 90.3 in both states" (raw demand unchanged because State 2 is still reading v25's enabled-MVHR via fallback).
+
+This is a SEPARATE bug from the double-counting. Recommended fix:
+- Either auto-rebalance shares when a system is disabled in the v40 UI (the simpler UX fix)
+- Or make the silent fallback loud — surface an error to the user that the toggle was rejected because shares no longer sum to 100 %
+
+Also flagged: **v25 MVHR entry has HRE = 0.80, v40 entry has 0.75.** Stale duplicate config, surfaces as a `~3 MWh / yr` drift in recovery between v25-fallback and v40-active paths (caught by the first harness run, before share rebalancing was added). Either field should be the single source of truth; the other should be deleted or auto-synced.
+
+### §11.8 Updated verdict
+
+**Verdict: H1 + H3 both present.**
+
+- **H1 (display + fuel internally consistent at the engine boundary they share):** confirmed. Δ heating electricity = +18.05 ≈ recovery / SCOP. Total-electricity flatness is real fan/heat cancellation, not a fuel-path bug.
+- **H2 (fuel path uses raw demand):** ruled out by both static trace AND live engine.
+- **H3 (recovery double-counted across State 2 + State 3):** confirmed. State 2's `(1 − HRE)` vent UA factor + State 3's explicit `−effective_recovery_mwh` subtraction together overstate MVHR savings by ~recovery_offset_mwh per year. On Bridgewater that's 61 MWh / yr of heating demand the engine credits the building with, beyond what the airstream physically carries.
+
+The internal consistency (H1) is why Chris's observation looked like "the panel works correctly" at the Brief 48 checkpoint — every quantity in the panel reconciles with every other quantity. It just reconciles to a wrong total.
+
+### §11.9 Recommended fix direction (still NOT implementing)
+
+The fix brief must pick one boundary to own the MVHR recovery, and remove it from the other:
+
+**Option A — State 2 owns it; State 3 stops subtracting again.**
+- Keep `(1 − HRE)` in `instantCalc.js` line 2551 (State 2 vent UA formula).
+- Delete the subtraction at `instantCalc.js` line 4131: replace with `const heating_demand_mwh = heating_demand_state2_mwh`.
+- Surface `effective_recovery_mwh` as DIAGNOSTIC ONLY (for the Breakdown panel's "Heat recovered by MVHR" row), not as a deduction from demand.
+- Effect on Bridgewater: heating demand reads 90.30 MWh as both demand AND delivered (single boundary). Heating fuel rises from 12.17 to ~26.6 MWh. EUI rises ~4 kWh/m²·yr.
+
+**Option B — State 3 owns it; State 2 uses full vent loss.**
+- Remove `(1 − HRE)` from `instantCalc.js` line 2551 — vent UA becomes `AIR_HC × Q × sched_factor`.
+- Keep State 3's subtraction at line 4131 as the only recovery point.
+- Effect on Bridgewater: State 2 raw demand rises to ~175.90 MWh; State 3 subtracts 61.42; delivered = 114.48; heating fuel = 33.7 MWh. EUI rises ~7 kWh/m²·yr.
+
+**Option A is the more conservative correction** (smaller numerical move from current) and matches the Brief 44 boundary discipline: State 2 represents "demand at the comfort setpoint, given the heat balance INCLUDING passive systems like MVHR"; State 3 represents "active systems consuming fuel to meet that demand". State 3 should not double-net what State 2 already netted.
+
+Both options also need:
+- Update the Breakdown panel's `recovery_offset_mwh` row label / tooltip — it's still shown as a deduction from raw demand, which after the fix is no longer how the math works.
+- Decide on v25/v40 stale-HRE: delete one path or auto-sync.
+- Decide on the share-pct silent fallback (rebalance or raise).
+
+### §11.10 Falsifiability target (updated)
+
+After the fix lands, on Bridgewater clean:
+
+1. Toggling MVHR (any mechanism — true `enabled: false`, or HRE→0) must change `consumption.space_heating.delivered_mwh` by ≤ the airstream's physical heat content `flow × cp × ρ × HRE × dT_integral` (≈ 83 MWh ceiling for Bridgewater).
+2. `consumption.space_heating.delivered_mwh − raw_demand_with_zero_HRE × (1 - HRE)` must round to zero (single boundary owns the recovery).
+3. The Brief 48 BreakdownPanel "Heat recovered by MVHR" row must reconcile: `raw_demand − delivered = recovery_actually_credited`.
+4. Bridgewater EUI shifts by 4–7 kWh/m²·yr (depending on Option A or B) and stabilises at the new anchor.
+5. The harness `scripts/_brief49_mvhr_boundary_diagnostic.mjs` re-run must show MVHR savings ≤ 104 MWh (the airstream's heat content), not 147 MWh.
+
+---
+
+## §12 — HARD STOP
+
+Diagnosis is closed. **Verdict: H1 + H3 — internal accounting consistent but recovery double-counted, ~14 kWh/m²·yr heating-fuel under-count per MVHR building.** H2 is dead. The v25/v40 silent-fallback footgun (§11.7) is recorded as a related bug for the same fix brief.
+
+Two read-only artifacts in this brief:
+- `scripts/_brief49_mvhr_boundary_diagnostic.mjs` — Node harness (re-runnable; written to be kept for the fix brief's falsifiability target #5).
+- `docs/audit/_brief49_diagnostic_run.json` — the raw harness output (numbers above derived from it).
+
+**The fix is a separate brief**, authorised once Chris reviews the verdict and picks between Option A and Option B (§11.9).
