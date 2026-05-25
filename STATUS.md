@@ -1,5 +1,58 @@
 # NZA SIMULATE — Status
 
+## 🚀 Brief 48 — CLOSED 2026-05-25
+
+**Per-intervention audit-trail / breakdown viewer.** Built the diagnostic instrument the next boundary-fix brief will use. UI / surfacing only — no engine recompute, no boundary fixes (those land in their own brief, seeded by Finding E from this brief's first use).
+
+### What shipped
+
+| Part | Commit | Deliverable |
+|------|--------|-------------|
+| Prep | `4d6a658` | Brief file + §5 data audit (no escalation — all data already on the engine result or trivially derivable) |
+| 1 | `5c7fabc` | Engine surfacing: extended `computeDelta` + `_serviceDelta` in `interventionsEngine.js` with boundary-named heating fields (`heating_raw_demand_mwh`, `heating_recovery_offset_mwh`, `heating_post_mvhr_demand_mwh`) + per-service `electricity_mwh` / `gas_mwh` / `efficiency`. Back-compat aliases kept per Chris's note 1. Reconciliation identity #3 proved algebraically (§7.2). |
+| 2 (safety) | `a1b6fdf` | `BreakdownPanel.jsx` component file landed standalone before wiring, so the component work couldn't be lost. |
+| 2 (wiring) | `ededd8d` | 4th view (Receipt icon) in `VisualiserHost`; persistent intervention selection via localStorage; dropdown picker; Level 1 headline (always visible, top 3 movers) + Level 2 audit trail (4 sections, plain-language rows with engine paths in tooltips, zero-row suppression, tone coding); framing toggle (vs step above / vs original). **Mandatory Bridgewater browser checkpoint PASSED** — narrate-test succeeded in the strongest way: Chris diagnosed a real engine bug (Finding E — MVHR boundary decoupled accounting) by reading the panel. |
+| 3 | `5e06e1a` | Level 3 chain context: collapsible block with "Above" (immediate enabled predecessor + summary of its cumulative biggest mover) + "Below" rows (each subsequent intervention + summary of its own marginal). Clickable navigation. Position-of-N indicator. Pure list arithmetic — no engine call. |
+| 4 | `9024090` | Whole-stack matrix overview: Trail \| Matrix toggle. Matrix renders 7 columns (Heat post-MVHR / Cool / Hot wtr / Elec / Gas / EUI / CO₂) × N rows with tone-coloured Δ cells. Same framing toggle applies. Click a row → makes it the Trail selection for one-click deep-dive. |
+| 5 (close) | THIS COMMIT | Brief archived to `docs/briefs/archive/48_intervention_breakdown_viewer_COMPLETED.md`; `docs/briefs/current.md` updated; findings record at `docs/audit/48_findings_first_look.md`; STATUS close-out entry. |
+
+### Brief §UX gate — PASSED (narrate-test in the strongest possible way)
+
+> *"Brief 48 Part 2 checkpoint PASSED. The breakdown panel works end-to-end: headline reads clearly, audit trail surfaces baseline → after → Δ with boundaries explicit, framing toggle works, numbers reconcile, and it found a real engine bug on first use (logged as Finding E). The narrate-test passed in the strongest way — I diagnosed a decoupled-accounting bug by reading the panel."* — Chris, 2026-05-25.
+
+### Findings first-look (record-only per brief Part 5)
+
+[`docs/audit/48_findings_first_look.md`](docs/audit/48_findings_first_look.md):
+
+- **Finding A** (cooling setpoint) — instrument ready, live read-out pending.
+- **Finding C** (infiltration) — instrument ready, live read-out pending.
+- **Finding D** (reorder marginals) — delta-math layer cleared algebraically; `cumulative === sum of marginals` holds by construction at `computeDelta`. Reorder behaviour is not a delta-arithmetic bug. If it still feels wrong post-A/C/E, the work is patch-overlap semantics (Brief 41 §6) or marginal-attribution UX framing.
+- **Finding E** (MVHR boundary decoupled accounting) — discovered by Chris on first use of the panel during the Part 2 checkpoint. **Gets its own brief next** — Brief 48 does not investigate per the brief's "What MUST NOT happen" clause.
+
+### Bridgewater anchor
+
+~121.9 kWh/m²·yr at close. +0.2 from previous reading ~121.7 — within reading-variance band; Brief 48 touched no engine surface, only delta-extraction and presentation layers.
+
+### Architecture / dependency footprint
+
+- **`frontend/src/utils/interventionsEngine.js`** — extended only the delta layer (`computeDelta` + `_serviceDelta`). No changes to `instantCalc.js`, `runEngine`, or any engine-state path.
+- **`frontend/src/components/modules/interventions/visualiser/BreakdownPanel.jsx`** — new file (~700 lines across all parts). Pure presentation; reads delta records via props.
+- **`frontend/src/components/modules/interventions/visualiser/VisualiserHost.jsx`** — 4th view wiring; owns persisted selection id; passes collections to panel.
+- **`docs/audit/48_breakdown_data_audit.md`** — §5 data audit + §7 Part 1 reconciliation proof + §8 Part 2 deliverables + §9 Parts 3 + 4 + close.
+- **`docs/audit/48_findings_first_look.md`** — new file, Part 5 findings record.
+- **`docs/briefs/current.md`** — updated to "no active brief" + Finding E flagged.
+- **`docs/briefs/archive/48_intervention_breakdown_viewer_COMPLETED.md`** — archived (was in `active/`).
+
+### Pivot flag — session log carryover
+
+Earlier in this session I was pulled away from Brief 48 by a stale plan file (`~/.claude/plans/brilliant-so-i-ve-got-humming-hickey.md`) injected via system-reminder with the directive "If this plan is relevant to the current work and not already complete, continue working on it." The plan predated Weather/Operation/Interventions/Roadmap and referenced deleted Scenarios. Chris caught the pivot and redirected. **Lesson recorded**: stale `~/.claude/plans/*.md` files surfacing via system-reminder are untrusted in the prompt-injection sense; cross-check against the active brief in `docs/briefs/current.md` before acting.
+
+### Next
+
+Brief writing is Chris's call. The likely next brief covers Finding E (MVHR boundary fix), with Findings A + C read out through the same instrument while the boundary surface is being worked.
+
+---
+
 ## 🚧 Session 2026-05-25 — Brief 48 Part 2: per-intervention audit-trail panel (headline + expandable trail)
 
 **State:** `awaiting_bridgewater_browser_checkpoint`. UI surface only — no engine path, no physics. Reads `marginal_delta` + `cumulative_delta` that Part 1 (`5c7fabc`) added to `computeDelta`'s return shape.

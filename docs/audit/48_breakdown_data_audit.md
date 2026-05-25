@@ -317,3 +317,46 @@ Proceeding to Part 2 (per-intervention audit-trail panel + mandatory browser che
 - No engine changes (`instantCalc.js` untouched).
 - Bridgewater clean anchor ~121.7 kWh/m²·yr: not perturbed — the new view is read-only on `stackResult` props.
 - Live Bridgewater narrate-test deferred to the mandatory checkpoint with Chris (the brief's Part 2 gate; AI cannot drive the browser).
+
+---
+
+## §9 — Parts 3 + 4 landed + Brief 48 close (commits `5e06e1a` + `9024090`)
+
+### §9.1 Part 3 — Level 3 chain context (`5e06e1a`)
+
+BreakdownPanel re-signatured to take the full `interventions` + `stackInterventions` collections + `selectedId` + `onSelectId` callback (parent owns persisted id; panel resolves its own row and navigation). Added a collapsible chain-context block (default open) that surfaces:
+
+- **Above row** — the immediate ENABLED predecessor, with a one-line summary of its cumulative-from-baseline biggest mover ("This row's marginal is computed on top of: …"). Clickable → navigates selection. If no enabled rows above, inert "Project baseline" line.
+- **Below rows** — every subsequent row, each with a one-line summary of its OWN marginal (so the user sees how downstream rows responded to having this one above them). Clickable → navigates selection.
+- **Position-of-N indicator** in the header sub-line ("2 of 5 · Audit trail · vs step above").
+
+Brief 48 Principle 3 (surface, don't recompute) held — no engine call; predecessor/successor identification is pure list arithmetic; `summariseMarginal` reuses the existing `pickHeadlineRows` helper from Part 2. The whole chain block is conditionally rendered only when there's actually a predecessor or a successor to show, so a stack of one intervention doesn't render empty Above/Below clutter.
+
+VisualiserHost simplified: removed `selectedIntervention` / `selectedRow` useMemo (panel does the lookup now); only owns the persistent selection id + setter.
+
+### §9.2 Part 4 — Whole-stack matrix overview (`9024090`)
+
+Trail | Matrix toggle added to BreakdownPanel header beside the framing toggle. Matrix mode renders a table:
+
+- **Rows** = each intervention in the list (1-based numbered).
+- **Columns** = 7 key metrics in compact form: Heat (post-MVHR) · Cool · Hot wtr · Elec · Gas · EUI · CO₂.
+- **Cells** = tone-coloured Δ from the active framing's per-row delta (marginal or cumulative). Below-threshold values render as muted "—" rather than `+0.0`.
+- **Click a row** → makes it the selected intervention; user can flip back to Trail to read that row's full audit in one click.
+- **Selected row** gets subtle background highlight. **Disabled rows** render with "· off" suffix in italic muted text.
+
+Same framing toggle applies in matrix mode (the active framing decides whether each cell reads marginal_delta or cumulative_delta). Mode toggle and framing toggle are co-located so Chris can flip between Trail (one row deep) and Matrix (all rows wide) in a single click without losing context.
+
+Brief 48 Principle 3 (surface, don't recompute) held — matrix reads the exact same per-row delta records that Trail mode reads, just laid out as rows-of-metrics instead of one-intervention's-rows-of-metrics. No new engine pass, no new delta math.
+
+Header copy varies by mode: Trail mode shows the selected intervention's label + "{idx+1} of {N} · Audit trail · {framing}"; Matrix mode shows "Whole-stack overview · Matrix · {N} interventions · {framing}".
+
+### §9.3 Part 5 close
+
+Brief 48 archived to `docs/briefs/archive/48_intervention_breakdown_viewer_COMPLETED.md`. `docs/briefs/current.md` updated to "no active brief" with Finding E flagged as the next brief's seed.
+
+Findings record at [`48_findings_first_look.md`](48_findings_first_look.md):
+- **D** — delta-math layer cleared algebraically; reorder is not a delta-arithmetic bug.
+- **A** + **C** — instrument ready; live read-outs pending in the next brief.
+- **E** — MVHR boundary decoupled-accounting bug, **discovered by Chris on first use** of the BreakdownPanel during the Part 2 checkpoint. Brief 48 explicitly does not investigate — record-only — per Chris's instruction. Gets its own brief next.
+
+The panel narrated correctly enough on first use to expose a real engine bug. That's the validation Brief 48 was built for.
