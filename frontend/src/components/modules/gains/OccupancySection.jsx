@@ -22,6 +22,10 @@ import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { useProjectMutation } from '../../../hooks/useProjectMutation.js'
 import MiniProfile from './MiniProfile.jsx'
 import { GAIN_COLOURS } from './gainColours.js'
+// Brief 47 Part 4 (2026-05-24): per-control change flags. Uses
+// prefix-match in useHasPatchOnPath so the whole-snapshot patch at
+// `building.occupancy` lights up every sub-field badge.
+import PatchedInputBadge from '../interventions/PatchedInputBadge.jsx'
 
 // ── Small editable field components (unchanged from Part 5) ─────────────────
 function NumField({ label, suffix, value, onChange, min = 0, max, step = 1, disabled }) {
@@ -161,13 +165,15 @@ export default function OccupancySection({ annual, onEditSchedule }) {
 
       {/* ── Density value + basis ──────────────────────────────────────── */}
       <div className="space-y-1.5">
-        <NumField
-          label="Density"
-          value={occ.density?.value}
-          onChange={setDensityValue}
-          step={0.1}
-          min={0}
-        />
+        <PatchedInputBadge path="building.occupancy.density">
+          <NumField
+            label="Density"
+            value={occ.density?.value}
+            onChange={setDensityValue}
+            step={0.1}
+            min={0}
+          />
+        </PatchedInputBadge>
         <SelectField
           label="Basis"
           value={occ.density?.basis ?? 'per_room'}
@@ -183,11 +189,13 @@ export default function OccupancySection({ annual, onEditSchedule }) {
       </div>
 
       {/* ── Occupancy rate ─────────────────────────────────────────────── */}
-      <PercentSlider
-        label="Occupancy rate"
-        value={occ.occupancy_rate}
-        onChange={v => patchOccupancy({ occupancy_rate: v })}
-      />
+      <PatchedInputBadge path="building.occupancy.occupancy_rate">
+        <PercentSlider
+          label="Occupancy rate"
+          value={occ.occupancy_rate}
+          onChange={v => patchOccupancy({ occupancy_rate: v })}
+        />
+      </PatchedInputBadge>
 
       {/* ── Heat per person ───────────────────────────────────────────── */}
       <div className="space-y-1.5">

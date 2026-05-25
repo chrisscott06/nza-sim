@@ -1,5 +1,37 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-24 — Brief 47 Part 4: right-pane visualiser views + PatchedInputBadge coverage
+
+**State:** `commit_in_flight` — final substantive Part before the walkthrough close.
+
+### What landed (Part 4)
+
+**Visualiser switcher** in the right pane: Waterfall (reuse `EUIWaterfall`) + Before/after (NEW small `BeforeAfterBars`) + Heat balance (reuse `HeatBalance` via new `PhysicsView`). View selection persists in localStorage. Per Brief 47 Principle 4 (reuse, don't rebuild): only `BeforeAfterBars` + the host scaffold are new; the heavy chart components are unchanged.
+
+**Live-update loop end-to-end.** New `onLivePatchesChange` callback on `InterventionEditorPopout` lifts the editor's in-progress patches up to `InterventionsModule`, where a new `paramsForEngine` useMemo substitutes them into the editing intervention before the engine pass. Result: user drags a slider in an off-screen editor → visualiser updates same render cycle. The on-screen verification loop the brief asks for, working.
+
+**PatchedInputBadge prefix-match** added to `useHasPatchOnPath` and `useRevertPathPatch`. Without this, every per-input badge was inert because Brief 46 captures most edits as whole-object snapshots at parent paths.
+
+**Coverage** wrapped across all four section types:
+- Building: orientation, q50, WWR (×4), shading (×4), comfort heating + cooling sliders
+- IG: occupancy density + rate
+- Operation: each OpeningRow
+- Systems: per-system share slider
+
+Per-field granularity inside Lighting/Equipment profiles, OpeningRow expanded fields, and SystemEditorPopout fields is deferred — wrapped at the parent level only. Documented in audit doc §4.3.
+
+### Verification
+
+- `npm run build` clean.
+- Engine unchanged.
+- Browser verification: Chris's Part 5 walkthrough.
+
+### Next: Part 5 walkthrough
+
+15-item Bridgewater checklist per Brief 47 §Part 5. State display (5 items) + Layout (4 items) + Visualiser (4 items) + Anchor (2 items). If clean → close commit + archive. If anomalous → log to 29_open_issues.md, fix within Part 5.
+
+---
+
 ## 🚧 Session 2026-05-24 — Brief 47 Part 3: stack-left / visualiser-right layout + draggable-off-screen pop-outs + share-rebalance clarity
 
 **State:** `commit_in_flight` — one commit per discipline.

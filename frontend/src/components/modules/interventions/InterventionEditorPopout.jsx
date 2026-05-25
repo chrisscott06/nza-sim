@@ -169,6 +169,7 @@ export default function InterventionEditorPopout({
   onCancel,
   onDelete,
   onDirtyChange,
+  onLivePatchesChange,   // Brief 47 Part 4 — visualiser live update
 }) {
   const isOpen = !!intervention
 
@@ -279,8 +280,15 @@ export default function InterventionEditorPopout({
   // Re-seed local patches when capture context emits onChange.
   // The provider lifts its local state into our localPatches so the
   // engine recompute fires inside this component's useMemo above.
+  //
+  // Brief 47 Part 4 (2026-05-24): also relay to the parent's
+  // onLivePatchesChange so the InterventionsModule's right-pane
+  // visualiser can re-run its engine pass against the live-edited
+  // intervention. The two callbacks always agree; relaying both keeps
+  // the editor's own preview-EUI footer and the visualiser in sync.
   const handleCapturedPatchesChange = (nextPatches) => {
     setLocalPatches(nextPatches)
+    onLivePatchesChange?.(nextPatches)
   }
 
   return (

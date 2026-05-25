@@ -309,9 +309,102 @@ No UI surface mounts library components. No prop chain references `onSaveToLibra
 
 ---
 
-## §4 Part 4 — visualiser views
+## §4 Part 4 — right-pane visualiser views + PatchedInputBadge coverage
 
-(To be filled.)
+### §4.1 Visualiser view switcher
+
+New directory: `frontend/src/components/modules/interventions/visualiser/`.
+
+| File | Role |
+|---|---|
+| `VisualiserHost.jsx` | View switcher (Waterfall / Before-after / Heat balance) — header strip with 3 buttons; routes to the active view. Selection persisted in localStorage. |
+| `BeforeAfterBars.jsx` | NEW — small two-bar comparison (Baseline vs After-stack) for EUI + Carbon. Reuses the engine's `stackResult.baseline` + walks back to the last enabled intervention's `result` for the cumulative. Tone-coloured delta pill. |
+| `PhysicsView.jsx` | Reuses `HeatBalance` (Brief 28-IM) on the cumulative state. Header strip shows ΔEUI vs baseline for context. |
+
+Per Brief 47 Principle 4 (reuse, don't rebuild): only `BeforeAfterBars` is new (and small). `EUIWaterfall` (Brief 45) and `HeatBalance` (Brief 28-IM) are imported and fed intervention-aware data via the existing `stackResult` / `result` shapes — no fork.
+
+### §4.2 Live-update loop — editor → visualiser
+
+The brief's hardest requirement: "Edit a value in the (off-screen) pop-out → the on-screen visualiser updates live."
+
+Implementation (`InterventionsModule.jsx`):
+
+1. **Lift in-progress patches from editor.** Added `onLivePatchesChange` callback prop to `InterventionEditorPopout`. The popout's existing `handleCapturedPatchesChange` (which mirrors the capture provider's `onChange` into `localPatches`) now ALSO calls `onLivePatchesChange(nextPatches)`. Identity: both callbacks fire from the same source, the local mirror and the parent mirror stay in lockstep.
+2. **Local mirror in InterventionsModule.** New `livePatches` useState held by `InterventionsModule`. `handleLivePatchesChange` writes to it. Cleared on editor close / save / delete.
+3. **Substitute into the engine pass.** New `paramsForEngine` useMemo: when `editingId` + `livePatches` are both present, build a synthetic interventions array where the editing intervention's saved `patches` are replaced with `livePatches`. Pass this to `calculateInstant`. When no editor is open / no live patches yet, `paramsForEngine === params` and the engine pass is identical to pre-Part-4 behaviour.
+4. **Visualiser consumes.** `stackResult` is re-derived from the new engine result every render; all three visualiser views (`EUIWaterfall`, `BeforeAfterBars`, `PhysicsView`) consume `stackResult` and re-render in the same cycle.
+
+End-to-end: user drags a slider in the off-screen editor → mutate fires → capturePatch → currentPatches updates → CaptureProvider's onChange → editor's handleCapturedPatchesChange → onLivePatchesChange → InterventionsModule's livePatches state → paramsForEngine memo re-derives → calculateInstant re-runs → stackResult new → all three views re-render. All in one React batch.
+
+**Performance note.** Every slider drag now triggers two engine passes: one in the editor (for the footer's preview EUI) and one in the InterventionsModule (for the visualiser). React batches state updates; on a typical drag the user-perceived rate is the render rate (~60 fps), not the input rate. The two engine passes share most computation but aren't dedup'd. If perf becomes an issue, the editor's preview engine can be retired (the visualiser's pass covers the footer too) — deferred until needed.
+
+### §4.3 PatchedInputBadge prefix-match + coverage
+
+**Hook enhancement** (`frontend/src/hooks/useProjectMutation.js`):
+
+`useHasPatchOnPath(path)` previously did exact-match against `patch.path`. Most Brief 46 capture patterns store whole-object snapshots at parent paths (`building.fabric`, `building.systems_config_v40`, `building.occupancy`, `building.gains`, `building.operable_openings`), so an exact-match badge at a granular leaf path (e.g. `building.fabric.air_permeability_q50`) would never fire.
+
+Enhanced to also match when `patch.path` is a PREFIX of the queried `path`:
+```js
+return capture.currentPatches.some(p => {
+  if (p.path === path) return true                  // exact
+  if (path.startsWith(p.path + '.')) return true    // whole-snapshot covers this field
+  return false
+})
+```
+
+`useRevertPathPatch` updated with the same dispatch — clicking the badge always finds the covering patch and removes it. For whole-snapshot patches the revert undoes ALL fields in that snapshot; the user understands they're undoing whatever change introduced the captured patch.
+
+**Coverage** — `PatchedInputBadge` now wraps:
+
+| Section | Inputs wrapped | Path matched |
+|---|---|---|
+| **Building / Geometry** | Orientation slider | `building.orientation` |
+| **Building / Glazing** | Per-face WWR slider (×4) | `building.wwr.<face>` |
+| **Building / Shading** | Per-face shading depth slider (×4) | `building.shading_overhang.<face>` |
+| **Building / Air permeability** | q50 slider | `building.fabric.air_permeability_q50` (prefix-matches `building.fabric`) |
+| **Building / Comfort band** | Heating + cooling setpoint sliders | `comfort_band.lower_c` / `comfort_band.upper_c` |
+| **IG / Occupancy** | Density number, Occupancy rate slider | `building.occupancy.density` / `building.occupancy.occupancy_rate` (prefix-matches `building.occupancy`) |
+| **Operation / Openings** | Each OpeningRow | `building.operable_openings` (whole-row trigger) |
+| **Systems** | Per-system share slider on SystemSummaryRow | `building.systems_config_v40.<service>` (prefix-matches `building.systems_config_v40`) |
+
+**Limitation acknowledged.** Prefix-matching is broad. A single whole-snapshot patch at `building.systems_config_v40` lights up every system's share slider in every service — not just the one that changed. Same for `building.gains` → both lighting and equipment lit. Acceptable for now; the change list (`ChangeList.jsx`) is the ground-truth surface that shows exactly which patch was captured. Granular per-field capture patterns (e.g. `building.systems_config_v40.heating[id=X].share_pct`) would resolve this; deferred — they require refactoring the writeV40 / patchOccupancy / patchGains call shapes to emit field-level patches rather than whole-object snapshots, which is a Brief 41 patch-shape concern not a Brief 47 layout one.
+
+**Not yet wrapped (deferred to follow-up polish):**
+- Lighting / Equipment per-profile magnitude inputs inside `MultiProfileList` (the profile list component is shared across modules and editing it adds risk; section-level nav flag already fires).
+- Per-opening fields inside OpeningRow's expanded editor (Cd / threshold / schedule_ref).
+- Per-system fields inside SystemEditorPopout (efficiency / control mechanism / setpoint).
+
+These are all wrapped at a parent level (per-row for OperationSection openings, per-section for IG profiles); per-field granularity is the polish pass.
+
+### §4.4 Files changed (Part 4)
+
+| File | Change |
+|---|---|
+| `frontend/src/hooks/useProjectMutation.js` | `useHasPatchOnPath` + `useRevertPathPatch` extended with prefix-match |
+| `frontend/src/components/modules/interventions/visualiser/VisualiserHost.jsx` | NEW — view switcher |
+| `frontend/src/components/modules/interventions/visualiser/BeforeAfterBars.jsx` | NEW — small two-bar comparison |
+| `frontend/src/components/modules/interventions/visualiser/PhysicsView.jsx` | NEW — heat-balance reuse wrapper with ΔEUI badge |
+| `frontend/src/components/modules/interventions/InterventionsModule.jsx` | `livePatches` state + `paramsForEngine` memo + VisualiserHost mounted in right pane |
+| `frontend/src/components/modules/interventions/InterventionEditorPopout.jsx` | `onLivePatchesChange` callback added; fires alongside `handleCapturedPatchesChange` |
+| `frontend/src/components/modules/building/buildingSections.jsx` | PatchedInputBadge wraps: orientation, q50, WWR (×4), shading (×4), comfort heating + cooling |
+| `frontend/src/components/modules/gains/OccupancySection.jsx` | PatchedInputBadge wraps: density, occupancy rate |
+| `frontend/src/components/modules/interventions/sections/OperationSection.jsx` | PatchedInputBadge wraps each OpeningRow |
+| `frontend/src/components/modules/systems/SystemSummaryRow.jsx` | PatchedInputBadge wraps the per-service share slider |
+| `docs/audit/47_interventions_layout_and_state.md` | §4 added |
+| `STATUS.md` | Part 4 entry |
+
+### §4.5 Verification
+
+- `npm run build` clean.
+- No engine code touched. `applyIntervention` / `calculateInstant` unchanged. Bridgewater anchor ~121.7 holds by construction.
+- Browser verification: Chris's Part 5 walkthrough.
+
+### §4.6 What Part 5 does
+
+Bridgewater walkthrough end-to-end (the 15-item checklist in Brief 47 §Part 5). If clean, close commit + archive Brief 47. If anything anomalous, log to `docs/audit/29_open_issues.md` + diagnose + fix within Part 5.
+
+---
 
 ---
 

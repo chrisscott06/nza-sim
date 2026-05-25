@@ -41,6 +41,7 @@ import { ProjectContext } from '../../../../context/ProjectContext.jsx'
 import { useUI } from '../../../../context/UIContext.jsx'
 import { useProjectMutation } from '../../../../hooks/useProjectMutation.js'
 import { useEditorChrome } from '../EditorChromeContext.jsx'
+import PatchedInputBadge from '../PatchedInputBadge.jsx'
 import {
   OPENING_TYPE_OPTIONS,
   OpeningRow,
@@ -141,18 +142,24 @@ function OpeningsEditor() {
         </p>
       ) : (
         <div className="space-y-1.5">
+          {/* Brief 47 Part 4: each row wrapped with PatchedInputBadge at
+              the whole-array path — when any opening changes (or one is
+              added/deleted), all rows' badges light up. Granular per-
+              field flagging requires capturing at per-opening paths;
+              follow-up. */}
           {openings.map(o => (
-            <OpeningRow
-              key={o.id}
-              opening={o}
-              selected={selectedOpeningId === o.id}
-              orientation={orientation}
-              onSelect={() => setSelectedOpeningId(o.id)}
-              onUpdate={(partial) => updateOpening(o.id, partial)}
-              onDelete={() => deleteOpening(o.id)}
-              openScheduleEditor={chrome.openNamedScheduleEditor}
-              allSched={Array.isArray(params?.schedules) ? params.schedules : []}
-            />
+            <PatchedInputBadge key={o.id} path="building.operable_openings">
+              <OpeningRow
+                opening={o}
+                selected={selectedOpeningId === o.id}
+                orientation={orientation}
+                onSelect={() => setSelectedOpeningId(o.id)}
+                onUpdate={(partial) => updateOpening(o.id, partial)}
+                onDelete={() => deleteOpening(o.id)}
+                openScheduleEditor={chrome.openNamedScheduleEditor}
+                allSched={Array.isArray(params?.schedules) ? params.schedules : []}
+              />
+            </PatchedInputBadge>
           ))}
         </div>
       )}

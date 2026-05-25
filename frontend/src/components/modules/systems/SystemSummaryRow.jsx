@@ -32,6 +32,13 @@
 
 import { Pencil, Trash2 } from 'lucide-react'
 import { SERVICE_COLOURS } from './SystemEditorCard.jsx'
+// Brief 47 Part 4 (2026-05-24): per-control change flag via PatchedInputBadge.
+// In the intervention editor, the badge fires when ANY system in this
+// service has been patched (because Brief 46 Part 4 captures Systems
+// edits as whole-systems_config_v40 snapshots; prefix-match in
+// useHasPatchOnPath catches the per-service / per-system level). On the
+// main /systems page this is a no-op pass-through.
+import PatchedInputBadge from '../interventions/PatchedInputBadge.jsx'
 
 function headlineEfficiency(system) {
   const service = system?.service
@@ -123,28 +130,30 @@ export default function SystemSummaryRow({
           hidden when onShareChange is not provided (graceful fallback for
           any caller that hasn't been migrated). */}
       {onShareChange && isEnabled && (
-        <input
-          type="range"
-          min={0}
-          max={100}
-          step={1}
-          value={sharePct}
-          onChange={(e) => onShareChange(Number(e.target.value))}
-          onClick={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-          className="flex-shrink-0 w-20 h-[3px] cursor-pointer"
-          style={{ accentColor: accent }}
-          title={
-            // Brief 47 Part 3 share-rebalance clarity: when this system
-            // has enabled partners in the same service, Brief 45 Part
-            // 3b auto-rebalances them as you drag this slider. The
-            // tooltip surfaces that behaviour so the user understands
-            // the partner sliders are about to move, too.
-            enabledPartnerCount > 0
-              ? `Share: ${sharePct}% of ${service} demand · drag to rebalance ${enabledPartnerCount} partner system${enabledPartnerCount === 1 ? '' : 's'} (enabled sum stays = 100%)`
-              : `Share: ${sharePct}% of ${service} demand`
-          }
-        />
+        <PatchedInputBadge path={`building.systems_config_v40.${service}`}>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={sharePct}
+            onChange={(e) => onShareChange(Number(e.target.value))}
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            className="flex-shrink-0 w-20 h-[3px] cursor-pointer"
+            style={{ accentColor: accent }}
+            title={
+              // Brief 47 Part 3 share-rebalance clarity: when this system
+              // has enabled partners in the same service, Brief 45 Part
+              // 3b auto-rebalances them as you drag this slider. The
+              // tooltip surfaces that behaviour so the user understands
+              // the partner sliders are about to move, too.
+              enabledPartnerCount > 0
+                ? `Share: ${sharePct}% of ${service} demand · drag to rebalance ${enabledPartnerCount} partner system${enabledPartnerCount === 1 ? '' : 's'} (enabled sum stays = 100%)`
+                : `Share: ${sharePct}% of ${service} demand`
+            }
+          />
+        </PatchedInputBadge>
       )}
 
       {/* Share — Brief 42 Part 4 conditional-pass review: bumped from

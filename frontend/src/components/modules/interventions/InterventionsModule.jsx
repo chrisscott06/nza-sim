@@ -38,14 +38,17 @@ import InterventionStackView from './InterventionStackView.jsx'
 // This import opens the rebuilt editor on every "Add intervention" /
 // edit-pencil click.
 import InterventionEditorPopout from './InterventionEditorPopout.jsx'
+import VisualiserHost from './visualiser/VisualiserHost.jsx'
 // Brief 47 Part 1 (2026-05-24): Library feature cut entirely per design
 // note. InterventionLibrary.jsx no longer imported.
 // Brief 47 Part 3 (2026-05-24): ComparisonView no longer mounted — the
 // Stack | Comparison tab switcher is retired in favour of the
-// inputs-left / visualiser-right layout. Comparison becomes a view in
-// the right-pane visualiser switcher in Part 4. ComparisonView file
-// stays in the repo until then (potentially deleted at close if the
-// visualiser fully subsumes it).
+// inputs-left / visualiser-right layout.
+// Brief 47 Part 4 (2026-05-24): visualiser switcher wired in the right
+// pane (Waterfall / Before-after / Heat balance), reusing existing
+// EUIWaterfall + HeatBalance components plus a small new
+// BeforeAfterBars. ComparisonView fully subsumed by the switcher —
+// file stays in the repo for now; safe to delete at Part 5 close.
 
 const INTERVENTIONS_ACCENT = '#E84393'
 const CURRENT_SCHEMA_VERSION = 1   // Mirrors DEFAULT_PARAMS.schema_version
@@ -70,8 +73,16 @@ export default function InterventionsModule() {
   // Brief 47 Part 3 (2026-05-24): `tab` state retired — Stack | Comparison
   // switcher gone, replaced by inputs-left / visualiser-right split.
   const [editingId, setEditingId] = useState(null)
-  // Brief 47 Part 1: library state (saveLibId / libraryPickerOpen) removed
-  // — library feature cut. See ImportantLibrary removal at line ~32.
+  // Brief 47 Part 1: library state (saveLibId / libraryPickerOpen) removed.
+  // Brief 47 Part 4 (2026-05-24): livePatches mirrors the editor's
+  // in-progress currentPatches so the right-pane visualiser updates
+  // live as the user edits in the (possibly off-screen) pop-out.
+  // Set to null when the editor isn't dirty / open; engineResult then
+  // consumes the saved params.interventions directly.
+  const [livePatches, setLivePatches] = useState(null)
+  const handleLivePatchesChange = useCallback((nextPatches) => {
+    setLivePatches(Array.isArray(nextPatches) ? nextPatches : null)
+  }, [])
   // Brief 43 Part 1: dirty state surfaced by the editor pop-out via
   // onDirtyChange. Used to gate switching to a different intervention
   // and closing the pop-out without saving. Stored in a ref so event
@@ -106,17 +117,33 @@ export default function InterventionsModule() {
     library_schedules: params?.library_schedules ?? [],
   }), [constructionsLib, params?.library_systems, params?.library_schedules])
 
+  // Brief 47 Part 4 (2026-05-24): live-stack synthesis. When the editor
+  // is open AND has emitted live patches via onLivePatchesChange, swap
+  // the editing intervention's saved patches with the in-progress ones
+  // for the engine pass so the right-pane visualiser reflects the
+  // unsaved edit in real time. When no editor is open or no live patches
+  // have been emitted yet, paramsForEngine === params and engineResult
+  // is identical to before this Part landed.
+  const paramsForEngine = useMemo(() => {
+    if (!editingId || !Array.isArray(livePatches)) return params
+    if (!params) return params
+    const live = interventions.map(i =>
+      i.id === editingId ? { ...i, patches: livePatches } : i
+    )
+    return { ...params, interventions: live }
+  }, [params, interventions, editingId, livePatches])
+
   // Engine result with interventions block (when present).
   const engineResult = useMemo(() => {
-    if (!params) return null
+    if (!paramsForEngine) return null
     try {
-      return calculateInstant(params, constructions, systems, libraryData, weatherData, hourlySolar, null, {})
+      return calculateInstant(paramsForEngine, constructions, systems, libraryData, weatherData, hourlySolar, null, {})
     } catch (err) {
       console.warn('[InterventionsModule] calculateInstant threw:', err)
       return null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params, constructions, systems, libraryData, weatherData, hourlySolar])
+  }, [paramsForEngine, constructions, systems, libraryData, weatherData, hourlySolar])
 
   const stackResult = engineResult?.consumption?.interventions ?? engineResult?.interventions ?? null
 
@@ -188,6 +215,7 @@ export default function InterventionsModule() {
   const handleCloseEditor = () => {
     setEditingId(null)
     editorDirtyRef.current = false
+    setLivePatches(null)   // Brief 47 Part 4 — clear live override on close
   }
 
   const handleSaveEditing = (updatedIntervention) => {
@@ -198,6 +226,7 @@ export default function InterventionsModule() {
     updateParam('interventions', next)
     setEditingId(null)
     editorDirtyRef.current = false
+    setLivePatches(null)   // Brief 47 Part 4 — saved patches now in params; clear live override
   }
 
   const handleDeleteEditing = () => {
@@ -206,6 +235,7 @@ export default function InterventionsModule() {
     updateParam('interventions', next)
     setEditingId(null)
     editorDirtyRef.current = false
+    setLivePatches(null)   // Brief 47 Part 4
   }
 
   // Brief 45 Part 2 (2026-05-21): duplicate an intervention. Deep-clones
@@ -322,26 +352,20 @@ export default function InterventionsModule() {
           </div>
         </aside>
 
-        {/* Right pane — visualiser surface. Part 3 ships a placeholder;
-            Part 4 wires the view switcher (Waterfall / Before-after /
-            Physics). Live-update loop: the visualiser consumes
-            baselineSummary + stackResult which are recomputed by the
-            engine useMemo whenever params.interventions changes (stack
-            toggle / reorder / delete) — that wiring is already in place.
-            The editor's in-progress patches are NOT yet lifted to this
-            view (queued for Part 4). */}
-        <main className="flex-1 min-w-0 overflow-auto bg-off-white">
-          <div className="p-6 h-full flex items-center justify-center">
-            <div className="max-w-md text-center rounded-lg border border-dashed border-light-grey bg-white p-8">
-              <p className="text-caption font-semibold text-navy mb-2">Visualiser</p>
-              <p className="text-xxs text-mid-grey leading-relaxed">
-                The right-pane visualiser switcher (Waterfall · Before/after · Heat balance · Hourly profiles) lands in Brief 47 Part 4 — fed baseline-vs-current data from the stack on the left, updating live as you edit in the pop-out.
-              </p>
-              <p className="text-xxs text-mid-grey/70 italic mt-3">
-                For now: open an intervention via the pencil to edit; the editor's footer Δ shows the impact of its in-progress edits.
-              </p>
-            </div>
-          </div>
+        {/* Right pane — Brief 47 Part 4 visualiser surface. View switcher
+            with Waterfall (reuse EUIWaterfall) / Before-after (new
+            BeforeAfterBars) / Heat balance (reuse HeatBalance via
+            PhysicsView). Live-update: engineResult re-runs with the
+            editor's in-progress patches substituted into the editing
+            intervention (see paramsForEngine useMemo); all three views
+            consume the recomputed stackResult so the visualiser stays
+            in sync with edits in the (potentially off-screen) pop-out. */}
+        <main className="flex-1 min-w-0 bg-off-white overflow-hidden">
+          <VisualiserHost
+            interventions={interventions}
+            stackResult={stackResult}
+            orientationDeg={Number(params?.orientation ?? 0)}
+          />
         </main>
       </div>
 
@@ -360,6 +384,7 @@ export default function InterventionsModule() {
         onCancel={handleCloseEditor}
         onDelete={handleDeleteEditing}
         onDirtyChange={handleDirtyChange}
+        onLivePatchesChange={handleLivePatchesChange}
       />
 
       {/* Brief 47 Part 1 (2026-05-24): library save/load modals removed. */}

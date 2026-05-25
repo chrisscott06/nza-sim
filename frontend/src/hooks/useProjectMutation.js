@@ -259,33 +259,64 @@ export function useProjectMutation() {
 
 /**
  * Hook: returns true if the currently-mounted capture context has a
- * captured patch at the given path. Used by the visible-change
- * indicator pattern in Building / IG / Operation / Systems composers
- * (Brief 46 Parts 2-4 step 2.4 / 3.6 / 4.6). Renders a small accent
- * dot next to inputs with a patch; click reverts.
+ * captured patch covering the given path. Used by `PatchedInputBadge`
+ * (Brief 46 Q3 pattern) to flag a control whose value differs from
+ * baseline.
  *
- * Path matching is exact-match against `patch.path`. Components that
- * write to a deep path should query the same deep path (e.g.
- * `useHasPatchOnPath('building.wwr.north')`).
+ * Match rules (Brief 47 Part 4 extension):
+ *   1. EXACT — patch.path === path. The original Brief 46 rule.
+ *   2. PREFIX — patch.path is a prefix of `path` (e.g. patch.path
+ *      'building.fabric' covers `path` 'building.fabric.air_permeability_q50').
+ *      This is necessary because Brief 46 Parts 2c-4 capture most edits
+ *      as WHOLE-OBJECT snapshots at parent paths — without prefix-match
+ *      every per-input badge would always read false and the per-control
+ *      visible-change indicator would never fire.
+ *
+ * Limitation: prefix-match is broad. A single whole-snapshot patch at
+ * `building.systems_config_v40` will light up the badge on every system
+ * control in every service — not just the one the user actually changed.
+ * Acceptable until Brief 41-shape granular patches replace whole-object
+ * snapshots (future iteration). The change list (`ChangeList.jsx`)
+ * shows the ground-truth patch list with the actual values, so the
+ * user always has a precise source of truth even when nav/badge dots
+ * are overly inclusive.
  */
 export function useHasPatchOnPath(path) {
   const capture = useInterventionCapture()
   return useMemo(() => {
     if (!capture?.isCapturing || !Array.isArray(capture.currentPatches)) return false
-    return capture.currentPatches.some(p => p?.path === path)
+    if (typeof path !== 'string') return false
+    return capture.currentPatches.some(p => {
+      if (typeof p?.path !== 'string') return false
+      if (p.path === path) return true                  // exact match
+      if (path.startsWith(p.path + '.')) return true    // whole-snapshot covers this field
+      return false
+    })
   }, [capture, path])
 }
 
 /**
- * Hook: returns a function that reverts the patch at a given path.
- * Components use it for the click-to-revert affordance on visible-
- * change indicators.
+ * Hook: returns a function that reverts the patch covering a given
+ * path. Used by `PatchedInputBadge`'s click-to-revert affordance.
+ *
+ * Matches via the same exact-or-prefix rule as `useHasPatchOnPath` so
+ * the revert button on a badge that fired via prefix-match still
+ * removes the covering patch (which may be a whole-snapshot — reverting
+ * it returns ALL fields in that snapshot to baseline; the user
+ * understands that they're undoing whatever change introduced the
+ * captured patch).
  */
 export function useRevertPathPatch() {
   const capture = useInterventionCapture()
   return useCallback((path) => {
     if (!capture?.isCapturing || !Array.isArray(capture.currentPatches)) return
-    const patch = capture.currentPatches.find(p => p?.path === path)
+    if (typeof path !== 'string') return
+    const patch = capture.currentPatches.find(p => {
+      if (typeof p?.path !== 'string') return false
+      if (p.path === path) return true
+      if (path.startsWith(p.path + '.')) return true
+      return false
+    })
     if (patch?.id) capture.revertPatch(patch.id)
   }, [capture])
 }

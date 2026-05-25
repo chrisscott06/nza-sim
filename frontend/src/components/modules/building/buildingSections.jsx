@@ -41,6 +41,11 @@ import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { useProjectMutation } from '../../../hooks/useProjectMutation.js'
 import { cwProvenance } from '../../../utils/openingCoefficients.js'
 import ThermalBridgesPanel from './ThermalBridgesPanel.jsx'
+// Brief 47 Part 4 (2026-05-24): per-control change flags. PatchedInputBadge
+// renders a small accent dot beside any input whose path matches an
+// active patch in the capture context (exact or prefix). Outside the
+// editor it's a no-op pass-through.
+import PatchedInputBadge from '../interventions/PatchedInputBadge.jsx'
 
 // ── Module-scoped constants ────────────────────────────────────────────────
 
@@ -367,13 +372,15 @@ export function GeometrySection({ isOpen, onToggle }) {
 
       <Field label={`Orientation — ${orientation}°${orientationLocked ? ' (locked)' : ''}`}>
         <div className="flex items-center gap-2">
-          <input
-            type="range" min={0} max={359} step={1}
-            value={orientation}
-            onChange={e => mutate('building.orientation', Number(e.target.value))}
-            disabled={orientationLocked}
-            className="flex-1 h-[3px] accent-navy disabled:opacity-30"
-          />
+          <PatchedInputBadge path="building.orientation">
+            <input
+              type="range" min={0} max={359} step={1}
+              value={orientation}
+              onChange={e => mutate('building.orientation', Number(e.target.value))}
+              disabled={orientationLocked}
+              className="flex-1 h-[3px] accent-navy disabled:opacity-30 w-full"
+            />
+          </PatchedInputBadge>
           <button
             type="button"
             onClick={() => setOrientationLocked(l => !l)}
@@ -451,13 +458,15 @@ export function GlazingSection({ isOpen, onToggle }) {
             <span className={`text-xxs w-14 flex-shrink-0 ${included ? 'text-navy' : 'text-light-grey'}`}>
               {facadeLabel(fac.num, orientation)}
             </span>
-            <input
-              type="range" min={0} max={100} step={1}
-              value={Math.round((wwr[fac.key] ?? 0) * 100)}
-              onChange={e => setWwrFor(fac.key, Number(e.target.value) / 100)}
-              disabled={!included}
-              className="flex-1 h-[3px] accent-navy disabled:opacity-30"
-            />
+            <PatchedInputBadge path={`building.wwr.${fac.key}`}>
+              <input
+                type="range" min={0} max={100} step={1}
+                value={Math.round((wwr[fac.key] ?? 0) * 100)}
+                onChange={e => setWwrFor(fac.key, Number(e.target.value) / 100)}
+                disabled={!included}
+                className="flex-1 h-[3px] accent-navy disabled:opacity-30 w-full"
+              />
+            </PatchedInputBadge>
             <span className={`text-xxs w-7 text-right ${included ? 'text-navy' : 'text-light-grey'}`}>
               {Math.round((wwr[fac.key] ?? 0) * 100)}%
             </span>
@@ -552,13 +561,15 @@ export function ShadingSection({ isOpen, onToggle }) {
             <span className={`text-xxs w-14 flex-shrink-0 ${included ? 'text-navy' : 'text-light-grey'}`}>
               {facadeLabel(fac.num, orientation)}
             </span>
-            <input
-              type="range" min={0} max={1.5} step={0.05}
-              value={reveal}
-              onChange={e => setShadingFor(fac.key, Number(e.target.value))}
-              disabled={!included}
-              className="flex-1 h-[3px] accent-navy disabled:opacity-30"
-            />
+            <PatchedInputBadge path={`building.shading_overhang.${fac.key}`}>
+              <input
+                type="range" min={0} max={1.5} step={0.05}
+                value={reveal}
+                onChange={e => setShadingFor(fac.key, Number(e.target.value))}
+                disabled={!included}
+                className="flex-1 h-[3px] accent-navy disabled:opacity-30 w-full"
+              />
+            </PatchedInputBadge>
             <span className={`text-xxs w-12 text-right tabular-nums ${included ? 'text-navy' : 'text-light-grey'}`}>
               {reveal.toFixed(2)} m
             </span>
@@ -794,12 +805,14 @@ export function AirtightnessSection({ liveResult, isOpen, onToggle }) {
         </div>
       </div>
       <div className="flex items-center gap-2 mb-1">
-        <input
-          type="range" min={1} max={25} step={0.1}
-          value={q50}
-          onChange={e => mutate('building.fabric', { air_permeability_q50: parseFloat(e.target.value) })}
-          className="flex-1 h-[3px] accent-navy"
-        />
+        <PatchedInputBadge path="building.fabric.air_permeability_q50">
+          <input
+            type="range" min={1} max={25} step={0.1}
+            value={q50}
+            onChange={e => mutate('building.fabric', { air_permeability_q50: parseFloat(e.target.value) })}
+            className="flex-1 h-[3px] accent-navy w-full"
+          />
+        </PatchedInputBadge>
         <span className="text-caption font-semibold text-navy w-16 text-right tabular-nums">
           {unit === 'm3_h_m2' ? q50.toFixed(2) : q50_ls.toFixed(2)}
         </span>
@@ -869,24 +882,28 @@ export function ComfortBandSection({ isOpen, onToggle }) {
             <label className="text-xxs text-mid-grey">Heating setpoint</label>
             <span className="text-xxs text-navy tabular-nums">{lo.toFixed(1)} °C</span>
           </div>
-          <input
-            type="range" min={12} max={26} step={0.5}
-            value={lo}
-            onChange={e => mutate('comfort_band.lower_c', parseFloat(e.target.value))}
-            className="w-full h-[3px] accent-navy"
-          />
+          <PatchedInputBadge path="comfort_band.lower_c">
+            <input
+              type="range" min={12} max={26} step={0.5}
+              value={lo}
+              onChange={e => mutate('comfort_band.lower_c', parseFloat(e.target.value))}
+              className="w-full h-[3px] accent-navy"
+            />
+          </PatchedInputBadge>
         </div>
         <div>
           <div className="flex items-center justify-between mb-0.5">
             <label className="text-xxs text-mid-grey">Cooling setpoint</label>
             <span className="text-xxs text-navy tabular-nums">{hi.toFixed(1)} °C</span>
           </div>
-          <input
-            type="range" min={20} max={32} step={0.5}
-            value={hi}
-            onChange={e => mutate('comfort_band.upper_c', parseFloat(e.target.value))}
-            className="w-full h-[3px] accent-navy"
-          />
+          <PatchedInputBadge path="comfort_band.upper_c">
+            <input
+              type="range" min={20} max={32} step={0.5}
+              value={hi}
+              onChange={e => mutate('comfort_band.upper_c', parseFloat(e.target.value))}
+              className="w-full h-[3px] accent-navy"
+            />
+          </PatchedInputBadge>
         </div>
         <p className="text-xxs text-mid-grey/80 italic pt-1">
           Drives heating/cooling demand against the setpoint convention (Brief 28k).
