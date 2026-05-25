@@ -65,31 +65,36 @@ function computeOverriddenSet(interventions) {
 }
 
 function BaselineRow({ baselineSummary }) {
-  // Brief 45 Part 2 (2026-05-21): baseline row now matches the
-  // intervention row's four-column delta shape:
-  //   Marginal ΔEUI | Marginal ΔCO₂ | Cumulative ΔEUI | Cumulative ΔCO₂
-  // For the baseline row, marginal/cumulative is meaningless — show the
-  // baseline EUI + carbon values in the cumulative slots, dash in the
-  // marginal slots. Column widths track InterventionRow's w-24 spec.
+  // Brief 47 Part 5a (2026-05-24): card layout matching InterventionRow,
+  // sized + spaced so the stack of cards reads as a single visual
+  // sequence. Baseline has no marginal/cumulative — show the absolute
+  // EUI + Carbon figures in a small two-cell table so the user has the
+  // anchor values to read intervention deltas against.
   return (
-    <div className="flex items-center gap-3 px-3 py-2 rounded-lg border border-light-grey bg-off-white">
-      <span className="w-3.5" /> {/* drag-handle column spacer */}
-      <span className="w-3" />  {/* enable-dot column spacer */}
-      <div className="flex-1 min-w-0 flex items-center gap-2">
+    <div className="rounded-lg border border-light-grey bg-off-white p-3">
+      <div className="flex items-center gap-2">
+        <span className="block w-2.5 h-2.5 rounded-full bg-mid-grey/70 flex-shrink-0" title="Baseline" />
         <span className="text-caption text-navy font-semibold">Baseline</span>
-        <span className="text-xxs text-mid-grey">starting point — toggle interventions below to test what-ifs</span>
+        <span className="text-xxs text-mid-grey italic ml-1">starting point</span>
       </div>
-      <div className="flex-shrink-0 w-24 text-right text-xxs text-mid-grey/50">—</div>
-      <div className="flex-shrink-0 w-24 text-right text-xxs text-mid-grey/50">—</div>
-      <div className="flex-shrink-0 w-24 text-right text-xxs text-mid-grey tabular-nums">
-        {baselineSummary?.eui != null ? `${baselineSummary.eui.toFixed(1)} kWh/m²` : '—'}
-      </div>
-      <div className="flex-shrink-0 w-24 text-right text-xxs text-mid-grey tabular-nums">
-        {baselineSummary?.carbon != null ? `${baselineSummary.carbon.toFixed(1)} kgCO₂/m²` : '—'}
-      </div>
-      <span className="w-5" />  {/* save-button column spacer */}
-      <span className="w-5" />  {/* duplicate-button column spacer (Brief 45 Part 2) */}
-      <span className="w-5" />  {/* edit-button column spacer */}
+      <table className="w-full mt-2 text-xxs border-collapse">
+        <tbody>
+          <tr className="border-t border-light-grey/60">
+            <td className="text-mid-grey font-medium py-1 w-16">EUI</td>
+            <td className="text-right tabular-nums text-navy font-semibold py-1">
+              {baselineSummary?.eui != null ? baselineSummary.eui.toFixed(1) : '—'}
+            </td>
+            <td className="text-mid-grey/70 pl-2 py-1">kWh/m²·yr</td>
+          </tr>
+          <tr className="border-t border-light-grey/60">
+            <td className="text-mid-grey font-medium py-1">Carbon</td>
+            <td className="text-right tabular-nums text-navy font-semibold py-1">
+              {baselineSummary?.carbon != null ? baselineSummary.carbon.toFixed(1) : '—'}
+            </td>
+            <td className="text-mid-grey/70 pl-2 py-1">kgCO₂/m²·yr</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   )
 }
@@ -181,31 +186,13 @@ export default function InterventionStackView({
   const overridden = computeOverriddenSet(interventions)
   const stackRows = Array.isArray(stackResult?.interventions) ? stackResult.interventions : []
 
-  // Column headers
-  // Brief 45 Part 2 (2026-05-21): two Δ columns expanded to four —
-  // Marginal ΔEUI / Marginal ΔCO₂ / Cumulative ΔEUI / Cumulative ΔCO₂.
-  // Widths track InterventionRow's w-24 spec.
-  // Brief 47 Part 1 (2026-05-24): Save-to-library button removed (library
-  // feature cut entirely); Delete button added. Header spacer count is
-  // still 3 (Duplicate / Edit / Delete) but the slot that used to belong
-  // to Save now belongs to Delete.
+  // Brief 47 Part 5a (2026-05-24): column-headers row retired. Each
+  // card (BaselineRow + InterventionRow) carries its own labelled
+  // metrics table — the global header strip is redundant and was the
+  // source of the squeezed-label issue in the 560 px-wide left pane.
   return (
-    <div className="space-y-2">
-      {/* Column headers */}
-      <div className="flex items-center gap-3 px-3 py-1">
-        <span className="w-3.5" />
-        <span className="w-3" />
-        <span className="flex-1 text-xxs text-mid-grey uppercase tracking-wider font-medium">Label</span>
-        <span className="flex-shrink-0 w-24 text-right text-xxs text-mid-grey uppercase tracking-wider font-medium" title="Marginal change in EUI vs the previous enabled state">Marg ΔEUI</span>
-        <span className="flex-shrink-0 w-24 text-right text-xxs text-mid-grey uppercase tracking-wider font-medium" title="Marginal change in carbon intensity vs the previous enabled state">Marg ΔCO₂</span>
-        <span className="flex-shrink-0 w-24 text-right text-xxs text-mid-grey uppercase tracking-wider font-medium" title="Cumulative change in EUI vs baseline">Cum ΔEUI</span>
-        <span className="flex-shrink-0 w-24 text-right text-xxs text-mid-grey uppercase tracking-wider font-medium" title="Cumulative change in carbon intensity vs baseline">Cum ΔCO₂</span>
-        <span className="w-5" />
-        <span className="w-5" />
-        <span className="w-5" />
-      </div>
-
-      {/* Baseline row */}
+    <div className="space-y-3">
+      {/* Baseline card */}
       <BaselineRow baselineSummary={baselineSummary} />
 
       {/* Intervention rows */}

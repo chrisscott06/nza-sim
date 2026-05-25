@@ -1,5 +1,31 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-24 — Brief 47 Part 5a: left-pane stack card redesign (walkthrough finding)
+
+**State:** `commit_in_flight` — Part 5 walkthrough is in progress; first finding fixed in-flight per the brief's discipline ("If anything anomalous → diagnose, fix within Part 5").
+
+### What landed (Part 5a)
+
+Chris flagged at `40e0f6f`: the Part 3 horizontal-row stack layout didn't fit the 560 px left pane. Labels truncated awkwardly, four delta columns crowded everything, action icons (duplicate/edit/delete) were nearly invisible at the right edge.
+
+Redesigned `InterventionRow` as a card:
+- Top row: drag handle · enable dot · label (truncate-friendly) · prominent action toolbar (Duplicate / Edit / Delete each as a `p-1.5` button, Delete hover-red).
+- Patch count + plain-English summary indented under the label.
+- Override warning inline when present.
+- Compact 2×2 metrics table at the bottom: Marginal | Cumulative across ΔEUI + ΔCO₂ rows, with a unit column.
+
+`BaselineRow` rebuilt to match the card shape — header + small 2-row absolute-value table (EUI + Carbon).
+
+`InterventionStackView`'s column-header row retired (each card carries its own labelled metrics; the global header was the source of the squeeze).
+
+### Verification
+
+- `npm run build` clean.
+- Engine unchanged.
+- Returns to Chris's continued walkthrough.
+
+---
+
 ## 🚧 Session 2026-05-24 — Brief 47 Part 4: right-pane visualiser views + PatchedInputBadge coverage
 
 **State:** `commit_in_flight` — final substantive Part before the walkthrough close.

@@ -408,6 +408,45 @@ Bridgewater walkthrough end-to-end (the 15-item checklist in Brief 47 §Part 5).
 
 ---
 
-## §5 Part 5 — walkthrough + close
+## §5 Part 5 — walkthrough findings + close
 
-(To be filled.)
+### §5a Card redesign for the left-pane stack (2026-05-24, walkthrough finding #1)
+
+**Finding (Chris at `40e0f6f` walkthrough):** the Part 3 horizontal-row layout for `InterventionRow` didn't fit the 560 px-wide left pane — labels truncated to the point of wrapping the "starting point" baseline subtitle onto multiple lines, the four delta columns (`Marg ΔEUI` / `Marg ΔCO₂` / `Cum ΔEUI` / `Cum ΔCO₂` at `w-24` each = 384 px before action icons) crowded the label, and the three action icons (duplicate / edit / delete) at the right edge were too small + too cramped to register as actions.
+
+**Fix:** rebuild as a card.
+
+`InterventionRow.jsx` now renders:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ ⠿ ● Label                            [⧉ Dup] [✏ Edit] [🗑]│
+│       n patch(es): plain-English summary…                │
+│       ⚠ Overridden by a later intervention (if any)      │
+│ ┌────────┬───────────┬───────────┬────────────┐          │
+│ │        │ Marginal  │ Cumulative│   unit     │          │
+│ ├────────┼───────────┼───────────┼────────────┤          │
+│ │ ΔEUI   │ +1.6      │ +1.6      │ kWh/m²·yr  │          │
+│ │ ΔCO₂   │ +0.3      │ +0.3      │ kgCO₂/m²·yr│          │
+│ └────────┴───────────┴───────────┴────────────┘          │
+└──────────────────────────────────────────────────────────┘
+```
+
+Action icons (Duplicate / Edit / Delete) live in a small toolbar at the top-right, each a `p-1.5` button with a hover background, the icon at `size={13}` (was 12 in tighter spaces). Delete is hover-red.
+
+`BaselineRow` rebuilt to match — a `p-3` card with a "Baseline · starting point" header and a small 2-row table showing the absolute baseline EUI + Carbon. No marginal/cumulative columns (meaningless for baseline).
+
+`InterventionStackView`'s column-header strip retired — each card now carries its own labelled metrics, the global header is redundant and was the cause of the squeeze.
+
+**Files changed (Part 5a):**
+
+| File | Change |
+|---|---|
+| `frontend/src/components/modules/interventions/InterventionRow.jsx` | Full rewrite — card layout, prominent action toolbar, compact 2×2 metrics table with unit column |
+| `frontend/src/components/modules/interventions/InterventionStackView.jsx` | BaselineRow rebuilt to match card shape; column-header strip removed |
+| `docs/audit/47_interventions_layout_and_state.md` | §5a added |
+| `STATUS.md` | Part 5a entry |
+
+**Verification:** `npm run build` clean. Engine unchanged. Returns to walkthrough.
+
+---
