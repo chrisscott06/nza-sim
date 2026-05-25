@@ -1,5 +1,54 @@
 # NZA SIMULATE — Status
 
+## 🚀 Brief 47 — CLOSED 2026-05-24
+
+**Walkthrough passes (Chris):** "reopen holds, deletes work, layout and visualiser are right, the 3-intervention waterfall tells the story." Bridgewater clean anchor ~121.7 confirmed at close. Brief 47 archived → `docs/briefs/archive/47_interventions_layout_and_state_COMPLETED.md`.
+
+### What Brief 47 delivered
+
+- **State display spine:** reopen bug fixed; ChangeList plain-English panel with live revert; nav flags propagate up the tree; per-control PatchedInputBadge dots across all four section types.
+- **List operations:** delete-intervention + delete-system both visible in-place.
+- **Library cut:** intervention library entirely removed; system library save-to-library gated to the main `/systems` page (out of editor / capture context).
+- **Layout:** stack-left / visualiser-right; intervention cards collapsible with prominent action toolbar; popouts draggable almost fully off-screen (60 px sliver).
+- **Visualiser:** stepped vertical waterfall (full rewrite) + before/after bars + heat-balance physics view; live-update loop end-to-end (editor → engine pass → visualiser, same React batch).
+- **Share-rebalance clarity:** tooltip + inline hint when 2+ enabled in a service.
+- **Sidecar fix:** Systems Sankey honours the global kWh / kWh/m²·yr toggle.
+
+UI-only brief throughout. Engine code untouched. Bridgewater clean baseline EUI ~121.7 kWh/m²·yr held across all 8 commits + the close gate fix.
+
+### Final commit chain
+
+```
+5478d21  Brief 47 Part 1   reopen-seed + list-level deletes + library removal
+411aed2  Brief 47 Part 2   ChangeList + nav-flag matcher rewrite
+504aa24  Brief 47 Part 3   stack-left/visualiser-right layout + draggable-off-screen
+40e0f6f  Brief 47 Part 4   visualiser views + live-update + PatchedInputBadge coverage
+22dc620  Brief 47 Part 5a  card redesign for stack
+1ac1f6a  Brief 47 Part 5b  stepped vertical waterfall
+510bf88  (sidecar)         Systems Sankey kWh / kWh/m²·yr toggle
+7407145  Brief 47 Part 5c  collapsible intervention cards
+<this>   Brief 47 close    SystemEditorPopout library gate + archive + STATUS
+```
+
+### Deferred to the next brief (NOT Brief 47 defects)
+
+Logged at close per Chris's directive:
+
+1. **Finding D — stacked-marginal reorder behaviour / demand-vs-delivered reading.** Reordering interventions shifts per-row marginal/cumulative attribution in ways that don't fully match the demand-vs-delivered framing the user expects. Engine output is correct per Brief 41 Part 2's `computeDelta` definition; user-facing framing needs work. Diagnostic note carries the live observation.
+
+2. **Intervention breakdown viewer.** A per-intervention drill-down showing the physical decomposition of one intervention's impact ("this q50 change shaved X through infiltration, this construction swap shaved Y through walls…"). Different shape from Brief 47's whole-stack visualiser views; needs its own view + engine query.
+
+Both surfaced during walkthrough. NEXT-BRIEF WORK, not Brief 47 defects.
+
+### Also logged for future housekeeping (see current.md)
+
+- Other /systems surfaces with hard-coded MWh (Live Results, Rejection, Summary, Sankey legend) — ~6 mechanical fix sites if we want them to follow the global toggle too.
+- Per-row collapse-state persistence (localStorage with per-id keys).
+- Per-field PatchedInputBadge granularity (requires field-level capture instead of whole-snapshots).
+- Issue #24 polish trio + perf React.memo follow-ups + cross-route EUI baseline harmonisation (logged since Brief 44/45 close).
+
+---
+
 ## 🚧 Session 2026-05-24 — Brief 47 Part 5c: collapsible intervention cards (walkthrough finding #3)
 
 **State:** `commit_in_flight`. Walkthrough still in progress.

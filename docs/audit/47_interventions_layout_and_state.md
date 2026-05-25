@@ -512,3 +512,83 @@ Brief 45 §4 principle held: presentation-only, no new computation, no engine ca
 **Verification:** `npm run build` clean. Engine untouched.
 
 ---
+
+### §5d Close: dead Save-to-library button gated inside capture context (2026-05-24)
+
+**Chris's final cleanup before close:** "Remove the dead 'Save current as library item' button still in SystemEditorPopout (the nested pop-out the library removal missed)."
+
+**Investigation:**
+- `SystemEditorCard.jsx` lines 411-420 render a "Save current as library item" button gated by `{onSaveToLibrary && (...)}`.
+- The prop chain: `SystemsModule.saveSystemToLibrary` → `SystemEditorPopout.onSaveToLibrary` → `SystemEditorCard.onSaveToLibrary`.
+- `SystemsModule.saveSystemToLibrary` writes to `params.library_systems`.
+- `AddSystemButton`'s "Load from library" picker reads from the SAME `params.library_systems`.
+- So removing save outright would orphan the load workflow on the main `/systems` page.
+
+**Decision: GATE not remove.** Per Chris's brief: "if the main-app system editor needs it, gate it so it only hides inside the capture context; otherwise remove outright."
+
+The save→load loop has a genuine use on the main `/systems` page (save a tuned system config, load it elsewhere in the same project). Removing it altogether would leave AddSystemButton's load picker forever empty for new projects. The Brief 47 library-removal scope was specifically the intervention library + the editor's exposure of any library affordance — not Brief 40's main-app systems library workflow.
+
+**Fix:** in `SystemEditorPopout.jsx`, consume `useInterventionCapture()`; when `isCapturing === true`, pass `undefined` as `onSaveToLibrary` to the underlying `SystemEditorCard`. The Card's existing `{onSaveToLibrary && (...)}` gate then hides the LIBRARY group entirely. No `SystemEditorCard` change needed — the prop pass-through is the boundary.
+
+Net result:
+- Intervention editor → no library affordance anywhere (Part 1 intent now complete across all four section composers + nested popouts).
+- Main `/systems` page → save + load remain (Brief 40 feature, out of Brief 47 scope).
+
+**Files changed:**
+
+| File | Change |
+|---|---|
+| `frontend/src/components/modules/systems/SystemEditorPopout.jsx` | `useInterventionCapture` import + `effectiveOnSaveToLibrary` gate before passing to SystemEditorCard |
+
+**Verification:** `npm run build` clean. Engine untouched.
+
+---
+
+## §6 Close: walkthrough pass + Bridgewater anchor + deferrals (2026-05-24)
+
+### §6.1 Walkthrough result
+
+Chris confirmed: "Walkthrough passes — reopen holds, deletes work, layout and visualiser are right, the 3-intervention waterfall tells the story."
+
+The 15-item Bridgewater walkthrough checklist (state display × 5 + layout × 4 + visualiser × 4 + anchor × 2) passes end-to-end at HEAD `7407145` + the §5d gate fix on top.
+
+### §6.2 Bridgewater clean anchor — confirmed
+
+Bridgewater clean state EUI **~121.7 kWh/m²·yr** held throughout Brief 47. UI-only brief; no engine code touched across any of the eight Parts (1, 2, 3, 4, 5a, 5b, 5c, 5d) plus the §5c sidecar Sankey toggle fix. Confirmed at close.
+
+### §6.3 Deferrals — logged, NOT Brief 47 defects
+
+Two items surfaced during the walkthrough that are next-brief work, not Brief 47 problems:
+
+1. **Finding D — stacked-marginal reorder behaviour / demand-vs-delivered reading.** Reordering interventions in the stack shifts the engine's per-row marginal/cumulative attribution in ways that don't fully match the demand-vs-delivered framing the user expects. The engine output is correct per Brief 41 Part 2's `computeDelta` definition (each row's marginal is "vs the previous enabled state"); the user-facing FRAMING needs work. Diagnostic note carries the live observation.
+
+2. **Intervention breakdown viewer** — a per-intervention drill-down showing the physical decomposition of one intervention's impact (this q50 change shaved X kWh through infiltration, this construction swap shaved Y through walls, …). Different shape from the Brief 47 visualiser views (which show the WHOLE stack's impact); needs its own view + engine query. The change list shows raw patches; this would show their decomposed physical effects.
+
+Both logged in `docs/briefs/current.md` "Deferred to the next brief" + this audit doc. Next-brief work.
+
+### §6.4 Brief 47 final commit chain
+
+| Commit | Part | Headline |
+|---|---|---|
+| `5478d21` | 1 | Reopen-seed fix + list-level deletes + library removal |
+| `411aed2` | 2 | ChangeList + nav-flag matcher rewrite |
+| `504aa24` | 3 | Stack-left/visualiser-right layout + draggable-off-screen popouts + share-rebalance clarity |
+| `40e0f6f` | 4 | Visualiser views + live-update loop + PatchedInputBadge coverage |
+| `22dc620` | 5a | Card redesign for stack rows |
+| `1ac1f6a` | 5b | Stepped vertical waterfall |
+| `510bf88` | (sidecar) | Systems Sankey honours global kWh / kWh/m²·yr toggle |
+| `7407145` | 5c | Collapsible intervention cards |
+| (this commit) | close | §5d gate fix + archive + STATUS |
+
+### §6.5 What Brief 47 delivered, end to end
+
+- **State display spine:** reopen bug fixed (controls render saved values, not baseline); change list (plain English, live revert); nav flags up the tree; per-control PatchedInputBadge dots; all three views agree.
+- **List operations:** delete-intervention + delete-system both visible in-place.
+- **Library cut:** intervention library entirely removed; system library save-to-library gated to the main `/systems` page only.
+- **Layout:** stack-left / visualiser-right; intervention cards collapsible with prominent action toolbar; popouts draggable almost fully off-screen.
+- **Visualiser:** waterfall (rebuilt as stepped-vertical SVG) + before/after bars + heat-balance physics view; live-update loop end-to-end (editor → InterventionsModule → engine pass → visualiser, same React batch).
+- **Share-rebalance clarity:** tooltip + inline hint when 2+ enabled in a service.
+- **Systems Sankey** (sidecar fix): global kWh / kWh/m²·yr toggle now flips labels.
+
+Engine unchanged. Bridgewater anchor held throughout. Module is finally usable for real consultancy per the brief's target outcome.
+

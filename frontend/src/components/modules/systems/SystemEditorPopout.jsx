@@ -25,6 +25,7 @@
 
 import SchedulePopout from '../../shared/SchedulePopout.jsx'
 import SystemEditorCard, { SERVICE_COLOURS } from './SystemEditorCard.jsx'
+import { useInterventionCapture } from '../../../context/InterventionCaptureContext.jsx'
 
 export default function SystemEditorPopout({
   system,
@@ -37,6 +38,28 @@ export default function SystemEditorPopout({
   shareInvalid,
   onClose,
 }) {
+  // Brief 47 close (2026-05-24): hide the "Save current as library item"
+  // affordance inside the capture context. The intervention editor cut
+  // all library features per the Brief 47 design note; this nested
+  // pop-out was missed in Part 1's sweep because it's mounted by
+  // InputsColumn which is shared between the main /systems page and
+  // the editor's SystemsSection.
+  //
+  // GATE (not remove): the main /systems page still benefits — its
+  // AddSystemButton's "Load from library" picker reads from the same
+  // params.library_systems that this save button populates. Removing
+  // save outright would orphan the load workflow. Hiding only inside
+  // the editor keeps both surfaces consistent with their own scope:
+  //   - Intervention editor → no library affordance anywhere (Part 1
+  //     intent, now complete).
+  //   - Main /systems page → save + load remain (Brief 40 feature,
+  //     out of Brief 47 scope).
+  // SystemEditorCard's existing `{onSaveToLibrary && ...}` gate around
+  // the LIBRARY group handles the rendering — passing undefined hides
+  // the group entirely. No SystemEditorCard change needed.
+  const capture = useInterventionCapture()
+  const effectiveOnSaveToLibrary = capture?.isCapturing ? undefined : onSaveToLibrary
+
   const isOpen = !!system
   const service = system?.service ?? 'heating'
   const accent = SERVICE_COLOURS[service] ?? '#00AEEF'
@@ -62,7 +85,7 @@ export default function SystemEditorPopout({
               onDelete?.()
               onClose?.()
             }}
-            onSaveToLibrary={onSaveToLibrary}
+            onSaveToLibrary={effectiveOnSaveToLibrary}
             openScheduleEditor={openScheduleEditor}
             shareInvalid={shareInvalid}
           />
