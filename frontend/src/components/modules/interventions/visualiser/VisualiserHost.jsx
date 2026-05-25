@@ -1,5 +1,5 @@
 /**
- * VisualiserHost.jsx — Brief 47 Part 4 (2026-05-24)
+ * VisualiserHost.jsx — Brief 47 Part 4 (2026-05-24), Brief 48 Part 2 (2026-05-25)
  *
  * Host for the right-pane visualiser views. Carries the view switcher
  * and dispatches to:
@@ -7,6 +7,7 @@
  *   - Waterfall (reuse `EUIWaterfall` from Brief 45)
  *   - Before/after (new `BeforeAfterBars`)
  *   - Physics (reuse `HeatBalance` via `PhysicsView`)
+ *   - Breakdown (Brief 48 Part 2 — per-intervention audit trail)
  *
  * Brief 47 Part 4.2 framing: every view shows change-against-baseline
  * — baseline-vs-cumulative bars, baseline-vs-current physics, waterfall
@@ -21,23 +22,35 @@
  * This component receives the recomputed `stackResult` as a prop and
  * passes through to each view — no separate engine pass here.
  *
+ * Brief 48 Part 2: the Breakdown view shows the per-intervention
+ * audit trail. Picks one intervention from a dropdown, reads its
+ * marginal_delta + cumulative_delta off the matching stackResult.
+ * interventions[i] row, and hands them to BreakdownPanel. Alignment
+ * is by index (runInterventionStack processes the source list in
+ * order and produces a result row at the same index, including
+ * disabled rows).
+ *
  * Brief 47 Principle 4: reuse, don't rebuild. Only `BeforeAfterBars`
- * is new (and small). Waterfall + HeatBalance are existing.
+ * and `BreakdownPanel` are new. Waterfall + HeatBalance are existing.
  *
  * Out of scope (deferred to follow-on brief): carbon-trajectory-over-
- * time / pathway data / BAU projection.
+ * time / pathway data / BAU projection. Brief 48 Part 3 will add
+ * Level 3 chain context (downstream effect on subsequent rows) to
+ * the breakdown view.
  */
 
-import { useState } from 'react'
-import { BarChart3, GitCompareArrows, Flame } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { BarChart3, GitCompareArrows, Flame, Receipt } from 'lucide-react'
 import EUIWaterfall from '../EUIWaterfall.jsx'
 import BeforeAfterBars from './BeforeAfterBars.jsx'
 import PhysicsView from './PhysicsView.jsx'
+import BreakdownPanel from './BreakdownPanel.jsx'
 
 const VIEWS = [
-  { id: 'waterfall', label: 'Waterfall',     icon: BarChart3,         hint: 'Per-intervention marginal impact' },
-  { id: 'beforeafter', label: 'Before/after', icon: GitCompareArrows,  hint: 'Cumulative stack vs baseline' },
-  { id: 'physics',  label: 'Heat balance',   icon: Flame,             hint: 'Current stack heat balance' },
+  { id: 'waterfall',   label: 'Waterfall',     icon: BarChart3,         hint: 'Per-intervention marginal impact' },
+  { id: 'beforeafter', label: 'Before/after',  icon: GitCompareArrows,  hint: 'Cumulative stack vs baseline' },
+  { id: 'physics',     label: 'Heat balance',  icon: Flame,             hint: 'Current stack heat balance' },
+  { id: 'breakdown',   label: 'Breakdown',     icon: Receipt,           hint: 'Per-intervention audit trail' },
 ]
 
 export default function VisualiserHost({ interventions, stackResult, orientationDeg = 0 }) {
@@ -66,6 +79,48 @@ export default function VisualiserHost({ interventions, stackResult, orientation
       }
     }
   }
+
+  // ── Breakdown view selection ──────────────────────────────────────
+  // Persist by id so reorders are tracked; auto-pick the first row
+  // when the list changes (or the previously selected id is gone).
+  const interventionList = Array.isArray(interventions) ? interventions : []
+  const [selectedBreakdownId, setSelectedBreakdownId] = useState(() => {
+    try { return localStorage.getItem('nza-interventions-breakdown-id') || null }
+    catch { return null }
+  })
+
+  // If the selection is no longer in the list (deleted / never set),
+  // fall back to the first available intervention. Run as an effect so
+  // it doesn't re-render on every selection change.
+  useEffect(() => {
+    if (interventionList.length === 0) return
+    const found = selectedBreakdownId
+      && interventionList.some(i => i?.id === selectedBreakdownId)
+    if (!found) {
+      const firstId = interventionList[0]?.id ?? null
+      setSelectedBreakdownId(firstId)
+      try { localStorage.setItem('nza-interventions-breakdown-id', firstId ?? '') } catch {}
+    }
+  }, [interventionList, selectedBreakdownId])
+
+  const handleSetBreakdownId = (id) => {
+    setSelectedBreakdownId(id)
+    try { localStorage.setItem('nza-interventions-breakdown-id', id ?? '') } catch {}
+  }
+
+  // Resolve the selected intervention + matching engine row by id, then
+  // pair the source intervention (carries label) with the engine row
+  // (carries marginal_delta / cumulative_delta). Alignment by index —
+  // runInterventionStack produces one row per source list entry.
+  const { selectedIntervention, selectedRow } = useMemo(() => {
+    if (!selectedBreakdownId || interventionList.length === 0) {
+      return { selectedIntervention: null, selectedRow: null }
+    }
+    const idx = interventionList.findIndex(i => i?.id === selectedBreakdownId)
+    if (idx < 0) return { selectedIntervention: null, selectedRow: null }
+    const row = stackResult?.interventions?.[idx] ?? null
+    return { selectedIntervention: interventionList[idx], selectedRow: row }
+  }, [interventionList, stackResult, selectedBreakdownId])
 
   return (
     <div className="h-full flex flex-col">
@@ -111,6 +166,40 @@ export default function VisualiserHost({ interventions, stackResult, orientation
             cumulativeResult={cumulativeResult}
             orientationDeg={orientationDeg}
           />
+        )}
+        {view === 'breakdown' && (
+          <div className="h-full flex flex-col">
+            {/* Intervention picker — quiet single-row strip above the
+                panel. Disabled rows surface (muted label) so the user
+                can see why a marginal_delta is zero. */}
+            <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2 border-b border-light-grey bg-white">
+              <label className="text-xxs uppercase tracking-wider text-mid-grey">Intervention</label>
+              {interventionList.length === 0 ? (
+                <span className="text-xxs italic text-mid-grey">
+                  No interventions yet — add one in the stack on the left.
+                </span>
+              ) : (
+                <select
+                  value={selectedBreakdownId ?? ''}
+                  onChange={(e) => handleSetBreakdownId(e.target.value || null)}
+                  className="text-xxs px-2 py-1 rounded border border-light-grey bg-white text-navy focus:outline-none focus:border-navy"
+                >
+                  {interventionList.map((i, idx) => (
+                    <option key={i?.id ?? idx} value={i?.id ?? ''}>
+                      {idx + 1}. {i?.label || '(unnamed)'}{i?.enabled === false ? '  · disabled' : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <div className="flex-1 min-h-0">
+              <BreakdownPanel
+                intervention={selectedIntervention}
+                marginalDelta={selectedRow?.marginal_delta ?? null}
+                cumulativeDelta={selectedRow?.cumulative_delta ?? null}
+              />
+            </div>
+          </div>
         )}
       </div>
     </div>

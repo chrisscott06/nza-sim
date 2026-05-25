@@ -282,3 +282,38 @@ The other two reconciliations from §5 (MVHR identity: `raw − offset ≈ deliv
 - Bridgewater clean anchor ~121.7 kWh/m²·yr held — Part 1 adds derived fields to `computeDelta` return; underlying engine `result` is unchanged.
 
 Proceeding to Part 2 (per-intervention audit-trail panel + mandatory browser checkpoint).
+
+---
+
+## §8 — Part 2 landed (safety commit `a1b6fdf` + wiring commit pending)
+
+### §8.1 What shipped
+
+**New file** — `frontend/src/components/modules/interventions/visualiser/BreakdownPanel.jsx` (406 lines, safety-committed at `a1b6fdf`):
+
+- **Progressive disclosure** per brief §UX: Level 1 headline (top 3 movers by absolute Δ, picked from post-MVHR demand / cooling / hot water / electricity / gas / EUI / carbon candidate set, threshold-filtered) is always visible; Level 2 audit-trail table expands on click; Level 3 chain context deferred to Part 3.
+- **Framing toggle** at top-right — "vs step above" (marginal, default — Finding-D-relevant) vs "vs original" (cumulative from baseline). Only one Δ column at a time per brief §UX rule "not two competing columns".
+- **Four sections** in the trail, plain-language section headers + plain-language row labels with engine paths in Info tooltips: Demand side (raw / MVHR recovery / post-MVHR / cooling / DHW) → Delivered by systems (heating delivered + efficiency, cooling delivered + efficiency, DHW delivered) → Fuel consumed (total electricity / gas, per-service splits) → Headline impact (EUI + carbon).
+- **Zero-row suppression** — rows where baseline and after are both zero are hidden silently; rows where Δ is below per-unit `NOISE_THRESHOLD` show "no change" text rather than `+0.0`. Sections with no surviving rows are hidden entirely.
+- **Tone coding** — `text-green-700` for "good" Δs (lower demand / lower fuel / higher efficiency via `goodWhenPositive`), `text-red-700` for "bad", `text-mid-grey` for below-threshold. Honest directional read; tradeoffs are explicit (e.g. heat-pump retrofit shows red on electricity Δ and green on gas Δ → reader sees the trade).
+- **Empty state** when `!intervention` — plain message pointing user to the dropdown.
+
+**Wiring** — `frontend/src/components/modules/interventions/visualiser/VisualiserHost.jsx`:
+
+- 4th view `breakdown` (icon: `Receipt` from Lucide) added to the `VIEWS` array alongside Waterfall / Before-after / Heat balance.
+- Persistent intervention selection via `localStorage` key `nza-interventions-breakdown-id`. Auto-falls-back to the first intervention's id if the previously-selected one is no longer in the list (handled in `useEffect` so it doesn't fight the user's selection).
+- Single-row picker strip above the panel (label + dropdown). Disabled rows surface in the dropdown with `· disabled` suffix so a zero `marginal_delta` has a visible explanation.
+- BreakdownPanel receives `intervention` (source list entry, carries label) + `marginalDelta` + `cumulativeDelta` (from the matching `stackResult.interventions[idx]` row by id-lookup → index alignment). No internal engine call — plugs straight into the Brief 47 live-update loop.
+
+### §8.2 What is deliberately NOT in Part 2 (deferred to Part 3+)
+
+- **Level 3 chain context** — "this intervention shifted intervention X's marginal from −Y to −Z" downstream effect. Requires per-cell baseline-when-reordered diffs that the current `stackResult` shape doesn't carry. Part 3.
+- **Whole-stack matrix overview** — one screen showing every intervention × every metric. Brief §UX Part 4 optional; not built unless walkthrough motivates it.
+- **Engine boundary fixes** for Findings A (cooling setpoint), C (infiltration), D (reorder marginals). Out of scope per brief's "What MUST NOT happen" — Brief 48 builds the instrument; fixes are a separate brief that uses the instrument.
+
+### §8.3 Verification
+
+- `npm run build` clean (3,213 modules transformed, 9.17s, no errors — only pre-existing chunk-size + font-path warnings).
+- No engine changes (`instantCalc.js` untouched).
+- Bridgewater clean anchor ~121.7 kWh/m²·yr: not perturbed — the new view is read-only on `stackResult` props.
+- Live Bridgewater narrate-test deferred to the mandatory checkpoint with Chris (the brief's Part 2 gate; AI cannot drive the browser).

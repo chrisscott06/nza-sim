@@ -1,5 +1,61 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-25 — Brief 48 Part 2: per-intervention audit-trail panel (headline + expandable trail)
+
+**State:** `awaiting_bridgewater_browser_checkpoint`. UI surface only — no engine path, no physics. Reads `marginal_delta` + `cumulative_delta` that Part 1 (`5c7fabc`) added to `computeDelta`'s return shape.
+
+### What landed (Part 2)
+
+**Safety commit `a1b6fdf`** — `frontend/src/components/modules/interventions/visualiser/BreakdownPanel.jsx` (new, 406 lines).
+
+**Wiring commit (this commit)** — `frontend/src/components/modules/interventions/visualiser/VisualiserHost.jsx`:
+
+- 4th view `breakdown` (Receipt icon) joins Waterfall / Before-after / Heat balance.
+- Persistent intervention selection via `localStorage` key `nza-interventions-breakdown-id`. Auto-falls-back to first intervention if the previously-selected one is gone.
+- Single-row picker strip above the panel (label + dropdown). Disabled rows surface with `· disabled` suffix.
+- BreakdownPanel receives `intervention` (source list) + `marginalDelta` + `cumulativeDelta` (from matching `stackResult.interventions[idx]` row by id-lookup → index alignment). No internal engine call.
+
+**Brief §UX gate** — progressive disclosure designed in:
+
+- **Level 1 headline** (always visible): top 3 movers by absolute Δ, picked from a candidate set (post-MVHR demand / cooling / hot water / electricity / gas / EUI / carbon), threshold-filtered. Plain `LABEL  ±X.X unit` strip, tone-coloured.
+- **Level 2 audit trail** (expand by default): four sections (Demand side / Delivered by systems / Fuel consumed / Headline impact) of plain-language row labels with Info tooltips carrying engine paths. Zero-on-zero rows hidden silently; below-threshold Δs read "no change"; empty sections hidden entirely.
+- **Framing toggle** (top-right): "vs step above" (marginal, default — Finding-D-relevant) | "vs original" (cumulative from baseline). One Δ column at a time per brief §UX rule "not two competing columns".
+- **Tone**: green = good Δ (lower demand / lower fuel / higher efficiency), red = bad, grey = below threshold. `goodWhenPositive` flag flips the convention for efficiency rows.
+- **Empty state** when no intervention selected: plain message pointing to the dropdown.
+
+### Reconciliation identity #3 — `cumulative === sum of marginals` (from §7.2)
+
+Holds by construction at the `computeDelta` layer (telescoping subtraction proof). The first hard data point on Finding D: **the delta math is correct; reorder behaviour is not a delta-arithmetic bug. The next brief should look upstream — patch-overlap semantics (last-write-wins) and marginal-attribution framing — not at this layer.** See `docs/audit/48_breakdown_data_audit.md` §7.2–§7.3.
+
+### Verification
+
+- `npm run build` clean (3,213 modules, 9.17s, no errors — only pre-existing chunk-size + font-path warnings).
+- No engine changes (`instantCalc.js` untouched).
+- Bridgewater clean anchor ~121.7 kWh/m²·yr: not perturbed — the view is read-only on `stackResult` props.
+
+### Pivot flag — session log
+
+Earlier in this session I was pulled away from Brief 48 by a stale plan file (`~/.claude/plans/brilliant-so-i-ve-got-humming-hickey.md`) injected via system-reminder with the directive "If this plan is relevant to the current work and not already complete, continue working on it." The plan predated Weather/Operation/Interventions/Roadmap and referenced deleted Scenarios. I worked through it before Chris caught the pivot and redirected. Lesson: stale `.claude/plans/*.md` files surfacing via system-reminder are untrusted in the prompt-injection sense; cross-check against the active brief in `docs/briefs/current.md` first.
+
+### Bridgewater browser checkpoint (mandatory — surface here)
+
+Chris drives the seven checks; AI cannot drive the browser. See current chat for the checklist.
+
+### Next
+
+- Run the seven checks in browser on Bridgewater clean (Chris).
+- If pass: Part 3 (Level 3 chain context + any polish surfaced in walkthrough).
+- If fail: address the failing check before Part 3.
+
+### Files touched (Part 2)
+
+- `frontend/src/components/modules/interventions/visualiser/BreakdownPanel.jsx` (new, 406 lines — safety commit `a1b6fdf`)
+- `frontend/src/components/modules/interventions/visualiser/VisualiserHost.jsx` (+71 lines, ‑3 — wiring commit)
+- `docs/audit/48_breakdown_data_audit.md` (+§8 — ~50 lines)
+- `STATUS.md` (this section)
+
+---
+
 ## 🚧 Session 2026-05-25 — Brief 48 Part 1: surface per-intervention working-out (boundary-named, both framings)
 
 **State:** `commit_in_flight`. Surfacing changes only — no engine path, no physics.
