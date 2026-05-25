@@ -1,6 +1,8 @@
 # Current brief
 
-**Active:** [`active/49_mvhr_recovery_boundary_diagnostic.md`](active/49_mvhr_recovery_boundary_diagnostic.md) — Brief 49 MVHR recovery boundary diagnostic. Diagnosis-first / HARD STOP after diagnosis document. Read-only investigation of Finding E.2 (MVHR on/off changes demand→delivered display by ~61 MWh but barely changes EUI/electricity ~0 MWh; ~22 MWh expected at SCOP ~2.8). No engine fixes — verdict (Hypothesis 1 display wrong / 2 fuel path wrong / 3 recovery magnitude wrong) goes to Chris for direction call.
+**Active:** [`active/50_mvhr_recovery_doublecount_fix.md`](active/50_mvhr_recovery_doublecount_fix.md) — Brief 50 MVHR recovery double-count fix (Option A: State 2 owns recovery). Engine fix brief — deletes the duplicate State 3 subtraction at `instantCalc.js` ~L4131. Primary acceptance gate: refbox Probe 1 ratio must converge 1.99 → 1.00 (re-run `scripts/_brief49_refbox_test.mjs`). Secondary: Bridgewater total apparent MVHR saving ≤ 104 MWh (was 147.02). New anchor expected ~126 kWh/m²·yr from first principles — not calibrated to.
+
+Brief 49 (MVHR recovery boundary diagnostic) closed 2026-05-25 at HARD STOP with verdict H3 (double-count) confirmed via reference box fixture ratio 1.99 — see [`archive/49_mvhr_recovery_boundary_diagnostic_COMPLETED.md`](archive/49_mvhr_recovery_boundary_diagnostic_COMPLETED.md) and [`docs/audit/49_mvhr_recovery_diagnosis.md`](../audit/49_mvhr_recovery_diagnosis.md).
 
 Brief 48 (Interventions: per-intervention audit-trail / breakdown viewer) closed 2026-05-25 — see [`archive/48_intervention_breakdown_viewer_COMPLETED.md`](archive/48_intervention_breakdown_viewer_COMPLETED.md) and STATUS.md.
 
