@@ -1,17 +1,20 @@
 /**
- * BreakdownPanel.jsx — Brief 48 Part 2 (2026-05-25)
+ * BreakdownPanel.jsx — Brief 48 Part 2 (2026-05-25) + Part 3 (chain context)
  *
  * Per-intervention audit-trail panel. The diagnostic instrument the brief
  * calls for — surfaces the engine's working-out as plain-language rows so
  * the user can sanity-check "is the engine counting everything it should?"
  *
  * Progressive disclosure (brief §UX):
- *   Level 1 — Headline. One calm line per few key metrics that matter.
- *             Always visible. No engine jargon.
+ *   Level 1 — Headline. Top 3 movers, always visible, no engine jargon.
  *   Level 2 — Audit trail. Boundary rows explicit (raw / post-MVHR /
  *             delivered / fuel), grouped, plain-language labels with
- *             precise term in tooltip. Zero-rows suppressed to "no change".
- *   Level 3 — Chain context (Part 3, not this commit).
+ *             precise term in tooltip. Zero-rows suppressed.
+ *   Level 3 — Chain context (Part 3). Position-in-chain + clickable
+ *             predecessor (the state this row's marginal is computed
+ *             against) + clickable successor list. Helps the user
+ *             reason about reorder / dependency by navigating the
+ *             chain in place. Pure list arithmetic — no engine call.
  *
  * Two framings:
  *   Vs step above (default) — this intervention's marginal contribution.
@@ -19,16 +22,26 @@
  * Toggle at the top — only ONE column of Δ shown at a time, not two
  * competing equal columns (would feel like a spreadsheet).
  *
+ * Self-contained: owns its own intervention picker and chain navigation.
+ * Parent passes the full `interventions` + `stackInterventions` arrays +
+ * `selectedId` + `onSelectId` callback (parent handles localStorage
+ * persistence). When the user clicks a predecessor / successor in the
+ * chain block, the panel calls onSelectId to navigate.
+ *
  * Data: reads from the `marginal_delta` + `cumulative_delta` shape that
  * Brief 48 Part 1 extended in `interventionsEngine.js`. The boundary-
  * named fields (heating_raw_demand_mwh, heating_recovery_offset_mwh,
  * heating_post_mvhr_demand_mwh) drive the demand-side rows; existing
  * per_service + per_fuel drive the delivered-side and fuel rows.
  *
- * Live recompute: receives `intervention` + the relevant delta object
- * via props from the parent. When the parent's stackResult re-runs
- * (Brief 47 live-update loop), props change → React re-renders → trail
- * updates in the same React batch. No internal engine call.
+ * Live recompute: when the parent's stackResult re-runs (Brief 47
+ * live-update loop), the panel's looked-up delta records change →
+ * React re-renders → trail updates in the same React batch. No internal
+ * engine call.
+ *
+ * Brief 48 Principle 3 (surface, don't recompute): chain-context
+ * predecessor / successor identification is pure list-position
+ * arithmetic; no new engine pass for Level 3.
  *
  * Brief 48 Principle 4 (calm, not overwhelming): the rendered panel
  * passes the narrate-test — a reader who doesn't know the engine should
@@ -37,8 +50,8 @@
  * neutral grey) carry direction; section headers carry context.
  */
 
-import { useState } from 'react'
-import { ChevronDown, ChevronRight, Info } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { ChevronDown, ChevronRight, Info, ArrowUp, ArrowDown } from 'lucide-react'
 
 const TONE = {
   good:    'text-green-700',
@@ -299,20 +312,97 @@ function Section({ title, rows, deltaObj }) {
 
 const INTERVENTIONS_ACCENT = '#E84393'
 
-export default function BreakdownPanel({ intervention, marginalDelta, cumulativeDelta }) {
+/**
+ * Compact one-line summary of an intervention's marginal headline,
+ * used inside the chain block for predecessor / successor rows. Picks
+ * the single biggest mover; if none, returns "no significant change".
+ */
+function summariseMarginal(marginalDelta) {
+  const top = pickHeadlineRows(marginalDelta)[0]
+  if (!top) return 'no significant change'
+  const sign = top.delta < 0 ? '−' : '+'
+  const num = Math.abs(top.delta) >= 10
+    ? Math.abs(top.delta).toFixed(1)
+    : Math.abs(top.delta).toFixed(1)
+  return `${top.label} ${sign}${num} ${unitLabel(top.unit)}`
+}
+
+function ChainRow({ idx, intervention, summary, direction, onClick, active }) {
+  const Icon = direction === 'up' ? ArrowUp : ArrowDown
+  const directionLabel = direction === 'up' ? 'Above' : 'Below'
+  const label = intervention?.label || `Intervention ${idx + 1}`
+  const disabled = intervention?.enabled === false
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full flex items-start gap-2 text-left px-2 py-1.5 rounded transition-colors ${
+        active ? 'bg-off-white' : 'hover:bg-off-white/60'
+      }`}
+    >
+      <Icon size={11} className="text-mid-grey mt-0.5 flex-shrink-0" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-xxs text-mid-grey uppercase tracking-wider flex-shrink-0">
+            {directionLabel} · {idx + 1}
+          </span>
+          <span className={`text-xxs font-medium truncate ${disabled ? 'text-mid-grey/60 italic' : 'text-navy'}`}>
+            {label}{disabled ? ' · disabled' : ''}
+          </span>
+        </div>
+        <p className="text-xxs text-mid-grey mt-0.5 truncate">{summary}</p>
+      </div>
+    </button>
+  )
+}
+
+export default function BreakdownPanel({
+  interventions,
+  stackInterventions,
+  selectedId,
+  onSelectId,
+}) {
   // Framing toggle — default to "vs step above" (the marginal/diagnostic
   // view that answers Finding D's reorder question). User can switch to
   // "vs original building" for the cumulative-from-baseline view.
   const [framing, setFraming] = useState('marginal')   // 'marginal' | 'cumulative'
   const [showDetail, setShowDetail] = useState(true)   // Level 2 expand
+  const [showChain, setShowChain] = useState(true)     // Level 3 expand
 
-  if (!intervention) {
+  const list = Array.isArray(interventions) ? interventions : []
+  const stack = Array.isArray(stackInterventions) ? stackInterventions : []
+
+  // Resolve selected index by id; -1 when nothing selected or stale.
+  const selectedIdx = useMemo(() => {
+    if (!selectedId) return -1
+    return list.findIndex(i => i?.id === selectedId)
+  }, [list, selectedId])
+
+  const selected = selectedIdx >= 0 ? list[selectedIdx] : null
+  const selectedRow = selectedIdx >= 0 ? stack[selectedIdx] : null
+  const marginalDelta = selectedRow?.marginal_delta ?? null
+  const cumulativeDelta = selectedRow?.cumulative_delta ?? null
+
+  // ── Empty states ──
+  if (list.length === 0) {
+    return (
+      <div className="h-full flex items-center justify-center p-6 text-center">
+        <div className="max-w-sm">
+          <p className="text-caption font-semibold text-navy mb-1">No interventions yet</p>
+          <p className="text-xxs text-mid-grey">
+            Add an intervention in the stack on the left to start auditing what the engine does step-by-step.
+          </p>
+        </div>
+      </div>
+    )
+  }
+  if (!selected) {
     return (
       <div className="h-full flex items-center justify-center p-6 text-center">
         <div className="max-w-sm">
           <p className="text-caption font-semibold text-navy mb-1">No intervention selected</p>
           <p className="text-xxs text-mid-grey">
-            Pick an intervention from the dropdown above to see its audit trail — what changed, where in the chain, and what flowed downstream.
+            Pick an intervention from the dropdown to see its audit trail.
           </p>
         </div>
       </div>
@@ -325,15 +415,32 @@ export default function BreakdownPanel({ intervention, marginalDelta, cumulative
     ? "This intervention's marginal contribution on top of everything above it in the stack."
     : 'Total change from the unedited project baseline, including everything above this intervention.'
 
+  // ── Chain context: find immediate predecessor + all successors. ──
+  // The predecessor is the previous ENABLED intervention (disabled rows
+  // pass through with zero marginal — semantically the same as not
+  // being there for the marginal baseline). If none enabled above, the
+  // predecessor is the original project baseline.
+  let predecessorIdx = -1
+  for (let i = selectedIdx - 1; i >= 0; i--) {
+    if (list[i]?.enabled !== false) { predecessorIdx = i; break }
+  }
+  const predecessor = predecessorIdx >= 0 ? list[predecessorIdx] : null
+  const predecessorRow = predecessorIdx >= 0 ? stack[predecessorIdx] : null
+
+  const successors = []
+  for (let i = selectedIdx + 1; i < list.length; i++) {
+    successors.push({ idx: i, intervention: list[i], row: stack[i] })
+  }
+
   return (
     <div className="h-full overflow-auto">
       <div className="p-4 space-y-4">
         {/* Header — intervention name + framing toggle */}
         <div className="flex items-start justify-between gap-3 pb-3 border-b border-light-grey">
           <div className="min-w-0">
-            <p className="text-caption font-semibold text-navy truncate">{intervention.label || '(unnamed intervention)'}</p>
+            <p className="text-caption font-semibold text-navy truncate">{selected.label || '(unnamed intervention)'}</p>
             <p className="text-xxs text-mid-grey italic mt-0.5">
-              Audit trail · {framingLabel}
+              {selectedIdx + 1} of {list.length} · Audit trail · {framingLabel}
             </p>
           </div>
           {/* Framing toggle — one selected, the other available; not two
@@ -400,6 +507,63 @@ export default function BreakdownPanel({ intervention, marginalDelta, cumulative
             </div>
           )}
         </div>
+
+        {/* Level 3 — Chain context */}
+        {(predecessor || successors.length > 0) && (
+          <div className="pt-1">
+            <button
+              type="button"
+              onClick={() => setShowChain(s => !s)}
+              className="flex items-center gap-1.5 text-xxs text-mid-grey hover:text-navy transition-colors"
+              aria-expanded={showChain}
+            >
+              {showChain ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+              {showChain ? 'Hide chain context' : 'Show chain context'}
+            </button>
+            {showChain && (
+              <div className="mt-2 pt-2 border-t border-light-grey/60 space-y-1">
+                {predecessor ? (
+                  <ChainRow
+                    idx={predecessorIdx}
+                    intervention={predecessor}
+                    summary={`This row's marginal is computed on top of: ${summariseMarginal(predecessorRow?.cumulative_delta)}`}
+                    direction="up"
+                    onClick={() => onSelectId?.(predecessor.id)}
+                  />
+                ) : (
+                  <div className="px-2 py-1.5">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-xxs text-mid-grey uppercase tracking-wider">Above</span>
+                      <span className="text-xxs italic text-mid-grey">Project baseline (no enabled interventions above this row)</span>
+                    </div>
+                  </div>
+                )}
+                {successors.length === 0 ? (
+                  <div className="px-2 py-1.5">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-xxs text-mid-grey uppercase tracking-wider">Below</span>
+                      <span className="text-xxs italic text-mid-grey">Bottom of the stack — nothing flows downstream from this row.</span>
+                    </div>
+                  </div>
+                ) : (
+                  successors.map(s => (
+                    <ChainRow
+                      key={s.intervention?.id ?? s.idx}
+                      idx={s.idx}
+                      intervention={s.intervention}
+                      summary={summariseMarginal(s.row?.marginal_delta)}
+                      direction="down"
+                      onClick={() => onSelectId?.(s.intervention?.id)}
+                    />
+                  ))
+                )}
+                <p className="mt-2 px-2 text-xxs italic text-mid-grey/70 leading-relaxed">
+                  Click a row to navigate. Successor rows show their own marginal — your edits to this intervention flow into the state they're computed against.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

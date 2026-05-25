@@ -39,7 +39,7 @@
  * the breakdown view.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BarChart3, GitCompareArrows, Flame, Receipt } from 'lucide-react'
 import EUIWaterfall from '../EUIWaterfall.jsx'
 import BeforeAfterBars from './BeforeAfterBars.jsx'
@@ -108,19 +108,10 @@ export default function VisualiserHost({ interventions, stackResult, orientation
     try { localStorage.setItem('nza-interventions-breakdown-id', id ?? '') } catch {}
   }
 
-  // Resolve the selected intervention + matching engine row by id, then
-  // pair the source intervention (carries label) with the engine row
-  // (carries marginal_delta / cumulative_delta). Alignment by index —
-  // runInterventionStack produces one row per source list entry.
-  const { selectedIntervention, selectedRow } = useMemo(() => {
-    if (!selectedBreakdownId || interventionList.length === 0) {
-      return { selectedIntervention: null, selectedRow: null }
-    }
-    const idx = interventionList.findIndex(i => i?.id === selectedBreakdownId)
-    if (idx < 0) return { selectedIntervention: null, selectedRow: null }
-    const row = stackResult?.interventions?.[idx] ?? null
-    return { selectedIntervention: interventionList[idx], selectedRow: row }
-  }, [interventionList, stackResult, selectedBreakdownId])
+  // The Breakdown panel resolves its own selected row by id from the
+  // interventions + stackInterventions props (Brief 48 Part 3 — panel
+  // is self-contained so it can own chain-context navigation cleanly).
+  // VisualiserHost only owns the persisted selection id.
 
   return (
     <div className="h-full flex flex-col">
@@ -194,9 +185,10 @@ export default function VisualiserHost({ interventions, stackResult, orientation
             </div>
             <div className="flex-1 min-h-0">
               <BreakdownPanel
-                intervention={selectedIntervention}
-                marginalDelta={selectedRow?.marginal_delta ?? null}
-                cumulativeDelta={selectedRow?.cumulative_delta ?? null}
+                interventions={interventionList}
+                stackInterventions={stackResult?.interventions ?? []}
+                selectedId={selectedBreakdownId}
+                onSelectId={handleSetBreakdownId}
               />
             </div>
           </div>
