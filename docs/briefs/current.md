@@ -1,10 +1,10 @@
 # Current brief
 
-**Active:** _none_ — Brief 47 closed 2026-05-24. Awaiting the next brief.
+**Active:** [`active/48_intervention_breakdown_viewer.md`](active/48_intervention_breakdown_viewer.md) — Brief 48 per-intervention audit-trail / breakdown viewer. Surfacing-not-recomputing exercise per the §5 data audit; mandatory checkpoint after Part 2 on the UX "narrate-it-unprompted" gate. UI/surfacing only — no engine recompute, no boundary fixes (those are a separate brief).
 
 Brief 47 (Interventions: faithful state + inputs-left / visualiser-right layout) closed 2026-05-24 — see [`archive/47_interventions_layout_and_state_COMPLETED.md`](archive/47_interventions_layout_and_state_COMPLETED.md) and STATUS.md.
 
-Brief 46 (Interventions editor full rebuild) closed 2026-05-24 — see [`archive/46_interventions_editor_rebuild_COMPLETED.md`](archive/46_interventions_editor_rebuild_COMPLETED.md). The capture-context architecture + read-overlay layer (the inert-controls fix at HEAD `70514e6`) are the foundation Brief 47 built on.
+Brief 46 (Interventions editor full rebuild) closed 2026-05-24 — see [`archive/46_interventions_editor_rebuild_COMPLETED.md`](archive/46_interventions_editor_rebuild_COMPLETED.md). The capture-context architecture + read-overlay layer (the inert-controls fix at HEAD `70514e6`) are the foundation Brief 47 + 48 build on.
 
 Brief 45 (Interventions + Systems UX polish) closed 2026-05-21 — see [`archive/45_ux_polish_COMPLETED.md`](archive/45_ux_polish_COMPLETED.md) and STATUS.md.
 
@@ -12,19 +12,17 @@ Brief 45 (Interventions + Systems UX polish) closed 2026-05-21 — see [`archive
 
 This pointer file is updated each time a brief in `active/` closes or a new brief opens.
 
-## Deferred to the next brief
+## Brief 48 §5 data audit — completed, no escalation
 
-Logged during Brief 47 walkthrough as next-brief work, NOT Brief 47 defects:
+`docs/audit/48_breakdown_data_audit.md` walks the engine's intervention pass and confirms the brief's premise: **all data the breakdown panel needs is already on the engine result or trivially derivable.** Both framings (cumulative vs marginal) are first-class (computed by `runInterventionStack` per intervention). The MVHR boundary (raw / recovery offset / post-MVHR / delivered) is all surfaced or one subtraction away. **Escalation gate does not fire.** Part 1 is a ~50-line additive change to `computeDelta` + `_serviceDelta` in `interventionsEngine.js` — no physics, no State 2/3, no new engine path. Proceeding.
 
-1. **Finding D** — stacked-marginal reorder behaviour / demand-vs-delivered reading. Reordering interventions in the stack shifts the engine's per-row marginal/cumulative attribution in ways that don't fully match the demand-vs-delivered framing the user expects. The engine output is correct per Brief 41 Part 2's `computeDelta` definition; the user-facing framing of marginal-after-reorder needs its own pass. Diagnostic note (location TBD) carries the live observation.
+## Deferred to a future boundary-fix brief (NOT Brief 48 scope)
 
-2. **Intervention breakdown viewer** — a "what changed inside this intervention, step-by-step" drill-down (separate from the change list, which shows raw patches; this would show their physical impact decomposed: this q50 change shaved X kWh/m²·yr through infiltration, this construction swap shaved Y through walls, etc.). Different shape from the Brief 47 visualiser views (which show the WHOLE stack's impact). New view, new engine query.
-
-Both are next-brief work — Brief 47's scope is closed.
+Brief 48 builds the diagnostic instrument; the boundary-fix brief uses it. Per Brief 48 Part 5: the new viewer will be used to inspect Findings A (cooling setpoint), C (infiltration), D (reorder marginals) and record observations to the diagnostics note — **no engine fixes in this brief.** Engine boundary fixes that those observations may motivate are their own brief.
 
 ## Pending candidates for a future housekeeping brief
 
-Logged from Briefs 44 + 45 close. Not picked up by Brief 47:
+Logged from Briefs 44 + 45 + 47 close. Not picked up by Brief 48:
 
 1. **Issue #24 polish trio** ([`docs/audit/29_open_issues.md`](../audit/29_open_issues.md)):
    - `heat_gas_share` defensive guard (`instantCalc.js:4474`).
@@ -50,4 +48,4 @@ All catalogued for the next architect-decided brief.
 
 ## Recent brief sequencing
 
-See STATUS.md for full Brief 47 close-out + Brief 46 close-out + Brief 45 / 44 close-outs. Prior closed briefs (Brief 42 / 43 / 41 / etc.) catalogued in `docs/briefs/archive/`.
+See STATUS.md for Brief 47 close-out + Brief 46 close-out + Brief 45 / 44 close-outs. Prior closed briefs in `docs/briefs/archive/`.

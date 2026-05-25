@@ -1,5 +1,45 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-25 — Brief 48 opens: prep + §5 data audit (no escalation)
+
+**State:** `commit_in_flight` — prep commit landing the brief file + §5 data audit. No code changes in this commit (read-only audit + brief landing).
+
+### What landed (prep)
+
+- Brief 48 file landed at `docs/briefs/active/48_intervention_breakdown_viewer.md`.
+- `docs/audit/48_breakdown_data_audit.md` — read-only catalogue of which engine quantities the breakdown panel needs are Already-Retained / Computed-and-Discarded / Not-Computed-at-all.
+- `docs/briefs/current.md` updated — active brief is now Brief 48.
+
+### §5 audit verdict — NO ESCALATION
+
+The brief's premise ("surface, don't recompute") holds. All quantities Brief 48's UX section asks for are either:
+- **Already retained** on each intervention's `result` object (raw heating demand, recovery offset, delivered per service, electricity/gas per service, SCOP/SEER, EUI, carbon, both framings via `marginal_delta` + `cumulative_delta`).
+- **Trivially derivable** from those (post-MVHR heating demand = raw − recovery offset; DHW efficiency = delivered / fuel).
+
+Both framings ("vs project baseline" and "vs state above me") are first-class — `runInterventionStack` computes them for every intervention on every engine pass. Disabled-row semantics are correct (marginal reads zero against previous enabled state).
+
+Post-MVHR heating demand specifically: NOT a single named field on `result`, but `space_heating.demand_mwh − space_heating.recovery_offset_mwh` from two AR fields. Counts as CR (Computed-and-Retained derivably). **Escalation gate does not fire.**
+
+### Implication for Part 1
+
+~50-line additive change to `interventionsEngine.js`:
+- Extend `computeDelta` to add boundary-named derived fields (`heating_post_mvhr_demand_mwh`, `heating_recovery_offset_mwh`, `heating_raw_demand_mwh` alias).
+- Extend `_serviceDelta` to add per-service `electricity_mwh` + `gas_mwh` + efficiency-metric deltas alongside the existing delivered/demand.
+- Three reconciliation identities to console-verify on Bridgewater (MVHR identity, fuel identity per service, cumulative = sum of marginals).
+- No physics changes, no State 2/3 changes, no new engine path. Brief 48 §6 verdict.
+
+### Verification
+
+- Brief file landed; audit doc written.
+- No code change → no build needed at this commit (build will happen as part of Part 1).
+- Bridgewater clean anchor ~121.7 kWh/m²·yr held at HEAD `5a135f9` (UI-only changes throughout the session so far).
+
+### Next: Part 1 — surface per-intervention working-out (boundary-named, both framings)
+
+Single commit per the brief's Part 1 structure. The audit doc §4 lists the exact `computeDelta` / `_serviceDelta` additions; §5 lists the reconciliation checks.
+
+---
+
 ## 🚀 Brief 47 — CLOSED 2026-05-24
 
 **Walkthrough passes (Chris):** "reopen holds, deletes work, layout and visualiser are right, the 3-intervention waterfall tells the story." Bridgewater clean anchor ~121.7 confirmed at close. Brief 47 archived → `docs/briefs/archive/47_interventions_layout_and_state_COMPLETED.md`.
