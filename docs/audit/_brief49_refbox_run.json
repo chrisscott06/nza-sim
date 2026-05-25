@@ -1,0 +1,124 @@
+{
+  "meta": {
+    "weather_file": "GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw",
+    "dT_integral_K_hours": 77967.19984360039,
+    "box_gia_m2": 100,
+    "timestamp": "2026-05-25T20:16:59.529Z"
+  },
+  "probe1": {
+    "p1_on": {
+      "sh_demand_mwh": 147.8,
+      "sh_delivered_mwh": 112.539,
+      "sh_electricity_mwh": 37.513,
+      "sh_recovery_off_mwh": 35.261,
+      "vent_fan_kwh": 0,
+      "vent_recovery_mwh": 35.261,
+      "vent_recovery_theo": 35.261,
+      "elec_total_kwh": 37513.1,
+      "eui": 375.1
+    },
+    "p1_off": {
+      "sh_demand_mwh": 182.6,
+      "sh_delivered_mwh": 182.6,
+      "sh_electricity_mwh": 60.867,
+      "sh_recovery_off_mwh": 0,
+      "vent_fan_kwh": 0,
+      "vent_recovery_mwh": 0,
+      "vent_recovery_theo": 0,
+      "elec_total_kwh": 60866.7,
+      "eui": 608.7
+    },
+    "p1_correct_delta_elec": 11.75355537642276,
+    "p1_engine_delta_elec": 23.354,
+    "p1_engine_delta_total": 23.3536,
+    "p1_recovery_max": 35.26066612926828,
+    "ratio": 1.9869732393355073,
+    "verdict": "H3 — DOUBLE subtraction. Δ elec ≈ 2 × recovery/SCOP (ratio 1.99). State 2's (1-HRE) AND State 3's −recovery are both counting."
+  },
+  "probe2": {
+    "p2_s3": {
+      "sh_demand_mwh": 147.8,
+      "sh_delivered_mwh": 112.539,
+      "sh_electricity_mwh": 37.513,
+      "sh_recovery_off_mwh": 35.261,
+      "vent_fan_kwh": 0,
+      "vent_recovery_mwh": 35.261,
+      "vent_recovery_theo": 35.261,
+      "elec_total_kwh": 37513.1,
+      "eui": 375.1
+    },
+    "p2_s4": {
+      "sh_demand_mwh": 147.8,
+      "sh_delivered_mwh": 112.539,
+      "sh_electricity_mwh": 28.135,
+      "sh_recovery_off_mwh": 35.261,
+      "vent_fan_kwh": 0,
+      "vent_recovery_mwh": 35.261,
+      "vent_recovery_theo": 35.261,
+      "elec_total_kwh": 28134.8,
+      "eui": 281.3
+    },
+    "p2_expected_elec_s3": 37.513,
+    "p2_expected_elec_s4": 28.13475,
+    "verdict": "✓ SCOP correctly applied to delivered"
+  },
+  "probe3": {
+    "sweep": [
+      {
+        "hre": 0,
+        "recEngine": 0,
+        "recMax": 0,
+        "ratio": 1,
+        "exceeds": false,
+        "raw": 182.6,
+        "delivered": 182.6,
+        "elec": 60.867
+      },
+      {
+        "hre": 0.25,
+        "recEngine": 11.754,
+        "recMax": 11.75355537642276,
+        "ratio": 1.0000378288579923,
+        "exceeds": false,
+        "raw": 171,
+        "delivered": 159.246,
+        "elec": 53.082
+      },
+      {
+        "hre": 0.5,
+        "recEngine": 23.507,
+        "recMax": 23.50711075284552,
+        "ratio": 0.9999952885385753,
+        "exceeds": false,
+        "raw": 159.4,
+        "delivered": 135.893,
+        "elec": 45.298
+      },
+      {
+        "hre": 0.75,
+        "recEngine": 35.261,
+        "recMax": 35.26066612926828,
+        "ratio": 1.0000094686450476,
+        "exceeds": false,
+        "raw": 147.8,
+        "delivered": 112.539,
+        "elec": 37.513
+      },
+      {
+        "hre": 0.9,
+        "recEngine": 42.313,
+        "recMax": 42.31279935512194,
+        "ratio": 1.0000047419428901,
+        "exceeds": false,
+        "raw": 140.9,
+        "delivered": 98.587,
+        "elec": 32.862
+      }
+    ],
+    "p3_max_ratio": 1.0000378288579923,
+    "p3_exceeds_ceiling": false,
+    "verdict": "✓ Recovery scales linearly with HRE and stays within the airstream ceiling. (Max ratio 1.00.)",
+    "ventLossFull": 47.01422150569104
+  },
+  "combined_verdict": "H3 CONFIRMED — recovery is DOUBLE-SUBTRACTED across State 2 + State 3. Fix brief needs to pick which boundary owns the recovery."
+}

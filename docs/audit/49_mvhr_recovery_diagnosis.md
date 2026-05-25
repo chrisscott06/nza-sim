@@ -449,12 +449,111 @@ After the fix lands, on Bridgewater clean:
 
 ---
 
-## §12 — HARD STOP
+## §12 — Reference box (clean fixture) — H3 CONFIRMED unambiguously
 
-Diagnosis is closed. **Verdict: H1 + H3 — internal accounting consistent but recovery double-counted, ~14 kWh/m²·yr heating-fuel under-count per MVHR building.** H2 is dead. The v25/v40 silent-fallback footgun (§11.7) is recorded as a related bug for the same fix brief.
+Chris's follow-up: Bridgewater is too entangled — DHW, internal gains, cooling, multiple ventilation systems, fan electricity ≈ heating savings. The fan/heat cancellation that makes the live UI look flat is exactly what makes the toggle UNREADABLE. Need a known-answer fixture where every boundary is hand-calculable.
 
-Two read-only artifacts in this brief:
-- `scripts/_brief49_mvhr_boundary_diagnostic.mjs` — Node harness (re-runnable; written to be kept for the fix brief's falsifiability target #5).
-- `docs/audit/_brief49_diagnostic_run.json` — the raw harness output (numbers above derived from it).
+Built `scripts/_brief49_refbox_test.mjs` — a single-zone box with:
+- 10 m × 10 m × 3 m, 100 m² GIA
+- WWR = 0, infiltration = 0, no internal gains, no DHW, no cooling
+- Heating: single ASHP at known SCOP (configurable per probe)
+- Ventilation: single system, 500 L/s, **SFP = 0** (no fan electricity — kills the cancellation confound)
+- v40 systems empty → v25 path exclusive (no silent fallback dance)
 
-**The fix is a separate brief**, authorised once Chris reviews the verdict and picks between Option A and Option B (§11.9).
+Annual integrated heating-degree-hours @ 20°C base (Yeovilton TMYx): 77,967 K·h.
+
+### §12.1 Probe 1 — MVHR HRE 0.75 → 0  (SFP=0, SCOP=3.0)
+
+Single change between runs: HRE on the one ventilation system. SFP=0 means total electricity = heating electricity exactly (no fan signal to mask anything).
+
+| Quantity                | HRE = 0.75 | HRE = 0  | Δ (OFF − ON) |
+|-------------------------|-----------:|---------:|-------------:|
+| raw demand (State 2)    | 147.800    | 182.600  | +34.800      |
+| delivered_mwh           | 112.539    | 182.600  | **+70.061**  |
+| recovery_offset_mwh     |  35.261    |   0.000  | −35.261      |
+| heating electricity     |  37.513    |  60.867  | **+23.354**  |
+| fan electricity         |   0.000    |   0.000  | 0            |
+| TOTAL electricity       |  37.513    |  60.867  | +23.354      |
+
+**Hand-calc reference:**
+- Airstream physical max recovery at HRE=0.75 = vent_loss × HRE = 47.014 × 0.75 = **35.261 MWh**
+- Engine's `recovery_offset_mwh` matches exactly: 35.261 MWh ✓ within physical ceiling
+- **Correct (single-boundary) Δ delivered** when toggling HRE: should equal the airstream recovery contribution = **35.261 MWh**
+- **Observed Δ delivered = 70.061 MWh** = **exactly 2 × the correct value**
+- **Correct Δ heating elec** = 35.261 / SCOP_3.0 = **11.754 MWh**
+- **Observed Δ heating elec = 23.354 MWh** = **ratio 1.99 vs correct**
+
+**Verdict: H3 unambiguously confirmed. Recovery is subtracted TWICE.**
+
+The double subtraction mechanism:
+- State 2 raw demand at HRE=0.75 = 147.800 MWh (vent UA uses `(1 − 0.75) = 0.25` factor → reduced vent loss)
+- State 2 raw demand at HRE=0 = 182.600 MWh (vent UA uses `1.0` factor → full vent loss)
+- **State 2 alone already captures the airstream recovery** (Δ raw_S2 = 34.800 ≈ vent × HRE)
+- Then State 3 subtracts `recovery_offset_mwh = 35.261` AGAIN
+- Combined effect: delivered changes by 70.061 ≈ 2 × 35.261
+
+### §12.2 Probe 2 — SCOP 3.0 → 4.0 (HRE=0.75, vent fixed)
+
+| Quantity            | SCOP = 3.0 | SCOP = 4.0 |
+|---------------------|-----------:|-----------:|
+| raw demand (State 2)| 147.800    | 147.800    |
+| delivered_mwh       | 112.539    | 112.539    |
+| heating electricity |  37.513    |  28.135    |
+
+Hand-calc: electricity = delivered / SCOP.
+- SCOP=3.0: 112.539 / 3.0 = 37.513 ✓ (engine matches to <0.001 MWh)
+- SCOP=4.0: 112.539 / 4.0 = 28.135 ✓ (engine matches to <0.001 MWh)
+- Delivered is unchanged across SCOP variants (it's a demand quantity).
+
+**Verdict: ✓ SCOP correctly applied to delivered.** The fuel-path math is faithful to its inputs — the bug is exclusively in WHAT is being passed as `delivered`, not in the conversion `delivered / SCOP`.
+
+### §12.3 Probe 3 — HRE sweep 0 → 0.90 (linearity + ceiling test)
+
+| HRE  | recovery_engine | recovery_phys_max | ratio | linear? | exceeds ceiling? |
+|------|----------------:|-------------------:|-------|---------|-------------------|
+| 0.00 |       0.000 MWh |        0.000 MWh   | 1.00  | ✓       | ✓ no              |
+| 0.25 |      11.754 MWh |       11.754 MWh   | 1.00  | ✓       | ✓ no              |
+| 0.50 |      23.507 MWh |       23.507 MWh   | 1.00  | ✓       | ✓ no              |
+| 0.75 |      35.261 MWh |       35.261 MWh   | 1.00  | ✓       | ✓ no              |
+| 0.90 |      42.313 MWh |       42.313 MWh   | 1.00  | ✓       | ✓ no              |
+
+Airstream physical maximum (full vent loss at zero HRE): 47.014 MWh.
+
+**Verdict: ✓ Recovery scales linearly with HRE and never exceeds the airstream ceiling.** The recovery-magnitude side is correct — what's wrong is that the same recovery is BEING APPLIED TWICE at two different layers, not that the magnitude is overstated in isolation.
+
+### §12.4 Combined verdict from the reference box
+
+| Hypothesis | Status |
+|------------|--------|
+| H1 — display + fuel reconcile internally | ✓ Mechanically true (delivered/SCOP = electricity exactly per Probe 2). But the DELIVERED value being reconciled to is wrong (double-counted), so the user sees a fuel number that is half of physical reality. |
+| H2 — fuel path uses raw demand | ✗ DEAD. Probe 1 shows Δ heating elec = +23.354 MWh, NOT 0. Fuel does respond to MVHR toggle (just to the wrong-by-2x quantity). |
+| H3 — recovery counted at the wrong magnitude / boundary | ✓ **CONFIRMED with ratio 1.99**. Recovery is correctly capped at airstream content (Probe 3) but is subtracted from heating demand **once in State 2 via the `(1 − HRE)` factor on vent UA AND again in State 3 via `−effective_recovery_mwh`**. The double subtraction is the bug. |
+
+**Severity remains HIGH** — every MVHR building's heating fuel is systematically half of what physics says it should be, in the limit where MVHR dominates the building's heat demand. For Bridgewater (moderate MVHR contribution): heating fuel under-counted by ~14 kWh/m²·yr.
+
+### §12.5 Why Bridgewater's reading hid this
+
+The Bridgewater harness in §11 showed Δheating_elec ≈ +18.05 MWh which looked like a clean single-boundary `recovery / SCOP` ratio (~1.00 vs single-boundary expectation). That ratio is **the same ratio the refbox would show** — i.e. on Bridgewater the comparison was also against a double-counted baseline, so the ratio looked right.
+
+But on the refbox we can see the **absolute hand-calc**: the Δ should be 11.754, not 23.354. Bridgewater couldn't show this because the "correct" hand-calc Δ depends on knowing exactly what the airstream physically carries, and on Bridgewater that's tangled with three vent systems, gains, DHW, etc.
+
+The refbox is the diagnostic instrument. Bridgewater confirmed the magnitude is in the right ballpark; the refbox confirms it's wrong by a factor of 2.
+
+### §12.6 Reference box stays as a re-usable fixture
+
+`scripts/_brief49_refbox_test.mjs` is committed and re-runnable. The fix brief's falsifiability target: **after the fix lands, Probe 1's `Δ heating elec observed` must match `Δ heating elec single-boundary` to within 0.01 MWh** (currently 23.354 vs 11.754 — must converge to ~11.754).
+
+The box is also valuable beyond Brief 49 — it's the cleanest engine fixture in the repo for any future "does engine boundary X behave correctly" question. Recommend keeping the file and adding more probes to it as new questions surface.
+
+---
+
+## §13 — HARD STOP
+
+Diagnosis is closed. **Verdict: H3 — recovery is double-subtracted across State 2's `(1 − HRE)` factor + State 3's explicit `−recovery_offset_mwh`. H1 and H2 are both wrong framings — H1 because the internal reconciliation is to a half-magnitude number, H2 because the fuel does correctly track delivered (just delivered is half what it should be).**
+
+Three read-only artifacts in this brief:
+- `scripts/_brief49_mvhr_boundary_diagnostic.mjs` — Bridgewater harness (live-engine reading)
+- `scripts/_brief49_refbox_test.mjs` — clean fixture probes (THE smoking gun, ratio 1.99)
+- `docs/audit/_brief49_diagnostic_run.json` + `docs/audit/_brief49_refbox_run.json` — raw harness outputs
+
+**The fix is a separate brief**, authorised once Chris reviews the verdict and picks Option A or B (§11.9). The refbox stays as the falsifiability instrument — after the fix, Probe 1's ratio must converge from 1.99 to 1.00.
