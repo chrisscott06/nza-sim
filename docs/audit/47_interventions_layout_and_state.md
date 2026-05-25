@@ -230,9 +230,82 @@ The fourth way (per-input PatchedInputBadge dot beside each changed input) is de
 
 ---
 
-## §3 Part 3 — layout restructure
+## §3 Part 3 — layout restructure: stack-left / visualiser-right + draggable-off-screen pop-outs
 
-(To be filled by the Part 3 commit, post browser-verification checkpoint.)
+### §3.1 Stack relocated to left pane
+
+`InterventionsModule.jsx` restructured from a centred `max-w-6xl` vertical container into a full-height horizontal split:
+
+- **Header** (full-width top strip): module title + subtitle. Border-bottom separates from body.
+- **Left pane** (fixed `w-[560px]`, scrollable): `InterventionStackView` carrying the baseline row, intervention rows (reorderable in place via the existing drag handles), and the "+ Add" affordance. Per-intervention actions on each row: select (opens editor via pencil), duplicate, delete (Brief 47 Part 1.3). Reorder triggers the existing engine useMemo chain — marginals/cumulatives recompute live.
+- **Right pane** (flex-1, scrollable): visualiser surface. Part 3 ships a placeholder card explaining the switcher lands in Part 4. The visualiser will consume `baselineSummary` + `stackResult` (already-recomputed engine output from the existing useMemo chain) plus a Part 4 addition: the editor's in-progress patches lifted up so the visualiser updates live as the user edits in an off-screen pop-out.
+
+The Stack | Comparison tab switcher is retired. `ComparisonView.jsx` stays in the repo (no import deleted yet) — Part 4 will decide whether the right-pane switcher fully subsumes it (likely; before/after view covers the comparison use case).
+
+### §3.2 Off-screen-drag clamp loosened
+
+`SchedulePopout.jsx`'s drag clamp previously kept 200 px of the popout sticking out of the left edge, which crowded the new right-pane visualiser. Loosened to a 60 px sliver:
+
+```diff
+- x: Math.max(-POPOUT_WIDTH + 200, Math.min(maxX, newX))
+- y: Math.max(0, Math.min(maxY, newY))
++ const sliver = 60   // px kept visible at the edge
++ const minX = -POPOUT_WIDTH + sliver
++ const maxX = innerW - sliver
++ const maxY = innerH - 40
++ x: Math.max(minX, Math.min(maxX, newX))
++ y: Math.max(0,    Math.min(maxY, newY))
+```
+
+So a 1000 px-wide pop-out on a 1440 px viewport can be dragged so just a 60 px grab-strip is visible at either edge. The right-pane visualiser is fully visible while the editor sits off-screen left, or vice versa. "Drag to a second monitor" is technically not possible — the pop-out is HTML inside the browser window — but Chris's actual use case ("editor off to one side so the visualiser stays visible") works without browser-level multi-monitor support.
+
+Applied to ALL pop-outs that share this chrome: the intervention editor itself, the nested schedule editor (Brief 46 fix), and `SystemEditorPopout`. Single edit, multi-site effect.
+
+### §3.3 Z-index nesting — confirmed working
+
+`SchedulePopout` renders at `z-50` with `position: fixed`. Three pop-outs can stack at the same z-index in the editor flow:
+
+1. Outer `<SchedulePopout>` chrome of `InterventionEditorPopout` (z-50)
+2. Nested `<SchedulePopout>` for the schedule editor (z-50, opens from IG/Operation/Systems composers via `EditorChromeContext`)
+3. Nested `<SystemEditorPopout>` for per-system editing (z-50, opens from `InputsColumn`'s `SystemSummaryRow` edit pencil)
+
+Same z-index: React render order wins. The nested editors render AFTER the parent in their respective JSX trees, so they stack above. Confirmed by static analysis — no z-trap. Brief 46 Q1's concern about nested popouts is resolved by this stacking order plus the loosened clamp.
+
+### §3.4 Share-rebalance flow clarity
+
+Brief 45 Part 3b's auto-rebalance — dragging one system's share slider automatically rebalances the other enabled systems in the same service so the enabled sum stays at 100 % — has been silent. Users can miss that partner sliders are moving simultaneously.
+
+Two minimal clarity additions:
+
+- **Tooltip on the share slider** (when 2+ enabled partners): "Share: 70 % of heating demand · drag to rebalance N partner system(s) (enabled sum stays = 100 %)."
+- **Inline hint above the system list** (when `enabledCount >= 2` in a service): italic one-liner "Drag a share slider to rebalance partners — enabled sum stays at 100 %."
+
+Both surface the auto-rebalance behaviour without disrupting the existing UI; both vanish for single-system services where there's no partner to rebalance.
+
+### §3.5 Library — confirmed not back
+
+Grep audit: `grep -rn 'LibraryStripButton|SaveToLibraryModal|LoadFromLibraryModal|library_interventions|onSaveToLibrary' frontend/src/components/modules/interventions/` returns:
+- Two comment lines in `InterventionsModule.jsx` (explaining Brief 47 Part 1 removed them).
+- One entry in `PatchedProjectContextProvider.jsx`'s `PASSTHROUGH_TOP_KEYS` allowlist (defensive — handles writes to `library_*` keys without capturing, never renders).
+
+No UI surface mounts library components. No prop chain references `onSaveToLibrary`. Part 1's removal holds.
+
+### §3.6 Files changed (Part 3)
+
+| File | Change |
+|---|---|
+| `frontend/src/components/modules/interventions/InterventionsModule.jsx` | Full-width split layout: header strip → stack-left (w-[560px]) + visualiser-right placeholder; tab switcher retired; ComparisonView import removed |
+| `frontend/src/components/shared/SchedulePopout.jsx` | Drag clamp loosened to 60 px sliver at edges (was 200 px / 80 px) |
+| `frontend/src/components/modules/systems/SystemSummaryRow.jsx` | New `enabledPartnerCount` prop; share-slider tooltip describes auto-rebalance when partners exist |
+| `frontend/src/components/modules/SystemsModule.jsx` | Pass `enabledPartnerCount` per row; inline "Drag a share slider to rebalance partners" hint above the system list when 2+ enabled |
+| `docs/audit/47_interventions_layout_and_state.md` | §3 added |
+| `STATUS.md` | Part 3 entry |
+
+### §3.7 Verification
+
+- `npm run build` clean.
+- Engine unchanged.
+- Layout verification deferred to Chris's Part 5 walkthrough (the brief promises browser verification at the walkthrough, not per Part after the Part 2 checkpoint).
 
 ---
 

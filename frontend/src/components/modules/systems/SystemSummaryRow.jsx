@@ -66,7 +66,15 @@ function headlineEfficiency(system) {
   return null
 }
 
-export default function SystemSummaryRow({ system, onToggleEnabled, onEdit, onShareChange, onDelete, shareInvalid = false }) {
+export default function SystemSummaryRow({
+  system,
+  onToggleEnabled,
+  onEdit,
+  onShareChange,
+  onDelete,
+  shareInvalid = false,
+  enabledPartnerCount = 0,   // Brief 47 Part 3 — share-rebalance flow clarity
+}) {
   const service = system?.service ?? 'heating'
   const accent = SERVICE_COLOURS[service] ?? '#00AEEF'
   const isEnabled = system?.enabled !== false
@@ -126,7 +134,16 @@ export default function SystemSummaryRow({ system, onToggleEnabled, onEdit, onSh
           onMouseDown={(e) => e.stopPropagation()}
           className="flex-shrink-0 w-20 h-[3px] cursor-pointer"
           style={{ accentColor: accent }}
-          title={`Share: ${sharePct}% of ${service} demand`}
+          title={
+            // Brief 47 Part 3 share-rebalance clarity: when this system
+            // has enabled partners in the same service, Brief 45 Part
+            // 3b auto-rebalances them as you drag this slider. The
+            // tooltip surfaces that behaviour so the user understands
+            // the partner sliders are about to move, too.
+            enabledPartnerCount > 0
+              ? `Share: ${sharePct}% of ${service} demand · drag to rebalance ${enabledPartnerCount} partner system${enabledPartnerCount === 1 ? '' : 's'} (enabled sum stays = 100%)`
+              : `Share: ${sharePct}% of ${service} demand`
+          }
         />
       )}
 

@@ -38,12 +38,14 @@ import InterventionStackView from './InterventionStackView.jsx'
 // This import opens the rebuilt editor on every "Add intervention" /
 // edit-pencil click.
 import InterventionEditorPopout from './InterventionEditorPopout.jsx'
-import ComparisonView from './ComparisonView.jsx'
 // Brief 47 Part 1 (2026-05-24): Library feature cut entirely per design
-// note. InterventionLibrary.jsx no longer imported — its components
-// (SaveToLibraryModal / LoadFromLibraryModal / LibraryStripButton)
-// have been removed from the render tree. Within-project persistence +
-// reopen-seeding makes the library pointless.
+// note. InterventionLibrary.jsx no longer imported.
+// Brief 47 Part 3 (2026-05-24): ComparisonView no longer mounted — the
+// Stack | Comparison tab switcher is retired in favour of the
+// inputs-left / visualiser-right layout. Comparison becomes a view in
+// the right-pane visualiser switcher in Part 4. ComparisonView file
+// stays in the repo until then (potentially deleted at close if the
+// visualiser fully subsumes it).
 
 const INTERVENTIONS_ACCENT = '#E84393'
 const CURRENT_SCHEMA_VERSION = 1   // Mirrors DEFAULT_PARAMS.schema_version
@@ -65,7 +67,8 @@ export default function InterventionsModule() {
   const { weatherData } = useContext(WeatherContext)
   const hourlySolar = useHourlySolar(weatherData, params?.orientation ?? 0)
 
-  const [tab, setTab] = useState('stack')   // 'stack' | 'comparison'
+  // Brief 47 Part 3 (2026-05-24): `tab` state retired — Stack | Comparison
+  // switcher gone, replaced by inputs-left / visualiser-right split.
   const [editingId, setEditingId] = useState(null)
   // Brief 47 Part 1: library state (saveLibId / libraryPickerOpen) removed
   // — library feature cut. See ImportantLibrary removal at line ~32.
@@ -276,71 +279,70 @@ export default function InterventionsModule() {
   // ── Render ──────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-off-white">
-      {/* Brief 43 Part 1: container widened from max-w-5xl → max-w-6xl
-          so the stack rows have more breathing room while the editor
-          pop-out sits to the right. */}
-      <div className="max-w-6xl mx-auto px-6 py-6 space-y-6">
-        {/* Header */}
-        <div>
-          <div className="flex items-center gap-2">
-            <span
-              className="inline-block w-1 h-5 rounded-full"
-              style={{ backgroundColor: INTERVENTIONS_ACCENT }}
+    <div className="h-[calc(100vh-3rem)] bg-off-white flex flex-col">
+      {/* Header — full width, stays put when scrolling either pane.
+          Brief 47 Part 3 (2026-05-24): centred max-w-6xl container
+          retired; module is now full-width with inputs-left /
+          visualiser-right split. */}
+      <div className="flex-shrink-0 px-6 pt-5 pb-3 border-b border-light-grey bg-white">
+        <div className="flex items-center gap-2">
+          <span
+            className="inline-block w-1 h-5 rounded-full"
+            style={{ backgroundColor: INTERVENTIONS_ACCENT }}
+          />
+          <h1 className="text-heading font-semibold text-navy">Interventions</h1>
+        </div>
+        <p className="text-caption text-mid-grey mt-1 max-w-3xl">
+          Stack interventions against the baseline. Each intervention compounds on top of the ones above it.
+          Toggle, reorder, or click to edit. Baseline stays untouched.
+        </p>
+      </div>
+
+      {/* Body — Brief 47 Part 3: split into stack-left + visualiser-right.
+          The Stack | Comparison tab switcher is retired; comparison is now
+          one of the views inside the right-pane visualiser switcher
+          (lands as part of Part 4). The library button never existed
+          post-Brief-47 Part 1. */}
+      <div className="flex-1 min-h-0 flex">
+        {/* Left pane — intervention stack */}
+        <aside className="flex-shrink-0 w-[560px] border-r border-light-grey bg-white overflow-auto">
+          <div className="p-4">
+            <InterventionStackView
+              interventions={interventions}
+              baselineSummary={baselineSummary}
+              stackResult={stackResult}
+              baselineConfig={baselineConfig}
+              onToggleEnabled={handleToggleEnabled}
+              onReorder={handleReorder}
+              onEdit={handleEdit}
+              onAdd={handleAdd}
+              onDuplicate={handleDuplicate}
+              onDelete={handleListDelete}
             />
-            <h1 className="text-heading font-semibold text-navy">Interventions</h1>
           </div>
-          <p className="text-caption text-mid-grey mt-1 max-w-2xl">
-            Stack interventions against the baseline. Each intervention's effect compounds on top of the ones above it.
-            Toggle, reorder, or click to edit. Baseline stays untouched.
-          </p>
-        </div>
+        </aside>
 
-        {/* Tab switcher. Brief 47 Part 1 (2026-05-24): LibraryStripButton
-            removed — library feature cut entirely per design note. */}
-        <div className="flex items-center justify-between border-b border-light-grey">
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setTab('stack')}
-              className={`px-3 py-2 text-caption font-medium transition-colors border-b-2 ${
-                tab === 'stack' ? 'border-navy text-navy' : 'border-transparent text-mid-grey hover:text-navy'
-              }`}
-            >
-              Stack
-            </button>
-            <button
-              onClick={() => setTab('comparison')}
-              className={`px-3 py-2 text-caption font-medium transition-colors border-b-2 ${
-                tab === 'comparison' ? 'border-navy text-navy' : 'border-transparent text-mid-grey hover:text-navy'
-              }`}
-            >
-              Comparison
-            </button>
+        {/* Right pane — visualiser surface. Part 3 ships a placeholder;
+            Part 4 wires the view switcher (Waterfall / Before-after /
+            Physics). Live-update loop: the visualiser consumes
+            baselineSummary + stackResult which are recomputed by the
+            engine useMemo whenever params.interventions changes (stack
+            toggle / reorder / delete) — that wiring is already in place.
+            The editor's in-progress patches are NOT yet lifted to this
+            view (queued for Part 4). */}
+        <main className="flex-1 min-w-0 overflow-auto bg-off-white">
+          <div className="p-6 h-full flex items-center justify-center">
+            <div className="max-w-md text-center rounded-lg border border-dashed border-light-grey bg-white p-8">
+              <p className="text-caption font-semibold text-navy mb-2">Visualiser</p>
+              <p className="text-xxs text-mid-grey leading-relaxed">
+                The right-pane visualiser switcher (Waterfall · Before/after · Heat balance · Hourly profiles) lands in Brief 47 Part 4 — fed baseline-vs-current data from the stack on the left, updating live as you edit in the pop-out.
+              </p>
+              <p className="text-xxs text-mid-grey/70 italic mt-3">
+                For now: open an intervention via the pencil to edit; the editor's footer Δ shows the impact of its in-progress edits.
+              </p>
+            </div>
           </div>
-        </div>
-
-        {/* Tab content */}
-        {tab === 'stack' && (
-          <InterventionStackView
-            interventions={interventions}
-            baselineSummary={baselineSummary}
-            stackResult={stackResult}
-            baselineConfig={baselineConfig}
-            onToggleEnabled={handleToggleEnabled}
-            onReorder={handleReorder}
-            onEdit={handleEdit}
-            onAdd={handleAdd}
-            onDuplicate={handleDuplicate}
-            onDelete={handleListDelete}
-          />
-        )}
-        {tab === 'comparison' && (
-          <ComparisonView
-            interventions={interventions}
-            stackResult={stackResult}
-            baselineConfig={baselineConfig}
-          />
-        )}
+        </main>
       </div>
 
       {/* Brief 46 Part 5 (2026-05-22): the rebuilt InterventionEditorPopout

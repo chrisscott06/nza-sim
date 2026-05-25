@@ -131,13 +131,22 @@ export default function SchedulePopout({
       if (!origin) return
       const newX = origin.offsetX + (e.clientX - origin.startX)
       const newY = origin.offsetY + (e.clientY - origin.startY)
-      // Clamp so the header doesn't escape the viewport. 40 px is the
-      // approximate header height — keep at least that much visible.
-      const maxX = (typeof window !== 'undefined' ? window.innerWidth : 1920) - 80
-      const maxY = (typeof window !== 'undefined' ? window.innerHeight : 1080) - 40
+      // Brief 47 Part 3.3 (2026-05-24): clamp loosened so the popout can
+      // be dragged almost fully off-screen left/right. Keep a narrow
+      // sliver visible (60 px = roughly the "Reset position" link width)
+      // so the user can always grab it back. Previously the clamp left
+      // 200 px sticking out, which crowded the right-pane visualiser on
+      // narrower screens. Vertical clamp unchanged — header must stay
+      // on-screen so the drag handle remains usable.
+      const innerW = (typeof window !== 'undefined' ? window.innerWidth : 1920)
+      const innerH = (typeof window !== 'undefined' ? window.innerHeight : 1080)
+      const sliver = 60   // px kept visible at the edge
+      const minX = -POPOUT_WIDTH + sliver       // mostly off-screen left
+      const maxX = innerW - sliver              // mostly off-screen right
+      const maxY = innerH - 40                  // header height ≈ 40
       const clamped = {
-        x: Math.max(-POPOUT_WIDTH + 200, Math.min(maxX, newX)),
-        y: Math.max(0, Math.min(maxY, newY)),
+        x: Math.max(minX, Math.min(maxX, newX)),
+        y: Math.max(0,    Math.min(maxY, newY)),
       }
       setPosition(clamped)
     }

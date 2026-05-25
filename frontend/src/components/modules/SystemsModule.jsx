@@ -710,8 +710,26 @@ export function InputsColumn({ params, updateParam, consumption, comfortBand, op
                     individual rows mentally. */}
                 <ServiceSplitBar service={service} systems={list} />
 
+                {/* Brief 47 Part 3 (2026-05-24): share-rebalance flow
+                    clarity — surface the Brief 45 Part 3b auto-rebalance
+                    behaviour with a one-line hint when 2+ systems are
+                    enabled in this service. Hidden when there's only
+                    one enabled system (no partner to rebalance). */}
+                {enabledCount >= 2 && (
+                  <p className="text-xxs italic text-mid-grey/80 px-1.5 -mt-0.5 mb-1">
+                    Drag a share slider to rebalance partners — enabled sum stays at 100%.
+                  </p>
+                )}
+
                 {list.map((sys, idx) => {
                   const key = `${service}:${sys.id ?? idx}`
+                  // Brief 47 Part 3: count of OTHER enabled systems in
+                  // this service. SystemSummaryRow's tooltip uses this
+                  // to explain the auto-rebalance behaviour when the
+                  // user hovers the share slider.
+                  const partnerCount = (sys?.enabled !== false)
+                    ? Math.max(0, enabledCount - 1)
+                    : 0
                   return (
                     <SystemSummaryRow
                       key={key}
@@ -730,6 +748,7 @@ export function InputsColumn({ params, updateParam, consumption, comfortBand, op
                       // the intervention editor it routes via
                       // writeV40 → mutate → capturePatch (Brief 46 Part 4).
                       onDelete={() => removeSystem(service, idx)}
+                      enabledPartnerCount={partnerCount}
                       shareInvalid={!valid}
                     />
                   )

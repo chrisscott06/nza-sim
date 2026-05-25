@@ -1,5 +1,35 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-24 — Brief 47 Part 3: stack-left / visualiser-right layout + draggable-off-screen pop-outs + share-rebalance clarity
+
+**State:** `commit_in_flight` — one commit per discipline.
+
+### What landed (Part 3)
+
+**Layout restructure.** `InterventionsModule.jsx` swapped from a centred `max-w-6xl` vertical container to a full-height horizontal split: top header strip + body split with `aside w-[560px]` (stack) on the left and `main flex-1` (visualiser surface) on the right. The Stack | Comparison tab switcher is retired (ComparisonView import removed; the file stays in the repo pending the Part 4 view-switcher subsuming it). The Part 4 visualiser fills the right pane; Part 3 ships a labelled placeholder card explaining what's coming.
+
+**Draggable off-screen.** `SchedulePopout.jsx` drag clamp loosened from 200 px to 60 px visible sliver at either viewport edge. The intervention editor + nested schedule editor + SystemEditorPopout (all share this chrome) can now sit almost entirely off-screen left or right while the right-pane visualiser stays visible. Browser-level multi-monitor "drag to second monitor" is still constrained by the popout being inside the browser window — but Chris's actual use case ("aside so visualiser stays visible") works.
+
+**Z-index nesting confirmed.** Three popouts can stack (editor → schedule editor → system editor) at z-50; React render order resolves the stacking correctly. Brief 46 Q1's concern resolved by static analysis — no z-trap.
+
+**Share-rebalance flow clarity.** Two minimal additions surface Brief 45 Part 3b's silent auto-rebalance:
+- SystemSummaryRow's share-slider tooltip now describes partner rebalance when 2+ enabled.
+- Italic one-liner above each service's system list when 2+ enabled: "Drag a share slider to rebalance partners — enabled sum stays at 100 %."
+
+**Library reappearance check.** Grep audit confirms zero UI surface uses library code post-Part-1. Two comment lines + one defensive PASSTHROUGH_TOP_KEYS allowlist entry — never renders.
+
+### Verification
+
+- `npm run build` clean.
+- Engine unchanged. Bridgewater anchor ~121.7 holds by construction.
+- Browser verification: deferred to Chris's Part 5 walkthrough (the brief's discipline is Part 2 checkpoint + Part 5 walkthrough, not per-Part after Part 2).
+
+### Next: Part 4
+
+Right-pane visualiser: view switcher (Waterfall reuse + new BeforeAfterBars + physics views reusing InteractiveProfileVisualiser + heat balance Sankey) AND the deferred PatchedInputBadge per-control flag coverage across all four section types (Chris's Part 2 deferral now picked up alongside the visualiser work).
+
+---
+
 ## 🚧 Session 2026-05-24 — Brief 47 Part 2: change list + nav-flag matcher rewrite
 
 **State:** `commit_in_flight` — Part 2 one commit per discipline. Next step is the **mandatory browser-verification checkpoint** before any Part 3 layout work.
