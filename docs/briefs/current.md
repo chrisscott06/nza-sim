@@ -1,6 +1,8 @@
 # Current brief
 
-**No active brief.** Brief 48 (Interventions: per-intervention audit-trail / breakdown viewer) closed 2026-05-25 — see [`archive/48_intervention_breakdown_viewer_COMPLETED.md`](archive/48_intervention_breakdown_viewer_COMPLETED.md) and STATUS.md.
+**Active:** [`active/49_mvhr_recovery_boundary_diagnostic.md`](active/49_mvhr_recovery_boundary_diagnostic.md) — Brief 49 MVHR recovery boundary diagnostic. Diagnosis-first / HARD STOP after diagnosis document. Read-only investigation of Finding E.2 (MVHR on/off changes demand→delivered display by ~61 MWh but barely changes EUI/electricity ~0 MWh; ~22 MWh expected at SCOP ~2.8). No engine fixes — verdict (Hypothesis 1 display wrong / 2 fuel path wrong / 3 recovery magnitude wrong) goes to Chris for direction call.
+
+Brief 48 (Interventions: per-intervention audit-trail / breakdown viewer) closed 2026-05-25 — see [`archive/48_intervention_breakdown_viewer_COMPLETED.md`](archive/48_intervention_breakdown_viewer_COMPLETED.md) and STATUS.md.
 
 Brief 47 (Interventions: faithful state + inputs-left / visualiser-right layout) closed 2026-05-24 — see [`archive/47_interventions_layout_and_state_COMPLETED.md`](archive/47_interventions_layout_and_state_COMPLETED.md).
 
