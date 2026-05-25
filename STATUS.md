@@ -1,5 +1,31 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-24 — Brief 47 Part 5c: collapsible intervention cards (walkthrough finding #3)
+
+**State:** `commit_in_flight`. Walkthrough still in progress.
+
+### What landed (Part 5c)
+
+Chris flagged: the Part 5a always-expanded card layout adds bulk to every row — drag-reorder of a long stack means scrolling past metrics tables. Asked for collapse/expand per row so the default state shows just label + actions for fast reordering.
+
+`InterventionRow` now has local `expanded` state (default `false`):
+
+- **Collapsed (default):** single-line row — drag · enable dot · label · `· N patches` badge · override warning (if any) · theme pill · chevron-right · Duplicate / Edit / Delete buttons. Tight `px-3 py-2` padding.
+- **Expanded:** chevron-down · everything above PLUS the indented patch-summary block + override warning text + metrics table. Full `p-3` padding for breathing room.
+- Click the label to toggle expand; click the pencil to edit; gestures don't fight.
+
+`InterventionStackView` inter-card gap tightened from `space-y-3` → `space-y-1.5` so a long collapsed stack packs tightly enough that drag-reorder lands within one viewport.
+
+No persistence — each row re-mounts collapsed on every reload. Easy to add per-id localStorage if Chris wants persistence.
+
+### Verification
+
+- `npm run build` clean.
+- Engine unchanged.
+- Returns to walkthrough.
+
+---
+
 ## 🩹 Sidecar fix 2026-05-24 — Systems Sankey honours the global kWh / kWh/m²·yr toggle
 
 **Out of Brief 47 scope** (Brief 47 is interventions-focused; this is a `/systems` page bug Chris spotted during the walkthrough) but small enough to land in-flight without disturbing the Brief 47 commit chain.

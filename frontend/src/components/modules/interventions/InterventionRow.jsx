@@ -29,7 +29,8 @@
  * now carries its own labelled metrics table).
  */
 
-import { GripVertical, Pencil, AlertTriangle, Copy, Trash2 } from 'lucide-react'
+import { useState } from 'react'
+import { GripVertical, Pencil, AlertTriangle, Copy, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
 import { summarizePatchListShort } from './patchCapture.js'
 
 const INTERVENTIONS_ACCENT = '#E84393'
@@ -103,9 +104,19 @@ export default function InterventionRow({
   onDragEnd,
   draggingId,
 }) {
+  // Brief 47 Part 5c (2026-05-24): collapse/expand state per row.
+  // Defaults to COLLAPSED so the stack stays compact for drag-reorder —
+  // user can expand individual rows to see the metrics table + patch
+  // summary when they want detail. Local state per row (not lifted to
+  // StackView) — simpler, no persistence across reloads. If usage shows
+  // most rows stay expanded, swap the default to `true`.
+  const [expanded, setExpanded] = useState(false)
   const isEnabled = intervention?.enabled !== false
   const isDragging = draggingId === intervention?.id
-  const wrapperBase = 'rounded-lg border bg-white hover:border-mid-grey/40 transition-colors p-3'
+  const wrapperBase = 'rounded-lg border bg-white hover:border-mid-grey/40 transition-colors'
+  // When collapsed: tighter vertical padding so the row reads as a
+  // single line. When expanded: full p-3 padding for breathing room.
+  const wrapperPadding = expanded ? 'p-3' : 'px-3 py-2'
   const wrapperState = !isEnabled ? 'opacity-60' : ''
   const wrapperDrag  = isDragging ? 'ring-2 ring-offset-1' : ''
 
@@ -125,14 +136,14 @@ export default function InterventionRow({
       onDragOver={(e) => onDragOver?.(e, intervention?.id)}
       onDrop={(e) => onDrop?.(e, intervention?.id)}
       onDragEnd={onDragEnd}
-      className={`${wrapperBase} ${wrapperState} ${wrapperDrag} border-light-grey`}
+      className={`${wrapperBase} ${wrapperPadding} ${wrapperState} ${wrapperDrag} border-light-grey`}
       style={isDragging ? { borderColor: INTERVENTIONS_ACCENT } : undefined}
     >
-      {/* Header row: drag handle · enable dot · label · action buttons */}
-      <div className="flex items-start gap-2">
+      {/* Header row: drag handle · enable dot · label · chevron · actions */}
+      <div className="flex items-center gap-2">
         <button
           type="button"
-          className="cursor-grab text-mid-grey/60 hover:text-mid-grey active:cursor-grabbing flex-shrink-0 mt-0.5"
+          className="cursor-grab text-mid-grey/60 hover:text-mid-grey active:cursor-grabbing flex-shrink-0"
           title="Drag to reorder"
           tabIndex={-1}
         >
@@ -142,7 +153,7 @@ export default function InterventionRow({
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onToggleEnabled?.() }}
-          className="flex-shrink-0 p-0.5 rounded hover:bg-light-grey/40 transition-colors mt-0.5"
+          className="flex-shrink-0 p-0.5 rounded hover:bg-light-grey/40 transition-colors"
           title={isEnabled ? 'Disable this intervention' : 'Enable this intervention'}
         >
           <span
@@ -151,16 +162,44 @@ export default function InterventionRow({
           />
         </button>
 
-        {/* Label + meta — click anywhere here to edit */}
+        {/* Label + meta — click toggles expand/collapse (cheap discovery).
+            Dedicated edit affordance is the pencil in the action toolbar
+            to its right, so click-to-expand here doesn't steal the
+            click-to-edit gesture. */}
         <button
           type="button"
-          onClick={onEdit}
+          onClick={() => setExpanded(e => !e)}
           className="flex-1 min-w-0 text-left"
+          title={expanded ? 'Click to collapse' : 'Click to expand'}
         >
           <div className="flex items-center gap-2 min-w-0">
             <span className={`flex-shrink min-w-0 truncate text-caption ${isEnabled ? 'text-navy font-semibold' : 'text-mid-grey line-through'}`}>
               {intervention?.label || '(unnamed intervention)'}
             </span>
+            {/* When collapsed, show a tiny patch-count badge so the user
+                has at-a-glance richness without expanding. Hidden when
+                expanded — the indented summary block below carries the
+                same info in more detail. */}
+            {!expanded && patchCount > 0 && (
+              <span
+                className="flex-shrink-0 text-xxs text-mid-grey/70 tabular-nums"
+                title={patchSummary ?? ''}
+              >
+                · {patchCount} {patchCount === 1 ? 'patch' : 'patches'}
+              </span>
+            )}
+            {!expanded && patchCount === 0 && (
+              <span className="flex-shrink-0 text-xxs italic text-mid-grey/60">
+                · no patches
+              </span>
+            )}
+            {overridden && isEnabled && !expanded && (
+              <AlertTriangle
+                size={11}
+                className="flex-shrink-0 text-amber-600"
+                aria-label="Overridden by a later intervention"
+              />
+            )}
             {intervention?.theme && (
               <span
                 className="flex-shrink-0 px-1.5 py-0.5 rounded-full bg-light-grey/60 text-xxs text-mid-grey font-medium"
@@ -170,6 +209,19 @@ export default function InterventionRow({
               </span>
             )}
           </div>
+        </button>
+
+        {/* Expand / collapse chevron — separate from the label button so
+            screen-reader users get a distinct semantic action. */}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setExpanded(v => !v) }}
+          className="flex-shrink-0 p-1 rounded hover:bg-light-grey/40 text-mid-grey hover:text-navy transition-colors"
+          title={expanded ? 'Collapse' : 'Expand'}
+          aria-label={expanded ? 'Collapse intervention details' : 'Expand intervention details'}
+          aria-expanded={expanded}
+        >
+          {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
         </button>
 
         {/* Action toolbar — visible up-front (Brief 47 Part 5a). Spacing
@@ -187,7 +239,7 @@ export default function InterventionRow({
           </button>
           <button
             type="button"
-            onClick={onEdit}
+            onClick={(e) => { e.stopPropagation(); onEdit?.() }}
             className="p-1.5 rounded hover:bg-light-grey/50 text-mid-grey hover:text-navy transition-colors"
             title="Edit this intervention"
             aria-label="Edit"
@@ -206,40 +258,44 @@ export default function InterventionRow({
         </div>
       </div>
 
-      {/* Patch summary / empty state — indented under the label column */}
-      <div className="pl-7 mt-1">
-        {patchCount > 0 ? (
-          <div className="flex items-baseline gap-2 min-w-0">
-            <span className="flex-shrink-0 text-xxs text-mid-grey/70 tabular-nums">
-              {patchCount} {patchCount === 1 ? 'patch' : 'patches'}:
-            </span>
-            <span className="text-xxs text-mid-grey truncate" title={patchSummary ?? ''}>
-              {patchSummary ?? '—'}
-            </span>
-          </div>
-        ) : (
-          <div className="text-xxs text-mid-grey/60 italic">No patches yet</div>
-        )}
+      {/* Expanded body — Brief 47 Part 5c: rendered only when the user
+          opens the row. Holds the longer patch summary, the override
+          warning, and the metrics table. Collapsed state keeps the
+          stack tight for drag-reorder per Chris's brief. */}
+      {expanded && (
+        <>
+          <div className="pl-7 mt-2">
+            {patchCount > 0 ? (
+              <div className="flex items-baseline gap-2 min-w-0">
+                <span className="flex-shrink-0 text-xxs text-mid-grey/70 tabular-nums">
+                  {patchCount} {patchCount === 1 ? 'patch' : 'patches'}:
+                </span>
+                <span className="text-xxs text-mid-grey truncate" title={patchSummary ?? ''}>
+                  {patchSummary ?? '—'}
+                </span>
+              </div>
+            ) : (
+              <div className="text-xxs text-mid-grey/60 italic">No patches yet</div>
+            )}
 
-        {overridden && isEnabled && (
-          <div className="flex items-center gap-1 mt-1 text-xxs text-amber-700">
-            <AlertTriangle size={11} className="flex-shrink-0" />
-            <span>Overridden by a later intervention (last-write-wins)</span>
+            {overridden && isEnabled && (
+              <div className="flex items-center gap-1 mt-1 text-xxs text-amber-700">
+                <AlertTriangle size={11} className="flex-shrink-0" />
+                <span>Overridden by a later intervention (last-write-wins)</span>
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* Metrics table — Brief 47 Part 5a inline compact 2×2 layout
-          (Marginal / Cumulative × ΔEUI / ΔCO₂) replaces the previous
-          four horizontal columns that didn't fit in the left pane. */}
-      <MetricsTable
-        marginalEui={marginalEui}
-        marginalCarbon={marginalCarbon}
-        cumEui={cumEui}
-        cumCarbon={cumCarbon}
-        muted={!isEnabled}
-        forceEmpty={isEmpty}
-      />
+          <MetricsTable
+            marginalEui={marginalEui}
+            marginalCarbon={marginalCarbon}
+            cumEui={cumEui}
+            cumCarbon={cumCarbon}
+            muted={!isEnabled}
+            forceEmpty={isEmpty}
+          />
+        </>
+      )}
     </div>
   )
 }

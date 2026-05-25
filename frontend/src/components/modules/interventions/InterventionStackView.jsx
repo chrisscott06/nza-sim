@@ -190,8 +190,11 @@ export default function InterventionStackView({
   // card (BaselineRow + InterventionRow) carries its own labelled
   // metrics table — the global header strip is redundant and was the
   // source of the squeezed-label issue in the 560 px-wide left pane.
+  // Brief 47 Part 5c (2026-05-24): inter-card gap tightened from
+  // space-y-3 → space-y-1.5 so collapsed rows pack tightly enough that
+  // a long stack stays drag-reorderable without scrolling.
   return (
-    <div className="space-y-3">
+    <div className="space-y-1.5">
       {/* Baseline card */}
       <BaselineRow baselineSummary={baselineSummary} />
 

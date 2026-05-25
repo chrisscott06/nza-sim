@@ -485,3 +485,30 @@ Brief 45 §4 principle held: presentation-only, no new computation, no engine ca
 **Verification:** `npm run build` clean (3214 modules). Engine untouched. Returns to walkthrough.
 
 ---
+
+### §5c Collapsible intervention cards (2026-05-24, walkthrough finding #3)
+
+**Finding (Chris):** the Part 5a card layout is good, but the full-card-always-expanded shape adds vertical bulk to every row — drag-reorder of a long stack means scrolling past metrics tables to reach the target. Asked to make each card collapsible so the default state shows just label + actions + drag handle.
+
+**Fix:**
+
+- Each `InterventionRow` now has local `expanded` state, default `false`. Toggled by either clicking the label OR clicking a dedicated chevron button between the label and the action toolbar. The chevron carries `aria-expanded` so screen readers get the affordance.
+- **Collapsed state** (default): single-line row — drag handle · enable dot · label · `· N patches` badge (or `· no patches` italic when empty) · override warning icon (if any) · theme pill · chevron-right · action toolbar (Duplicate / Edit / Delete). Vertical padding tightened to `px-3 py-2`.
+- **Expanded state**: chevron-down · everything above PLUS the indented patch-summary block · override warning text · metrics table. Vertical padding bumped to `p-3` for breathing room.
+- Click semantics: clicking the LABEL toggles expand (cheap discovery — the chevron is small). Clicking the PENCIL ICON edits. The two are independent buttons so the gestures don't fight.
+- `InterventionStackView` inter-card gap tightened from `space-y-3` → `space-y-1.5` so a long collapsed stack packs tightly enough that drag-reorder lands within a single viewport without scroll.
+
+**Persistence:** none. Each row's expand state lives in row-local `useState`, no localStorage. Defaults to collapsed on every render. Acceptable for now; if Chris wants individual rows to remember their state across reloads I can lift to localStorage with per-intervention-id keys (small follow-up).
+
+**Files changed (Part 5c):**
+
+| File | Change |
+|---|---|
+| `frontend/src/components/modules/interventions/InterventionRow.jsx` | Added `expanded` state, chevron toggle, conditional collapsed-vs-expanded layout |
+| `frontend/src/components/modules/interventions/InterventionStackView.jsx` | Inter-card gap `space-y-3` → `space-y-1.5` |
+| `docs/audit/47_interventions_layout_and_state.md` | §5c added |
+| `STATUS.md` | Part 5c entry |
+
+**Verification:** `npm run build` clean. Engine untouched.
+
+---
