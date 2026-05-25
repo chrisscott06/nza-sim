@@ -182,7 +182,7 @@ function _sourceToFuel(source) {
  *
  * Returns service-level block per §6.
  */
-function _computeHeatingOrCooling(service, systems, serviceLevel, demandAtComfortMwh, comfortBand, state2Recompute, recoveryOffsetMwh = 0) {
+function _computeHeatingOrCooling(service, systems, serviceLevel, demandAtComfortMwh, comfortBand, state2Recompute) {
   // Brief 40 Part 5b Section A (2026-05-19): filter enabled first; share
   // validation operates on enabled systems only. A disabled system's share
   // value is preserved on disk but excluded from compute + validation.
@@ -255,10 +255,18 @@ function _computeHeatingOrCooling(service, systems, serviceLevel, demandAtComfor
                           && Math.abs(setpoint_resolved - (comfortSetpoint ?? setpoint_resolved)) > 0.05
 
   // Diagnostic recompute: when the service-level setpoint differs from
-  // comfort, recompute demand once at the custom setpoint and use that
-  // demand for all systems' deliveries. (Pre-Brief-42 had per-system
-  // recompute — now it's per-service because all systems share the same
-  // setpoint.)
+  // comfort, recompute State 2 demand once at the custom setpoint and use
+  // that demand for all systems' deliveries.
+  //
+  // Brief 50 Part 4 (2026-05-25) — retired the offsetRatio workaround.
+  // The pre-Brief-50 engine subtracted MVHR recovery from heating demand
+  // at State 3 (instantCalc.js ~L4131); when the State 2 recompute returned
+  // RAW demand at a new setpoint, a proportional offsetRatio ≈ 0.68 was
+  // applied here to put both values on the same post-recovery boundary
+  // (Brief 44 Part 2 / Part 5). With Brief 50 making State 2 the sole owner
+  // of MVHR recovery (via the (1-HRE) factor on vent UA at instantCalc.js
+  // L2551), the recomputed State 2 demand is ALREADY post-MVHR — no
+  // offset correction needed. The recomputed value passes through directly.
   let demand_at_service_setpoint_mwh = demandAtComfortMwh
   if (setpointDiffers && typeof state2Recompute === 'function') {
     const overrideKey = service === 'heating' ? 'heating' : 'cooling'
@@ -266,37 +274,7 @@ function _computeHeatingOrCooling(service, systems, serviceLevel, demandAtComfor
     const rawDemandAtSetpointMwh = service === 'heating'
       ? (recomputed?.demand?.heating_demand_mwh ?? demandAtComfortMwh)
       : (recomputed?.demand?.cooling_demand_mwh ?? demandAtComfortMwh)
-    // Brief 44 Part 2 (2026-05-21) — boundary alignment fix.
-    // `demandAtComfortMwh` is the POST-MVHR-recovery demand on the heating
-    // side (caller passes `heatingDemandOverrideMwh = raw − MVHR offset`,
-    // see instantCalc.js line 4131). The state-2 recompute returns RAW
-    // demand at the new setpoint (no MVHR applied). To put both values on
-    // the same boundary we subtract a recovery offset from the recomputed
-    // value too.
-    //
-    // Brief 44 Part 5 follow-up (2026-05-21) — Constant offset over-
-    // subtracts at low setpoints. The MVHR recovery scales with heating
-    // demand (Brief 28j's hourly cap ensures recovery ≤ per-hour demand).
-    // At setpoint 19°C (vs comfort 21°C) raw demand is smaller; subtracting
-    // the larger offset sized at the comfort baseline clipped to 0 →
-    // "Heating (off)" in the Sankey for Bridgewater. The proportional
-    // scaling below preserves the boundary alignment while respecting
-    // that lower-demand settings have lower recovery.
-    //
-    // offsetRatio ≈ recovery_offset / raw_state2_at_comfort
-    // ≈ 0.68 for Bridgewater (61.3 / 90.1)
-    // → post-recovery at setpoint = raw_at_setpoint × (1 − 0.68)
-    //                            = raw_at_setpoint × 0.32
-    // (Cooling passes recoveryOffsetMwh=0; no shift.)
-    let scaledOffset = 0
-    if (service === 'heating' && recoveryOffsetMwh && recoveryOffsetMwh > 0) {
-      const rawAtComfortMwh = demandAtComfortMwh + recoveryOffsetMwh
-      const offsetRatio = rawAtComfortMwh > 0
-        ? recoveryOffsetMwh / rawAtComfortMwh
-        : 0
-      scaledOffset = offsetRatio * rawDemandAtSetpointMwh
-    }
-    demand_at_service_setpoint_mwh = Math.max(0, rawDemandAtSetpointMwh - scaledOffset)
+    demand_at_service_setpoint_mwh = rawDemandAtSetpointMwh
   }
 
   // Per-system computation
@@ -701,18 +679,20 @@ function round_mwh(x) { return Math.round((x || 0) * 1000) / 1000 }  // 0.001 MW
  * @param {object} args.state2Result        — State 2 output (for demand + gains + occupancy)
  * @param {object} args.comfortBand         — { lower_c, upper_c }
  * @param {Function} args.state2Recompute   — (override) => state2Result with setpointOverride
- * @param {number}   [args.heatingDemandOverrideMwh]    — post-MVHR-recovery demand (Brief 40 Part 5b)
- * @param {number}   [args.heatingRecoveryOffsetMwh]    — Brief 44 Part 2: the MVHR offset that
- *   was subtracted from raw state-2 heating demand to produce
- *   heatingDemandOverrideMwh. When the heating Diagnostic recomputes State 2
- *   at a custom setpoint, the recompute returns RAW demand (no MVHR applied)
- *   — without this offset, the Diagnostic Δ measures BOTH the setpoint shift
- *   AND the MVHR contribution, producing the spurious 248% jumps Chris
- *   reported in the Brief 42/43 walkthroughs. Subtracting the same offset
- *   from the recomputed demand puts both at the same (post-recovery)
- *   boundary so Δ measures only the setpoint shift.
+ * @param {number}   [args.heatingDemandOverrideMwh]    — post-MVHR-recovery demand
+ *   (Brief 40 Part 5b: caller passes State 2 heating_demand_mwh, which is
+ *   ALREADY post-MVHR via the (1-HRE) factor on vent UA at instantCalc.js
+ *   L2551). Defaults to state2Result.demand.heating_demand_mwh when not
+ *   supplied — same post-MVHR boundary.
+ *
+ * Brief 50 Part 4 (2026-05-25) — heatingRecoveryOffsetMwh param removed.
+ * Pre-Brief-50 it was Brief 44 Part 2's workaround for State 3's now-
+ * deleted -effective_recovery_mwh subtraction (instantCalc.js ~L4131).
+ * With State 2 as the sole owner of MVHR recovery, the recomputed State 2
+ * demand at a custom setpoint is already post-MVHR — no offset
+ * correction needed.
  */
-export function computeSystemsDelivered({ building, state2Result, comfortBand, state2Recompute, heatingDemandOverrideMwh, heatingRecoveryOffsetMwh }) {
+export function computeSystemsDelivered({ building, state2Result, comfortBand, state2Recompute, heatingDemandOverrideMwh }) {
   // Brief 40 shape lives at `systems_config_v40` to avoid clash with the
   // legacy `systems_config` fallback used by State 3 (line 4018 in
   // instantCalc.js: `building.systems_config_v25 ?? building.systems_config`).
@@ -747,12 +727,10 @@ export function computeSystemsDelivered({ building, state2Result, comfortBand, s
   // to heating/cooling/dhw so they can read service-level setpoint/demand
   // fields. ventilation/lighting/small_power don't have service-level
   // fields and continue to take just the per-system array.
-  // Brief 44 Part 2 fix: pass the MVHR recovery offset only to heating
-  // (cooling has no MVHR-recovery boundary shift; the cooling demand on
-  // state2Result.demand.cooling_demand_mwh is raw state-2 demand at the
-  // comfort upper, same boundary as the recomputed value).
-  const heating = _computeHeatingOrCooling('heating', cfg.heating ?? [], cfg, heatingDemandMwh, comfortBand, state2Recompute, heatingRecoveryOffsetMwh)
-  const cooling = _computeHeatingOrCooling('cooling', cfg.cooling ?? [], cfg, coolingDemandMwh, comfortBand, state2Recompute, 0)
+  // Brief 50 Part 4 (2026-05-25): recoveryOffsetMwh param dropped — State 2
+  // owns MVHR recovery exclusively after Brief 50 (see signature comment).
+  const heating = _computeHeatingOrCooling('heating', cfg.heating ?? [], cfg, heatingDemandMwh, comfortBand, state2Recompute)
+  const cooling = _computeHeatingOrCooling('cooling', cfg.cooling ?? [], cfg, coolingDemandMwh, comfortBand, state2Recompute)
   const dhw     = _computeDhw(cfg.dhw ?? [], cfg, gia, annualOccupantHours)
   const ventilation = _computeVentilation(cfg.ventilation ?? [], gia, peakOccupants)
   const lighting    = _computeThin(cfg.lighting ?? [], lightingGainMwh)

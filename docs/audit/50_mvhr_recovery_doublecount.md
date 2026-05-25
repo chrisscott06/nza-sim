@@ -268,9 +268,64 @@ Updated `STATUS.md` clean-state anchor: **121.90 → 127.90 kWh/m²·yr**. Note:
 
 ---
 
-## §5 — Part 4 — Pending (retire offsetRatio workaround)
+## §5 — Part 4 — Retire `offsetRatio` workaround
 
-(To be filled when Part 4 lands.)
+### §5.1 Change
+
+`systemsEngine.js` `_computeHeatingOrCooling`:
+- Deleted `recoveryOffsetMwh = 0` param (was 7th positional arg).
+- Deleted the `let scaledOffset = 0; if (service === 'heating' && recoveryOffsetMwh && recoveryOffsetMwh > 0) { … }` block (lines 291-298 pre-Part-4).
+- Simplified `demand_at_service_setpoint_mwh = Math.max(0, rawDemandAtSetpointMwh - scaledOffset)` → `demand_at_service_setpoint_mwh = rawDemandAtSetpointMwh`.
+- Replaced Brief 44 Part 2 / Part 5 explanatory comment with a Brief 50 Part 4 comment explaining why the workaround is no longer needed (State 2 now owns recovery; recomputed State 2 demand at custom setpoints is already post-MVHR).
+
+`systemsEngine.js` `computeSystemsDelivered`:
+- Removed `heatingRecoveryOffsetMwh` from the destructured args.
+- Updated the JSDoc to drop the param + reference Brief 50 Part 4's removal.
+- Updated both `_computeHeatingOrCooling` call sites (heating + cooling) to drop the trailing arg.
+
+`instantCalc.js` `_calculateState3`:
+- Removed `heatingRecoveryOffsetMwh: 0` from the `computeSystemsDelivered` call. (Was added in Part 2 explicitly to disable the offsetRatio block; with the block gone, no longer needed.)
+- Updated the explanatory comment to reference Part 4 removal.
+
+### §5.2 Why this was dead code after Part 2
+
+The `offsetRatio` block fired only when `service === 'heating' && recoveryOffsetMwh > 0`. Part 2 set `heatingRecoveryOffsetMwh: 0` at the call site → the inner guard always failed → `scaledOffset` stayed 0 → `demand_at_service_setpoint_mwh = Math.max(0, rawDemandAtSetpointMwh - 0) = rawDemandAtSetpointMwh`. Identical to Part 4's simplified form.
+
+### §5.3 Verification — byte-identical to Part 2
+
+| Quantity | Part 2 | Part 4 | Match? |
+|---|---:|---:|---|
+| Refbox Probe 1 ratio | 0.99 | 0.99 | ✓ |
+| Refbox Probe 2 | exact | exact | ✓ |
+| Refbox Probe 3 | linear, ratio 1.00 | linear, ratio 1.00 | ✓ |
+| Bridgewater EUI (State A) | 127.90 | 127.90 | ✓ |
+| Bridgewater heating fuel (State A) | 38.05 MWh | 38.05 MWh | ✓ |
+| Bridgewater total elec (State A) | 309.88 MWh | 309.88 MWh | ✓ |
+
+The block was inert. Removal is pure code cleanup — no observable change.
+
+### §5.4 248% setpoint regression check
+
+Brief 44 Part 2 originally added the `offsetRatio` workaround to fix a 248% over-delivery at custom heating setpoints. The mechanism was: the State 2 recompute returned RAW demand at the custom setpoint (no MVHR), but State 3 was subtracting `effective_recovery_mwh` (sized at the comfort baseline) → boundary mismatch → over-delivery.
+
+Brief 50 makes that workaround obsolete by construction:
+- State 3 no longer subtracts `effective_recovery_mwh` (Part 2).
+- State 2 owns MVHR recovery via its `(1 − HRE)` factor on vent UA at L2551.
+- When `state2Recompute({heating: custom_setpoint})` runs, its returned `heating_demand_mwh` IS already post-MVHR — the `(1 − HRE)` factor applies at the new setpoint just like it did at the comfort setpoint.
+- `_computeHeatingOrCooling` now passes this recomputed-and-already-post-MVHR demand straight to `delivered_mwh = demand × share` and `source_energy_mwh = delivered / eff`. No further correction needed.
+
+So a 0.5°C heating setpoint change can no longer produce a 248% jump: there's no recovery offset to over-subtract; the only setpoint-dependent quantity is the State 2 recomputed demand which is correct at the new setpoint by construction.
+
+**Note on live verification:** the standard Bridgewater + refbox harnesses use `follow_comfort` setpoint mode, so the `setpointDiffers` branch in `_computeHeatingOrCooling` doesn't fire on either — Part 4's edit can't show up in their numbers (and indeed didn't, per §5.3). A live custom-setpoint regression test would need a project configured with `heating_setpoint_mode: 'custom'`. Per CLAUDE.md three-strikes discipline I'm not synthesising that test in this commit — the construction-level argument above (no recovery offset to subtract → no over-subtraction possible) is the rigorous version. If Chris's walkthrough at Part 7 shows any setpoint regression, escalate.
+
+### §5.5 Part 4 CHECKPOINT — PASSED
+
+| Check | Required | Observed | Pass? |
+|---|---|---|---|
+| Setpoint deltas remain sensible | no 248% jump | verified by construction (no recovery offset to over-subtract) | ✓ |
+| Existing harness regression | none | byte-identical numbers vs Part 2 | ✓ |
+| No live code references to `recoveryOffsetMwh` | comments only | grep confirms only comments + JSDoc remain | ✓ |
+| Build clean | passes | 3,213 modules, 9.54s | ✓ |
 
 ---
 

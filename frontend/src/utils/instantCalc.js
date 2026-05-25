@@ -4152,16 +4152,13 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
 
   // v40 path: build the brief40 block ONCE here so the v25-shape adapters
   // (heating/cooling/DHW) and the consumption.brief40 attachment can both
-  // consume it. Brief 50 Part 2: heatingRecoveryOffsetMwh is now 0 because
-  // State 2 owns recovery — `_computeHeatingOrCooling`'s offsetRatio scaling
-  // block at custom setpoints relied on this offset to undo the (now-deleted)
-  // State 3 subtraction; passing 0 disables it. (The block itself is dead
-  // code after Part 2 and gets retired in Part 4.) heatingDemandOverrideMwh
-  // is the post-MVHR State 2 demand — what systems are sized to.
+  // consume it. heatingDemandOverrideMwh is the post-MVHR State 2 demand —
+  // what systems are sized to. (Brief 50 Part 4 retired the
+  // heatingRecoveryOffsetMwh param — State 2 owns recovery, no offset
+  // correction needed at the v40 boundary.)
   const brief40Computed = computeSystemsDelivered({
     building, state2Result, comfortBand, state2Recompute,
     heatingDemandOverrideMwh: heating_post_mvhr_demand_mwh,
-    heatingRecoveryOffsetMwh: 0,
   })
 
   // Per-service displacement: when v40.{service} is non-empty, v40 wins.
