@@ -450,3 +450,38 @@ Action icons (Duplicate / Edit / Delete) live in a small toolbar at the top-righ
 **Verification:** `npm run build` clean. Engine unchanged. Returns to walkthrough.
 
 ---
+
+### §5b Waterfall chart redesign — stepped vertical SVG (2026-05-24, walkthrough finding #2)
+
+**Finding (Chris at `22dc620` walkthrough):** the Brief 45 horizontal-bar `EUIWaterfall` reads as a list of bars rather than a waterfall. Asked to rebuild in the classic Excel "Increase / Decrease / Total" stepped-vertical shape.
+
+**Fix:** full rewrite of `EUIWaterfall.jsx`.
+
+New shape:
+- Anchor columns at start (Baseline) and end (After stack) — full grounded bars from 0 to the absolute EUI, slate-grey.
+- Per-intervention floating bars between them — each bar's height = abs(marginal delta), positioned between the previous cumulative and the new cumulative. Green for savings (delta < 0), red for increases (delta > 0), neutral grey for disabled / empty / zero.
+- Dashed step connectors between consecutive bars at the running-total y-position so the eye reads the trajectory at a glance.
+- Y-axis with "nice" ticks (multiples of 10/20/25/50 chosen automatically), kWh/m²·yr label rotated on the left.
+- X-axis with intervention labels (truncated with `<title>` tooltip when long), and a sub-label showing the running total after each step.
+- Legend strip above (Total / Saving / Increase / Disabled).
+
+Implementation:
+- Pure SVG, no chart library — 220 lines including the docstring.
+- Fixed `colW = 88 px`, horizontal scroll if many interventions (each column stays legible regardless of total count).
+- Inner height 280 px, total height ~366 px including padding + axis labels.
+- `buildSeries` computes the per-step from/to values once, walking the engine's `consumption.interventions[]` marginal deltas. Reuses the same `pullEui` / `pullMarginalDelta` fallback lists the previous version used — no engine-shape change.
+- `buildYAxis` picks a "nice" max via a step-magnitude lookup ([10, 20, 25, 50, 100, 200, 250, 500, …]); ticks at fifths.
+
+Brief 45 §4 principle held: presentation-only, no new computation, no engine call.
+
+**Files changed (Part 5b):**
+
+| File | Change |
+|---|---|
+| `frontend/src/components/modules/interventions/EUIWaterfall.jsx` | Full rewrite — stepped vertical SVG |
+| `docs/audit/47_interventions_layout_and_state.md` | §5b added |
+| `STATUS.md` | Part 5b entry |
+
+**Verification:** `npm run build` clean (3214 modules). Engine untouched. Returns to walkthrough.
+
+---

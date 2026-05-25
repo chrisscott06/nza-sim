@@ -1,5 +1,33 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-24 — Brief 47 Part 5b: stepped vertical waterfall (walkthrough finding #2)
+
+**State:** `commit_in_flight`.
+
+### What landed (Part 5b)
+
+Chris flagged at `22dc620` (after the Part 5a card redesign): the Brief 45 horizontal-bar `EUIWaterfall` doesn't read as a waterfall. Asked to rebuild as the classic Excel-style "Increase / Decrease / Total" stepped-vertical shape.
+
+Full rewrite of `EUIWaterfall.jsx`:
+- Pure SVG (no chart library; 220 lines).
+- Anchor columns: Baseline (left) + After stack (right) as full grounded slate-grey bars showing absolute EUI.
+- Per-intervention floating bars between: green for savings, red for increases, neutral grey for disabled / empty / zero.
+- Dashed step connectors between consecutive bars at the running-total y-position.
+- Y-axis with auto-nice ticks (10/20/25/50/100/200/250/500…) + kWh/m²·yr label rotated.
+- X-axis: intervention labels truncated with `<title>` tooltip + sub-label showing the running total after each step.
+- Legend strip above (Total / Saving / Increase / Disabled).
+- Horizontal scroll if many interventions (fixed 88 px column width keeps every column legible).
+
+Same `interventions` + `stackResult` props as before. Reuses `pullEui` + `pullMarginalDelta` from the old version. No engine-shape change.
+
+### Verification
+
+- `npm run build` clean.
+- Engine unchanged. Bridgewater anchor ~121.7 holds.
+- Returns to Chris's continued walkthrough.
+
+---
+
 ## 🚧 Session 2026-05-24 — Brief 47 Part 5a: left-pane stack card redesign (walkthrough finding)
 
 **State:** `commit_in_flight` — Part 5 walkthrough is in progress; first finding fixed in-flight per the brief's discipline ("If anything anomalous → diagnose, fix within Part 5").

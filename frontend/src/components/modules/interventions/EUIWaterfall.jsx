@@ -1,45 +1,52 @@
 /**
- * EUIWaterfall.jsx — Brief 45 Part 3 (2026-05-21)
+ * EUIWaterfall.jsx — Brief 47 Part 5b (2026-05-24)
  *
- * Simple horizontal waterfall chart for the Comparison tab. Reads the
- * existing engine output (`consumption.interventions[]`) — no new
- * computation; reuses Brief 41 Part 2's marginal/cumulative delta shape.
+ * Stepped vertical waterfall — the standard Excel-style "Increase /
+ * Decrease / Total" layout. Replaces the Brief 45 horizontal-bar
+ * version per Chris's mid-walkthrough redesign request.
  *
- * Layout:
+ * Visual shape:
  *
- *   Baseline                                      [██████████████████] 122.2
- *                                                      −63.1 ↓
- *   After "Fabric upgrade — south retrofit"       [████████          ]  59.1
- *                                                      −15.4 ↓
- *   After "Plant SCOP → 5.0"                      [█████             ]  43.7
- *                                                      +0.0
- *   New intervention (disabled — skipped)         [█████             ]  43.7
- *                                                      −2.1 ↓
- *   After "Demand control_factor → 0.5"           [████              ]  41.6
+ *   ┌──┐                                              ┌──┐
+ *   │  │  Baseline                                    │  │  After
+ *   │  │  (total)                                     │  │  stack
+ *   │  │                                              │  │  (total)
+ *   │  │     ┌──┐                                     │  │
+ *   │  │     │  │ ↓                                   │  │
+ *   │  │     └──┘     ┌──┐                            │  │
+ *   │  │              │  │ ↓     ┌──┐                 │  │
+ *   │  │              └──┘       │  │ ↑               │  │
+ *   │  │                         └──┘                 │  │
+ *   └──┘                                              └──┘
+ *    │      │           │           │                   │
+ *  Base  Fabric      Lighting    Plant              Cumulative
  *
- * Bars are right-aligned with a shared scale (longest = 100% bar width).
- * Marginal delta labels float between adjacent bars in muted text.
- * Disabled interventions render as muted/striped bars with "skipped" text.
- * Empty interventions (patches.length === 0) render as muted with "— no
- * patches" alongside the bar (the cumulative state at that point in the
- * stack stays the same as the previous row).
+ * Each intervention is a floating bar showing its marginal delta:
+ *   - green (savings)  — bar drops from previous cumulative to new cumulative
+ *   - red   (increase) — bar rises from previous cumulative to new cumulative
+ *   - grey  (neutral)  — disabled / empty / zero
+ * First + last columns are full grounded bars showing the absolute
+ * baseline + final cumulative EUI.
  *
- * Falsifiability:
- *   - Baseline EUI matches `stackResult.baseline.consumption.total.kwh_per_m2_yr`.
- *   - After-each-intervention EUI matches each row's
- *     `result.consumption.total.kwh_per_m2_yr` (or the parallel result
- *     fields used by ComparisonView's pullMetrics — same fallback list
- *     here for shape parity).
- *   - Marginal delta labels match `row.marginal_delta.eui_kwh_per_m2.delta`.
+ * Reuses the same `interventions` + `stackResult` props the previous
+ * version consumed — `pullEui` / `pullMarginalDelta` fallback lists
+ * unchanged. No new computation, no new engine call. Brief 45
+ * Principle §4: presentation-only.
  *
- * Brief 45 Principle §4: no new calc. Data flows directly from the
- * engine; this component is presentation-only.
+ * Rendered as SVG with a fixed column width and horizontal scroll when
+ * the stack exceeds container width — keeps every column legible
+ * regardless of intervention count.
  */
 
-const INTERVENTIONS_ACCENT = '#E84393'
-const BAR_TRACK_BG = '#F3F4F6'   // light-grey/30-ish
-const ACTIVE_BAR_BG = '#E84393'
-const DISABLED_BAR_BG = '#9CA3AF'
+const COLORS = {
+  total:    '#94A3B8',  // slate-400 — baseline + final
+  savings:  '#16A34A',  // green-600 — reductions
+  increase: '#DC2626',  // red-600   — increases
+  neutral:  '#CBD5E1',  // slate-300 — disabled / empty / zero
+  axis:     '#E5E7EB',  // grey-200  — gridlines
+  axisText: '#6B7280',  // grey-500  — labels
+  connector:'#94A3B8',  // dashed step connectors
+}
 
 function pickFirst(result, paths) {
   if (!result) return null
@@ -55,8 +62,6 @@ function pickFirst(result, paths) {
 }
 
 function pullEui(result) {
-  // Same fallback chain as ComparisonView.pullMetrics — keeps the two
-  // surfaces reading from the same canonical engine fields.
   return pickFirst(result, [
     'consumption.total.kwh_per_m2_yr',
     'results.energy.kwh_per_m2_yr',
@@ -68,7 +73,6 @@ function pullEui(result) {
 }
 
 function pullMarginalDelta(row) {
-  // computeDelta shape from interventionsEngine.js: row.marginal_delta.eui_kwh_per_m2 = { from, to, delta, delta_pct }.
   const rec = row?.marginal_delta?.eui_kwh_per_m2
   if (!rec || !Number.isFinite(rec.delta)) return null
   return rec.delta
@@ -81,10 +85,67 @@ function fmtEui(v) {
   return v.toFixed(2)
 }
 
-function fmtDelta(v) {
-  if (v == null || !Number.isFinite(v) || Math.abs(v) < 0.05) return '0.0'
+function fmtDeltaSigned(v) {
+  if (!Number.isFinite(v) || Math.abs(v) < 0.05) return '0.0'
   const sign = v < 0 ? '−' : '+'
   return `${sign}${Math.abs(v).toFixed(1)}`
+}
+
+/** Compute the series of bars + steps: baseline → per-intervention → final cumulative. */
+function buildSeries(interventions, stackResult) {
+  const baselineEui = pullEui(stackResult?.baseline)
+  const rows = Array.isArray(stackResult?.interventions) ? stackResult.interventions : []
+  const series = []
+  series.push({
+    kind: 'total',
+    label: 'Baseline',
+    value: baselineEui,
+  })
+  let running = baselineEui
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]
+    const intervention = interventions[i] ?? null
+    const enabled = row?.enabled !== false && intervention?.enabled !== false
+    const patchCount = Array.isArray(intervention?.patches) ? intervention.patches.length : 0
+    const empty = patchCount === 0
+    const delta = pullMarginalDelta(row) ?? 0
+    const to = enabled && !empty ? (Number.isFinite(running + delta) ? running + delta : running) : running
+    series.push({
+      kind: 'step',
+      label: intervention?.label || `Intervention ${i + 1}`,
+      from: running,
+      to,
+      delta: enabled && !empty ? delta : 0,
+      enabled,
+      empty,
+    })
+    running = to
+  }
+  // Final cumulative (only if we have at least one step — otherwise the
+  // single baseline column says it all).
+  if (rows.length > 0) {
+    series.push({
+      kind: 'total',
+      label: 'After stack',
+      value: running,
+    })
+  }
+  return series
+}
+
+/** Build a "nice" Y-axis with N tick marks. Returns { max, ticks: number[] }. */
+function buildYAxis(rawMax) {
+  if (!Number.isFinite(rawMax) || rawMax <= 0) return { max: 1, ticks: [0, 1] }
+  // Round max up to a "nice" number — multiples of 10/20/25/50 etc.
+  const magnitudes = [10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 2500, 5000]
+  let max = rawMax
+  for (const step of magnitudes) {
+    if (rawMax / step <= 8) { max = Math.ceil(rawMax / step) * step; break }
+  }
+  // Build ticks every (max / 5) values
+  const tickStep = max / 5
+  const ticks = [0, tickStep, tickStep * 2, tickStep * 3, tickStep * 4, max]
+  return { max, ticks }
 }
 
 export default function EUIWaterfall({ interventions = [], stackResult }) {
@@ -96,139 +157,156 @@ export default function EUIWaterfall({ interventions = [], stackResult }) {
     )
   }
 
-  const baselineEui = pullEui(stackResult.baseline)
-  const rows = stackResult.interventions
+  const series = buildSeries(interventions, stackResult)
 
-  // Bar data — one entry per stack position (baseline + each intervention row).
-  // `cumEui` is the cumulative state at that row's result. For disabled rows
-  // the engine returns the previous enabled state's result (audit doc §8.2),
-  // so cumEui stays flat — and `marginal` is zero. Empty interventions
-  // (patches.length === 0) also produce zero marginal but we surface that
-  // distinctly in the row label.
-  const bars = [
-    {
-      label: 'Baseline',
-      sublabel: 'starting point',
-      cumEui: baselineEui,
-      marginal: null,     // no marginal for the baseline row
-      enabled: true,
-      isEmpty: false,
-      isBaseline: true,
-    },
-    ...rows.map((row, i) => {
-      const intervention = interventions[i] ?? null
-      const isEnabled = row?.enabled !== false && intervention?.enabled !== false
-      const patchCount = Array.isArray(intervention?.patches) ? intervention.patches.length : 0
-      const isEmpty = patchCount === 0
-      const cumEui = pullEui(row?.result)
-      const marginal = pullMarginalDelta(row)
-      const sublabel = !isEnabled
-        ? 'disabled — skipped'
-        : isEmpty
-          ? 'no patches'
-          : `${patchCount} ${patchCount === 1 ? 'patch' : 'patches'}`
-      return {
-        label: intervention?.label || `Intervention ${i + 1}`,
-        sublabel,
-        cumEui,
-        marginal,
-        enabled: isEnabled,
-        isEmpty,
-        isBaseline: false,
-      }
-    }),
-  ]
-
-  // Scale: longest absolute bar drives the width. If everything is null,
-  // fall back to 1 so the divisor is safe.
-  const maxAbs = Math.max(
-    ...bars.map(b => (Number.isFinite(b.cumEui) ? Math.abs(b.cumEui) : 0)),
+  // Scale: max of all values + a 10% headroom so the tallest bar has
+  // room for its label above.
+  const rawMax = Math.max(
     1,
+    ...series.flatMap(s =>
+      s.kind === 'total' ? [Number.isFinite(s.value) ? s.value : 0]
+                         : [Number.isFinite(s.from) ? s.from : 0, Number.isFinite(s.to) ? s.to : 0]
+    ),
   )
+  const { max: yMax, ticks } = buildYAxis(rawMax * 1.1)
+
+  // SVG layout — fixed column width, horizontal scroll if many cols.
+  const colW = 88
+  const pad = { top: 30, right: 16, bottom: 56, left: 56 }
+  const innerH = 280
+  const totalH = innerH + pad.top + pad.bottom
+  const totalW = pad.left + pad.right + Math.max(1, series.length) * colW
+  const innerLeft = pad.left
+  const innerBottom = pad.top + innerH
+  const innerRight = innerLeft + series.length * colW
+
+  const yScale = (v) => pad.top + innerH - (innerH * (v / yMax))
+
+  const barWidth = Math.min(48, colW * 0.55)
 
   return (
-    <div className="rounded-xl border border-light-grey bg-white p-4 space-y-1">
-      <div className="flex items-baseline justify-between mb-3">
+    <div className="rounded-xl border border-light-grey bg-white p-4 space-y-2">
+      <div className="flex items-baseline justify-between">
         <p className="text-caption font-semibold text-navy">EUI waterfall</p>
-        <p className="text-xxs text-mid-grey">cumulative EUI after each enabled intervention · kWh/m²·yr</p>
+        <p className="text-xxs text-mid-grey">marginal Δ per intervention · kWh/m²·yr</p>
       </div>
 
-      <div className="space-y-2">
-        {bars.map((b, i) => {
-          const widthPct = Number.isFinite(b.cumEui)
-            ? Math.max(2, Math.abs(b.cumEui) / maxAbs * 100)
-            : 0
-          const barColor = b.isBaseline
-            ? DISABLED_BAR_BG
-            : !b.enabled
-              ? DISABLED_BAR_BG
-              : b.isEmpty
-                ? DISABLED_BAR_BG
-                : ACTIVE_BAR_BG
-          const muted = b.isBaseline || !b.enabled || b.isEmpty
-          const prev = bars[i - 1]
-          // Marginal label sits between the previous bar and this bar.
-          // For the baseline row there's no marginal. For empty/disabled
-          // rows we still show "0.0" so the user sees the no-effect
-          // explicitly.
-          const showMarginal = !b.isBaseline && prev && Number.isFinite(b.marginal)
-          const marginalTone = !b.enabled || b.isEmpty
-            ? 'text-mid-grey/50'
-            : Number.isFinite(b.marginal) && Math.abs(b.marginal) >= 0.05
-              ? (b.marginal < 0 ? 'text-green-600' : 'text-red-600')
-              : 'text-mid-grey/60'
+      {/* Legend */}
+      <div className="flex items-center gap-3 text-xxs text-mid-grey">
+        <span className="inline-flex items-center gap-1.5"><span className="block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: COLORS.total }} />Total</span>
+        <span className="inline-flex items-center gap-1.5"><span className="block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: COLORS.savings }} />Saving</span>
+        <span className="inline-flex items-center gap-1.5"><span className="block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: COLORS.increase }} />Increase</span>
+        <span className="inline-flex items-center gap-1.5"><span className="block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: COLORS.neutral }} />Disabled / no patches</span>
+      </div>
 
-          return (
-            <div key={i}>
-              {/* Marginal label between previous bar and this one */}
-              {showMarginal && (
-                <div className="flex items-center gap-2 px-2 -mt-1.5 -mb-1.5">
-                  <span className="w-44 flex-shrink-0" />
-                  <span className={`text-xxs tabular-nums font-medium ${marginalTone}`}>
-                    {fmtDelta(b.marginal)} kWh/m²
-                  </span>
-                  {Number.isFinite(b.marginal) && Math.abs(b.marginal) >= 0.05 && (
-                    <span className={`text-xxs ${marginalTone}`}>{b.marginal < 0 ? '↓' : '↑'}</span>
-                  )}
-                </div>
-              )}
+      <div className="overflow-x-auto">
+        <svg width={totalW} height={totalH} role="img" aria-label="EUI waterfall chart">
+          {/* Y-axis gridlines + labels */}
+          {ticks.map((t, i) => {
+            const y = yScale(t)
+            return (
+              <g key={i}>
+                <line x1={innerLeft} y1={y} x2={innerRight} y2={y} stroke={COLORS.axis} strokeWidth={1} />
+                <text x={innerLeft - 6} y={y + 3} textAnchor="end" fontSize="10" fill={COLORS.axisText}>
+                  {t.toFixed(0)}
+                </text>
+              </g>
+            )
+          })}
+          {/* X-axis baseline */}
+          <line x1={innerLeft} y1={innerBottom} x2={innerRight} y2={innerBottom} stroke={COLORS.axisText} strokeWidth={1} />
 
-              {/* Row: label + bar + value */}
-              <div className="flex items-center gap-2 px-2">
-                <div className="w-44 flex-shrink-0 min-w-0">
-                  <p className={`text-xxs truncate ${muted ? 'text-mid-grey' : 'text-navy font-medium'}`} title={b.label}>
-                    {b.label}
-                  </p>
-                  <p className="text-xxs text-mid-grey/60 truncate" title={b.sublabel}>
-                    {b.sublabel}
-                  </p>
-                </div>
-                <div
-                  className="flex-1 h-4 rounded relative overflow-hidden"
-                  style={{ backgroundColor: BAR_TRACK_BG }}
+          {/* Step connectors (dashed) — draw before bars so bars overlay */}
+          {series.map((s, i) => {
+            if (i === 0) return null
+            const prev = series[i - 1]
+            const prevTop = prev.kind === 'total' ? prev.value : prev.to
+            const x1 = innerLeft + (i - 1) * colW + colW / 2 + barWidth / 2
+            const x2 = innerLeft + i * colW + colW / 2 - barWidth / 2
+            const y  = yScale(prevTop)
+            return (
+              <line
+                key={`conn-${i}`}
+                x1={x1} y1={y} x2={x2} y2={y}
+                stroke={COLORS.connector} strokeWidth={1} strokeDasharray="3 3" opacity={0.6}
+              />
+            )
+          })}
+
+          {/* Bars */}
+          {series.map((s, i) => {
+            const cx = innerLeft + i * colW + colW / 2
+            const bx = cx - barWidth / 2
+
+            if (s.kind === 'total') {
+              const v = Number.isFinite(s.value) ? s.value : 0
+              const y = yScale(v)
+              const h = innerBottom - y
+              return (
+                <g key={i}>
+                  <rect x={bx} y={y} width={barWidth} height={Math.max(0, h)} fill={COLORS.total} rx={2} />
+                  <text x={cx} y={y - 6} textAnchor="middle" fontSize="11" fill="#1F2937" fontWeight="600">
+                    {fmtEui(v)}
+                  </text>
+                  <text x={cx} y={innerBottom + 18} textAnchor="middle" fontSize="11" fill={COLORS.axisText} fontWeight="500">
+                    {s.label}
+                  </text>
+                </g>
+              )
+            }
+
+            // step — floating bar between from + to
+            const enabled = s.enabled && !s.empty && Math.abs(s.delta) >= 0.05
+            const from = Number.isFinite(s.from) ? s.from : 0
+            const to   = Number.isFinite(s.to)   ? s.to   : from
+            const top    = Math.max(from, to)
+            const bottom = Math.min(from, to)
+            const y = yScale(top)
+            const h = Math.max(2, yScale(bottom) - y)   // min 2 px for visibility
+            const fill = !enabled
+              ? COLORS.neutral
+              : s.delta < 0 ? COLORS.savings : COLORS.increase
+
+            // Label above the bar (for non-zero) or beside (for zero/disabled)
+            const deltaLabel = enabled ? fmtDeltaSigned(s.delta) : (s.empty ? '— no patches' : 'disabled')
+            const labelY = y - 6
+            return (
+              <g key={i}>
+                <rect x={bx} y={y} width={barWidth} height={h} fill={fill} rx={2} opacity={enabled ? 1 : 0.55} />
+                <text
+                  x={cx} y={labelY}
+                  textAnchor="middle" fontSize="11"
+                  fill={enabled ? (s.delta < 0 ? '#15803D' : '#B91C1C') : COLORS.axisText}
+                  fontWeight="600"
                 >
-                  <div
-                    className="absolute inset-y-0 left-0 rounded"
-                    style={{
-                      width: `${widthPct}%`,
-                      backgroundColor: barColor,
-                      opacity: muted ? 0.45 : 0.9,
-                    }}
-                  />
-                </div>
-                <div className="w-20 flex-shrink-0 text-right">
-                  <span className={`text-caption tabular-nums ${muted ? 'text-mid-grey' : 'text-navy font-medium'}`}>
-                    {fmtEui(b.cumEui)}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )
-        })}
+                  {deltaLabel}
+                </text>
+                {/* X-axis label — truncate if long via title fallback */}
+                <text x={cx} y={innerBottom + 18} textAnchor="middle" fontSize="11" fill={COLORS.axisText}>
+                  {s.label.length > 12 ? s.label.slice(0, 11) + '…' : s.label}
+                  <title>{s.label}</title>
+                </text>
+                {/* Sub-label (running total at this point) */}
+                <text x={cx} y={innerBottom + 32} textAnchor="middle" fontSize="9" fill={COLORS.axisText} opacity={0.7}>
+                  → {fmtEui(s.to)}
+                </text>
+              </g>
+            )
+          })}
+
+          {/* Y-axis label */}
+          <text
+            x={pad.left - 40} y={pad.top + innerH / 2}
+            textAnchor="middle" fontSize="10" fill={COLORS.axisText}
+            transform={`rotate(-90, ${pad.left - 40}, ${pad.top + innerH / 2})`}
+          >
+            kWh/m²·yr
+          </text>
+        </svg>
       </div>
 
-      <p className="text-xxs text-mid-grey/70 leading-tight mt-3 pt-3 border-t border-light-grey/40">
-        Each bar shows the cumulative EUI at that point in the stack. The label between two bars is the marginal contribution of the intervention applied in the lower row — green = saving, red = increase, grey = zero or skipped (disabled / empty). Reads directly from <span className="font-mono text-mid-grey">consumption.interventions[].marginal_delta</span> per Brief 41 Part 2.
+      <p className="text-xxs text-mid-grey italic pt-1">
+        Each floating bar is one intervention's marginal contribution to the running EUI. Anchor bars at the ends show the baseline and the cumulative state after the stack. Reads directly from <code className="text-xxs">consumption.interventions[].marginal_delta</code> per Brief 41 Part 2.
       </p>
     </div>
   )
