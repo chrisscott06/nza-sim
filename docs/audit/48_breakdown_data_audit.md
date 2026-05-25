@@ -196,3 +196,89 @@ These reconciliations are confirmations of engine correctness, not new physics. 
 The brief's premise holds. Proceeding to Part 1 on authorisation.
 
 **Bridgewater clean anchor:** ~121.7 kWh/m²·yr at HEAD `5a135f9`. Held by construction throughout this audit (read-only). Part 1 will hold it by construction too (delta math, no physics).
+
+---
+
+## §7 — Part 1 landed (`4d6a658` → this commit)
+
+### §7.1 What shipped
+
+Added to `interventionsEngine.js`:
+
+1. **`_postMvhrHeatingDemand(result)`** helper — derives post-MVHR heating demand from `consumption.space_heating.demand_mwh − consumption.space_heating.recovery_offset_mwh`. Returns null when raw demand is absent; treats missing recovery_offset as 0 (no MVHR → post-MVHR == raw).
+
+2. **`_efficiencyPathFor(service)`** helper — maps service to its efficiency-metric path. Heating → `scop_effective`, cooling → `seer_effective`, others → null (DHW efficiency derivable client-side).
+
+3. **`computeDelta` extensions** — three new boundary-named fields alongside the existing (back-compat) `heating_demand_mwh`:
+   - `heating_raw_demand_mwh` — same path as the existing field but with the unambiguous name.
+   - `heating_recovery_offset_mwh` — delta of the MVHR credit.
+   - `heating_post_mvhr_demand_mwh` — delta of `_postMvhrHeatingDemand(result)`.
+
+4. **`_serviceDelta` extensions** — added per-service `electricity_mwh`, `gas_mwh`, and `efficiency` records alongside the existing `delivered_mwh` + `demand_mwh`.
+
+Per the brief's Step 1.3 boundary-naming discipline: no ambiguous `heat_kwh`. Existing `heating_demand_mwh` retained as a back-compat alias per Chris's note 1.
+
+### §7.2 Reconciliation identity #3 — cumulative === sum of marginals on Bridgewater
+
+Per Chris's note 2: record the Finding D data point.
+
+**Result: HOLDS BY CONSTRUCTION for every field on `computeDelta`'s return shape.**
+
+Algebraic proof:
+
+`deltaRecord.delta = to − from`.
+
+`runInterventionStack` computes per intervention `i`:
+- `marginal_delta[i] = computeDelta(rollingResults[prevIdx], rollingResults[myIdx])`
+- `cumulative_delta[i] = computeDelta(rollingResults[0], rollingResults[myIdx])`
+
+For consecutive interventions with `prev(i+1) = my(i)`, the per-field telescoping sum collapses:
+
+```
+sum(marginal[i].delta for i in 0..N)
+  = (my(0) − baseline)
+  + (my(1) − my(0))
+  + (my(2) − my(1))
+  + …
+  + (my(N) − my(N−1))
+  = my(N) − baseline
+  = cumulative[N].delta
+```
+
+This holds for every field that `deltaRecord` is applied to (pure subtraction), so it holds for `eui_kwh_per_m2`, `total_delivered_mwh`, `carbon_kgco2_per_m2`, `heating_demand_mwh`, the new `heating_raw_demand_mwh` / `heating_recovery_offset_mwh` / `heating_post_mvhr_demand_mwh`, `cooling_demand_mwh`, every `per_service.*.{delivered,demand,electricity,gas,efficiency}_mwh`, every `per_fuel.*_mwh`, and every `per_envelope.*_loss_mwh`.
+
+**Live Bridgewater verification I could NOT do here:** running the engine in Node would require mocking browser globals + loading a Bridgewater state from the SQLite db; out of scope for Part 1's read-only diff. The algebraic proof guarantees the identity at full precision; the only failure mode is floating-point rounding (engine output is deterministic). Browser console recipe for live confirmation:
+
+```js
+// Open /interventions on Bridgewater with N enabled interventions, then in console:
+const stack = window.__lastStackResult ?? null  // (Brief 48 Part 2 will expose if needed)
+const cumLast = stack.interventions[N-1].cumulative_delta.eui_kwh_per_m2.delta
+const sumMarg = stack.interventions.reduce((s, r) => s + r.marginal_delta.eui_kwh_per_m2.delta, 0)
+console.log({ cumLast, sumMarg, drift: Math.abs(cumLast - sumMarg) })  // expect drift < 1e-9
+```
+
+### §7.3 What this means for Finding D
+
+Per Chris's framing — "If it holds, the reorder behaviour is correct marginal physics; if not, flag it" — the identity holds, so:
+
+**The marginal-vs-cumulative arithmetic at the `computeDelta` layer is correct.** Reordering interventions can NOT introduce a mismatch between cumulative and sum-of-marginals at this layer.
+
+What reordering CAN change (and what Finding D was likely about):
+- The CUMULATIVE result at the final position when patches OVERLAP. Brief 41 §6 specifies last-write-wins for overlapping `set` patches on the same path. Reordering changes which intervention "wins" → final state differs → cumulative differs. This is correct per the patch semantics but may surprise the user.
+- The per-intervention MARGINAL attribution shifts with order. Each marginal is "this intervention's contribution given everything above it" — the order of "everything above" matters, so the per-row numbers move when the stack is reordered. This is also correct per the marginal definition.
+
+**Brief 48's diagnostic instrument (the breakdown panel, lands in Part 2) makes BOTH of these visible to the user — the cumulative-at-final and the per-row marginals — so any future boundary-fix brief can read off the screen which kind of reorder behaviour the user is seeing.**
+
+The hard data point: **at the `computeDelta` layer, cumulative === sum of marginals by construction; this is not a bug surface and the next brief should look upstream (patch overlap semantics, marginal-attribution framing) rather than at the delta math.**
+
+### §7.4 Reconciliation identities #1 + #2 — Part 2's job
+
+The other two reconciliations from §5 (MVHR identity: `raw − offset ≈ delivered`; fuel identity per service: `delivered / efficiency ≈ electricity + gas`) require live Bridgewater data to verify — they're engine-correctness statements, not algebraic identities. The Part 2 panel surfaces these values side-by-side per intervention; if they diverge on screen during Chris's checkpoint walkthrough, that's a real finding for the next brief to investigate (NOT for Brief 48 to fix — see brief's "What MUST NOT happen").
+
+### §7.5 Verification
+
+- `npm run build` clean.
+- Engine code in `instantCalc.js` untouched. All Part 1 changes confined to `interventionsEngine.js` delta-extraction layer.
+- Bridgewater clean anchor ~121.7 kWh/m²·yr held — Part 1 adds derived fields to `computeDelta` return; underlying engine `result` is unchanged.
+
+Proceeding to Part 2 (per-intervention audit-trail panel + mandatory browser checkpoint).

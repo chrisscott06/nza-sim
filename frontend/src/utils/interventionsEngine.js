@@ -438,14 +438,85 @@ function pickNumber(result, paths) {
 }
 
 /**
+ * Brief 48 Part 1 (2026-05-25): boundary-named derived field for the
+ * post-MVHR heating demand. The engine surfaces:
+ *   consumption.space_heating.demand_mwh           = RAW State 2 demand
+ *   consumption.space_heating.recovery_offset_mwh  = MVHR credit
+ * but NOT the post-MVHR value directly (it's used internally to size
+ * systems but never attached to result — see §3 of the audit doc).
+ *
+ * Brief 48's breakdown panel needs all three boundaries as distinct
+ * rows. This helper computes the post-MVHR value from the two AR
+ * fields. Returns null when raw demand isn't available; treats missing
+ * recovery_offset_mwh as 0 (no MVHR → post-MVHR demand == raw demand).
+ *
+ * Reconciliation identity (checked at the call site below):
+ *   raw − recovery_offset == post_mvhr   (this helper, by construction)
+ *   post_mvhr ≈ delivered                (engine consistency, NOT
+ *     enforced here — flag if it diverges by >1 %; see Part 1 audit
+ *     §5 reconciliation identity #1)
+ */
+function _postMvhrHeatingDemand(result) {
+  const raw = pickNumber(result, ['consumption.space_heating.demand_mwh'])
+  if (raw == null) return null
+  const offset = pickNumber(result, ['consumption.space_heating.recovery_offset_mwh']) ?? 0
+  return raw - offset
+}
+
+/**
+ * Brief 48 Part 1 (2026-05-25): per-service efficiency-metric path for
+ * the `_serviceDelta` extension. Heating → scop_effective, cooling →
+ * seer_effective. DHW + ventilation + lighting + small_power have no
+ * single-number efficiency on the engine result — the panel derives
+ * DHW efficiency from delivered ÷ (electricity + gas) on its own.
+ */
+function _efficiencyPathFor(service) {
+  if (service === 'space_heating') return 'consumption.space_heating.scop_effective'
+  if (service === 'space_cooling') return 'consumption.space_cooling.seer_effective'
+  return null
+}
+
+/**
  * Compute a structured delta object between two engine results.
  * Headline metrics + per-service + per-fuel (best-effort — fields not
  * present on the engine result yield null in their record slot).
  *
  * Field names mirror common consumption.* roots used across the
- * existing engine paths. The Part 5 comparison view reads from this
- * shape; if a field is missing, the comparison view shows '—' in that
- * cell rather than crashing.
+ * existing engine paths. The Part 5 comparison view + Brief 48
+ * breakdown panel both read from this shape; if a field is missing,
+ * a record slot will read null rather than crashing.
+ *
+ * Brief 48 Part 1 (2026-05-25) — boundary-named field additions:
+ *
+ * The existing `heating_demand_mwh` field reads `consumption.space_heating.
+ * demand_mwh`, which the engine emits as the RAW State 2 zone demand
+ * (pre-MVHR). The field name is ambiguous: post-Brief-44 callers may
+ * assume it's the "demand the systems see", which would be the post-MVHR
+ * value. The audit doc (§3) documents this asymmetry; for back-compat
+ * the field is RETAINED at its current value. Brief 48 adds three
+ * boundary-named fields alongside that are unambiguous:
+ *
+ *   heating_raw_demand_mwh        — alias of heating_demand_mwh (clear)
+ *   heating_recovery_offset_mwh   — the MVHR credit, deltaRecord
+ *   heating_post_mvhr_demand_mwh  — raw − recovery_offset, deltaRecord
+ *
+ * Reconciliation identity #3 (cumulative === sum of marginals on
+ * Bridgewater): TRUE BY CONSTRUCTION for every field on this object.
+ * `deltaRecord.delta = to − from`. For consecutive interventions where
+ * `prev(i+1) = my(i)`, the telescoping sum collapses:
+ *   sum(marginal[i].delta for i in 0..N)
+ *     = (my(0) − baseline) + (my(1) − my(0)) + … + (my(N) − my(N−1))
+ *     = my(N) − baseline
+ *     = cumulative[N].delta
+ * Any deviation observable on Bridgewater would be a floating-point
+ * rounding artefact, NOT a Finding D defect. The reorder behaviour
+ * (Finding D from Brief 47 walkthrough) is therefore correct marginal
+ * physics at the delta-extraction layer — if reordering changes the
+ * cumulative numerically, the divergence comes from upstream patch
+ * application (overlapping patches → last-write-wins per Brief 41 §6),
+ * not from `computeDelta`. The Part 5 walkthrough will read this off
+ * the new panel; Brief 48 records the algebraic conclusion HERE so
+ * the next boundary-fix brief starts from the right hypothesis.
  */
 export function computeDelta(fromResult, toResult) {
   return {
@@ -473,6 +544,22 @@ export function computeDelta(fromResult, toResult) {
     heating_demand_mwh:  deltaRecord(
       pickNumber(fromResult, ['consumption.space_heating.demand_mwh', 'demand.heating_demand_mwh', 'demand.heating_mwh', 'consumption.heating_demand_mwh', 'heating_demand_mwh', 'annual_heating_kWh']),
       pickNumber(toResult,   ['consumption.space_heating.demand_mwh', 'demand.heating_demand_mwh', 'demand.heating_mwh', 'consumption.heating_demand_mwh', 'heating_demand_mwh', 'annual_heating_kWh']),
+    ),
+    // Brief 48 Part 1 (2026-05-25) — boundary-named heating-demand triple.
+    // Added alongside `heating_demand_mwh` (kept as back-compat alias).
+    // See computeDelta docstring for the post-MVHR derivation rationale
+    // and the cumulative-equals-sum-of-marginals proof.
+    heating_raw_demand_mwh: deltaRecord(
+      pickNumber(fromResult, ['consumption.space_heating.demand_mwh']),
+      pickNumber(toResult,   ['consumption.space_heating.demand_mwh']),
+    ),
+    heating_recovery_offset_mwh: deltaRecord(
+      pickNumber(fromResult, ['consumption.space_heating.recovery_offset_mwh']),
+      pickNumber(toResult,   ['consumption.space_heating.recovery_offset_mwh']),
+    ),
+    heating_post_mvhr_demand_mwh: deltaRecord(
+      _postMvhrHeatingDemand(fromResult),
+      _postMvhrHeatingDemand(toResult),
     ),
     cooling_demand_mwh:  deltaRecord(
       pickNumber(fromResult, ['consumption.space_cooling.demand_mwh', 'demand.cooling_demand_mwh', 'demand.cooling_mwh', 'consumption.cooling_demand_mwh', 'cooling_demand_mwh', 'annual_cooling_kWh']),
@@ -523,6 +610,15 @@ export function computeDelta(fromResult, toResult) {
 }
 
 function _serviceDelta(fromResult, toResult, service) {
+  // Brief 48 Part 1 (2026-05-25): per-service split extended from
+  // {delivered, demand} → {delivered, demand, electricity, gas,
+  // efficiency}. The breakdown panel needs these to make the
+  // "delivered ÷ efficiency = electricity + gas" identity visually
+  // legible per row. Fields not emitted by the engine for a given
+  // service (e.g. ventilation has per-vent fan_electricity but no
+  // service-level aggregate; lighting + small_power have no gas)
+  // yield null record slots — the panel renders "—" in those cells.
+  const effPath = _efficiencyPathFor(service)
   return {
     delivered_mwh: deltaRecord(
       pickNumber(fromResult, [
@@ -538,6 +634,22 @@ function _serviceDelta(fromResult, toResult, service) {
       pickNumber(fromResult, [`consumption.${service}.demand_mwh`]),
       pickNumber(toResult,   [`consumption.${service}.demand_mwh`]),
     ),
+    electricity_mwh: deltaRecord(
+      pickNumber(fromResult, [`consumption.${service}.electricity_mwh`]),
+      pickNumber(toResult,   [`consumption.${service}.electricity_mwh`]),
+    ),
+    gas_mwh: deltaRecord(
+      pickNumber(fromResult, [`consumption.${service}.gas_mwh`]),
+      pickNumber(toResult,   [`consumption.${service}.gas_mwh`]),
+    ),
+    // Efficiency metric — SCOP for heating, SEER for cooling, null for
+    // others (the panel can derive DHW efficiency from delivered/(elec+gas)).
+    efficiency: effPath
+      ? deltaRecord(
+          pickNumber(fromResult, [effPath]),
+          pickNumber(toResult,   [effPath]),
+        )
+      : null,
   }
 }
 

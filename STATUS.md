@@ -1,5 +1,59 @@
 # NZA SIMULATE — Status
 
+## 🚧 Session 2026-05-25 — Brief 48 Part 1: surface per-intervention working-out (boundary-named, both framings)
+
+**State:** `commit_in_flight`. Surfacing changes only — no engine path, no physics.
+
+### What landed (Part 1)
+
+`interventionsEngine.js` extensions only — three additive helpers + extensions to `computeDelta` + `_serviceDelta`:
+
+- **`_postMvhrHeatingDemand(result)`** helper — derives post-MVHR demand from `raw − recovery_offset` per the §5 audit finding. Null when raw absent; treats missing offset as 0.
+- **`_efficiencyPathFor(service)`** helper — maps service to its efficiency-metric path on the result (`scop_effective` / `seer_effective` / null).
+- **`computeDelta` new boundary-named fields** alongside existing back-compat aliases:
+  - `heating_raw_demand_mwh` (alias of `heating_demand_mwh` with the unambiguous name)
+  - `heating_recovery_offset_mwh` (MVHR credit delta)
+  - `heating_post_mvhr_demand_mwh` (derived from `raw − offset`)
+- **`_serviceDelta` extensions** — added `electricity_mwh`, `gas_mwh`, `efficiency` per service alongside existing `delivered_mwh` + `demand_mwh`.
+
+Existing `heating_demand_mwh` retained as back-compat alias per Chris's note 1.
+
+### Reconciliation identity #3 — recorded (Finding D first data point)
+
+Per Chris's note 2.
+
+**Result: HOLDS BY CONSTRUCTION for every field on `computeDelta`'s return shape.**
+
+`deltaRecord.delta = to − from`. For consecutive interventions where `prev(i+1) = my(i)`, the per-field telescoping sum collapses:
+
+```
+sum(marginal[i].delta for i in 0..N) = my(N) − baseline = cumulative[N].delta
+```
+
+This is **not** Finding D. The marginal-vs-cumulative arithmetic at the delta-extraction layer is correct.
+
+Implication for the next boundary-fix brief:
+- What Finding D was likely about is **upstream** of `computeDelta` — patch-overlap semantics (`Brief 41 §6` last-write-wins for overlapping `set` patches on the same path changes the final state when interventions are reordered), or the per-row marginal attribution shifting with order (correct per the marginal definition but potentially surprising).
+- Brief 48's panel surfaces both cumulative-at-final and per-row marginals so the next brief can READ off the screen which kind of reorder behaviour the user is seeing.
+
+Live Bridgewater verification recipe is in `docs/audit/48_breakdown_data_audit.md` §7.2 (browser console snippet). I could not run it from this environment (would need a Node-side engine fixture loading Bridgewater from the SQLite db, out of Part 1 scope). The algebraic proof guarantees the identity at full precision; only failure mode is floating-point rounding (engine output is deterministic).
+
+### Reconciliations #1 + #2 — deferred to Part 2 walkthrough
+
+MVHR identity (`raw − offset ≈ delivered`) and fuel identity per service (`delivered / efficiency ≈ electricity + gas`) are engine-correctness statements, not algebraic identities. They need live values. Part 2's panel surfaces them side-by-side; Chris's checkpoint walkthrough on Bridgewater will confirm — and any divergence is a finding for the next brief, NOT something Brief 48 fixes.
+
+### Verification
+
+- `npm run build` clean.
+- `instantCalc.js` untouched. All Part 1 changes confined to `interventionsEngine.js` delta-extraction layer.
+- Bridgewater clean anchor ~121.7 kWh/m²·yr held — Part 1 adds derived fields to `computeDelta` return; underlying engine `result` is unchanged.
+
+### Next: Part 2 — per-intervention audit-trail panel (Levels 1 + 2)
+
+Then **mandatory Bridgewater browser checkpoint** with the narrate-test UX gate. Surfacing there for Chris's call.
+
+---
+
 ## 🚧 Session 2026-05-25 — Brief 48 opens: prep + §5 data audit (no escalation)
 
 **State:** `commit_in_flight` — prep commit landing the brief file + §5 data audit. No code changes in this commit (read-only audit + brief landing).
