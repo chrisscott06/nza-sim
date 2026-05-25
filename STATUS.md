@@ -1,5 +1,35 @@
 # NZA SIMULATE — Status
 
+## 🩹 Sidecar fix 2026-05-24 — Systems Sankey honours the global kWh / kWh/m²·yr toggle
+
+**Out of Brief 47 scope** (Brief 47 is interventions-focused; this is a `/systems` page bug Chris spotted during the walkthrough) but small enough to land in-flight without disturbing the Brief 47 commit chain.
+
+### Symptom
+
+The top-bar global unit toggle (`kWh` ↔ `kWh/m²·yr`, owned by `UISettingsContext` since Chris's 2026-05-17 UX overhaul) had no effect on the Systems Sankey. The Sankey rendered MWh values hard-coded.
+
+### Fix
+
+`SystemsSankey` now:
+- Reads `unit` from `useUISettings()`.
+- Takes a new `giaM2` prop (passed from `SystemsModule` via `result?.metadata?.gia_m2 ?? result?.heat_balance?.metadata?.gia_m2`).
+- Routes every visible flow figure + hover-tooltip string through a new `fmtFlow(mwh, unit, giaM2)` helper:
+  - `unit === 'kwh'` → `"X.X MWh"` (existing behaviour).
+  - `unit === 'kwh_per_m2'` → `"X.X kWh/m²·yr"` (mwh × 1000 / gia).
+  - If `giaM2 <= 0` (no engine result yet), falls back to MWh regardless of toggle. CLAUDE.md Rule 2 — no synthetic divisor.
+
+Sites touched: 2 visible label sites (left-column demand + right-column carrier) + 1 tooltip-string site (4 substring renderings). The flows themselves stay drawn in MWh space — the per-pixel scale is unaffected, only the printed labels change.
+
+### Out of scope (other /systems surfaces with hard-coded MWh)
+
+Live Results strip / Live Results panel / SystemsRejection / SystemsSummary table / Sankey legend — all still render MWh hard-coded. Chris flagged only the Sankey diagram, so only the Sankey was fixed. If the other surfaces should also follow the toggle, that's a small follow-up brief (`SystemsModule.jsx` has ~6 more `.toFixed(1)} MWh` sites outside SystemsSankey).
+
+### Verification
+
+`npm run build` clean. Engine untouched. Bridgewater anchor ~121.7 holds.
+
+---
+
 ## 🚧 Session 2026-05-24 — Brief 47 Part 5b: stepped vertical waterfall (walkthrough finding #2)
 
 **State:** `commit_in_flight`.

@@ -32,6 +32,7 @@ import { useContext, useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { ProjectContext } from '../../context/ProjectContext.jsx'
 import { useProjectMutation } from '../../hooks/useProjectMutation.js'
+import { useUISettings } from '../../context/UISettingsContext.jsx'
 import { WeatherContext } from '../../context/WeatherContext.jsx'
 import { useHourlySolar } from '../../hooks/useHourlySolar.js'
 import { calculateInstant } from '../../utils/instantCalc.js'
@@ -321,7 +322,12 @@ export default function SystemsModule() {
               </div>
             )}
             {consumption && centreView === 'sankey' && (
-              <SystemsSankey consumption={consumption} sysCfg={sysCfg} sysCfgV40={params?.systems_config_v40} />
+              <SystemsSankey
+                consumption={consumption}
+                sysCfg={sysCfg}
+                sysCfgV40={params?.systems_config_v40}
+                giaM2={result?.metadata?.gia_m2 ?? result?.heat_balance?.metadata?.gia_m2 ?? 0}
+              />
             )}
             {consumption && centreView === 'profiles' && (
               <SystemsProfiles result={result} />
@@ -879,7 +885,35 @@ function fmtSys(s) {
     .replace(/^\w/, ch => ch.toUpperCase())
 }
 
-function SystemsSankey({ consumption, sysCfg, sysCfgV40 }) {
+/**
+ * Brief 47 Part 5c (2026-05-24) — top-bar kWh / kWh/m²·yr toggle finding.
+ *
+ * The Sankey now reads the global `unit` from UISettingsContext and a
+ * `giaM2` prop (passed from the engine result's metadata) and formats
+ * every visible flow figure + tooltip via `fmtFlow`:
+ *
+ *   unit === 'kwh'         → "X.X MWh"          (existing default)
+ *   unit === 'kwh_per_m2'  → "X.X kWh/m²·yr"    (mwh * 1000 / gia)
+ *
+ * If giaM2 isn't available the formatter falls back to MWh regardless
+ * of the toggle (no synthetic divisor; CLAUDE.md Rule 2 "never generate
+ * synthetic data").
+ *
+ * The flows themselves stay drawn in MWh space — the per-pixel scale is
+ * unaffected. Only the printed labels change. The Sankey's geometry
+ * (column widths, ribbon tapers, demand-driven scale) is unchanged.
+ */
+function fmtFlow(mwh, unit, giaM2) {
+  if (!Number.isFinite(mwh)) return '—'
+  if (unit === 'kwh_per_m2' && giaM2 > 0) {
+    const kwhPerM2 = (mwh * 1000) / giaM2
+    return `${kwhPerM2.toFixed(1)} kWh/m²·yr`
+  }
+  return `${mwh.toFixed(1)} MWh`
+}
+
+function SystemsSankey({ consumption, sysCfg, sysCfgV40, giaM2 = 0 }) {
+  const { unit } = useUISettings()
   // Three-column Sankey per Chris's walkthrough call (2026-05-19, second
   // iteration):
   //   LEFT   — Demand bars (Heating, Cooling, DHW, Mech vent, Lighting, SP)
@@ -1170,11 +1204,17 @@ function SystemsSankey({ consumption, sysCfg, sysCfgV40 }) {
         ? (effForLabel >= 1 ? `SEER ${effForLabel.toFixed(2)}` : `η ${effForLabel.toFixed(2)}`)
         : (effForLabel >= 1 ? `SCOP ${effForLabel.toFixed(2)}` : `η ${effForLabel.toFixed(2)}`)
       const nameStr = br.sysName ?? `${it.label} (${br.role ?? 'primary'})`
+      // Brief 47 Part 5c: tooltip respects the global unit toggle. The
+      // calc itself (MWh / efficiency) stays in MWh so the "÷ SCOP =
+      // fuel MWh" identity reads naturally; the leading + trailing
+      // figures swap to kWh/m²·yr when the toggle is set.
+      const deliveredStr = fmtFlow(deliveredMwh, unit, giaM2)
+      const fuelStr      = fmtFlow(fuelMwh, unit, giaM2)
       const calcStr = effForLabel > 0
-        ? `${deliveredMwh.toFixed(1)} MWh ÷ ${effForLabel.toFixed(2)} = ${fuelMwh.toFixed(1)} MWh ${fuelName}`
-        : `${deliveredMwh.toFixed(1)} MWh delivered`
+        ? `${deliveredStr} ÷ ${effForLabel.toFixed(2)} = ${fuelStr} ${fuelName}`
+        : `${deliveredStr} delivered`
       br.tooltip = `${nameStr}
-Demand (delivered):  ${deliveredMwh.toFixed(1)} MWh
+Demand (delivered):  ${deliveredStr}
 ${effLabel}
 Fuel consumed:  ${calcStr}`
     }
@@ -1361,7 +1401,7 @@ Fuel consumed:  ${calcStr}`
               <text x={leftX0 + nodeW / 2} y={it.mwhY} fontSize="9"
                 fill={it.isUnserved ? '#9CA3AF' : '#374151'} textAnchor="middle"
                 fontWeight="500">
-                {it.demand.toFixed(1)} MWh
+                {fmtFlow(it.demand, unit, giaM2)}
               </text>
             </g>
           )
@@ -1406,7 +1446,7 @@ Fuel consumed:  ${calcStr}`
                 fill={b.color} opacity={0.90} rx={2} />
               <text x={rightX0 + nodeW / 2} y={b.mwhY} fontSize="9"
                 fill="#374151" textAnchor="middle" fontWeight="500">
-                {b.mwh.toFixed(1)} MWh
+                {fmtFlow(b.mwh, unit, giaM2)}
               </text>
             </g>
           )
