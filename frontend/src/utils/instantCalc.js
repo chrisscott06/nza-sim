@@ -4123,16 +4123,26 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
     heatingDemandHourlyKwh,
   )
 
-  // Effective recovery is computed per-hour inside computeVentilationEnergy
-  // and surfaced as ventResult.effectiveRecoveryMwh. Heating demand seen by
-  // the heating service is reduced accordingly. The annual-aggregate cap
-  // (pre-28j) has been removed -- the hourly cap is the correct physics.
-  const effective_recovery_mwh = ventResult.effectiveRecoveryMwh ?? 0
-  const heating_demand_mwh     = Math.max(0, heating_demand_state2_mwh - effective_recovery_mwh)
+  // Brief 50 Part 2 (2026-05-25) — MVHR recovery double-count fix.
+  //
+  // BEFORE Brief 50: State 2 reduced vent UA via (1 - HRE) factor (~L2551)
+  // → heating_demand_state2_mwh is ALREADY post-MVHR. We then ALSO subtracted
+  // effective_recovery_mwh here → recovery counted twice (refbox Probe 1
+  // ratio = 1.99). See Brief 49 verdict + 50 audit doc §1.
+  //
+  // AFTER Brief 50: State 2 owns recovery exclusively via its (1 - HRE)
+  // factor. The State 2 demand is the post-MVHR demand the systems should
+  // be sized to — pass it through unchanged. recovery_offset_mwh is still
+  // surfaced on consumption.space_heating for the BreakdownPanel (it's the
+  // real airstream recovery integral — its semantic role shifts from
+  // "amount subtracted at this boundary" to "amount State 2 baked in via
+  // the (1 − HRE) factor", but the magnitude is unchanged).
+  const effective_recovery_mwh         = ventResult.effectiveRecoveryMwh ?? 0
+  const heating_post_mvhr_demand_mwh   = heating_demand_state2_mwh
 
   // ── Service energy math (heating, cooling, DHW) ───────────────────────────
   // v25 path (existing computeServiceEnergy / computeDhwFuelMix):
-  const heating_v25 = computeServiceEnergy(sys.heating, 'heating', heating_demand_mwh, resolved)
+  const heating_v25 = computeServiceEnergy(sys.heating, 'heating', heating_post_mvhr_demand_mwh, resolved)
   const cooling_v25 = computeServiceEnergy(sys.cooling, 'cooling', cooling_demand_mwh, resolved)
   // Brief 28-IM IM-M4 §8.1: DHW prefers fuel_mix when present. Falls back to
   // the legacy primary/secondary computeServiceEnergy path when not.
@@ -4142,15 +4152,16 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
 
   // v40 path: build the brief40 block ONCE here so the v25-shape adapters
   // (heating/cooling/DHW) and the consumption.brief40 attachment can both
-  // consume it. Pass heating_demand_mwh (post-recovery) so v40 matches v25's
-  // post-recovery demand exactly. Also pass effective_recovery_mwh so the
-  // engine can apply the same offset when it recomputes State 2 at a custom
-  // heating setpoint (Brief 44 Part 2 — boundary alignment fix for the
-  // Diagnostic 248% over-delivery bug).
+  // consume it. Brief 50 Part 2: heatingRecoveryOffsetMwh is now 0 because
+  // State 2 owns recovery — `_computeHeatingOrCooling`'s offsetRatio scaling
+  // block at custom setpoints relied on this offset to undo the (now-deleted)
+  // State 3 subtraction; passing 0 disables it. (The block itself is dead
+  // code after Part 2 and gets retired in Part 4.) heatingDemandOverrideMwh
+  // is the post-MVHR State 2 demand — what systems are sized to.
   const brief40Computed = computeSystemsDelivered({
     building, state2Result, comfortBand, state2Recompute,
-    heatingDemandOverrideMwh: heating_demand_mwh,
-    heatingRecoveryOffsetMwh: effective_recovery_mwh,
+    heatingDemandOverrideMwh: heating_post_mvhr_demand_mwh,
+    heatingRecoveryOffsetMwh: 0,
   })
 
   // Per-service displacement: when v40.{service} is non-empty, v40 wins.

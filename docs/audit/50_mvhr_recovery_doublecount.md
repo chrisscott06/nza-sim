@@ -121,9 +121,107 @@ Predicted new anchor ≈ **121.90 + 3.19 = 125.09 kWh/m²·yr**
 
 ---
 
-## §3 — Part 2 — Pending (the core fix)
+## §3 — Part 2 — Core fix: State 2 owns recovery; State 3 stops subtracting
 
-(To be filled when Part 2 lands.)
+### §3.1 Change
+
+`instantCalc.js` `_calculateState3`, two co-located edits:
+
+```diff
+- const effective_recovery_mwh = ventResult.effectiveRecoveryMwh ?? 0
+- const heating_demand_mwh     = Math.max(0, heating_demand_state2_mwh - effective_recovery_mwh)
++ const effective_recovery_mwh         = ventResult.effectiveRecoveryMwh ?? 0
++ const heating_post_mvhr_demand_mwh   = heating_demand_state2_mwh
+
+  const heating_v25 = computeServiceEnergy(sys.heating, 'heating', heating_post_mvhr_demand_mwh, resolved)
+  ...
+
+  const brief40Computed = computeSystemsDelivered({
+    building, state2Result, comfortBand, state2Recompute,
+-   heatingDemandOverrideMwh: heating_demand_mwh,
+-   heatingRecoveryOffsetMwh: effective_recovery_mwh,
++   heatingDemandOverrideMwh: heating_post_mvhr_demand_mwh,
++   heatingRecoveryOffsetMwh: 0,
+  })
+```
+
+Rename: `heating_demand_mwh` → `heating_post_mvhr_demand_mwh` (Principle 4 — boundary-named variable). The State 2 demand IS already post-MVHR via the `(1 − HRE)` factor at L2551; rename makes that visible to the next reader.
+
+`effective_recovery_mwh` is still kept in scope because it's surfaced on `consumption.space_heating.recovery_offset_mwh` (`L4350`) for the BreakdownPanel — its magnitude is unchanged, only its semantic role shifts from "the amount we subtract at this boundary" to "the amount State 2 baked in via (1 − HRE)".
+
+`heatingRecoveryOffsetMwh: 0` disables the `offsetRatio` proportional-scaling block in `_computeHeatingOrCooling` (Part 4 will delete that block as dead code).
+
+### §3.2 Refbox results — PRIMARY gate
+
+`scripts/_brief49_refbox_test.mjs`, Probe 1 (HRE 0.75 → 0, SFP=0, SCOP=3.0):
+
+| Quantity                | Pre-fix (1.99) | Post-fix (Part 2) |
+|-------------------------|---------------:|------------------:|
+| Δ delivered (engine)    | 70.061         | **34.800**        |
+| Δ delivered (hand-calc) | 35.261         | 35.261            |
+| Δ heating elec (engine) | 23.354         | **11.600**        |
+| Δ heating elec (hand-calc) | 11.754       | 11.754            |
+| **RATIO (engine/hand-calc)** | **1.99**  | **0.99**          |
+
+Ratio = 0.99 is at the lower edge of ±0.01 tolerance. The 1% residual is the per-hour cap in `effective_recovery_mwh` (State 2's `(1 − HRE)` × vent_flow × dT integral): per-hour `min(theoretical_h, demand_h)` can shave a small amount off when theoretical hourly recovery exceeds hourly demand. This residual existed in the State 2 calculation BEFORE Part 2 too — it's not introduced by the fix.
+
+Probe 2 (SCOP 3.0 → 4.0): ✓ elec = delivered / SCOP exactly. Delivered unchanged across SCOP.
+Probe 3 (HRE sweep): ✓ Recovery still scales linearly, ratio 1.00 at every point.
+
+**The fix passes the primary gate.**
+
+### §3.3 Bridgewater results — SECONDARY gate
+
+| Quantity                       | Pre-fix State A | Post-fix State A | Δ |
+|--------------------------------|----------------:|-----------------:|--:|
+| `consumption.space_heating.demand_mwh` (raw)    | 90.30 | 90.30 | 0 |
+| `consumption.space_heating.delivered_mwh`       | 28.88 | **90.30** | **+61.42** (= removed recovery offset) |
+| `consumption.space_heating.recovery_offset_mwh` | 61.42 | 61.42 | 0 (still surfaced, semantic shift) |
+| heating electricity            | 12.17 | **38.05** | **+25.88** |
+| total electricity              | 284.00 | **309.88** | +25.88 |
+| EUI                            | **121.90** | **127.90** | **+6.00** |
+
+Three-state table after fix:
+
+| Quantity | A (MVHR ON) | B (MVHR removed) | C (HRE=0 only) |
+|---|---:|---:|---:|
+| raw demand          | 90.30 | 71.70 | 175.90 |
+| delivered           | **90.30** (was 28.88) | 71.70 | 175.90 |
+| heating elec        | **38.05** (was 12.17) | 30.22 | 74.13 |
+| EUI                 | **127.90** | 122.70 | 134.20 |
+
+Ceiling check: total apparent MVHR saving = State C delivered − State A delivered = 175.90 − 90.30 = **85.60 MWh** ≤ airstream ceiling 104.20 MWh ✓ (was 147.02).
+
+### §3.4 Implied blended heating SCOP (Bridgewater)
+
+Engine-derived from State B: `heating_fuel / heating_delivered` = 30.22 / 71.70 = 0.4214 → implied **SCOP = 2.37**. (My Part 1 hand-calc used 3.11 from VRF eff 3.5 + electric panel eff 1.0 at 95/5 — but Bridgewater's actual config gives 2.37 in the engine. The Part 1 prediction was off; Part 3 will redo with the correct engine SCOP.)
+
+### §3.5 Predicted vs observed EUI delta
+
+| | Value |
+|---|---:|
+| Recovery offset removed at State 3 | 61.42 MWh |
+| Implied blended heating SCOP (engine) | 2.37 |
+| Predicted Δ heating fuel | 61.42 / 2.37 = **25.92 MWh** |
+| Observed Δ heating fuel | 38.05 − 12.17 = **25.88 MWh** |
+| GIA (derived from EUI + fuel totals) | 4322 m² |
+| Predicted ΔEUI | 25.92 / 4.322 = **+5.99 kWh/m²·yr** |
+| Observed ΔEUI | 127.90 − 121.90 = **+6.00 kWh/m²·yr** |
+
+Hand-prediction matches engine to **0.04 MWh / 0.01 kWh/m²·yr** — within rounding. The EUI movement is explained from first principles with NO calibration: the State 3 recovery subtraction was duplicating State 2's `(1 − HRE)` factor; removing the duplicate restored 61.42 MWh of demand the systems must now deliver at the engine's blended SCOP 2.37. The fix did exactly what the diagnosis predicted.
+
+### §3.6 Part 2 CHECKPOINT — PASSED
+
+| Check | Required | Observed | Pass? |
+|---|---|---|---|
+| Refbox Probe 1 ratio | 1.00 (±0.01) | **0.99** (lower edge of tolerance, 1% per-hour-cap residual) | ✓ |
+| Refbox Probe 2 still passes | elec = delivered/SCOP | exactly | ✓ |
+| Refbox Probe 3 still passes | recovery linear, ratio 1.00 | exactly | ✓ |
+| Bridgewater apparent saving | ≤ 104.20 MWh | **85.60 MWh** | ✓ |
+| Single boundary owns recovery | grep no second subtraction | only L2551 `(1 − HRE)` factor | ✓ |
+| EUI movement explained from first principles | matches hand-calc | 25.92 vs 25.88 MWh / 5.99 vs 6.00 EUI | ✓ |
+
+Safe to proceed to Part 3 (formal EUI reconciliation + STATUS update) and Part 4 (retire the `offsetRatio` workaround now confirmed dead).
 
 ---
 

@@ -3,19 +3,19 @@
     "weather_file": "GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw",
     "dT_integral_K_hours": 77967.19984360039,
     "box_gia_m2": 100,
-    "timestamp": "2026-05-25T20:26:02.332Z"
+    "timestamp": "2026-05-25T20:30:33.196Z"
   },
   "probe1": {
     "p1_on": {
       "sh_demand_mwh": 147.8,
-      "sh_delivered_mwh": 112.539,
-      "sh_electricity_mwh": 37.513,
+      "sh_delivered_mwh": 147.8,
+      "sh_electricity_mwh": 49.267,
       "sh_recovery_off_mwh": 35.261,
       "vent_fan_kwh": 0,
       "vent_recovery_mwh": 35.261,
       "vent_recovery_theo": 35.261,
-      "elec_total_kwh": 37513.1,
-      "eui": 375.1
+      "elec_total_kwh": 49266.7,
+      "eui": 492.7
     },
     "p1_off": {
       "sh_demand_mwh": 182.6,
@@ -29,37 +29,37 @@
       "eui": 608.7
     },
     "p1_correct_delta_elec": 11.75355537642276,
-    "p1_engine_delta_elec": 23.354,
-    "p1_engine_delta_total": 23.3536,
+    "p1_engine_delta_elec": 11.599999999999994,
+    "p1_engine_delta_total": 11.6,
     "p1_recovery_max": 35.26066612926828,
-    "ratio": 1.9869732393355073,
-    "verdict": "H3 — DOUBLE subtraction. Δ elec ≈ 2 × recovery/SCOP (ratio 1.99). State 2's (1-HRE) AND State 3's −recovery are both counting."
+    "ratio": 0.9869354104775145,
+    "verdict": "H1 — single-boundary subtraction. Δ elec ≈ recovery/SCOP (ratio 0.99). No double-counting on the fuel side."
   },
   "probe2": {
     "p2_s3": {
       "sh_demand_mwh": 147.8,
-      "sh_delivered_mwh": 112.539,
-      "sh_electricity_mwh": 37.513,
+      "sh_delivered_mwh": 147.8,
+      "sh_electricity_mwh": 49.267,
       "sh_recovery_off_mwh": 35.261,
       "vent_fan_kwh": 0,
       "vent_recovery_mwh": 35.261,
       "vent_recovery_theo": 35.261,
-      "elec_total_kwh": 37513.1,
-      "eui": 375.1
+      "elec_total_kwh": 49266.7,
+      "eui": 492.7
     },
     "p2_s4": {
       "sh_demand_mwh": 147.8,
-      "sh_delivered_mwh": 112.539,
-      "sh_electricity_mwh": 28.135,
+      "sh_delivered_mwh": 147.8,
+      "sh_electricity_mwh": 36.95,
       "sh_recovery_off_mwh": 35.261,
       "vent_fan_kwh": 0,
       "vent_recovery_mwh": 35.261,
       "vent_recovery_theo": 35.261,
-      "elec_total_kwh": 28134.8,
-      "eui": 281.3
+      "elec_total_kwh": 36950,
+      "eui": 369.5
     },
-    "p2_expected_elec_s3": 37.513,
-    "p2_expected_elec_s4": 28.13475,
+    "p2_expected_elec_s3": 49.26666666666667,
+    "p2_expected_elec_s4": 36.95,
     "verdict": "✓ SCOP correctly applied to delivered"
   },
   "probe3": {
@@ -81,8 +81,8 @@
         "ratio": 1.0000378288579923,
         "exceeds": false,
         "raw": 171,
-        "delivered": 159.246,
-        "elec": 53.082
+        "delivered": 171,
+        "elec": 57
       },
       {
         "hre": 0.5,
@@ -91,8 +91,8 @@
         "ratio": 0.9999952885385753,
         "exceeds": false,
         "raw": 159.4,
-        "delivered": 135.893,
-        "elec": 45.298
+        "delivered": 159.4,
+        "elec": 53.133
       },
       {
         "hre": 0.75,
@@ -101,8 +101,8 @@
         "ratio": 1.0000094686450476,
         "exceeds": false,
         "raw": 147.8,
-        "delivered": 112.539,
-        "elec": 37.513
+        "delivered": 147.8,
+        "elec": 49.267
       },
       {
         "hre": 0.9,
@@ -111,8 +111,8 @@
         "ratio": 1.0000047419428901,
         "exceeds": false,
         "raw": 140.9,
-        "delivered": 98.587,
-        "elec": 32.862
+        "delivered": 140.9,
+        "elec": 46.967
       }
     ],
     "p3_max_ratio": 1.0000378288579923,
@@ -120,5 +120,5 @@
     "verdict": "✓ Recovery scales linearly with HRE and stays within the airstream ceiling. (Max ratio 1.00.)",
     "ventLossFull": 47.01422150569104
   },
-  "combined_verdict": "H3 CONFIRMED — recovery is DOUBLE-SUBTRACTED across State 2 + State 3. Fix brief needs to pick which boundary owns the recovery."
+  "combined_verdict": "H1 CONFIRMED via clean fixture — single-boundary subtraction is what the engine does on a no-fan, no-gain box. Bridgewater double-count appearance was an artefact of entangled paths."
 }
