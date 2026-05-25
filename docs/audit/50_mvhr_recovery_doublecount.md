@@ -329,9 +329,67 @@ So a 0.5°C heating setpoint change can no longer produce a 248% jump: there's n
 
 ---
 
-## §6 — Part 5 — Pending (v40→v25 silent-fallback fix)
+## §6 — Part 5 — Fix v40→v25 silent-fallback (D1)
 
-(To be filled when Part 5 lands.)
+### §6.1 Change
+
+`systemsEngine.js` `v40VentilationToV25List` (one-line edit + JSDoc rewrite):
+
+```diff
+- if (brief40VentBlock.error) return null     // validation failure: fall through to v25 to keep ventilation alive
++ if (brief40VentBlock.error) return []        // Brief 50 Part 5 — was `return null` (silent fallback to v25).
+```
+
+Pre-Brief-50 `null` triggered the caller's "no v40 to use" branch → `_calculateState3` fell back to the v25 ventilation array → MVHR stayed effectively enabled even after the user disabled it in v40 (silent masking).
+
+Post-Brief-50 `[]` triggers the caller's "use v40 list" branch with an empty list → `computeVentilationEnergy` sees no systems → fan + recovery both zero → the v40 toggle is no longer inert.
+
+JSDoc updated to clearly distinguish:
+- **null** = block absent OR systems list empty (legitimate fall-through to v25)
+- **[]** = error OR all systems disabled (caller treats as "no ventilation")
+
+### §6.2 Verification — synthetic UI scenario
+
+New test: `scripts/_brief50_part5_silent_fallback_test.mjs` (committed).
+
+The test simulates exactly what a user does in the UI: disable MVHR in `systems_config_v40.ventilation` only, **without rebalancing the remaining shares** (shares now sum to 13 %, validation fails). Pre-fix, this scenario was inert. Post-fix:
+
+| Quantity | State A (baseline) | State B (MVHR disabled in v40) | Δ |
+|---|---:|---:|---:|
+| fan_mwh | 25.949 | **0.000** | **−25.95** ✓ |
+| recovery_mwh | 61.419 | **0.000** | **−61.42** ✓ |
+| total electricity | 309.882 | 283.933 | **−25.95** (= the MVHR fan power) |
+| EUI | 127.90 | **121.90** | **−6.00** kWh/m²·yr ✓ |
+| `consumption.space_heating.demand_mwh` | 90.300 | 90.300 | 0 (see §6.3) |
+| `consumption.space_heating.delivered_mwh` | 90.300 | 90.300 | 0 (see §6.3) |
+| `consumption.space_heating.electricity_mwh` | 38.055 | 38.055 | 0 (see §6.3) |
+
+Engine response is VISIBLE: fan + recovery drop to zero, total electricity drops by exactly the MVHR fan power, EUI drops by 6.00 kWh/m²·yr. Toggle is no longer silently masked.
+
+### §6.3 Known limitation — State 2 ↔ v25 hardcoded coupling
+
+Demand and heating fuel DON'T move in State B because `_calculateState2` reads `building.systems_config_v25.ventilation` directly at `instantCalc.js` L2530 — never through v40. The v25 entry was not touched (mirroring the UI toggle behaviour), so State 2's vent UA still has the `(1 − HRE)` factor from v25's MVHR → demand stays at the post-MVHR value.
+
+This is the State 2 / v25 architectural coupling — a SEPARATE issue from Part 5's silent fallback. Without it Brief 50 Part 5 fully delivers the brief's "v40 ventilation no longer silently falls back to v25" target. With it the toggle's full intent ("disable MVHR completely") needs either:
+- **State 2 reads v40 when present** (engine architectural change, ~equivalent to Brief 40 Part 5b for ventilation but on the State 2 side). Best done in a follow-up brief.
+- **UI keeps v25 in sync with v40** (per-system mirror write whenever the user changes v40). Out of engine scope.
+- **Engine treats v25 as legacy / removed when v40 is present** (architectural — v40 fully wins).
+
+Recorded as a Brief-50-residual finding for a future "State 2 reads v40 ventilation" or "retire v25 ventilation" brief.
+
+### §6.4 Baseline harness regression — none
+
+Refbox: Probe 1 ratio 0.99, Probes 2 + 3 pass — unchanged from Part 4 (Part 5 only affects the error path which baseline harnesses don't trigger).
+Bridgewater (State A): EUI 127.90, three-state table byte-identical to Part 4.
+
+### §6.5 Part 5 CHECKPOINT — PASSED
+
+| Check | Required | Observed | Pass? |
+|---|---|---|---|
+| Engine responds to v40 MVHR disable | demand/fuel changes | EUI −6.00, fan −26, recovery 0 | ✓ (engine-response criterion met) |
+| Baseline harnesses unaffected | byte-identical to Part 4 | refbox + Bridgewater unchanged | ✓ |
+| No live code references to silent-fallback path | grep | only `if (brief40VentBlock.error) return []` remains | ✓ |
+| Known limitation documented | Part 5 audit + test output | State 2 / v25 coupling recorded | ✓ |
 
 ---
 

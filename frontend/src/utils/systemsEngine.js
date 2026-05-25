@@ -919,13 +919,21 @@ export function v40ServiceBlockToV25Shape(brief40Block) {
  * synthesised list, preserving the Brief 28j hourly recovery cap math.
  *
  * Returns:
- *   - null when v40 vent block has error or empty (caller falls through)
- *   - array of v25-shaped vent entries otherwise (may be empty if all
- *     disabled — caller treats that as "no ventilation")
+ *   - null when v40 vent block is absent OR has no systems (caller falls
+ *     back to v25 — the legitimate "nothing to displace" case).
+ *   - empty array [] when v40 vent has a validation error OR all systems
+ *     disabled. Caller treats either as "no ventilation" → fan + recovery
+ *     both zero. (Brief 50 Part 5 (2026-05-25): on error, returning []
+ *     replaces the pre-Brief-50 `return null` which caused silent
+ *     fallback to v25 — that masked validation failures and made the v40
+ *     MVHR disable toggle inert when shares didn't rebalance to 100%.
+ *     The error string itself remains on brief40VentBlock.error for UI
+ *     surfacing — this function just controls the engine consumption.)
+ *   - array of v25-shaped vent entries otherwise.
  */
 export function v40VentilationToV25List(brief40VentBlock) {
   if (!brief40VentBlock) return null
-  if (brief40VentBlock.error) return null     // validation failure: fall through to v25 to keep ventilation alive
+  if (brief40VentBlock.error) return []        // Brief 50 Part 5 — was `return null` (silent fallback to v25).
   if (brief40VentBlock.all_disabled) return [] // user disabled all vents: empty list = no vent compute
   const sysList = brief40VentBlock.systems ?? []
   if (sysList.length === 0) return null       // nothing to displace
