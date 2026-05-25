@@ -225,9 +225,46 @@ Safe to proceed to Part 3 (formal EUI reconciliation + STATUS update) and Part 4
 
 ---
 
-## §4 — Part 3 — Pending (EUI reconciliation from first principles)
+## §4 — Part 3 — EUI reconciliation from first principles
 
-(To be filled when Part 3 lands.)
+### §4.1 Hand-derivation (no engine call)
+
+The fix removes State 3's `Math.max(0, raw - effective_recovery_mwh)` subtraction. The variable previously named `heating_demand_mwh` (post-MVHR via DUPLICATE subtraction) becomes `heating_post_mvhr_demand_mwh` = State 2 raw demand directly (post-MVHR via the single `(1 − HRE)` factor at L2551).
+
+What changes downstream:
+1. **`heating.total_perf.delivered_mwh`** rises by exactly `effective_recovery_mwh` (61.42 MWh on Bridgewater) — the systems must now deliver the demand that was previously claimed twice as recovered.
+2. **`heating.total_perf.fuel_mwh`** rises by `delivered_increase / blended_SCOP`. The blended SCOP can be derived from any State that doesn't change with the fix; State B (MVHR removed) is the cleanest because the MVHR system is absent, so blended SCOP is just the active heating system mix.
+3. **EUI** rises by `Δheating_fuel / GIA`.
+
+For Bridgewater clean:
+
+| Term | Value | Source |
+|---|---:|---|
+| `effective_recovery_mwh` (removed double-subtraction) | 61.42 MWh | engine State A pre-fix |
+| Engine-implied blended heating SCOP | 71.70 / 30.22 = **2.37** | State B `heating_delivered / heating_fuel` |
+| Predicted Δheating fuel | 61.42 / 2.37 = **25.92 MWh** | arithmetic |
+| GIA | 4322 m² | derived: (`electricity_kwh + gas_kwh`) / EUI = (284,000 + 242,890) / 121.90 |
+| **Predicted ΔEUI** | 25.92 × 1000 / 4322 = **+5.99 kWh/m²·yr** | arithmetic |
+| **Predicted new anchor** | 121.90 + 5.99 = **127.89 kWh/m²·yr** | arithmetic |
+
+### §4.2 Engine reading (cross-check)
+
+Engine after Part 2:
+- Δheating fuel: 38.05 − 12.17 = **25.88 MWh** (predicted 25.92; diff 0.04)
+- ΔEUI: 127.90 − 121.90 = **+6.00** (predicted +5.99; diff 0.01)
+- New anchor: **127.90 kWh/m²·yr** (predicted 127.89; diff 0.01)
+
+**Hand-prediction matches engine to within rounding** (last decimal-place difference). The EUI movement is fully explained by removing the State 3 duplicate subtraction at the engine's actual blended SCOP. No calibration; no hidden side effects.
+
+### §4.3 Reconciliation with Brief 50's "~126" estimate
+
+The brief's expected post-fix anchor was "~126 kWh/m²·yr" (estimated +4 kWh/m²·yr from a "remove 43 MWh over-count" framing). The actual answer is +6 (new anchor 127.90), 1.5% higher than the brief's estimate. The difference: the brief framed the fix as "remove the 43 MWh by which apparent saving (147) exceeds physical ceiling (104)"; the actual fix removes the FULL State 3 subtraction (61.42 MWh), which is what makes a single boundary own the recovery. Both framings describe the same fix; one is a partial accounting and the other is the complete one. Engine number is the complete one.
+
+The brief's "~126" was an order-of-magnitude target, not a calibration anchor — confirmed in the brief itself: "Don't calibrate to a target… NEVER tweak a factor to land on a specific EUI." Observed 127.90 is in the right family; the gap is explained.
+
+### §4.4 STATUS.md anchor update
+
+Updated `STATUS.md` clean-state anchor: **121.90 → 127.90 kWh/m²·yr**. Note: "Brief 50 removed MVHR recovery double-count; previous anchor under-counted heating fuel by 25.88 MWh / yr (= recovery_offset 61.42 MWh ÷ blended heating SCOP 2.37)."
 
 ---
 

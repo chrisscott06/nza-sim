@@ -1,5 +1,66 @@
 # NZA SIMULATE — Status
 
+## 🚧 Brief 50 — IN FLIGHT (Parts 1–3 landed) 2026-05-25
+
+**MVHR recovery double-count fix (Option A: State 2 owns recovery).** Engine fix brief — deletes the duplicate State 3 subtraction at `instantCalc.js` ~L4131. Brief 49's diagnosis (refbox ratio 1.99) sized the bug; this brief lands the fix.
+
+### Clean-state EUI anchor — UPDATED
+
+**Bridgewater clean EUI: 121.90 → 127.90 kWh/m²·yr** (Brief 50 Part 2).
+
+Brief 50 removed MVHR recovery double-count; previous anchor under-counted heating fuel by 25.88 MWh / yr (= recovery_offset 61.42 MWh ÷ blended heating SCOP 2.37). The movement is fully derived from first principles in `docs/audit/50_mvhr_recovery_doublecount.md` §4.
+
+### Parts landed
+
+| Part | Commit | Status |
+|---|---|---|
+| 1 | `3fa5c80` | Land brief + pre-fix baseline (refbox 1.99, Bridgewater 121.90) ✓ |
+| 2 | `bef5c2f` | Core fix — delete State 3 subtraction. Refbox ratio 1.99 → 0.99 ✓ |
+| 3 | THIS  | EUI reconciliation + STATUS update + new anchor 127.90 ✓ |
+| 4 | pending | Retire `offsetRatio` workaround (dead code after Part 2) |
+| 5 | pending | Fix v40→v25 silent-fallback (D1) |
+| 6 | pending | Unify HRE source of truth (D2) + final reconciliation |
+| 7 | pending | Walkthrough + close |
+
+### Falsifiability gates (Part 2 → so far)
+
+| Gate | Pre-fix | Post-fix | Pass? |
+|---|---:|---:|---|
+| Refbox Probe 1 ratio (PRIMARY) | 1.99 | **0.99** | ✓ (lower edge of ±0.01, 1% per-hour-cap residual) |
+| Refbox Probe 2 (elec = delivered/SCOP) | ✓ | ✓ | held |
+| Refbox Probe 3 (HRE linear, ratio 1.00) | ✓ | ✓ | held |
+| Bridgewater apparent saving | 147.02 MWh | **85.60 MWh** | ✓ (≤ 104.20 ceiling) |
+| Single owner | State 2 + State 3 (both) | State 2 only | ✓ |
+| EUI from first principles | n/a | **+5.99 predicted vs +6.00 observed** | ✓ |
+
+### Files touched (this brief, so far)
+
+- `frontend/src/utils/instantCalc.js` (Part 2 — 2 edits at L4129-4154)
+- `docs/briefs/active/50_mvhr_recovery_doublecount_fix.md` (Part 1)
+- `docs/briefs/archive/49_mvhr_recovery_boundary_diagnostic_COMPLETED.md` (Part 1 — archived)
+- `docs/audit/50_mvhr_recovery_doublecount.md` (Parts 1, 2, 3)
+- `docs/briefs/current.md` (Part 1)
+- `STATUS.md` (Part 3 — this section)
+
+---
+
+## 🚀 Brief 49 — CLOSED 2026-05-25 (HARD STOP at diagnosis verdict)
+
+**MVHR recovery boundary diagnostic.** Diagnosis-first brief — closed at HARD STOP with H3 verdict (recovery double-counted across State 2 / State 3) confirmed via reference box fixture (`scripts/_brief49_refbox_test.mjs`, commit `5265c42`). Refbox Probe 1 ratio 1.99 unambiguously proved double-subtraction. Brief 50 (`3fa5c80` →) is the fix.
+
+Three commits in the chain:
+- `06a5cda` static-trace diagnosis (ruled out H2 algebraically)
+- `9159ba0` live engine harness (Bridgewater, suggested H1+H3 but entangled)
+- `5265c42` reference box fixture (THE smoking gun, clean ratio 1.99)
+
+Findings record: `docs/audit/49_findings_first_look.md` + full diagnosis at `docs/audit/49_mvhr_recovery_diagnosis.md`.
+
+Two read-only harness scripts kept as falsifiability instruments for Brief 50 and beyond:
+- `scripts/_brief49_refbox_test.mjs` — the clean known-answer fixture (PRIMARY gate)
+- `scripts/_brief49_mvhr_boundary_diagnostic.mjs` — live Bridgewater engine reader (SECONDARY)
+
+---
+
 ## 🚀 Brief 48 — CLOSED 2026-05-25
 
 **Per-intervention audit-trail / breakdown viewer.** Built the diagnostic instrument the next boundary-fix brief will use. UI / surfacing only — no engine recompute, no boundary fixes (those land in their own brief, seeded by Finding E from this brief's first use).
