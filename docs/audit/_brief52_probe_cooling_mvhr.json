@@ -1,0 +1,47 @@
+{
+  "meta": {
+    "weather": "GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw",
+    "comfort": {
+      "lower_c": 20,
+      "upper_c": 25
+    },
+    "heating_hours": 8261,
+    "dT_integral_at_lower": 77967.19984360039,
+    "theoretical_recovery_uncapped_mwh": 35.26066612926827
+  },
+  "cold": {
+    "raw_demand_mwh": 147.8,
+    "delivered_mwh": 147.8,
+    "recovery_offset": 35.261,
+    "heating_elec_mwh": 49.267,
+    "cooling_demand_mwh": 4.8,
+    "fan_kwh": 0,
+    "vent_recovery_eff": 35.261,
+    "vent_recovery_theo": 35.261,
+    "int_people_kwh": 0,
+    "int_lighting_kwh": 0,
+    "int_equipment_kwh": 0,
+    "eui": 492.7
+  },
+  "hot": {
+    "raw_demand_mwh": 71.3,
+    "delivered_mwh": 71.3,
+    "recovery_offset": 30.546,
+    "heating_elec_mwh": 23.767,
+    "cooling_demand_mwh": 15.4,
+    "fan_kwh": 0,
+    "vent_recovery_eff": 30.546,
+    "vent_recovery_theo": 35.261,
+    "int_people_kwh": 87600,
+    "int_lighting_kwh": 0,
+    "int_equipment_kwh": 0,
+    "eui": 1932.9
+  },
+  "deltas": {
+    "recovery": -4.715000000000003,
+    "recovery_pct": -13.371713791440978,
+    "heat_demand": -76.50000000000001,
+    "cool_demand": 10.600000000000001
+  },
+  "verdict": "GATED_CORRECTLY"
+}
