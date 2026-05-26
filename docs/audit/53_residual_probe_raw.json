@@ -1,0 +1,151 @@
+{
+  "project_id": "14b4a5b1-8c73-4acb-8b65-1d22f05ec969",
+  "gia": 4322,
+  "comfortBand": {
+    "lower_c": 21,
+    "upper_c": 24
+  },
+  "gainLines": [
+    {
+      "label": "Solar — south",
+      "kwh": 39495.6,
+      "kwh_per_m2": 9.14,
+      "source": "heat_balance.annual.gains.solar.south.kwh"
+    },
+    {
+      "label": "Solar — east",
+      "kwh": 1492.1,
+      "kwh_per_m2": 0.35,
+      "source": "heat_balance.annual.gains.solar.east.kwh"
+    },
+    {
+      "label": "Solar — west",
+      "kwh": 978.2,
+      "kwh_per_m2": 0.23,
+      "source": "heat_balance.annual.gains.solar.west.kwh"
+    },
+    {
+      "label": "Solar — north",
+      "kwh": 57430.6,
+      "kwh_per_m2": 13.29,
+      "source": "heat_balance.annual.gains.solar.north.kwh"
+    },
+    {
+      "label": "Internal — people",
+      "kwh": 217233.8,
+      "kwh_per_m2": 50.26,
+      "source": "heat_balance.annual.gains.internal.people.kwh"
+    },
+    {
+      "label": "Internal — lighting",
+      "kwh": 76536.6,
+      "kwh_per_m2": 17.71,
+      "source": "heat_balance.annual.gains.internal.lighting.kwh"
+    },
+    {
+      "label": "Internal — equipment",
+      "kwh": 78864.1,
+      "kwh_per_m2": 18.25,
+      "source": "heat_balance.annual.gains.internal.equipment.kwh"
+    },
+    {
+      "label": "Heating (synthetic)",
+      "kwh": 95200,
+      "kwh_per_m2": 22.03,
+      "source": "data.demand.heating_demand_mwh × 1000  [synthesised in HeatBalance.jsx L324-353]"
+    }
+  ],
+  "lossLines": [
+    {
+      "label": "external_wall",
+      "kwh": 20019.7,
+      "kwh_per_m2": 4.63,
+      "source": "losses_at_setpoint.external_wall.heating_loss_kwh"
+    },
+    {
+      "label": "roof",
+      "kwh": 9174.5,
+      "kwh_per_m2": 2.12,
+      "source": "losses_at_setpoint.roof.heating_loss_kwh"
+    },
+    {
+      "label": "ground_floor",
+      "kwh": 9589.2,
+      "kwh_per_m2": 2.22,
+      "source": "losses_at_setpoint.ground_floor.heating_loss_kwh"
+    },
+    {
+      "label": "glazing",
+      "kwh": 54578.3,
+      "kwh_per_m2": 12.63,
+      "source": "losses_at_setpoint.glazing.heating_loss_kwh"
+    },
+    {
+      "label": "fabric_leakage",
+      "kwh": 27319.4,
+      "kwh_per_m2": 6.32,
+      "source": "losses_at_setpoint.fabric_leakage.heating_loss_kwh"
+    },
+    {
+      "label": "permanent_vents",
+      "kwh": 7692,
+      "kwh_per_m2": 1.78,
+      "source": "losses_at_setpoint.permanent_vents.heating_loss_kwh"
+    },
+    {
+      "label": "thermal_bridging",
+      "kwh": 10340.4,
+      "kwh_per_m2": 2.39,
+      "source": "losses_at_setpoint.thermal_bridging.heating_loss_kwh"
+    },
+    {
+      "label": "Vent: mvhr_gf_public",
+      "kwh": 36536.3,
+      "kwh_per_m2": 8.45,
+      "source": "losses_at_setpoint.ventilation[].heat_loss_kwh"
+    },
+    {
+      "label": "Vent: bedroom_extract",
+      "kwh": 226448.1,
+      "kwh_per_m2": 52.39,
+      "source": "losses_at_setpoint.ventilation[].heat_loss_kwh"
+    },
+    {
+      "label": "Vent: public_toilet_extract",
+      "kwh": 21537.2,
+      "kwh_per_m2": 4.98,
+      "source": "losses_at_setpoint.ventilation[].heat_loss_kwh"
+    },
+    {
+      "label": "Cooling (synthetic)",
+      "kwh": 145900,
+      "kwh_per_m2": 33.76,
+      "source": "data.demand.cooling_demand_mwh × 1000  [synthesised in HeatBalance.jsx L215-223]"
+    }
+  ],
+  "totals": {
+    "gains_kwh": 567231,
+    "losses_kwh": 569135.1000000001,
+    "residual_kwh": -1904.1000000000931,
+    "residual_per_m2": -0.44
+  },
+  "engine_cross_checks": {
+    "total_heat_loss_accum_kwh": 423235.1,
+    "displayed_loss_lines_sum_kwh": 423235.1000000001,
+    "internal_gains_kwh": 372634.5,
+    "solar_gains_kwh": 99396.5,
+    "heating_demand_kwh": 95200,
+    "cooling_demand_kwh": 145900
+  },
+  "demand_block": {
+    "heating_demand_mwh": 95.2,
+    "cooling_demand_mwh": 145.9,
+    "underheating_hours": 110,
+    "overheating_hours": 8603,
+    "comfort_hours": 47
+  },
+  "setpoints_used": {
+    "heating_c": 21,
+    "cooling_c": 24
+  }
+}

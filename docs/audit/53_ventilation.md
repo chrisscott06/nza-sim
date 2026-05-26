@@ -12,6 +12,60 @@
 
 ---
 
+## §1.0 — RESIDUAL BRANCH TEST: VERDICT (2026-05-26)
+
+**Branch: B — labelling/display gap.** Continue Brief 53 Parts 2–5.
+
+**Evidence** (read-only probe `scripts/_brief53_residual_probe_v2.mjs` against Bridgewater clean, comfort band 21–24 °C, GIA 4,322 m²):
+
+| | kWh | kWh/m² |
+|---|---:|---:|
+| Observed residual (Results /full view, no module filter) | **+43,447.7** | **+10.05** |
+| Engine `losses_at_setpoint.totals.total_heating_loss_kwh` | 423,235.1 | 97.93 |
+| Σ heating-loss lines displayed in Results /full view | 377,883.3 | 87.43 |
+| **Δ (engine integrand − displayed losses)** | **+45,351.8** | **+10.49** |
+
+The Δ is composed of exactly three engine-integrand terms that the `LOSS_ORDERS[MODES.FULL]` array in `stateMode.js` **does not list**:
+
+| Term | Engine integrand (kWh) | kWh/m² | In `LOSS_ORDERS[FULL]`? | Displayed? |
+|---|---:|---:|---|---|
+| `fabric_leakage` | 27,319.4 | 6.32 | **No** | **No** |
+| `permanent_vents` | 7,692.0 | 1.78 | **No** | **No** |
+| `thermal_bridging` | 10,340.4 | 2.39 | **No** | **No** |
+| **Sum** | **45,351.8** | **10.49** | | |
+
+Reconciliation gate (Chris's "derived-matches-engine" acceptance test):
+- Predicted unpaired-term magnitude: **10.49 kWh/m²**
+- Observed residual: **10.05 kWh/m²**
+- Δ: **0.44 kWh/m²** — the inherent algebraic closing residual from shoulder-hour gains (hours where `T_air > T_setpoint_heating` per face so no loss accumulates, but solar/internal gains still fire; no demand integrand captures them). Within tolerance.
+
+**Branch test confirmation** (Brief 53 audit §1.2 rule):
+- The three terms ARE in the demand integrand: `instantCalc.js` L2980–2992 — `hourly_heat_loss_Wh` includes `UA_leakage * dT_heat_out`, `UA_permanent * dT_heat_out`, `TB_heat_h`. All three flow into `heating_Wh_at_setpoint = max(0, hourly_heat_loss_Wh − offsetters_total)` at L3031.
+- Removing them from the Sankey display does NOT shift heating demand (engine never reads the display list).
+- Removing them from the engine WOULD shift heating demand by ~45 MWh. We are NOT removing from the engine.
+- → Branch B confirmed: engine correct, display incomplete.
+
+**Root cause:** `LOSS_ORDERS[MODES.FULL]` in `frontend/src/utils/stateMode.js` L208–219 carries the legacy alias keys (`infiltration`, `openings_louvre`) but never picked up the Brief 28k+ canonical keys (`fabric_leakage`, `permanent_vents`, `thermal_bridging`). The State 2 engine emits the new shape; State 1's `LOSS_ORDERS[MODES.ENVELOPE_ONLY]` lists both old and new aliases; State 2's `LOSS_ORDERS[MODES.ENVELOPE_GAINS]` lists only the new aliases; State 3 (`MODES.FULL`) lists only the legacy aliases. The legacy aliases never resolve to engine values (no engine field is keyed `infiltration` or `openings_louvre`), so the three terms are silently dropped from the FULL display.
+
+**Cross-verification on other views** (probe output):
+- **Building tab** (`mode=envelope-only`): residual −9.1 kWh/m². Renders fabric_leakage/permanent_vents/thermal_bridging correctly. Negative residual = envelope-only heating demand the building would need a system to satisfy. Intentional ("system gap" per Brief 28a Issue 3 design note).
+- **Internal Gains tab** (`mode=envelope-gains`): residual +77.12 kWh/m². Renders all three loss terms; intentionally excludes synthetic heating/cooling demand (envelope-gains is a free-running picture; cooling reappears at FULL only per Brief 28a Issue 3).
+- **Results /full**: residual +10.05 kWh/m². The bug.
+
+**Display-only fix path** (lands as Brief 53 Part 4, NOT Part 2):
+- Patch `LOSS_ORDERS[MODES.FULL]` in `frontend/src/utils/stateMode.js` to include `fabric_leakage`, `permanent_vents`, `thermal_bridging`. Decide on placement (likely after `glazing`, before per-system ventilation). Leave `infiltration` and `openings_louvre` in place as harmless legacy aliases that never resolve (or remove them in the same patch — Chris's call). No engine code touched.
+- Verify Bridgewater /full residual moves from +10.05 → ~−0.44 kWh/m² (within ✓ balanced tolerance).
+- Verify the other views are unchanged (envelope-only and envelope-gains already render these terms correctly).
+- Verify the 128.20 anchor holds (engine demand unchanged → fuel/EUI unchanged).
+
+**Branch B verdict per Chris's amendment:** Brief 53 continues. Part 4's scope now narrows from "investigate +10" to "patch the FULL loss order + verify". Part 2 bypass work is unblocked.
+
+Awaiting Chris's sign-off on the verdict before Part 2 begins. Probe artefact: `docs/audit/53_residual_probe_v2_raw.json`. Probe script: `scripts/_brief53_residual_probe_v2.mjs`.
+
+---
+
+---
+
 ## §1 — +10 heat-balance residual: hypothesis + branch (LEAD)
 
 ### §1.1 What the residual mechanism is

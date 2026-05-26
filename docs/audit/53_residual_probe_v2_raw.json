@@ -1,0 +1,345 @@
+{
+  "project_id": "14b4a5b1-8c73-4acb-8b65-1d22f05ec969",
+  "gia": 4322,
+  "comfortBand": {
+    "lower_c": 21,
+    "upper_c": 24
+  },
+  "views": [
+    {
+      "label": "Results / HeatBalanceTab (full, no module filter)",
+      "mode": "full",
+      "modules": null,
+      "gains": [
+        {
+          "key": "solar_south",
+          "kwh": 39495.6
+        },
+        {
+          "key": "solar_east",
+          "kwh": 1492.1
+        },
+        {
+          "key": "solar_west",
+          "kwh": 978.2
+        },
+        {
+          "key": "solar_north",
+          "kwh": 57430.6
+        },
+        {
+          "key": "people",
+          "kwh": 217233.8
+        },
+        {
+          "key": "equipment",
+          "kwh": 78864.1
+        },
+        {
+          "key": "lighting",
+          "kwh": 76536.6
+        },
+        {
+          "key": "heating",
+          "kwh": 95200,
+          "synthetic": true
+        }
+      ],
+      "losses": [
+        {
+          "key": "external_wall",
+          "label": "external_wall",
+          "kwh": 20019.7
+        },
+        {
+          "key": "roof",
+          "label": "roof",
+          "kwh": 9174.5
+        },
+        {
+          "key": "ground_floor",
+          "label": "ground_floor",
+          "kwh": 9589.2
+        },
+        {
+          "key": "glazing",
+          "label": "glazing",
+          "kwh": 54578.3
+        },
+        {
+          "key": "ventilation_mvhr_gf_public",
+          "label": "Ventilation: mvhr_gf_public",
+          "kwh": 36536.3
+        },
+        {
+          "key": "ventilation_bedroom_extract",
+          "label": "Ventilation: bedroom_extract",
+          "kwh": 226448.1
+        },
+        {
+          "key": "ventilation_public_toilet_extract",
+          "label": "Ventilation: public_toilet_extract",
+          "kwh": 21537.2
+        },
+        {
+          "key": "cooling",
+          "label": "cooling",
+          "kwh": 145900
+        }
+      ],
+      "totalGains": 567231,
+      "totalLosses": 523783.30000000005,
+      "residualKwh": 43447.69999999995,
+      "residualPerM2": 10.05,
+      "flagged": true
+    },
+    {
+      "label": "Building tab",
+      "mode": "envelope-only",
+      "modules": [
+        "fabric",
+        "thermal_bridging",
+        "fabric_leakage",
+        "permanent_vents"
+      ],
+      "gains": [
+        {
+          "key": "solar_south",
+          "kwh": 39495.6
+        },
+        {
+          "key": "solar_east",
+          "kwh": 1492.1
+        },
+        {
+          "key": "solar_west",
+          "kwh": 978.2
+        },
+        {
+          "key": "solar_north",
+          "kwh": 57430.6
+        }
+      ],
+      "losses": [
+        {
+          "key": "external_wall",
+          "label": "external_wall",
+          "kwh": 20019.7
+        },
+        {
+          "key": "roof",
+          "label": "roof",
+          "kwh": 9174.5
+        },
+        {
+          "key": "ground_floor",
+          "label": "ground_floor",
+          "kwh": 9589.2
+        },
+        {
+          "key": "glazing",
+          "label": "glazing",
+          "kwh": 54578.3
+        },
+        {
+          "key": "thermal_bridging",
+          "label": "thermal_bridging",
+          "kwh": 10340.4
+        },
+        {
+          "key": "fabric_leakage",
+          "label": "fabric_leakage",
+          "kwh": 27319.4
+        },
+        {
+          "key": "permanent_vents",
+          "label": "permanent_vents",
+          "kwh": 7692
+        }
+      ],
+      "totalGains": 99396.5,
+      "totalLosses": 138713.5,
+      "residualKwh": -39317,
+      "residualPerM2": -9.1,
+      "flagged": true
+    },
+    {
+      "label": "Internal Gains tab",
+      "mode": "envelope-gains",
+      "modules": [
+        "fabric",
+        "thermal_bridging",
+        "fabric_leakage",
+        "permanent_vents",
+        "internal_gains"
+      ],
+      "gains": [
+        {
+          "key": "solar_south",
+          "kwh": 39495.6
+        },
+        {
+          "key": "solar_east",
+          "kwh": 1492.1
+        },
+        {
+          "key": "solar_west",
+          "kwh": 978.2
+        },
+        {
+          "key": "solar_north",
+          "kwh": 57430.6
+        },
+        {
+          "key": "people",
+          "kwh": 217233.8
+        },
+        {
+          "key": "equipment",
+          "kwh": 78864.1
+        },
+        {
+          "key": "lighting",
+          "kwh": 76536.6
+        }
+      ],
+      "losses": [
+        {
+          "key": "external_wall",
+          "label": "external_wall",
+          "kwh": 20019.7
+        },
+        {
+          "key": "roof",
+          "label": "roof",
+          "kwh": 9174.5
+        },
+        {
+          "key": "ground_floor",
+          "label": "ground_floor",
+          "kwh": 9589.2
+        },
+        {
+          "key": "glazing",
+          "label": "glazing",
+          "kwh": 54578.3
+        },
+        {
+          "key": "thermal_bridging",
+          "label": "thermal_bridging",
+          "kwh": 10340.4
+        },
+        {
+          "key": "fabric_leakage",
+          "label": "fabric_leakage",
+          "kwh": 27319.4
+        },
+        {
+          "key": "permanent_vents",
+          "label": "permanent_vents",
+          "kwh": 7692
+        }
+      ],
+      "totalGains": 472031,
+      "totalLosses": 138713.5,
+      "residualKwh": 333317.5,
+      "residualPerM2": 77.12,
+      "flagged": true
+    },
+    {
+      "label": "Full mode + ALL modules but built explicitly",
+      "mode": "full",
+      "modules": [
+        "fabric",
+        "thermal_bridging",
+        "fabric_leakage",
+        "permanent_vents",
+        "internal_gains",
+        "mechanical_ventilation"
+      ],
+      "gains": [
+        {
+          "key": "solar_south",
+          "kwh": 39495.6
+        },
+        {
+          "key": "solar_east",
+          "kwh": 1492.1
+        },
+        {
+          "key": "solar_west",
+          "kwh": 978.2
+        },
+        {
+          "key": "solar_north",
+          "kwh": 57430.6
+        },
+        {
+          "key": "people",
+          "kwh": 217233.8
+        },
+        {
+          "key": "equipment",
+          "kwh": 78864.1
+        },
+        {
+          "key": "lighting",
+          "kwh": 76536.6
+        },
+        {
+          "key": "heating",
+          "kwh": 95200,
+          "synthetic": true
+        }
+      ],
+      "losses": [
+        {
+          "key": "external_wall",
+          "label": "external_wall",
+          "kwh": 20019.7
+        },
+        {
+          "key": "roof",
+          "label": "roof",
+          "kwh": 9174.5
+        },
+        {
+          "key": "ground_floor",
+          "label": "ground_floor",
+          "kwh": 9589.2
+        },
+        {
+          "key": "glazing",
+          "label": "glazing",
+          "kwh": 54578.3
+        },
+        {
+          "key": "ventilation_mvhr_gf_public",
+          "label": "Ventilation: mvhr_gf_public",
+          "kwh": 36536.3
+        },
+        {
+          "key": "ventilation_bedroom_extract",
+          "label": "Ventilation: bedroom_extract",
+          "kwh": 226448.1
+        },
+        {
+          "key": "ventilation_public_toilet_extract",
+          "label": "Ventilation: public_toilet_extract",
+          "kwh": 21537.2
+        },
+        {
+          "key": "cooling",
+          "label": "cooling",
+          "kwh": 145900
+        }
+      ],
+      "totalGains": 567231,
+      "totalLosses": 523783.30000000005,
+      "residualKwh": 43447.69999999995,
+      "residualPerM2": 10.05,
+      "flagged": true
+    }
+  ],
+  "engine_total_heat_loss_kwh": 423235.1
+}
