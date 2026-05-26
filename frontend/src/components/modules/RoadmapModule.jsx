@@ -29,6 +29,7 @@ import { WeatherContext } from '../../context/WeatherContext.jsx'
 import { useHourlySolar } from '../../hooks/useHourlySolar.js'
 import { computeRoadmap } from '../../utils/roadmapEngine.js'
 import { SYSTEM_TEMPLATES_LIBRARY } from '../../data/systemTemplatesLibrary.js'
+import { confirm } from '../shared/ConfirmDialog.jsx'
 
 const ACCENT = '#9333EA'        // roadmap theme — violet-700 (distinct from results teal)
 const ROADMAP_YEARS = 25
@@ -137,8 +138,13 @@ export default function RoadmapModule() {
     })
   }
   const handleEdit = (intv) => setEditing({ ...intv, _editingExisting: true })
-  const handleDelete = (id) => {
-    if (window.confirm(`Delete this intervention?`)) {
+  const handleDelete = async (id) => {
+    if (await confirm({
+      title: 'Delete this intervention?',
+      message: 'It will be removed from the roadmap. This cannot be undone.',
+      confirmText: 'Delete',
+      tone: 'danger',
+    })) {
       writeInterventions(interventions.filter(i => i.id !== id))
     }
   }

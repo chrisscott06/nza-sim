@@ -33,6 +33,7 @@
  */
 
 import { NavLink } from 'react-router-dom'
+import { confirm } from '../../shared/ConfirmDialog.jsx'
 
 // Service colour palette per Brief 37 Part 1 / SYSTEMS_SERVICE_COLOURS
 export const SERVICE_COLOURS = {
@@ -220,8 +221,13 @@ export default function SystemEditorCard({
           title="Collapse"
         >▴</button>
         <button
-          onClick={() => {
-            if (window.confirm(`Delete "${system?.label ?? 'this system'}"?`)) onDelete()
+          onClick={async () => {
+            if (await confirm({
+              title: `Delete "${system?.label ?? 'this system'}"?`,
+              message: 'The system will be removed. This cannot be undone.',
+              confirmText: 'Delete',
+              tone: 'danger',
+            })) onDelete()
           }}
           className="text-xxs text-error hover:underline px-1"
           title="Delete this system"

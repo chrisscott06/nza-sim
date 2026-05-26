@@ -12,7 +12,8 @@
  *   - Brief 43 Part 1: pop-out defaults to right-anchored position so
  *     the stack in the main canvas remains visible. Switching between
  *     interventions while the pop-out is dirty fires an unsaved-
- *     changes guard (window.confirm before discarding).
+ *     changes guard (bespoke confirm dialog before discarding —
+ *     see components/shared/ConfirmDialog.jsx).
  *   - Container max-width bumped from max-w-5xl → max-w-6xl so the
  *     stack rows have more breathing room beside the pop-out.
  *
@@ -32,6 +33,7 @@ import { useHourlySolar } from '../../../hooks/useHourlySolar.js'
 import { calculateInstant } from '../../../utils/instantCalc.js'
 import { SYSTEM_TEMPLATES_LIBRARY } from '../../../data/systemTemplatesLibrary.js'
 import InterventionStackView from './InterventionStackView.jsx'
+import { confirm } from '../../shared/ConfirmDialog.jsx'
 // Brief 46 Part 5 (2026-05-22): the pre-Brief-46 InterventionEditorPopout
 // has been deleted; the new V2-built editor (built across Parts 1–4)
 // was renamed to InterventionEditorPopout.jsx as the canonical name.
@@ -203,9 +205,14 @@ export default function InterventionsModule() {
   // editor is dirty fires an unsaved-changes guard. The pop-out's own
   // onClose guard handles close-without-save; this parent-side guard
   // handles user-clicks-a-different-edit-pencil-while-popout-is-open.
-  const handleEdit = (id) => {
+  const handleEdit = async (id) => {
     if (editingId && editingId !== id && editorDirtyRef.current) {
-      if (!window.confirm('Discard unsaved changes to the current intervention?')) return
+      if (!(await confirm({
+        title: 'Discard unsaved changes?',
+        message: 'Your edits to the current intervention will be lost when you switch.',
+        confirmText: 'Discard',
+        tone: 'warning',
+      }))) return
     }
     setEditingId(id)
     // Reset dirty on switch — the popout will re-emit its dirty state
@@ -273,14 +280,19 @@ export default function InterventionsModule() {
   // icon on each stack row invokes this. Confirm-before-delete because
   // interventions can be expensive to rebuild. Closes the editor pop-out
   // if the deleted intervention is currently being edited.
-  const handleListDelete = (id) => {
+  const handleListDelete = async (id) => {
     const target = interventions.find(i => i.id === id)
     const label = target?.label || '(unnamed intervention)'
     const patchCount = Array.isArray(target?.patches) ? target.patches.length : 0
-    const msg = patchCount > 0
-      ? `Delete "${label}" (${patchCount} patch${patchCount === 1 ? '' : 'es'})? This cannot be undone.`
-      : `Delete "${label}"?`
-    if (!window.confirm(msg)) return
+    const message = patchCount > 0
+      ? `${patchCount} patch${patchCount === 1 ? '' : 'es'} will be permanently removed. This cannot be undone.`
+      : 'This cannot be undone.'
+    if (!(await confirm({
+      title: `Delete "${label}"?`,
+      message,
+      confirmText: 'Delete',
+      tone: 'danger',
+    }))) return
     const next = interventions.filter(i => i.id !== id)
     updateParam('interventions', next)
     if (editingId === id) {

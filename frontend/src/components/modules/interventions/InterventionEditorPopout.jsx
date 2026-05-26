@@ -44,6 +44,7 @@
 
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import SchedulePopout from '../../shared/SchedulePopout.jsx'
+import { confirm } from '../../shared/ConfirmDialog.jsx'
 import UnifiedScheduleEditor from '../../shared/scheduleEditor/UnifiedScheduleEditor.jsx'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { InterventionCaptureProvider, useInterventionCapture } from '../../../context/InterventionCaptureContext.jsx'
@@ -270,9 +271,14 @@ export default function InterventionEditorPopout({
       patches: localPatches,
     })
   }
-  const handleCancel = () => {
+  const handleCancel = async () => {
     if (isDirty) {
-      if (!window.confirm('Discard unsaved changes to this intervention?')) return
+      if (!(await confirm({
+        title: 'Discard unsaved changes?',
+        message: 'Your edits to this intervention will be lost.',
+        confirmText: 'Discard',
+        tone: 'warning',
+      }))) return
     }
     onCancel?.()
   }

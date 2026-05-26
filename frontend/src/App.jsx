@@ -40,6 +40,9 @@ import CRREMModule from './components/modules/CRREMModule.jsx'
 import WeatherModule from './components/modules/WeatherModule.jsx'
 import BalanceTestPage from './components/modules/balance/BalanceTestPage.jsx'
 import ChartComponentsTestPage from './pages/ChartComponentsTestPage.jsx'
+// Bespoke confirm dialog — mounted once at app root; module-scoped
+// `confirm()` from this file replaces all native window.confirm() calls.
+import ConfirmDialogHost from './components/shared/ConfirmDialog.jsx'
 
 export default function App() {
   return (
@@ -73,6 +76,10 @@ export default function App() {
                 <Route path="/library"   element={<ErrorBoundary moduleName="Library Browser"><LibraryBrowser /></ErrorBoundary>} />
               </Route>
             </Routes>
+            {/* Bespoke confirm modal — replaces native window.confirm.
+                Mounted once at app root; any component can call the
+                module-scoped `confirm()` from ConfirmDialog.jsx. */}
+            <ConfirmDialogHost />
             </UISettingsProvider>
             </UIProvider>
           </SimulationProvider>

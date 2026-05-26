@@ -41,6 +41,7 @@ import { BLANK_ARCHETYPES, seedSystem } from '../systems/AddSystemButton.jsx'
 // option lists from SystemEditorCard so the editor matches the Systems
 // module's affordances.
 import { SOURCE_OPTIONS, CONTROL_MECHANISM_OPTIONS } from '../systems/SystemEditorCard.jsx'
+import { confirm } from '../../shared/ConfirmDialog.jsx'
 
 const CONTROL_OPTIONS = [
   { value: 'constant',         label: 'Constant (no control)',  factor: 1.00 },
@@ -422,8 +423,13 @@ function ServiceBlock({ system, service, capture, librarySystems }) {
   const baseVent    = service === 'ventilation'
   const baseLight   = service === 'lighting' || service === 'small_power'
 
-  const handleRemove = () => {
-    if (!window.confirm(`Remove ${service} system "${system.label || sysId}" from this intervention?`)) return
+  const handleRemove = async () => {
+    if (!(await confirm({
+      title: `Remove ${service} system "${system.label || sysId}"?`,
+      message: 'This system will be removed from the intervention. The change can be undone by reopening the intervention and adding the system back.',
+      confirmText: 'Remove',
+      tone: 'danger',
+    }))) return
     capture({
       id: newPatchId(),
       op: 'remove',

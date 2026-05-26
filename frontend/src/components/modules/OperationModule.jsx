@@ -52,6 +52,7 @@ import InteractiveProfileVisualiser from '../shared/InteractiveProfileVisualiser
 // flow lifted from the legacy editor and inlined as `saveScheduleToProject`
 // in this module.
 import SchedulePopout from '../shared/SchedulePopout.jsx'
+import { confirm } from '../shared/ConfirmDialog.jsx'
 import UnifiedScheduleEditor from '../shared/scheduleEditor/UnifiedScheduleEditor.jsx'
 // Brief 28-IM-Polish POL-M2: shared cross-module strip + chart components.
 import LiveResultsStrip from '../shared/LiveResultsStrip.jsx'
@@ -1091,8 +1092,13 @@ export function OpeningRow({ opening, selected, orientation, onSelect, onUpdate,
           {expanded ? '▴' : '▾'}
         </button>
         <button
-          onClick={() => {
-            if (window.confirm(`Delete "${opening.name || opening.id}"?`)) onDelete()
+          onClick={async () => {
+            if (await confirm({
+              title: `Delete "${opening.name || opening.id}"?`,
+              message: 'This opening will be removed from the building. This cannot be undone.',
+              confirmText: 'Delete',
+              tone: 'danger',
+            })) onDelete()
           }}
           className="text-xxs text-error hover:underline px-1"
           title="Delete this opening"

@@ -39,6 +39,7 @@ import { SERVICE_COLOURS } from './SystemEditorCard.jsx'
 // useHasPatchOnPath catches the per-service / per-system level). On the
 // main /systems page this is a no-op pass-through.
 import PatchedInputBadge from '../interventions/PatchedInputBadge.jsx'
+import { confirm } from '../../shared/ConfirmDialog.jsx'
 
 function headlineEfficiency(system) {
   const service = system?.service
@@ -195,10 +196,15 @@ export default function SystemSummaryRow({
       {onDelete && (
         <button
           type="button"
-          onClick={(e) => {
+          onClick={async (e) => {
             e.stopPropagation()
             const label = system?.label ?? '(unnamed system)'
-            if (window.confirm(`Delete system "${label}"?`)) onDelete()
+            if (await confirm({
+              title: `Delete system "${label}"?`,
+              message: 'The system will be removed. This cannot be undone.',
+              confirmText: 'Delete',
+              tone: 'danger',
+            })) onDelete()
           }}
           className="flex-shrink-0 p-1 rounded hover:bg-red-50 text-mid-grey hover:text-red-600 transition-colors"
           title="Delete this system"
