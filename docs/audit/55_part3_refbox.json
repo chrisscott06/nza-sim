@@ -1,0 +1,102 @@
+{
+  "refbox": {
+    "gia": 100,
+    "comfort": {
+      "lower_c": 20,
+      "upper_c": 25
+    },
+    "vent_flow_l_s": 500,
+    "baseline_scop": 2,
+    "baseline_hre": 0
+  },
+  "results": {
+    "baseline_eui": 913,
+    "only_A_eui": 456.5,
+    "only_B_eui": 739,
+    "AB_eui": 369.5,
+    "BA_eui": 369.5
+  },
+  "marginals": {
+    "AB": {
+      "A_pos1": -456.5,
+      "B_pos2": -87
+    },
+    "BA": {
+      "B_pos1": -174,
+      "A_pos2": -369.5
+    }
+  },
+  "assertions": [
+    {
+      "name": "PERMUTATION — cumulative EUI order-independent",
+      "ok": true,
+      "detail": "[A,B]=369.50, [B,A]=369.50, Δ=0.000 (tol 0.05)"
+    },
+    {
+      "name": "SHAPE — v40.heating array IDENTICAL across orders",
+      "ok": true,
+      "detail": "A.length=1, B.length=1"
+    },
+    {
+      "name": "SHAPE — v40.cooling array IDENTICAL across orders",
+      "ok": true,
+      "detail": "A.length=0, B.length=0"
+    },
+    {
+      "name": "SHAPE — v40.dhw array IDENTICAL across orders",
+      "ok": true,
+      "detail": "A.length=0, B.length=0"
+    },
+    {
+      "name": "SHAPE — v40.ventilation array IDENTICAL across orders",
+      "ok": true,
+      "detail": "A.length=1, B.length=1"
+    },
+    {
+      "name": "SHAPE — v40.lighting array IDENTICAL across orders",
+      "ok": true,
+      "detail": "A.length=0, B.length=0"
+    },
+    {
+      "name": "SHAPE — v40.small_power array IDENTICAL across orders",
+      "ok": true,
+      "detail": "A.length=0, B.length=0"
+    },
+    {
+      "name": "SHAPE — v25.ventilation IDENTICAL across orders",
+      "ok": true,
+      "detail": "A.length=1, B.length=1"
+    },
+    {
+      "name": "SCOP-INVARIANT — [A] only (SCOP up) reduces EUI in isolation",
+      "ok": true,
+      "detail": "Δ=-456.50 (must be ≤ 0.05)"
+    },
+    {
+      "name": "HRE-INVARIANT — [B] only (HRE up) reduces EUI in isolation",
+      "ok": true,
+      "detail": "Δ=-174.00 (must be ≤ 0.05)"
+    },
+    {
+      "name": "TELESCOPING — [A,B] Σ marginals == cumulative Δ",
+      "ok": true,
+      "detail": "Σ marg = -543.500, cum Δ = -543.500"
+    },
+    {
+      "name": "TELESCOPING — [B,A] Σ marginals == cumulative Δ",
+      "ok": true,
+      "detail": "Σ marg = -543.500, cum Δ = -543.500"
+    },
+    {
+      "name": "SCOP-INVARIANT — A's marginal in [B, A] (position 2) still ≤ 0",
+      "ok": true,
+      "detail": "marg = -369.50 at position 2"
+    },
+    {
+      "name": "HRE-INVARIANT — B's marginal in [A, B] (position 2) still ≤ 0",
+      "ok": true,
+      "detail": "marg = -87.00 at position 2"
+    }
+  ],
+  "all_pass": true
+}
