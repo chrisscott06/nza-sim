@@ -1,0 +1,20 @@
+{
+  "baseline_eui": 128.2,
+  "order_A": {
+    "stack": [
+      "VRF 4.0",
+      "MVHR Bedrooms"
+    ],
+    "eui": 125.7,
+    "final_heating": "Primary heating (vrf_heat_recovery_dual_function): eff=2.8, share=90, enabled=true || Secondary heating (electric_panel_heater): eff=1, share=10, enabled=true"
+  },
+  "order_B": {
+    "stack": [
+      "MVHR Bedrooms",
+      "VRF 4.0"
+    ],
+    "eui": 124.4,
+    "final_heating": "Primary heating (vrf_heat_recovery_dual_function): eff=4, share=100, enabled=true"
+  },
+  "delta_kwh_per_m2": 1.2999999999999972
+}
