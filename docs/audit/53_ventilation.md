@@ -1,13 +1,64 @@
-# Brief 53 audit — Ventilation: bypass design + heat-balance residual hypothesis
+# Brief 53 audit — Ventilation: +10 residual hypothesis (lead), bypass design (free-cooling), reconciliation strategy
 
 **Brief:** [`docs/briefs/active/53_ventilation_bypass_and_heatbalance.md`](../briefs/active/53_ventilation_bypass_and_heatbalance.md)
 **Status:** Part 1 deliverable. Read-only. No engine code touched.
 **Anchor:** Bridgewater clean EUI 128.20 (Brief 50 close, `c64657c`).
-**Purpose:** Lock the bypass trigger choice + reconciliation strategy + Bridgewater first-principles prediction BEFORE any engine code lands. Plus a hypothesis on the +10 heat-balance residual to scope Part 4.
+
+**Reading order — per Chris's amendment 2026-05-26:**
+
+> "When the Part 1 audit lands, lead with the +10 residual hypothesis — if it's a real missing term in the demand calc rather than a labelling gap, stop and we treat it as its own diagnosis before any UI work."
+
+§1 below opens with the residual hypothesis and its branch. If §1 lands as "real missing demand term", Parts 2–5 of the brief are paused and a separate diagnosis brief takes over. If §1 lands as "labelling/accounting gap", proceed to §2+ (where the bypass + reconciliation design lives).
 
 ---
 
-## §1 — Where the per-hour recovery cap lives (confirmed, Brief 50 Probe 4 + cooling-hours probe c64657c)
+## §1 — +10 heat-balance residual: hypothesis + branch (LEAD)
+
+### §1.1 What the residual mechanism is
+
+Heat-balance Sankey (`HeatBalance.jsx` L755–774) computes `netResidual = totalGains − totalLosses` per the displayed Sankey ribbons; flags "large residual; check inputs" when `|residual| > 5 kWh/m²` (or 10 % of losses). On Bridgewater the residual reads ~+10 kWh/m²·yr — positive (gains > losses on the displayed lines).
+
+The PHPP convention is enforced via two **synthetic** terms (`HeatBalance.jsx` L215–223 for cooling, L324–353 for heating):
+
+- **Cooling** synthesised as a *loss*: `data.demand.cooling_demand_mwh`, added when `orderWithNew.includes('cooling')`.
+- **Heating** synthesised as a *gain*: `data.demand.heating_demand_mwh`, added when `allowed.has('heating')`.
+
+Together they make the balance close: heating-demand-as-gain plus envelope-gains equals envelope-losses plus cooling-demand-as-loss. The residual is the sum of every term not appearing on either side of that identity.
+
+### §1.2 Branch: real missing demand term vs. labelling/accounting gap
+
+The branch matters because **a missing demand-side term is a Brief 50-class engine bug** (something heating ought to fight but isn't showing up in the demand integral), whereas **a labelling gap is a Sankey display issue** (the engine is correct; the chart is rounding or omitting an informational line that should appear).
+
+| Branch | Signature | Diagnostic test | Action |
+|---|---|---|---|
+| **A — Real missing demand term** | An envelope-affecting heat term is missing from `_calculateState2`'s demand integral but visible on `HeatBalance.jsx` as a gain (or vice-versa). Removing the term from the Sankey would zero the residual; removing it from the engine would *also* shift heating demand. | Compare each Sankey line value to State 2's per-bucket integrand sum. Any Sankey term whose magnitude does NOT appear in State 2's bucketed integrands is the suspect. | **STOP Brief 53.** Open a separate diagnosis brief (Brief 50 pattern: refbox-driven, ratio-test verdict). No Parts 2–5 UI work until this resolves. |
+| **B — Labelling/accounting gap** | All engine-side integrands are accounted for; the residual is structural (util-factor unused gains, supply-fan-heat already in MVHR recovery, or rounding of synthetic terms). Removing the term from the Sankey would zero the residual without engine change. | Same diagnostic: every Sankey line maps cleanly to an engine integrand. The discrepancy is on the *display* convention. | **Continue Brief 53.** Land bypass (Part 2), heat-balance Sankey on Systems (Part 3), then **Part 4** relabels footer + reconciles the residual presentation (no engine change). |
+
+### §1.3 Lead candidates (ordered: most likely first, for Part 4 investigation)
+
+1. **MVHR supply-fan electricity → space heat gain (Branch B-leaning).** Bridgewater MVHR fan electricity ~17.5 MWh + extracts ~8 MWh ≈ 25 MWh of consumed fan electricity. The supply-fan share (~50–80 %) dissipates inside the conditioned space as a sensible heat gain. ~12–20 MWh ≈ 3–5 kWh/m²·yr. **If the Sankey shows full MVHR recovery on the gain side and ALSO surfaces supply-fan heat as a gain, but the State 2 demand integral only credits ONE of these (recovery via `(1−HRE)`), there's a structural double-credit on the display.** Branch B if the engine correctly accounts and the chart just labels both. Branch A if the engine itself is double-counting.
+2. **Util-factor non-linearity (Branch B).** State 2 applies `util_factor ≈ 0.60` to internal gains for heating offset (gains arrive at non-heating hours and are unused). If the Sankey shows the FULL internal gain on the gain side but the heating-demand synthesis subtracts (1−util_factor) of those gains as "unused", the unused-gain portion appears as a positive residual. Bridgewater rough estimate: 40 % × (people + lighting + equipment) / GIA. Likely too big alone — but contributes.
+3. **Solar absorbed on opaque walls (Branch A risk).** `TUNE_OPAQUE_GAIN_FRACTION × OPAQUE_WALL_SOLAR` (around L4830-4842 inline-legacy / corresponding State 2 location). If State 2 includes this in demand integration but the Sankey doesn't show it on the gain side (or shows it at a different scale), it's a missing display term — Branch B. If the engine and the Sankey treat this differently in MAGNITUDE (not just labelling), it could be Branch A.
+4. **MVHR recovery directionality (Branch A risk, but ruled out by Brief 50).** Brief 50 closed the recovery double-count; recovery is folded once into State 2 via `(1−HRE)` on vent UA. If the Sankey separately surfaces the airstream recovery integral (~63 MWh ≈ 15 kWh/m²) as an INFORMATIONAL gain, the residual would be much larger than +10. Inconsistent with the observed magnitude → low-priority candidate.
+
+### §1.4 Investigation method (Part 4 — only if §1.2 lands Branch B)
+
+The investigation IS the branch-decider. If a Sankey term has no engine counterpart at the displayed magnitude, that's Branch A and Brief 53 stops here.
+
+1. On Bridgewater clean, dump from State 2: `losses_at_setpoint.*.heating_loss_kwh`, `heat_balance.annual.gains.*.kwh`, `(1−HRE)` ventUA contribution, util_factor-adjusted internal gain, supply-fan-heat (if surfaced).
+2. Dump from `HeatBalance.jsx` data: each ribbon's labelled magnitude + which `data.*` path it reads from.
+3. Pair each Sankey line with its engine source. First unpaired line is the residual term.
+4. Apply branch test: if removing the unpaired Sankey line and rerunning State 2 leaves heating demand UNCHANGED, Branch B (display-only). If heating demand shifts, Branch A.
+
+### §1.5 Decision at Part 1 sign-off
+
+Chris signs off the branch ONCE the §1.4 investigation completes. The brief carries on as written ONLY if Branch B. Branch A halts Brief 53 and seeds a separate brief.
+
+**Note:** §1.4 investigation can run in PARALLEL with Part 2 engine work IF Chris explicitly authorises that risk. Default sequencing: §1.4 first, Part 2 after.
+
+---
+
+## §2 — Where the per-hour recovery cap lives (Brief 50 Probe 4 + cooling-hours probe `c64657c`)
 
 `instantCalc.js` `computeVentilationEnergy`, hourly loop at **L3984–3995**:
 
@@ -33,9 +84,9 @@ Two gates already in place, both probe-confirmed correct:
 | Outer | `dT > 0` ⟺ `T_out < T_setpoint_heating` | Hours where the airstream physically has heat to recover from |
 | Inner | `min(theoretical_h, demand_h)` | Hours where the building actually wants heat per-hour, gains-aware |
 
-Brief 53's bypass is a THIRD gate, layered ON TOP of these (suppression, not replacement).
+Brief 53's bypass is a THIRD gate, layered ON TOP of these (suppression in cooling-mode hours where bypassing physically helps), not a replacement.
 
-## §2 — Where the State 2 `(1 − HRE)` factor lives (Brief 50 Part 6)
+## §3 — Where the State 2 `(1 − HRE)` factor lives (Brief 50 Part 6)
 
 `instantCalc.js` `_calculateState2`, vent UA projection at **L2553–2579**, used in the heat-balance hourly loop. After Brief 50 Part 6, `hre` is sourced from v40 when present:
 
@@ -62,190 +113,209 @@ const ventUA = ventSystems.map(v => {
 
 This `ventUA` array is consumed inside State 2's 8760-hour balance step as the per-hour ventilation loss UA. Recovery is folded into demand via the `(1 − HRE)` factor exactly once — Brief 50's single-owner architecture.
 
-## §3 — Bypass design
+## §4 — Bypass design: free-cooling trigger (Chris's amendment)
 
-### §3.1 Trigger choice — recommendation
+### §4.1 Trigger — confirmed by Chris
 
-**Use `cooling_demand_hourly_kwh[h−1] > 0` in BOTH `_calculateState2` AND `computeVentilationEnergy`. Same array slot. Same lag.**
+> "Bypass trigger decided: free-cooling logic — suppress recovery in hours where there is cooling demand AND T_out < T_extract. This is how a real bypass damper is controlled (it opens only when bypassing actually helps — cooling wanted and outside air cooler than the extract air)."
 
-Why this trigger:
+Formally, for each hour `h`:
 
-| Candidate | Pros | Cons |
+```
+bypass_h = vs.summer_bypass
+        && cooling_demand_hourly_kwh[h − 1] > 0     ← zone wanted cooling in the prior hour
+        && T_out[h]   <  T_extract[h − 1]            ← outside air is cooler than extract
+```
+
+Why both conditions matter:
+
+- **`cooling_demand[h−1] > 0` alone** — what I originally proposed. Suppresses recovery any time the zone is in cooling mode. But this is wrong when `T_out > T_extract`: in that case, "bypassing the recovery" doesn't *help* — outside air is even warmer than extract, so the heat exchanger removing some heat is actually beneficial for cooling. A real bypass damper would NOT open. Single-condition logic over-bypasses in heatwave hours.
+- **`T_out < T_extract` alone** — typical shoulder-season and winter hours. We don't want to bypass recovery just because outside air is cool; that's where recovery is most valuable. Needs the cooling-demand gate.
+- **Both together** — bypass opens only when zone wants cooling AND outside air is cooler than the air being extracted (so bypassing the heat exchanger lets the zone exhaust hot air without re-warming the supply). This matches manufacturer literature.
+
+### §4.2 Signal availability in the per-hour loop — confirmed
+
+| Signal | Available in `computeVentilationEnergy`? | Available in `_calculateState2` hourly loop? | Source |
+|---|---|---|---|
+| `T_out[h]` | Yes — `weatherData.temperature[h]` (already used by outer gate) | Yes — `T_out` local at ~L2750 region | Same weather array |
+| `cooling_demand_hourly_kwh[h−1]` | **Not yet** — needs new parameter. Caller (`_calculateState3` ~L4118) HAS this on `state2Result.demand.cooling_demand_hourly_kwh` (L3430). | Yes — being populated in same loop (L3067); use `[h−1]` from prior iteration's stored value | State 2 result `cooling_demand_hourly_kwh` (L2628 alloc, L3067 populate, L3430 surface) |
+| `T_extract[h−1]` | **Not yet** — needs new parameter. T_extract is "the air being extracted from the zone". For a single-zone engine, T_extract ≈ T_zone air. | Yes — `T_air` local at ~L2750 region (the zone air being computed this iteration); carry forward as `prev_T_air` for next iteration | State 2 internal carry-forward |
+
+### §4.3 T_extract proxy — propose, await Chris's sign-off
+
+**The engine is single-zone**, so the "extract air" *is* the zone air. There's no separate extract-air node, no zone-mixing model. The cleanest proxy for T_extract is the zone air temperature.
+
+Two ways to source it:
+
+| Option | What | Reconciliation cost |
 |---|---|---|
-| `T_out > some_threshold` (e.g. > 16 °C) | Synchronous (no lag); cheap | Crude — ignores zone state. Bypasses on warm winter days when zone is still being heated. Wrong for real bypass-controlled units. |
-| `T_zone > cooling_setpoint` (zone-temp trigger) | Captures "zone in cooling mode" | Zone temp known only AFTER the heat balance solves at hour h → chicken-and-egg with State 2's loop. Requires `T_air[h−1]` proxy (different signal from computeVentilationEnergy's cooling-demand array → reconciliation drift). |
-| **`cooling_demand_hourly_kwh[h−1] > 0`** | **Mirrors the heating-side per-hour cap. Already computed in State 2 (L2628 alloc, L3067 populate, L3430 surface). Same array readable by both `_calculateState2` AND `computeVentilationEnergy`.** | **One-hour lag.** Affects only the handful of transition hours per year. |
-| `cooling_demand_hourly_kwh[h] > 0` (true synchronous demand) | Most physically correct | Requires 2-pass State 2 (dry-run to compute cooling array, then real run with bypass applied). ~2× engine cost — unacceptable for the live-update loop Brief 47 / 53 rely on. |
+| **A — Surface T_air per hour as a new State 2 output `hourly_zone_air_c`** (a sibling to `hourly_temperature_c` which is operative T) | One new `Float32Array(n)` + populate line at L2761 region (`T_air_hourly[h] = T_air`). Pass through to `computeVentilationEnergy` as `T_air_hourly_c`. Both sites read identical signal. | Byte-exact reconciliation. Strictly correct (T_air, not T_op). |
+| **B — Reuse existing `hourly_temperature_c` (T_op)** | Zero new outputs. `T_op = 0.5 × (T_air + T_radiant)` (L2760). For a well-insulated zone, the gap is ≤1 K. | Byte-exact reconciliation IF both sites read T_op[h−1] from the SAME surfaced array. But State 2's own internal carry-forward would be `T_air[h−1]` (the local variable). To make State 2 ALSO use T_op[h−1], it'd have to read its own surfaced output one step later — awkward. Likely forces both sites to use T_op[h−1] from a stored array, which then mismatches the local T_air[h−1] available within State 2's loop. |
 
-The `[h−1]` choice is the only option that meets the **reconciliation principle** (Principle 2: same hours, same magnitude on demand side and fuel side) **without doubling engine cost.** Both `_calculateState2`'s per-hour UA computation AND `computeVentilationEnergy`'s per-hour cap read identically from `cooling_demand_hourly_kwh[h−1]`. Same signal, same lag, identical bypass hours → reconciliation tight.
+**Recommendation: Option A.** It's the right primitive. Cost: one Float32Array + one populate line. Both sites read identical `T_air_hourly_c` signal → reconciliation discipline is byte-exact, which is Chris's confirmation #1.
 
-**Awkwardness flagged (per Chris's design-around-it request):**
+Note for Chris: Option B works ONLY if we accept the T_op-vs-T_air drift inside State 2's loop (its own decision uses local `T_air[h−1]`, while `computeVentilationEnergy` uses `T_op[h−1]`). That drift is small (≤1 K) but breaks the reconciliation-tight guarantee. Option A removes the drift source by making both sites read the same `T_air[h−1]` array. Sign-off requested.
 
-- The implementation is not a single one-liner inside `computeVentilationEnergy`. It's a two-site change with a shared signal. The "single one-liner" path would be cooling-demand only in `computeVentilationEnergy` and zone-temp proxy in State 2 — which breaks reconciliation. The shared-signal-with-lag is the cleanest reconciliation-safe path.
-- For hour 0 (first hour of the simulation), `cooling_demand_hourly_kwh[−1]` is undefined. Initialise as `false` (bypass off) for hour 0; physically a non-issue (single hour out of 8760, almost certainly in winter, no cooling demand anyway).
-
-**`computeVentilationEnergy` needs `cooling_demand_hourly_kwh` passed in.** Currently it only takes `heatingDemandHourlyKwh`. Part 2 adds `coolingDemandHourlyKwh` as a sibling parameter. Caller (`_calculateState3` at ~L4118) already has it on `state2Result.demand.cooling_demand_hourly_kwh` (L3430).
-
-### §3.2 Reconciliation diagram
+### §4.4 Reconciliation diagram
 
 ```
-                                bypass_h
-                                   │
-              ┌────────────────────┼────────────────────┐
-              │                                          │
-              ▼                                          ▼
-     State 2 hourly loop                  computeVentilationEnergy hourly loop
-     (instantCalc.js ~L2580+)              (instantCalc.js L3984-3995)
-              │                                          │
-     vent_UA_h = AIR_HC × Q ×                Math.min(theoretical_h, demand_h)
-     (bypass_h ? 1 : (1 − HRE)) ×            (skip when bypass_h)
-     sched_factor
-              │                                          │
-              ▼                                          ▼
-     larger vent loss in                     no recovery credit in
-     bypass hours                            bypass hours
-     → less heating demand                   → reported recovery is
-       (or more cooling                        less than theoretical
-       potential)                              (consistent with
-                                               State 2 picture)
+                          bypass_h = vs.summer_bypass
+                                  && cooling_demand_hourly_kwh[h−1] > 0
+                                  && T_out[h] < T_air_hourly_c[h−1]
+                                          │
+              ┌───────────────────────────┼────────────────────────────┐
+              │                                                         │
+              ▼                                                         ▼
+     State 2 hourly loop                                computeVentilationEnergy hourly loop
+     (instantCalc.js ~L2580+)                            (instantCalc.js L3984-3995)
+              │                                                         │
+     vent_UA_h = AIR_HC × Q ×                              Math.min(theoretical_h, demand_h)
+     (bypass_h ? 1 : (1 − HRE)) × sched_factor             (skip when bypass_h)
+              │                                                         │
+              ▼                                                         ▼
+     larger vent loss in bypass hours                       no recovery credit in bypass hours
+     → less heating demand                                  → reported recovery is less
+       (or more cooling potential)                            than theoretical
+                                                              (consistent with State 2 picture)
 
-  Both sides honour SAME hours (cooling_demand_hourly_kwh[h−1] > 0)
-  → Demand-side recovery and fuel-side recovery match within rounding.
+  Both sides honour SAME hours (same trigger, same lagged signals) → demand-side recovery
+  and fuel-side recovery match within rounding. Brief 50-class decoupling avoided.
 ```
 
-**Anti-pattern to avoid (Brief 50 redux):**
-> Touching only `computeVentilationEnergy`'s cap (suppressing reported recovery) without also flipping `(1 − HRE)` → 1 in the State 2 UA in the same hours reintroduces the exact decoupling Brief 50 fixed. State 2 would report demand assuming MVHR is still recovering; system fuel would assume it isn't.
+### §4.5 Anti-pattern to avoid (Brief 50 redux)
 
-Part 2's grep-confirmation: every bypass-true hour h shall have BOTH `(a) ventUA[h] = full ventUA without (1−HRE)` AND `(b) effective recovery accruing 0 in that hour`. Same hour. Same magnitude.
+Touching only `computeVentilationEnergy`'s cap (suppressing reported recovery) without also flipping `(1 − HRE)` → 1 in the State 2 UA in the same hours reintroduces the exact decoupling Brief 50 fixed. State 2 would report demand assuming MVHR is still recovering; system fuel would assume it isn't.
 
-### §3.3 Default — bypass OFF
+Part 2's grep-confirmation: every bypass-true hour h shall have BOTH `(a) ventUA[h] = full ventUA without (1−HRE)` AND `(b) effective recovery accruing 0 in that hour`. Same hour. Same magnitude. **Reconciliation log dumped to the commit message.**
 
-Default OFF preserves the 128.20 anchor. Bypass is an opt-in modelling choice; a real building may or may not have a working bypass damper. Bypass-on becomes a deliberate user decision, surfaced in the system editor, with engine confirming the EUI shift from first principles (§4).
+### §4.6 Hour-0 boundary
 
-## §4 — First-principles prediction: bypass-on effect on Bridgewater
+For `h = 0`: `cooling_demand_hourly_kwh[−1]` and `T_air_hourly_c[−1]` are undefined. Initialise as `false` (bypass off) for hour 0. Physically a non-issue (single hour out of 8760, almost certainly in winter night-time, no cooling demand anyway).
 
-### §4.1 Bridgewater clean baseline (no MVHR-bedrooms intervention)
+### §4.7 Default — bypass OFF
+
+Default OFF preserves the 128.20 anchor. Bypass is an opt-in modelling choice; a real building may or may not have a working bypass damper. Bypass-on becomes a deliberate user decision, surfaced in the system editor, with engine confirming the EUI shift from first principles (§5).
+
+---
+
+## §5 — First-principles predictions: bypass-on effect on Bridgewater + refbox
+
+### §5.1 Bridgewater clean baseline (no MVHR-bedrooms intervention)
 
 Post-Brief-50 anchor:
-- Cooling demand: small (<5 MWh on Bridgewater clean per the original Sankey screenshot, ~4.8 MWh on refbox COLD)
+- Cooling demand: small (<5 MWh on Bridgewater clean, ~4.8 MWh on refbox COLD)
 - MVHR recovery: ~63 MWh (effective_recovery_mwh)
 - Most cooling-demand hours occur in summer when `T_out > T_heating_setpoint` → outer `dT > 0` gate ALREADY zeros recovery in those hours
+- The free-cooling trigger's second condition (`T_out < T_extract`) further narrows the bypass hours to a shoulder-season subset
 
-**Prediction:** bypass-on EUI shift on Bridgewater clean is **near-zero (probably < 0.3 kWh/m²·yr)** because the outer gate already suppresses recovery in most cooling-demand hours. The interesting hours are SHOULDER-SEASON ones where `T_out < setpoint` (outer gate passes, some recovery accrues) AND zone has cooling demand (gains pushed it above cooling setpoint). Few such hours on Bridgewater clean.
+**Prediction:** bypass-on EUI shift on Bridgewater clean is **near-zero (probably < 0.3 kWh/m²·yr)** because:
+- The outer gate already suppresses recovery in most cooling-mode hours (T_out too warm)
+- The remaining cooling-mode hours where T_out < T_extract are shoulder-season; few hours, small recovery integral
+- Tighter trigger than my originally-proposed single-condition (cooling-demand alone), so the prediction is even smaller in magnitude
 
-### §4.2 Bridgewater + bedrooms-MVHR intervention (the walkthrough scenario)
+### §5.2 Bridgewater + bedrooms-MVHR intervention (the walkthrough scenario)
 
 Chris's walkthrough showed reorder behaviour: "MVHR Bedrooms: heat recovered drops 63.2 → 24.4 while cooling rises +83.9". The bedrooms zone has high gains; adding MVHR there:
-- Slightly raises heating demand (the per-hour cap is firing in many hours where gains absorb heat → less recovery credit)
+- Slightly raises heating demand (per-hour cap firing in many gain-absorbed hours → less recovery credit)
 - Raises cooling demand significantly (MVHR adds heat to a zone that wants cooling in shoulder/summer hours where `T_out < setpoint`)
-- Net effect: under reorder, MVHR can show as an EUI INCREASE rather than a saving
+- Net effect under reorder: MVHR can show as an EUI INCREASE rather than a saving
 
-**Prediction:** bypass-on for the bedrooms-MVHR intervention shifts the cooling penalty substantially. The 83.9 MWh cooling increase in Chris's walkthrough is the target. Of that, the portion attributable to shoulder-hour recovery is what bypass-on suppresses:
-- Order-of-magnitude estimate: **half to two-thirds of the cooling-demand increase recovers** if bypass is well-targeted (cooling-demand hours where MVHR was still accruing recovery).
-- Predicted EUI shift on the bedrooms-MVHR scenario: bypass-on **reduces EUI by ~5–15 kWh/m²·yr** (depends on the bedrooms gain magnitude — could be larger).
-- The qualitative test: with bypass on, the MVHR bedrooms intervention SHOULD read as a net EUI saving rather than an increase under reorder.
+**Prediction:** bypass-on for the bedrooms-MVHR scenario:
+- Suppresses recovery in shoulder hours where `cooling_demand[h−1] > 0 AND T_out < T_extract`
+- Cooling demand drops by roughly the suppressed recovery (the recovered heat that was driving the cooling load is no longer added)
+- The free-cooling trigger is TIGHTER than my originally-proposed single-condition trigger → predicted EUI saving is a subset of the prior 5–15 kWh/m²·yr range. Revised estimate: **bypass-on reduces EUI by ~3–10 kWh/m²·yr** on the bedrooms-MVHR scenario.
+- Qualitative test: with bypass on, MVHR bedrooms intervention SHOULD read closer to neutral or saving under reorder, rather than a penalty.
 
-### §4.3 Refbox HOT scenario (probe-baselined)
+### §5.3 Refbox HOT scenario (probe-baselined)
 
 From cooling-hours probe (`c64657c`):
 
 | | COLD baseline | HOT (1 person/m² gain) | Expected bypass-on HOT |
 |---|---:|---:|---:|
 | heating demand | 147.80 | 71.30 | similar (~72) |
-| cooling demand | 4.80 | 15.40 | **lower** (~12–13) |
-| effective recovery | 35.26 | 30.55 | **lower** (~25–28) |
+| cooling demand | 4.80 | 15.40 | **lower** (~13–14) |
+| effective recovery | 35.26 | 30.55 | **lower** (~26–29) |
 | heating electricity | 49.27 | 23.77 | similar (~24) |
 
-Bypass-on suppresses ~2–5 MWh of recovery (estimate; depends on hour-by-hour overlap of `T_out < setpoint` AND `cooling_demand > 0`). Cooling demand drops by approximately the same magnitude (the recovered heat that was driving the cooling load is no longer added). Heating demand barely changes (those hours weren't heating-mode hours).
+Free-cooling trigger is tighter than the single-condition cooling-demand trigger I originally posed, so the suppressed-recovery integral is smaller. Expected bypass-on recovery reduction: ~1.5–4 MWh (versus the 2–5 MWh I'd posed under single-condition). Cooling demand drops by approximately the same magnitude. Heating demand barely changes (those hours weren't heating-mode hours anyway).
 
-**Part 2 will run the refbox with bypass on/off and report.** The above ranges are the first-principles prediction; if the engine returns something materially outside these ranges, escalate.
+**Part 2 will extend the existing probe with bypass on/off cases and report. Bypass-OFF must reproduce 30.55 / 15.40 exactly** (Chris's confirmation #2). Bypass-ON ranges above are first-principles predictions; engine output materially outside ranges → escalate.
 
-## §5 — Hypothesis on the +10 heat-balance residual
-
-### §5.1 What the residual mechanism is
-
-Heat-balance Sankey (`HeatBalance.jsx` L755–774) computes `netResidual = totalGains − totalLosses` per the displayed Sankey ribbons; flags "large residual; check inputs" when |residual| > 5 kWh/m² (or 10 % of losses).
-
-The PHPP convention is enforced via two **synthetic** terms (L215–223 for cooling, L324–353 for heating):
-
-- **Cooling** synthesised as a *loss*: `data.demand.cooling_demand_mwh`, added when `orderWithNew.includes('cooling')`.
-- **Heating** synthesised as a *gain*: `data.demand.heating_demand_mwh`, added when `allowed.has('heating')`.
-
-Together they make the balance close: the building's heating-demand-as-a-gain plus envelope-gains equals envelope-losses plus cooling-demand-as-a-loss.
-
-### §5.2 Hypothesis on the +10
-
-The +10 residual is small enough that it's NOT a full missing-term issue (a full missing heating demand on Bridgewater would show as a large NEGATIVE residual — heating fights envelope losses, putting it on the gain side adds ~30+ kWh/m²·yr of gain).
-
-`+10 kWh/m²·yr` × `Bridgewater GIA 4322 m²` = `43.2 MWh / yr`. This magnitude is in the same family as:
-- Solar gains (a few tens of MWh on a hotel)
-- Internal-gain util-factor residue (heating util_factor < 1 means some gains don't fully offset, leaving them on the gain side without a matching loss)
-- MVHR fan electricity becoming heat in the space (continuous ~25 MWh on Bridgewater) — possibly a separate gain term that's surfaced but not labelled
-
-**Most-likely candidates (Part 4 investigates in order):**
-
-1. **MVHR fan electricity → space-heat gain.** Bridgewater MVHR fan ~17.5 MWh + extracts ~8 MWh ≈ 25 MWh. Some fraction (the SUPPLY fan share) ends up as heat IN the space. If 25 MWh × supply-fan-share (~50–80 %) ≈ 12–20 MWh ≈ 3–5 kWh/m²·yr of "fan motor heat". If the engine surfaces fan heat as a gain (or doesn't) inconsistently with the rest of the balance, partial residual.
-2. **Solar absorbed on opaque walls** (`TUNE_OPAQUE_GAIN_FRACTION × OPAQUE_WALL_SOLAR`, around L4830-4842 inline-legacy). This is treated as a gain in State 2 but may not be on the Sankey's gain side at the same scale.
-3. **Util-factor non-linearity.** State 2 applies `util_factor = 0.60` to internal gains for heating offset. The Sankey may show full internal gain on the gain side but the heating-demand synthesis already accounts for `(1 − util_factor)` of those gains being "unused" — surfaces as a positive residual ≈ `0.40 × (people + lighting + equipment) / GIA`.
-   - Bridgewater internal gains: rough estimate from a hotel — ~150,000 kWh occupancy + ~250,000 kWh lighting + ~250,000 kWh equipment ≈ 650 MWh. 40 % × 650 / 4322 = ~60 kWh/m². Too big. So util-factor residue alone isn't it.
-4. **MVHR recovery directionality.** Brief 50 closed the double-count; the recovery is now baked into a smaller `permanent_vents` / mechanical vent loss term. If the Sankey separately shows the airstream recovery integral as a "gain" (informational, ~63 MWh), it'd produce a much larger residual (~15 kWh/m²) — not +10. So this is unlikely the primary cause.
-
-**Lead hypothesis for Part 4 investigation:** **MVHR fan electricity → space-heat gain** (item 1 above), interacting with the heating-demand-as-gain synthesis. Magnitude 3–5 kWh/m² of fan heat plus a few kWh/m² of misaligned solar-on-opaque-walls accounting could account for the +10.
-
-**Investigation method for Part 4:**
-- Log `totalGains`, `totalLosses`, the per-line breakdown of each, on Bridgewater clean.
-- Compare each line value to the engine's `losses_at_setpoint.*.heating_loss_kwh` / `heat_balance.annual.gains.internal.*.kwh` / etc.
-- The first line where the Sankey value diverges from the engine value (or where a term is missing from the Sankey but present on the engine result) is the residual source.
-- If it's a real missing term — add it. If it's a legitimate "this is unused/storage/etc." — relabel the footer from "check inputs" to e.g. "Net (gains − losses): +10.1 kWh/m²·yr (unused gains, util factor 0.60)".
+---
 
 ## §6 — What Part 2 will look like (forward sketch — for sign-off context, NOT to be implemented yet)
 
 ### §6.1 Engine changes (`instantCalc.js`)
 
 ```js
-// New: at State 2 ventilation projection (L2553+), thread through summer_bypass flag
-const ventSystems = (... as before ...).map(v => {
+// In _calculateState2, alongside the existing T_hourly = new Float32Array(n)
+// at ~L2415, ADD a new array for zone air per hour:
+const T_air_hourly = new Float32Array(n)
+
+// Then inside the hourly loop at L2761 region (right next to T_hourly[h] = T_op):
+T_air_hourly[h] = T_air
+
+// And on State 2's result object near L3418, ADD:
+//   hourly_zone_air_c: T_air_hourly,
+// (sibling to existing hourly_temperature_c: T_hourly)
+
+// Per-system summer_bypass flag from v40:
+const ventSystems = (...as before...).map(v => {
   …
   const v40Match = v40VentMap.get(v?.id)
   const summer_bypass = v40Match?.summer_bypass === true   // new v40 field, default false
-                     || v?.summer_bypass === true          // v25 fallback
+                     || v?.summer_bypass === true          // v25 fallback (Brief 50 Part 6 pattern)
   …
   return { …, summer_bypass }
 })
 
-// Inside State 2 hourly loop (~L2700-2900 region — UA is currently precomputed
-// outside the loop; now it must be conditioned per hour by bypass status):
+// Inside State 2 hourly loop, condition vent UA per hour by bypass status.
+// Carry T_air forward from previous iteration as prev_T_air (h-1) for the trigger:
+let prev_T_air = NaN
+let prev_cooling_demand = 0
 for (let h = 0; h < n; h++) {
   …
-  // bypass active when previous hour had cooling demand
-  const cooling_prev = (h > 0) ? cooling_demand_hourly_kwh[h - 1] : 0
-  // Per-system vent UA: bypass replaces (1−HRE) with 1.0 for systems with summer_bypass
+  // Bypass active when:
+  //   (a) zone wanted cooling in the previous hour (prev_cooling_demand > 0)
+  //   (b) outside air is cooler than the air being extracted (T_out[h] < prev_T_air)
   let ventUA_eff = 0
   for (let vi = 0; vi < ventSystems.length; vi++) {
     const vs = ventSystems[vi]
     if (!vs.enabled) continue
-    const bypass_h = vs.summer_bypass && cooling_prev > 0
+    const bypass_h = vs.summer_bypass
+                  && prev_cooling_demand > 0
+                  && !Number.isNaN(prev_T_air)
+                  && T_out < prev_T_air
     const hre_factor = bypass_h ? 1 : (1 - vs.hre)
     ventUA_eff += AIR_HEAT_CAPACITY * vs.flow_l_s * 3.6 * hre_factor * (vs.hours / 8760)
   }
-  // Use ventUA_eff in this hour's heat balance step
-  …
+  // …use ventUA_eff in this hour's heat balance step…
+
+  // At end of iteration, store for next hour:
+  prev_T_air = T_air
+  prev_cooling_demand = cooling_demand_hourly_kwh[h]   // populated earlier in same iteration
 }
 ```
 
 ### §6.2 `computeVentilationEnergy` change
 
 ```js
-// New 6th positional arg: coolingDemandHourlyKwh
+// New positional args: coolingDemandHourlyKwh, T_air_hourly_c
 function computeVentilationEnergy(ventSystems, weatherData, T_setpoint_c, building,
                                   heatingDemandHourlyKwh = null,
-                                  coolingDemandHourlyKwh = null) {
+                                  coolingDemandHourlyKwh = null,
+                                  T_air_hourly_c = null) {
   …
   for (let h = 0; h < n; h++) {
-    const dT = T_setpoint_c - weatherData.temperature[h]
+    const T_out_h = weatherData.temperature[h]
+    const dT = T_setpoint_c - T_out_h
     if (dT > 0) {
       const cooling_prev = (coolingDemandHourlyKwh && h > 0) ? coolingDemandHourlyKwh[h - 1] : 0
-      const bypass_h = vs.summer_bypass && cooling_prev > 0
+      const T_extract_prev = (T_air_hourly_c && h > 0) ? T_air_hourly_c[h - 1] : NaN
+      const bypass_h = vs.summer_bypass
+                    && cooling_prev > 0
+                    && !Number.isNaN(T_extract_prev)
+                    && T_out_h < T_extract_prev
       if (!bypass_h) {
         const theoretical_h_Wh = flow_m3s * AIR_HC_J_PER_M3_K * vs.hre * dT * schedule_factor
         const demand_h_Wh = (heatingDemandHourlyKwh[h] ?? 0) * 1000
@@ -258,54 +328,64 @@ function computeVentilationEnergy(ventSystems, weatherData, T_setpoint_c, buildi
 }
 ```
 
-And `_calculateState3` at L4118+ already has `cooling_demand_hourly_kwh` available on `state2Result.demand.cooling_demand_hourly_kwh` — pass it through.
+Caller (`_calculateState3` at ~L4118) passes through `state2Result.demand.cooling_demand_hourly_kwh` AND the new `state2Result.heat_balance.hourly_zone_air_c`.
 
 ### §6.3 Schema field
 
 Add `summer_bypass: boolean` to:
 - `systems_config_v40.ventilation[].summer_bypass` — canonical
-- (Optional) `systems_config_v25.ventilation[].summer_bypass` — v25 mirror with the same fallback logic Brief 50 Part 6 used for HRE / enabled
+- (Fallback) `systems_config_v25.ventilation[].summer_bypass` — v25 mirror with the same fallback logic Brief 50 Part 6 used for HRE / enabled
 
 Default: `false`. The engine reads `v40 ?? v25 ?? false`.
 
 ### §6.4 UI control
 
-Checkbox in `SystemEditorCard.jsx` / equivalent for v40 ventilation systems. Label: "Summer bypass (suppress recovery in cooling-demand hours)". Default unchecked.
+Checkbox in `SystemEditorCard.jsx` / equivalent for v40 ventilation systems. Label: "Summer bypass (open bypass damper when zone wants cooling and outside air is cooler than extract)". Default unchecked.
 
 ### §6.5 Falsifiability for Part 2
 
-1. **Bypass-off Bridgewater clean = 128.20** (no movement) — non-trivially, because Part 2 changes the call signature of `computeVentilationEnergy` and the State 2 UA computation pattern. Any byte-shift between bypass-off and pre-brief = bug.
-2. **Bypass-off refbox HOT** matches probe (recovery 30.55, cooling 15.40).
-3. **Bypass-on refbox HOT** drops recovery in cooling-mode hours: predict recovery 25–28 MWh, cooling demand 12–13 MWh.
-4. **Reconciliation log:** in Part 2's commit, dump `Σ (1 − HRE)-mode-hours` vs `Σ bypass-mode-hours` for both State 2 and `computeVentilationEnergy` on Bridgewater. Both lists must match exactly.
+1. **Bypass-off Bridgewater clean = 128.20** (no movement) — non-trivially, because Part 2 changes the call signature of `computeVentilationEnergy` AND adds a new State 2 output array. Any byte-shift between bypass-off and pre-brief = bug.
+2. **Bypass-off refbox HOT** reproduces probe (recovery 30.55, cooling 15.40) **exactly** — Chris's confirmation #2.
+3. **Bypass-on refbox HOT** drops recovery in cooling-mode, T_out<T_extract hours: predict recovery 26–29 MWh, cooling demand 13–14 MWh.
+4. **Reconciliation log:** in Part 2's commit, dump for both State 2 and `computeVentilationEnergy` on Bridgewater:
+   - Count of bypass-true hours
+   - Sum of `(1−HRE)`-mode UA-hours vs bypass-mode UA-hours
+   - Both sides must report identical bypass-hour set (same indices) and identical magnitudes within rounding tolerance.
+
+---
 
 ## §7 — Part 1 deliverable summary
 
 | Question | Answer |
 |---|---|
+| **Lead: +10 residual hypothesis branch** | Two-branch test in §1.2 (real missing demand term → STOP Brief 53 and seed separate diagnosis brief; labelling/accounting gap → continue with Parts 2–5). Investigation method in §1.4. |
+| **Lead candidates** | (1) MVHR supply-fan electricity → space heat gain; (2) util-factor unused-gain residue; (3) solar-on-opaque-walls accounting; (4) recovery directionality (low priority, ruled out by Brief 50). |
 | Where does the per-hour recovery cap live? | `instantCalc.js` `computeVentilationEnergy` L3984–3995 |
 | Where does the State 2 (1−HRE) factor live? | `instantCalc.js` `_calculateState2` L2553–2582 |
-| Recommended bypass trigger | `cooling_demand_hourly_kwh[h−1] > 0` — symmetric in both sites, identical signal, identical lag |
-| Reconciliation strategy | Both sites read the same `cooling_demand_hourly_kwh[h−1]` array slot per hour. Same signal → same bypass hours → same magnitude (Principle 2). |
-| Implementation awkwardness | One-hour lag is inherent (avoiding 2-pass State 2). Two-site change (not a one-liner). Hour 0 defaults to bypass-off. |
+| **Bypass trigger (Chris-confirmed)** | Free-cooling: `summer_bypass AND cooling_demand_hourly_kwh[h−1] > 0 AND T_out[h] < T_extract[h−1]` |
+| **T_out availability** | Yes — `weatherData.temperature[h]` (already used by outer gate) in both sites |
+| **T_extract availability** | Single-zone engine ⇒ T_extract ≈ T_zone air. Currently `T_hourly` (operative T) is surfaced; need to ADD `T_air_hourly` (zone air) — one new Float32Array + populate line in State 2. **Sign-off requested on Option A (surface T_air per hour) vs Option B (reuse T_op).** Recommend A for byte-exact reconciliation. |
+| Reconciliation strategy | Both sites read identical lagged signals: `cooling_demand_hourly_kwh[h−1]` and `T_air_hourly_c[h−1]`. Same trigger, same hours, same magnitude (Principle 2). Reconciliation log dumped to Part 2 commit. |
+| Implementation footprint | (1) New State 2 output `hourly_zone_air_c`; (2) `computeVentilationEnergy` signature grows by two args; (3) State 2 hourly loop carries `prev_T_air`, `prev_cooling_demand`; (4) v40 schema gains `summer_bypass` field with v25 fallback. |
 | Default | OFF (preserves 128.20 anchor; bypass is opt-in modelling choice). |
-| Bridgewater clean bypass-on prediction | Near-zero shift (< 0.3 kWh/m²·yr). Outer gate already suppresses recovery in most cooling hours. |
-| Bridgewater + bedrooms-MVHR bypass-on prediction | EUI drops 5–15 kWh/m²·yr on that scenario. Cooling penalty falls toward the no-recovery-into-cooling-zone level. Order under reorder flips from "increase" to "saving". |
-| Refbox HOT bypass-on prediction | Recovery 30.55 → ~25–28 MWh. Cooling 15.40 → ~12–13 MWh. Heating largely unchanged. |
-| +10 residual hypothesis | Lead: MVHR fan electricity → space-heat gain not surfaced consistently with the heating-demand-as-gain / cooling-demand-as-loss PHPP convention. Plus possible solar-on-opaque-walls misalignment. Investigation method documented for Part 4. |
+| Bridgewater clean bypass-on prediction | Near-zero shift (< 0.3 kWh/m²·yr). Outer gate already suppresses recovery in most cooling hours; free-cooling trigger narrows further. |
+| Bridgewater + bedrooms-MVHR bypass-on prediction | EUI drops 3–10 kWh/m²·yr on that scenario (narrower than single-condition trigger would have predicted). |
+| Refbox HOT bypass-on prediction | Recovery 30.55 → ~26–29 MWh. Cooling 15.40 → ~13–14 MWh. Heating largely unchanged. |
+
+---
 
 ## §8 — Hard stop
 
-Part 1 checkpoint per the brief: **trigger + Bridgewater first-principles prediction signed off by Chris BEFORE Part 2 engine code.** Surfacing for sign-off. No engine code touched.
+Part 1 checkpoint per the brief: **+10 residual branch, trigger confirmation, T_extract option, and first-principles predictions signed off by Chris BEFORE Part 2 engine code.** Surfacing for sign-off. No engine code touched.
 
 Open questions for Chris:
 
-1. **Trigger `cooling_demand_hourly_kwh[h−1] > 0` accepted?** Or do you want the synchronous-with-2×-cost variant? (Recommend reject — the lag effect is one hour of recovery in a year of 8760 — negligible at engine scale, and 2× State 2 cost would break live-update reactivity in Brief 47 / 53's heat-balance Sankey.)
+1. **§1 — Branch test sequencing.** Run §1.4 investigation FIRST (default), or in parallel with Part 2 engine work (risk: if Branch A, the Part 2 work has built on a wrong-shape assumption about the heat balance)? Recommend §1.4 first.
 
-2. **Default OFF accepted?** (Recommend yes — preserves 128.20 anchor as the verified clean reference.)
+2. **§4.3 — T_extract option.** Option A (surface new `hourly_zone_air_c` from State 2 — byte-exact reconciliation, one new array) or Option B (reuse `hourly_temperature_c` which is T_op — small T_op-vs-T_air drift inside State 2's local-variable use, looser reconciliation guarantee)? Recommend A.
 
-3. **Predictions reasonable?** Particularly the bedrooms-MVHR 5–15 kWh/m²·yr range. If you have a tighter expectation from the walkthrough imagery, narrow it now so Part 2's checkpoint has the right band.
+3. **§5 predictions.** Bypass-on bedrooms-MVHR EUI saving 3–10 kWh/m²·yr; refbox HOT recovery 26–29 / cooling 13–14 MWh. Reasonable, or do you have a tighter expectation from the walkthrough imagery?
 
-4. **Part 4 +10 residual hypothesis (MVHR fan heat) — agree this is the lead candidate to investigate first?** Or do you want Part 4 to start with a different candidate?
+4. **§4.7 — Default OFF confirmed?** (Chris's confirmation #3: "Default bypass OFF; 128.2 holds with it off." Restating here for the record.)
 
 Awaiting sign-off before Part 2.
