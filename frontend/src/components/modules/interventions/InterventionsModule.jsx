@@ -40,6 +40,7 @@ import { confirm } from '../../shared/ConfirmDialog.jsx'
 // This import opens the rebuilt editor on every "Add intervention" /
 // edit-pencil click.
 import InterventionEditorPopout from './InterventionEditorPopout.jsx'
+import { computeFieldConflicts } from './InterventionStackView.jsx'
 import VisualiserHost from './visualiser/VisualiserHost.jsx'
 // Brief 47 Part 1 (2026-05-24): Library feature cut entirely per design
 // note. InterventionLibrary.jsx no longer imported.
@@ -175,6 +176,14 @@ export default function InterventionsModule() {
   }, [paramsForEngine, constructions, systems, libraryData, weatherData, hourlySolar, comfortBand])
 
   const stackResult = engineResult?.consumption?.interventions ?? engineResult?.interventions ?? null
+
+  // Brief 55 Part 5: compute per-patch field-level conflicts across the
+  // full intervention list. Threaded into the editor popout so PatchList
+  // can mark conflicting patches with a Drop affordance.
+  const { patchConflicts: globalPatchConflicts } = useMemo(
+    () => computeFieldConflicts(interventions),
+    [interventions],
+  )
 
   const baselineSummary = useMemo(() => {
     const baseline = stackResult?.baseline ?? engineResult
@@ -419,6 +428,7 @@ export default function InterventionsModule() {
         weatherData={weatherData}
         hourlySolar={hourlySolar}
         scheduleProfiles={null}
+        patchConflicts={globalPatchConflicts}
         onSave={handleSaveEditing}
         onCancel={handleCloseEditor}
         onDelete={handleDeleteEditing}

@@ -26,42 +26,110 @@ import InterventionRow from './InterventionRow.jsx'
 const INTERVENTIONS_ACCENT = '#E84393'
 
 /**
- * Compute which interventions are overridden by later enabled
- * interventions in the same stack. Returns a Set of intervention IDs.
+ * Brief 55 Part 5 (2026-05-26) — Same-field conflict signal.
  *
- * "Overridden" = at least one patch in this intervention addresses a
- * path that an ENABLED later intervention also patches with the same
- * op semantics on the same leaf. We use a coarse path-string match
- * (any later patch with the same `path` string and op in {set,
- * replace}) — finer-grained array-entry detection (e.g. `add`
- * followed by `remove[id=...]`) is deferred until the editor pop-out
- * (Part 4) where individual patches can be flagged.
+ * Pre-Brief-55 the "Overridden by a later intervention" warning was
+ * a side-effect of whole-object snapshot collision: two interventions
+ * that captured `systems_config_v40` snapshots would always collide
+ * because each REPLACES the entire sub-tree. Now (post Brief 55 Part 2)
+ * patches are field-level, so this signal fires only on GENUINE
+ * same-field conflict — two enabled interventions edit the literal
+ * same patch path with different values.
+ *
+ * Returns:
+ *   {
+ *     interventionHasConflict: Set<interventionId>,
+ *     patchConflicts: Map<patchId, {
+ *       interventionId,
+ *       otherInterventionId,
+ *       otherInterventionLabel,
+ *       otherValue,
+ *       // Heuristic flag — likely a legacy-snapshot capture artefact.
+ *       // True when the intervention's label suggests its concern is
+ *       // OTHER than the field in conflict (e.g. "MVHR Bedrooms" with
+ *       // a heating share_pct edit). The UI uses this to nudge the
+ *       // user toward dropping the unintended field edit.
+ *       likelyArtefact: boolean,
+ *     }>,
+ *   }
+ *
+ * Coarse path-string match — finer-grained array-entry detection
+ * (add[id=X] followed by remove[id=X]) is a future refinement.
  */
-function computeOverriddenSet(interventions) {
-  const overridden = new Set()
-  if (!Array.isArray(interventions)) return overridden
-  for (let i = 0; i < interventions.length; i++) {
-    const a = interventions[i]
-    if (!a || a.enabled === false) continue
-    const aPaths = (Array.isArray(a.patches) ? a.patches : [])
-      .filter(p => p && (p.op === 'set' || p.op === 'replace'))
-      .map(p => p.path)
-    if (aPaths.length === 0) continue
-    for (let j = i + 1; j < interventions.length; j++) {
-      const b = interventions[j]
-      if (!b || b.enabled === false) continue
-      const bPaths = (Array.isArray(b.patches) ? b.patches : [])
-        .filter(p => p && (p.op === 'set' || p.op === 'replace'))
-        .map(p => p.path)
-      if (bPaths.length === 0) continue
-      const collision = aPaths.some(p => bPaths.includes(p))
-      if (collision) {
-        overridden.add(a.id)
-        break
-      }
+export function computeFieldConflicts(interventions) {
+  const interventionHasConflict = new Set()
+  const patchConflicts = new Map()
+  if (!Array.isArray(interventions)) return { interventionHasConflict, patchConflicts }
+
+  // First pass: index every enabled set/replace patch by path so we can
+  // find collisions across interventions.
+  // pathOwners.get(path) = [{ intvId, intvLabel, patchId, value }, ...]
+  const pathOwners = new Map()
+  for (const intv of interventions) {
+    if (!intv || intv.enabled === false) continue
+    const patches = Array.isArray(intv.patches) ? intv.patches : []
+    for (const p of patches) {
+      if (!p || (p.op !== 'set' && p.op !== 'replace')) continue
+      if (!p.path) continue
+      const owners = pathOwners.get(p.path) ?? []
+      owners.push({ intvId: intv.id, intvLabel: intv.label ?? '(unnamed)', patchId: p.id, value: p.value })
+      pathOwners.set(p.path, owners)
     }
   }
-  return overridden
+
+  // Second pass: any path with >1 owner is a conflict. For each owner,
+  // mark its patch as conflicting (paired with the immediately-following
+  // owner — that's the "later intervention" semantics).
+  for (const [pathStr, owners] of pathOwners) {
+    if (owners.length < 2) continue
+    for (let i = 0; i < owners.length - 1; i++) {
+      const self = owners[i]
+      const later = owners[i + 1]
+      interventionHasConflict.add(self.intvId)
+      patchConflicts.set(self.patchId, {
+        interventionId: self.intvId,
+        otherInterventionId: later.intvId,
+        otherInterventionLabel: later.intvLabel,
+        otherValue: later.value,
+        likelyArtefact: _isLikelyArtefact(self.intvLabel, pathStr),
+      })
+    }
+  }
+  return { interventionHasConflict, patchConflicts }
+}
+
+/**
+ * Heuristic: does this intervention's label suggest its concern is
+ * something OTHER than the field path it edits? Used to flag legacy-
+ * snapshot capture artefacts (e.g. "MVHR Bedrooms" carrying a
+ * `heating[id=X].share_pct` edit picked up from a drifted-view
+ * snapshot). The UI then nudges the user to drop the unintended edit.
+ *
+ * Conservative — when uncertain, return false (treat as a real conflict).
+ */
+function _isLikelyArtefact(intvLabel, patchPath) {
+  if (typeof intvLabel !== 'string' || typeof patchPath !== 'string') return false
+  const label = intvLabel.toLowerCase()
+  // Path segment tells us which service area the patch touches.
+  const m = patchPath.match(/systems_config_v\d+\.(heating|cooling|dhw|ventilation|lighting|small_power)/)
+  if (!m) return false
+  const fieldService = m[1]
+  // Map label keywords to expected service.
+  const labelService =
+      /mvhr|vent|hre|extract|airflow|fan/.test(label) ? 'ventilation'
+    : /vrf|ashp|scop|boiler|heat\b|heating/.test(label) ? 'heating'
+    : /cool/.test(label)                          ? 'cooling'
+    : /dhw|hot water/.test(label)                 ? 'dhw'
+    : /light/.test(label)                         ? 'lighting'
+    : /small power|appliance/.test(label)         ? 'small_power'
+    : null
+  if (labelService == null) return false
+  return labelService !== fieldService
+}
+
+// Back-compat alias for callers that just need the boolean set.
+function computeOverriddenSet(interventions) {
+  return computeFieldConflicts(interventions).interventionHasConflict
 }
 
 function BaselineRow({ baselineSummary }) {
@@ -183,7 +251,8 @@ export default function InterventionStackView({
     )
   }
 
-  const overridden = computeOverriddenSet(interventions)
+  // Brief 55 Part 5 — richer conflict info (per-patch, with artefact heuristic).
+  const { interventionHasConflict: overridden, patchConflicts } = computeFieldConflicts(interventions)
   const stackRows = Array.isArray(stackResult?.interventions) ? stackResult.interventions : []
 
   // Brief 47 Part 5a (2026-05-24): column-headers row retired. Each

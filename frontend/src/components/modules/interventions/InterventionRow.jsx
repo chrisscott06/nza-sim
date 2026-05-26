@@ -197,7 +197,8 @@ export default function InterventionRow({
               <AlertTriangle
                 size={11}
                 className="flex-shrink-0 text-amber-600"
-                aria-label="Overridden by a later intervention"
+                aria-label="Same-field conflict with another enabled intervention"
+                title="One or more fields in this intervention are also edited by another enabled intervention — open the editor to see + drop unintended edits"
               />
             )}
             {intervention?.theme && (
@@ -279,9 +280,12 @@ export default function InterventionRow({
             )}
 
             {overridden && isEnabled && (
-              <div className="flex items-center gap-1 mt-1 text-xxs text-amber-700">
-                <AlertTriangle size={11} className="flex-shrink-0" />
-                <span>Overridden by a later intervention (last-write-wins)</span>
+              <div className="flex items-start gap-1 mt-1 text-xxs text-amber-700">
+                <AlertTriangle size={11} className="flex-shrink-0 mt-0.5" />
+                <span>
+                  Same-field conflict — another enabled intervention edits one or more of the same field paths.
+                  Open the editor (pencil) to see exactly which fields collide and drop any unintended edits.
+                </span>
               </div>
             )}
           </div>

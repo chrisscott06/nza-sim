@@ -166,6 +166,7 @@ export default function InterventionEditorPopout({
   weatherData,
   hourlySolar,
   scheduleProfiles,
+  patchConflicts,        // Brief 55 Part 5 — Map<patchId, {…conflict info…}>
   onSave,
   onCancel,
   onDelete,
@@ -554,6 +555,7 @@ function EditorBody({
         <ChangeList
           baselineConfig={baselineConfig}
           libraryData={baselineConfig?.libraryData}
+          patchConflicts={patchConflicts}
         />
 
         {/* Footer */}

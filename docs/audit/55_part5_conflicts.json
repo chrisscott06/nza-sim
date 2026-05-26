@@ -1,0 +1,93 @@
+{
+  "intervention_with_conflict": [
+    "int_3ad13c2d-b3fa-4938-835a-4c1949cd2f42"
+  ],
+  "conflicts": [
+    {
+      "intv": "MVHR Bedrooms",
+      "path": "building.systems_config_v40.heating[id=sys_heating_1779261680582_18672].share_pct",
+      "thisValue": 90,
+      "interventionId": "int_3ad13c2d-b3fa-4938-835a-4c1949cd2f42",
+      "otherInterventionId": "int_aafbb12c-b294-4e1f-97a3-486295e48113",
+      "otherInterventionLabel": "VRF 4.0",
+      "otherValue": 100,
+      "likelyArtefact": true
+    },
+    {
+      "intv": "MVHR Bedrooms",
+      "path": "building.systems_config_v40.ventilation[id=vent_mvhr_gf_public].efficiency_metric.sfp_w_per_lps",
+      "thisValue": 1.4,
+      "interventionId": "int_3ad13c2d-b3fa-4938-835a-4c1949cd2f42",
+      "otherInterventionId": "int_aafbb12c-b294-4e1f-97a3-486295e48113",
+      "otherInterventionLabel": "VRF 4.0",
+      "otherValue": 1.4,
+      "likelyArtefact": false
+    },
+    {
+      "intv": "MVHR Bedrooms",
+      "path": "building.systems_config_v40.ventilation[id=vent_mvhr_gf_public].share_pct",
+      "thisValue": 0,
+      "interventionId": "int_3ad13c2d-b3fa-4938-835a-4c1949cd2f42",
+      "otherInterventionId": "int_aafbb12c-b294-4e1f-97a3-486295e48113",
+      "otherInterventionLabel": "VRF 4.0",
+      "otherValue": 0,
+      "likelyArtefact": false
+    },
+    {
+      "intv": "MVHR Bedrooms",
+      "path": "building.systems_config_v40.ventilation[id=vent_bedroom_extract].efficiency_metric.sfp_w_per_lps",
+      "thisValue": 0.4,
+      "interventionId": "int_3ad13c2d-b3fa-4938-835a-4c1949cd2f42",
+      "otherInterventionId": "int_aafbb12c-b294-4e1f-97a3-486295e48113",
+      "otherInterventionLabel": "VRF 4.0",
+      "otherValue": 0.4,
+      "likelyArtefact": false
+    },
+    {
+      "intv": "MVHR Bedrooms",
+      "path": "building.systems_config_v40.ventilation[id=vent_bedroom_extract].share_pct",
+      "thisValue": 50,
+      "interventionId": "int_3ad13c2d-b3fa-4938-835a-4c1949cd2f42",
+      "otherInterventionId": "int_aafbb12c-b294-4e1f-97a3-486295e48113",
+      "otherInterventionLabel": "VRF 4.0",
+      "otherValue": 50,
+      "likelyArtefact": false
+    },
+    {
+      "intv": "MVHR Bedrooms",
+      "path": "building.systems_config_v40.ventilation[id=vent_public_toilet_extract].efficiency_metric.sfp_w_per_lps",
+      "thisValue": 0.4,
+      "interventionId": "int_3ad13c2d-b3fa-4938-835a-4c1949cd2f42",
+      "otherInterventionId": "int_aafbb12c-b294-4e1f-97a3-486295e48113",
+      "otherInterventionLabel": "VRF 4.0",
+      "otherValue": 0.4,
+      "likelyArtefact": false
+    },
+    {
+      "intv": "MVHR Bedrooms",
+      "path": "building.systems_config_v40.ventilation[id=vent_public_toilet_extract].share_pct",
+      "thisValue": 50,
+      "interventionId": "int_3ad13c2d-b3fa-4938-835a-4c1949cd2f42",
+      "otherInterventionId": "int_aafbb12c-b294-4e1f-97a3-486295e48113",
+      "otherInterventionLabel": "VRF 4.0",
+      "otherValue": 50,
+      "likelyArtefact": false
+    },
+    {
+      "intv": "MVHR Bedrooms",
+      "path": "building.systems_config_v40.lighting[id=sys_lighting_1779226352156_399].control_factor",
+      "thisValue": 1,
+      "interventionId": "int_3ad13c2d-b3fa-4938-835a-4c1949cd2f42",
+      "otherInterventionId": "int_aafbb12c-b294-4e1f-97a3-486295e48113",
+      "otherInterventionLabel": "VRF 4.0",
+      "otherValue": 1,
+      "likelyArtefact": true
+    }
+  ],
+  "summary": {
+    "artefacts": 2,
+    "real": 6,
+    "total": 8
+  },
+  "expected_artefact_found": true
+}
