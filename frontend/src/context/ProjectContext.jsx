@@ -268,6 +268,16 @@ const DEFAULT_PARAMS = {
     dhw_demand_basis:                      'per_person',
     dhw_demand_litres_per_person_per_day:  80,
     dhw_demand_litres_per_m2_per_day:      1.1,
+    // Brief 58 B4 (2026-05-26): DHW hourly load-shape toggle.
+    //   'flat'             — constant L/h across all 8760 hours (storage
+    //                        decouples timing from draw; default).
+    //   'follow_occupancy' — same annual L spread over hourly occupancy
+    //                        presence (0 L off-hours, peak L peak-hours).
+    // Annual DHW demand is IDENTICAL across both shapes; only the
+    // hourly distribution differs. Engine reads at compute time and
+    // attaches an `hourly_kwh` array to the DHW result. Visualisation
+    // of the hourly draw is the follow-up brief.
+    dhw_load_shape:                        'flat',
     dhw:                                   [],
     // ── Ventilation, Lighting, Small power: per-system only ────────
     ventilation: [],

@@ -349,6 +349,17 @@ function _computeHeatingOrCooling(service, systems, serviceLevel, demandAtComfor
  *                          (Pre-B3 took `annualOccupantHours` instead;
  *                          that arg is gone — DHW is per-HEAD, not per
  *                          occupant-second.)
+ *   presenceHourly       — Brief 58 B4 (2026-05-26): optional 8760
+ *                          Float32Array of per-hour occupancy SCHEDULE
+ *                          PRESENCE (0-1 schedule × monthly mult, post
+ *                          exception-resolution) from State 2's
+ *                          occupancy_summary. Used to shape the
+ *                          hourly_kwh draw when
+ *                          `dhw_load_shape === 'follow_occupancy'`.
+ *                          The toggle follows the schedule SHAPE
+ *                          (timing), not headcount — a calibration-zero
+ *                          headcount still has a non-zero schedule.
+ *                          Falls back to 'flat' if absent or zero-sum.
  *
  * Service-level fields drive the building DHW demand math:
  *   - dhw_demand_basis         — 'per_m2' or 'per_person'
@@ -361,7 +372,7 @@ function _computeHeatingOrCooling(service, systems, serviceLevel, demandAtComfor
  * source-energy split. All DHW systems share the same building demand;
  * share_pct splits delivery across them.
  */
-function _computeDhw(systems, serviceLevel, gia, building) {
+function _computeDhw(systems, serviceLevel, gia, building, presenceHourly = null) {
   // Brief 42 Part 2 (2026-05-20): DHW building-level fields lifted to
   // service-level on `systems_config_v40`. Reads from `serviceLevel`
   // (the post-Brief-42 systems_config_v40 object); per-system entries
@@ -470,6 +481,38 @@ function _computeDhw(systems, serviceLevel, gia, building) {
   const annual_dhw_thermal_kWh = boiler_litres_per_day * setpoint_minus_cold * WATER_SHC_KWH_PER_L_PER_K * 365
   const demand_at_comfort_mwh  = annual_dhw_thermal_kWh / 1000
 
+  // Brief 58 B4 (2026-05-26): hourly DHW load-shape profile generation.
+  //
+  //   'flat'             — uniform: each hour gets annual / 8760.
+  //   'follow_occupancy' — annual draw spread across the hourly
+  //                        occupancy presence (0 kWh off-hours, peak
+  //                        kWh peak-hours).
+  //
+  // Annual integral is identical across both shapes by construction
+  // (each branch redistributes `annual_dhw_thermal_kWh` and nothing
+  // else). Falls back to 'flat' if `presenceHourly` is missing,
+  // wrong-shaped, or sums to zero. Float32 to keep memory ~35 KB.
+  const load_shape = (serviceLevel?.dhw_load_shape === 'follow_occupancy')
+    ? 'follow_occupancy'
+    : 'flat'
+  const hourly_kwh = new Float32Array(8760)
+  let usedShape = 'flat'
+  if (load_shape === 'follow_occupancy'
+      && presenceHourly
+      && presenceHourly.length === 8760) {
+    let presence_sum = 0
+    for (let i = 0; i < 8760; i++) presence_sum += presenceHourly[i]
+    if (presence_sum > 0) {
+      const weight = annual_dhw_thermal_kWh / presence_sum
+      for (let i = 0; i < 8760; i++) hourly_kwh[i] = presenceHourly[i] * weight
+      usedShape = 'follow_occupancy'
+    }
+  }
+  if (usedShape === 'flat') {
+    const per_h = annual_dhw_thermal_kWh / 8760
+    for (let i = 0; i < 8760; i++) hourly_kwh[i] = per_h
+  }
+
   // Per-system: split delivered by share, divide by per-system efficiency.
   // Loops over ENABLED systems only — disabled systems' share preserved on
   // disk but excluded from compute.
@@ -525,6 +568,14 @@ function _computeDhw(systems, serviceLevel, gia, building) {
     delivered_total_mwh:        round_mwh(delivered_total_mwh),
     blended_efficiency:         blended_efficiency != null ? Math.round(blended_efficiency * 1000) / 1000 : null,
     systems:                    out_systems,
+    // Brief 58 B4 (2026-05-26): hourly DHW draw profile + load-shape
+    // selector. Sum(hourly_kwh) == annual_dhw_thermal_kWh in both shapes
+    // by construction (the toggle redistributes timing only — annual
+    // total invariant). load_shape is the SHAPE ACTUALLY USED (falls
+    // back to 'flat' when 'follow_occupancy' is requested but
+    // presence data is missing/zero).
+    load_shape:                 usedShape,
+    hourly_kwh:                 hourly_kwh,
     diagnostic: {
       delivered_no_mix_mwh: round_mwh(delivered_no_mix_mwh),
       delta_mwh:            round_mwh(delta_mwh),
@@ -755,7 +806,11 @@ export function computeSystemsDelivered({ building, state2Result, comfortBand, s
   // owns MVHR recovery exclusively after Brief 50 (see signature comment).
   const heating = _computeHeatingOrCooling('heating', cfg.heating ?? [], cfg, heatingDemandMwh, comfortBand, state2Recompute)
   const cooling = _computeHeatingOrCooling('cooling', cfg.cooling ?? [], cfg, coolingDemandMwh, comfortBand, state2Recompute)
-  const dhw     = _computeDhw(cfg.dhw ?? [], cfg, gia, building)
+  // Brief 58 B4 (2026-05-26): pass State 2's per-hour occupancy
+  // schedule presence (0-1) for the DHW load-shape toggle.
+  // _computeDhw falls back to 'flat' when this is missing — no error.
+  const presenceHourly = state2Result?.occupancy_summary?.presence_hourly ?? null
+  const dhw     = _computeDhw(cfg.dhw ?? [], cfg, gia, building, presenceHourly)
   const ventilation = _computeVentilation(cfg.ventilation ?? [], gia, peakOccupants)
   const lighting    = _computeThin(cfg.lighting ?? [], lightingGainMwh)
   const small_power = _computeThin(cfg.small_power ?? [], equipmentGainMwh)

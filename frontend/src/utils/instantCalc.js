@@ -2452,6 +2452,24 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   let peak_people = 0, peak_lighting = 0, peak_equipment = 0
   let hours_people = 0, hours_lighting = 0, hours_equipment_active = 0
   let sum_effective_occupants = 0, peak_occupants = 0
+  // Brief 58 B4 (2026-05-26): hourly presence series for the DHW
+  // load-shape toggle. systemsEngine._computeDhw reads this when
+  // dhw_load_shape === 'follow_occupancy' and normalises it to a
+  // weight vector to spread the annual L/day across 8760 hours
+  // (annual total invariant by construction).
+  //
+  // We surface the SCHEDULE PRESENCE (the 0-1 schedule × monthly_mult
+  // value, see computeHourlyGains:2157-2166), NOT headcount-multiplied
+  // `effective_occupants`. Two reasons:
+  //   1. The toggle's semantic is "follow the occupancy schedule",
+  //      decoupled from how many people the schedule represents.
+  //   2. Some projects (Bridgewater is one) carry `density.value=0`
+  //      with B3-style headcount inferred from num_bedrooms ×
+  //      people_per_room — in that case `effective_occupants_hourly`
+  //      is uniformly zero and `follow_occupancy` would silently
+  //      flat-fallback. presence isn't subject to that calibration
+  //      oddity.
+  const presence_hourly = new Float32Array(8760)
 
   const lightingProfileAccum = new Map()
   const equipmentProfileAccum = new Map()
@@ -2723,6 +2741,10 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     if (gains.equipment_active > 0.01) hours_equipment_active++
     sum_effective_occupants += gains.effective_occupants
     if (gains.effective_occupants > peak_occupants) peak_occupants = gains.effective_occupants
+    // Brief 58 B4: per-hour PRESENCE (0-1 schedule × monthly mult)
+    // for DHW load-shape toggle (see Float32Array declaration above
+    // the loop). Bounded by 8760.
+    if (h < 8760) presence_hourly[h] = gains.presence
     if (gains.lighting_per_profile)  for (const p of gains.lighting_per_profile)  accumLighting(p.id, p.value)
     if (gains.equipment_per_profile) for (const p of gains.equipment_per_profile) accumEquipment(p.id, p.value, p.baseload, p.active)
     const Q_internal_total_Wh = gains.total
@@ -3557,6 +3579,13 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       average_occupants:       Math.round(sum_effective_occupants / n * 10) / 10,
       peak_occupants:          Math.round(peak_occupants * 10) / 10,
       annual_occupant_hours:   Math.round(sum_effective_occupants),
+      // Brief 58 B4 (2026-05-26): 8760-element schedule presence
+      // series (0-1 per hour, post monthly multiplier / exception
+      // resolution) consumed by systemsEngine._computeDhw when
+      // dhw_load_shape === 'follow_occupancy'. Sum across the year
+      // is the number of "occupied hours" in dimensionless units (the
+      // schedule's integral). Float32 to keep memory ~35 KB.
+      presence_hourly,
     },
     // Brief 28c (2026-05-14): heat_balance.annual.losses now reflects State 2's
     // own accumulators (computed against the State 2 T_air trace), not

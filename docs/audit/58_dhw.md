@@ -192,6 +192,59 @@ Add a service-level field `dhw_load_shape ∈ {'follow_occupancy', 'flat'}`. Def
 
 This is partly a Schedule-tab concern (deferred to the planned follow-up brief) — B4 lands the toggle FIELD + the engine's profile generation; the visualisation is the follow-up.
 
+### §4.4 B4 landing notes (2026-05-26)
+
+**Signal chosen: schedule PRESENCE (0-1), not headcount-multiplied `effective_occupants`.**
+
+Rationale — the toggle's semantic is "follow the occupancy schedule", which is the TIMING signal, not the magnitude. Two concrete reasons:
+
+1. **Decouples from headcount calibration.** Some projects (Bridgewater is one) carry `occupancy.density.value=0` and rely on B3's `num_bedrooms × people_per_room` headcount fallback. In that case `effective_occupants_hourly` is uniformly zero and `follow_occupancy` would silently flat-fallback. Presence isn't subject to that calibration oddity.
+
+2. **Semantic clarity.** "Follow the schedule" should mean exactly that — the timing pattern, decoupled from how many people the schedule represents. Engine reads `gains.presence` (post monthly multiplier / exception resolution, see `instantCalc.js:2157-2166`) and accumulates an 8760 Float32Array on `state2Result.occupancy_summary.presence_hourly`.
+
+**Field surface (ProjectContext default):**
+
+```js
+dhw_load_shape: 'flat',  // | 'follow_occupancy'
+```
+
+Lives on `systems_config_v40` alongside the other service-level DHW fields. Default `'flat'` preserves current 24/7-constant behaviour. Engine reads in `_computeDhw` via `serviceLevel?.dhw_load_shape`.
+
+**Engine output:**
+
+`brief40.dhw.hourly_kwh` — `Float32Array(8760)` of per-hour DHW draw, shaped per the toggle. `Σ hourly_kwh = annual_dhw_thermal_kWh` by construction in both shapes.
+
+`brief40.dhw.load_shape` — the shape actually applied. May fall back to `'flat'` if `follow_occupancy` was requested but the presence array is missing or sums to zero (no error — graceful degradation).
+
+**Probe results (Bridgewater, 2026-05-26):**
+
+| metric | flat | follow_occupancy |
+|---|---|---|
+| `demand_at_comfort_mwh` | 204.444 | 204.444 |
+| `Σ hourly_kwh` (MWh) | 204.4438 | 204.4438 |
+| peak hour (kWh) | 23.338 | 28.375 |
+| min hour (kWh) | 23.338 | 6.810 |
+| CV (stdev/mean) | 0.0000 | 0.3009 |
+| EUI (kWh/m²·yr) | 105.7 | 105.7 |
+
+Total redistribution magnitude: Σ |Δ| = 53,648 kWh (~26 % of annual) — meaningful timing shift across the 8760 hours, but the integral is conserved to 0.36 kWh (< 0.01 MWh) in both shapes.
+
+**Gates (all pass — see `docs/audit/58_b4_load_shape.json`):**
+
+- G1 demand identical across shapes (|Δ| < 0.01 MWh) ✓
+- G2 each shape integrates to demand (|residual| < 0.01 MWh) ✓
+- G3 load_shape returned matches request (no silent fallback) ✓
+- G4 shapes actually differ (Σ |Δ| > 1 kWh) ✓
+- G4b flat has CV = 0 (uniform) ✓
+- G4c follow_occupancy has CV > 0.01 (meaningful redistribution) ✓
+- G5 EUI invariant across shapes (|Δ| < 0.01 kWh/m²·yr) ✓
+
+**Why no "zero off-hours" gate?** Hotels are 24/7 — guests are present overnight, so a faithful hotel schedule never reaches zero. CV is the right invariant for redistribution.
+
+**Anchor check:** Breakdown-dump baseline (109.90 EUI at default `'flat'`) UNCHANGED — the toggle is timing-only, not magnitude.
+
+**What's NOT changed in B4:** the daily_profiles aggregator in `instantCalc.js` (`dhw_daily = _z().map(() => ... / 365)`) — still flat. That's "visualisation" and per the brief's framing is the follow-up. The engine's hourly_kwh is now AVAILABLE on `brief40.dhw.hourly_kwh` for a future Profiles-tab visualisation to consume.
+
 ---
 
 ## §5 — Open questions for Chris
