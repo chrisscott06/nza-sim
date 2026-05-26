@@ -1,0 +1,44 @@
+{
+  "meta": {
+    "project": "Bridgewater",
+    "geometry_gia": 4322,
+    "multiplier": 1.1,
+    "timestamp": "2026-05-26T21:57:34.223Z"
+  },
+  "gate1_default": {
+    "eui_kwh_per_m2": 69.1,
+    "delivered_kwh_total": 298632,
+    "electricity_kwh": 298632,
+    "gas_kwh": 0,
+    "heating_demand_mwh": 238.3,
+    "heating_delivered_mwh": 238.3,
+    "cooling_demand_mwh": 72.5,
+    "carbon_kg_co2_per_m2": 14.3,
+    "metadata_gia_m2": 4322,
+    "metadata_geometry_gia_m2": 4322,
+    "metadata_reported_gia_m2": 4322
+  },
+  "gate2_reported_1p1x": {
+    "eui_kwh_per_m2": 62.8,
+    "delivered_kwh_total": 298632,
+    "electricity_kwh": 298632,
+    "gas_kwh": 0,
+    "heating_demand_mwh": 238.3,
+    "heating_delivered_mwh": 238.3,
+    "cooling_demand_mwh": 72.5,
+    "carbon_kg_co2_per_m2": 13,
+    "metadata_gia_m2": 4754,
+    "metadata_geometry_gia_m2": 4322,
+    "metadata_reported_gia_m2": 4754
+  },
+  "gates": {
+    "g1_metadata_default": true,
+    "g2_eui_ratio": true,
+    "g3_abs_delivered": true,
+    "g3_abs_heating": true,
+    "g3_abs_cooling": true,
+    "g4_reported": true,
+    "g4_geometry": true,
+    "all_pass": true
+  }
+}

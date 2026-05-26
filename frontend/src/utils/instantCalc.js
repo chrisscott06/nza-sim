@@ -1669,7 +1669,18 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
         gains_kwh_per_m2:  perM2(total_solar_Wh),
       },
     },
-    metadata: { gia_m2: Math.round(gia) },
+    // Brief 58 A3 (2026-05-26): GIA two-role split. `gia_m2` (back-compat
+    // alias for UI consumers) = `reported_gia_m2`; `geometry_gia_m2` is
+    // surfaced alongside for the A4 divergence flag. See State 2 metadata
+    // block for full rationale.
+    metadata: (() => {
+      const geometry_gia_m2 = Math.round(gia)
+      const reportedInput = Number(building?.reported_gia)
+      const reported_gia_m2 = Number.isFinite(reportedInput) && reportedInput > 0
+        ? Math.round(reportedInput)
+        : geometry_gia_m2
+      return { gia_m2: reported_gia_m2, geometry_gia_m2, reported_gia_m2 }
+    })(),
     // State 1 extras — surfaced inside heat_balance so the Heat Balance
     // component can render the "demand below bars" + free-running stats
     // + comfort band readout without a separate prop. Per state contract.
@@ -3585,7 +3596,25 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
             gains_kwh_per_m2:   Math.round(((state1Result.heat_balance.annual.totals.gains_kwh ?? 0) + (acc_people + acc_lighting + totalEquipmentWh) / 1000) / gia * 100) / 100,
           },
         },
-        metadata: { gia_m2: Math.round(gia) },
+        // Brief 58 A3 (2026-05-26): GIA two-role split.
+        //   geometry_gia_m2 — derived from length × width × num_floors;
+        //                     drives ALL physics (per-m² gain densities,
+        //                     surface-area maths, heat balance per-element
+        //                     kwh_per_m2 above). Untouched by this brief.
+        //   reported_gia_m2 — user-supplied (e.g., BRUKL net internal area);
+        //                     the EUI denominator only. Defaults to geometry
+        //                     when building.reported_gia is absent/0/non-finite,
+        //                     so reported==geometry ⇒ 128.20 unchanged.
+        //   gia_m2 — back-compat alias = reported_gia_m2. UI consumers that
+        //            display "X kWh/m²·yr" pick up the reported value.
+        metadata: (() => {
+          const geometry_gia_m2 = Math.round(gia)
+          const reportedInput = Number(building?.reported_gia)
+          const reported_gia_m2 = Number.isFinite(reportedInput) && reportedInput > 0
+            ? Math.round(reportedInput)
+            : geometry_gia_m2
+          return { gia_m2: reported_gia_m2, geometry_gia_m2, reported_gia_m2 }
+        })(),
         demand: {
           heating_demand_mwh: Math.round(acc_heating_demand_Wh / 1_000_000 * 10) / 10,
           cooling_demand_mwh: Math.round(acc_cooling_demand_Wh / 1_000_000 * 10) / 10,
@@ -4446,7 +4475,15 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
       total_fan_kwh + lighting_kwh + equipment_kwh
   const gas_total_kwh         = gas_heat_total + gas_cool_total + gas_dhw_total
   const delivered_total_kwh   = electricity_total_kwh + gas_total_kwh
+  // Brief 58 A3 (2026-05-26): `gia` here is the EUI denominator —
+  // = `reported_gia_m2` from State 2 (which defaults to geometry when
+  // the user hasn't supplied a reported_gia override). The denominator
+  // role of the post-A3 metadata is the only role State 3 cares about
+  // for the headline EUI + carbon division. Physics (per-element
+  // breakdowns, gain densities) lives inside State 2 against geometry.
   const gia                   = state2Result.heat_balance?.metadata?.gia_m2 ?? state2Result.metadata?.gia_m2 ?? 0
+  const geometry_gia_m2       = state2Result.heat_balance?.metadata?.geometry_gia_m2 ?? gia
+  const reported_gia_m2       = state2Result.heat_balance?.metadata?.reported_gia_m2 ?? gia
   const eui_kwh_per_m2        = gia > 0 ? delivered_total_kwh / gia : 0
 
   // ── Carbon ────────────────────────────────────────────────────────────────
@@ -4471,7 +4508,9 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
     ...state2Result,
     state: 3,
     mode: 'full',
-    metadata: { gia_m2: gia },   // surfaced at top level for v2.5 contract symmetry with State 1
+    // Brief 58 A3 (2026-05-26): top-level metadata surfaces both roles.
+    // gia_m2 = reported_gia_m2 (back-compat for UI consumers).
+    metadata: { gia_m2: gia, geometry_gia_m2, reported_gia_m2 },
     energy_use: {
       electricity: {
         heating:   { primary: r_kwh(elec_heat_prim), secondary: r_kwh(elec_heat_sec), total: r_kwh(elec_heat_total) },
@@ -5599,7 +5638,16 @@ function _buildHeatBalance({
         net_kwh_per_m2:    perM(totalGains - totalLosses),
       },
     },
-    metadata: { gia_m2: Math.round(gia) },
+    // Brief 58 A3 (2026-05-26): GIA two-role split. Legacy 'full' path
+    // mirrors State 1/2/3 — see State 2 metadata block for rationale.
+    metadata: (() => {
+      const geometry_gia_m2 = Math.round(gia)
+      const reportedInput = Number(building?.reported_gia)
+      const reported_gia_m2 = Number.isFinite(reportedInput) && reportedInput > 0
+        ? Math.round(reportedInput)
+        : geometry_gia_m2
+      return { gia_m2: reported_gia_m2, geometry_gia_m2, reported_gia_m2 }
+    })(),
   }
 }
 
