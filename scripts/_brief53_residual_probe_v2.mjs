@@ -119,7 +119,7 @@ function buildLossesMap(data, mode, modules) {
 }
 
 const PROJECT_ID = process.argv[2] || '14b4a5b1-8c73-4acb-8b65-1d22f05ec969'
-const API = 'http://127.0.0.1:8002'
+const API = process.env.NZA_API || 'http://127.0.0.1:8003'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '..')
 

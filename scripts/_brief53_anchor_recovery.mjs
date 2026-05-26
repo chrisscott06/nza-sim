@@ -20,7 +20,7 @@ import { calculateInstant } from '../frontend/src/utils/instantCalc.js'
 import { computeHourlySolarByFacade } from '../frontend/src/utils/solarCalc.js'
 import { SYSTEM_TEMPLATES_LIBRARY } from '../frontend/src/data/systemTemplatesLibrary.js'
 
-const API = 'http://127.0.0.1:8002'
+const API = process.env.NZA_API || 'http://127.0.0.1:8003'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '..')
 const PROJECT_ID = '14b4a5b1-8c73-4acb-8b65-1d22f05ec969'

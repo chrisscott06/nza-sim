@@ -29,8 +29,17 @@ from nza_engine.library.systems import list_systems
 from nza_engine.library.benchmarks import _BENCHMARKS
 
 # ── Database path ─────────────────────────────────────────────────────────────
-
-DATABASE_PATH = DATA_DIR / "nza_sim.db"
+#
+# Filename is overridable via the NZA_DB_FILE env var (just the basename;
+# the file always lives under DATA_DIR). Brief 53 sidecar (2026-05-26):
+# enables an isolated verification environment — a second backend instance
+# pointed at a copy of the DB so verification harness work doesn't share
+# project state with the user's live browser session. Set NZA_DB_FILE=
+# nza_sim_cc.db on the verification backend (port 8003); the user's
+# original backend (port 8002) keeps using the default nza_sim.db.
+import os
+_DB_FILENAME = os.environ.get("NZA_DB_FILE", "nza_sim.db").strip() or "nza_sim.db"
+DATABASE_PATH = DATA_DIR / _DB_FILENAME
 _SCHEMA_PATH  = Path(__file__).parent / "schema.sql"
 
 # ── Default project config ────────────────────────────────────────────────────
