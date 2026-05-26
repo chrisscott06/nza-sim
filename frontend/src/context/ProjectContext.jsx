@@ -1215,6 +1215,18 @@ export function ProjectProvider({ children }) {
     }
   }
 
+  // Brief 53 sidecar (2026-05-26): Clone a project — POSTs to the new
+  // /api/projects/{id}/clone backend endpoint, then refreshes the project
+  // list. Does NOT auto-load the clone (the user clicked Clone, not Load —
+  // they may want to keep working on the original). Returns the new project
+  // row so the caller can navigate or load explicitly if it wants.
+  async function cloneProject(id) {
+    const cloned = await _apiFetch(`/api/projects/${id}/clone`, { method: 'POST' })
+    const list = await _apiFetch('/api/projects')
+    setProjects(list)
+    return cloned
+  }
+
   async function updateProjectName(name) {
     if (!currentProjectId) return
     await _apiFetch(`/api/projects/${currentProjectId}`, {
@@ -1257,6 +1269,7 @@ export function ProjectProvider({ children }) {
       createProject,
       loadProject,
       deleteProject,
+      cloneProject,
     }}>
       {children}
     </ProjectContext.Provider>

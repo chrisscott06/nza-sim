@@ -2,13 +2,18 @@
  * HomePage.jsx — project landing page
  *
  * Shows all projects as cards. Click a card to load the project and
- * navigate to /building. "New Project" card creates a new project.
+ * navigate to /information. "New Project" card creates a new project.
+ *
+ * Brief 53 sidecar (2026-05-26): hover-revealed Clone + Delete actions on
+ * each card. Clone is one-click; Delete uses ConfirmDialog (danger tone)
+ * so the user can't fat-finger a destructive op.
  */
 
-import { useContext, useCallback } from 'react'
+import { useContext, useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Building2, Plus, Clock, Zap, BarChart3 } from 'lucide-react'
+import { Building2, Plus, Clock, Zap, BarChart3, Copy, Trash2 } from 'lucide-react'
 import { ProjectContext } from '../context/ProjectContext.jsx'
+import { confirm } from '../components/shared/ConfirmDialog.jsx'
 
 function formatDate(ts) {
   if (!ts) return '—'
@@ -29,20 +34,66 @@ function dimSummary(p) {
   return { L, W, fl, gia }
 }
 
-function ProjectCard({ project, isCurrent, onLoad }) {
+function ProjectCard({ project, isCurrent, onLoad, onClone, onDelete, busy }) {
   const { L, W, fl, gia } = dimSummary(project)
   const eui = project.latest_eui != null ? Math.round(project.latest_eui) : null
 
+  // Stop-propagation wrappers so hovered action buttons don't trigger card click.
+  const handleClone = (e) => { e.stopPropagation(); onClone(project) }
+  const handleDelete = (e) => { e.stopPropagation(); onDelete(project) }
+
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onLoad(project.id)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onLoad(project.id) } }}
       className={`
-        w-full text-left p-4 rounded-xl border transition-all group
+        relative w-full text-left p-4 rounded-xl border transition-all group cursor-pointer
         hover:shadow-md hover:border-magenta/40
         ${isCurrent ? 'border-magenta/50 bg-white shadow-sm' : 'border-light-grey bg-white'}
+        ${busy ? 'opacity-60 pointer-events-none' : ''}
       `}
     >
-      <div className="flex items-start justify-between gap-2 mb-3">
+      {/* Hover-revealed action row — Brief 53 sidecar (2026-05-26). Top-
+          right so it doesn't collide with the EUI chip on the same row.
+          opacity-0 → opacity-100 on group-hover/focus-within. */}
+      <div
+        className="absolute top-2.5 right-2.5 flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+        // Stop the parent's click handler from firing when interacting with the buttons.
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          aria-label={`Clone ${project.name}`}
+          title="Clone project"
+          onClick={handleClone}
+          className="
+            inline-flex items-center justify-center w-7 h-7 rounded-md
+            bg-white/90 border border-light-grey text-mid-grey
+            hover:text-navy hover:border-navy/30 hover:bg-white
+            transition-colors
+          "
+        >
+          <Copy size={13} strokeWidth={2} />
+        </button>
+        <button
+          type="button"
+          aria-label={`Delete ${project.name}`}
+          title="Delete project"
+          onClick={handleDelete}
+          className="
+            inline-flex items-center justify-center w-7 h-7 rounded-md
+            bg-white/90 border border-light-grey text-mid-grey
+            hover:text-red-600 hover:border-red-300 hover:bg-red-50
+            transition-colors
+          "
+        >
+          <Trash2 size={13} strokeWidth={2} />
+        </button>
+      </div>
+
+      <div className="flex items-start justify-between gap-2 mb-3 pr-16">
         <div className="flex items-center gap-2 min-w-0">
           <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
             isCurrent ? 'bg-magenta/10' : 'bg-off-white'
@@ -87,7 +138,7 @@ function ProjectCard({ project, isCurrent, onLoad }) {
           </div>
         )}
       </div>
-    </button>
+    </div>
   )
 }
 
@@ -112,8 +163,12 @@ function NewProjectCard({ onCreate }) {
 }
 
 export default function HomePage() {
-  const { projects, currentProjectId, loadProject, createProject, isLoading } = useContext(ProjectContext)
+  const { projects, currentProjectId, loadProject, createProject, cloneProject, deleteProject, isLoading } = useContext(ProjectContext)
   const navigate = useNavigate()
+
+  // Per-card busy flag so a slow clone/delete doesn't accept a second click
+  // on the same card. Keyed by project id.
+  const [busyId, setBusyId] = useState(null)
 
   const handleLoad = useCallback(async (id) => {
     if (id !== currentProjectId) await loadProject(id)
@@ -124,6 +179,62 @@ export default function HomePage() {
     await createProject()
     navigate('/building')
   }, [createProject, navigate])
+
+  const handleClone = useCallback(async (project) => {
+    setBusyId(project.id)
+    try {
+      await cloneProject(project.id)
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[Home] clone failed', err)
+      await confirm({
+        title: 'Clone failed',
+        message: err?.message ?? 'Could not clone project. Check the dev console for details.',
+        confirmText: 'OK',
+        cancelText: '',
+        tone: 'warning',
+      })
+    } finally {
+      setBusyId(null)
+    }
+  }, [cloneProject])
+
+  const handleDelete = useCallback(async (project) => {
+    // Two-step confirm. Step 1: do you really want to delete this? Step 2:
+    // re-confirm by re-asserting against a "type the name to confirm" style?
+    // Brief 53 sidecar approach: ONE strong confirm dialog with the project
+    // name explicit, danger tone, and the destructive button labelled
+    // "Delete forever". That matches the existing ConfirmDialog API + the
+    // user's "need a double-confirm" requirement — the dialog itself is the
+    // second step (the first being clicking the trash icon).
+    const ok = await confirm({
+      title: `Delete "${project.name}"?`,
+      message:
+        `This permanently removes the project and all its simulation runs. ` +
+        `Consumption data attached to this project is also deleted. This action ` +
+        `cannot be undone.`,
+      confirmText: 'Delete forever',
+      cancelText: 'Cancel',
+      tone: 'danger',
+    })
+    if (!ok) return
+    setBusyId(project.id)
+    try {
+      await deleteProject(project.id)
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[Home] delete failed', err)
+      await confirm({
+        title: 'Delete failed',
+        message: err?.message ?? 'Could not delete project. Check the dev console for details.',
+        confirmText: 'OK',
+        cancelText: '',
+        tone: 'warning',
+      })
+    } finally {
+      setBusyId(null)
+    }
+  }, [deleteProject])
 
   if (isLoading) {
     return (
@@ -152,7 +263,15 @@ export default function HomePage() {
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {recent.map(p => (
-                <ProjectCard key={p.id} project={p} isCurrent={p.id === currentProjectId} onLoad={handleLoad} />
+                <ProjectCard
+                  key={p.id}
+                  project={p}
+                  isCurrent={p.id === currentProjectId}
+                  onLoad={handleLoad}
+                  onClone={handleClone}
+                  onDelete={handleDelete}
+                  busy={busyId === p.id}
+                />
               ))}
               {projects.length < 6 && <NewProjectCard onCreate={handleCreate} />}
             </div>
@@ -164,7 +283,15 @@ export default function HomePage() {
             <p className="text-xxs uppercase tracking-wider text-mid-grey mb-3">All Projects</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {older.map(p => (
-                <ProjectCard key={p.id} project={p} isCurrent={p.id === currentProjectId} onLoad={handleLoad} />
+                <ProjectCard
+                  key={p.id}
+                  project={p}
+                  isCurrent={p.id === currentProjectId}
+                  onLoad={handleLoad}
+                  onClone={handleClone}
+                  onDelete={handleDelete}
+                  busy={busyId === p.id}
+                />
               ))}
               <NewProjectCard onCreate={handleCreate} />
             </div>

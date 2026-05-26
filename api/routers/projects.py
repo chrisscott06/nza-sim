@@ -331,6 +331,66 @@ async def delete_project(project_id: str):
         await db.commit()
 
 
+@router.post("/{project_id}/clone", status_code=201)
+async def clone_project(project_id: str):
+    """
+    Clone a project — duplicate its building_config / systems_config /
+    construction_choices / comfort_band into a NEW project with a fresh
+    UUID and " (copy)" suffix on the name. Does NOT copy simulation_runs
+    or consumption_data — only the design state. Use case: branching
+    Bridgewater into "Bridgewater (calibration test)" without affecting
+    the baseline project.
+
+    Brief 53 sidecar (2026-05-26): added alongside delete to give the user
+    a non-destructive way to fork projects from the Home screen.
+    """
+    async with get_db() as db:
+        cursor = await db.execute(
+            "SELECT * FROM projects WHERE id = ?", (project_id,)
+        )
+        src = await cursor.fetchone()
+        if not src:
+            raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
+
+        new_id = str(uuid.uuid4())
+        new_name = f"{src['name']} (copy)"
+
+        # Copy the JSON config columns verbatim. Each is already a JSON
+        # TEXT column; the building_config name embedded inside the JSON
+        # is updated so the in-app name matches the new project row.
+        building_config = json.loads(src["building_config"])
+        building_config["name"] = new_name
+
+        await db.execute(
+            """
+            INSERT INTO projects
+                (id, name, description, building_config, systems_config,
+                 construction_choices, schedule_assignments, weather_file,
+                 metadata, comfort_band_lower_c, comfort_band_upper_c)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                new_id,
+                new_name,
+                src["description"],
+                json.dumps(building_config),
+                src["systems_config"],
+                src["construction_choices"],
+                src["schedule_assignments"],
+                src["weather_file"],
+                src["metadata"],
+                src["comfort_band_lower_c"],
+                src["comfort_band_upper_c"],
+            ),
+        )
+        await db.commit()
+
+        row_q = await db.execute("SELECT * FROM projects WHERE id = ?", (new_id,))
+        new_row = await row_q.fetchone()
+
+    return _row_to_project(new_row)
+
+
 @router.put("/{project_id}/building")
 async def update_building(project_id: str, body: dict):
     """
