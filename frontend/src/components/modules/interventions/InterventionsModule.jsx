@@ -68,7 +68,7 @@ function newId(prefix) {
 }
 
 export default function InterventionsModule() {
-  const { params, constructions, systems, updateParam } = useContext(ProjectContext)
+  const { params, constructions, systems, comfortBand, updateParam } = useContext(ProjectContext)
   const { weatherData } = useContext(WeatherContext)
   const hourlySolar = useHourlySolar(weatherData, params?.orientation ?? 0)
 
@@ -136,16 +136,43 @@ export default function InterventionsModule() {
   }, [params, interventions, editingId, livePatches])
 
   // Engine result with interventions block (when present).
+  //
+  // STOPGAP (2026-05-25): comfort_band is threaded into BOTH the building
+  // config AND the options bag, mirroring SystemsModule's call signature
+  // (SystemsModule.jsx L149–157). Pre-stopgap this module passed raw
+  // `paramsForEngine` + empty options; Bridgewater's building_config has
+  // no `comfort_band` key (the 21/24 value lives only on the DB columns
+  // exposed via ProjectContext.comfortBand), so the engine fell back to
+  // its hard-coded default {20, 26} → /interventions ran State 2 at 20°C
+  // heating setpoint vs /systems' 21°C → 0.5 kWh/m²·yr baseline EUI drift.
+  //
+  // Verified: scripts/_baseline_drift_check.mjs — pre-stopgap drift
+  // −0.50, post-stopgap 0.00 exactly (no residual second-channel drift).
+  //
+  // This is a stopgap because the comfort_band lives in three places
+  // (DB cols, ProjectContext React state, optional building_config JSON
+  // field) and every call site has to remember to thread it twice. The
+  // canonical fix is single-source comfort_band resolution in the engine
+  // — to land in the upcoming metadata-input-page brief (single source of
+  // truth: num_rooms, comfort_band, peak_people_per_room resolved once,
+  // threaded by no call site). Until then this stopgap keeps /systems
+  // and /interventions baselines numerically identical. Do NOT add
+  // _skipInterventions:true here — Interventions needs the stack runner.
   const engineResult = useMemo(() => {
     if (!paramsForEngine) return null
+    const cb = comfortBand ?? paramsForEngine?.comfort_band ?? { lower_c: 20, upper_c: 26 }
     try {
-      return calculateInstant(paramsForEngine, constructions, systems, libraryData, weatherData, hourlySolar, null, {})
+      return calculateInstant(
+        { ...paramsForEngine, comfort_band: cb },
+        constructions, systems, libraryData, weatherData, hourlySolar, null,
+        { mode: 'full', comfortBand: cb, engine: 'v2.5' },
+      )
     } catch (err) {
       console.warn('[InterventionsModule] calculateInstant threw:', err)
       return null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paramsForEngine, constructions, systems, libraryData, weatherData, hourlySolar])
+  }, [paramsForEngine, constructions, systems, libraryData, weatherData, hourlySolar, comfortBand])
 
   const stackResult = engineResult?.consumption?.interventions ?? engineResult?.interventions ?? null
 
