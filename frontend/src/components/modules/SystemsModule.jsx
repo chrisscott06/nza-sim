@@ -95,7 +95,7 @@ const CENTRE_TABS = [
   // important as the window… this is why I want to see this before we
   // start with the systems." Sankey (energy-flow) stays as the next tab.
   { id: 'heatbalance', label: 'Heat balance' },
-  { id: 'sankey',     label: 'Sankey' },
+  { id: 'sankey',     label: 'Energy flows' },
   { id: 'profiles',   label: 'Profiles' },
   { id: 'schedule',  label: 'Schedule' },
   { id: 'monthly',    label: 'Monthly' },
