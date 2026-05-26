@@ -1,0 +1,52 @@
+{
+  "meta": {
+    "weather_file": "GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw",
+    "flow_l_s": 500,
+    "hre": 0.75,
+    "comfort": {
+      "lower_c": 20,
+      "upper_c": 25
+    },
+    "timestamp": "2026-05-26T20:27:22.279Z"
+  },
+  "runs": {
+    "A_no_mvhr": {
+      "cooling_demand_mwh": 13,
+      "recovery": 0
+    },
+    "B_bypass_off": {
+      "cooling_demand_mwh": 15.4,
+      "recovery": 30.546,
+      "bypass_hours": 0,
+      "suppressed": 0
+    },
+    "C_bypass_on": {
+      "cooling_demand_mwh": 13.5,
+      "recovery": 30.365,
+      "bypass_hours": 1670,
+      "suppressed": 2.66
+    }
+  },
+  "hand_calc": {
+    "using_B_T_air": {
+      "savings_mwh": 5.515705486563918,
+      "trigger_hours": 2412,
+      "total_dT_K": 12196.142590522766
+    },
+    "using_C_T_air": {
+      "savings_mwh": 4.8331203856387095,
+      "trigger_hours": 2160,
+      "total_dT_K": 10686.8333568573
+    }
+  },
+  "checks": {
+    "delta_cooling_mwh": 1.9000000000000004,
+    "suppressed_recovery_mwh": 2.66,
+    "engine_internally_consistent": false,
+    "engine_matches_handcalc": false,
+    "residual_penalty_mwh": 0.5,
+    "off_penalty_mwh": 2.4000000000000004,
+    "bypass_caught_pct": 79.16666666666667,
+    "engine_firing_rate_vs_naive_eligible_pct": 69.23714759535655
+  }
+}
