@@ -205,13 +205,30 @@ const LOSS_ORDERS = {
     'fabric_leakage',
     'permanent_vents',
   ],
+  // Brief 53 Part 4 (2026-05-26): added the Brief 28k+ canonical loss keys
+  // (fabric_leakage, permanent_vents, thermal_bridging) that State 2 emits
+  // since Brief 28-TB-Simple. Previously the FULL order carried only the
+  // pre-28k legacy aliases (infiltration, openings_louvre) which never
+  // resolve to engine values, so the three terms silently dropped from the
+  // Results /full Sankey + Rows + Stacked views — surfacing as the +10
+  // kWh/m²·yr heat-balance residual Chris flagged. State 1 (envelope-only)
+  // and State 2 (envelope-gains) order tables already listed the canonical
+  // keys; FULL had drifted. Placement: after `glazing` (envelope conduction
+  // group), before per-system ventilation (the ventilation key with
+  // dynamic per-system children). Legacy aliases retained as no-ops —
+  // engine emits nothing under those keys so they render nothing, but
+  // removing them risks breaking external readers of LOSS_ORDERS. See
+  // docs/audit/53_ventilation.md §1.0 for the residual branch-test verdict.
   [MODES.FULL]: [
     'external_wall',
     'roof',
     'ground_floor',
     'glazing',
-    'infiltration',
-    'openings_louvre',
+    'fabric_leakage',     // Brief 53 Part 4 — was missing, caused +10 residual
+    'permanent_vents',    // Brief 53 Part 4 — was missing
+    'thermal_bridging',   // Brief 53 Part 4 — was missing
+    'infiltration',       // legacy alias — engine no longer emits under this key
+    'openings_louvre',    // legacy alias — engine no longer emits under this key
     'openings_window',
     'ventilation',
     'cooling',
