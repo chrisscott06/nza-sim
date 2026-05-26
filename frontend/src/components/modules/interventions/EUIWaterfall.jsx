@@ -36,7 +36,14 @@
  * Rendered as SVG with a fixed column width and horizontal scroll when
  * the stack exceeds container width — keeps every column legible
  * regardless of intervention count.
+ *
+ * 2026-05-26: Honours the global UISettingsContext `unit` toggle. EUI
+ * values render in kWh/m²·yr (intensity) or MWh-equivalent (absolute,
+ * EUI × GIA) per the TopBar pill. Carbon is out of scope here.
  */
+
+import { useUISettings } from '../../../context/UISettingsContext.jsx'
+import { toDisplay, displayUnitLabel, KIND, getGia } from './visualiser/unitFmt.js'
 
 const COLORS = {
   total:    '#94A3B8',  // slate-400 — baseline + final
@@ -149,6 +156,8 @@ function buildYAxis(rawMax) {
 }
 
 export default function EUIWaterfall({ interventions = [], stackResult }) {
+  const { unit } = useUISettings()
+
   if (!stackResult || !Array.isArray(stackResult.interventions)) {
     return (
       <div className="rounded-xl border border-dashed border-light-grey bg-off-white/30 p-4 text-xxs text-mid-grey">
@@ -157,7 +166,20 @@ export default function EUIWaterfall({ interventions = [], stackResult }) {
     )
   }
 
-  const series = buildSeries(interventions, stackResult)
+  // GIA is project-wide; safe to read from baseline. Used by the unit
+  // helper to convert EUI ↔ absolute kWh when the toggle is in 'kwh' mode.
+  const gia = getGia(stackResult.baseline)
+
+  // Convert every series value in-place to the chosen display unit.
+  // Chart shape stays IDENTICAL because all values scale by the same
+  // factor (× gia or × 1) — only the numeric labels + axis title change.
+  const rawSeries = buildSeries(interventions, stackResult)
+  const convert = (v) => toDisplay(v, KIND.KWH_M2, unit, gia).value
+  const series = rawSeries.map(s => {
+    if (s.kind === 'total') return { ...s, value: convert(s.value) }
+    return { ...s, from: convert(s.from), to: convert(s.to), delta: convert(s.delta) }
+  })
+  const axisLabel = displayUnitLabel(KIND.KWH_M2, unit)
 
   // Scale: max of all values + a 10% headroom so the tallest bar has
   // room for its label above.
@@ -188,7 +210,7 @@ export default function EUIWaterfall({ interventions = [], stackResult }) {
     <div className="rounded-xl border border-light-grey bg-white p-4 space-y-2">
       <div className="flex items-baseline justify-between">
         <p className="text-caption font-semibold text-navy">EUI waterfall</p>
-        <p className="text-xxs text-mid-grey">marginal Δ per intervention · kWh/m²·yr</p>
+        <p className="text-xxs text-mid-grey">marginal Δ per intervention · {axisLabel}</p>
       </div>
 
       {/* Legend */}
@@ -300,7 +322,7 @@ export default function EUIWaterfall({ interventions = [], stackResult }) {
             textAnchor="middle" fontSize="10" fill={COLORS.axisText}
             transform={`rotate(-90, ${pad.left - 40}, ${pad.top + innerH / 2})`}
           >
-            kWh/m²·yr
+            {axisLabel}
           </text>
         </svg>
       </div>

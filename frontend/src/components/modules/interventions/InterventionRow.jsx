@@ -32,6 +32,8 @@
 import { useState } from 'react'
 import { GripVertical, Pencil, AlertTriangle, Copy, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
 import { summarizePatchListShort } from './patchCapture.js'
+import { useUISettings } from '../../../context/UISettingsContext.jsx'
+import { toDisplay, KIND } from './visualiser/unitFmt.js'
 
 const INTERVENTIONS_ACCENT = '#E84393'
 
@@ -59,7 +61,7 @@ function DeltaCell({ record, muted, forceEmpty }) {
   return <span className="text-xxs tabular-nums text-mid-grey" title={tooltip}>{text}</span>
 }
 
-function MetricsTable({ marginalEui, marginalCarbon, cumEui, cumCarbon, muted, forceEmpty }) {
+function MetricsTable({ marginalEui, marginalCarbon, cumEui, cumCarbon, muted, forceEmpty, euiUnitLabel = 'kWh/m²·yr' }) {
   return (
     <table className="w-full mt-2 text-xxs border-collapse">
       <thead>
@@ -75,7 +77,7 @@ function MetricsTable({ marginalEui, marginalCarbon, cumEui, cumCarbon, muted, f
           <td className="text-mid-grey font-medium py-1">ΔEUI</td>
           <td className="text-right py-1"><DeltaCell record={marginalEui} muted={muted} forceEmpty={forceEmpty} /></td>
           <td className="text-right py-1"><DeltaCell record={cumEui}      muted={muted} forceEmpty={forceEmpty} /></td>
-          <td className="text-mid-grey/70 pl-2 py-1">kWh/m²·yr</td>
+          <td className="text-mid-grey/70 pl-2 py-1">{euiUnitLabel}</td>
         </tr>
         <tr className="border-t border-light-grey/60">
           <td className="text-mid-grey font-medium py-1">ΔCO₂</td>
@@ -94,6 +96,7 @@ export default function InterventionRow({
   cumulativeDeltaFull,      // Full computeDelta object (Brief 45 Part 2)
   overridden,
   baselineConfig,
+  gia_m2 = 0,               // 2026-05-26: for global unit-toggle conversion
   onToggleEnabled,
   onEdit,
   onDuplicate,              // Brief 45 Part 2
@@ -104,6 +107,7 @@ export default function InterventionRow({
   onDragEnd,
   draggingId,
 }) {
+  const { unit } = useUISettings()
   // Brief 47 Part 5c (2026-05-24): collapse/expand state per row.
   // Defaults to COLLAPSED so the stack stays compact for drag-reorder —
   // user can expand individual rows to see the metrics table + patch
@@ -124,10 +128,25 @@ export default function InterventionRow({
   const patchSummary = patchCount > 0 ? summarizePatchListShort(intervention.patches, baselineConfig, { maxItems: 3 }) : null
   const isEmpty = patchCount === 0
 
-  const marginalEui    = marginalDeltaFull?.eui_kwh_per_m2 ?? null
+  const marginalEuiRaw = marginalDeltaFull?.eui_kwh_per_m2 ?? null
   const marginalCarbon = marginalDeltaFull?.carbon_kgco2_per_m2 ?? null
-  const cumEui         = cumulativeDeltaFull?.eui_kwh_per_m2 ?? null
+  const cumEuiRaw      = cumulativeDeltaFull?.eui_kwh_per_m2 ?? null
   const cumCarbon      = cumulativeDeltaFull?.carbon_kgco2_per_m2 ?? null
+
+  // 2026-05-26: convert ΔEUI through the global unit toggle. The
+  // deltaRecord shape is { from, to, delta, delta_pct } — we clone with
+  // the converted `delta` so DeltaCell's formatting still works unchanged.
+  // delta_pct is unit-independent (a ratio); keep as-is.
+  const convertDeltaRecord = (rec) => {
+    if (!rec) return null
+    const conv = toDisplay(rec.delta, KIND.KWH_M2, unit, gia_m2)
+    return { ...rec, delta: conv.value }
+  }
+  const marginalEui    = convertDeltaRecord(marginalEuiRaw)
+  const cumEui         = convertDeltaRecord(cumEuiRaw)
+  // Compute the unit label once — same conversion path gives the same
+  // label, so reading from baseline is enough.
+  const euiLabel = toDisplay(0, KIND.KWH_M2, unit, gia_m2).label || 'kWh/m²·yr'
 
   return (
     <div
@@ -297,6 +316,7 @@ export default function InterventionRow({
             cumCarbon={cumCarbon}
             muted={!isEnabled}
             forceEmpty={isEmpty}
+            euiUnitLabel={euiLabel}
           />
         </>
       )}

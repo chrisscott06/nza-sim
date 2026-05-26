@@ -15,7 +15,14 @@
  * a delta pill with the percentage saving (green) or increase (red).
  *
  * Presentation-only — no new computation. Brief 47 Principle 4.
+ *
+ * 2026-05-26: EUI bar honours the global UISettingsContext `unit` toggle
+ * (kWh/m²·yr ↔ MWh-equivalent absolute). Carbon stays kgCO₂/m²·yr — no
+ * meaningful absolute-energy interpretation.
  */
+
+import { useUISettings } from '../../../../context/UISettingsContext.jsx'
+import { toDisplay, KIND, getGia } from './unitFmt.js'
 
 const INTERVENTIONS_ACCENT = '#E84393'
 
@@ -133,6 +140,7 @@ function MetricBars({ label, unit, baseline, current }) {
 }
 
 export default function BeforeAfterBars({ stackResult }) {
+  const { unit } = useUISettings()
   const baselineResult = stackResult?.baseline ?? null
   const cumulativeResult = findCumulativeResult(stackResult)
 
@@ -140,6 +148,14 @@ export default function BeforeAfterBars({ stackResult }) {
   const cumulativeEui  = pullEui(cumulativeResult)
   const baselineCarbon = pullCarbon(baselineResult)
   const cumulativeCarbon = pullCarbon(cumulativeResult)
+
+  // Convert EUI through the unit helper. Both baseline + current share
+  // the same GIA so their relative magnitudes (which drive the bar
+  // widths) are unchanged — only the numeric labels + unit text move.
+  const gia = getGia(baselineResult)
+  const baselineEuiConv   = toDisplay(baselineEui,   KIND.KWH_M2, unit, gia)
+  const cumulativeEuiConv = toDisplay(cumulativeEui, KIND.KWH_M2, unit, gia)
+  const euiUnit = baselineEuiConv.label || cumulativeEuiConv.label || 'kWh/m²·yr'
 
   return (
     <div className="space-y-4 max-w-2xl mx-auto">
@@ -151,9 +167,9 @@ export default function BeforeAfterBars({ stackResult }) {
       </div>
       <MetricBars
         label="Energy Use Intensity"
-        unit="kWh/m²·yr"
-        baseline={baselineEui}
-        current={cumulativeEui}
+        unit={euiUnit}
+        baseline={baselineEuiConv.value}
+        current={cumulativeEuiConv.value}
       />
       <MetricBars
         label="Operational Carbon"

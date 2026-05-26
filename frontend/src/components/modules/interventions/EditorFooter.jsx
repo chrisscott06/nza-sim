@@ -21,6 +21,8 @@
  */
 
 import { useInterventionCapture } from '../../../context/InterventionCaptureContext.jsx'
+import { useUISettings } from '../../../context/UISettingsContext.jsx'
+import { toDisplay, KIND } from './visualiser/unitFmt.js'
 
 const INTERVENTIONS_ACCENT = '#E84393'
 
@@ -61,18 +63,27 @@ export default function EditorFooter({
   baselineCarbon,
   previewEui,
   previewCarbon,
+  gia_m2 = 0,        // 2026-05-26: needed for unit-toggle conversion (kWh/m²·yr ↔ MWh)
   onCancel,
   onSave,
   canSave = true,
   saveDisabledReason,
 }) {
   const { currentPatches } = useInterventionCapture()
+  const { unit } = useUISettings()
   const patchCount = Array.isArray(currentPatches) ? currentPatches.length : 0
 
   const euiDelta    = (Number.isFinite(previewEui) && Number.isFinite(baselineEui)) ? previewEui - baselineEui : null
   const carbonDelta = (Number.isFinite(previewCarbon) && Number.isFinite(baselineCarbon)) ? previewCarbon - baselineCarbon : null
 
-  const euiFmt    = fmtDelta(euiDelta, 'kWh/m²')
+  // Convert baseline + preview + delta to the chosen display unit. Carbon
+  // stays kgCO₂/m²·yr regardless of toggle.
+  const baselineConv = toDisplay(baselineEui, KIND.KWH_M2, unit, gia_m2)
+  const previewConv  = toDisplay(previewEui,  KIND.KWH_M2, unit, gia_m2)
+  const deltaConv    = toDisplay(euiDelta,    KIND.KWH_M2, unit, gia_m2)
+  const euiUnitLabel = baselineConv.label || previewConv.label || 'kWh/m²·yr'
+
+  const euiFmt    = fmtDelta(deltaConv.value, euiUnitLabel)
   const carbonFmt = fmtDelta(carbonDelta, 'kgCO₂/m²')
 
   return (
@@ -97,10 +108,10 @@ export default function EditorFooter({
       {/* Metrics block */}
       <div className="flex items-center gap-3 flex-wrap">
         <span className="text-xxs text-mid-grey">
-          EUI <span className="text-mid-grey/80 tabular-nums">{fmtEui(baselineEui)}</span>
+          EUI <span className="text-mid-grey/80 tabular-nums">{fmtEui(baselineConv.value)}</span>
           <span className="mx-1 text-mid-grey/60">→</span>
-          <span className="text-navy font-medium tabular-nums">{fmtEui(previewEui)}</span>
-          <span className="ml-1 text-mid-grey/70">kWh/m²</span>
+          <span className="text-navy font-medium tabular-nums">{fmtEui(previewConv.value)}</span>
+          <span className="ml-1 text-mid-grey/70">{euiUnitLabel}</span>
         </span>
         <DeltaPill
           delta={euiFmt.text}

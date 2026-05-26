@@ -27,6 +27,8 @@ import { useMemo, useState } from 'react'
 // between bars. Reads directly from `consumption.interventions[]` —
 // no new computation.
 import EUIWaterfall from './EUIWaterfall.jsx'
+import { useUISettings } from '../../../context/UISettingsContext.jsx'
+import { toDisplay, KIND, getGia } from './visualiser/unitFmt.js'
 
 const INTERVENTIONS_ACCENT = '#E84393'
 
@@ -178,8 +180,35 @@ export default function ComparisonView({
     return null
   }, [drilldown, rows, baseline])
 
-  const baselineMetrics = pullMetrics(baseline)
-  const targetMetrics   = pullMetrics(target)
+  const baselineMetricsRaw = pullMetrics(baseline)
+  const targetMetricsRaw   = pullMetrics(target)
+
+  // 2026-05-26: Honour the global unit toggle. EUI converts between
+  // kWh/m²·yr (intensity) and MWh (absolute, EUI × GIA); demand/
+  // delivered/fuel (native MWh) converts to kWh/m²·yr in intensity mode.
+  // Carbon stays kgCO₂/m²·yr.
+  const { unit } = useUISettings()
+  const gia_m2 = getGia(baseline)
+  const conv = (value, kind) => toDisplay(value, kind, unit, gia_m2).value
+  const labelEui    = toDisplay(0, KIND.KWH_M2, unit, gia_m2).label || 'kWh/m²·yr'
+  const labelAbs    = toDisplay(0, KIND.MWH,    unit, gia_m2).label || 'MWh'
+  const labelCarbon = 'kgCO₂/m²·yr'
+  const convertMetrics = (m) => m ? ({
+    eui:            conv(m.eui,            KIND.KWH_M2),
+    carbon:         m.carbon,   // untoggleable
+    heat:           conv(m.heat,           KIND.MWH),
+    cool:           conv(m.cool,           KIND.MWH),
+    elec:           conv(m.elec,           KIND.MWH),
+    gas:            conv(m.gas,            KIND.MWH),
+    heatDelivered:  conv(m.heatDelivered,  KIND.MWH),
+    coolDelivered:  conv(m.coolDelivered,  KIND.MWH),
+    dhwDelivered:   conv(m.dhwDelivered,   KIND.MWH),
+    ventDelivered:  conv(m.ventDelivered,  KIND.MWH),
+    lightDelivered: conv(m.lightDelivered, KIND.MWH),
+    spDelivered:    conv(m.spDelivered,    KIND.MWH),
+  }) : null
+  const baselineMetrics = convertMetrics(baselineMetricsRaw)
+  const targetMetrics   = convertMetrics(targetMetricsRaw)
 
   const enabledCount = interventions.filter(i => i?.enabled !== false).length
 
@@ -239,12 +268,12 @@ export default function ComparisonView({
           <span className="text-xxs text-mid-grey/80 font-medium uppercase tracking-wider text-right">{drilldown === 'final' ? 'Final' : `After ${parseInt(drilldown, 10) + 1}`}</span>
           <span className="text-xxs text-mid-grey/80 font-medium uppercase tracking-wider text-right">Δ</span>
         </div>
-        <KPIRow label="EUI" before={baselineMetrics?.eui} after={targetMetrics?.eui} unit=" kWh/m²" />
-        <KPIRow label="Heating demand" before={baselineMetrics?.heat} after={targetMetrics?.heat} unit=" MWh" />
-        <KPIRow label="Cooling demand" before={baselineMetrics?.cool} after={targetMetrics?.cool} unit=" MWh" />
-        <KPIRow label="Electricity"    before={baselineMetrics?.elec} after={targetMetrics?.elec} unit=" MWh" />
-        <KPIRow label="Gas"            before={baselineMetrics?.gas}  after={targetMetrics?.gas}  unit=" MWh" />
-        <KPIRow label="Carbon"         before={baselineMetrics?.carbon} after={targetMetrics?.carbon} unit=" kgCO₂/m²" />
+        <KPIRow label="EUI" before={baselineMetrics?.eui} after={targetMetrics?.eui} unit={` ${labelEui}`} />
+        <KPIRow label="Heating demand" before={baselineMetrics?.heat} after={targetMetrics?.heat} unit={` ${labelAbs}`} />
+        <KPIRow label="Cooling demand" before={baselineMetrics?.cool} after={targetMetrics?.cool} unit={` ${labelAbs}`} />
+        <KPIRow label="Electricity"    before={baselineMetrics?.elec} after={targetMetrics?.elec} unit={` ${labelAbs}`} />
+        <KPIRow label="Gas"            before={baselineMetrics?.gas}  after={targetMetrics?.gas}  unit={` ${labelAbs}`} />
+        <KPIRow label="Carbon"         before={baselineMetrics?.carbon} after={targetMetrics?.carbon} unit={` ${labelCarbon}`} />
       </div>
 
       {/* Paired heat-balance bars */}
@@ -256,10 +285,10 @@ export default function ComparisonView({
             <span className="inline-flex items-center gap-1"><span className="block w-3 h-1 rounded" style={{ backgroundColor: INTERVENTIONS_ACCENT }} /> {drilldown === 'final' ? 'cumulative' : `after intervention ${parseInt(drilldown, 10) + 1}`}</span>
           </div>
         </div>
-        <PairedBar label="Heating demand" baselineValue={baselineMetrics?.heat} targetValue={targetMetrics?.heat} unit="MWh" />
-        <PairedBar label="Cooling demand" baselineValue={baselineMetrics?.cool} targetValue={targetMetrics?.cool} unit="MWh" />
-        <PairedBar label="Electricity" baselineValue={baselineMetrics?.elec} targetValue={targetMetrics?.elec} unit="MWh" />
-        <PairedBar label="Gas" baselineValue={baselineMetrics?.gas} targetValue={targetMetrics?.gas} unit="MWh" />
+        <PairedBar label="Heating demand" baselineValue={baselineMetrics?.heat} targetValue={targetMetrics?.heat} unit={labelAbs} />
+        <PairedBar label="Cooling demand" baselineValue={baselineMetrics?.cool} targetValue={targetMetrics?.cool} unit={labelAbs} />
+        <PairedBar label="Electricity" baselineValue={baselineMetrics?.elec} targetValue={targetMetrics?.elec} unit={labelAbs} />
+        <PairedBar label="Gas" baselineValue={baselineMetrics?.gas} targetValue={targetMetrics?.gas} unit={labelAbs} />
       </div>
 
       {/* Delta table */}
@@ -277,18 +306,18 @@ export default function ComparisonView({
             </tr>
           </thead>
           <tbody>
-            <DeltaTableRow label="EUI"                     before={baselineMetrics?.eui}   after={targetMetrics?.eui}   unit=" kWh/m²" />
-            <DeltaTableRow label="Carbon (today)"          before={baselineMetrics?.carbon} after={targetMetrics?.carbon} unit=" kgCO₂/m²" />
-            <DeltaTableRow label="Heating — demand"        before={baselineMetrics?.heat}  after={targetMetrics?.heat}  unit=" MWh" />
-            <DeltaTableRow label="Cooling — demand"        before={baselineMetrics?.cool}  after={targetMetrics?.cool}  unit=" MWh" />
-            <DeltaTableRow label="Heating — delivered"     before={baselineMetrics?.heatDelivered} after={targetMetrics?.heatDelivered} unit=" MWh" />
-            <DeltaTableRow label="Cooling — delivered"     before={baselineMetrics?.coolDelivered} after={targetMetrics?.coolDelivered} unit=" MWh" />
-            <DeltaTableRow label="DHW — delivered"         before={baselineMetrics?.dhwDelivered}  after={targetMetrics?.dhwDelivered}  unit=" MWh" />
-            <DeltaTableRow label="Ventilation — delivered" before={baselineMetrics?.ventDelivered} after={targetMetrics?.ventDelivered} unit=" MWh" />
-            <DeltaTableRow label="Lighting — delivered"    before={baselineMetrics?.lightDelivered} after={targetMetrics?.lightDelivered} unit=" MWh" />
-            <DeltaTableRow label="Small power — delivered" before={baselineMetrics?.spDelivered}    after={targetMetrics?.spDelivered}    unit=" MWh" />
-            <DeltaTableRow label="Electricity (total)"     before={baselineMetrics?.elec}  after={targetMetrics?.elec}  unit=" MWh" />
-            <DeltaTableRow label="Gas (total)"             before={baselineMetrics?.gas}   after={targetMetrics?.gas}   unit=" MWh" />
+            <DeltaTableRow label="EUI"                     before={baselineMetrics?.eui}   after={targetMetrics?.eui}   unit={` ${labelEui}`} />
+            <DeltaTableRow label="Carbon (today)"          before={baselineMetrics?.carbon} after={targetMetrics?.carbon} unit={` ${labelCarbon}`} />
+            <DeltaTableRow label="Heating — demand"        before={baselineMetrics?.heat}  after={targetMetrics?.heat}  unit={` ${labelAbs}`} />
+            <DeltaTableRow label="Cooling — demand"        before={baselineMetrics?.cool}  after={targetMetrics?.cool}  unit={` ${labelAbs}`} />
+            <DeltaTableRow label="Heating — delivered"     before={baselineMetrics?.heatDelivered} after={targetMetrics?.heatDelivered} unit={` ${labelAbs}`} />
+            <DeltaTableRow label="Cooling — delivered"     before={baselineMetrics?.coolDelivered} after={targetMetrics?.coolDelivered} unit={` ${labelAbs}`} />
+            <DeltaTableRow label="DHW — delivered"         before={baselineMetrics?.dhwDelivered}  after={targetMetrics?.dhwDelivered}  unit={` ${labelAbs}`} />
+            <DeltaTableRow label="Ventilation — delivered" before={baselineMetrics?.ventDelivered} after={targetMetrics?.ventDelivered} unit={` ${labelAbs}`} />
+            <DeltaTableRow label="Lighting — delivered"    before={baselineMetrics?.lightDelivered} after={targetMetrics?.lightDelivered} unit={` ${labelAbs}`} />
+            <DeltaTableRow label="Small power — delivered" before={baselineMetrics?.spDelivered}    after={targetMetrics?.spDelivered}    unit={` ${labelAbs}`} />
+            <DeltaTableRow label="Electricity (total)"     before={baselineMetrics?.elec}  after={targetMetrics?.elec}  unit={` ${labelAbs}`} />
+            <DeltaTableRow label="Gas (total)"             before={baselineMetrics?.gas}   after={targetMetrics?.gas}   unit={` ${labelAbs}`} />
           </tbody>
         </table>
       </div>

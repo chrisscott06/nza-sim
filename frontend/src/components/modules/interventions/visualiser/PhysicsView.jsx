@@ -21,6 +21,8 @@
  */
 
 import HeatBalance from '../../balance/HeatBalance.jsx'
+import { useUISettings } from '../../../../context/UISettingsContext.jsx'
+import { toDisplay, KIND, getGia } from './unitFmt.js'
 
 const INTERVENTIONS_ACCENT = '#E84393'
 
@@ -45,10 +47,17 @@ function pullEui(r) {
 }
 
 export default function PhysicsView({ baselineResult, cumulativeResult, orientationDeg = 0 }) {
+  const { unit } = useUISettings()
   const heatBalance = cumulativeResult?.heat_balance ?? null
   const baselineEui = pullEui(baselineResult)
   const cumulativeEui = pullEui(cumulativeResult)
   const delta = (cumulativeEui != null && baselineEui != null) ? (cumulativeEui - baselineEui) : null
+
+  // Convert the delta through the unit helper so the badge matches the
+  // global TopBar toggle. The wrapped <HeatBalance> below already honours
+  // the same toggle internally (Brief 28-IM Chris UX overhaul 2026-05-17).
+  const gia = getGia(baselineResult)
+  const deltaConv = delta != null ? toDisplay(delta, KIND.KWH_M2, unit, gia) : { value: null, label: 'kWh/m²·yr' }
 
   if (!heatBalance) {
     return (
@@ -63,16 +72,17 @@ export default function PhysicsView({ baselineResult, cumulativeResult, orientat
     )
   }
 
-  const deltaText = delta == null
+  const deltaValue = deltaConv.value
+  const deltaText = deltaValue == null
     ? '—'
-    : Math.abs(delta) < 0.05
-      ? '0.0 kWh/m²·yr vs baseline'
-      : `${delta < 0 ? '−' : '+'}${Math.abs(delta).toFixed(1)} kWh/m²·yr vs baseline`
-  const deltaTone = delta == null
+    : Math.abs(deltaValue) < 0.05
+      ? `0.0 ${deltaConv.label} vs baseline`
+      : `${deltaValue < 0 ? '−' : '+'}${Math.abs(deltaValue).toFixed(1)} ${deltaConv.label} vs baseline`
+  const deltaTone = deltaValue == null
     ? 'text-mid-grey'
-    : Math.abs(delta) < 0.05
+    : Math.abs(deltaValue) < 0.05
       ? 'text-mid-grey'
-      : delta < 0 ? 'text-green-700' : 'text-red-700'
+      : deltaValue < 0 ? 'text-green-700' : 'text-red-700'
 
   return (
     <div className="h-full flex flex-col">

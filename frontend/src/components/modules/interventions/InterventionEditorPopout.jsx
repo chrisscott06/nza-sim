@@ -206,9 +206,9 @@ export default function InterventionEditorPopout({
 
   // Compute the preview engine result. Single-intervention stack run
   // — same code path as the old editor's preview (Brief 41 Part 4).
-  const { baselineEui, baselineCarbon, previewEui, previewCarbon } = useMemo(() => {
+  const { baselineEui, baselineCarbon, previewEui, previewCarbon, baselineGia } = useMemo(() => {
     if (!baselineConfig || !intervention) {
-      return { baselineEui: null, baselineCarbon: null, previewEui: null, previewCarbon: null }
+      return { baselineEui: null, baselineCarbon: null, previewEui: null, previewCarbon: null, baselineGia: 0 }
     }
     try {
       const editIntervention = {
@@ -228,15 +228,22 @@ export default function InterventionEditorPopout({
       )
       const baseline = stack.baseline
       const after    = stack.interventions[0]?.result
+      // 2026-05-26: surface GIA so the EditorFooter ΔEUI pill can convert
+      // between intensity (kWh/m²·yr) and absolute (MWh) per the global
+      // unit toggle. Robust across result shapes.
+      const baselineGia = baseline?.metadata?.gia_m2
+        ?? baseline?.heat_balance?.metadata?.gia_m2
+        ?? 0
       return {
         baselineEui:    pullEui(baseline),
         baselineCarbon: pullCarbon(baseline),
         previewEui:     pullEui(after),
         previewCarbon:  pullCarbon(after),
+        baselineGia,
       }
     } catch (err) {
       console.warn('[InterventionEditorPopout] preview engine threw:', err)
-      return { baselineEui: null, baselineCarbon: null, previewEui: null, previewCarbon: null }
+      return { baselineEui: null, baselineCarbon: null, previewEui: null, previewCarbon: null, baselineGia: 0 }
     }
   }, [baselineConfig, intervention, localPatches, weatherData, hourlySolar, scheduleProfiles])
 
@@ -338,6 +345,7 @@ export default function InterventionEditorPopout({
             baselineCarbon={baselineCarbon}
             previewEui={previewEui}
             previewCarbon={previewCarbon}
+            baselineGia={baselineGia}
             handleCancel={handleCancel}
             handleSave={handleSave}
             canSave={canSave}
@@ -367,6 +375,7 @@ function EditorBody({
   localPatches,
   baselineConfig,
   baselineEui, baselineCarbon, previewEui, previewCarbon,
+  baselineGia,
   handleCancel, handleSave, canSave,
   patchConflicts,  // Brief 55 Part 5 hotfix (2026-05-26): threaded from outer
                    // InterventionEditorPopout so the ChangeList render below
@@ -573,6 +582,7 @@ function EditorBody({
           baselineCarbon={baselineCarbon}
           previewEui={previewEui}
           previewCarbon={previewCarbon}
+          gia_m2={baselineGia}
           onCancel={handleCancel}
           onSave={handleSave}
           canSave={canSave}

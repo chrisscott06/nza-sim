@@ -22,6 +22,8 @@
 import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import InterventionRow from './InterventionRow.jsx'
+import { useUISettings } from '../../../context/UISettingsContext.jsx'
+import { toDisplay, KIND, getGia } from './visualiser/unitFmt.js'
 
 const INTERVENTIONS_ACCENT = '#E84393'
 
@@ -132,12 +134,19 @@ function computeOverriddenSet(interventions) {
   return computeFieldConflicts(interventions).interventionHasConflict
 }
 
-function BaselineRow({ baselineSummary }) {
+function BaselineRow({ baselineSummary, gia_m2 = 0 }) {
   // Brief 47 Part 5a (2026-05-24): card layout matching InterventionRow,
   // sized + spaced so the stack of cards reads as a single visual
   // sequence. Baseline has no marginal/cumulative — show the absolute
   // EUI + Carbon figures in a small two-cell table so the user has the
   // anchor values to read intervention deltas against.
+  //
+  // 2026-05-26: EUI honours the global unit toggle. Carbon stays
+  // kgCO₂/m²·yr.
+  const { unit } = useUISettings()
+  const euiConv = toDisplay(baselineSummary?.eui, KIND.KWH_M2, unit, gia_m2)
+  const euiLabel = euiConv.label || 'kWh/m²·yr'
+
   return (
     <div className="rounded-lg border border-light-grey bg-off-white p-3">
       <div className="flex items-center gap-2">
@@ -150,9 +159,9 @@ function BaselineRow({ baselineSummary }) {
           <tr className="border-t border-light-grey/60">
             <td className="text-mid-grey font-medium py-1 w-16">EUI</td>
             <td className="text-right tabular-nums text-navy font-semibold py-1">
-              {baselineSummary?.eui != null ? baselineSummary.eui.toFixed(1) : '—'}
+              {euiConv.value != null ? euiConv.value.toFixed(1) : '—'}
             </td>
-            <td className="text-mid-grey/70 pl-2 py-1">kWh/m²·yr</td>
+            <td className="text-mid-grey/70 pl-2 py-1">{euiLabel}</td>
           </tr>
           <tr className="border-t border-light-grey/60">
             <td className="text-mid-grey font-medium py-1">Carbon</td>
@@ -242,10 +251,14 @@ export default function InterventionStackView({
     setHoverId(null)
   }
 
+  // 2026-05-26: GIA from the baseline result so child rows can honour
+  // the global unit toggle (kWh/m²·yr ↔ MWh) on their EUI numbers.
+  const gia_m2 = getGia(stackResult?.baseline)
+
   if (!Array.isArray(interventions) || interventions.length === 0) {
     return (
       <div className="space-y-3">
-        <BaselineRow baselineSummary={baselineSummary} />
+        <BaselineRow baselineSummary={baselineSummary} gia_m2={gia_m2} />
         <EmptyState onAdd={onAdd} />
       </div>
     )
@@ -265,7 +278,7 @@ export default function InterventionStackView({
   return (
     <div className="space-y-1.5">
       {/* Baseline card */}
-      <BaselineRow baselineSummary={baselineSummary} />
+      <BaselineRow baselineSummary={baselineSummary} gia_m2={gia_m2} />
 
       {/* Intervention rows */}
       {interventions.map((intervention, i) => {
@@ -280,6 +293,7 @@ export default function InterventionStackView({
             cumulativeDeltaFull={row?.cumulative_delta ?? null}
             overridden={overridden.has(intervention.id)}
             baselineConfig={baselineConfig}
+            gia_m2={gia_m2}
             onToggleEnabled={() => onToggleEnabled?.(intervention.id)}
             onEdit={() => onEdit?.(intervention.id)}
             onDuplicate={() => onDuplicate?.(intervention.id)}

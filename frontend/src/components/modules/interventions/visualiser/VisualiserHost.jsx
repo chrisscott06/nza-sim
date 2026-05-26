@@ -189,6 +189,7 @@ export default function VisualiserHost({ interventions, stackResult, orientation
                 stackInterventions={stackResult?.interventions ?? []}
                 selectedId={selectedBreakdownId}
                 onSelectId={handleSetBreakdownId}
+                baselineResult={baselineResult}
               />
             </div>
           </div>

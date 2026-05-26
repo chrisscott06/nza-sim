@@ -52,6 +52,23 @@
 
 import { useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, Info, ArrowUp, ArrowDown } from 'lucide-react'
+import { useUISettings } from '../../../../context/UISettingsContext.jsx'
+import { toDisplay as toDisplayUnit, KIND as DISPLAY_KIND, getGia } from './unitFmt.js'
+
+// 2026-05-26: BreakdownPanel honours the global UISettingsContext `unit`
+// toggle. Each row's value gets converted from its native unit (MWh,
+// kWh/m²·yr) to the chosen display unit ('kwh' = absolute, 'kwh_per_m2'
+// = intensity) via `toDisplayUnit` from unitFmt.js. Threshold checks
+// stay on the NATIVE value so flipping the toggle doesn't gain/lose
+// rows — only changes the rendered numbers + unit labels.
+
+// Map the panel's native-unit strings to the unitFmt.js KIND enum.
+function nativeKindFor(nativeUnit) {
+  if (nativeUnit === 'mwh')             return DISPLAY_KIND.MWH
+  if (nativeUnit === 'kwh_per_m2_yr')   return DISPLAY_KIND.KWH_M2
+  if (nativeUnit === 'kgco2_per_m2_yr') return DISPLAY_KIND.KG_M2
+  return DISPLAY_KIND.UNITLESS
+}
 
 const TONE = {
   good:    'text-green-700',
@@ -82,6 +99,22 @@ function unitLabel(unit) {
   if (unit === 'kwh_per_m2_yr')   return 'kWh/m²·yr'
   if (unit === 'kgco2_per_m2_yr') return 'kgCO₂/m²·yr'
   return ''
+}
+
+/**
+ * Convert a native-unit value to the user's chosen display unit. Returns
+ * `{ value, label }`. Native unit kinds that don't toggle (carbon /
+ * efficiency) pass through unchanged.
+ */
+function convertForDisplay(value, nativeUnit, displayUnit, gia_m2) {
+  return toDisplayUnit(value, nativeKindFor(nativeUnit), displayUnit, gia_m2)
+}
+
+/** Render-time unit label honouring the global toggle. */
+function displayUnitLabel(nativeUnit, displayUnit) {
+  if (nativeUnit === 'kgco2_per_m2_yr') return 'kgCO₂/m²·yr'
+  if (nativeUnit === 'unitless')         return ''
+  return displayUnit === 'kwh_per_m2' ? 'kWh/m²·yr' : 'MWh'
 }
 
 function fmtValue(v, unit) {
@@ -204,7 +237,7 @@ function pickHeadlineRows(marginalDelta) {
   return scored.slice(0, 3)
 }
 
-function Headline({ marginalDelta }) {
+function Headline({ marginalDelta, displayUnit, gia_m2 }) {
   const rows = pickHeadlineRows(marginalDelta)
   if (rows.length === 0) {
     return (
@@ -216,13 +249,15 @@ function Headline({ marginalDelta }) {
   return (
     <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
       {rows.map((r, i) => {
+        // Tone still uses NATIVE delta (so a "saving" stays green when toggled).
         const tone = deltaTone(r.delta, r.unit, { goodWhenPositive: r.goodWhenPositive })
+        const deltaConv = convertForDisplay(r.delta, r.unit, displayUnit, gia_m2)
         return (
           <div key={i} className="flex items-baseline gap-1.5">
             <span className="text-xxs text-mid-grey uppercase tracking-wider">{r.label}</span>
             <span className={`text-caption font-semibold tabular-nums ${TONE[tone]}`}>
-              {fmtDelta(r.delta, r.unit)}
-              <span className="text-xxs font-normal text-mid-grey/80 ml-0.5">{unitLabel(r.unit)}</span>
+              {fmtDelta(deltaConv.value, r.unit)}
+              <span className="text-xxs font-normal text-mid-grey/80 ml-0.5">{deltaConv.label || unitLabel(r.unit)}</span>
             </span>
           </div>
         )
@@ -231,7 +266,7 @@ function Headline({ marginalDelta }) {
   )
 }
 
-function Row({ rowSpec, deltaObj, unitOverride }) {
+function Row({ rowSpec, deltaObj, unitOverride, displayUnit, gia_m2 }) {
   const rec = pickDelta(deltaObj, rowSpec.deltaPath)
   if (!rec || (!Number.isFinite(rec.from) && !Number.isFinite(rec.to))) return null
 
@@ -239,6 +274,8 @@ function Row({ rowSpec, deltaObj, unitOverride }) {
   // (useful: "this intervention didn't touch X" is information). But mute
   // the delta cell when below threshold via fmtDelta's "no change".
   const unit = unitOverride ?? unitFor(rowSpec.deltaPath.split('.').pop())
+
+  // Threshold + tone use the NATIVE value (so toggle doesn't add/remove rows).
   const tone = deltaTone(rec.delta, unit, { goodWhenPositive: rowSpec.goodWhenPositive })
 
   // Suppress zero-on-zero rows entirely (avoid noise — Brief 48 §UX
@@ -247,6 +284,13 @@ function Row({ rowSpec, deltaObj, unitOverride }) {
   // zeros to find the one thing that moved.")
   const bothZero = (rec.from ?? 0) === 0 && (rec.to ?? 0) === 0
   if (bothZero) return null
+
+  // Display values + label honour the global toggle. Pre-Brief-56 these
+  // were rendered in native units (MWh / kWh/m²·yr) regardless of toggle.
+  const fromConv  = convertForDisplay(rec.from,  unit, displayUnit, gia_m2)
+  const toConv    = convertForDisplay(rec.to,    unit, displayUnit, gia_m2)
+  const deltaConv = convertForDisplay(rec.delta, unit, displayUnit, gia_m2)
+  const dispLabel = fromConv.label || toConv.label || deltaConv.label || displayUnitLabel(unit, displayUnit)
 
   return (
     <tr className="border-t border-light-grey/40 hover:bg-off-white/30">
@@ -261,22 +305,22 @@ function Row({ rowSpec, deltaObj, unitOverride }) {
         </span>
       </td>
       <td className="py-1.5 px-2 text-right text-xxs tabular-nums text-mid-grey/80">
-        {fmtValue(rec.from, unit)}
+        {fmtValue(fromConv.value, unit)}
       </td>
       <td className="py-1.5 px-2 text-right text-xxs tabular-nums text-navy">
-        {fmtValue(rec.to, unit)}
+        {fmtValue(toConv.value, unit)}
       </td>
       <td className={`py-1.5 px-2 text-right text-xxs tabular-nums font-medium ${TONE[tone]}`}>
-        {fmtDelta(rec.delta, unit)}
+        {fmtDelta(deltaConv.value, unit)}
       </td>
       <td className="py-1.5 pl-2 pr-2 text-xxs text-mid-grey/70 whitespace-nowrap">
-        {unitLabel(unit)}
+        {dispLabel}
       </td>
     </tr>
   )
 }
 
-function Section({ title, rows, deltaObj }) {
+function Section({ title, rows, deltaObj, displayUnit, gia_m2 }) {
   // Render only if at least one row produces output (the row's bothZero
   // check filters silently). Compute that by attempting to extract each row.
   const visibleRows = rows.filter(r => {
@@ -303,7 +347,7 @@ function Section({ title, rows, deltaObj }) {
           </tr>
         </thead>
         <tbody>
-          {visibleRows.map(r => <Row key={r.key} rowSpec={r} deltaObj={deltaObj} />)}
+          {visibleRows.map(r => <Row key={r.key} rowSpec={r} deltaObj={deltaObj} displayUnit={displayUnit} gia_m2={gia_m2} />)}
         </tbody>
       </table>
     </div>
@@ -335,7 +379,7 @@ const MATRIX_COLUMNS = [
   { key: 'co2',   label: 'CO₂',    deltaPath: 'carbon_kgco2_per_m2',          unit: 'kgco2_per_m2_yr' },
 ]
 
-function MatrixCell({ deltaObj, col }) {
+function MatrixCell({ deltaObj, col, displayUnit, gia_m2 }) {
   const rec = pickDelta(deltaObj, col.deltaPath)
   const v = rec?.delta
   const threshold = NOISE_THRESHOLD[col.unit] ?? 0.05
@@ -343,14 +387,15 @@ function MatrixCell({ deltaObj, col }) {
     return <td className="px-2 py-1.5 text-right text-xxs tabular-nums text-mid-grey/30">—</td>
   }
   const tone = deltaTone(v, col.unit)
+  const conv = convertForDisplay(v, col.unit, displayUnit, gia_m2)
   return (
     <td className={`px-2 py-1.5 text-right text-xxs tabular-nums font-medium ${TONE[tone]}`}>
-      {fmtDelta(v, col.unit)}
+      {fmtDelta(conv.value, col.unit)}
     </td>
   )
 }
 
-function MatrixView({ interventions, stackInterventions, framing, selectedId, onSelectId }) {
+function MatrixView({ interventions, stackInterventions, framing, selectedId, onSelectId, displayUnit, gia_m2 }) {
   if (!interventions || interventions.length === 0) {
     return (
       <div className="p-6 text-center text-xxs italic text-mid-grey">
@@ -403,7 +448,7 @@ function MatrixView({ interventions, stackInterventions, framing, selectedId, on
                   </div>
                 </td>
                 {MATRIX_COLUMNS.map(c => (
-                  <MatrixCell key={c.key} deltaObj={deltaObj} col={c} />
+                  <MatrixCell key={c.key} deltaObj={deltaObj} col={c} displayUnit={displayUnit} gia_m2={gia_m2} />
                 ))}
                 <td className="pl-2 py-1.5 text-xxs text-mid-grey/40 whitespace-nowrap">
                   {/* leave blank — each column has its own unit; the
@@ -427,14 +472,14 @@ function MatrixView({ interventions, stackInterventions, framing, selectedId, on
  * used inside the chain block for predecessor / successor rows. Picks
  * the single biggest mover; if none, returns "no significant change".
  */
-function summariseMarginal(marginalDelta) {
+function summariseMarginal(marginalDelta, displayUnit, gia_m2) {
   const top = pickHeadlineRows(marginalDelta)[0]
   if (!top) return 'no significant change'
-  const sign = top.delta < 0 ? '−' : '+'
-  const num = Math.abs(top.delta) >= 10
-    ? Math.abs(top.delta).toFixed(1)
-    : Math.abs(top.delta).toFixed(1)
-  return `${top.label} ${sign}${num} ${unitLabel(top.unit)}`
+  const conv = convertForDisplay(top.delta, top.unit, displayUnit, gia_m2)
+  const v = conv.value ?? top.delta
+  const sign = v < 0 ? '−' : '+'
+  const num = Math.abs(v).toFixed(1)
+  return `${top.label} ${sign}${num} ${conv.label || unitLabel(top.unit)}`
 }
 
 function ChainRow({ idx, intervention, summary, direction, onClick, active }) {
@@ -471,7 +516,17 @@ export default function BreakdownPanel({
   stackInterventions,
   selectedId,
   onSelectId,
+  baselineResult = null,   // 2026-05-26: passed by VisualiserHost so the
+                           // panel can derive GIA for the unit-toggle
+                           // conversion. Optional — falls back to native
+                           // units when absent.
 }) {
+  // 2026-05-26: global unit toggle ('kwh' | 'kwh_per_m2') from
+  // UISettingsContext. Each per-row value gets converted via
+  // `convertForDisplay` before formatting.
+  const { unit: displayUnit } = useUISettings()
+  const gia_m2 = getGia(baselineResult)
+
   // Framing toggle — default to "vs step above" (the marginal/diagnostic
   // view that answers Finding D's reorder question). User can switch to
   // "vs original building" for the cumulative-from-baseline view.
@@ -620,6 +675,8 @@ export default function BreakdownPanel({
             framing={framing}
             selectedId={selectedId}
             onSelectId={onSelectId}
+            displayUnit={displayUnit}
+            gia_m2={gia_m2}
           />
         ) : !selected ? (
           <div className="px-2 py-6 text-center">
@@ -630,7 +687,7 @@ export default function BreakdownPanel({
         ) : (
           <>
             {/* Level 1 — Headline */}
-            <Headline marginalDelta={activeDelta} />
+            <Headline marginalDelta={activeDelta} displayUnit={displayUnit} gia_m2={gia_m2} />
 
             {/* Level 2 — Audit trail expand */}
             <div className="pt-1">
@@ -645,10 +702,10 @@ export default function BreakdownPanel({
               </button>
               {showDetail && (
                 <div className="mt-2 pt-2 border-t border-light-grey/60">
-                  <Section title="Demand side · what the building needs" rows={ROWS.demand} deltaObj={activeDelta} />
-                  <Section title="Delivered by systems"                  rows={ROWS.delivered} deltaObj={activeDelta} />
-                  <Section title="Fuel consumed"                          rows={ROWS.fuel} deltaObj={activeDelta} />
-                  <Section title="Headline impact"                         rows={ROWS.headline} deltaObj={activeDelta} />
+                  <Section title="Demand side · what the building needs" rows={ROWS.demand} deltaObj={activeDelta} displayUnit={displayUnit} gia_m2={gia_m2} />
+                  <Section title="Delivered by systems"                  rows={ROWS.delivered} deltaObj={activeDelta} displayUnit={displayUnit} gia_m2={gia_m2} />
+                  <Section title="Fuel consumed"                          rows={ROWS.fuel} deltaObj={activeDelta} displayUnit={displayUnit} gia_m2={gia_m2} />
+                  <Section title="Headline impact"                         rows={ROWS.headline} deltaObj={activeDelta} displayUnit={displayUnit} gia_m2={gia_m2} />
                   <p className="mt-4 px-2 text-xxs italic text-mid-grey/70 leading-relaxed">
                     {framingHint}
                   </p>
@@ -674,7 +731,7 @@ export default function BreakdownPanel({
                       <ChainRow
                         idx={predecessorIdx}
                         intervention={predecessor}
-                        summary={`This row's marginal is computed on top of: ${summariseMarginal(predecessorRow?.cumulative_delta)}`}
+                        summary={`This row's marginal is computed on top of: ${summariseMarginal(predecessorRow?.cumulative_delta, displayUnit, gia_m2)}`}
                         direction="up"
                         onClick={() => onSelectId?.(predecessor.id)}
                       />
@@ -699,7 +756,7 @@ export default function BreakdownPanel({
                           key={s.intervention?.id ?? s.idx}
                           idx={s.idx}
                           intervention={s.intervention}
-                          summary={summariseMarginal(s.row?.marginal_delta)}
+                          summary={summariseMarginal(s.row?.marginal_delta, displayUnit, gia_m2)}
                           direction="down"
                           onClick={() => onSelectId?.(s.intervention?.id)}
                         />
