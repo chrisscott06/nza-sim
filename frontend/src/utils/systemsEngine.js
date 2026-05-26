@@ -691,8 +691,19 @@ function _computeVentilation(systems, gia, peakOccupants, hoursActive = 8760) {
  *
  * gain_from_internal_gains_mwh comes from the upstream Internal Gains
  * accumulator (heat_balance.annual.gains.internal.{lighting,equipment}.kwh
- * on State 2's output). Multiplied by control_factor × share/100 →
- * delivered electrical kWh.
+ * on State 2's output). Per Brief 58 Part C (2026-05-26), that upstream
+ * gain is already modulated by the same v40 systems list (enabled +
+ * share + control_factor) via `effectiveSystemScalar` in
+ * computeHourlyGains — load + gain are coupled. _computeThin's job is
+ * to split the modulated gain across enabled systems pro-rata by their
+ * weight (share × cf), so per-system breakdown still reflects each
+ * system's relative contribution.
+ *
+ * Total invariant: Σ delivered_electrical_i == upstream gain (because
+ * weight_i / Σ weight = 1, by construction).
+ *
+ * Default 1-system case (share=100, cf=1): weight_i/Σ = 1, delivered =
+ * gain — identity, no behavioural change from pre-Part-C.
  */
 function _computeThin(systems, gainFromInternalGainsMwh) {
   // Brief 40 Part 5b Section A (2026-05-19): same enabled-filter +
@@ -712,17 +723,31 @@ function _computeThin(systems, gainFromInternalGainsMwh) {
     }
   }
 
-  const out_systems = enabledSystems.map(sys => {
+  // Brief 58 Part C: weighted pro-rata split. weight_i = share/100 × cf.
+  // weight_total normalises so Σ delivered == upstream gain. For the
+  // default 1-system case this is identity (weight = 1, total = 1).
+  let weight_total = 0
+  const weights = enabledSystems.map(sys => {
+    const w = (Number(sys?.share_pct ?? 0) / 100) * Number(sys?.control_factor ?? 1.0)
+    weight_total += w
+    return w
+  })
+
+  const out_systems = enabledSystems.map((sys, i) => {
     const share          = Number(sys?.share_pct ?? 0) / 100
     const control_factor = Number(sys?.control_factor ?? 1.0)
-    const delivered_electrical_mwh = gainFromInternalGainsMwh * control_factor * share
+    const weight_share   = weight_total > 0 ? weights[i] / weight_total : 0
+    const delivered_electrical_mwh = gainFromInternalGainsMwh * weight_share
     return {
       id:                         sys.id ?? null,
       label:                      sys.label ?? 'system',
       share_pct:                  sys.share_pct ?? 0,
       control_mechanism:          sys.control_mechanism ?? 'constant',
       control_factor,
-      gain_from_internal_gains_mwh: round_mwh(gainFromInternalGainsMwh * share),
+      // Brief 58 Part C: each system's "share of the gain" reported as
+      // its pro-rata of the modulated upstream (matches delivered when
+      // 1:1 gain-to-electricity, as for lighting / small_power).
+      gain_from_internal_gains_mwh: round_mwh(gainFromInternalGainsMwh * weight_share),
       delivered_electrical_mwh:   round_mwh(delivered_electrical_mwh),
     }
   })

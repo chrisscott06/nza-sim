@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-26T22:34:01.469Z",
+  "generated_at": "2026-05-26T22:46:02.322Z",
   "api": "http://127.0.0.1:8003",
   "project": {
     "id": "14b4a5b1-8c73-4acb-8b65-1d22f05ec969",
@@ -15,12 +15,12 @@
     "VRF 4.0"
   ],
   "baseline": {
-    "eui_kwh_per_m2": 109.9,
+    "eui_kwh_per_m2": 110.3,
     "consumption_total": {
-      "electricity_mwh": 327.254,
+      "electricity_mwh": 329.126,
       "gas_mwh": 147.654,
       "district_heat_mwh": 0,
-      "kwh_per_m2_yr": 109.9
+      "kwh_per_m2_yr": 110.3
     }
   },
   "interventions": [
@@ -39,16 +39,16 @@
             "good_when_positive": false,
             "path": "heating_raw_demand_mwh",
             "vs_step_above": {
-              "baseline": 238.3,
+              "baseline": 245.6,
               "after": 101.9,
-              "delta": -136.4,
-              "delta_pct": -57.23877465379773
+              "delta": -143.7,
+              "delta_pct": -58.509771986970684
             },
             "vs_original": {
-              "baseline": 238.3,
+              "baseline": 245.6,
               "after": 101.9,
-              "delta": -136.4,
-              "delta_pct": -57.23877465379773
+              "delta": -143.7,
+              "delta_pct": -58.509771986970684
             }
           },
           {
@@ -58,16 +58,16 @@
             "good_when_positive": true,
             "path": "heating_recovery_offset_mwh",
             "vs_step_above": {
-              "baseline": 93.066,
+              "baseline": 94.084,
               "after": 170.58,
-              "delta": 77.51400000000001,
-              "delta_pct": 83.28927857649411
+              "delta": 76.49600000000001,
+              "delta_pct": 81.30606691892352
             },
             "vs_original": {
-              "baseline": 93.066,
+              "baseline": 94.084,
               "after": 170.58,
-              "delta": 77.51400000000001,
-              "delta_pct": 83.28927857649411
+              "delta": 76.49600000000001,
+              "delta_pct": 81.30606691892352
             }
           },
           {
@@ -77,16 +77,16 @@
             "good_when_positive": false,
             "path": "heating_post_mvhr_demand_mwh",
             "vs_step_above": {
-              "baseline": 238.3,
+              "baseline": 245.6,
               "after": 101.9,
-              "delta": -136.4,
-              "delta_pct": -57.23877465379773
+              "delta": -143.7,
+              "delta_pct": -58.509771986970684
             },
             "vs_original": {
-              "baseline": 238.3,
+              "baseline": 245.6,
               "after": 101.9,
-              "delta": -136.4,
-              "delta_pct": -57.23877465379773
+              "delta": -143.7,
+              "delta_pct": -58.509771986970684
             }
           },
           {
@@ -96,16 +96,16 @@
             "good_when_positive": false,
             "path": "cooling_demand_mwh",
             "vs_step_above": {
-              "baseline": 72.5,
+              "baseline": 69.1,
               "after": 103,
-              "delta": 30.5,
-              "delta_pct": 42.06896551724138
+              "delta": 33.900000000000006,
+              "delta_pct": 49.05933429811868
             },
             "vs_original": {
-              "baseline": 72.5,
+              "baseline": 69.1,
               "after": 103,
-              "delta": 30.5,
-              "delta_pct": 42.06896551724138
+              "delta": 33.900000000000006,
+              "delta_pct": 49.05933429811868
             }
           },
           {
@@ -136,16 +136,16 @@
             "good_when_positive": false,
             "path": "per_service.heating.delivered_mwh",
             "vs_step_above": {
-              "baseline": 238.3,
+              "baseline": 245.6,
               "after": 101.9,
-              "delta": -136.4,
-              "delta_pct": -57.23877465379773
+              "delta": -143.7,
+              "delta_pct": -58.509771986970684
             },
             "vs_original": {
-              "baseline": 238.3,
+              "baseline": 245.6,
               "after": 101.9,
-              "delta": -136.4,
-              "delta_pct": -57.23877465379773
+              "delta": -143.7,
+              "delta_pct": -58.509771986970684
             }
           },
           {
@@ -174,16 +174,16 @@
             "good_when_positive": false,
             "path": "per_service.cooling.delivered_mwh",
             "vs_step_above": {
-              "baseline": 72.5,
+              "baseline": 69.1,
               "after": 103,
-              "delta": 30.5,
-              "delta_pct": 42.06896551724138
+              "delta": 33.900000000000006,
+              "delta_pct": 49.05933429811868
             },
             "vs_original": {
-              "baseline": 72.5,
+              "baseline": 69.1,
               "after": 103,
-              "delta": 30.5,
-              "delta_pct": 42.06896551724138
+              "delta": 33.900000000000006,
+              "delta_pct": 49.05933429811868
             }
           },
           {
@@ -233,16 +233,16 @@
             "good_when_positive": false,
             "path": "per_fuel.electricity_mwh",
             "vs_step_above": {
-              "baseline": 327.254,
+              "baseline": 329.126,
               "after": 283.396,
-              "delta": -43.858000000000004,
-              "delta_pct": -13.401822437617264
+              "delta": -45.72999999999996,
+              "delta_pct": -13.894374798709297
             },
             "vs_original": {
-              "baseline": 327.254,
+              "baseline": 329.126,
               "after": 283.396,
-              "delta": -43.858000000000004,
-              "delta_pct": -13.401822437617264
+              "delta": -45.72999999999996,
+              "delta_pct": -13.894374798709297
             }
           },
           {
@@ -271,16 +271,16 @@
             "good_when_positive": false,
             "path": "per_service.heating.electricity_mwh",
             "vs_step_above": {
-              "baseline": 92.767,
+              "baseline": 95.609,
               "after": 42.944,
-              "delta": -49.82299999999999,
-              "delta_pct": -53.70767622106999
+              "delta": -52.66499999999999,
+              "delta_pct": -55.08372642742837
             },
             "vs_original": {
-              "baseline": 92.767,
+              "baseline": 95.609,
               "after": 42.944,
-              "delta": -49.82299999999999,
-              "delta_pct": -53.70767622106999
+              "delta": -52.66499999999999,
+              "delta_pct": -55.08372642742837
             }
           },
           {
@@ -347,16 +347,16 @@
             "good_when_positive": false,
             "path": "per_service.cooling.electricity_mwh",
             "vs_step_above": {
-              "baseline": 20.714,
+              "baseline": 19.743,
               "after": 29.429,
-              "delta": 8.715,
-              "delta_pct": 42.072994110263586
+              "delta": 9.686,
+              "delta_pct": 49.06042648027149
             },
             "vs_original": {
-              "baseline": 20.714,
+              "baseline": 19.743,
               "after": 29.429,
-              "delta": 8.715,
-              "delta_pct": 42.072994110263586
+              "delta": 9.686,
+              "delta_pct": 49.06042648027149
             }
           }
         ],
@@ -368,16 +368,16 @@
             "good_when_positive": false,
             "path": "eui_kwh_per_m2",
             "vs_step_above": {
-              "baseline": 109.9,
+              "baseline": 110.3,
               "after": 99.7,
-              "delta": -10.200000000000003,
-              "delta_pct": -9.281164695177436
+              "delta": -10.599999999999994,
+              "delta_pct": -9.610154125113322
             },
             "vs_original": {
-              "baseline": 109.9,
+              "baseline": 110.3,
               "after": 99.7,
-              "delta": -10.200000000000003,
-              "delta_pct": -9.281164695177436
+              "delta": -10.599999999999994,
+              "delta_pct": -9.610154125113322
             }
           },
           {
@@ -387,16 +387,16 @@
             "good_when_positive": false,
             "path": "carbon_kgco2_per_m2",
             "vs_step_above": {
-              "baseline": 21.93,
+              "baseline": 22.02,
               "after": 19.83,
-              "delta": -2.1000000000000014,
-              "delta_pct": -9.575923392612866
+              "delta": -2.1900000000000013,
+              "delta_pct": -9.945504087193466
             },
             "vs_original": {
-              "baseline": 21.93,
+              "baseline": 22.02,
               "after": 19.83,
-              "delta": -2.1000000000000014,
-              "delta_pct": -9.575923392612866
+              "delta": -2.1900000000000013,
+              "delta_pct": -9.945504087193466
             }
           }
         ]
@@ -423,10 +423,10 @@
               "delta_pct": 0
             },
             "vs_original": {
-              "baseline": 238.3,
+              "baseline": 245.6,
               "after": 101.9,
-              "delta": -136.4,
-              "delta_pct": -57.23877465379773
+              "delta": -143.7,
+              "delta_pct": -58.509771986970684
             }
           },
           {
@@ -442,10 +442,10 @@
               "delta_pct": 0
             },
             "vs_original": {
-              "baseline": 93.066,
+              "baseline": 94.084,
               "after": 170.58,
-              "delta": 77.51400000000001,
-              "delta_pct": 83.28927857649411
+              "delta": 76.49600000000001,
+              "delta_pct": 81.30606691892352
             }
           },
           {
@@ -461,10 +461,10 @@
               "delta_pct": 0
             },
             "vs_original": {
-              "baseline": 238.3,
+              "baseline": 245.6,
               "after": 101.9,
-              "delta": -136.4,
-              "delta_pct": -57.23877465379773
+              "delta": -143.7,
+              "delta_pct": -58.509771986970684
             }
           },
           {
@@ -480,10 +480,10 @@
               "delta_pct": 0
             },
             "vs_original": {
-              "baseline": 72.5,
+              "baseline": 69.1,
               "after": 103,
-              "delta": 30.5,
-              "delta_pct": 42.06896551724138
+              "delta": 33.900000000000006,
+              "delta_pct": 49.05933429811868
             }
           },
           {
@@ -520,10 +520,10 @@
               "delta_pct": 0
             },
             "vs_original": {
-              "baseline": 238.3,
+              "baseline": 245.6,
               "after": 101.9,
-              "delta": -136.4,
-              "delta_pct": -57.23877465379773
+              "delta": -143.7,
+              "delta_pct": -58.509771986970684
             }
           },
           {
@@ -558,10 +558,10 @@
               "delta_pct": 0
             },
             "vs_original": {
-              "baseline": 72.5,
+              "baseline": 69.1,
               "after": 103,
-              "delta": 30.5,
-              "delta_pct": 42.06896551724138
+              "delta": 33.900000000000006,
+              "delta_pct": 49.05933429811868
             }
           },
           {
@@ -617,10 +617,10 @@
               "delta_pct": -6.164166043275133
             },
             "vs_original": {
-              "baseline": 327.254,
+              "baseline": 329.126,
               "after": 265.927,
-              "delta": -61.327,
-              "delta_pct": -18.739877893012764
+              "delta": -63.198999999999955,
+              "delta_pct": -19.202068508717012
             }
           },
           {
@@ -655,10 +655,10 @@
               "delta_pct": -40.678558122205665
             },
             "vs_original": {
-              "baseline": 92.767,
+              "baseline": 95.609,
               "after": 25.475,
-              "delta": -67.292,
-              "delta_pct": -72.53872605560167
+              "delta": -70.13399999999999,
+              "delta_pct": -73.35501887897581
             }
           },
           {
@@ -731,10 +731,10 @@
               "delta_pct": 0
             },
             "vs_original": {
-              "baseline": 20.714,
+              "baseline": 19.743,
               "after": 29.429,
-              "delta": 8.715,
-              "delta_pct": 42.072994110263586
+              "delta": 9.686,
+              "delta_pct": 49.06042648027149
             }
           }
         ],
@@ -752,10 +752,10 @@
               "delta_pct": -4.012036108324975
             },
             "vs_original": {
-              "baseline": 109.9,
+              "baseline": 110.3,
               "after": 95.7,
-              "delta": -14.200000000000003,
-              "delta_pct": -12.920837124658782
+              "delta": -14.599999999999994,
+              "delta_pct": -13.23662737987307
             }
           },
           {
@@ -771,10 +771,10 @@
               "delta_pct": -4.236006051437216
             },
             "vs_original": {
-              "baseline": 21.93,
+              "baseline": 22.02,
               "after": 18.99,
-              "delta": -2.9400000000000013,
-              "delta_pct": -13.406292749658007
+              "delta": -3.030000000000001,
+              "delta_pct": -13.760217983651232
             }
           }
         ]

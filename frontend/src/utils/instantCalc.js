@@ -2253,6 +2253,32 @@ function computeHourlyGains(building, h, weatherData, gia) {
       })
     }
   }
+  // Brief 58 Part C (2026-05-26): couple the load and its internal
+  // gain. systems_config_v40.{lighting,small_power}.{enabled,share_pct,
+  // control_factor} now modulate BOTH the gain and the electricity (the
+  // load and its space gain are ONE entity with two consequences).
+  // Before Part C the gain was independent of the v40 systems list —
+  // disabling a lighting system dropped electricity but left the gain
+  // alone, so heating/cooling demand didn't respond. See
+  // docs/audit/58_lighting.md for the audit + hand-calc.
+  //
+  // Per-profile breakdowns are scaled by the same scalar so the per-
+  // profile annual totals reconcile with the aggregate.
+  const lightingScalar = effectiveSystemScalar(building?.systems_config_v40?.lighting)
+  const smallPwrScalar = effectiveSystemScalar(building?.systems_config_v40?.small_power)
+  if (lightingScalar !== 1) {
+    Q_lighting *= lightingScalar
+    for (const p of lighting_per_profile) p.value *= lightingScalar
+  }
+  if (smallPwrScalar !== 1) {
+    Q_equipment_baseload *= smallPwrScalar
+    Q_equipment_active   *= smallPwrScalar
+    for (const p of equipment_per_profile) {
+      p.value    *= smallPwrScalar
+      p.baseload *= smallPwrScalar
+      p.active   *= smallPwrScalar
+    }
+  }
   const Q_equipment = Q_equipment_baseload + Q_equipment_active
 
   return {
@@ -2270,6 +2296,34 @@ function computeHourlyGains(building, h, weatherData, gia) {
     lighting_per_profile,
     equipment_per_profile,
   }
+}
+
+/**
+ * Brief 58 Part C (2026-05-26): resolve the effective scalar applied
+ * to a thin service's internal gain from its v40 systems list.
+ *
+ *   - returns 1.0 when the v40 array is empty / absent (legacy
+ *     pre-Brief-40 projects — no modulation, gain unchanged)
+ *   - returns 0 when no systems are enabled (load is OFF)
+ *   - otherwise returns Σ over enabled systems of (share_pct/100 ×
+ *     control_factor). Validation guarantees enabled share_pct sums
+ *     to 100, so for the default 1-system case (share=100, cf=1) this
+ *     returns 1.0 — identity for the common case.
+ *
+ * Applied to lighting + small_power gains in computeHourlyGains so
+ * disabling or dimming the load moves BOTH the gain AND the electrical
+ * consumption (systemsEngine._computeThin computes electricity from
+ * the now-modulated upstream gain). See docs/audit/58_lighting.md.
+ */
+function effectiveSystemScalar(v40Systems) {
+  if (!Array.isArray(v40Systems) || v40Systems.length === 0) return 1.0
+  const enabled = v40Systems.filter(s => s?.enabled !== false)
+  if (enabled.length === 0) return 0
+  let acc = 0
+  for (const s of enabled) {
+    acc += (Number(s.share_pct ?? 0) / 100) * Number(s.control_factor ?? 1)
+  }
+  return acc
 }
 
 // Export the gain helpers so test scripts and the State 2 UI can use them

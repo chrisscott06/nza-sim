@@ -1,0 +1,95 @@
+{
+  "generated_at": "2026-05-26T22:45:01.100Z",
+  "brief": "58 Part C — Lighting/gains decoupling",
+  "api": "http://127.0.0.1:8003",
+  "project": {
+    "id": "14b4a5b1-8c73-4acb-8b65-1d22f05ec969",
+    "name": "HIX Bridgewater",
+    "gia_m2": 4322
+  },
+  "expected": {
+    "pre_partc_lighting_gain_mwh": 76.537,
+    "baseline_lighting_cf": 0.86,
+    "baseline_lighting_gain_new": 65.82182,
+    "baseline_lighting_elec_new": 65.82182,
+    "baseline_equipment_gain": 78.864,
+    "baseline_equipment_elec": 78.864
+  },
+  "runs": {
+    "baseline": {
+      "eui_kwh_per_m2": 106.2,
+      "heating_demand_mwh": 245.6,
+      "cooling_demand_mwh": 69.1,
+      "lighting_gain_mwh": 65.8215,
+      "equipment_gain_mwh": 78.86410000000001,
+      "people_gain_mwh": 0,
+      "lighting_electricity_mwh": 65.822,
+      "small_power_electricity_mwh": 78.864,
+      "lighting_systems_view": [
+        {
+          "id": "sys_lighting_1779226352156_399",
+          "label": "Lighting (daylight dimming)",
+          "share_pct": 100,
+          "control_mechanism": "constant",
+          "control_factor": 0.86,
+          "gain_from_internal_gains_mwh": 65.822,
+          "delivered_electrical_mwh": 65.822
+        }
+      ]
+    },
+    "disabled": {
+      "eui_kwh_per_m2": 94,
+      "heating_demand_mwh": 293.2,
+      "cooling_demand_mwh": 50.9,
+      "lighting_gain_mwh": 0,
+      "equipment_gain_mwh": 78.86410000000001,
+      "people_gain_mwh": 0,
+      "lighting_electricity_mwh": 0,
+      "small_power_electricity_mwh": 78.864,
+      "lighting_systems_view": []
+    },
+    "undimmed": {
+      "eui_kwh_per_m2": 108.2,
+      "heating_demand_mwh": 238.3,
+      "cooling_demand_mwh": 72.5,
+      "lighting_gain_mwh": 76.5366,
+      "equipment_gain_mwh": 78.86410000000001,
+      "people_gain_mwh": 0,
+      "lighting_electricity_mwh": 76.537,
+      "small_power_electricity_mwh": 78.864,
+      "lighting_systems_view": [
+        {
+          "id": "sys_lighting_1779226352156_399",
+          "label": "Lighting (daylight dimming)",
+          "share_pct": 100,
+          "control_mechanism": "constant",
+          "control_factor": 1,
+          "gain_from_internal_gains_mwh": 76.537,
+          "delivered_electrical_mwh": 76.537
+        }
+      ]
+    }
+  },
+  "diffs": {
+    "disabled_minus_baseline": {
+      "heating_demand_mwh": 47.599999999999994,
+      "cooling_demand_mwh": -18.199999999999996,
+      "lighting_gain_mwh": -65.8215,
+      "lighting_elec_mwh": -65.822,
+      "eui_kwh_per_m2": -12.200000000000003
+    },
+    "eui_anchor_move_from_pre_partc": -3.700000000000003
+  },
+  "gates": {
+    "C-G1 baseline lighting gain matches 76.537×0.86": true,
+    "C-G2 baseline lighting electricity = gain (cf in gain)": true,
+    "C-G3 baseline equipment gain unchanged": true,
+    "C-G4 baseline equipment electricity unchanged": true,
+    "C-G5 disabled → lighting gain = 0": true,
+    "C-G6 disabled → lighting electricity = 0": true,
+    "C-G7 disabled → heating demand RISES": true,
+    "C-G8 disabled → cooling demand FALLS": true,
+    "C-G9 magnitude bounded by lighting gain (≤ 76.54 MWh)": true
+  },
+  "all_pass": true
+}
