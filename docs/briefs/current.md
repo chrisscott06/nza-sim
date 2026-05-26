@@ -1,6 +1,8 @@
 # Current brief
 
-**No active brief.** Brief 50 (MVHR recovery double-count fix — Option A: State 2 owns recovery) closed 2026-05-25 — see [`archive/50_mvhr_recovery_doublecount_fix_COMPLETED.md`](archive/50_mvhr_recovery_doublecount_fix_COMPLETED.md) and STATUS.md. Clean-state Bridgewater EUI anchor: **128.20 kWh/m²·yr** (was 121.90 pre-Brief-50; movement explained from first principles in `docs/audit/50_mvhr_recovery_doublecount.md` §4 + §7).
+**Active:** [`active/53_ventilation_bypass_and_heatbalance.md`](active/53_ventilation_bypass_and_heatbalance.md) — Brief 53 Ventilation: summer-bypass toggle + heat-balance visibility on Systems. Engine + UI brief (6 Parts). Part 1 landed (audit + bypass design); awaiting Chris's sign-off at the Part 1 checkpoint before any engine code. Anchor 128.20 must hold with bypass default-off. See `docs/audit/53_ventilation.md` for the trigger choice, reconciliation strategy, Bridgewater first-principles prediction, and the +10 residual hypothesis.
+
+Brief 50 (MVHR recovery double-count fix — Option A: State 2 owns recovery) closed 2026-05-25 — see [`archive/50_mvhr_recovery_doublecount_fix_COMPLETED.md`](archive/50_mvhr_recovery_doublecount_fix_COMPLETED.md) and STATUS.md. Clean-state Bridgewater EUI anchor: **128.20 kWh/m²·yr** (was 121.90 pre-Brief-50; movement explained from first principles in `docs/audit/50_mvhr_recovery_doublecount.md` §4 + §7).
 
 ## Next priorities
 
