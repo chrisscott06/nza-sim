@@ -1,0 +1,105 @@
+{
+  "off": {
+    "gia": 4322,
+    "solar_kwh": 99396.5,
+    "internal_kwh": 372634.5,
+    "heating_synth_kwh": 95200,
+    "external_wall_kwh": 20019.7,
+    "roof_kwh": 9174.5,
+    "ground_floor_kwh": 9589.2,
+    "glazing_kwh": 54578.3,
+    "fabric_leakage_kwh": 27319.4,
+    "permanent_vents_kwh": 7692,
+    "thermal_bridging_kwh": 10340.4,
+    "mech_vent_total_kwh": 284521.60000000003,
+    "cooling_synth_kwh": 145900,
+    "mech_vent_per_system": [
+      {
+        "name": "mvhr_gf_public",
+        "kwh": 36536.3
+      },
+      {
+        "name": "bedroom_extract",
+        "kwh": 226448.1
+      },
+      {
+        "name": "public_toilet_extract",
+        "kwh": 21537.2
+      }
+    ],
+    "bypass_log": [
+      {
+        "id": "mvhr_gf_public",
+        "summer_bypass": false,
+        "hours": 0,
+        "suppressed_recovery_mwh": 0
+      },
+      {
+        "id": "bedroom_extract",
+        "summer_bypass": false,
+        "hours": 0,
+        "suppressed_recovery_mwh": 0
+      },
+      {
+        "id": "public_toilet_extract",
+        "summer_bypass": false,
+        "hours": 0,
+        "suppressed_recovery_mwh": 0
+      }
+    ],
+    "eui": 129.6
+  },
+  "on": {
+    "gia": 4322,
+    "solar_kwh": 99396.5,
+    "internal_kwh": 372634.5,
+    "heating_synth_kwh": 99900,
+    "external_wall_kwh": 20019.7,
+    "roof_kwh": 9174.5,
+    "ground_floor_kwh": 9589.2,
+    "glazing_kwh": 54578.3,
+    "fabric_leakage_kwh": 27319.4,
+    "permanent_vents_kwh": 7692,
+    "thermal_bridging_kwh": 10340.4,
+    "mech_vent_total_kwh": 313738.8,
+    "cooling_synth_kwh": 121800,
+    "mech_vent_per_system": [
+      {
+        "name": "mvhr_gf_public",
+        "kwh": 65753.5
+      },
+      {
+        "name": "bedroom_extract",
+        "kwh": 226448.1
+      },
+      {
+        "name": "public_toilet_extract",
+        "kwh": 21537.2
+      }
+    ],
+    "bypass_log": [
+      {
+        "id": "mvhr_gf_public",
+        "summer_bypass": true,
+        "hours": 3794,
+        "suppressed_recovery_mwh": 29.22
+      },
+      {
+        "id": "bedroom_extract",
+        "summer_bypass": false,
+        "hours": 0,
+        "suppressed_recovery_mwh": 0
+      },
+      {
+        "id": "public_toilet_extract",
+        "summer_bypass": false,
+        "hours": 0,
+        "suppressed_recovery_mwh": 0
+      }
+    ],
+    "eui": 128.5
+  },
+  "dEui": -1.0999999999999943,
+  "dCool_kwh": -24100,
+  "dCool_pct": -16.518163125428377
+}

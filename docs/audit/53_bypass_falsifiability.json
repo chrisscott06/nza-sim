@@ -1,8 +1,8 @@
 {
   "test_1_bridgewater": {
-    "eui": 128.2,
+    "eui": 131.9,
     "target": 128.2,
-    "pass": true,
+    "pass": false,
     "bypass_hours": 0
   },
   "test_2_refbox_hot_off": {
@@ -83,5 +83,5 @@
     "bw": true,
     "pass": true
   },
-  "all_pass": true
+  "all_pass": false
 }
