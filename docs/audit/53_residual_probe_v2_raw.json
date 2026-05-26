@@ -67,6 +67,21 @@
           "kwh": 54578.3
         },
         {
+          "key": "fabric_leakage",
+          "label": "fabric_leakage",
+          "kwh": 27319.4
+        },
+        {
+          "key": "permanent_vents",
+          "label": "permanent_vents",
+          "kwh": 7692
+        },
+        {
+          "key": "thermal_bridging",
+          "label": "thermal_bridging",
+          "kwh": 10340.4
+        },
+        {
           "key": "ventilation_mvhr_gf_public",
           "label": "Ventilation: mvhr_gf_public",
           "kwh": 36536.3
@@ -88,10 +103,10 @@
         }
       ],
       "totalGains": 567231,
-      "totalLosses": 523783.30000000005,
-      "residualKwh": 43447.69999999995,
-      "residualPerM2": 10.05,
-      "flagged": true
+      "totalLosses": 569135.1000000001,
+      "residualKwh": -1904.1000000000931,
+      "residualPerM2": -0.44,
+      "flagged": false
     },
     {
       "label": "Building tab",
@@ -314,6 +329,21 @@
           "kwh": 54578.3
         },
         {
+          "key": "fabric_leakage",
+          "label": "fabric_leakage",
+          "kwh": 27319.4
+        },
+        {
+          "key": "permanent_vents",
+          "label": "permanent_vents",
+          "kwh": 7692
+        },
+        {
+          "key": "thermal_bridging",
+          "label": "thermal_bridging",
+          "kwh": 10340.4
+        },
+        {
           "key": "ventilation_mvhr_gf_public",
           "label": "Ventilation: mvhr_gf_public",
           "kwh": 36536.3
@@ -335,10 +365,10 @@
         }
       ],
       "totalGains": 567231,
-      "totalLosses": 523783.30000000005,
-      "residualKwh": 43447.69999999995,
-      "residualPerM2": 10.05,
-      "flagged": true
+      "totalLosses": 569135.1000000001,
+      "residualKwh": -1904.1000000000931,
+      "residualPerM2": -0.44,
+      "flagged": false
     }
   ],
   "engine_total_heat_loss_kwh": 423235.1

@@ -1,18 +1,26 @@
 # Current brief
 
-**Active:** [`active/53_ventilation_bypass_and_heatbalance.md`](active/53_ventilation_bypass_and_heatbalance.md) — Brief 53 Ventilation: summer-bypass toggle + heat-balance visibility on Systems. Engine + UI brief (6 Parts). Part 1 landed (audit + bypass design); awaiting Chris's sign-off at the Part 1 checkpoint before any engine code. Anchor 128.20 must hold with bypass default-off. See `docs/audit/53_ventilation.md` for the trigger choice, reconciliation strategy, Bridgewater first-principles prediction, and the +10 residual hypothesis.
+**No active brief.** Brief 53 (ventilation summer-bypass + heat-balance Sankey on Systems) closed 2026-05-26 — see [`archive/53_ventilation_bypass_and_heatbalance_COMPLETED.md`](archive/53_ventilation_bypass_and_heatbalance_COMPLETED.md) and STATUS.md. Clean-state Bridgewater EUI anchor unchanged: **128.20 kWh/m²·yr** (bypass default-off; the toggle is now user-controllable via a checkbox on each ventilation system entry in `/systems`).
 
-Brief 50 (MVHR recovery double-count fix — Option A: State 2 owns recovery) closed 2026-05-25 — see [`archive/50_mvhr_recovery_doublecount_fix_COMPLETED.md`](archive/50_mvhr_recovery_doublecount_fix_COMPLETED.md) and STATUS.md. Clean-state Bridgewater EUI anchor: **128.20 kWh/m²·yr** (was 121.90 pre-Brief-50; movement explained from first principles in `docs/audit/50_mvhr_recovery_doublecount.md` §4 + §7).
+The Brief 53 walkthrough surfaced one observation that is **NOT a Brief 53 regression**: intervention order-dependence (`[VRF, MVHR] = 130 kWh/m²·yr` vs `[MVHR, VRF] = 124 kWh/m²·yr`). This is the pre-existing Finding D patch-overlap bug in the intervention stacking layer — Brief 53 never touched that code. It is now the explicit trigger for the next brief (see priorities below).
 
 ## Next priorities
 
-1. **Granular-field-patch / SCOP-invariant fix** (Finding D follow-up). Engine correctness work; comes before Brief 51 polish per Chris's sequencing call. Brief not yet written.
+1. **Granular-field-patch / SCOP-invariant fix** (Finding D follow-up — Brief 53 walkthrough reproduction fixture). NOW THE NEXT BRIEF. The intervention-stacking layer currently applies whole-object `systems_config_v40` snapshots as patches (each intervention sets the entire v40 object). When two interventions touch the same service (e.g. "VRF 4.0" sets heating to a single VRF at SCOP 4; "MVHR Bedrooms" sets ventilation), the later one's snapshot replaces the earlier one's wholesale — so heating gets clobbered by MVHR's patched-but-unintentionally-included heating block. Result: order-dependent EUI.
+
+   **Fix shape:** field-level system patches (`op:set` on `building.systems_config_v40.heating[0].efficiency_metric`, not on the whole `building.systems_config_v40` object). VRF and MVHR then compose instead of collide.
+
+   **Falsifiability gate:**
+   - Cumulative after-stack EUI must be **order-independent** — `[VRF, MVHR]` and `[MVHR, VRF]` must converge to one number (the 130/124 split → one value).
+   - **No isolated SCOP/demand-reducer may show a positive marginal.** A pure efficiency improvement (e.g. VRF SCOP 2.8 → 4.0) or a pure demand reducer (e.g. MVHR HRE upgrade) MUST move EUI in the saving direction in isolation. The walkthrough screenshots (showing `[MVHR alone]` and `[VRF alone]` marginals from Brief 48's breakdown panel) are the reproduction fixture for this brief.
+
+   Brief not yet written.
 
 2. **Metadata-input-page brief** (single source of truth for num_rooms, comfort_band, peak_people_per_room). Will subsume the comfort_band stopgap landed at `e462a21`. Brief not yet written.
 
 3. **Brief 51 (HELD)** — MVHR recovery row surfacing / panel reconciliation (Brief 50 target 5 residual). Polish only, waits behind the engine-correctness work above. Source brief at `~/Downloads/51_mvhr_recovery_row_surfacing.md` (not yet landed in active/).
 
-4. **Ventilation findings from Brief 50 walkthrough** — Chris's walkthrough surfaced new ventilation-side observations (separate scope from Brief 50; not regressions). Probe scoped first (cooling-hour MVHR-recovery gating), then a new brief if a fix is needed.
+Brief 50 (MVHR recovery double-count fix — Option A: State 2 owns recovery) closed 2026-05-25 — see [`archive/50_mvhr_recovery_doublecount_fix_COMPLETED.md`](archive/50_mvhr_recovery_doublecount_fix_COMPLETED.md). Movement explained from first principles in `docs/audit/50_mvhr_recovery_doublecount.md` §4 + §7.
 
 Brief 49 (MVHR recovery boundary diagnostic) closed 2026-05-25 at HARD STOP with verdict H3 (double-count) confirmed via reference box fixture ratio 1.99 — see [`archive/49_mvhr_recovery_boundary_diagnostic_COMPLETED.md`](archive/49_mvhr_recovery_boundary_diagnostic_COMPLETED.md) and [`docs/audit/49_mvhr_recovery_diagnosis.md`](../audit/49_mvhr_recovery_diagnosis.md).
 

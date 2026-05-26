@@ -1,5 +1,53 @@
 # NZA SIMULATE — Status
 
+## 🚀 Brief 53 — CLOSED 2026-05-26
+
+**Ventilation: summer-bypass toggle + heat-balance Sankey on Systems.** Engine + UI brief, six parts plus a substantial sidecar.
+
+### Clean-state anchor unchanged
+
+**Bridgewater clean EUI: 128.20 kWh/m²·yr** (bypass default-off). Brief 53 added an opt-in user control (a checkbox per ventilation system) — the toggle moves EUI only when the user enables it on a specific MVHR. Anchor preserved.
+
+### Parts landed
+
+| Part | Commits | Deliverable |
+|---|---|---|
+| Part 1 | `6a885d3` + amend `9d7d512` | Ventilation audit + bypass design (free-cooling trigger: `cooling_demand_h-1 > 0 AND T_out < T_extract`) |
+| §1.4 | `f0a89ad` | Residual branch test → **Branch B** (display gap, not real demand term); engine innocent |
+| Part 2 | `eaa91b0` | Summer-bypass engine — State 2 `(1−HRE)` factor + `computeVentilationEnergy` per-hour cap both gated on the same lagged signal. **Reconciliation byte-exact** (Principle 2) |
+| Part 3 | `15d254a` + verify `f53dcd5` | Heat-balance Sankey added as a centre tab on `/systems` (alongside the energy-flow Sankey). Bypass-on cooling-ribbon shrinkage on Bridgewater: −24.1 MWh / −5.58 kWh/m² (highly visible) |
+| Part 4 | `a6ab4d2` | `LOSS_ORDERS[MODES.FULL]` patched with canonical Brief 28k+ keys (`fabric_leakage`, `permanent_vents`, `thermal_bridging`). +10 kWh/m² residual on `/results` Heat balance → **−0.44 ✓ balanced** |
+| Part 5 | `d3a8d85` | Ventilation share = fixed numeric input (not slider); `summer_bypass` UI checkbox in `VentilationFields` (renders only when HRE > 0) |
+| Sidecar | `d323e12` + `d933014` | Isolated verification environment: `data/nza_sim_cc.db` + port 8003 + `NZA_DB_FILE` env var. Anchor restored via documented reconstruction (3 fields the stray autosave touched) |
+| Home | `4002546` + `b1212f9` | Clone + true two-step delete confirm on Home page (sidecar) |
+
+### Final falsifiability gate review — all green
+
+| # | Target | Status |
+|---|---|---|
+| 1 | Bridgewater clean EUI = 128.20 with bypass default-off | ✓ exact (verification DB :8003) |
+| 2 | Refbox Probe 1 — H1 single-boundary subtraction | ✓ Δelec ratio 0.99 (no double-counting) |
+| 3 | Refbox Probe 2 — SCOP applied to delivered | ✓ exact match at SCOP 3.0 and 4.0 |
+| 4 | Refbox Probe 3 — HRE sweep linear, within ceiling | ✓ ratio 1.00 at HRE = 0 / 0.25 / 0.50 / 0.75 / 0.90 |
+| 5 | Refbox Probe 4 — MVHR credited at custom setpoint | ✓ 46.1 MWh vs 46.7 MWh hand-calc (1.4 %) |
+| 6 | Refbox HOT bypass-OFF reproduces probe `c64657c` | ✓ recovery 30.55, cooling 15.40 exact |
+| 7 | Refbox HOT bypass-ON cooling-band 13–14 MWh | ✓ 13.50 (recovery-band refinement documented at audit §5.3.1) |
+| 8 | State 2 ↔ State 3 reconciliation byte-exact per system | ✓ Principle 2 honoured (1670 hours / 2.62 vs 2.66 MWh suppressed) |
+| 9 | Heat balance ribbons: every canonical key displayed; engine ↔ display Δ = 0 | ✓ 423,235 kWh on both sides; residual −0.44 ✓ balanced |
+| 10 | Browser walkthrough by Chris | ✓ items hold |
+
+### Walkthrough finding — NOT a Brief 53 regression
+
+Chris's walkthrough surfaced intervention order-dependence: `[VRF, MVHR] = 130 kWh/m²·yr` vs `[MVHR, VRF] = 124 kWh/m²·yr`. **This is the pre-existing Finding D patch-overlap bug** in the intervention stacking layer — Brief 53 never touched that code path. Logged as the explicit trigger for the next brief (granular-field-patch / SCOP-invariant fix).
+
+### Sidecar lessons captured
+
+- **Environment contamination is real and silent.** Multiple stale vite dev servers + browser tabs across sibling projects can autosave into the live DB without any explicit user action. Fix: isolated verification backend on its own port + DB file, documented at `docs/dev-setup-isolation.md`.
+- **An anchor capture must be from a confirmed-clean state.** The first attempt at re-anchoring used a numerical fudge (`heating_eff = 5.0`) that happened to produce 128.20 but wasn't the documented Brief 50 close state. Correct anchor reconstruction requires THREE field reverts (heating shares 95/5, vent flows = v25, lighting `control_factor` = 0.86) — none of which match library defaults verbatim.
+- **The view-load autosave path is still unresolved at the source-code level.** `_scheduleSave` is only called from user-edit handlers; no mount-time `updateParam` was found. Likely a stale browser tab on a sibling-project dev server. Logged at `docs/audit/53_anchor_drift_diagnosis.md`. Not a Brief 53 blocker now that isolation is in place.
+
+---
+
 ## 🩹 Stopgap 2026-05-25 — comfort_band threading in InterventionsModule (`e462a21`)
 
 Cross-route baseline-EUI integrity bug closed (originally Brief 45 Part 4 walkthrough finding; housekeeping candidate #4). `/interventions` was running State 2 at the engine's hard-coded default 20/26 because Bridgewater's `building_config` has no `comfort_band` JSON field (21/24 lives only on `projects.comfort_band_{lower,upper}_c` DB columns, exposed via `ProjectContext.comfortBand` React state). `/systems` (canonical baseline path) was correctly threading 21/24 into both the building arg + the options bag.
