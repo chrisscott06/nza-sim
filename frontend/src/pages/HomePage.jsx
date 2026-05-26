@@ -200,24 +200,39 @@ export default function HomePage() {
   }, [cloneProject])
 
   const handleDelete = useCallback(async (project) => {
-    // Two-step confirm. Step 1: do you really want to delete this? Step 2:
-    // re-confirm by re-asserting against a "type the name to confirm" style?
-    // Brief 53 sidecar approach: ONE strong confirm dialog with the project
-    // name explicit, danger tone, and the destructive button labelled
-    // "Delete forever". That matches the existing ConfirmDialog API + the
-    // user's "need a double-confirm" requirement — the dialog itself is the
-    // second step (the first being clicking the trash icon).
-    const ok = await confirm({
+    // TWO-STEP CONFIRM (Brief 53 sidecar — Chris explicit ask: "double
+    // double check that you want it to be deleted before allowing it to
+    // happen"). Both modals must be confirmed before the DELETE fires.
+    //
+    // Step 1 — Intent confirmation. Surfaces the project name + full
+    // consequence statement. Cancel here → no delete.
+    const step1 = await confirm({
       title: `Delete "${project.name}"?`,
       message:
         `This permanently removes the project and all its simulation runs. ` +
         `Consumption data attached to this project is also deleted. This action ` +
         `cannot be undone.`,
-      confirmText: 'Delete forever',
+      confirmText: 'Continue…',
       cancelText: 'Cancel',
       tone: 'danger',
     })
-    if (!ok) return
+    if (!step1) return
+
+    // Step 2 — Final confirmation. Explicitly framed as the last chance,
+    // with a label-mirrored confirm button so the user has to read it.
+    // Cancel here → no delete (the user is forced to acknowledge twice).
+    const step2 = await confirm({
+      title: `Really delete "${project.name}"?`,
+      message:
+        `Last chance. After this there is no recovery — the project, every ` +
+        `simulation it has produced, and all attached consumption data will ` +
+        `be gone.`,
+      confirmText: 'Yes — delete forever',
+      cancelText: 'Keep it',
+      tone: 'danger',
+    })
+    if (!step2) return
+
     setBusyId(project.id)
     try {
       await deleteProject(project.id)
