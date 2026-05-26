@@ -65,6 +65,12 @@ import SchedulePopout from '../shared/SchedulePopout.jsx'
 import { SERVICE_COLOURS } from './systems/SystemEditorCard.jsx'
 import AddSystemButton from './systems/AddSystemButton.jsx'
 import SystemsDiagnosticPanel from './systems/SystemsDiagnosticPanel.jsx'
+// Brief 53 Part 3 (2026-05-26): heat-balance Sankey on Systems so the
+// demand-shaping role of ventilation (envelope → +gains → +ventilation →
+// demand) is visible alongside the existing energy-flow Sankey
+// (demand → systems → fuel). Reuses the existing Scenarios/Results
+// component — same visual language, same engine output path.
+import HeatBalance from './balance/HeatBalance.jsx'
 // Brief 42 Part 3 (2026-05-20): per-system inline-expand SystemEditorCard
 // replaced with compact SystemSummaryRow + draggable SystemEditorPopout
 // (Issue #22). Building-level fields (heating/cooling setpoint mode +
@@ -82,6 +88,13 @@ import LiveResultsStrip from '../shared/LiveResultsStrip.jsx'
 const ACCENT = '#00AEEF'   // systems theme — cyan-bright
 
 const CENTRE_TABS = [
+  // Brief 53 Part 3 (2026-05-26): Heat balance placed FIRST so the
+  // demand-shaping picture (gains → zone → losses, incl. ventilation
+  // recovery folded into vent UA + cooling-demand drop in bypass hours)
+  // is the default view a user lands on. Chris: "the vent is just as
+  // important as the window… this is why I want to see this before we
+  // start with the systems." Sankey (energy-flow) stays as the next tab.
+  { id: 'heatbalance', label: 'Heat balance' },
   { id: 'sankey',     label: 'Sankey' },
   { id: 'profiles',   label: 'Profiles' },
   { id: 'schedule',  label: 'Schedule' },
@@ -158,13 +171,17 @@ export default function SystemsModule() {
     )
   }, [params, constructions, systems, libraryData, weatherData, hourlySolar, comfortBand, constructionsLib])
 
-  // Centre view switcher state
+  // Centre view switcher state. Brief 53 Part 3 (2026-05-26): default-
+  // fallback shifted from 'sankey' to 'heatbalance' so fresh sessions
+  // land on the demand-shaping view first (Chris's preference). Existing
+  // sessions keep their saved selection — no UX regression for users
+  // who'd memorised 'sankey' as the default.
   const [centreView, setCentreView] = useState(() => {
     try {
       const saved = localStorage.getItem('nza-systems-centre')
       if (CENTRE_TABS.some(t => t.id === saved)) return saved
     } catch {}
-    return 'sankey'
+    return 'heatbalance'
   })
   useEffect(() => {
     try { localStorage.setItem('nza-systems-centre', centreView) } catch {}
@@ -320,6 +337,26 @@ export default function SystemsModule() {
               <div className="h-full flex items-center justify-center text-mid-grey text-xxs">
                 Engine output not ready — load weather data + library.
               </div>
+            )}
+            {/* Brief 53 Part 3 (2026-05-26): Heat balance Sankey — the
+                demand-shaping picture (gains in → zone → losses out) that
+                Chris wants visible BEFORE the system overlay (energy-flow
+                Sankey below). After Brief 53 Part 4, the FULL loss order
+                renders fabric_leakage + permanent_vents + thermal_bridging
+                explicitly, so the +10 residual is gone (now ≈ −0.44 ✓
+                balanced). After Brief 53 Part 2, summer_bypass on a vent
+                system suppresses recovery in cooling-mode hours; the
+                visible signature is the COOLING ribbon shrinking (e.g.
+                refbox HOT 15.40 → 13.50 MWh) as the bypass damper opens.
+                Reactivity: result.heat_balance is part of the memoised
+                `result` above; any input edit triggers re-render. */}
+            {consumption && centreView === 'heatbalance' && (
+              <HeatBalance
+                liveData={result?.heat_balance}
+                mode="full"
+                modules={null}
+                orientationDeg={orientation}
+              />
             )}
             {consumption && centreView === 'sankey' && (
               <SystemsSankey
