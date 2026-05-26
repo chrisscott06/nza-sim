@@ -188,6 +188,32 @@ export default function OccupancySection({ annual, onEditSchedule }) {
         )}
       </div>
 
+      {/* ── People per room — Brief 58 B2 sensitivity input ──────────────
+          Surface for `building.people_per_room` — fundamentally an
+          internal gain (drives occupancy gains via the legacy
+          `num_bedrooms × occupancy_rate × people_per_room` formula AND
+          B3's headcount-basis DHW). Lifted into Internal Gains as a
+          first-class sensitivity lever per Brief 58 B2 (was previously
+          editable only via project import, never a tunable input).
+          Storage path unchanged — engine reads building.people_per_room
+          at every existing call site (instantCalc.js:5066/5758). */}
+      <div className="space-y-1">
+        <PatchedInputBadge path="people_per_room">
+          <NumField
+            label="People per room"
+            value={params?.people_per_room ?? 1.5}
+            onChange={v => mutate('people_per_room', v ?? 0)}
+            step={0.1}
+            min={0}
+          />
+        </PatchedInputBadge>
+        <p className="text-xxs italic text-mid-grey/70 pl-1">
+          Sensitivity lever. Flexes occupancy gains (via legacy avg-occupants)
+          and DHW demand (after B3 — headcount basis) together. Independent
+          of `density.value` above; engine selects via basis.
+        </p>
+      </div>
+
       {/* ── Occupancy rate ─────────────────────────────────────────────── */}
       <PatchedInputBadge path="building.occupancy.occupancy_rate">
         <PercentSlider
