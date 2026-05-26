@@ -183,19 +183,20 @@ export default function ComparisonView({
   const baselineMetricsRaw = pullMetrics(baseline)
   const targetMetricsRaw   = pullMetrics(target)
 
-  // 2026-05-26: Honour the global unit toggle. EUI converts between
-  // kWh/m²·yr (intensity) and MWh (absolute, EUI × GIA); demand/
-  // delivered/fuel (native MWh) converts to kWh/m²·yr in intensity mode.
-  // Carbon stays kgCO₂/m²·yr.
+  // 2026-05-26: Honour the global Per m² ↔ Total toggle. EUI, demand/
+  // delivered/fuel, AND carbon all convert. Per m² → intensities. Total
+  // → absolutes (MWh + tCO₂, auto-promoted from kWh + kg).
   const { unit } = useUISettings()
   const gia_m2 = getGia(baseline)
   const conv = (value, kind) => toDisplay(value, kind, unit, gia_m2).value
   const labelEui    = toDisplay(0, KIND.KWH_M2, unit, gia_m2).label || 'kWh/m²·yr'
   const labelAbs    = toDisplay(0, KIND.MWH,    unit, gia_m2).label || 'MWh'
-  const labelCarbon = 'kgCO₂/m²·yr'
+  // Carbon label uses a representative value so kg→tCO₂ auto-promotion
+  // matches what the actual numbers will render as.
+  const labelCarbon = toDisplay(baselineMetricsRaw?.carbon ?? 0, KIND.KG_M2, unit, gia_m2).label || 'kgCO₂/m²·yr'
   const convertMetrics = (m) => m ? ({
     eui:            conv(m.eui,            KIND.KWH_M2),
-    carbon:         m.carbon,   // untoggleable
+    carbon:         conv(m.carbon,         KIND.KG_M2),
     heat:           conv(m.heat,           KIND.MWH),
     cool:           conv(m.cool,           KIND.MWH),
     elec:           conv(m.elec,           KIND.MWH),

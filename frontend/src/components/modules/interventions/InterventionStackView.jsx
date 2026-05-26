@@ -141,11 +141,13 @@ function BaselineRow({ baselineSummary, gia_m2 = 0 }) {
   // EUI + Carbon figures in a small two-cell table so the user has the
   // anchor values to read intervention deltas against.
   //
-  // 2026-05-26: EUI honours the global unit toggle. Carbon stays
-  // kgCO₂/m²·yr.
+  // 2026-05-26: both EUI and Carbon honour the global Per m² ↔ Total
+  // toggle. Per m² → kWh/m²·yr + kgCO₂/m²·yr. Total → MWh + tCO₂.
   const { unit } = useUISettings()
-  const euiConv = toDisplay(baselineSummary?.eui, KIND.KWH_M2, unit, gia_m2)
-  const euiLabel = euiConv.label || 'kWh/m²·yr'
+  const euiConv    = toDisplay(baselineSummary?.eui,    KIND.KWH_M2, unit, gia_m2)
+  const carbonConv = toDisplay(baselineSummary?.carbon, KIND.KG_M2,  unit, gia_m2)
+  const euiLabel    = euiConv.label    || 'kWh/m²·yr'
+  const carbonLabel = carbonConv.label || 'kgCO₂/m²·yr'
 
   return (
     <div className="rounded-lg border border-light-grey bg-off-white p-3">
@@ -166,9 +168,9 @@ function BaselineRow({ baselineSummary, gia_m2 = 0 }) {
           <tr className="border-t border-light-grey/60">
             <td className="text-mid-grey font-medium py-1">Carbon</td>
             <td className="text-right tabular-nums text-navy font-semibold py-1">
-              {baselineSummary?.carbon != null ? baselineSummary.carbon.toFixed(1) : '—'}
+              {carbonConv.value != null ? carbonConv.value.toFixed(1) : '—'}
             </td>
-            <td className="text-mid-grey/70 pl-2 py-1">kgCO₂/m²·yr</td>
+            <td className="text-mid-grey/70 pl-2 py-1">{carbonLabel}</td>
           </tr>
         </tbody>
       </table>

@@ -112,8 +112,10 @@ function convertForDisplay(value, nativeUnit, displayUnit, gia_m2) {
 
 /** Render-time unit label honouring the global toggle. */
 function displayUnitLabel(nativeUnit, displayUnit) {
-  if (nativeUnit === 'kgco2_per_m2_yr') return 'kgCO₂/m²·yr'
   if (nativeUnit === 'unitless')         return ''
+  if (nativeUnit === 'kgco2_per_m2_yr') {
+    return displayUnit === 'kwh_per_m2' ? 'kgCO₂/m²·yr' : 'tCO₂'
+  }
   return displayUnit === 'kwh_per_m2' ? 'kWh/m²·yr' : 'MWh'
 }
 

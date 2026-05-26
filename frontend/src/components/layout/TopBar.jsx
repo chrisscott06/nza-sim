@@ -34,22 +34,27 @@ function GlobalToggles({ hasSimulation }) {
           Static / Dynamic / Both buttons return when Brief 30 closes.
           See docs/briefs/active/32_static_completion.md §1. */}
 
-      {/* Unit — kWh/m²·a / kWh — remains visible (no Dynamic dependency). */}
+      {/* Display mode — Per m² / Total. Applies to every energy + carbon
+          number in the app. 2026-05-26 (Chris walkthrough): label changed
+          from "kWh/m²·a / kWh" to "Per m² / Total" because the toggle
+          drives BOTH energy (kWh ↔ MWh) AND carbon (kgCO₂/m² ↔ tCO₂),
+          so a unit-specific label was misleading. Internal storage keys
+          stay 'kwh_per_m2' / 'kwh' for back-compat. */}
       <div
         className="flex items-center bg-off-white rounded-md p-0.5 border border-light-grey"
-        title="Display unit — applies to all numbers"
+        title="Display mode — Per m² shows intensities (kWh/m²·yr, kgCO₂/m²·yr); Total shows absolutes (MWh, tCO₂)"
       >
         <button
           onClick={() => setUnit('kwh_per_m2')}
           className={`${segCls(unit === 'kwh_per_m2')} rounded`}
         >
-          kWh/m²·a
+          Per m²
         </button>
         <button
           onClick={() => setUnit('kwh')}
           className={`${segCls(unit === 'kwh')} rounded`}
         >
-          kWh
+          Total
         </button>
       </div>
     </div>

@@ -16,9 +16,8 @@
  *
  * Presentation-only — no new computation. Brief 47 Principle 4.
  *
- * 2026-05-26: EUI bar honours the global UISettingsContext `unit` toggle
- * (kWh/m²·yr ↔ MWh-equivalent absolute). Carbon stays kgCO₂/m²·yr — no
- * meaningful absolute-energy interpretation.
+ * 2026-05-26: Both bars honour the global UISettingsContext `unit` toggle.
+ * Per m² mode → kWh/m²·yr + kgCO₂/m²·yr. Total mode → MWh + tCO₂.
  */
 
 import { useUISettings } from '../../../../context/UISettingsContext.jsx'
@@ -149,13 +148,23 @@ export default function BeforeAfterBars({ stackResult }) {
   const baselineCarbon = pullCarbon(baselineResult)
   const cumulativeCarbon = pullCarbon(cumulativeResult)
 
-  // Convert EUI through the unit helper. Both baseline + current share
-  // the same GIA so their relative magnitudes (which drive the bar
-  // widths) are unchanged — only the numeric labels + unit text move.
+  // Convert both EUI and Carbon through the unit helper. Both baseline +
+  // current share the same GIA so their relative magnitudes (which drive
+  // the bar widths) are unchanged — only the numeric labels + unit text
+  // move.
   const gia = getGia(baselineResult)
   const baselineEuiConv   = toDisplay(baselineEui,   KIND.KWH_M2, unit, gia)
   const cumulativeEuiConv = toDisplay(cumulativeEui, KIND.KWH_M2, unit, gia)
-  const euiUnit = baselineEuiConv.label || cumulativeEuiConv.label || 'kWh/m²·yr'
+  const baselineCarbConv  = toDisplay(baselineCarbon,   KIND.KG_M2, unit, gia)
+  const cumulativeCarbConv= toDisplay(cumulativeCarbon, KIND.KG_M2, unit, gia)
+  const euiUnit    = baselineEuiConv.label  || cumulativeEuiConv.label  || 'kWh/m²·yr'
+  const carbonUnit = baselineCarbConv.label || cumulativeCarbConv.label || 'kgCO₂/m²·yr'
+
+  // Label adapts: in absolute mode, "Operational Carbon" reads more
+  // naturally than "Operational Carbon Intensity"; in per-m² mode, the
+  // intensity framing is clearer. Same for EUI.
+  const euiLabel    = unit === 'kwh_per_m2' ? 'Energy Use Intensity' : 'Total Energy'
+  const carbonLabel = unit === 'kwh_per_m2' ? 'Carbon Intensity'     : 'Operational Carbon'
 
   return (
     <div className="space-y-4 max-w-2xl mx-auto">
@@ -166,16 +175,16 @@ export default function BeforeAfterBars({ stackResult }) {
         </p>
       </div>
       <MetricBars
-        label="Energy Use Intensity"
+        label={euiLabel}
         unit={euiUnit}
         baseline={baselineEuiConv.value}
         current={cumulativeEuiConv.value}
       />
       <MetricBars
-        label="Operational Carbon"
-        unit="kgCO₂/m²·yr"
-        baseline={baselineCarbon}
-        current={cumulativeCarbon}
+        label={carbonLabel}
+        unit={carbonUnit}
+        baseline={baselineCarbConv.value}
+        current={cumulativeCarbConv.value}
       />
     </div>
   )

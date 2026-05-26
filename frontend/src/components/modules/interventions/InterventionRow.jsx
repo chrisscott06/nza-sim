@@ -61,7 +61,7 @@ function DeltaCell({ record, muted, forceEmpty }) {
   return <span className="text-xxs tabular-nums text-mid-grey" title={tooltip}>{text}</span>
 }
 
-function MetricsTable({ marginalEui, marginalCarbon, cumEui, cumCarbon, muted, forceEmpty, euiUnitLabel = 'kWh/m²·yr' }) {
+function MetricsTable({ marginalEui, marginalCarbon, cumEui, cumCarbon, muted, forceEmpty, euiUnitLabel = 'kWh/m²·yr', carbonUnitLabel = 'kgCO₂/m²·yr' }) {
   return (
     <table className="w-full mt-2 text-xxs border-collapse">
       <thead>
@@ -83,7 +83,7 @@ function MetricsTable({ marginalEui, marginalCarbon, cumEui, cumCarbon, muted, f
           <td className="text-mid-grey font-medium py-1">ΔCO₂</td>
           <td className="text-right py-1"><DeltaCell record={marginalCarbon} muted={muted} forceEmpty={forceEmpty} /></td>
           <td className="text-right py-1"><DeltaCell record={cumCarbon}      muted={muted} forceEmpty={forceEmpty} /></td>
-          <td className="text-mid-grey/70 pl-2 py-1">kgCO₂/m²·yr</td>
+          <td className="text-mid-grey/70 pl-2 py-1">{carbonUnitLabel}</td>
         </tr>
       </tbody>
     </table>
@@ -128,25 +128,29 @@ export default function InterventionRow({
   const patchSummary = patchCount > 0 ? summarizePatchListShort(intervention.patches, baselineConfig, { maxItems: 3 }) : null
   const isEmpty = patchCount === 0
 
-  const marginalEuiRaw = marginalDeltaFull?.eui_kwh_per_m2 ?? null
-  const marginalCarbon = marginalDeltaFull?.carbon_kgco2_per_m2 ?? null
-  const cumEuiRaw      = cumulativeDeltaFull?.eui_kwh_per_m2 ?? null
-  const cumCarbon      = cumulativeDeltaFull?.carbon_kgco2_per_m2 ?? null
+  const marginalEuiRaw    = marginalDeltaFull?.eui_kwh_per_m2 ?? null
+  const marginalCarbonRaw = marginalDeltaFull?.carbon_kgco2_per_m2 ?? null
+  const cumEuiRaw         = cumulativeDeltaFull?.eui_kwh_per_m2 ?? null
+  const cumCarbonRaw      = cumulativeDeltaFull?.carbon_kgco2_per_m2 ?? null
 
-  // 2026-05-26: convert ΔEUI through the global unit toggle. The
+  // 2026-05-26: convert ΔEUI and ΔCarbon through the global toggle. The
   // deltaRecord shape is { from, to, delta, delta_pct } — we clone with
   // the converted `delta` so DeltaCell's formatting still works unchanged.
   // delta_pct is unit-independent (a ratio); keep as-is.
-  const convertDeltaRecord = (rec) => {
+  const convertDeltaRecord = (rec, kind) => {
     if (!rec) return null
-    const conv = toDisplay(rec.delta, KIND.KWH_M2, unit, gia_m2)
+    const conv = toDisplay(rec.delta, kind, unit, gia_m2)
     return { ...rec, delta: conv.value }
   }
-  const marginalEui    = convertDeltaRecord(marginalEuiRaw)
-  const cumEui         = convertDeltaRecord(cumEuiRaw)
-  // Compute the unit label once — same conversion path gives the same
-  // label, so reading from baseline is enough.
-  const euiLabel = toDisplay(0, KIND.KWH_M2, unit, gia_m2).label || 'kWh/m²·yr'
+  const marginalEui    = convertDeltaRecord(marginalEuiRaw,    KIND.KWH_M2)
+  const marginalCarbon = convertDeltaRecord(marginalCarbonRaw, KIND.KG_M2)
+  const cumEui         = convertDeltaRecord(cumEuiRaw,         KIND.KWH_M2)
+  const cumCarbon      = convertDeltaRecord(cumCarbonRaw,      KIND.KG_M2)
+  // Compute the unit labels once. For carbon, use a representative value
+  // (typical cumulative delta magnitude) so the auto-promote kg→tCO₂ picks
+  // the same label as the actual cell. Falling back to baseline magnitude.
+  const euiLabel    = toDisplay(0, KIND.KWH_M2, unit, gia_m2).label || 'kWh/m²·yr'
+  const carbonLabel = toDisplay(cumCarbonRaw?.to ?? cumCarbonRaw?.delta ?? 0, KIND.KG_M2, unit, gia_m2).label || 'kgCO₂/m²·yr'
 
   return (
     <div
@@ -317,6 +321,7 @@ export default function InterventionRow({
             muted={!isEnabled}
             forceEmpty={isEmpty}
             euiUnitLabel={euiLabel}
+            carbonUnitLabel={carbonLabel}
           />
         </>
       )}

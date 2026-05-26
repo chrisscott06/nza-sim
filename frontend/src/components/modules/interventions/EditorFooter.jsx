@@ -76,15 +76,18 @@ export default function EditorFooter({
   const euiDelta    = (Number.isFinite(previewEui) && Number.isFinite(baselineEui)) ? previewEui - baselineEui : null
   const carbonDelta = (Number.isFinite(previewCarbon) && Number.isFinite(baselineCarbon)) ? previewCarbon - baselineCarbon : null
 
-  // Convert baseline + preview + delta to the chosen display unit. Carbon
-  // stays kgCO₂/m²·yr regardless of toggle.
+  // Convert baseline + preview + delta to the chosen display unit.
+  // 2026-05-26: carbon also honours the toggle (kgCO₂/m²·yr ↔ tCO₂).
   const baselineConv = toDisplay(baselineEui, KIND.KWH_M2, unit, gia_m2)
   const previewConv  = toDisplay(previewEui,  KIND.KWH_M2, unit, gia_m2)
   const deltaConv    = toDisplay(euiDelta,    KIND.KWH_M2, unit, gia_m2)
   const euiUnitLabel = baselineConv.label || previewConv.label || 'kWh/m²·yr'
 
+  const carbonDeltaConv = toDisplay(carbonDelta, KIND.KG_M2, unit, gia_m2)
+  const carbonUnitLabel = carbonDeltaConv.label || 'kgCO₂/m²·yr'
+
   const euiFmt    = fmtDelta(deltaConv.value, euiUnitLabel)
-  const carbonFmt = fmtDelta(carbonDelta, 'kgCO₂/m²')
+  const carbonFmt = fmtDelta(carbonDeltaConv.value, carbonUnitLabel)
 
   return (
     <div className="flex-shrink-0 border-t border-light-grey bg-white px-3 py-2 flex items-center gap-3 flex-wrap">
