@@ -4265,18 +4265,39 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
   const heating_demand_state2_mwh = state2Result.demand?.heating_demand_mwh ?? 0
   const cooling_demand_mwh        = state2Result.demand?.cooling_demand_mwh ?? 0
 
-  // DHW demand (Brief 28f Part 5.1): annual_occupant_hours × per-person DHW
-  // load, where per-person load is derived from the three new DHW formula
-  // inputs (litres_per_person_per_day, store_temperature_c, cold_mains_
-  // temperature_c) with defaults 80/60/10. At defaults the per-person-hour
-  // value is 0.1935 kWh — byte-identical to the Part 4 ship constant.
-  const annual_occupant_hours = state2Result.occupancy_summary?.annual_occupant_hours ?? 0
+  // DHW demand (Brief 28f Part 5.1, Brief 58 B3 fix 2026-05-26).
+  //
+  // PRE-B3: dhw_demand_kwh = annual_occupant_hours × per-person-hour
+  //   load. That scales DHW with PRESENCE TIME — wrong because DHW is a
+  //   per-HEAD event (one guest, one shower, regardless of dwell hours).
+  //
+  // POST-B3: HEADCOUNT basis. Read peak headcount from building.{num_bedrooms,
+  //   people_per_room, occupancy_rate} directly (the same source the v40
+  //   per_person path now uses in systemsEngine.js _computeDhw). The
+  //   formula is `occupants × L_per_p_per_day × cp × ΔT_tap × 365 / 3.6e9`
+  //   in MWh, equivalent to the engine-side tap-mix-corrected boiler-litre
+  //   form (the hot_fraction cancels with ΔT_storage/ΔT_tap). B1 hand-calc
+  //   on Bridgewater predicts 204.8 MWh; B3 gate is ±0.5 MWh.
+  //
+  // NOTE: on projects where systems_config_v40.dhw is non-empty, this v25
+  // path's dhw_demand_mwh is shadowed by brief40Computed.dhw.
+  // demand_at_comfort_mwh at L4413 (`dhw_demand_displayed_mwh`). The fix
+  // here keeps the legacy v25 path consistent for projects without v40
+  // DHW (Brief 28k-era projects). The v40 fix lives in systemsEngine.js.
+  const dhw_num_rooms = Number(building?.num_bedrooms ?? 0)
+  const dhw_ppr       = Number(building?.people_per_room ?? 1.5)
+  const dhw_occ_rate  = Number(building?.occupancy_rate ?? 1)
+  const dhw_headcount = Math.max(0, dhw_num_rooms * dhw_ppr * dhw_occ_rate)
+  // dhwKwhPerPersonHour(L, store, cold) returns kWh per PERSON·HOUR using
+  // tap-mix-corrected storage delta. Multiplying by 8760 h/yr gives the
+  // annual headcount-based DHW demand (no occupancy_rate or schedule
+  // presence factor — DHW is a 24/7 per-head consumption).
   const dhw_kwh_per_person_hour = dhwKwhPerPersonHour(
     sys.dhw?.litres_per_person_per_day,
     sys.dhw?.store_temperature_c,
     sys.dhw?.cold_mains_temperature_c,
   )
-  const dhw_demand_kwh = annual_occupant_hours * dhw_kwh_per_person_hour
+  const dhw_demand_kwh = dhw_headcount * dhw_kwh_per_person_hour * 8760
   const dhw_demand_mwh = dhw_demand_kwh / 1000
 
   // ── Brief 40 Part 5b Section A (2026-05-19): per-service displacement ────

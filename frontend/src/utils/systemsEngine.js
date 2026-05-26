@@ -343,8 +343,12 @@ function _computeHeatingOrCooling(service, systems, serviceLevel, demandAtComfor
  *   serviceLevel         — the `systems_config_v40` object (so `dhw_*`
  *                          service-level fields can be read)
  *   gia                  — building GIA (m²), used for 'per_m2' basis
- *   annualOccupantHours  — sum of occupants × hour over the year, used for
- *                          'per_person' basis (read from state2Result)
+ *   building             — Brief 58 B3 (2026-05-26): read num_bedrooms,
+ *                          people_per_room, occupancy_rate for the
+ *                          headcount-basis 'per_person' DHW formula.
+ *                          (Pre-B3 took `annualOccupantHours` instead;
+ *                          that arg is gone — DHW is per-HEAD, not per
+ *                          occupant-second.)
  *
  * Service-level fields drive the building DHW demand math:
  *   - dhw_demand_basis         — 'per_m2' or 'per_person'
@@ -357,7 +361,7 @@ function _computeHeatingOrCooling(service, systems, serviceLevel, demandAtComfor
  * source-energy split. All DHW systems share the same building demand;
  * share_pct splits delivery across them.
  */
-function _computeDhw(systems, serviceLevel, gia, annualOccupantHours) {
+function _computeDhw(systems, serviceLevel, gia, building) {
   // Brief 42 Part 2 (2026-05-20): DHW building-level fields lifted to
   // service-level on `systems_config_v40`. Reads from `serviceLevel`
   // (the post-Brief-42 systems_config_v40 object); per-system entries
@@ -440,10 +444,22 @@ function _computeDhw(systems, serviceLevel, gia, annualOccupantHours) {
   if (demand_basis === 'per_person') {
     const litres_per_person_per_day = Number(serviceLevel?.dhw_demand_litres_per_person_per_day ?? 80)
     demand_litres_per_person_per_day_used = litres_per_person_per_day
-    // Per-person-day → annual L/yr from occupant-hours: L/yr = L/person/day ÷ 24 h × person·h/yr
-    // Equivalent total_tap_litres_per_day = annual_L / 365
-    const annual_litres = (annualOccupantHours / 24) * litres_per_person_per_day
-    total_tap_litres_per_day = annual_litres / 365
+    // Brief 58 B3 (2026-05-26): HEADCOUNT basis. Pre-B3, this branch
+    // computed `total_tap = (annualOccupantHours / 24) × L_per_p_per_day
+    // / 365`, which scales DHW with PRESENCE TIME. Wrong — DHW is a
+    // per-HEAD event (one guest, one shower, regardless of dwell time).
+    // The new formula reads peak headcount from building.{num_bedrooms,
+    // people_per_room, occupancy_rate}, where occupancy_rate factors
+    // in for partially-occupied projects (a 75 %-occupied hotel uses
+    // 0.75 × peak DHW). B1 hand-calc on Bridgewater: 134 × 1.5 × 1.0
+    // = 201 occupants → total_tap = 201 × 80 = 16,080 L/day →
+    // annual thermal = 204.8 MWh (matches B1 hand-calc, B3 gate
+    // ±0.5 MWh).
+    const num_rooms = Number(building?.num_bedrooms ?? 0)
+    const ppr       = Number(building?.people_per_room ?? 1.5)
+    const occ_rate  = Number(building?.occupancy_rate ?? 1)
+    const occupants = Math.max(0, num_rooms * ppr * occ_rate)
+    total_tap_litres_per_day = occupants * litres_per_person_per_day
   } else {  // 'per_m2'
     const litres_per_m2_per_day = Number(serviceLevel?.dhw_demand_litres_per_m2_per_day ?? 1.1)
     demand_litres_per_m2_day_used = litres_per_m2_per_day
@@ -722,7 +738,10 @@ export function computeSystemsDelivered({ building, state2Result, comfortBand, s
                             ? heatingDemandOverrideMwh
                             : (state2Result?.demand?.heating_demand_mwh ?? 0)
   const coolingDemandMwh = state2Result?.demand?.cooling_demand_mwh ?? 0
-  const annualOccupantHours = state2Result?.occupancy_summary?.annual_occupant_hours ?? 0
+  // Brief 58 B3 (2026-05-26): annualOccupantHours retired from the DHW
+  // path — see _computeDhw signature comment. Still read from state2 for
+  // ventilation (peakOccupants below) and any future per-second flow
+  // calculations.
   const peakOccupants       = state2Result?.occupancy_summary?.peak_people ?? 0
   const lightingGainMwh     = (state2Result?.heat_balance?.annual?.gains?.internal?.lighting?.kwh ?? 0) / 1000
   const equipmentGainMwh    = (state2Result?.heat_balance?.annual?.gains?.internal?.equipment?.kwh ?? 0) / 1000
@@ -736,7 +755,7 @@ export function computeSystemsDelivered({ building, state2Result, comfortBand, s
   // owns MVHR recovery exclusively after Brief 50 (see signature comment).
   const heating = _computeHeatingOrCooling('heating', cfg.heating ?? [], cfg, heatingDemandMwh, comfortBand, state2Recompute)
   const cooling = _computeHeatingOrCooling('cooling', cfg.cooling ?? [], cfg, coolingDemandMwh, comfortBand, state2Recompute)
-  const dhw     = _computeDhw(cfg.dhw ?? [], cfg, gia, annualOccupantHours)
+  const dhw     = _computeDhw(cfg.dhw ?? [], cfg, gia, building)
   const ventilation = _computeVentilation(cfg.ventilation ?? [], gia, peakOccupants)
   const lighting    = _computeThin(cfg.lighting ?? [], lightingGainMwh)
   const small_power = _computeThin(cfg.small_power ?? [], equipmentGainMwh)

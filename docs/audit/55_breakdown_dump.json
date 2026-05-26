@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-26T22:10:10.953Z",
+  "generated_at": "2026-05-26T22:20:45.685Z",
   "api": "http://127.0.0.1:8003",
   "project": {
     "id": "14b4a5b1-8c73-4acb-8b65-1d22f05ec969",
@@ -15,12 +15,12 @@
     "VRF 4.0"
   ],
   "baseline": {
-    "eui_kwh_per_m2": 69.1,
+    "eui_kwh_per_m2": 109.9,
     "consumption_total": {
-      "electricity_mwh": 298.632,
-      "gas_mwh": 0,
+      "electricity_mwh": 327.254,
+      "gas_mwh": 147.654,
       "district_heat_mwh": 0,
-      "kwh_per_m2_yr": 69.1
+      "kwh_per_m2_yr": 109.9
     }
   },
   "interventions": [
@@ -115,16 +115,16 @@
             "good_when_positive": false,
             "path": "per_service.dhw.demand_mwh",
             "vs_step_above": {
-              "baseline": 0,
-              "after": 0,
+              "baseline": 204.444,
+              "after": 204.444,
               "delta": 0,
-              "delta_pct": null
+              "delta_pct": 0
             },
             "vs_original": {
-              "baseline": 0,
-              "after": 0,
+              "baseline": 204.444,
+              "after": 204.444,
               "delta": 0,
-              "delta_pct": null
+              "delta_pct": 0
             }
           }
         ],
@@ -212,16 +212,16 @@
             "good_when_positive": false,
             "path": "per_service.dhw.delivered_mwh",
             "vs_step_above": {
-              "baseline": 0,
-              "after": 0,
+              "baseline": 204.443,
+              "after": 204.443,
               "delta": 0,
-              "delta_pct": null
+              "delta_pct": 0
             },
             "vs_original": {
-              "baseline": 0,
-              "after": 0,
+              "baseline": 204.443,
+              "after": 204.443,
               "delta": 0,
-              "delta_pct": null
+              "delta_pct": 0
             }
           }
         ],
@@ -233,16 +233,16 @@
             "good_when_positive": false,
             "path": "per_fuel.electricity_mwh",
             "vs_step_above": {
-              "baseline": 298.632,
-              "after": 254.774,
+              "baseline": 327.254,
+              "after": 283.396,
               "delta": -43.858000000000004,
-              "delta_pct": -14.686302874440784
+              "delta_pct": -13.401822437617264
             },
             "vs_original": {
-              "baseline": 298.632,
-              "after": 254.774,
+              "baseline": 327.254,
+              "after": 283.396,
               "delta": -43.858000000000004,
-              "delta_pct": -14.686302874440784
+              "delta_pct": -13.401822437617264
             }
           },
           {
@@ -252,16 +252,16 @@
             "good_when_positive": false,
             "path": "per_fuel.gas_mwh",
             "vs_step_above": {
-              "baseline": 0,
-              "after": 0,
+              "baseline": 147.654,
+              "after": 147.654,
               "delta": 0,
-              "delta_pct": null
+              "delta_pct": 0
             },
             "vs_original": {
-              "baseline": 0,
-              "after": 0,
+              "baseline": 147.654,
+              "after": 147.654,
               "delta": 0,
-              "delta_pct": null
+              "delta_pct": 0
             }
           },
           {
@@ -309,14 +309,14 @@
             "good_when_positive": false,
             "path": "per_service.dhw.electricity_mwh",
             "vs_step_above": {
-              "baseline": 1.051,
-              "after": 1.051,
+              "baseline": 29.673,
+              "after": 29.673,
               "delta": 0,
               "delta_pct": 0
             },
             "vs_original": {
-              "baseline": 1.051,
-              "after": 1.051,
+              "baseline": 29.673,
+              "after": 29.673,
               "delta": 0,
               "delta_pct": 0
             }
@@ -328,16 +328,16 @@
             "good_when_positive": false,
             "path": "per_service.dhw.gas_mwh",
             "vs_step_above": {
-              "baseline": 0,
-              "after": 0,
+              "baseline": 147.654,
+              "after": 147.654,
               "delta": 0,
-              "delta_pct": null
+              "delta_pct": 0
             },
             "vs_original": {
-              "baseline": 0,
-              "after": 0,
+              "baseline": 147.654,
+              "after": 147.654,
               "delta": 0,
-              "delta_pct": null
+              "delta_pct": 0
             }
           },
           {
@@ -368,16 +368,16 @@
             "good_when_positive": false,
             "path": "eui_kwh_per_m2",
             "vs_step_above": {
-              "baseline": 69.1,
-              "after": 58.9,
-              "delta": -10.199999999999996,
-              "delta_pct": -14.761215629522425
+              "baseline": 109.9,
+              "after": 99.7,
+              "delta": -10.200000000000003,
+              "delta_pct": -9.281164695177436
             },
             "vs_original": {
-              "baseline": 69.1,
-              "after": 58.9,
-              "delta": -10.199999999999996,
-              "delta_pct": -14.761215629522425
+              "baseline": 109.9,
+              "after": 99.7,
+              "delta": -10.200000000000003,
+              "delta_pct": -9.281164695177436
             }
           },
           {
@@ -387,16 +387,16 @@
             "good_when_positive": false,
             "path": "carbon_kgco2_per_m2",
             "vs_step_above": {
-              "baseline": 14.3,
-              "after": 12.2,
+              "baseline": 21.93,
+              "after": 19.83,
               "delta": -2.1000000000000014,
-              "delta_pct": -14.685314685314694
+              "delta_pct": -9.575923392612866
             },
             "vs_original": {
-              "baseline": 14.3,
-              "after": 12.2,
+              "baseline": 21.93,
+              "after": 19.83,
               "delta": -2.1000000000000014,
-              "delta_pct": -14.685314685314694
+              "delta_pct": -9.575923392612866
             }
           }
         ]
@@ -493,16 +493,16 @@
             "good_when_positive": false,
             "path": "per_service.dhw.demand_mwh",
             "vs_step_above": {
-              "baseline": 0,
-              "after": 0,
+              "baseline": 204.444,
+              "after": 204.444,
               "delta": 0,
-              "delta_pct": null
+              "delta_pct": 0
             },
             "vs_original": {
-              "baseline": 0,
-              "after": 0,
+              "baseline": 204.444,
+              "after": 204.444,
               "delta": 0,
-              "delta_pct": null
+              "delta_pct": 0
             }
           }
         ],
@@ -590,16 +590,16 @@
             "good_when_positive": false,
             "path": "per_service.dhw.delivered_mwh",
             "vs_step_above": {
-              "baseline": 0,
-              "after": 0,
+              "baseline": 204.443,
+              "after": 204.443,
               "delta": 0,
-              "delta_pct": null
+              "delta_pct": 0
             },
             "vs_original": {
-              "baseline": 0,
-              "after": 0,
+              "baseline": 204.443,
+              "after": 204.443,
               "delta": 0,
-              "delta_pct": null
+              "delta_pct": 0
             }
           }
         ],
@@ -611,16 +611,16 @@
             "good_when_positive": false,
             "path": "per_fuel.electricity_mwh",
             "vs_step_above": {
-              "baseline": 254.774,
-              "after": 237.305,
+              "baseline": 283.396,
+              "after": 265.927,
               "delta": -17.468999999999994,
-              "delta_pct": -6.856665122814727
+              "delta_pct": -6.164166043275133
             },
             "vs_original": {
-              "baseline": 298.632,
-              "after": 237.305,
+              "baseline": 327.254,
+              "after": 265.927,
               "delta": -61.327,
-              "delta_pct": -20.535977390232794
+              "delta_pct": -18.739877893012764
             }
           },
           {
@@ -630,16 +630,16 @@
             "good_when_positive": false,
             "path": "per_fuel.gas_mwh",
             "vs_step_above": {
-              "baseline": 0,
-              "after": 0,
+              "baseline": 147.654,
+              "after": 147.654,
               "delta": 0,
-              "delta_pct": null
+              "delta_pct": 0
             },
             "vs_original": {
-              "baseline": 0,
-              "after": 0,
+              "baseline": 147.654,
+              "after": 147.654,
               "delta": 0,
-              "delta_pct": null
+              "delta_pct": 0
             }
           },
           {
@@ -687,14 +687,14 @@
             "good_when_positive": false,
             "path": "per_service.dhw.electricity_mwh",
             "vs_step_above": {
-              "baseline": 1.051,
-              "after": 1.051,
+              "baseline": 29.673,
+              "after": 29.673,
               "delta": 0,
               "delta_pct": 0
             },
             "vs_original": {
-              "baseline": 1.051,
-              "after": 1.051,
+              "baseline": 29.673,
+              "after": 29.673,
               "delta": 0,
               "delta_pct": 0
             }
@@ -706,16 +706,16 @@
             "good_when_positive": false,
             "path": "per_service.dhw.gas_mwh",
             "vs_step_above": {
-              "baseline": 0,
-              "after": 0,
+              "baseline": 147.654,
+              "after": 147.654,
               "delta": 0,
-              "delta_pct": null
+              "delta_pct": 0
             },
             "vs_original": {
-              "baseline": 0,
-              "after": 0,
+              "baseline": 147.654,
+              "after": 147.654,
               "delta": 0,
-              "delta_pct": null
+              "delta_pct": 0
             }
           },
           {
@@ -746,16 +746,16 @@
             "good_when_positive": false,
             "path": "eui_kwh_per_m2",
             "vs_step_above": {
-              "baseline": 58.9,
-              "after": 54.9,
+              "baseline": 99.7,
+              "after": 95.7,
               "delta": -4,
-              "delta_pct": -6.791171477079796
+              "delta_pct": -4.012036108324975
             },
             "vs_original": {
-              "baseline": 69.1,
-              "after": 54.9,
-              "delta": -14.199999999999996,
-              "delta_pct": -20.549927641099853
+              "baseline": 109.9,
+              "after": 95.7,
+              "delta": -14.200000000000003,
+              "delta_pct": -12.920837124658782
             }
           },
           {
@@ -765,16 +765,16 @@
             "good_when_positive": false,
             "path": "carbon_kgco2_per_m2",
             "vs_step_above": {
-              "baseline": 12.2,
-              "after": 11.37,
-              "delta": -0.8300000000000001,
-              "delta_pct": -6.803278688524592
+              "baseline": 19.83,
+              "after": 18.99,
+              "delta": -0.8399999999999999,
+              "delta_pct": -4.236006051437216
             },
             "vs_original": {
-              "baseline": 14.3,
-              "after": 11.37,
-              "delta": -2.9300000000000015,
-              "delta_pct": -20.489510489510497
+              "baseline": 21.93,
+              "after": 18.99,
+              "delta": -2.9400000000000013,
+              "delta_pct": -13.406292749658007
             }
           }
         ]
