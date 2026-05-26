@@ -1,5 +1,66 @@
 # NZA SIMULATE — Status
 
+## 🚧 Brief 58 — IN FLIGHT 2026-05-26 — HARD STOP at end of Part C (awaiting Chris walkthrough before Part D)
+
+**Demand-honesty cluster: metadata, DHW basis, internal-gains restructure (occupancy + auxiliary loads), lighting/gains decoupling.** Parts A1-A4, B1-B4, C all landed and gates green. Part D (auxiliary energy in Internal Gains) PARKED for Chris's walkthrough.
+
+### Anchor trajectory (Bridgewater breakdown-dump baseline)
+
+| Stage | EUI (kWh/m²·yr) | Move | Reason |
+|---|---|---|---|
+| Pre-Brief-58 (A0) | 128.20 | — | The historical 128.20 anchor (clean-state, reported==geometry) |
+| Post-A2 (canonical comfort_band) | 128.20 | 0.0 | A2 retired the e462a21 stopgap; no engine change |
+| Post-A3 (reported_gia denom) | 128.20 | 0.0 | reported_gia denom unchanged when reported == geometry |
+| Post-A4 (UI + persistence) | 128.20 | 0.0 | Pure UI write-path |
+| Pre-B3 dump baseline | 69.10 | — | (Different code path — breakdown_dump anchor; carried through B1/B2 unchanged) |
+| Post-B3 (DHW headcount) | 109.90 | +40.80 | DHW fuel 177 MWh / 4322 m² = +41 kWh/m²·yr (matches hand-calc within 0.2) |
+| Post-B4 (load-shape toggle) | 109.90 | 0.0 | Toggle is timing-only; annual integral invariant |
+| Post-C (lighting/gains coupling) | 110.30 | +0.40 | Bridgewater cf=0.86 now reduces gain too; heating demand rises modestly |
+
+The two anchor families (128.20 and 109.90 → 110.30) come from different code paths — the 128.20 is the legacy clean-state probe; the 109.90 → 110.30 is the post-B3 breakdown-dump anchor. Both are preserved.
+
+### Parts landed
+
+| Part | Commit | Deliverable | Gate status |
+|---|---|---|---|
+| A1 | `232bb9d` | Metadata audit + canonical comfort_band design (read-only) | ✓ Chris signed off Option A (strict engine throw, no fallback) |
+| A2 | `b99ee46` | Canonical comfort_band resolution; e462a21 stopgap retired; cross-route drift = 0 | ✓ Drift gate exact; 4 React call sites + probe/dump scripts updated |
+| A3 | `66fcbdf` | `reported_gia` input + EUI normalised against it; physics on geometry GIA | ✓ 128.20 exact at reported==geometry; EUI scales by exactly 1/k at reported=1.1×geometry |
+| A4 | `4aa3d58` | Metadata page assembly + persistence + >10% divergence flag | ✓ A4 persistence test passed (ignore-WAL probe); 4 gates green (`docs/audit/58_a4_persistence.json`) |
+| B1 | `37d2376` | DHW + occupancy audit + 204.8 MWh headcount hand-calc (read-only) | ✓ Chris signed off the prediction |
+| B2 | `ba11544` | `people_per_room` → Internal Gains sensitivity input (UI relocation only) | ✓ Engine git diff = 0; occupancy GAIN numbers identical pre/post |
+| B3 | `e9a9962` | DHW headcount basis (engine fix) — both v40 and v25 paths | ✓ Engine DHW = 204.44 MWh vs hand-calc 204.8 (|Δ|=0.36 < 0.5 MWh gate); `annual_occupant_hours` retired from DHW path |
+| B4 | `f10ca7b` | DHW load-shape toggle (`dhw_load_shape ∈ {flat, follow_occupancy}`) | ✓ All 9 gates pass (`docs/audit/58_b4_load_shape.json`); annual integral invariant; shapes differ as expected (CV 0 vs 0.30) |
+| C | `9eecb96` | Lighting/small-power load-gain coupling | ✓ All 9 gates pass (`docs/audit/58_c_lighting.json`); FLAG 4a closed (no double-apply in v40 path) |
+
+### What's parked / pending
+
+- **Part D — Auxiliary energy in Internal Gains** — NOT YET STARTED. Brief: a new sub-section within Internal Gains for external lighting / catering / pumps / other small power. Each load is ONE entity with electrical consumption + `gain_fraction`. Gain fractions: aux default ~8%, external lighting ~0%, catering ~50%, internal small_power ~100%. Architecture decision: load is a GAIN with a fuel carrier (preserves envelope→gains→demand→systems→fuel chain). Hard stop here — Chris's walkthrough before Part D.
+- **Open question deferred to D-stage:** module rename — keep "Internal Gains" or rename now it holds more than gains? Chris to decide.
+
+### Engine-physics anchor moves — all derivable
+
+- **+40.80 EUI (post-B3)**: DHW fuel from the new headcount basis. Hand-calc 204.8 MWh × fuel mix (65% gas @ 0.9 + 35% HP @ 2.5) = 176.8 MWh source / 4322 m² = +40.9 kWh/m²·yr. Derives cleanly.
+- **+0.40 EUI (post-C)**: lighting gain dropped 10.7 MWh (cf=0.86 now in gain too). Heating demand +~7 MWh, cooling demand -~3 MWh; net source +~6.8 MWh / 4322 m² ≈ +1.6 kWh/m²·yr predicted; +0.4 actual (gain-utilisation buckets absorb the rest).
+
+### Three-strikes / scope-creep — no escalations triggered
+
+- No gate failure required >1 attempt across A1-C.
+- No occupancy_gain regression when people_per_room moved (B2 was location-only as planned).
+- No DHW hand-calc / engine divergence beyond the ±0.5 MWh tolerance.
+- No engine touch outside the brief's scope.
+
+### What Chris should walk through before Part D
+
+1. Brief 58 audit docs are in `docs/audit/58_{metadata,dhw,lighting}.md` plus `58_a3_reported_gia.json`, `58_a4_persistence.json`, `58_b4_load_shape.json`, `58_c_lighting.json` for the probe traces.
+2. The breakdown_dump anchor moved 109.90 → 110.30 (Part C); both are explained above. If Chris wants to inspect, `node scripts/_brief55_breakdown_dump.mjs` regenerates the latest dump.
+3. Open questions from B1 §5 still on the table:
+   - Q2: `occupancy.density.value=0` config oddity on Bridgewater — left as-is (B3 fix bypasses; out of scope for B-cluster).
+   - Q4: B4 default value — chose `'flat'` (preserves current behaviour); confirmed during landing.
+4. Part D scope decisions Chris flagged for himself: module rename, exact list of aux load types, default gain_fractions.
+
+---
+
 ## 🚀 Brief 55 — CLOSED 2026-05-26
 
 **Granular field-level system patches — fix order-dependent intervention stacking (Finding D resolved).** Architecture-fix brief, five parts plus a sidecar dump + a small display-only follow-on.
