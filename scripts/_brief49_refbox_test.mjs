@@ -147,7 +147,25 @@ const constructions = {
 }
 
 // Build the reference box building config.
-function makeRefBox({ heatScop = 3.0, ventFlow_l_s = 500, ventHre = 0.75, ventSfp = 0, ventEnabled = true } = {}) {
+//
+// `v40Heating` (default false): when true, populate v40 heating with one
+// system at `heatScop` SCOP + service-level setpoint fields. This routes
+// heating through `_computeHeatingOrCooling` (where the custom-setpoint
+// logic lives — Probe 4 needs this path). When false (default), heating
+// uses the v25 path (Probes 1–3 don't need the setpoint logic).
+//
+// `setpointMode` / `setpointC` (only meaningful when v40Heating=true):
+// 'follow_comfort' (default) or 'custom' with a specific heating_setpoint_c.
+function makeRefBox({
+  heatScop = 3.0,
+  ventFlow_l_s = 500,
+  ventHre = 0.75,
+  ventSfp = 0,
+  ventEnabled = true,
+  v40Heating = false,
+  setpointMode = 'follow_comfort',
+  setpointC = null,
+} = {}) {
   const heatLibId = heatScop === 4.0 ? 'refbox_heat_scop4' : 'refbox_heat_scop3'
   return {
     name: 'REFBOX',
@@ -173,8 +191,28 @@ function makeRefBox({ heatScop = 3.0, ventFlow_l_s = 500, ventHre = 0.75, ventSf
     fabric: {},
     thermal_mass_mode: 'category',
     thermal_mass_category: 'lightweight',
-    // No v40 so engine uses v25 path exclusively (no silent fallback)
-    systems_config_v40: { heating: [], cooling: [], dhw: [], ventilation: [], lighting: [], small_power: [] },
+    // v40 heating populated only when probe needs the _computeHeatingOrCooling
+    // path. Service-level setpoint fields are set at the cfg root per Brief 42.
+    systems_config_v40: v40Heating
+      ? {
+          heating: [{
+            id: 'refbox_heat_v40',
+            label: 'Refbox heating (v40)',
+            service: 'heating',
+            source: 'electricity',
+            efficiency_metric: heatScop,
+            share_pct: 100,
+            enabled: true,
+          }],
+          cooling: [], dhw: [],
+          ventilation: [], lighting: [], small_power: [],
+          // Service-level setpoint fields (Brief 42)
+          heating_setpoint_mode: setpointMode,
+          heating_setpoint_c:    setpointC,
+          cooling_setpoint_mode: 'follow_comfort',
+          cooling_setpoint_c:    null,
+        }
+      : { heating: [], cooling: [], dhw: [], ventilation: [], lighting: [], small_power: [] },
     systems_config_v25: {
       // Force LPD/EPD to 0 — no internal gains from lighting/equipment
       lighting_power_density: 0,
@@ -420,6 +458,109 @@ console.log(`    PROBE 3 VERDICT: ${p3_verdict}`)
 probeResults.probe3 = { sweep, p3_max_ratio, p3_exceeds_ceiling, verdict: p3_verdict, ventLossFull }
 
 // ════════════════════════════════════════════════════════════════════════
+// PROBE 4 — Custom heating setpoint (FLAG 3a falsifiability)
+// ════════════════════════════════════════════════════════════════════════
+//
+// Brief 50 Part 4 deleted the `offsetRatio` block in
+// `_computeHeatingOrCooling`. That block bridged State 3's pre-Brief-50
+// recovery subtraction to the State 2 recompute at custom setpoints.
+// With the State 3 subtraction gone (Part 2) and State 2 owning recovery
+// via (1−HRE), the workaround was argued to be dead-code-by-data-flow.
+//
+// FLAG 3a (overnight audit): "monotonic by construction" is an argument,
+// not a measurement. The refbox Probes 1–3 all run at the comfort
+// setpoint, so the custom-setpoint code path is NOT exercised. This
+// probe exercises it and asserts MVHR is still credited at the new
+// setpoint.
+//
+// Three sub-scenarios at comfort=20°C (lower comfort), all v40-heating-routed:
+//   4a — HRE=0.75, follow_comfort       → baseline
+//   4b — HRE=0.75, custom heating=23    → MVHR ON at custom setpoint
+//   4c — HRE=0.00, custom heating=23    → MVHR OFF at custom setpoint (reference)
+//
+// Key assertion: at the custom setpoint, the MVHR savings (4c - 4b)
+// should be approximately `vent_loss_at_23 × HRE`. If 4b == 4c (engine
+// returns RAW pre-recovery demand at the custom setpoint), FLAG 3a
+// has fired: `demand_at_service_setpoint_mwh = rawDemandAtSetpointMwh`
+// is sourcing pre-recovery demand, and Part 2's replacement line needs
+// to re-source from the post-recovery State 2 value at that setpoint.
+console.log()
+console.log('========================================================')
+console.log('  PROBE 4 — Custom heating setpoint (FLAG 3a falsifiability)')
+console.log('========================================================')
+console.log(`  Runs three v40-heating scenarios. Comfort lower = ${COMFORT.lower_c}°C, custom = 23°C.`)
+console.log()
+
+const r4a = runEngine(makeRefBox({ heatScop: 3.0, ventHre: 0.75, ventSfp: 0, v40Heating: true, setpointMode: 'follow_comfort' }), COMFORT)
+const r4b = runEngine(makeRefBox({ heatScop: 3.0, ventHre: 0.75, ventSfp: 0, v40Heating: true, setpointMode: 'custom', setpointC: 23 }), COMFORT)
+const r4c = runEngine(makeRefBox({ heatScop: 3.0, ventHre: 0.00, ventSfp: 0, v40Heating: true, setpointMode: 'custom', setpointC: 23 }), COMFORT)
+
+const p4a = pick(r4a), p4b = pick(r4b), p4c = pick(r4c)
+
+console.log('  Engine output:')
+console.log('    Scenario                                raw_demand    delivered    heating_elec    recovery_off')
+console.log('    ─────────────────────────────────────────────────────────────────────────────────────────────')
+console.log(`    4a — HRE 0.75, follow_comfort (20°C)   ${fmt(p4a.sh_demand_mwh, 3).padStart(9)}    ${fmt(p4a.sh_delivered_mwh, 3).padStart(9)}    ${fmt(p4a.sh_electricity_mwh, 3).padStart(9)}      ${fmt(p4a.sh_recovery_off_mwh, 3).padStart(9)}`)
+console.log(`    4b — HRE 0.75, custom (23°C)            ${fmt(p4b.sh_demand_mwh, 3).padStart(9)}    ${fmt(p4b.sh_delivered_mwh, 3).padStart(9)}    ${fmt(p4b.sh_electricity_mwh, 3).padStart(9)}      ${fmt(p4b.sh_recovery_off_mwh, 3).padStart(9)}`)
+console.log(`    4c — HRE 0.00, custom (23°C)            ${fmt(p4c.sh_demand_mwh, 3).padStart(9)}    ${fmt(p4c.sh_delivered_mwh, 3).padStart(9)}    ${fmt(p4c.sh_electricity_mwh, 3).padStart(9)}      ${fmt(p4c.sh_recovery_off_mwh, 3).padStart(9)}`)
+console.log()
+
+// Hand-calc references at the new setpoint
+// Annual integrated heating-degree-hours @ 23°C base for the hand-calc:
+let dT_integral_at_23 = 0
+for (let i = 0; i < N; i++) {
+  const dT = 23 - temperature[i]
+  if (dT > 0) dT_integral_at_23 += dT
+}
+const P4_FLOW = 500
+const vent_loss_at_23_full = (P4_FLOW / 1000) * AIR_HC_J_PER_M3_K * dT_integral_at_23 * 3600 / 3.6e9  // MWh, no HRE
+const vent_loss_at_23_with_hre = vent_loss_at_23_full * (1 - 0.75)
+const vent_recovery_at_23 = vent_loss_at_23_full * 0.75
+
+console.log('  Hand-calc reference (at 23°C custom setpoint):')
+console.log(`    dT_integral @ 23°C base = ${dT_integral_at_23.toFixed(0)} K·h  (vs ${dT_integral_K_hours.toFixed(0)} at ${T_BASE}°C)`)
+console.log(`    Full vent loss @ 23°C (no HRE)         = ${fmt(vent_loss_at_23_full)} MWh`)
+console.log(`    Vent loss @ 23°C with HRE 0.75 (factor 0.25) = ${fmt(vent_loss_at_23_with_hre)} MWh`)
+console.log(`    Recoverable @ 23°C (vent_loss × HRE 0.75) = ${fmt(vent_recovery_at_23)} MWh  ← amount MVHR should save at 23°C if credited`)
+console.log()
+
+// Decisive deltas
+const delta_4c_4b_delivered    = (p4c.sh_delivered_mwh   ?? 0) - (p4b.sh_delivered_mwh   ?? 0)
+const delta_4c_4b_electricity  = (p4c.sh_electricity_mwh ?? 0) - (p4b.sh_electricity_mwh ?? 0)
+const delta_4b_4a_delivered    = (p4b.sh_delivered_mwh   ?? 0) - (p4a.sh_delivered_mwh   ?? 0)
+
+console.log('  Decisive deltas:')
+console.log(`    Δ delivered (4c − 4b) at custom 23°C   = ${fmt(delta_4c_4b_delivered, 3)} MWh  (expect ≈ +${fmt(vent_recovery_at_23, 1)} = MVHR savings at 23°C)`)
+console.log(`    Δ heating elec (4c − 4b) at custom 23°C = ${fmt(delta_4c_4b_electricity, 3)} MWh  (expect ≈ +${fmt(vent_recovery_at_23 / 3.0, 1)} = / SCOP 3.0)`)
+console.log(`    Δ delivered (4b − 4a) setpoint shift  = ${fmt(delta_4b_4a_delivered, 3)} MWh  (informational — demand rise from 20°C → 23°C with MVHR on)`)
+console.log()
+
+// Verdict logic for FLAG 3a
+let p4_verdict = ''
+const expected_savings = vent_recovery_at_23
+const tolerance        = expected_savings * 0.15  // ±15% (per-hour cap effects + fabric vs vent ratio)
+
+if (Math.abs(delta_4c_4b_delivered - expected_savings) < tolerance) {
+  // MVHR credited at custom setpoint — Δdelivered ≈ vent_recovery_at_23
+  p4_verdict = `✓ MVHR IS CREDITED at custom setpoint. Δ delivered (4c − 4b) = ${fmt(delta_4c_4b_delivered, 1)} MWh ≈ hand-calc ${fmt(expected_savings, 1)} MWh (within ${(100*Math.abs(delta_4c_4b_delivered - expected_savings)/expected_savings).toFixed(1)}%). FLAG 3a CLEARED.`
+} else if (Math.abs(delta_4c_4b_delivered) < expected_savings * 0.1) {
+  // 4b == 4c (within 10% of expected savings) → MVHR not credited at custom setpoint
+  p4_verdict = `✗ FLAG 3a FIRED — MVHR is NOT credited at custom setpoint. Δ delivered (4c − 4b) = ${fmt(delta_4c_4b_delivered, 1)} MWh ≈ 0, but hand-calc expects ${fmt(expected_savings, 1)} MWh. Engine is sourcing PRE-RECOVERY demand at the custom setpoint.`
+} else {
+  p4_verdict = `⚠ UNCLEAR — Δ delivered (4c − 4b) = ${fmt(delta_4c_4b_delivered, 1)} MWh vs hand-calc ${fmt(expected_savings, 1)} MWh (${(100*Math.abs(delta_4c_4b_delivered - expected_savings)/expected_savings).toFixed(1)}% off). Outside both pass tolerance and "≈ 0" fail zone. Manual investigation.`
+}
+
+console.log('  PROBE 4 VERDICT:')
+console.log(`    ${p4_verdict}`)
+
+probeResults.probe4 = {
+  scenarios: { a: p4a, b: p4b, c: p4c },
+  hand_calc: { dT_integral_at_23, vent_loss_at_23_full, vent_loss_at_23_with_hre, vent_recovery_at_23 },
+  deltas: { delta_4c_4b_delivered, delta_4c_4b_electricity, delta_4b_4a_delivered },
+  verdict: p4_verdict,
+}
+
+// ════════════════════════════════════════════════════════════════════════
 // COMBINED VERDICT
 // ════════════════════════════════════════════════════════════════════════
 console.log()
@@ -429,6 +570,7 @@ console.log('========================================================')
 console.log(`  PROBE 1: ${probeResults.probe1.verdict}`)
 console.log(`  PROBE 2: ${probeResults.probe2.verdict}`)
 console.log(`  PROBE 3: ${probeResults.probe3.verdict}`)
+console.log(`  PROBE 4: ${probeResults.probe4.verdict}`)
 console.log()
 
 let combinedVerdict = ''

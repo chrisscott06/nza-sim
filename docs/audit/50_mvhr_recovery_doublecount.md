@@ -472,7 +472,7 @@ All 7 brief targets at end of Brief 50:
 | 4 | Single owner: recovery applied in exactly one place (State 2) | ✓ confirmed via grep; State 3 subtraction deleted in Part 2 |
 | 5 | Panel reconciles: BreakdownPanel "Heat recovered by MVHR" row = `raw − delivered` | ⚠ **SEMANTIC MISMATCH — needs follow-up** (see §7.6) |
 | 6 | EUI from first principles | ✓ Part 2 +6.00 predicted +5.99; Part 6 +0.30 predicted +0.479 (small discrepancy from recovery_offset re-display, in-band) |
-| 7a | No setpoint regression (0.5°C change still monotonic) | ✓ by construction (Part 4 §5.4 — no recovery offset to over-subtract) |
+| 7a | No setpoint regression (0.5°C change still monotonic) | ✓ **measured via refbox Probe 4 §7.8 (overnight audit FLAG 3a cleared)** — engine credits MVHR at custom setpoints; Δ delivered (HRE 0.75 vs HRE 0 at custom 23°C) = 46.1 MWh ≈ hand-calc 46.7 MWh (1.4%). Was "by construction" before audit. |
 | 7b | v40 disable produces visible engine response | ✓ Part 5 + Part 6 (complete response after Part 6) |
 | 7c | One HRE value across paths | ✓ Part 6 (both State 2 + State 3 read v40 HRE 0.75 for Bridgewater) |
 | 7d | Non-MVHR numbers unchanged | ✓ State B harness numbers match within rounding (delivered, heating elec, etc.) |
@@ -508,3 +508,55 @@ After Brief 50, `delivered_mwh` equals `demand_mwh` (both = State 2 post-MVHR de
 | Target 5 panel reconciliation | `raw − delivered = recovery` | mismatch — needs follow-up | ⚠ recorded |
 
 Six green, one yellow (target 5 — recorded for Part 7 + follow-up brief). Safe to proceed to Part 7 (walkthrough + close).
+
+### §7.8 Probe 4 — Custom-setpoint MVHR credit (overnight audit FLAG 3a)
+
+**Audit flag (Chris):** "The offsetRatio block you deleted in Part 4 existed to bridge recovery to demand AT CUSTOM SETPOINTS. The refbox Probe 1 runs at the comfort setpoint, so it does NOT exercise the custom-setpoint path. 'Monotonic by construction' is an argument, not a measurement — we don't accept 'by construction' for a boundary question."
+
+Fair flag. Building Probe 4 — same reference box, but with v40 heating populated (so `_computeHeatingOrCooling` actually runs) + service-level setpoint fields varied.
+
+**Three sub-scenarios** (comfort lower = 20°C, custom = 23°C):
+
+| Scenario | HRE | setpoint_mode | engine raw_demand | engine delivered | engine heating_elec |
+|---|---:|---|---:|---:|---:|
+| 4a | 0.75 | follow_comfort (20°C) | 147.800 | **147.800** | 49.267 |
+| 4b | 0.75 | custom (23°C)         | 147.800 | **199.400** | 66.467 |
+| 4c | 0.00 | custom (23°C)         | 182.600 | **245.500** | 81.833 |
+
+(Note: `consumption.space_heating.demand_mwh` reports the comfort-setpoint State 2 demand in all three; the setpoint-resolved demand lives on `delivered_mwh` since post-Brief-50 delivered = demand-at-active-setpoint × share. 4a delivered = 4a raw because the active setpoint IS the comfort setpoint.)
+
+**Hand-calc reference** at 23°C custom setpoint (vent flow 500 L/s):
+- `dT_integral @ 23°C base` = 103,358 K·h (vs 77,967 at 20°C — 33% more degree-hours)
+- Full vent loss @ 23°C without HRE = **62.325 MWh**
+- Vent loss @ 23°C with HRE 0.75 (factor 0.25) = 15.581 MWh
+- **Recoverable @ 23°C** = vent_loss × HRE = 62.325 × 0.75 = **46.744 MWh** ← what MVHR saves at 23°C if credited
+
+**Decisive deltas:**
+
+| Δ | Engine | Hand-calc | Match? |
+|---|---:|---:|---|
+| Δ delivered (4c − 4b) at custom 23°C | **+46.100 MWh** | +46.744 MWh | ✓ within **1.4 %** |
+| Δ heating electricity (4c − 4b) at custom 23°C | +15.366 MWh | +15.581 MWh (= recoverable/SCOP 3.0) | ✓ within 1.4 % |
+| Δ delivered (4b − 4a) setpoint shift (20°C → 23°C, MVHR on) | +51.600 MWh | n/a | informational — sensible monotonic, no 248 % return |
+
+**Verdict — FLAG 3a CLEARED:**
+- At the custom setpoint, MVHR IS credited. The recompute returns POST-MVHR demand at the new setpoint (because State 2's `(1 − HRE)` factor on vent UA applies at ANY setpoint the integral uses — vent UA is setpoint-independent, only the `max(0, T_setpoint − T_out)` integral changes).
+- If MVHR were NOT credited (the FLAG 3a regression), 4b delivered would equal 4c delivered (both = raw pre-recovery demand at 23°C). Observed Δ = 46.1 MWh ≠ 0 → MVHR is credited.
+- The setpoint shift Δ (4b − 4a) = +51.6 MWh is the legitimate "user changed setpoint from 20°C to 23°C with MVHR on" demand rise. Sensible monotonic. No 248 % over-delivery.
+
+**Engine self-consistency:** Probe 4 also confirms the fuel path remains faithful at custom setpoints: 4b heating elec / 4b delivered = 66.467 / 199.400 = 0.3333 = 1/3 exactly = 1/SCOP. 4c heating elec / 4c delivered = 81.833 / 245.500 = 0.3333 exactly. Probe 2's fuel-path discipline holds at every setpoint.
+
+**Falsifiability gate update:** target 7a now empirically verified — change to row 7a in §7.5 from "✓ by construction" to "✓ measured via Probe 4".
+
+**Where in the code path is the MVHR credit happening at the custom setpoint?**
+
+1. `_computeHeatingOrCooling` (`systemsEngine.js` L262 onward) detects `setpointDiffers === true` because `heating_setpoint_mode === 'custom'` and `|setpoint_resolved − comfortBand.lower_c| > 0.05`.
+2. Calls `state2Recompute({ heating: setpoint_resolved })` — this is the closure captured in `_calculateState3` that re-runs `_calculateState2` with a heating setpoint override.
+3. Inside the re-run `_calculateState2`, the per-system ventilation projection at L2530 builds vent UA from `building.systems_config_v25.ventilation` with Brief 50 Part 6's v40 HRE override applied → vent UA uses `(1 − v40.HRE)` factor.
+4. The vent loss integral uses `max(0, T_setpoint − T_out)` per hour where `T_setpoint = 23°C` (the override). Vent UA is unchanged; only the per-hour temperature integral changes.
+5. The recomputed `heating_demand_mwh` = fabric_loss + (1 − HRE) × vent_loss + infiltration_loss − gains × util, all evaluated at the new setpoint → **post-MVHR demand at the custom setpoint**.
+6. `_computeHeatingOrCooling` sets `demand_at_service_setpoint_mwh = rawDemandAtSetpointMwh` (the recomputed post-MVHR value).
+7. delivered = demand × share = post-MVHR demand at custom setpoint × 100% = 199.4 ✓
+8. fuel = delivered / SCOP = 199.4 / 3.0 = 66.467 ✓
+
+The Part 4 "by construction" argument was that `state2Recompute` returns post-MVHR demand because State 2's vent UA factor is setpoint-independent. Probe 4 measures this directly and confirms the construction holds.
