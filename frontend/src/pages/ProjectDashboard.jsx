@@ -166,7 +166,7 @@ function MiniCRREMChart({ crremData, modelledEui, actualEui }) {
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export default function ProjectDashboard() {
-  const { params, constructions, systems, currentProjectId, projects } = useContext(ProjectContext)
+  const { params, constructions, systems, currentProjectId, projects, comfortBand } = useContext(ProjectContext)
   const { results, status: simStatus, runSimulation } = useContext(SimulationContext)
   const { weatherData }  = useWeather()
   const hourlySolar      = useHourlySolar(weatherData, params?.orientation ?? 0)
@@ -201,9 +201,10 @@ export default function ProjectDashboard() {
     if (!params || !constructions || !systems) return null
     try {
       // Brief 44 Part 5d (2026-05-21): _skipInterventions per perf audit D.1.
-      return calculateInstant(params, constructions, systems, {}, weatherData, hourlySolar, null, { _skipInterventions: true })
+      // Brief 58 A2 (2026-05-26): comfortBand required.
+      return calculateInstant(params, constructions, systems, {}, weatherData, hourlySolar, null, { comfortBand, _skipInterventions: true })
     } catch { return null }
-  }, [params, constructions, systems, weatherData, hourlySolar])
+  }, [params, constructions, systems, weatherData, hourlySolar, comfortBand])
 
   // ── Derived values ───────────────────────────────────────────────────────────
 

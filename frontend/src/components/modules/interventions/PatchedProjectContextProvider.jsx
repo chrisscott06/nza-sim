@@ -88,9 +88,14 @@ export default function PatchedProjectContextProvider({ baselineConfig, children
   // separately so the comfort-band slider holds position. The engine
   // preview honouring comfort_band patches is a follow-up; this fix is
   // strictly about the UI not snapping back.
+  // Brief 58 A2 (2026-05-26): no defensive fallback. outer.comfortBand
+  // is guaranteed-defined by ProjectContext (initialised at L780,
+  // overwritten from API on load). If outer is null we have bigger
+  // problems than comfort_band.
   const patchedComfortBand = useMemo(() => {
     if (!capture?.isCapturing) return outer?.comfortBand
-    const base = outer?.comfortBand ?? { lower_c: 20, upper_c: 26 }
+    const base = outer?.comfortBand
+    if (!base) return undefined   // no canonical band yet → propagate; engine will throw with a clear message
     const cbPatches = (capture.currentPatches ?? []).filter(
       p => typeof p?.path === 'string' && p.path.startsWith('comfort_band.')
     )

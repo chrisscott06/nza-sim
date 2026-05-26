@@ -798,7 +798,9 @@ export function ProjectProvider({ children }) {
   function _broadcast(overrides = {}) {
     if (broadcastTimer.current) clearTimeout(broadcastTimer.current)
     broadcastTimer.current = setTimeout(() => {
-      publishState({ building: params, constructions, systems, ...overrides })
+      // Brief 58 A2 (2026-05-26): include comfortBand so the popout's
+      // calculateInstant call has it (engine now requires it).
+      publishState({ building: params, constructions, systems, comfortBand, ...overrides })
     }, 200)
   }
 
@@ -1182,9 +1184,10 @@ export function ProjectProvider({ children }) {
   // ── Respond to pop-out state requests ────────────────────────────────────
   useEffect(() => {
     return onInitialStateRequest(() => {
-      publishState({ building: params, constructions, systems })
+      // Brief 58 A2 (2026-05-26): include comfortBand for the popout's engine call.
+      publishState({ building: params, constructions, systems, comfortBand })
     })
-  }, [params, constructions, systems]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [params, constructions, systems, comfortBand]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Project management actions ────────────────────────────────────────────
 

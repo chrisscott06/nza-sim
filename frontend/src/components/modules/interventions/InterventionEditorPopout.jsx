@@ -216,13 +216,20 @@ export default function InterventionEditorPopout({
         enabled: true,
         patches: localPatches,
       }
+      // Brief 58 A2 (2026-05-26): comfortBand required by engine. The cfg
+      // passed by runInterventionStack carries the building under edit;
+      // comfortBand comes from baselineConfig (which the parent assembles
+      // from ProjectContext). Threaded once via options.
+      const cb = baselineConfig?.comfortBand
+        ?? baselineConfig?.building?.comfort_band  // fallback for callers that pre-Brief-58 attached it to building
+        ?? null
       const stack = runInterventionStack(
         baselineConfig,
         [editIntervention],
         (cfg) => calculateInstant(
           cfg.building, cfg.constructions, cfg.systems, cfg.libraryData,
           weatherData, hourlySolar, scheduleProfiles,
-          { _skipInterventions: true },
+          { comfortBand: cb, _skipInterventions: true },
         ),
         baselineConfig.libraryData,
       )

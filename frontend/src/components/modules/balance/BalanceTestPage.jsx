@@ -17,7 +17,7 @@ import HeatBalance from './HeatBalance.jsx'
 import DrillDown from './DrillDown.jsx'
 
 export default function BalanceTestPage() {
-  const { params, constructions, systems, currentProjectId, saveStatus } = useContext(ProjectContext)
+  const { params, constructions, systems, currentProjectId, saveStatus, comfortBand } = useContext(ProjectContext)
   // Brief 28-TB-Simple TB-V1 fix: previously this page read weatherCtx.hourlySolar
   // which doesn't exist on WeatherContext — that fall-through into
   // calculateInstantDegreeDay broke the post-Brief 28k+ display contract by
@@ -60,11 +60,12 @@ export default function BalanceTestPage() {
         params || {}, constructions || {}, systems || {}, libraryData,
         weatherData, hourlySolar, null,
         // Brief 44 Part 5d (2026-05-21): _skipInterventions per perf audit D.1.
-        { mode: 'envelope-gains', _skipInterventions: true },
+        // Brief 58 A2 (2026-05-26): comfortBand required.
+        { mode: 'envelope-gains', comfortBand, _skipInterventions: true },
       )
     }
     return calculateInstantDegreeDay(params || {}, constructions || {}, systems || {}, libraryData)
-  }, [params, constructions, systems, weatherData, hourlySolar, libraryData])
+  }, [params, constructions, systems, weatherData, hourlySolar, libraryData, comfortBand])
 
   // Test harness defaults to full-model shape; flip to 'envelope-only' to
   // exercise the State 1 contract output path manually.

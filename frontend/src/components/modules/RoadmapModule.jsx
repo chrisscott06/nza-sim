@@ -117,7 +117,7 @@ export default function RoadmapModule() {
       systems:       systems ?? {},
       interventions: debouncedInterventions,
       weatherData, hourlySolar, libraryData,
-      comfortBand: comfortBand ?? { lower_c: 20, upper_c: 26 },
+      comfortBand,   // Brief 58 A2: no defensive fallback; engine throws if absent
     })
   }, [params, constructions, systems, debouncedInterventions, weatherData, hourlySolar, libraryData, comfortBand, constructionsLib])
 

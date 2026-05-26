@@ -283,15 +283,16 @@ function sysFuel(key) { return (SYSTEM_DEFAULTS[key] ?? {}).fuel ?? 'electricity
 // ── Main panel ────────────────────────────────────────────────────────────────
 
 export default function SystemsLiveResults({ libraryData = {}, scheduleProfiles = null }) {
-  const { params, constructions, systems } = useContext(ProjectContext)
+  const { params, constructions, systems, comfortBand } = useContext(ProjectContext)
   const { weatherData } = useWeather()
   const orientationDeg = Number(params?.orientation ?? 0)
   const hourlySolar = useHourlySolar(weatherData, orientationDeg)
 
   const result = useMemo(
     // Brief 44 Part 5d (2026-05-21): _skipInterventions per perf audit D.1.
-    () => calculateInstant(params, constructions, systems, libraryData, weatherData, hourlySolar, scheduleProfiles, { _skipInterventions: true }),
-    [params, constructions, systems, libraryData, weatherData, hourlySolar, scheduleProfiles]
+    // Brief 58 A2 (2026-05-26): comfortBand required.
+    () => calculateInstant(params, constructions, systems, libraryData, weatherData, hourlySolar, scheduleProfiles, { comfortBand, _skipInterventions: true }),
+    [params, constructions, systems, libraryData, weatherData, hourlySolar, scheduleProfiles, comfortBand]
   )
 
   const isIdeal = systems.mode !== 'detailed'

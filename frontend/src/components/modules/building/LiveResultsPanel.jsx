@@ -249,15 +249,16 @@ function Metric({ label, value, unit, color }) {
 // ── Main panel ────────────────────────────────────────────────────────────────
 
 export default function LiveResultsPanel({ libraryData = {}, onSankeyExpand }) {
-  const { params, constructions, systems } = useContext(ProjectContext)
+  const { params, constructions, systems, comfortBand } = useContext(ProjectContext)
   const { weatherData } = useWeather()
   const orientationDeg = Number(params?.orientation ?? 0)
   const hourlySolar = useHourlySolar(weatherData, orientationDeg)
 
   const result = useMemo(
     // Brief 44 Part 5d (2026-05-21): _skipInterventions per perf audit D.1.
-    () => calculateInstant(params, constructions, systems, libraryData, weatherData, hourlySolar, null, { _skipInterventions: true }),
-    [params, constructions, systems, libraryData, weatherData, hourlySolar]
+    // Brief 58 A2 (2026-05-26): comfortBand required (engine throws if absent).
+    () => calculateInstant(params, constructions, systems, libraryData, weatherData, hourlySolar, null, { comfortBand, _skipInterventions: true }),
+    [params, constructions, systems, libraryData, weatherData, hourlySolar, comfortBand]
   )
 
   return (

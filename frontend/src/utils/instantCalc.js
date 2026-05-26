@@ -5663,7 +5663,7 @@ function _calculateInstantBaseline(building = {}, constructions = {}, systems = 
     return _calculateEnvelopeOnly(
       withMode(building, mode),
       constructions, libraryData, weatherData, hourlySolar,
-      options.comfortBand ?? building.comfort_band ?? { lower_c: 20, upper_c: 26 },
+      options.comfortBand,   // Brief 58 A2: required, validated at entry
       options.tuning ?? null,
     )
   }
@@ -5676,7 +5676,7 @@ function _calculateInstantBaseline(building = {}, constructions = {}, systems = 
     return _calculateState2(
       withMode(building, mode),
       constructions, libraryData, weatherData, hourlySolar,
-      options.comfortBand ?? building.comfort_band ?? { lower_c: 20, upper_c: 26 },
+      options.comfortBand,   // Brief 58 A2: required, validated at entry
     )
   }
 
@@ -5708,7 +5708,7 @@ function _calculateInstantBaseline(building = {}, constructions = {}, systems = 
     return _calculateState3(
       withMode(building, mode),
       constructions, libraryData, weatherData, hourlySolar,
-      options.comfortBand ?? building.comfort_band ?? { lower_c: 20, upper_c: 26 },
+      options.comfortBand,   // Brief 58 A2: required, validated at entry
     )
   }
 
@@ -6303,6 +6303,30 @@ function _calculateInstantBaseline(building = {}, constructions = {}, systems = 
 // When no interventions are present the slot is absent.
 
 export function calculateInstant(building = {}, constructions = {}, systems = {}, libraryData = {}, weatherData = null, hourlySolar = null, scheduleProfiles = null, options = {}) {
+  // Brief 58 A2 (2026-05-26): comfortBand is now REQUIRED at the engine
+  // boundary. The pre-A2 chain `options.comfortBand ?? building.
+  // comfort_band ?? { lower_c: 20, upper_c: 26 }` silently masked the
+  // e462a21-class bug where a caller forgot to thread the project's
+  // actual band. Per A1 design + Chris sign-off: resolve once at the
+  // canonical persistence (DB cols → ProjectContext.comfortBand), pass
+  // exactly once via options.comfortBand, throw loudly if absent.
+  //
+  // Required shape: `{ lower_c: number, upper_c: number }`. A non-finite
+  // value (NaN, undefined, null) is treated as missing — explicit numbers
+  // only. The check fires before any downstream resolution.
+  if (
+    !options
+    || !options.comfortBand
+    || !Number.isFinite(options.comfortBand.lower_c)
+    || !Number.isFinite(options.comfortBand.upper_c)
+  ) {
+    throw new Error(
+      'calculateInstant: options.comfortBand is required ({ lower_c, upper_c }). ' +
+      'Brief 58 A2 retired the building.comfort_band + {20, 26} fallback chain — ' +
+      'callers must thread comfortBand from ProjectContext.comfortBand explicitly.'
+    )
+  }
+
   // Brief 44 Part 5d (2026-05-21) — D.2.
   //
   // Decide upfront whether the intervention stack runs. If it does, the

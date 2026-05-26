@@ -159,14 +159,20 @@ export default function InterventionsModule() {
   // threaded by no call site). Until then this stopgap keeps /systems
   // and /interventions baselines numerically identical. Do NOT add
   // _skipInterventions:true here — Interventions needs the stack runner.
+  //
+  // Brief 58 A2 (2026-05-26): RETIRES the e462a21 stopgap above. Engine
+  // requires comfortBand via options; ProjectContext.comfortBand is the
+  // single resolution point. No defensive `?? {…}`, no
+  // building.comfort_band mutation, no dual-channel threading. The brief
+  // 's grep gate is satisfied: no call site composes comfort_band onto
+  // the building object before calling the engine.
   const engineResult = useMemo(() => {
     if (!paramsForEngine) return null
-    const cb = comfortBand ?? paramsForEngine?.comfort_band ?? { lower_c: 20, upper_c: 26 }
     try {
       return calculateInstant(
-        { ...paramsForEngine, comfort_band: cb },
+        paramsForEngine,
         constructions, systems, libraryData, weatherData, hourlySolar, null,
-        { mode: 'full', comfortBand: cb, engine: 'v2.5' },
+        { mode: 'full', comfortBand, engine: 'v2.5' },
       )
     } catch (err) {
       console.warn('[InterventionsModule] calculateInstant threw:', err)
@@ -347,12 +353,16 @@ export default function InterventionsModule() {
   // render. The editor pop-out passes this to runInterventionStack +
   // applyIntervention so the live preview can render against the
   // current baseline.
+  // Brief 58 A2 (2026-05-26): include comfortBand so the editor's
+  // single-intervention preview can thread it via options.comfortBand
+  // when calling calculateInstant inside runInterventionStack.
   const baselineConfig = useMemo(() => ({
     building: params,
     constructions,
     systems,
     libraryData,
-  }), [params, constructions, systems, libraryData])
+    comfortBand,
+  }), [params, constructions, systems, libraryData, comfortBand])
 
   // ── Render ──────────────────────────────────────────────────────────
 

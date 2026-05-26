@@ -540,6 +540,13 @@ export default function PopOutResults() {
   // ── Run instant calc ──────────────────────────────────────────────────────────
   const instantResult = useMemo(() => {
     if (!state?.building) return null
+    // Brief 58 A2 (2026-05-26): comfortBand required. The publisher
+    // (ProjectContext._broadcast / onInitialStateRequest) now includes it
+    // in the broadcast payload.
+    if (!state?.comfortBand) {
+      console.warn('[PopOut] state.comfortBand missing — parent window may be pre-Brief-58. Skipping engine call.')
+      return null
+    }
     try {
       // Brief 44 Part 5d (2026-05-21): _skipInterventions per perf audit D.1.
       return calculateInstant(
@@ -550,7 +557,7 @@ export default function PopOutResults() {
         weatherData,
         hourlySolar,
         state.schedules ?? null,
-        { _skipInterventions: true },
+        { comfortBand: state.comfortBand, _skipInterventions: true },
       )
     } catch (e) {
       console.warn('[PopOut] instantCalc failed:', e)

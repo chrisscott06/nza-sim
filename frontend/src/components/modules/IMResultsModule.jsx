@@ -91,14 +91,16 @@ export default function IMResultsModule() {
     system_templates: SYSTEM_TEMPLATES_LIBRARY,
   }), [constructionsLib])
 
+  // Brief 58 A2 (2026-05-26): pass comfortBand once via options; no
+  // defensive `?? {…}`, no building.comfort_band mutation. Engine throws
+  // if absent.
   const staticResult = useMemo(() => {
     if (!params || !weatherData || !hourlySolar || !constructionsLib) return null
-    const cb = comfortBand ?? { lower_c: 20, upper_c: 26 }
     return calculateInstant(
-      { ...params, comfort_band: cb }, constructions ?? {}, systems ?? {},
+      params, constructions ?? {}, systems ?? {},
       libraryData, weatherData, hourlySolar, null,
       // Brief 44 Part 5d (2026-05-21): _skipInterventions per perf audit D.1.
-      { mode: 'full', comfortBand: cb, engine: 'v2.5', _skipInterventions: true },
+      { mode: 'full', comfortBand, engine: 'v2.5', _skipInterventions: true },
     )
   }, [params, constructions, systems, libraryData, weatherData, hourlySolar, comfortBand])
 

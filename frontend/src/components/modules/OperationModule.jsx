@@ -291,14 +291,15 @@ export default function OperationModule() {
   // engine returns the per-opening natural-ventilation breakdown +
   // daily_profiles inside losses_at_setpoint.
   const hourlySolar = useHourlySolar(weatherData, orientation)
+  // Brief 58 A2 (2026-05-26): pass comfortBand once via options; engine
+  // throws if absent. No defensive `?? {…}`, no building.comfort_band.
   const instantResult = useMemo(() => {
     if (!params || !weatherData || !hourlySolar || !libraryData) return null
-    const cb = comfortBand ?? { lower_c: 20, upper_c: 26 }
     return calculateInstant(
-      { ...params, comfort_band: cb }, constructions ?? {}, systems ?? {},
+      params, constructions ?? {}, systems ?? {},
       libraryData, weatherData, hourlySolar, null,
       // Brief 44 Part 5d (2026-05-21): _skipInterventions per perf audit D.1.
-      { mode: 'envelope-gains', comfortBand: cb, _skipInterventions: true },
+      { mode: 'envelope-gains', comfortBand, _skipInterventions: true },
     )
   }, [params, constructions, systems, libraryData, weatherData, hourlySolar, comfortBand])
 

@@ -193,7 +193,8 @@ export default function EnergyCarbonTab() {
         building, constructions || {}, {}, libraryData,
         weatherCtx.weatherData, hourlySolar, null,
         // Brief 44 Part 5d (2026-05-21): _skipInterventions per perf audit D.1.
-        { comfortBand: comfortBand ?? { lower_c: 20, upper_c: 26 }, _skipInterventions: true },
+        // Brief 58 A2 (2026-05-26): comfortBand required; no defensive fallback.
+        { comfortBand, _skipInterventions: true },
       )
       setEngineError(null)
       return r

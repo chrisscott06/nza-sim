@@ -210,8 +210,10 @@ function _runEngine(state, constructions, systems, weatherData, hourlySolar, lib
   // top of the project's baseline construction_choices.
   const stateChoices = state.construction_choices ?? {}
   const mergedConstructions = { ...(constructions ?? {}), ...stateChoices }
+  // Brief 58 A2 (2026-05-26): pass comfortBand once via options;
+  // no building-mutation, no defensive fallback.
   const r = calculateInstant(
-    { ...state, comfort_band: comfortBand },
+    state,
     mergedConstructions,
     systems ?? {},
     libraryData,
@@ -249,7 +251,8 @@ function _runEngine(state, constructions, systems, weatherData, hourlySolar, lib
  */
 export function computeRoadmap({ baseline, constructions, systems, interventions, weatherData, hourlySolar, libraryData, comfortBand }) {
   const interv = Array.isArray(interventions) ? interventions : []
-  const cb = comfortBand ?? { lower_c: 20, upper_c: 26 }
+  // Brief 58 A2 (2026-05-26): no defensive fallback; engine throws if comfortBand is missing.
+  const cb = comfortBand
   // construction_choices and systems_config_v25 live at project level. The
   // engine needs both via the `constructions` arg (post-Brief-28k dict
   // shape) and through `building.systems_config_v25` (auto-detected). For

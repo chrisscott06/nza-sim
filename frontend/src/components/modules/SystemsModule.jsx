@@ -157,17 +157,20 @@ export default function SystemsModule() {
   }), [constructionsLib])
 
   // Live engine pass — State 3 (full v2.5) when systems_config_v25 is present.
+  // Brief 58 A2 (2026-05-26): pass comfortBand exactly once via options.
+  // Engine now requires it (throws if missing); ProjectContext guarantees
+  // a value is defined. No defensive `?? {…}`, no building.comfort_band
+  // mutation. Single resolution at the boundary.
   const result = useMemo(() => {
     if (!params || !weatherData || !hourlySolar || !constructionsLib) return null
-    const cb = comfortBand ?? { lower_c: 20, upper_c: 26 }
     return calculateInstant(
-      { ...params, comfort_band: cb }, constructions ?? {}, systems ?? {},
+      params, constructions ?? {}, systems ?? {},
       libraryData, weatherData, hourlySolar, null,
       // Brief 44 Part 5d (2026-05-21): _skipInterventions:true — this
       // route doesn't consume consumption.interventions.*; skipping
       // the stack runner cuts the per-edit cost from ~6.3s (N=3) to
       // ~550 ms (perf audit §14 / D.1).
-      { mode: 'full', comfortBand: cb, engine: 'v2.5', _skipInterventions: true },
+      { mode: 'full', comfortBand, engine: 'v2.5', _skipInterventions: true },
     )
   }, [params, constructions, systems, libraryData, weatherData, hourlySolar, comfortBand, constructionsLib])
 
@@ -309,7 +312,7 @@ export default function SystemsModule() {
             params={params}
             updateParam={updateParam}
             consumption={consumption}
-            comfortBand={comfortBand ?? { lower_c: 20, upper_c: 26 }}
+            comfortBand={comfortBand}{/* Brief 58 A2: no defensive fallback */}
             openScheduleEditor={openScheduleEditor}
           />
         </div>

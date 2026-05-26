@@ -15,7 +15,7 @@ import HeatBalance from '../balance/HeatBalance.jsx'
 import DrillDown from '../balance/DrillDown.jsx'
 
 export default function HeatBalanceTab() {
-  const { params, constructions, systems, currentProjectId, saveStatus } = useContext(ProjectContext)
+  const { params, constructions, systems, currentProjectId, saveStatus, comfortBand } = useContext(ProjectContext)
   const weatherCtx = useContext(WeatherContext)
   const simCtx     = useContext(SimulationContext)
   const [drillKey, setDrillKey] = useState(null)
@@ -31,10 +31,11 @@ export default function HeatBalanceTab() {
   const liveResult = useMemo(() => {
     if (weatherCtx?.weatherData && weatherCtx?.hourlySolar) {
       // Brief 44 Part 5d (2026-05-21): _skipInterventions per perf audit D.1.
-      return calculateInstant(params || {}, constructions || {}, systems || {}, {}, weatherCtx.weatherData, weatherCtx.hourlySolar, null, { _skipInterventions: true })
+      // Brief 58 A2 (2026-05-26): comfortBand required.
+      return calculateInstant(params || {}, constructions || {}, systems || {}, {}, weatherCtx.weatherData, weatherCtx.hourlySolar, null, { comfortBand, _skipInterventions: true })
     }
     return calculateInstantDegreeDay(params || {}, constructions || {}, systems || {}, {})
-  }, [params, constructions, systems, weatherCtx?.weatherData, weatherCtx?.hourlySolar])
+  }, [params, constructions, systems, weatherCtx?.weatherData, weatherCtx?.hourlySolar, comfortBand])
 
   // Results module is the State 3 (full model) view — explicit mode so a future
   // contract change to the default doesn't silently re-shape this view.
