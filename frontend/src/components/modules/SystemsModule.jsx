@@ -784,6 +784,12 @@ export function InputsColumn({ params, updateParam, consumption, comfortBand, op
                       // service so the enabled sum stays at 100% without
                       // the user matching two sliders manually.
                       onShareChange={(next) => handleShareChange(service, idx, next)}
+                      // 2026-05-26: generic partial update so the row's
+                      // inline ventilation flow_rate input can write
+                      // through directly. Bypasses handleShareChange's
+                      // partner-rebalancing logic (which is share-%
+                      // specific and not meaningful for fixed-flow vent).
+                      onUpdate={(patch) => updateSystem(service, idx, patch)}
                       // Brief 47 Part 1.3 (2026-05-24): list-level delete
                       // affordance — same `removeSystem` helper the
                       // pop-out's onDelete uses. In the main /systems

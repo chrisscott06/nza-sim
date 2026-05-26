@@ -79,6 +79,7 @@ export default function SystemSummaryRow({
   onToggleEnabled,
   onEdit,
   onShareChange,
+  onUpdate,                   // 2026-05-26: generic partial update (flow_rate etc.)
   onDelete,
   shareInvalid = false,
   enabledPartnerCount = 0,   // Brief 47 Part 3 — share-rebalance flow clarity
@@ -88,6 +89,16 @@ export default function SystemSummaryRow({
   const isEnabled = system?.enabled !== false
   const headline = headlineEfficiency(system)
   const sharePct = Number(system?.share_pct ?? 0)
+  // 2026-05-26: ventilation rows show flow_rate as the inline editable
+  // value instead of share % (per Chris's walkthrough — share % for
+  // fixed-flow ventilation has no physical meaning; flow_rate IS the
+  // meaningful number). flow_rate + flow_rate_basis live on the
+  // per-system v40 entry; the basis picks the displayed unit suffix.
+  const flowRate  = Number(system?.flow_rate ?? 0)
+  const flowBasis = system?.flow_rate_basis ?? 'constant'
+  const flowUnit  = flowBasis === 'per_person' ? 'l/s/p'
+                  : flowBasis === 'per_m2'     ? 'l/s/m²'
+                                               : 'l/s'
 
   return (
     <div
@@ -135,21 +146,35 @@ export default function SystemSummaryRow({
           numeric input instead of a slider — fixed-flow ventilation
           implies fixed values, the slider was misleading (Chris's
           walkthrough item 8). Heating / cooling / DHW retain the slider,
-          which is genuinely a continuous duty-split UX. */}
-      {onShareChange && isEnabled && service === 'ventilation' && (
+          which is genuinely a continuous duty-split UX.
+
+          2026-05-26: per Chris, the ventilation row now exposes
+          `flow_rate` as the inline editable number (matching how
+          designers actually think about ventilation: "I'm setting
+          200 l/s, not setting a 50 % share of demand"). The share %
+          number box has been removed entirely for ventilation. The
+          per-system flow editor in the pop-out still controls
+          flow_rate_basis (per-person / per-m² / constant); this inline
+          input edits the magnitude only — the unit suffix reflects
+          whichever basis is current. */}
+      {onUpdate && isEnabled && service === 'ventilation' && (
         <PatchedInputBadge path={`building.systems_config_v40.${service}`}>
-          <input
-            type="number"
-            min={0}
-            max={100}
-            step={1}
-            value={sharePct}
-            onChange={(e) => onShareChange(Number(e.target.value))}
-            onClick={(e) => e.stopPropagation()}
-            onMouseDown={(e) => e.stopPropagation()}
-            className="flex-shrink-0 w-12 px-1 py-0.5 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-cyan-700 tabular-nums text-right"
-            title="Fixed-flow ventilation: share scales fan electrical accounting only; flow itself is set by `flow_rate` in the editor."
-          />
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <input
+              type="number"
+              min={0}
+              step={0.5}
+              value={flowRate}
+              onChange={(e) => onUpdate({ flow_rate: Number(e.target.value) })}
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              className="w-16 px-1 py-0.5 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-cyan-700 tabular-nums text-right"
+              title={`Flow rate (${flowUnit}). Basis is set in the editor pop-out (per-person / per-m² / constant).`}
+            />
+            <span className="text-xxs text-mid-grey/80 tabular-nums" title={`Flow basis: ${flowBasis}`}>
+              {flowUnit}
+            </span>
+          </div>
         </PatchedInputBadge>
       )}
       {onShareChange && isEnabled && service !== 'ventilation' && (
@@ -178,12 +203,20 @@ export default function SystemSummaryRow({
           text-mid-grey to text-navy font-medium. Share is the single most-
           edited per-system field; needing to open the pop-out just to read
           it was friction. Brief 45 Part 3: pinned to w-9 so the share %
-          width stays stable as the slider above it moves. */}
-      <span className={`flex-shrink-0 text-xxs tabular-nums font-medium w-9 text-right ${
-        shareInvalid && isEnabled ? 'text-amber-600' : (isEnabled ? 'text-navy' : 'text-mid-grey')
-      }`}>
-        {sharePct}%
-      </span>
+          width stays stable as the slider above it moves.
+
+          2026-05-26: hidden for ventilation rows. Fixed-flow ventilation
+          means the meaningful number is flow_rate (now shown inline
+          above); the share-% readout was redundant + confusing. The
+          heating / cooling / DHW slider rows still show the share % as
+          a readout for the slider value. */}
+      {service !== 'ventilation' && (
+        <span className={`flex-shrink-0 text-xxs tabular-nums font-medium w-9 text-right ${
+          shareInvalid && isEnabled ? 'text-amber-600' : (isEnabled ? 'text-navy' : 'text-mid-grey')
+        }`}>
+          {sharePct}%
+        </span>
+      )}
 
       {/* Headline efficiency — bumped from text-mid-grey/80 to text-mid-grey
           for the same readability reason (still secondary to share). */}
