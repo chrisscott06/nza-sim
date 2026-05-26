@@ -289,23 +289,23 @@ export function useProjectMutation() {
  * (Brief 46 Q3 pattern) to flag a control whose value differs from
  * baseline.
  *
- * Match rules (Brief 47 Part 4 extension):
- *   1. EXACT — patch.path === path. The original Brief 46 rule.
+ * Match rules:
+ *   1. EXACT — patch.path === path. The Brief 46 baseline rule.
  *   2. PREFIX — patch.path is a prefix of `path` (e.g. patch.path
- *      'building.fabric' covers `path` 'building.fabric.air_permeability_q50').
- *      This is necessary because Brief 46 Parts 2c-4 capture most edits
- *      as WHOLE-OBJECT snapshots at parent paths — without prefix-match
- *      every per-input badge would always read false and the per-control
- *      visible-change indicator would never fire.
+ *      'building.systems_config_v40' covers any child like
+ *      'building.systems_config_v40.heating[id=X].share_pct').
+ *      Back-compat for legacy whole-object snapshots persisted on
+ *      pre-Brief-55 projects. Brief 55 Part 2's v2→v3 migration converts
+ *      these to field-level patches at load, but the predicate retains
+ *      prefix-match so any unmigrated patch still flags correctly.
  *
- * Limitation: prefix-match is broad. A single whole-snapshot patch at
- * `building.systems_config_v40` will light up the badge on every system
- * control in every service — not just the one the user actually changed.
- * Acceptable until Brief 41-shape granular patches replace whole-object
- * snapshots (future iteration). The change list (`ChangeList.jsx`)
- * shows the ground-truth patch list with the actual values, so the
- * user always has a precise source of truth even when nav/badge dots
- * are overly inclusive.
+ * Brief 55 Part 4 verification (`scripts/_brief55_part4_badge_precision.mjs`):
+ *   With FIELD-LEVEL patches (post-Brief-55-Part-2), badges fire ONLY
+ *   on the exact patched path. Sibling fields, other systems in the
+ *   same service, other services, and parent paths all read false.
+ *   33/33 truth-table outcomes match expected precision. The earlier
+ *   "broad prefix" limitation is gone now that the engine receives
+ *   field-level patches, not whole-object snapshots.
  */
 export function useHasPatchOnPath(path) {
   const capture = useInterventionCapture()

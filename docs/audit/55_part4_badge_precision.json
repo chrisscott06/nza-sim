@@ -1,0 +1,22 @@
+{
+  "tableA": {
+    "passes": 10,
+    "total": 10
+  },
+  "tableB": {
+    "passes": 7,
+    "total": 7
+  },
+  "tableC": {
+    "passes": 6,
+    "total": 6
+  },
+  "tableD": {
+    "passes": 10,
+    "total": 10
+  },
+  "total": {
+    "passes": 33,
+    "total": 33
+  }
+}
