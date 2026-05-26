@@ -129,8 +129,30 @@ export default function SystemSummaryRow({
           opacity-50 wrapper would mute it anyway, and a disabled system's
           share isn't editable until the user re-enables it. Slider also
           hidden when onShareChange is not provided (graceful fallback for
-          any caller that hasn't been migrated). */}
-      {onShareChange && isEnabled && (
+          any caller that hasn't been migrated).
+
+          Brief 53 Part 5 (2026-05-26): ventilation systems use a fixed
+          numeric input instead of a slider — fixed-flow ventilation
+          implies fixed values, the slider was misleading (Chris's
+          walkthrough item 8). Heating / cooling / DHW retain the slider,
+          which is genuinely a continuous duty-split UX. */}
+      {onShareChange && isEnabled && service === 'ventilation' && (
+        <PatchedInputBadge path={`building.systems_config_v40.${service}`}>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step={1}
+            value={sharePct}
+            onChange={(e) => onShareChange(Number(e.target.value))}
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            className="flex-shrink-0 w-12 px-1 py-0.5 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-cyan-700 tabular-nums text-right"
+            title="Fixed-flow ventilation: share scales fan electrical accounting only; flow itself is set by `flow_rate` in the editor."
+          />
+        </PatchedInputBadge>
+      )}
+      {onShareChange && isEnabled && service !== 'ventilation' && (
         <PatchedInputBadge path={`building.systems_config_v40.${service}`}>
           <input
             type="range"
@@ -144,11 +166,6 @@ export default function SystemSummaryRow({
             className="flex-shrink-0 w-20 h-[3px] cursor-pointer"
             style={{ accentColor: accent }}
             title={
-              // Brief 47 Part 3 share-rebalance clarity: when this system
-              // has enabled partners in the same service, Brief 45 Part
-              // 3b auto-rebalances them as you drag this slider. The
-              // tooltip surfaces that behaviour so the user understands
-              // the partner sliders are about to move, too.
               enabledPartnerCount > 0
                 ? `Share: ${sharePct}% of ${service} demand · drag to rebalance ${enabledPartnerCount} partner system${enabledPartnerCount === 1 ? '' : 's'} (enabled sum stays = 100%)`
                 : `Share: ${sharePct}% of ${service} demand`

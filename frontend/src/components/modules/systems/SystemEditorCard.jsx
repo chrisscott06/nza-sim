@@ -242,19 +242,41 @@ export default function SystemEditorCard({
             value={system?.label ?? ''}
             onChange={v => onUpdate({ label: v })}
           />
-          <div>
-            <label className="block text-xxs text-mid-grey mb-0.5">
-              Share <span className="tabular-nums text-navy">{Number(system?.share_pct ?? 0)}%</span>
-              {shareInvalid && <span className="text-amber-600 ml-2">⚠ service shares ≠ 100%</span>}
-            </label>
-            <input
-              type="range" min={0} max={100} step={5}
-              value={Number(system?.share_pct ?? 0)}
-              onChange={e => onUpdate({ share_pct: Number(e.target.value) })}
-              className="w-full h-[3px]"
-              style={{ accentColor: accent }}
-            />
-          </div>
+          {/* Brief 53 Part 5 (2026-05-26): ventilation share is a fixed
+              numeric input, not a slider. Fixed-flow ventilation systems
+              have a constant flow per the schema (flow_rate × flow_basis);
+              a 0-100 % slider implied continuous variation that doesn't
+              match the underlying physics. Heating / cooling / DHW retain
+              the slider — those are genuinely continuous duty splits. */}
+          {service === 'ventilation' ? (
+            <div>
+              <label className="block text-xxs text-mid-grey mb-0.5">
+                Share (% of service)
+                {shareInvalid && <span className="text-amber-600 ml-2">⚠ service shares ≠ 100%</span>}
+              </label>
+              <input
+                type="number" min={0} max={100} step={1}
+                value={Number(system?.share_pct ?? 0)}
+                onChange={e => onUpdate({ share_pct: Number(e.target.value) })}
+                className="w-full px-1.5 py-1 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-cyan-700 tabular-nums"
+                title="Fixed-flow ventilation: each system contributes its full flow regardless of this share; share scales fan electrical accounting only."
+              />
+            </div>
+          ) : (
+            <div>
+              <label className="block text-xxs text-mid-grey mb-0.5">
+                Share <span className="tabular-nums text-navy">{Number(system?.share_pct ?? 0)}%</span>
+                {shareInvalid && <span className="text-amber-600 ml-2">⚠ service shares ≠ 100%</span>}
+              </label>
+              <input
+                type="range" min={0} max={100} step={5}
+                value={Number(system?.share_pct ?? 0)}
+                onChange={e => onUpdate({ share_pct: Number(e.target.value) })}
+                className="w-full h-[3px]"
+                style={{ accentColor: accent }}
+              />
+            </div>
+          )}
         </Group>
 
         {/* ENERGY group — service-aware */}
@@ -497,6 +519,7 @@ function DiagRow({ label, value, strong = false }) {
 
 function VentilationFields({ system, onUpdate }) {
   const eff = system?.efficiency_metric ?? {}
+  const hasRecovery = Number(eff?.recovery_sensible_pct ?? 0) > 0
   return (
     <>
       <LabeledNumber
@@ -533,6 +556,28 @@ function VentilationFields({ system, onUpdate }) {
           { value: 'constant',   label: 'Constant (l/s building total)' },
         ]}
       />
+      {/* Brief 53 Part 2 (2026-05-26): summer-bypass damper. Only meaningful
+          when the system has heat recovery (HRE > 0). Suppresses recovery
+          in hours where the zone wants cooling AND outside air is cooler
+          than extract — the free-cooling trigger documented in
+          docs/audit/53_ventilation.md §4.1. Default OFF; the 128.20
+          Bridgewater anchor is computed with this OFF. */}
+      {hasRecovery && (
+        <label className="flex items-center gap-2 px-1 py-1.5 cursor-pointer text-xxs text-navy hover:text-cyan-700">
+          <input
+            type="checkbox"
+            checked={system?.summer_bypass === true}
+            onChange={e => onUpdate({ summer_bypass: e.target.checked })}
+            className="w-3.5 h-3.5 rounded border-light-grey text-cyan-700 focus:ring-cyan-700 focus:ring-1"
+          />
+          <span className="flex-1">
+            Summer bypass
+            <span className="block text-xxs text-mid-grey font-normal">
+              Open damper when zone wants cooling and T<sub>out</sub> &lt; T<sub>extract</sub>
+            </span>
+          </span>
+        </label>
+      )}
     </>
   )
 }
