@@ -24,6 +24,7 @@
 
 import { useContext, useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
+import { Pencil, Trash2, X } from 'lucide-react'
 import { ProjectContext } from '../../context/ProjectContext.jsx'
 import { WeatherContext } from '../../context/WeatherContext.jsx'
 import { useHourlySolar } from '../../hooks/useHourlySolar.js'
@@ -517,8 +518,26 @@ function InterventionCard({ summary, intervention, onEdit, onDelete }) {
           <p className="text-caption font-medium text-navy truncate">{summary.name}</p>
         </div>
         <div className="flex gap-1 flex-shrink-0">
-          <button onClick={() => onEdit(intervention)} className="text-xxs px-1.5 py-0.5 rounded border border-light-grey text-mid-grey hover:border-violet-700 hover:text-violet-700" title="Edit">✏️</button>
-          <button onClick={() => onDelete(summary.id)} className="text-xxs px-1.5 py-0.5 rounded border border-light-grey text-mid-grey hover:border-red-600 hover:text-red-600" title="Delete">✕</button>
+          {/* 2026-05-26 (Chris UX icon audit): emoji ✏️ → Lucide Pencil,
+              literal ✕ glyph → Lucide Trash2. The trash icon makes the
+              destructive action visually distinct from the modal-close
+              X immediately above it. */}
+          <button
+            onClick={() => onEdit(intervention)}
+            className="inline-flex items-center px-1.5 py-1 rounded border border-light-grey text-mid-grey hover:border-violet-700 hover:text-violet-700"
+            aria-label="Edit"
+            title="Edit"
+          >
+            <Pencil size={11} />
+          </button>
+          <button
+            onClick={() => onDelete(summary.id)}
+            className="inline-flex items-center px-1.5 py-1 rounded border border-light-grey text-mid-grey hover:border-red-600 hover:text-red-600"
+            aria-label="Delete"
+            title="Delete"
+          >
+            <Trash2 size={11} />
+          </button>
         </div>
       </div>
 
@@ -652,7 +671,19 @@ function InterventionEditor({ entry, onCancel, onSave }) {
           <p className="text-caption font-semibold text-navy">
             {draft._editingExisting ? 'Edit intervention' : 'Add intervention'}
           </p>
-          <button onClick={onCancel} className="text-xxs text-mid-grey hover:text-navy">✕</button>
+          {/* 2026-05-26 (Chris UX icon audit): glyph → Lucide X. This is
+              a genuine close (modal cancel), so X is the correct icon
+              — only the rendering changes from a Unicode glyph to a
+              vector icon for visual consistency with other close
+              buttons across the app. */}
+          <button
+            onClick={onCancel}
+            className="flex-shrink-0 p-1 rounded text-mid-grey hover:text-navy hover:bg-light-grey/30 transition-colors"
+            aria-label="Cancel"
+            title="Cancel"
+          >
+            <X size={14} />
+          </button>
         </div>
 
         <div className="grid grid-cols-2 gap-3">

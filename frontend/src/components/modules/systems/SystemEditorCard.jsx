@@ -33,6 +33,7 @@
  */
 
 import { NavLink } from 'react-router-dom'
+import { Trash2, ChevronUp } from 'lucide-react'
 import { confirm } from '../../shared/ConfirmDialog.jsx'
 
 // Service colour palette per Brief 37 Part 1 / SYSTEMS_SERVICE_COLOURS
@@ -217,9 +218,15 @@ export default function SystemEditorCard({
         </span>
         <button
           onClick={onToggleExpanded}
-          className="text-xxs text-mid-grey hover:text-navy px-1"
+          className="flex-shrink-0 p-1 rounded text-mid-grey hover:text-navy hover:bg-light-grey/30 transition-colors"
+          aria-label="Collapse"
           title="Collapse"
-        >▴</button>
+        >
+          <ChevronUp size={13} />
+        </button>
+        {/* 2026-05-26 (Chris UX): replaced literal ✕ glyph with Lucide
+            Trash2. The X looked identical to the popout's close button
+            and gave no visual signal that this action was destructive. */}
         <button
           onClick={async () => {
             if (await confirm({
@@ -229,9 +236,12 @@ export default function SystemEditorCard({
               tone: 'danger',
             })) onDelete()
           }}
-          className="text-xxs text-error hover:underline px-1"
+          className="flex-shrink-0 p-1 rounded text-mid-grey hover:text-red-600 hover:bg-red-50 transition-colors"
+          aria-label="Delete this system"
           title="Delete this system"
-        >✕</button>
+        >
+          <Trash2 size={13} />
+        </button>
       </div>
 
       <div className="p-2 space-y-2 text-xxs">

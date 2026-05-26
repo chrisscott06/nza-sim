@@ -15,7 +15,7 @@
  * neutral). When uncertain, neutral.
  */
 
-import { X } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { summarizePatch } from './patchCapture.js'
 
 const VERB_CHIPS = {
@@ -65,12 +65,17 @@ function PatchRow({ patch, baselineConfig, libraryData, onRemove }) {
         </span>
         <PctBadge pct={sum.pct} tone={sum.tone} />
       </div>
+      {/* 2026-05-26 (Chris UX icon audit): X → Trash2 to match the
+          ChangeList "revert change" affordance — both surfaces remove
+          a captured patch and should share the same destructive-icon
+          signal. */}
       <button
         onClick={() => onRemove?.(patch.id)}
         className="flex-shrink-0 p-0.5 rounded text-mid-grey/50 hover:text-red-600 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+        aria-label="Remove this patch"
         title="Remove this patch"
       >
-        <X size={11} />
+        <Trash2 size={11} />
       </button>
     </div>
   )
