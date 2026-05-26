@@ -1,0 +1,784 @@
+{
+  "generated_at": "2026-05-26T17:55:29.018Z",
+  "api": "http://127.0.0.1:8003",
+  "project": {
+    "id": "14b4a5b1-8c73-4acb-8b65-1d22f05ec969",
+    "name": "HIX Bridgewater",
+    "comfort_band": {
+      "lower_c": 21,
+      "upper_c": 24
+    },
+    "gia_m2": 4322
+  },
+  "stack": [
+    "VRF 4.0",
+    "MVHR Bedrooms"
+  ],
+  "baseline": {
+    "eui_kwh_per_m2": 69.1,
+    "consumption_total": {
+      "electricity_mwh": 298.632,
+      "gas_mwh": 0,
+      "district_heat_mwh": 0,
+      "kwh_per_m2_yr": 69.1
+    }
+  },
+  "interventions": [
+    {
+      "index": 0,
+      "id": "int_aafbb12c-b294-4e1f-97a3-486295e48113",
+      "label": "VRF 4.0",
+      "enabled": true,
+      "n_patches": 10,
+      "sections": {
+        "Demand side — what the building needs": [
+          {
+            "key": "raw_demand",
+            "label": "Heat the building needs",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "heating_raw_demand_mwh",
+            "vs_step_above": {
+              "baseline": 238.3,
+              "after": 238.3,
+              "delta": 0,
+              "delta_pct": 0
+            },
+            "vs_original": {
+              "baseline": 238.3,
+              "after": 238.3,
+              "delta": 0,
+              "delta_pct": 0
+            }
+          },
+          {
+            "key": "mvhr_recovery",
+            "label": "Heat recovered by MVHR",
+            "unit": "MWh",
+            "good_when_positive": true,
+            "path": "heating_recovery_offset_mwh",
+            "vs_step_above": {
+              "baseline": 93.066,
+              "after": 93.066,
+              "delta": 0,
+              "delta_pct": 0
+            },
+            "vs_original": {
+              "baseline": 93.066,
+              "after": 93.066,
+              "delta": 0,
+              "delta_pct": 0
+            }
+          },
+          {
+            "key": "post_mvhr",
+            "label": "After heat recovery",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "heating_post_mvhr_demand_mwh",
+            "vs_step_above": {
+              "baseline": 145.234,
+              "after": 145.234,
+              "delta": 0,
+              "delta_pct": 0
+            },
+            "vs_original": {
+              "baseline": 145.234,
+              "after": 145.234,
+              "delta": 0,
+              "delta_pct": 0
+            }
+          },
+          {
+            "key": "cooling_demand",
+            "label": "Cooling demand",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "cooling_demand_mwh",
+            "vs_step_above": {
+              "baseline": 72.5,
+              "after": 72.5,
+              "delta": 0,
+              "delta_pct": 0
+            },
+            "vs_original": {
+              "baseline": 72.5,
+              "after": 72.5,
+              "delta": 0,
+              "delta_pct": 0
+            }
+          },
+          {
+            "key": "dhw_demand",
+            "label": "Hot water demand",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "per_service.dhw.demand_mwh",
+            "vs_step_above": {
+              "baseline": 0,
+              "after": 0,
+              "delta": 0,
+              "delta_pct": null
+            },
+            "vs_original": {
+              "baseline": 0,
+              "after": 0,
+              "delta": 0,
+              "delta_pct": null
+            }
+          }
+        ],
+        "Delivered by systems": [
+          {
+            "key": "heat_del",
+            "label": "Heating delivered",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "per_service.heating.delivered_mwh",
+            "vs_step_above": {
+              "baseline": 238.3,
+              "after": 238.3,
+              "delta": 0,
+              "delta_pct": 0
+            },
+            "vs_original": {
+              "baseline": 238.3,
+              "after": 238.3,
+              "delta": 0,
+              "delta_pct": 0
+            }
+          },
+          {
+            "key": "heat_eff",
+            "label": "Heating efficiency",
+            "unit": "ratio",
+            "good_when_positive": true,
+            "path": "per_service.heating.efficiency",
+            "vs_step_above": {
+              "baseline": 2.57,
+              "after": 4,
+              "delta": 1.4300000000000002,
+              "delta_pct": 55.64202334630352
+            },
+            "vs_original": {
+              "baseline": 2.57,
+              "after": 4,
+              "delta": 1.4300000000000002,
+              "delta_pct": 55.64202334630352
+            }
+          },
+          {
+            "key": "cool_del",
+            "label": "Cooling delivered",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "per_service.cooling.delivered_mwh",
+            "vs_step_above": {
+              "baseline": 72.5,
+              "after": 72.5,
+              "delta": 0,
+              "delta_pct": 0
+            },
+            "vs_original": {
+              "baseline": 72.5,
+              "after": 72.5,
+              "delta": 0,
+              "delta_pct": 0
+            }
+          },
+          {
+            "key": "cool_eff",
+            "label": "Cooling efficiency",
+            "unit": "ratio",
+            "good_when_positive": true,
+            "path": "per_service.cooling.efficiency",
+            "vs_step_above": {
+              "baseline": 3.5,
+              "after": 3.5,
+              "delta": 0,
+              "delta_pct": 0
+            },
+            "vs_original": {
+              "baseline": 3.5,
+              "after": 3.5,
+              "delta": 0,
+              "delta_pct": 0
+            }
+          },
+          {
+            "key": "dhw_del",
+            "label": "Hot water delivered",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "per_service.dhw.delivered_mwh",
+            "vs_step_above": {
+              "baseline": 0,
+              "after": 0,
+              "delta": 0,
+              "delta_pct": null
+            },
+            "vs_original": {
+              "baseline": 0,
+              "after": 0,
+              "delta": 0,
+              "delta_pct": null
+            }
+          }
+        ],
+        "Fuel consumed": [
+          {
+            "key": "total_elec",
+            "label": "Total electricity",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "per_fuel.electricity_mwh",
+            "vs_step_above": {
+              "baseline": 298.632,
+              "after": 262.69,
+              "delta": -35.94200000000001,
+              "delta_pct": -12.035548769053554
+            },
+            "vs_original": {
+              "baseline": 298.632,
+              "after": 262.69,
+              "delta": -35.94200000000001,
+              "delta_pct": -12.035548769053554
+            }
+          },
+          {
+            "key": "total_gas",
+            "label": "Total gas",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "per_fuel.gas_mwh",
+            "vs_step_above": {
+              "baseline": 0,
+              "after": 0,
+              "delta": 0,
+              "delta_pct": null
+            },
+            "vs_original": {
+              "baseline": 0,
+              "after": 0,
+              "delta": 0,
+              "delta_pct": null
+            }
+          },
+          {
+            "key": "heat_elec",
+            "label": "Heating electricity",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "per_service.heating.electricity_mwh",
+            "vs_step_above": {
+              "baseline": 92.767,
+              "after": 59.575,
+              "delta": -33.19199999999999,
+              "delta_pct": -35.779964858193104
+            },
+            "vs_original": {
+              "baseline": 92.767,
+              "after": 59.575,
+              "delta": -33.19199999999999,
+              "delta_pct": -35.779964858193104
+            }
+          },
+          {
+            "key": "heat_gas",
+            "label": "Heating gas",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "per_service.heating.gas_mwh",
+            "vs_step_above": {
+              "baseline": 0,
+              "after": 0,
+              "delta": 0,
+              "delta_pct": null
+            },
+            "vs_original": {
+              "baseline": 0,
+              "after": 0,
+              "delta": 0,
+              "delta_pct": null
+            }
+          },
+          {
+            "key": "dhw_elec",
+            "label": "Hot water electricity",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "per_service.dhw.electricity_mwh",
+            "vs_step_above": {
+              "baseline": 1.051,
+              "after": 1.051,
+              "delta": 0,
+              "delta_pct": 0
+            },
+            "vs_original": {
+              "baseline": 1.051,
+              "after": 1.051,
+              "delta": 0,
+              "delta_pct": 0
+            }
+          },
+          {
+            "key": "dhw_gas",
+            "label": "Hot water gas",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "per_service.dhw.gas_mwh",
+            "vs_step_above": {
+              "baseline": 0,
+              "after": 0,
+              "delta": 0,
+              "delta_pct": null
+            },
+            "vs_original": {
+              "baseline": 0,
+              "after": 0,
+              "delta": 0,
+              "delta_pct": null
+            }
+          },
+          {
+            "key": "cool_elec",
+            "label": "Cooling electricity",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "per_service.cooling.electricity_mwh",
+            "vs_step_above": {
+              "baseline": 20.714,
+              "after": 20.714,
+              "delta": 0,
+              "delta_pct": 0
+            },
+            "vs_original": {
+              "baseline": 20.714,
+              "after": 20.714,
+              "delta": 0,
+              "delta_pct": 0
+            }
+          }
+        ],
+        "Headline": [
+          {
+            "key": "eui",
+            "label": "EUI",
+            "unit": "kWh/m²",
+            "good_when_positive": false,
+            "path": "eui_kwh_per_m2",
+            "vs_step_above": {
+              "baseline": 69.1,
+              "after": 60.8,
+              "delta": -8.299999999999997,
+              "delta_pct": -12.011577424023152
+            },
+            "vs_original": {
+              "baseline": 69.1,
+              "after": 60.8,
+              "delta": -8.299999999999997,
+              "delta_pct": -12.011577424023152
+            }
+          },
+          {
+            "key": "carbon",
+            "label": "Operational carbon",
+            "unit": "kgCO₂/m²",
+            "good_when_positive": false,
+            "path": "carbon_kgco2_per_m2",
+            "vs_step_above": {
+              "baseline": 14.3,
+              "after": 12.58,
+              "delta": -1.7200000000000006,
+              "delta_pct": -12.027972027972032
+            },
+            "vs_original": {
+              "baseline": 14.3,
+              "after": 12.58,
+              "delta": -1.7200000000000006,
+              "delta_pct": -12.027972027972032
+            }
+          }
+        ]
+      }
+    },
+    {
+      "index": 1,
+      "id": "int_3ad13c2d-b3fa-4938-835a-4c1949cd2f42",
+      "label": "MVHR Bedrooms",
+      "enabled": true,
+      "n_patches": 10,
+      "sections": {
+        "Demand side — what the building needs": [
+          {
+            "key": "raw_demand",
+            "label": "Heat the building needs",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "heating_raw_demand_mwh",
+            "vs_step_above": {
+              "baseline": 238.3,
+              "after": 101.9,
+              "delta": -136.4,
+              "delta_pct": -57.23877465379773
+            },
+            "vs_original": {
+              "baseline": 238.3,
+              "after": 101.9,
+              "delta": -136.4,
+              "delta_pct": -57.23877465379773
+            }
+          },
+          {
+            "key": "mvhr_recovery",
+            "label": "Heat recovered by MVHR",
+            "unit": "MWh",
+            "good_when_positive": true,
+            "path": "heating_recovery_offset_mwh",
+            "vs_step_above": {
+              "baseline": 93.066,
+              "after": 170.58,
+              "delta": 77.51400000000001,
+              "delta_pct": 83.28927857649411
+            },
+            "vs_original": {
+              "baseline": 93.066,
+              "after": 170.58,
+              "delta": 77.51400000000001,
+              "delta_pct": 83.28927857649411
+            }
+          },
+          {
+            "key": "post_mvhr",
+            "label": "After heat recovery",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "heating_post_mvhr_demand_mwh",
+            "vs_step_above": {
+              "baseline": 145.234,
+              "after": -68.68,
+              "delta": -213.91400000000002,
+              "delta_pct": -147.289202252916
+            },
+            "vs_original": {
+              "baseline": 145.234,
+              "after": -68.68,
+              "delta": -213.91400000000002,
+              "delta_pct": -147.289202252916
+            }
+          },
+          {
+            "key": "cooling_demand",
+            "label": "Cooling demand",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "cooling_demand_mwh",
+            "vs_step_above": {
+              "baseline": 72.5,
+              "after": 103,
+              "delta": 30.5,
+              "delta_pct": 42.06896551724138
+            },
+            "vs_original": {
+              "baseline": 72.5,
+              "after": 103,
+              "delta": 30.5,
+              "delta_pct": 42.06896551724138
+            }
+          },
+          {
+            "key": "dhw_demand",
+            "label": "Hot water demand",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "per_service.dhw.demand_mwh",
+            "vs_step_above": {
+              "baseline": 0,
+              "after": 0,
+              "delta": 0,
+              "delta_pct": null
+            },
+            "vs_original": {
+              "baseline": 0,
+              "after": 0,
+              "delta": 0,
+              "delta_pct": null
+            }
+          }
+        ],
+        "Delivered by systems": [
+          {
+            "key": "heat_del",
+            "label": "Heating delivered",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "per_service.heating.delivered_mwh",
+            "vs_step_above": {
+              "baseline": 238.3,
+              "after": 0,
+              "delta": -238.3,
+              "delta_pct": -100
+            },
+            "vs_original": {
+              "baseline": 238.3,
+              "after": 0,
+              "delta": -238.3,
+              "delta_pct": -100
+            }
+          },
+          {
+            "key": "heat_eff",
+            "label": "Heating efficiency",
+            "unit": "ratio",
+            "good_when_positive": true,
+            "path": "per_service.heating.efficiency",
+            "vs_step_above": {
+              "baseline": 4,
+              "after": 0,
+              "delta": -4,
+              "delta_pct": -100
+            },
+            "vs_original": {
+              "baseline": 2.57,
+              "after": 0,
+              "delta": -2.57,
+              "delta_pct": -100
+            }
+          },
+          {
+            "key": "cool_del",
+            "label": "Cooling delivered",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "per_service.cooling.delivered_mwh",
+            "vs_step_above": {
+              "baseline": 72.5,
+              "after": 103,
+              "delta": 30.5,
+              "delta_pct": 42.06896551724138
+            },
+            "vs_original": {
+              "baseline": 72.5,
+              "after": 103,
+              "delta": 30.5,
+              "delta_pct": 42.06896551724138
+            }
+          },
+          {
+            "key": "cool_eff",
+            "label": "Cooling efficiency",
+            "unit": "ratio",
+            "good_when_positive": true,
+            "path": "per_service.cooling.efficiency",
+            "vs_step_above": {
+              "baseline": 3.5,
+              "after": 3.5,
+              "delta": 0,
+              "delta_pct": 0
+            },
+            "vs_original": {
+              "baseline": 3.5,
+              "after": 3.5,
+              "delta": 0,
+              "delta_pct": 0
+            }
+          },
+          {
+            "key": "dhw_del",
+            "label": "Hot water delivered",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "per_service.dhw.delivered_mwh",
+            "vs_step_above": {
+              "baseline": 0,
+              "after": 0,
+              "delta": 0,
+              "delta_pct": null
+            },
+            "vs_original": {
+              "baseline": 0,
+              "after": 0,
+              "delta": 0,
+              "delta_pct": null
+            }
+          }
+        ],
+        "Fuel consumed": [
+          {
+            "key": "total_elec",
+            "label": "Total electricity",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "per_fuel.electricity_mwh",
+            "vs_step_above": {
+              "baseline": 262.69,
+              "after": 211.83,
+              "delta": -50.859999999999985,
+              "delta_pct": -19.361224256728455
+            },
+            "vs_original": {
+              "baseline": 298.632,
+              "after": 211.83,
+              "delta": -86.80199999999999,
+              "delta_pct": -29.06654343807763
+            }
+          },
+          {
+            "key": "total_gas",
+            "label": "Total gas",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "per_fuel.gas_mwh",
+            "vs_step_above": {
+              "baseline": 0,
+              "after": 0,
+              "delta": 0,
+              "delta_pct": null
+            },
+            "vs_original": {
+              "baseline": 0,
+              "after": 0,
+              "delta": 0,
+              "delta_pct": null
+            }
+          },
+          {
+            "key": "heat_elec",
+            "label": "Heating electricity",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "per_service.heating.electricity_mwh",
+            "vs_step_above": {
+              "baseline": 59.575,
+              "after": 0,
+              "delta": -59.575,
+              "delta_pct": -100
+            },
+            "vs_original": {
+              "baseline": 92.767,
+              "after": 0,
+              "delta": -92.767,
+              "delta_pct": -100
+            }
+          },
+          {
+            "key": "heat_gas",
+            "label": "Heating gas",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "per_service.heating.gas_mwh",
+            "vs_step_above": {
+              "baseline": 0,
+              "after": 0,
+              "delta": 0,
+              "delta_pct": null
+            },
+            "vs_original": {
+              "baseline": 0,
+              "after": 0,
+              "delta": 0,
+              "delta_pct": null
+            }
+          },
+          {
+            "key": "dhw_elec",
+            "label": "Hot water electricity",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "per_service.dhw.electricity_mwh",
+            "vs_step_above": {
+              "baseline": 1.051,
+              "after": 1.051,
+              "delta": 0,
+              "delta_pct": 0
+            },
+            "vs_original": {
+              "baseline": 1.051,
+              "after": 1.051,
+              "delta": 0,
+              "delta_pct": 0
+            }
+          },
+          {
+            "key": "dhw_gas",
+            "label": "Hot water gas",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "per_service.dhw.gas_mwh",
+            "vs_step_above": {
+              "baseline": 0,
+              "after": 0,
+              "delta": 0,
+              "delta_pct": null
+            },
+            "vs_original": {
+              "baseline": 0,
+              "after": 0,
+              "delta": 0,
+              "delta_pct": null
+            }
+          },
+          {
+            "key": "cool_elec",
+            "label": "Cooling electricity",
+            "unit": "MWh",
+            "good_when_positive": false,
+            "path": "per_service.cooling.electricity_mwh",
+            "vs_step_above": {
+              "baseline": 20.714,
+              "after": 29.429,
+              "delta": 8.715,
+              "delta_pct": 42.072994110263586
+            },
+            "vs_original": {
+              "baseline": 20.714,
+              "after": 29.429,
+              "delta": 8.715,
+              "delta_pct": 42.072994110263586
+            }
+          }
+        ],
+        "Headline": [
+          {
+            "key": "eui",
+            "label": "EUI",
+            "unit": "kWh/m²",
+            "good_when_positive": false,
+            "path": "eui_kwh_per_m2",
+            "vs_step_above": {
+              "baseline": 60.8,
+              "after": 49,
+              "delta": -11.799999999999997,
+              "delta_pct": -19.407894736842103
+            },
+            "vs_original": {
+              "baseline": 69.1,
+              "after": 49,
+              "delta": -20.099999999999994,
+              "delta_pct": -29.088277858176546
+            }
+          },
+          {
+            "key": "carbon",
+            "label": "Operational carbon",
+            "unit": "kgCO₂/m²",
+            "good_when_positive": false,
+            "path": "carbon_kgco2_per_m2",
+            "vs_step_above": {
+              "baseline": 12.58,
+              "after": 10.15,
+              "delta": -2.4299999999999997,
+              "delta_pct": -19.316375198728135
+            },
+            "vs_original": {
+              "baseline": 14.3,
+              "after": 10.15,
+              "delta": -4.15,
+              "delta_pct": -29.02097902097902
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
