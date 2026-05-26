@@ -1,0 +1,107 @@
+{
+  "meta": {
+    "weather_file": "GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw",
+    "dT_integral_K_hours": 77967.19984360039,
+    "box_gia_m2": 100,
+    "timestamp": "2026-05-26T19:14:22.170Z"
+  },
+  "scenario1": {
+    "s1_off": {
+      "demand_mwh": 182.6,
+      "delivered_mwh": 182.6,
+      "recovery_offset_mwh": 0,
+      "vent_recovery_mwh": 0,
+      "vent_recovery_theo": 0
+    },
+    "s1_on": {
+      "demand_mwh": 147.8,
+      "delivered_mwh": 147.8,
+      "recovery_offset_mwh": 35.261,
+      "vent_recovery_mwh": 35.261,
+      "vent_recovery_theo": 35.261
+    },
+    "breakdown_after_off": 182.6,
+    "breakdown_after_on": 112.53900000000002,
+    "demand_drop": 34.79999999999998
+  },
+  "scenario2": {
+    "sweep": [
+      {
+        "flow": 500,
+        "demand": 147.8,
+        "recovery": 35.261,
+        "after": 112.53900000000002,
+        "neg": false
+      },
+      {
+        "flow": 1000,
+        "demand": 159.4,
+        "recovery": 70.521,
+        "after": 88.879,
+        "neg": false
+      },
+      {
+        "flow": 2000,
+        "demand": 182.6,
+        "recovery": 139.485,
+        "after": 43.11499999999998,
+        "neg": false
+      },
+      {
+        "flow": 3000,
+        "demand": 205.7,
+        "recovery": 198.027,
+        "after": 7.673000000000002,
+        "neg": false
+      },
+      {
+        "flow": 4000,
+        "demand": 228.9,
+        "recovery": 227.056,
+        "after": 1.843999999999994,
+        "neg": false
+      },
+      {
+        "flow": 5000,
+        "demand": 252,
+        "recovery": 251.033,
+        "after": 0.967000000000013,
+        "neg": false
+      },
+      {
+        "flow": 6000,
+        "demand": 275.2,
+        "recovery": 274.486,
+        "after": 0.7139999999999986,
+        "neg": false
+      },
+      {
+        "flow": 7000,
+        "demand": 298.3,
+        "recovery": 297.797,
+        "after": 0.5029999999999859,
+        "neg": false
+      },
+      {
+        "flow": 8000,
+        "demand": 321.5,
+        "recovery": 321.051,
+        "after": 0.4490000000000123,
+        "neg": false
+      }
+    ],
+    "firstNegativeFlow": null
+  },
+  "findings": {
+    "q1_after_recovery_negative_on_clean_box": false,
+    "q1_first_negative_flow_l_s": null,
+    "q2_recovery_exceeds_demand_on_clean_box": false,
+    "q3_engine_bug_or_display_bug": "display",
+    "q5_double_subtraction_sites": [
+      "BreakdownPanel.jsx:146  (tooltip labels demand_mwh \"pre-MVHR\" but it is post-MVHR)",
+      "interventionsEngine.js:459-463  (_postMvhrHeatingDemand computes raw − offset; raw is already post-MVHR)",
+      "BreakdownPanel.jsx:148  (post_mvhr row shows the double-subtracted value)"
+    ],
+    "q6_eui_affected": false
+  }
+}

@@ -438,29 +438,28 @@ function pickNumber(result, paths) {
 }
 
 /**
- * Brief 48 Part 1 (2026-05-25): boundary-named derived field for the
- * post-MVHR heating demand. The engine surfaces:
- *   consumption.space_heating.demand_mwh           = RAW State 2 demand
- *   consumption.space_heating.recovery_offset_mwh  = MVHR credit
- * but NOT the post-MVHR value directly (it's used internally to size
- * systems but never attached to result — see §3 of the audit doc).
+ * Display-side helper: post-MVHR heating demand for the BreakdownPanel.
  *
- * Brief 48's breakdown panel needs all three boundaries as distinct
- * rows. This helper computes the post-MVHR value from the two AR
- * fields. Returns null when raw demand isn't available; treats missing
- * recovery_offset_mwh as 0 (no MVHR → post-MVHR demand == raw demand).
+ * 2026-05-26 (refbox MVHR cap diagnostic — Brief 55 follow-on, Option (b)):
+ *   `consumption.space_heating.demand_mwh` IS the post-MVHR demand. State 2
+ *   bakes the (1-HRE) recovery into the demand via the vent UA factor —
+ *   confirmed on the clean refbox: demand drops 182.6 → 147.8 MWh as HRE
+ *   goes 0 → 0.75 at flow=500 L/s, matching the airstream integral
+ *   (35.3 MWh) to within rounding. See instantCalc.js L4328-4343 and
+ *   docs/audit/55_refbox_mvhr_cap.json.
  *
- * Reconciliation identity (checked at the call site below):
- *   raw − recovery_offset == post_mvhr   (this helper, by construction)
- *   post_mvhr ≈ delivered                (engine consistency, NOT
- *     enforced here — flag if it diverges by >1 %; see Part 1 audit
- *     §5 reconciliation identity #1)
+ *   The PREVIOUS implementation of this helper returned `raw − offset`,
+ *   which double-subtracted recovery: it took the already-post-MVHR
+ *   `demand_mwh` and subtracted `recovery_offset_mwh` (the airstream
+ *   recovery integral, surfaced for display) a SECOND time. On Bridgewater
+ *   that produced a NEGATIVE "After heat recovery" panel row (−68.68 MWh
+ *   when raw=101.9 and offset=170.58). Engine was always correct; this
+ *   helper was wrong.
+ *
+ * Returns the engine-emitted post-MVHR demand. Null when missing.
  */
 function _postMvhrHeatingDemand(result) {
-  const raw = pickNumber(result, ['consumption.space_heating.demand_mwh'])
-  if (raw == null) return null
-  const offset = pickNumber(result, ['consumption.space_heating.recovery_offset_mwh']) ?? 0
-  return raw - offset
+  return pickNumber(result, ['consumption.space_heating.demand_mwh'])
 }
 
 /**
@@ -489,16 +488,27 @@ function _efficiencyPathFor(service) {
  * Brief 48 Part 1 (2026-05-25) — boundary-named field additions:
  *
  * The existing `heating_demand_mwh` field reads `consumption.space_heating.
- * demand_mwh`, which the engine emits as the RAW State 2 zone demand
- * (pre-MVHR). The field name is ambiguous: post-Brief-44 callers may
- * assume it's the "demand the systems see", which would be the post-MVHR
- * value. The audit doc (§3) documents this asymmetry; for back-compat
- * the field is RETAINED at its current value. Brief 48 adds three
- * boundary-named fields alongside that are unambiguous:
+ * demand_mwh`. For back-compat the field is RETAINED. Brief 48 adds three
+ * boundary-named fields alongside:
  *
- *   heating_raw_demand_mwh        — alias of heating_demand_mwh (clear)
- *   heating_recovery_offset_mwh   — the MVHR credit, deltaRecord
- *   heating_post_mvhr_demand_mwh  — raw − recovery_offset, deltaRecord
+ *   heating_raw_demand_mwh        — engine demand_mwh (POST-MVHR per
+ *                                    State 2's (1-HRE) factor — see the
+ *                                    instantCalc.js L4328-4343 comment).
+ *   heating_recovery_offset_mwh   — the airstream recovery integral,
+ *                                    surfaced for display.
+ *   heating_post_mvhr_demand_mwh  — same as heating_raw_demand_mwh
+ *                                    (engine demand is already post-MVHR).
+ *                                    Kept as a distinct field so the
+ *                                    BreakdownPanel "After heat recovery"
+ *                                    row can reference an explicit name.
+ *
+ * 2026-05-26 update (refbox MVHR cap diagnostic — Brief 55 follow-on,
+ * Option (b)): the previous `heating_post_mvhr_demand_mwh = raw − offset`
+ * formula double-subtracted recovery. The refbox proved engine demand_mwh
+ * is already post-MVHR. The helper now returns engine demand_mwh directly.
+ * Falsifiability: after-recovery == demand_mwh on every project including
+ * Bridgewater (never negative); refbox after-recovery == post-MVHR demand
+ * at every flow.
  *
  * Reconciliation identity #3 (cumulative === sum of marginals on
  * Bridgewater): TRUE BY CONSTRUCTION for every field on this object.

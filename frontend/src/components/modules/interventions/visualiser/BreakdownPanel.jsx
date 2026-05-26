@@ -143,9 +143,9 @@ function pickDelta(deltaObj, path) {
  */
 const ROWS = {
   demand: [
-    { key: 'raw_demand',     label: 'Heat the building needs',  tooltip: 'Raw State 2 zone demand · pre-MVHR (consumption.space_heating.demand_mwh)', deltaPath: 'heating_raw_demand_mwh' },
-    { key: 'mvhr_recovery',  label: 'Heat recovered by MVHR',   tooltip: 'MVHR recovery credit applied to heating demand (consumption.space_heating.recovery_offset_mwh)', deltaPath: 'heating_recovery_offset_mwh', goodWhenPositive: true },
-    { key: 'post_mvhr',      label: 'After heat recovery',      tooltip: 'Post-MVHR heating demand — what systems are sized to (raw − recovery)', deltaPath: 'heating_post_mvhr_demand_mwh' },
+    { key: 'raw_demand',     label: 'Heat the building needs',  tooltip: 'State 2 zone heating demand — already post-MVHR via the (1-HRE) factor on vent UA (consumption.space_heating.demand_mwh)', deltaPath: 'heating_raw_demand_mwh' },
+    { key: 'mvhr_recovery',  label: 'Heat recovered by MVHR',   tooltip: 'Airstream recovery integral surfaced for display — NOT subtracted again from demand (consumption.space_heating.recovery_offset_mwh)', deltaPath: 'heating_recovery_offset_mwh', goodWhenPositive: true },
+    { key: 'post_mvhr',      label: 'After heat recovery',      tooltip: 'Post-MVHR heating demand — what systems are sized to. Equals "Heat the building needs" by construction since demand_mwh is already post-MVHR.', deltaPath: 'heating_post_mvhr_demand_mwh' },
     { key: 'cooling_demand', label: 'Cooling demand',            tooltip: 'Cooling load at the zone (consumption.space_cooling.demand_mwh)', deltaPath: 'cooling_demand_mwh' },
     { key: 'dhw_demand',     label: 'Hot water demand',          tooltip: 'Tap-mix-corrected DHW demand (consumption.dhw.demand_mwh)', deltaPath: 'per_service.dhw.demand_mwh' },
   ],

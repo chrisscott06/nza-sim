@@ -1,6 +1,6 @@
 # Breakdown-panel audit-trail dump
 
-Generated: 2026-05-26T17:54:44.308Z
+Generated: 2026-05-26T19:14:32.212Z
 Source backend: `http://127.0.0.1:8003`  ·  Project: **HIX Bridgewater** (`14b4a5b1-8c73-4acb-8b65-1d22f05ec969`)
 Comfort band: 21–24 °C
 Baseline EUI: **69.10 kWh/m²·yr**
@@ -17,7 +17,7 @@ Patches: 10
 |---|---:|---:|---:|---:|:---|
 | Heat the building needs | 238.3 | 101.9 | -136.4 | -136.4 | MWh |
 | Heat recovered by MVHR | 93.07 | 170.58 | +77.51 | +77.51 | MWh |
-| After heat recovery | 145.23 | -68.68 | -213.91 | -213.91 | MWh |
+| After heat recovery | 238.3 | 101.9 | -136.4 | -136.4 | MWh |
 | Cooling demand | 72.5 | 103 | +30.5 | +30.5 | MWh |
 | Hot water demand | 0 | 0 | 0 | 0 | MWh |
 
@@ -61,7 +61,7 @@ Patches: 10
 |---|---:|---:|---:|---:|:---|
 | Heat the building needs | 238.3 | 101.9 | 0 | -136.4 | MWh |
 | Heat recovered by MVHR | 93.07 | 170.58 | 0 | +77.51 | MWh |
-| After heat recovery | 145.23 | -68.68 | 0 | -213.91 | MWh |
+| After heat recovery | 238.3 | 101.9 | 0 | -136.4 | MWh |
 | Cooling demand | 72.5 | 103 | 0 | +30.5 | MWh |
 | Hot water demand | 0 | 0 | 0 | 0 | MWh |
 
