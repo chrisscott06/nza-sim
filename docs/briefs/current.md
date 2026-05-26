@@ -1,24 +1,16 @@
 # Current brief
 
-**No active brief.** Brief 53 (ventilation summer-bypass + heat-balance Sankey on Systems) closed 2026-05-26 — see [`archive/53_ventilation_bypass_and_heatbalance_COMPLETED.md`](archive/53_ventilation_bypass_and_heatbalance_COMPLETED.md) and STATUS.md. Clean-state Bridgewater EUI anchor unchanged: **128.20 kWh/m²·yr** (bypass default-off; the toggle is now user-controllable via a checkbox on each ventilation system entry in `/systems`).
+**No active brief.** Brief 55 (granular field-level system patches — Finding D resolved) closed 2026-05-26 — see [`archive/55_granular_field_patches_COMPLETED.md`](archive/55_granular_field_patches_COMPLETED.md) and STATUS.md. Clean-state Bridgewater EUI anchor unchanged: **128.20 kWh/m²·yr** (no-intervention baseline). Field-level patches now compose; `[VRF, MVHR]` and `[MVHR, VRF]` produce the same cumulative.
 
-The Brief 53 walkthrough surfaced one observation that is **NOT a Brief 53 regression**: intervention order-dependence (`[VRF, MVHR] = 130 kWh/m²·yr` vs `[MVHR, VRF] = 124 kWh/m²·yr`). This is the pre-existing Finding D patch-overlap bug in the intervention stacking layer — Brief 53 never touched that code. It is now the explicit trigger for the next brief (see priorities below).
+The Brief 55 walkthrough surfaced a separate **display-only** issue at the BreakdownPanel boundary: "After heat recovery" was showing `demand_mwh − recovery_offset_mwh`, which double-subtracted recovery because `demand_mwh` is already post-MVHR (per Brief 50 Part 2). On Bridgewater this produced a physically-impossible −68.68 MWh. Fixed as Option (b) in a tiny separate commit `4d282ba` — engine untouched, helper now returns `demand_mwh` directly, tooltips corrected. Refbox confirms by construction: after-recovery == post-MVHR demand at every flow.
 
 ## Next priorities
 
-1. **Granular-field-patch / SCOP-invariant fix** (Finding D follow-up — Brief 53 walkthrough reproduction fixture). NOW THE NEXT BRIEF. The intervention-stacking layer currently applies whole-object `systems_config_v40` snapshots as patches (each intervention sets the entire v40 object). When two interventions touch the same service (e.g. "VRF 4.0" sets heating to a single VRF at SCOP 4; "MVHR Bedrooms" sets ventilation), the later one's snapshot replaces the earlier one's wholesale — so heating gets clobbered by MVHR's patched-but-unintentionally-included heating block. Result: order-dependent EUI.
+1. **Metadata-input-page brief** (single source of truth for num_rooms, comfort_band, peak_people_per_room). Will subsume the comfort_band stopgap landed at `e462a21`. Brief not yet written.
 
-   **Fix shape:** field-level system patches (`op:set` on `building.systems_config_v40.heating[0].efficiency_metric`, not on the whole `building.systems_config_v40` object). VRF and MVHR then compose instead of collide.
+2. **Brief 51 (HELD)** — MVHR recovery row surfacing / panel reconciliation (Brief 50 target 5 residual). Polish only — likely satisfied in part by Brief 55's display fix (the "After heat recovery" row no longer double-subtracts). Re-read the source brief at `~/Downloads/51_mvhr_recovery_row_surfacing.md` before opening to see what remains.
 
-   **Falsifiability gate:**
-   - Cumulative after-stack EUI must be **order-independent** — `[VRF, MVHR]` and `[MVHR, VRF]` must converge to one number (the 130/124 split → one value).
-   - **No isolated SCOP/demand-reducer may show a positive marginal.** A pure efficiency improvement (e.g. VRF SCOP 2.8 → 4.0) or a pure demand reducer (e.g. MVHR HRE upgrade) MUST move EUI in the saving direction in isolation. The walkthrough screenshots (showing `[MVHR alone]` and `[VRF alone]` marginals from Brief 48's breakdown panel) are the reproduction fixture for this brief.
-
-   Brief not yet written.
-
-2. **Metadata-input-page brief** (single source of truth for num_rooms, comfort_band, peak_people_per_room). Will subsume the comfort_band stopgap landed at `e462a21`. Brief not yet written.
-
-3. **Brief 51 (HELD)** — MVHR recovery row surfacing / panel reconciliation (Brief 50 target 5 residual). Polish only, waits behind the engine-correctness work above. Source brief at `~/Downloads/51_mvhr_recovery_row_surfacing.md` (not yet landed in active/).
+3. **Demand-honesty cluster** (per Brief 55 sequencing note): DHW basis (52), auxiliary-energy layer, lighting/gains-decoupling bug. Correctness work done; feature work resumes.
 
 Brief 50 (MVHR recovery double-count fix — Option A: State 2 owns recovery) closed 2026-05-25 — see [`archive/50_mvhr_recovery_doublecount_fix_COMPLETED.md`](archive/50_mvhr_recovery_doublecount_fix_COMPLETED.md). Movement explained from first principles in `docs/audit/50_mvhr_recovery_doublecount.md` §4 + §7.
 

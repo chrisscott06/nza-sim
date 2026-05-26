@@ -1,5 +1,56 @@
 # NZA SIMULATE — Status
 
+## 🚀 Brief 55 — CLOSED 2026-05-26
+
+**Granular field-level system patches — fix order-dependent intervention stacking (Finding D resolved).** Architecture-fix brief, five parts plus a sidecar dump + a small display-only follow-on.
+
+### Clean-state anchor unchanged
+
+**Bridgewater clean EUI: 128.20 kWh/m²·yr** (no-intervention baseline). The fix changes how interventions PATCH; the engine is untouched.
+
+### Parts landed
+
+| Part | Commit | Deliverable |
+|---|---|---|
+| Part 1 | `f80876b` | Patch-layer audit + 130/124 reproduction baseline (read-only) |
+| Part 2 | `1a58d0f` | Field-level system patches — `diffV40ToFieldPatches`, capture-mode diff in `useProjectMutation`, `migratePatch` v2→v3 eager migration. Array-shape equality holds across orders |
+| Part 3 | `4bc3f03` | Refbox permutation regression + SCOP-invariant fixture (`scripts/_brief55_part3_refbox.mjs`) |
+| Part 4 | `978bb28` | PatchedInputBadge precision verified — exact-match on field-level patches; per-field flags exposed |
+| Part 5 | `25bfc87` | Genuine same-field conflict signal + Drop-artefact UX (red/amber severity, AlertTriangle context strip, header "⚠ N conflicts" chip) |
+| Sidecar | `2b5ae46` | Vite config — env-var overridable port + API proxy target (live :5176 → :8002, verification :5178 → :8003) |
+| Sidecar | `b60e1ec` | Self-tracing breakdown-panel dump (`scripts/_brief55_breakdown_dump.mjs`) — reads from file, not screenshots |
+| Display fix | `4d282ba` | Stop double-subtracting MVHR recovery in BreakdownPanel ("After heat recovery" was showing −68.68 on Bridgewater; engine was always correct, helper was double-subtracting). Display-only — engine untouched |
+
+### Final falsifiability gate review — all green
+
+| # | Target | Status |
+|---|---|---|
+| 1 | Order-independence: [VRF, MVHR] == [MVHR, VRF] cumulative — 130/124 collapses | ✓ field-level patches compose; array-shape equality holds |
+| 2 | No spurious positive marginal from isolated SCOP/demand-reducer | ✓ refbox Part 3 fixture passes |
+| 3 | Marginals reconcile (telescoping) | ✓ by construction (Brief 48 §7.2) |
+| 4 | Baseline untouched: 128.20 on verification DB; engine `git diff` 0 | ✓ exact; `git diff 8ecd11c..HEAD frontend/src/utils/instantCalc.js frontend/src/utils/systemsEngine.js` returns 0 lines |
+| 5 | Refbox regression fixture committed | ✓ `scripts/_brief55_part3_refbox.mjs` |
+| 6 | Existing projects open + compute (migration works) | ✓ `migratePatch` v2→v3 runs eagerly on load; Bridgewater opens cleanly |
+| 7 | PatchedInputBadge highlights only changed fields | ✓ exact-match predicate on field-level patches |
+| Bonus | "After heat recovery" never negative on Bridgewater | ✓ −68.68 → 101.9 after display fix |
+| Bonus | Refbox after-recovery == post-MVHR demand at every flow | ✓ by construction (helper now returns demand_mwh directly) |
+
+### Walkthrough finding — display double-subtraction at the panel boundary
+
+Mid-walkthrough Chris asked the refbox engine question: can "after heat recovery" go negative when MVHR is added, and can recovery exceed demand? On Bridgewater image 2 the panel showed `After heat recovery = −68.68 MWh` (101.9 − 170.58), physically impossible.
+
+The refbox MVHR cap diagnostic (`scripts/_brief55_refbox_mvhr_cap.mjs`) confirmed: `consumption.space_heating.demand_mwh` IS already post-MVHR (Brief 50 Part 2's `(1-HRE)` factor on State 2 vent UA owns recovery). The BreakdownPanel "After heat recovery" row was reading `_postMvhrHeatingDemand = raw − recovery_offset` — a display-layer double subtraction. Engine was always correct. Display fix (Option (b), commit `4d282ba`): helper now returns `demand_mwh` directly; "After heat recovery" == "Heat the building needs" by construction (since the engine's demand is already post-MVHR). Tooltips on rows 146-148 of `BreakdownPanel.jsx` corrected.
+
+This was NOT part of Brief 55's primary fix (patch-overlap), but landed alongside as a tiny separate commit since it was discovered during Brief 55's verification walkthrough.
+
+### Brief 55 lessons captured
+
+- **Patches are edits, not snapshots.** The whole-object `systems_config_v40` snapshot was the root of three problems (order-dependence, badge over-highlighting, no per-field flags). Field-level patches resolve all three.
+- **Same-field conflicts must be surfaced, not silently resolved.** Brief 55's "Overridden" warning was a misleading side-effect of snapshot collision; it now means a real conflict (two interventions edit the same field) and offers a Drop-artefact affordance for capture-time accidents.
+- **Engine ≠ display.** Two distinct correctness layers. The engine's post-MVHR demand was correct since Brief 50; the BreakdownPanel display formula lagged. Engine-untouched-gate (`git diff 8ecd11c..HEAD` over `instantCalc.js + systemsEngine.js` must be 0 lines) caught the boundary clearly — the fix lived entirely in `interventionsEngine.js` + `BreakdownPanel.jsx`.
+
+---
+
 ## 🚀 Brief 53 — CLOSED 2026-05-26
 
 **Ventilation: summer-bypass toggle + heat-balance Sankey on Systems.** Engine + UI brief, six parts plus a substantial sidecar.
