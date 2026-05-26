@@ -37,7 +37,7 @@ import {
   OpeningsSection,
   FabricSection,
   AirtightnessSection,
-  ComfortBandSection,
+  BuildingMetadataSection,  // Brief 58 A4: replaces ComfortBandSection (folded into the metadata section)
 } from '../../building/buildingSections.jsx'
 
 const SUBSECTION_LABELS = {

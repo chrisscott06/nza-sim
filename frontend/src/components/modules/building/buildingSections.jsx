@@ -869,6 +869,164 @@ export function AirtightnessSection({ liveResult, isOpen, onToggle }) {
  * and the runtime ReferenceError fired only on the first slider drag,
  * which Chris had not yet attempted on the affected build).
  */
+/**
+ * BuildingMetadataSection — Brief 58 A4 (2026-05-26).
+ *
+ * Single source of truth for the three genuinely building-level constants:
+ *   - num_bedrooms (relabelled "Number of rooms" in the UI per A1 §3.4;
+ *     storage field name unchanged to avoid a 20-file Rule-14 rename)
+ *   - reported_gia (the EUI denominator; A3 engine surface)
+ *       + geometry_gia (read-only, computed from length × width × num_floors)
+ *       + divergence flag when |reported − geometry| / geometry > 10%
+ *   - comfort_band (heating + cooling setpoints)
+ *
+ * Brief 58 Principle 1: "Each quantity lives where it physically belongs.
+ * Building constants → metadata page. Occupancy and electrical loads →
+ * Internal Gains." Occupancy is NOT here — people_per_room is Part B.
+ *
+ * Persistence: each input writes via `mutate(path, value)` → ProjectContext
+ * → autosave PUT /api/projects/{id} → SQLite UPDATE + WAL_CHECKPOINT
+ * (Brief 58 A4 server-side, projects.py L311+).
+ */
+export function BuildingMetadataSection({ isOpen, onToggle }) {
+  const { params, comfortBand } = useContext(ProjectContext)
+  const { mutate } = useProjectMutation()
+
+  const numBedrooms = Number(params?.num_bedrooms ?? 0)
+  const length      = Number(params?.length ?? 0)
+  const width       = Number(params?.width ?? 0)
+  const numFloors   = Number(params?.num_floors ?? 0)
+  const geometryGia = Math.round(length * width * numFloors)
+
+  // reported_gia null → defaults to geometry on the engine side.
+  // Display: show user-set value when present, geometry otherwise.
+  const reportedRaw = params?.reported_gia
+  const reportedActive = reportedRaw != null && Number.isFinite(Number(reportedRaw)) && Number(reportedRaw) > 0
+  const reportedDisplay = reportedActive ? Math.round(Number(reportedRaw)) : geometryGia
+
+  // Brief 58 A4 §A4: divergence flag when |reported − geometry| / geometry > 10 %.
+  const divergencePct = geometryGia > 0
+    ? Math.abs(reportedDisplay - geometryGia) / geometryGia * 100
+    : 0
+  const divergenceFires = divergencePct > 10
+
+  const lo = Number(comfortBand?.lower_c ?? 20)
+  const hi = Number(comfortBand?.upper_c ?? 26)
+
+  return (
+    <CollapsibleSection title="Building metadata" isOpen={isOpen} onToggle={onToggle}>
+      <div className="space-y-3">
+        {/* ── Number of rooms ─────────────────────────────────────── */}
+        <div>
+          <div className="flex items-center justify-between mb-0.5">
+            <label className="text-xxs text-mid-grey">Number of rooms</label>
+            <span className="text-xxs text-mid-grey/60">drives per-room occupancy density</span>
+          </div>
+          <PatchedInputBadge path="num_bedrooms">
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={numBedrooms}
+              onChange={e => mutate('num_bedrooms', Math.max(0, parseInt(e.target.value || '0', 10)))}
+              className="w-full px-2 py-1 text-xxs text-navy border border-light-grey rounded bg-white tabular-nums"
+            />
+          </PatchedInputBadge>
+        </div>
+
+        {/* ── Reported GIA (+ geometry read-only + divergence flag) ─ */}
+        <div>
+          <div className="flex items-center justify-between mb-0.5">
+            <label className="text-xxs text-mid-grey">Reported GIA</label>
+            <span className="text-xxs text-mid-grey/60">EUI denominator</span>
+          </div>
+          <PatchedInputBadge path="reported_gia">
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={reportedActive ? reportedDisplay : ''}
+              placeholder={`${geometryGia} (geometry)`}
+              onChange={e => {
+                const raw = e.target.value.trim()
+                if (raw === '') {
+                  mutate('reported_gia', null)
+                  return
+                }
+                const v = Number(raw)
+                if (Number.isFinite(v) && v > 0) mutate('reported_gia', Math.round(v))
+              }}
+              className="w-full px-2 py-1 text-xxs text-navy border border-light-grey rounded bg-white tabular-nums"
+            />
+          </PatchedInputBadge>
+          <div className="flex items-center justify-between mt-1 text-xxs">
+            <span className="text-mid-grey/80">
+              Geometry GIA (length × width × floors)
+            </span>
+            <span className="text-mid-grey tabular-nums">{geometryGia} m²</span>
+          </div>
+          {divergenceFires && (
+            <div className="mt-1.5 px-2 py-1 rounded text-xxs bg-amber-50 border border-amber-200 text-amber-800">
+              ⚠ Reported and geometry diverge by {divergencePct.toFixed(1)} %
+              (> 10 % threshold). Either a legitimate convention gap (net
+              vs gross) or mis-entered geometry — confirm before relying
+              on EUI.
+            </div>
+          )}
+          <p className="text-xxs text-mid-grey/80 italic pt-1">
+            Leave blank to use geometry GIA (default). Set a different value
+            when reporting against an agency convention (BRUKL net internal
+            area, etc.). Drives EUI display only — building physics stays
+            on geometry.
+          </p>
+        </div>
+
+        {/* ── Comfort band ────────────────────────────────────────── */}
+        <div className="pt-2 border-t border-light-grey/60">
+          <p className="text-xxs uppercase tracking-wider text-mid-grey/70 font-semibold mb-1.5">
+            Comfort band
+          </p>
+          <div className="space-y-1.5">
+            <div>
+              <div className="flex items-center justify-between mb-0.5">
+                <label className="text-xxs text-mid-grey">Heating setpoint</label>
+                <span className="text-xxs text-navy tabular-nums">{lo.toFixed(1)} °C</span>
+              </div>
+              <PatchedInputBadge path="comfort_band.lower_c">
+                <input
+                  type="range" min={12} max={26} step={0.5}
+                  value={lo}
+                  onChange={e => mutate('comfort_band.lower_c', parseFloat(e.target.value))}
+                  className="w-full h-[3px] accent-navy"
+                />
+              </PatchedInputBadge>
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-0.5">
+                <label className="text-xxs text-mid-grey">Cooling setpoint</label>
+                <span className="text-xxs text-navy tabular-nums">{hi.toFixed(1)} °C</span>
+              </div>
+              <PatchedInputBadge path="comfort_band.upper_c">
+                <input
+                  type="range" min={20} max={32} step={0.5}
+                  value={hi}
+                  onChange={e => mutate('comfort_band.upper_c', parseFloat(e.target.value))}
+                  className="w-full h-[3px] accent-navy"
+                />
+              </PatchedInputBadge>
+            </div>
+            <p className="text-xxs text-mid-grey/80 italic pt-1">
+              Drives heating/cooling demand against the setpoint convention.
+              Wide bands (12 → 32) yield free-running behaviour; tight
+              bands force more system work.
+            </p>
+          </div>
+        </div>
+      </div>
+    </CollapsibleSection>
+  )
+}
+
 export function ComfortBandSection({ isOpen, onToggle }) {
   const { comfortBand } = useContext(ProjectContext)
   const { mutate } = useProjectMutation()

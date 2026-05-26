@@ -852,6 +852,11 @@ export function ProjectProvider({ children }) {
       num_bedrooms:    bc.num_bedrooms    ?? DEFAULT_PARAMS.num_bedrooms,
       occupancy_rate:  bc.occupancy_rate  ?? DEFAULT_PARAMS.occupancy_rate,
       people_per_room: bc.people_per_room ?? DEFAULT_PARAMS.people_per_room,
+      // Brief 58 A4 (2026-05-26): reported_gia — the EUI denominator
+      // (A3 engine surface). null when absent on load → engine falls
+      // back to geometry-derived gia (length × width × num_floors).
+      // Editable via BuildingMetadataSection.
+      reported_gia:    bc.reported_gia    ?? null,
       location:     bc.location     ?? DEFAULT_PARAMS.location,
       // Project-level metadata stored alongside building_config for now
       address:       bc.address       ?? '',

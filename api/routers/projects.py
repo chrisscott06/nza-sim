@@ -309,6 +309,16 @@ async def update_project(project_id: str, request: UpdateProjectRequest):
             ),
         )
         await db.commit()
+        # Brief 58 A4 (2026-05-26): Dev Bible save-kill-restart discipline.
+        # WAL mode (database.py L102) defers commits to .db-wal until a
+        # checkpoint. Without an explicit checkpoint after a user write,
+        # the .db-wal contains the value but the main .db file does not —
+        # a kill + .db-wal delete reverts the write silently. Force a
+        # TRUNCATE checkpoint here so each user-visible save is durable
+        # against process kill + WAL deletion (the test Chris specifies
+        # for A4's persistence gate). The cost is one fsync per write,
+        # which is fine at the user-edit cadence.
+        await db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
         cursor = await db.execute("SELECT * FROM projects WHERE id = ?", (project_id,))
         updated = await cursor.fetchone()
@@ -441,6 +451,10 @@ async def update_building(project_id: str, body: dict):
             (json.dumps(merged), project_id),
         )
         await db.commit()
+        # Brief 58 A4 (2026-05-26): force WAL checkpoint so the write
+        # is durable in the main .db file (not just .db-wal). See the
+        # block in the full-PUT endpoint above for the rationale.
+        await db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
         cursor = await db.execute("SELECT * FROM projects WHERE id = ?", (project_id,))
         updated = await cursor.fetchone()

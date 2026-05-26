@@ -46,7 +46,7 @@ import {
   OpeningsSection,
   FabricSection,
   AirtightnessSection,
-  ComfortBandSection,
+  BuildingMetadataSection,
   ThermalBridgesPanel,
 } from './buildingSections.jsx'
 import LiveResultsStrip from '../../shared/LiveResultsStrip.jsx'
@@ -177,7 +177,12 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
         />
         <ThermalBridgesPanel engineResult={liveResult} {...accordionProps('thermal_bridges')} />
         <AirtightnessSection liveResult={liveResult} {...accordionProps('airtightness')} />
-        <ComfortBandSection  {...accordionProps('comfort')} />
+        {/* Brief 58 A4 (2026-05-26): merged building metadata section.
+            Holds num_bedrooms (relabelled "Number of rooms"), reported_gia
+            + geometry display + >10% divergence flag, and the comfort
+            band (heating/cooling setpoints). Replaces the standalone
+            ComfortBandSection per Brief 58 §A4 "single source". */}
+        <BuildingMetadataSection {...accordionProps('comfort')} />
       </div>
     </div>
   )

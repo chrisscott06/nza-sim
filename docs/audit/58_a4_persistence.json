@@ -1,0 +1,36 @@
+{
+  "meta": {
+    "project": "Bridgewater",
+    "geometry_gia": 4322,
+    "timestamp": "2026-05-26T22:09:51.337Z"
+  },
+  "initial": {
+    "reported": null,
+    "eui_baseline": 69.1
+  },
+  "step1_1p05x": {
+    "reported": 4538,
+    "main_db_value": 4538,
+    "eui": 65.8,
+    "eui_expected": 65.81,
+    "ok": true
+  },
+  "step4_1p15x": {
+    "reported": 4970,
+    "main_db_value": 4970,
+    "eui": 60.1
+  },
+  "step5_revert": {
+    "main_db_value": null,
+    "eui": 69.1,
+    "baseline": 69.1,
+    "ok": true
+  },
+  "gates": {
+    "persistence": true,
+    "scaling": true,
+    "persistence_at_1p15": true,
+    "revert_to_baseline": true,
+    "all_pass": true
+  }
+}

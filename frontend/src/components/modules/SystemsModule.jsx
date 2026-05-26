@@ -312,7 +312,7 @@ export default function SystemsModule() {
             params={params}
             updateParam={updateParam}
             consumption={consumption}
-            comfortBand={comfortBand}{/* Brief 58 A2: no defensive fallback */}
+            comfortBand={comfortBand}
             openScheduleEditor={openScheduleEditor}
           />
         </div>
