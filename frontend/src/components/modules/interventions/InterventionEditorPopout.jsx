@@ -341,6 +341,7 @@ export default function InterventionEditorPopout({
             handleCancel={handleCancel}
             handleSave={handleSave}
             canSave={canSave}
+            patchConflicts={patchConflicts}
           />
         </PatchedProjectContextProvider>
       </InterventionCaptureProvider>
@@ -367,6 +368,12 @@ function EditorBody({
   baselineConfig,
   baselineEui, baselineCarbon, previewEui, previewCarbon,
   handleCancel, handleSave, canSave,
+  patchConflicts,  // Brief 55 Part 5 hotfix (2026-05-26): threaded from outer
+                   // InterventionEditorPopout so the ChangeList render below
+                   // can read it without hitting a ReferenceError. The Part 5
+                   // commit (25bfc87) added the prop to the outer component
+                   // and the ChangeList JSX but forgot the middle hop through
+                   // EditorBody.
 }) {
   // Read patched ProjectContext (so seeding from current state reflects
   // any prior captured edits — e.g. user adds a schedule patch, closes
