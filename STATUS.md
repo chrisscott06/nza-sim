@@ -1,6 +1,93 @@
 # NZA SIMULATE — Status
 
-## 🚧 Brief 50 — IN FLIGHT (Parts 1–6 landed; awaiting Part 7 walkthrough) 2026-05-25
+## 🩹 Stopgap 2026-05-25 — comfort_band threading in InterventionsModule (`e462a21`)
+
+Cross-route baseline-EUI integrity bug closed (originally Brief 45 Part 4 walkthrough finding; housekeeping candidate #4). `/interventions` was running State 2 at the engine's hard-coded default 20/26 because Bridgewater's `building_config` has no `comfort_band` JSON field (21/24 lives only on `projects.comfort_band_{lower,upper}_c` DB columns, exposed via `ProjectContext.comfortBand` React state). `/systems` (canonical baseline path) was correctly threading 21/24 into both the building arg + the options bag.
+
+`scripts/_baseline_drift_check.mjs` verified the patch:
+- Pre-patch drift (B − A): **−0.500** kWh/m²·yr (matches Chris's screenshots 127.7 vs 128.2)
+- Post-patch drift (C − A): **0.000** EXACTLY — no residual second-channel drift
+
+Patched by mirroring SystemsModule's threading in `InterventionsModule.jsx` engine-call useMemo. Two lines: destructure `comfortBand` from `useContext(ProjectContext)`; thread `cb` into both `building.comfort_band` and `options.comfortBand`. NOT `_skipInterventions:true` — Interventions needs the stack runner.
+
+**This is an explicit stopgap** tagged for the upcoming metadata-input-page brief (single source of truth: num_rooms, comfort_band, peak_people_per_room resolved once, threaded by no call site). The fact that every call site must remember to thread comfort_band twice is a Rule 14-class drift pattern applied to engine *input* resolution, not engine *parity*.
+
+---
+
+## 🩹 Sidecar 2026-05-25 — bespoke ConfirmDialog (`3d06fc6`)
+
+Replaced 9 native `window.confirm()` boxes with a bespoke design-system modal (`frontend/src/components/shared/ConfirmDialog.jsx`). Tone-coded (red danger / amber warning / teal neutral), keyboard-aware (Escape/Enter), a11y-tagged, mounted once at app root, Promise-based API (`await confirm({...})`). Same shape as the Brief 47 Systems Sankey kWh-toggle sidecar.
+
+---
+
+## 🚀 Brief 50 — CLOSED 2026-05-25
+
+**MVHR recovery double-count fix (Option A: State 2 owns recovery).** Engine fix brief — deleted the duplicate State 3 subtraction; State 2's `(1 − HRE)` factor on vent UA is now the sole owner of MVHR recovery. Six parts landed across six commits, then a final commit Part 7 close.
+
+### Final clean-state anchor
+
+**Bridgewater clean EUI: 128.20 kWh/m²·yr** (was 121.90 pre-Brief-50).
+
+| Step | EUI | Δ | Cause |
+|---|---:|---:|---|
+| Pre-Brief-50 | 121.90 | (baseline) | Double-counted MVHR recovery → heating fuel systematically under-counted |
+| After Part 2 | 127.90 | +6.00 | Removed State 3 duplicate subtraction. Δheating fuel = recovery_offset (61.42) / blended SCOP (2.37) = +25.92 MWh hand-predicted vs +25.88 observed; ΔEUI +5.99 predicted vs +6.00 observed (within rounding). |
+| After Part 6 | 128.20 | +0.30 | State 2 now reads v40 HRE (0.75) instead of v25 HRE (0.80) via per-id v40 override. Vent UA factor 0.20 → 0.25 → slightly more vent loss surfaces in demand. Hand-predicted +0.48 vs observed +0.30 (in-band). |
+
+Both moves derived from first principles in [`docs/audit/50_mvhr_recovery_doublecount.md`](docs/audit/50_mvhr_recovery_doublecount.md) §4 + §7.
+
+### Parts landed
+
+| Part | Commit | Deliverable |
+|---|---|---|
+| 1 | `3fa5c80` | Land brief + pre-fix baseline (refbox ratio 1.99, Bridgewater 121.90) |
+| 2 | `bef5c2f` | **Core fix** — delete State 3 subtraction at `instantCalc.js` ~L4131. Refbox Probe 1 ratio 1.99 → 0.99 |
+| 3 | `c3ebe90` | EUI reconciliation + new anchor 127.90 |
+| 4 | `634c6f4` | Retire `offsetRatio` workaround (dead code after Part 2) |
+| 5 | `9ff6c23` | Fix v40→v25 silent-fallback (D1) |
+| 6 | `53ab42b` | Unify HRE source of truth (D2) + final reconciliation |
+| Probe 4 | `74e8b4e` | **Audit-FLAG 3a falsifiability** — custom-setpoint test (HRE 0.75 vs 0 at custom 23°C). Engine credits MVHR at custom setpoints: Δdelivered = 46.1 MWh ≈ hand-calc 46.7 MWh (1.4 %). |
+| 7 (close) | THIS | Archive Brief 50 + repoint current.md + STATUS close-out at 128.20 anchor |
+
+### Final falsifiability gate review — 6 green + 1 yellow + 1 verified-not-by-construction
+
+| # | Target | Status |
+|---|---|---|
+| 1 | Refbox Probe 1 ratio 1.99 → 1.00 ±0.01 | ✓ **0.99** (Part 2, 1% per-hour-cap residual) |
+| 2 | Refbox Probes 2 + 3 still pass | ✓ unchanged through every Part |
+| 3 | Bridgewater apparent saving ≤ 104.20 MWh | ✓ **80.70 MWh** (was 147.02) |
+| 4 | Single owner: recovery applied in exactly one place | ✓ State 2's `(1 − HRE)` factor only |
+| 5 | Panel reconciles `raw − delivered = recovery_offset` | ⚠ **semantic mismatch — Brief 51 follow-up.** After Brief 50, raw == delivered → row = 0; recovery_offset still surfaces airstream integral (~63 MWh). Engine fix is sound; surfacing layer needs follow-up. |
+| 6 | EUI from first principles | ✓ Parts 2 + 6 hand-predictions within rounding |
+| 7a | No setpoint regression (0.5°C change still monotonic) | ✓ **Probe 4 measured** (was "by construction" pre-audit FLAG 3a — overnight audit elevated this to a hard gate, now verified) |
+| 7b | v40 disable produces visible engine response | ✓ Parts 5 + 6 (complete response after Part 6) |
+| 7c | One HRE value across paths | ✓ Both State 2 + State 3 read v40 HRE (Bridgewater = 0.75) |
+| 7d | Non-MVHR numbers unchanged within rounding | ✓ State B harness numbers match Part 5 within rounding |
+
+### Walkthrough sign-off (Chris, 2026-05-25)
+
+> Brief 50 walkthrough done. Items 5 (baseline parity: Systems 128.2 == Scenarios baseline 128.2) and 6 (VRF saving −3.8, sensible for the heat demand) both pass. The comfort_band stopgap (`e462a21`) is holding. Proceed with the formal Part 7 close.
+
+### Open items (NOT Brief 50 regressions — separate scope)
+
+- **Target 5 residual** (panel reconciliation) — Brief 51 polish, **HELD** behind engine-correctness work per Chris's sequencing.
+- **Ventilation findings from walkthrough** — Chris's walkthrough surfaced new ventilation-side observations (e.g. "MVHR Bedrooms: heat recovered drops 63.2 → 24.4 while cooling rises +83.9"). Scope: probe whether MVHR recovery is correctly gated to heating-mode hours (gains-dominated physics) vs accruing in cooling hours (potential bug). Read-only probe first, brief only if a fix is warranted.
+- **Granular-field-patch / SCOP-invariant fix** (Finding D follow-up) — engine correctness brief, queued next per Chris's sequencing.
+- **Metadata-input-page brief** — single source of truth for num_rooms, comfort_band, peak_people_per_room. Subsumes the comfort_band stopgap landed at `e462a21`.
+
+### Files / artefacts kept as fixtures
+
+- `scripts/_brief49_refbox_test.mjs` — known-answer reference box (4 probes, primary gate)
+- `scripts/_brief49_mvhr_boundary_diagnostic.mjs` — live Bridgewater harness (secondary gate)
+- `scripts/_brief50_part5_silent_fallback_test.mjs` — v40 silent-fallback regression test
+- `scripts/_baseline_drift_check.mjs` — cross-route EUI drift harness (post-stopgap)
+- `docs/audit/50_mvhr_recovery_doublecount.md` — full audit log (Parts 1–6, §1–§7.8)
+
+---
+
+## 🚧 Brief 50 — was IN FLIGHT (now CLOSED above) 2026-05-25 — DETAIL CONSOLIDATED ABOVE
+
+(Per-Part detail moved into the CLOSED section above; legacy sub-sections retained below for commit-history continuity. New readers should read the CLOSED section.)
 
 **MVHR recovery double-count fix (Option A: State 2 owns recovery).** Engine fix brief — deletes the duplicate State 3 subtraction at `instantCalc.js` ~L4131 + retires the now-dead `offsetRatio` workaround + stops the v40→v25 silent fallback + unifies the HRE source of truth at v40.
 

@@ -1,6 +1,16 @@
 # Current brief
 
-**Active:** [`active/50_mvhr_recovery_doublecount_fix.md`](active/50_mvhr_recovery_doublecount_fix.md) — Brief 50 MVHR recovery double-count fix (Option A: State 2 owns recovery). Engine fix brief — deletes the duplicate State 3 subtraction at `instantCalc.js` ~L4131. Primary acceptance gate: refbox Probe 1 ratio must converge 1.99 → 1.00 (re-run `scripts/_brief49_refbox_test.mjs`). Secondary: Bridgewater total apparent MVHR saving ≤ 104 MWh (was 147.02). New anchor expected ~126 kWh/m²·yr from first principles — not calibrated to.
+**No active brief.** Brief 50 (MVHR recovery double-count fix — Option A: State 2 owns recovery) closed 2026-05-25 — see [`archive/50_mvhr_recovery_doublecount_fix_COMPLETED.md`](archive/50_mvhr_recovery_doublecount_fix_COMPLETED.md) and STATUS.md. Clean-state Bridgewater EUI anchor: **128.20 kWh/m²·yr** (was 121.90 pre-Brief-50; movement explained from first principles in `docs/audit/50_mvhr_recovery_doublecount.md` §4 + §7).
+
+## Next priorities
+
+1. **Granular-field-patch / SCOP-invariant fix** (Finding D follow-up). Engine correctness work; comes before Brief 51 polish per Chris's sequencing call. Brief not yet written.
+
+2. **Metadata-input-page brief** (single source of truth for num_rooms, comfort_band, peak_people_per_room). Will subsume the comfort_band stopgap landed at `e462a21`. Brief not yet written.
+
+3. **Brief 51 (HELD)** — MVHR recovery row surfacing / panel reconciliation (Brief 50 target 5 residual). Polish only, waits behind the engine-correctness work above. Source brief at `~/Downloads/51_mvhr_recovery_row_surfacing.md` (not yet landed in active/).
+
+4. **Ventilation findings from Brief 50 walkthrough** — Chris's walkthrough surfaced new ventilation-side observations (separate scope from Brief 50; not regressions). Probe scoped first (cooling-hour MVHR-recovery gating), then a new brief if a fix is needed.
 
 Brief 49 (MVHR recovery boundary diagnostic) closed 2026-05-25 at HARD STOP with verdict H3 (double-count) confirmed via reference box fixture ratio 1.99 — see [`archive/49_mvhr_recovery_boundary_diagnostic_COMPLETED.md`](archive/49_mvhr_recovery_boundary_diagnostic_COMPLETED.md) and [`docs/audit/49_mvhr_recovery_diagnosis.md`](../audit/49_mvhr_recovery_diagnosis.md).
 
