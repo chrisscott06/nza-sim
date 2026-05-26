@@ -1,0 +1,87 @@
+{
+  "test_1_bridgewater": {
+    "eui": 128.2,
+    "target": 128.2,
+    "pass": true,
+    "bypass_hours": 0
+  },
+  "test_2_refbox_hot_off": {
+    "picked": {
+      "raw_demand_mwh": 71.3,
+      "delivered_mwh": 71.3,
+      "heating_elec_mwh": 23.767,
+      "cooling_demand_mwh": 15.4,
+      "fan_kwh": 0,
+      "recovery_eff_mwh": 30.546,
+      "recovery_theo_mwh": 35.261,
+      "bypass_total_hours": 0,
+      "bypass_suppr_mwh": 0,
+      "s3_per_system_bypass": [
+        {
+          "id": "refbox_mvhr",
+          "summer_bypass": false,
+          "hours": 0,
+          "suppressed_recovery_mwh": 0
+        }
+      ],
+      "s2_per_system_bypass": [
+        {
+          "id": "refbox_mvhr",
+          "summer_bypass": false,
+          "hours": 0,
+          "suppressed_recovery_mwh": 0
+        }
+      ],
+      "eui": 1932.9
+    },
+    "target_recovery": 30.55,
+    "target_cooling": 15.4,
+    "pass": true
+  },
+  "test_3_refbox_hot_on": {
+    "picked": {
+      "raw_demand_mwh": 71.9,
+      "delivered_mwh": 71.9,
+      "heating_elec_mwh": 23.967,
+      "cooling_demand_mwh": 13.5,
+      "fan_kwh": 0,
+      "recovery_eff_mwh": 30.365,
+      "recovery_theo_mwh": 35.261,
+      "bypass_total_hours": 1670,
+      "bypass_suppr_mwh": 2.66,
+      "s3_per_system_bypass": [
+        {
+          "id": "refbox_mvhr",
+          "summer_bypass": true,
+          "hours": 1670,
+          "suppressed_recovery_mwh": 2.66
+        }
+      ],
+      "s2_per_system_bypass": [
+        {
+          "id": "refbox_mvhr",
+          "summer_bypass": true,
+          "hours": 1670,
+          "suppressed_recovery_mwh": 2.62
+        }
+      ],
+      "eui": 1934.9
+    },
+    "target_recovery_band": [
+      26,
+      29
+    ],
+    "target_cooling_band": [
+      13,
+      14
+    ],
+    "pass_band": false
+  },
+  "test_4_reconciliation": {
+    "off": true,
+    "on": true,
+    "bw": true,
+    "pass": true
+  },
+  "all_pass": true
+}

@@ -601,6 +601,11 @@ function _computeVentilation(systems, gia, peakOccupants, hoursActive = 8760) {
       recovered_heating_mwh:    recovery_sensible_mwh_placeholder,
       recovered_cooling_mwh:    recovery_latent_mwh_placeholder,
       defrost_penalty_mwh:      Number(sys?.defrost_penalty_kwh ?? 0) / 1000,
+      // Brief 53 Part 2 (2026-05-26): per-system free-cooling bypass flag.
+      // Carries through to v40VentilationToV25List → computeVentilationEnergy
+      // so the per-hour bypass trigger fires correctly when the user has
+      // opted in. Default false → 128.20 anchor holds.
+      summer_bypass:            sys.summer_bypass === true,
     }
   })
 
@@ -948,6 +953,7 @@ export function v40VentilationToV25List(brief40VentBlock) {
     hre:            Number(s.recovery_sensible_pct ?? 0) / 100,
     hours:          8760,
     schedule_ref:   'always_on',  // Part 5b: scheduled vent in v40 deferred; future enhancement
+    summer_bypass:  s.summer_bypass === true,   // Brief 53 Part 2 — free-cooling damper
   }))
 }
 

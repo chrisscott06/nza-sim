@@ -2413,6 +2413,16 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   // 8760-hour loop setup
   const n = weatherData.temperature.length
   const T_hourly = new Float32Array(n)
+  // Brief 53 Part 2 (2026-05-26): zone air temperature per hour, surfaced
+  // separately from operative (T_op above). State 3's computeVentilationEnergy
+  // uses this as the T_extract proxy in the free-cooling bypass trigger
+  // (bypass opens only when T_out < T_extract). Single-zone engine means
+  // T_extract = T_zone_air; T_op = ½(T_air + T_radiant) so the two differ
+  // by ≤1 K. Both sites of the bypass decision (this loop's per-hour UA
+  // factor AND computeVentilationEnergy's per-hour cap) read the SAME
+  // T_air_hourly array → reconciliation byte-exact (Brief 53 audit §4.3
+  // Option A).
+  const T_air_hourly = new Float32Array(n)
   const dt = 3600
 
   // Brief 28-IM IM-M2 add 1: State 2 mirror — initialise from T_out at hour 0.
@@ -2560,6 +2570,15 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     // Enabled: both v25 and v40 must agree the system is enabled.
     const v40EnabledOk = !v40Match || v40Match?.enabled !== false
     const enabled = v.enabled !== false && v40EnabledOk
+    // Brief 53 Part 2 (2026-05-26): summer bypass flag. Free-cooling damper —
+    // when active, the HRE is bypassed in hours where the zone wants cooling
+    // AND outside air is cooler than the extract (so bypassing physically
+    // helps). v40 wins when present; v25 fallback. Default false → 128.20
+    // anchor holds for projects that haven't opted in. Brief 50 Part 6
+    // pattern for v40-wins-with-v25-fallback.
+    const summer_bypass = (v40Match?.summer_bypass != null)
+      ? (v40Match.summer_bypass === true)
+      : (v?.summer_bypass === true)
     return {
       name:       v.name ?? v.id ?? v.library_id ?? '?',
       library_id: v.library_id,
@@ -2575,6 +2594,7 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       // and the engine saw `undefined`, defeating every `if (vs.enabled ===
       // false) continue` guard downstream.
       enabled,
+      summer_bypass,   // Brief 53 Part 2
     }
   })
   // Per-system UA (W/K). Schedule_factor = hours/8760 (proportional approx;
@@ -2582,9 +2602,25 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   const ventUA = ventSystems.map(v => {
     const Q_m3_h = v.flow_l_s * 3.6      // L/s × 3.6 = m³/h
     const sched_factor = v.hours / 8760
-    return AIR_HEAT_CAPACITY * Q_m3_h * (1 - v.hre) * sched_factor   // W/K
+    return AIR_HEAT_CAPACITY * Q_m3_h * (1 - v.hre) * sched_factor   // W/K — recovery active
+  })
+  // Brief 53 Part 2 (2026-05-26): parallel UA array with no recovery (HRE
+  // factor = 1.0). Used when the per-system summer bypass damper is open
+  // — free-cooling: supply air bypasses the heat exchanger, so the heat-
+  // recovery credit collapses to zero in those hours. Each iteration's
+  // mech-vent loss loop picks ventUA[vi] vs ventUA_bypass[vi] per the
+  // per-hour bypass trigger (see hourly loop below).
+  const ventUA_bypass = ventSystems.map(v => {
+    const Q_m3_h = v.flow_l_s * 3.6
+    const sched_factor = v.hours / 8760
+    return AIR_HEAT_CAPACITY * Q_m3_h * 1.0 * sched_factor   // W/K — bypass (no HRE)
   })
   const ventTotalUA = ventUA.reduce((s, x) => s + x, 0)
+  // Brief 53 Part 2 reconciliation log: count bypass-active hours per
+  // system on the State 2 side. computeVentilationEnergy maintains an
+  // equivalent counter; they must agree at commit (Principle 2).
+  const acc_bypass_hours_per_system = new Int32Array(ventSystems.length)
+  const acc_bypass_recovery_suppressed_Wh_per_system = new Float64Array(ventSystems.length)
   const acc_mech_vent_heat_per_system = new Float64Array(ventSystems.length)
   const acc_mech_vent_cool_per_system = new Float64Array(ventSystems.length)
   // Brief 28-IM IM-M3 (per-system mech vent daily + monthly): now safe to
@@ -2627,9 +2663,27 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   const heating_demand_hourly_kwh = new Float32Array(n)
   const cooling_demand_hourly_kwh = new Float32Array(n)
 
+  // Brief 53 Part 2 (2026-05-26): lagged signals for free-cooling bypass.
+  // At hour h, bypass is active when the PREVIOUS hour had cooling demand
+  // AND outside air is cooler than the previous-hour zone air (T_extract
+  // proxy in a single-zone engine). One-hour lag is inherent to avoid
+  // 2-pass State 2 (which would break live-update reactivity). h=0 starts
+  // with prev_T_air = NaN sentinel ⇒ bypass off (single hour, almost
+  // certainly winter night-time, no cooling demand anyway).
+  let prev_T_air = NaN
+  let prev_cooling_demand_kwh = 0
+
   for (let h = 0; h < n; h++) {
     const T_out = weatherData.temperature[h]
     const v_wind = weatherData.wind_speed?.[h] ?? 0
+
+    // Brief 53 Part 2: per-hour free-cooling gate (lagged trigger).
+    // Common across all bypass-enabled systems. Per-system gating happens
+    // inside the mech-vent loss loop where each ventSystems[vi].summer_bypass
+    // flag is checked.
+    const bypass_gate_h = !Number.isNaN(prev_T_air)
+                       && prev_cooling_demand_kwh > 0
+                       && T_out < prev_T_air
 
     // Solar through glazing per facade (Wh into zone, post g × frame × shading)
     const sol_n = hourlySolar.f1[h] * (glazing.north ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.north
@@ -2759,6 +2813,13 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     ) / Math.max(_A_total_surf, 1e-9)
     const T_op = 0.5 * (T_air + T_radiant)
     T_hourly[h] = T_op
+    // Brief 53 Part 2: zone air per hour (T_extract proxy in single-zone
+    // engine). T_air is the air actually being extracted; T_op = ½(T_air +
+    // T_radiant) is what occupants feel. Bypass damper sees extract air,
+    // so T_air is the correct primitive — surface it separately so the
+    // bypass trigger is precise (and reconciliation byte-exact since both
+    // sites read the same array).
+    T_air_hourly[h] = T_air
 
     // ── Free-running loss accumulators (legacy convention; retained for ──
     //    transition. Brief 28k Gate 3 adds setpoint-convention block below.)
@@ -2882,12 +2943,34 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     let mech_vent_cool_h = 0
     for (let vi = 0; vi < ventSystems.length; vi++) {
       if (ventSystems[vi]?.enabled === false) continue
-      const heat_h = ventUA[vi] * dT_heat_out
-      const cool_h = ventUA[vi] * dT_cool_out
+      // Brief 53 Part 2 (2026-05-26): per-system bypass — open damper
+      // suppresses HRE in hours where the free-cooling gate fires AND the
+      // system has summer_bypass = true. Reconciliation: this MUST match
+      // computeVentilationEnergy's per-hour bypass decision exactly. Same
+      // trigger formula, same lagged signals, same hours.
+      const bypass_h = ventSystems[vi].summer_bypass && bypass_gate_h
+      const UA_eff = bypass_h ? ventUA_bypass[vi] : ventUA[vi]
+      const heat_h = UA_eff * dT_heat_out
+      const cool_h = UA_eff * dT_cool_out
       mech_vent_heat_h += heat_h
       mech_vent_cool_h += cool_h
       acc_mech_vent_heat_per_system[vi] += heat_h
       acc_mech_vent_cool_per_system[vi] += cool_h
+      // Reconciliation log accumulators (matched by computeVentilationEnergy
+      // — same gating, same metric). Both sites count bypass hours ONLY in
+      // heating-degree hours (dT_heat_out > 0), because that's where the
+      // suppressed-recovery integral lives. Outside heating hours, recovery
+      // never accrued anyway — counting them inflates State 2's hours
+      // beyond what State 3's per-hour cap loop sees, breaking Principle 2.
+      if (bypass_h && dT_heat_out > 0) {
+        acc_bypass_hours_per_system[vi]++
+        // "would-have-been recovery" in this hour = ventUA_bypass × hre × dT
+        // = (Q × ρCp × sched) × hre × dT — identical formula to the per-hour
+        // theoretical recovery in computeVentilationEnergy. Reconciliation
+        // byte-exact within rounding.
+        acc_bypass_recovery_suppressed_Wh_per_system[vi] +=
+          ventUA_bypass[vi] * ventSystems[vi].hre * dT_heat_out
+      }
       // Brief 28-IM IM-M3 (Systems Profiles future use): per-system daily +
       // monthly mech vent. Cheap to add here.
       {
@@ -3065,6 +3148,12 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     acc_cooling_demand_Wh += cooling_Wh_at_setpoint
     heating_demand_hourly_kwh[h] = heating_Wh_at_setpoint / 1000   // Brief 28j: per-hour for State 3 MVHR cap
     cooling_demand_hourly_kwh[h] = cooling_Wh_at_setpoint / 1000
+
+    // Brief 53 Part 2: carry lagged signals into next iteration's bypass
+    // decision. T_air is post-solve at this point (set at L2740 earlier in
+    // the iteration). cooling_demand_hourly_kwh[h] was just populated above.
+    prev_T_air = T_air
+    prev_cooling_demand_kwh = cooling_demand_hourly_kwh[h]
 
     // Per-facade allocation of solar buckets, proportional to each facade's
     // share of Q_h. Skip if Q_h = 0.
@@ -3428,7 +3517,24 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       // exposed to State 3; not surfaced in normal UI consumers.
       heating_demand_hourly_kwh,
       cooling_demand_hourly_kwh,
+      // Brief 53 Part 2 (2026-05-26): per-hour zone air temperature, used
+      // by computeVentilationEnergy as the T_extract proxy in the free-
+      // cooling bypass trigger. Same array State 2 used internally for its
+      // own bypass UA decisions → reconciliation byte-exact across both
+      // sites of the bypass decision. Engine-internal; not surfaced in
+      // normal UI consumers.
+      hourly_zone_air_c: T_air_hourly,
     },
+    // Brief 53 Part 2 reconciliation log: per-system bypass-hours +
+    // suppressed-recovery integral on the State 2 side. State 3's
+    // computeVentilationEnergy maintains the same counters; the verify
+    // step in Part 2.E asserts they agree per system (Principle 2).
+    bypass_reconciliation_s2: ventSystems.map((vs, vi) => ({
+      id:                   vs.name,
+      summer_bypass:        vs.summer_bypass,
+      hours:                acc_bypass_hours_per_system[vi],
+      suppressed_recovery_mwh: Math.round(acc_bypass_recovery_suppressed_Wh_per_system[vi] / 1_000_000 * 100) / 100,
+    })),
     state1_delta: {
       heating_demand_change_mwh:               heating_change_mwh,
       cooling_demand_change_mwh:               cooling_change_mwh,
@@ -3904,9 +4010,12 @@ function hoursActiveForSchedule(schedule_ref, building) {
  *     vent-on hours; tightenable when calibration shows it matters).
  *   - Recovery is THEORETICAL here; caller caps to heating_demand_mwh.
  */
-function computeVentilationEnergy(ventSystems, weatherData, T_setpoint_c, building, heatingDemandHourlyKwh = null) {
+function computeVentilationEnergy(ventSystems, weatherData, T_setpoint_c, building,
+                                  heatingDemandHourlyKwh = null,
+                                  coolingDemandHourlyKwh = null,
+                                  zoneAirHourlyC = null) {
   if (!Array.isArray(ventSystems) || ventSystems.length === 0) {
-    return { perSystem: [], totalFanKwh: 0, theoreticalRecoveryMwh: 0, effectiveRecoveryMwh: 0 }
+    return { perSystem: [], totalFanKwh: 0, theoreticalRecoveryMwh: 0, effectiveRecoveryMwh: 0, bypassReconciliation: [] }
   }
   const AIR_HC_J_PER_M3_K = 1.2 * 1005   // air heat capacity at ~20 °C
   const n = weatherData?.temperature?.length ?? 0
@@ -3970,6 +4079,10 @@ function computeVentilationEnergy(ventSystems, weatherData, T_setpoint_c, buildi
     // useful" (= effective).
     let theoretical_mwh = 0
     let effective_mwh = 0
+    // Brief 53 Part 2: declared at iteration scope so the perSystem.push
+    // below sees defined values regardless of which branch ran.
+    let per_system_bypass_hours = 0
+    let per_system_bypass_suppressed_Wh = 0
     if (vs.hre > 0) {
       const flow_m3s        = vs.flow_l_s / 1000
       const schedule_factor = hours_active / 8760
@@ -3981,13 +4094,41 @@ function computeVentilationEnergy(ventSystems, weatherData, T_setpoint_c, buildi
       // hourly demand series isn't available, fall back to theoretical (no
       // cap) — preserves engine usability for callers that haven't wired the
       // demand series through.
+      //
+      // Brief 53 Part 2 (2026-05-26): free-cooling bypass. When the system
+      // has summer_bypass = true AND the lagged free-cooling gate fires
+      // (prev_cooling_demand > 0 AND T_out < prev_T_air), the heat
+      // exchanger is bypassed and recovery contributes 0 in that hour.
+      // Same trigger formula State 2 used internally for its mech-vent UA
+      // (reconciliation byte-exact: same lagged signals, same hours, same
+      // magnitude — Principle 2).
       if (heatingDemandHourlyKwh && heatingDemandHourlyKwh.length === n) {
         let effective_Wh = 0
         for (let h = 0; h < n; h++) {
-          const dT = T_setpoint_c - weatherData.temperature[h]
+          const T_out_h = weatherData.temperature[h]
+          const dT = T_setpoint_c - T_out_h
           if (dT > 0) {
+            // Brief 53 Part 2: per-hour bypass trigger. Same lagged-signal
+            // formula as State 2 (instantCalc.js ~L2680 bypass_gate_h).
+            const cooling_prev = (coolingDemandHourlyKwh && h > 0)
+              ? (coolingDemandHourlyKwh[h - 1] ?? 0)
+              : 0
+            const T_extract_prev = (zoneAirHourlyC && h > 0)
+              ? zoneAirHourlyC[h - 1]
+              : NaN
+            const bypass_h = (vs.summer_bypass === true)
+                          && cooling_prev > 0
+                          && !Number.isNaN(T_extract_prev)
+                          && T_out_h < T_extract_prev
             // Per-hour theoretical recovery, in Wh (flow × HC × HRE × dT × schedule_factor × 1 h)
             const theoretical_h_Wh = flow_m3s * AIR_HC_J_PER_M3_K * vs.hre * dT * schedule_factor
+            if (bypass_h) {
+              // Damper bypasses HX → no recovery this hour. Log the
+              // would-have-been recovery for reconciliation against State 2.
+              per_system_bypass_hours++
+              per_system_bypass_suppressed_Wh += theoretical_h_Wh
+              continue
+            }
             // Per-hour heating demand, in Wh = kWh × 1000
             const demand_h_Wh = (heatingDemandHourlyKwh[h] ?? 0) * 1000
             // Per-hour cap: can't recover more heat than the building needed
@@ -4004,17 +4145,37 @@ function computeVentilationEnergy(ventSystems, weatherData, T_setpoint_c, buildi
       id, fan_kwh, hours_active, schedule_source,
       recovery_mwh: effective_mwh,                // effective (per-hour-capped) — the heating-offset value
       theoretical_recovery_mwh: theoretical_mwh,  // uncapped, informational
+      // Brief 53 Part 2 reconciliation log: per-system bypass-hours + the
+      // would-have-been recovery integral. Asserted to match State 2's
+      // bypass_reconciliation_s2 in the Part 2.E falsifiability tests.
+      bypass: {
+        summer_bypass:           vs.summer_bypass === true,
+        hours:                   per_system_bypass_hours,
+        suppressed_recovery_mwh: Math.round(per_system_bypass_suppressed_Wh / 1_000_000 * 100) / 100,
+      },
     })
     totalFanKwh += fan_kwh
     totalTheoreticalRecoveryMwh += theoretical_mwh
     totalEffectiveRecoveryMwh += effective_mwh
   }
 
+  // Brief 53 Part 2 reconciliation summary: aggregated bypass totals
+  // across all systems. Cross-checked against State 2's bypass_reconciliation_s2
+  // by the Part 2.E falsifiability test (same hours, same suppressed-recovery
+  // integral — Principle 2).
+  const bypassReconciliation = perSystem.map(p => ({
+    id:                      p.id,
+    summer_bypass:           p.bypass?.summer_bypass ?? false,
+    hours:                   p.bypass?.hours ?? 0,
+    suppressed_recovery_mwh: p.bypass?.suppressed_recovery_mwh ?? 0,
+  }))
+
   return {
     perSystem,
     totalFanKwh,
     theoreticalRecoveryMwh: totalTheoreticalRecoveryMwh,
     effectiveRecoveryMwh: totalEffectiveRecoveryMwh,
+    bypassReconciliation,
   }
 }
 
@@ -4124,6 +4285,11 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
   // (v40 or v25) populated the ventilation list.
   const T_heating_setpoint = sys.heating?.setpoint_c ?? comfortBand?.lower_c ?? 21
   const heatingDemandHourlyKwh = state2Result.demand?.heating_demand_hourly_kwh ?? null
+  // Brief 53 Part 2 (2026-05-26): cooling demand + zone air arrays drive
+  // the free-cooling bypass trigger inside computeVentilationEnergy. Same
+  // lagged signals State 2 used internally (reconciliation byte-exact).
+  const coolingDemandHourlyKwh = state2Result.demand?.cooling_demand_hourly_kwh ?? null
+  const zoneAirHourlyC         = state2Result.demand?.hourly_zone_air_c         ?? null
   let ventList = Array.isArray(sys.ventilation) ? sys.ventilation : []
   let ventSourcePath = 'v25'
   if (v40VentPresent) {
@@ -4155,6 +4321,8 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
     T_heating_setpoint,
     building,
     heatingDemandHourlyKwh,
+    coolingDemandHourlyKwh,  // Brief 53 Part 2: cooling-mode signal for bypass trigger
+    zoneAirHourlyC,          // Brief 53 Part 2: T_extract proxy for bypass trigger
   )
 
   // Brief 50 Part 2 (2026-05-25) — MVHR recovery double-count fix.
@@ -4359,11 +4527,20 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
           theoretical_recovery_mwh: r_mwh(v.theoretical_recovery_mwh),  // Brief 28j: uncapped per-system theoretical (informational)
           hours_active:             Math.round(v.hours_active),
           schedule_source:          v.schedule_source,                  // Brief 28f Part 5.2 — 'always_on' | 'profile' | 'unresolved_fallback'
+          // Brief 53 Part 2 (2026-05-26): per-system free-cooling bypass — flag,
+          // hour count, and would-have-been recovery suppressed. Reconciliation
+          // log: must match State 2's `bypass_reconciliation_s2` by id (Principle 2).
+          bypass:                   v.bypass ?? { summer_bypass: false, hours: 0, suppressed_recovery_mwh: 0 },
         })),
         total: {
           fan_kwh:                   r_kwh(total_fan_kwh),
           recovery_mwh:              r_mwh(effective_recovery_mwh),               // Brief 28j: per-hour-capped, applied to heating demand
           recovery_theoretical_mwh:  r_mwh(ventResult.theoreticalRecoveryMwh),    // uncapped annual, informational
+          // Brief 53 Part 2: aggregated bypass reconciliation (cross-system totals).
+          bypass: {
+            total_hours_x_systems:        (ventResult.bypassReconciliation ?? []).reduce((s, r) => s + (r.hours ?? 0), 0),
+            total_suppressed_recovery_mwh: r_mwh((ventResult.bypassReconciliation ?? []).reduce((s, r) => s + (r.suppressed_recovery_mwh ?? 0), 0)),
+          },
         },
       },
     },
