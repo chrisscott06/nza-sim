@@ -1,0 +1,18 @@
+{
+  "current": {
+    "share_pct": [
+      90,
+      10
+    ],
+    "eui": 131.9
+  },
+  "reverted": {
+    "share_pct": [
+      95,
+      5
+    ],
+    "eui": 130.6
+  },
+  "delta_from_anchor": 2.4000000000000057,
+  "recoverable": false
+}
