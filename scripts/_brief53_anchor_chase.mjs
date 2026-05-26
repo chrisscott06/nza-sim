@@ -92,6 +92,16 @@ function setDhwEff(b, primaryEff, secondaryEff) {
   })
   return { ...b, systems_config_v40: { ...b.systems_config_v40, dhw } }
 }
+function setLightingControlFactor(b, cf) {
+  const lighting = (b.systems_config_v40?.lighting ?? []).map((s, i) =>
+    i === 0 ? { ...s, control_factor: cf } : s)
+  return { ...b, systems_config_v40: { ...b.systems_config_v40, lighting } }
+}
+function setDhwShares(b, primaryPct, secondaryPct) {
+  const dhw = (b.systems_config_v40?.dhw ?? []).map((s, i) =>
+    i === 0 ? { ...s, share_pct: primaryPct } : i === 1 ? { ...s, share_pct: secondaryPct } : s)
+  return { ...b, systems_config_v40: { ...b.systems_config_v40, dhw } }
+}
 
 const scenarios = [
   ['As-stored', b => b],
@@ -114,6 +124,38 @@ const scenarios = [
   ['heating eff 4.95 + vent flows v25', b => setVentFlowsToV25(setHeatingEff(b, 4.95))],
   ['heating eff 5.00 + vent flows v25', b => setVentFlowsToV25(setHeatingEff(b, 5.00))],
   ['heating eff 5.05 + vent flows v25', b => setVentFlowsToV25(setHeatingEff(b, 5.05))],
+  // ── Step 2b documented-clean-state hypothesis (Chris's hint list):
+  //   heating share 95/5 + DHW 65/35 + vent flows → v25, but PRESERVE
+  //   the heating eff = 2.8 (current calibration) and find what extra
+  //   field closes the gap to 128.20.
+  ['DOC: share 95/5 + vent flows v25 (heating eff 2.8 kept)',
+    b => setVentFlowsToV25(setHeatingShares(b))],
+  ['DOC + lighting control_factor 0.85',
+    b => setLightingControlFactor(setVentFlowsToV25(setHeatingShares(b)), 0.85)],
+  ['DOC + lighting control_factor 0.80',
+    b => setLightingControlFactor(setVentFlowsToV25(setHeatingShares(b)), 0.80)],
+  ['DOC + lighting control_factor 0.70',
+    b => setLightingControlFactor(setVentFlowsToV25(setHeatingShares(b)), 0.70)],
+  // Maybe DHW preheat eff drift only:
+  ['DOC + DHW preheat eff 3.0',
+    b => setDhwEff(setVentFlowsToV25(setHeatingShares(b)), null, 3.0)],
+  // Maybe nothing further drifted — anchor was at eff=5.0 hack:
+  ['DOC + heating eff 5.0 (hack)',
+    b => setHeatingEff(setVentFlowsToV25(setHeatingShares(b)), 5.0)],
+  // Fine-tune control_factor around 0.85
+  ['DOC + lighting control_factor 0.87',
+    b => setLightingControlFactor(setVentFlowsToV25(setHeatingShares(b)), 0.87)],
+  ['DOC + lighting control_factor 0.86',
+    b => setLightingControlFactor(setVentFlowsToV25(setHeatingShares(b)), 0.86)],
+  ['DOC + lighting control_factor 0.88',
+    b => setLightingControlFactor(setVentFlowsToV25(setHeatingShares(b)), 0.88)],
+  // Also: small_power control_factor (independent of lighting)
+  ['DOC + lighting cf 0.85 + tweaks',
+    b => {
+      const x = setLightingControlFactor(setVentFlowsToV25(setHeatingShares(b)), 0.85)
+      // Cooling SEER 3.51 (library):
+      return setCoolingEff(x, 3.51)
+    }],
 ]
 
 console.log()

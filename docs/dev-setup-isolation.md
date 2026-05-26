@@ -55,7 +55,19 @@ The verification DB starts as a byte-for-byte copy of the live DB:
 cp data/nza_sim.db data/nza_sim_cc.db
 ```
 
-Run this once, on a known-good state. After copying, if the verification DB is at a drifted anchor, re-anchor it via the probes (the Brief 53 case: `_brief53_anchor_chase.mjs` found the values that reproduce 128.20; `_brief53_anchor_persist.mjs` writes them to the verification DB only).
+Run this once. If the live DB was drifted at copy time, the verification DB will be too — re-anchor before trusting it.
+
+**For Brief 53 / Bridgewater specifically, the documented 128.20 anchor requires THREE field reverts** (see `docs/audit/53_anchor_drift_diagnosis.md` §2 for full diff):
+
+| Field | Anchor value | Drifted to |
+|---|---|---|
+| `v40.heating[0/1].share_pct` | 95 / 5 | 90 / 10 |
+| `v40.ventilation[].flow_rate` | matches `v25.flow_l_s` (1425 / 2208 / 210) | 1431 / 2292 / 479 |
+| `v40.lighting[0].control_factor` | 0.86 (daylight dimming) | 1.0 |
+
+These are written to the verification DB by `scripts/_brief53_anchor_persist.mjs`, which targets port 8003 by default and has a safety guard refusing to write to port 8002. Verify with the falsifiability harness: T1 must report EUI = 128.20 exactly before any Brief 53 verification work is trustworthy.
+
+**Process discipline:** before running anchor work, kill stray vite/node processes. Multiple parallel vite dev servers + stale browser tabs are the contamination vector that produced the Brief 53 drift. Use `netstat -ano | grep LISTENING | grep ':5\|:8003'` (Mac: `lsof -i -P -n | grep LISTEN`) to enumerate; PowerShell `Stop-Process -Id <pid> -Force` to kill.
 
 ## Why not just run two browsers?
 
