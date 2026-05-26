@@ -59,6 +59,7 @@
 import { useCallback, useContext, useMemo } from 'react'
 import { ProjectContext } from '../context/ProjectContext.jsx'
 import { useInterventionCapture } from '../context/InterventionCaptureContext.jsx'
+import { diffV40ToFieldPatches } from '../components/modules/interventions/patchCapture.js'
 
 // ── Path parsing ────────────────────────────────────────────────────────
 
@@ -159,6 +160,31 @@ export function useProjectMutation() {
 
     // ── Path 1: capture mode ──────────────────────────────────────────
     if (capture?.isCapturing) {
+      // Brief 55 Part 2 (2026-05-26): WHEN the caller writes the WHOLE
+      // systems_config_v40 object (the legacy SystemsModule writeV40
+      // pattern), diff against the currently-patched v40 and emit one
+      // FIELD-LEVEL patch per changed leaf — never store a whole-object
+      // snapshot. This fixes Finding D's order-dependence: two
+      // interventions on different fields now compose instead of the
+      // later snapshot replacing the earlier one's contributions.
+      //
+      // The current "patched v40" lives on projectCtx.params (wrapped
+      // by PatchedProjectContextProvider — params is the baseline +
+      // already-captured-patches applied view inside the editor).
+      //
+      // For non-v40 paths or non-set ops, capture verbatim (legacy
+      // behaviour preserved — those paths are already field-level).
+      if (op === 'set'
+          && path === 'building.systems_config_v40'
+          && value != null
+          && typeof value === 'object'
+          && !Array.isArray(value)) {
+        const prevV40 = projectCtx?.params?.systems_config_v40 ?? {}
+        const fieldPatches = diffV40ToFieldPatches(prevV40, value)
+        if (fieldPatches.length === 0) return  // no-op write
+        for (const p of fieldPatches) capture.capturePatch(p)
+        return
+      }
       // Preserve the original path verbatim. The engine's applyPatch
       // resolves `building.<rest>` correctly against the patched root.
       capture.capturePatch({ path, op, value, source: 'inline' })

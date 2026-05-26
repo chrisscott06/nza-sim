@@ -1,0 +1,58 @@
+{
+  "baseline_eui": 128.2,
+  "order_A": {
+    "stack": [
+      "VRF 4.0",
+      "MVHR Bedrooms"
+    ],
+    "eui": 124.5,
+    "heating_count": 1,
+    "heating": [
+      {
+        "id": "sys_heating_1779261680582_18672",
+        "label": "Primary heating (vrf_heat_recovery_dual_function)",
+        "service": "heating",
+        "source": "ambient_air",
+        "efficiency_metric": 4,
+        "control_mechanism": "scheduled",
+        "control_schedule_id": "business_hours_09_18_weekdays",
+        "share_pct": 90,
+        "capacity_kw": null,
+        "enabled": true,
+        "notes": "Migrated from systems_config_v25 (library_id=vrf_heat_recovery_dual_function)"
+      }
+    ]
+  },
+  "order_B": {
+    "stack": [
+      "MVHR Bedrooms",
+      "VRF 4.0"
+    ],
+    "eui": 125.2,
+    "heating_count": 1,
+    "heating": [
+      {
+        "id": "sys_heating_1779261680582_18672",
+        "label": "Primary heating (vrf_heat_recovery_dual_function)",
+        "service": "heating",
+        "source": "ambient_air",
+        "efficiency_metric": 4,
+        "control_mechanism": "scheduled",
+        "control_schedule_id": "business_hours_09_18_weekdays",
+        "share_pct": 100,
+        "capacity_kw": null,
+        "enabled": true,
+        "notes": "Migrated from systems_config_v25 (library_id=vrf_heat_recovery_dual_function)"
+      }
+    ]
+  },
+  "eui_delta": -0.7000000000000028,
+  "heating_shape_match": false,
+  "gates": {
+    "4 baseline anchor": true,
+    "1 heating array shape": false,
+    "2 EUI convergence": false,
+    "5 engine accepts patches": true
+  },
+  "all_pass": false
+}

@@ -37,6 +37,148 @@ export function newPatchId() {
   return `patch_${raw}`
 }
 
+// ── Brief 55 Part 2 (2026-05-26) ────────────────────────────────────────
+//
+// Diff utility: given a previous and next `systems_config_v40` object,
+// produce a list of FIELD-LEVEL patches that, applied in order to the
+// previous, would yield the next. This replaces the legacy capture
+// pattern (one whole-object `op:set` patch on
+// `building.systems_config_v40`) that caused Finding D's order-
+// dependence (audit doc 55_granular_patch.md §0-§3).
+//
+// Rules:
+//   - Service-level keys (heating_setpoint_mode, dhw_storage_setpoint_c,
+//     etc.) — scalar/string/array/object value — emit one `op:set` per
+//     differing key at path `building.systems_config_v40.<key>`.
+//   - Service arrays (heating / cooling / dhw / ventilation / lighting /
+//     small_power) — match by `id`:
+//       • id only in prev → `op:remove` with `match: { id }`
+//       • id only in next → `op:add` with full `value`
+//       • id in both     → recurse into the entry's fields, emit `op:set`
+//                          per differing leaf at
+//                          `building.systems_config_v40.<service>[id=X].<field>...`
+//   - Nested objects inside an entry (e.g. ventilation[].efficiency_metric
+//     which is `{sfp_w_per_lps, recovery_sensible_pct, recovery_latent_pct}`)
+//     — recurse so a change to ONE nested key emits a path like
+//     `[id=X].efficiency_metric.recovery_sensible_pct`. This prevents
+//     nested-snapshot collisions (same root cause as the v40-level collision).
+//
+// Pure function. No persistence side effects. Used in TWO places:
+//   1. `useProjectMutation.mutate` — capture-mode emits field-level
+//      patches instead of one whole-object patch (live edits).
+//   2. `migratePatch` v2→v3 — converts legacy whole-object patches in
+//      saved projects to field-level on load (Brief 55 Part 2c).
+
+const V40_SERVICE_ARRAYS = ['heating', 'cooling', 'dhw', 'ventilation', 'lighting', 'small_power']
+
+function _isPlainObject(v) {
+  return v != null && typeof v === 'object' && !Array.isArray(v)
+}
+function _deepEqual(a, b) {
+  if (a === b) return true
+  if (a == null || b == null || typeof a !== typeof b) return false
+  if (typeof a !== 'object') return false
+  if (Array.isArray(a) !== Array.isArray(b)) return false
+  if (Array.isArray(a)) {
+    if (a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) if (!_deepEqual(a[i], b[i])) return false
+    return true
+  }
+  const ka = Object.keys(a), kb = Object.keys(b)
+  if (ka.length !== kb.length) return false
+  for (const k of ka) if (!_deepEqual(a[k], b[k])) return false
+  return true
+}
+
+function _diffEntryFields(prevEntry, nextEntry, basePath, out) {
+  const keys = new Set([...Object.keys(prevEntry ?? {}), ...Object.keys(nextEntry ?? {})])
+  for (const key of keys) {
+    const pv = prevEntry?.[key]
+    const nv = nextEntry?.[key]
+    if (_deepEqual(pv, nv)) continue
+    if (_isPlainObject(pv) && _isPlainObject(nv)) {
+      // Recurse — this is how ventilation[].efficiency_metric.recovery_sensible_pct
+      // emits a single-leaf path instead of a whole sub-object set.
+      _diffEntryFields(pv, nv, `${basePath}.${key}`, out)
+    } else {
+      out.push({
+        id: newPatchId(),
+        source: 'inline',
+        op: 'set',
+        path: `${basePath}.${key}`,
+        value: nv,
+      })
+    }
+  }
+}
+
+/**
+ * Diff two systems_config_v40 objects into a list of field-level patches.
+ * Returns [] when prev and next are structurally equal.
+ *
+ *   diffV40ToFieldPatches(prev, next)
+ *     → [{id, op:'set'|'add'|'remove', path, value, match?}, ...]
+ *
+ * Each patch is canonically shaped for `applyPatch` consumption — no
+ * additional transformation needed at apply time.
+ */
+export function diffV40ToFieldPatches(prevV40, nextV40) {
+  if (!_isPlainObject(prevV40) || !_isPlainObject(nextV40)) return []
+  const out = []
+  const root = 'building.systems_config_v40'
+
+  // 1. Service-level scalar/string/object fields (anything NOT in the
+  //    service-array list).
+  const allKeys = new Set([...Object.keys(prevV40), ...Object.keys(nextV40)])
+  for (const key of allKeys) {
+    if (V40_SERVICE_ARRAYS.includes(key)) continue
+    if (_deepEqual(prevV40[key], nextV40[key])) continue
+    out.push({
+      id: newPatchId(),
+      source: 'inline',
+      op: 'set',
+      path: `${root}.${key}`,
+      value: nextV40[key],
+    })
+  }
+
+  // 2. Service arrays — match by id.
+  for (const service of V40_SERVICE_ARRAYS) {
+    const prevArr = Array.isArray(prevV40[service]) ? prevV40[service] : []
+    const nextArr = Array.isArray(nextV40[service]) ? nextV40[service] : []
+    const prevByID = new Map(prevArr.map(s => [s.id, s]).filter(([id]) => id != null))
+    const nextByID = new Map(nextArr.map(s => [s.id, s]).filter(([id]) => id != null))
+    const allIDs = new Set([...prevByID.keys(), ...nextByID.keys()])
+
+    for (const id of allIDs) {
+      const prevSys = prevByID.get(id)
+      const nextSys = nextByID.get(id)
+      if (!nextSys) {
+        out.push({
+          id: newPatchId(),
+          source: 'inline',
+          op: 'remove',
+          path: `${root}.${service}`,
+          match: { id },
+        })
+      } else if (!prevSys) {
+        out.push({
+          id: newPatchId(),
+          source: 'inline',
+          op: 'add',
+          path: `${root}.${service}`,
+          value: nextSys,
+        })
+      } else {
+        // Both — diff entry fields.
+        _diffEntryFields(prevSys, nextSys, `${root}.${service}[id=${id}]`, out)
+      }
+    }
+  }
+
+  return out
+}
+
 /**
  * Read value at path (read-only). Returns undefined if path doesn't
  * resolve in the given config.

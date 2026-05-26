@@ -1,0 +1,82 @@
+{
+  "baseline_eui": 128.2,
+  "order_A": {
+    "stack": [
+      "SCOP up to 4",
+      "MVHR bedrooms HRE"
+    ],
+    "eui": 126,
+    "heating": [
+      {
+        "id": "sys_heating_1779261680582_18672",
+        "label": "Primary heating (vrf_heat_recovery_dual_function)",
+        "eff": 4,
+        "share": 95,
+        "enabled": true
+      },
+      {
+        "id": "sys_heating_1779261680582_24675",
+        "label": "Secondary heating (electric_panel_heater)",
+        "eff": 1,
+        "share": 5,
+        "enabled": true
+      }
+    ],
+    "vent_recov": [
+      {
+        "id": "vent_mvhr_gf_public",
+        "recov": 75
+      },
+      {
+        "id": "vent_bedroom_extract",
+        "recov": 75
+      },
+      {
+        "id": "vent_public_toilet_extract",
+        "recov": 0
+      }
+    ]
+  },
+  "order_B": {
+    "stack": [
+      "MVHR bedrooms HRE",
+      "SCOP up to 4"
+    ],
+    "eui": 126,
+    "heating": [
+      {
+        "id": "sys_heating_1779261680582_18672",
+        "label": "Primary heating (vrf_heat_recovery_dual_function)",
+        "eff": 4,
+        "share": 95,
+        "enabled": true
+      },
+      {
+        "id": "sys_heating_1779261680582_24675",
+        "label": "Secondary heating (electric_panel_heater)",
+        "eff": 1,
+        "share": 5,
+        "enabled": true
+      }
+    ],
+    "vent_recov": [
+      {
+        "id": "vent_mvhr_gf_public",
+        "recov": 75
+      },
+      {
+        "id": "vent_bedroom_extract",
+        "recov": 75
+      },
+      {
+        "id": "vent_public_toilet_extract",
+        "recov": 0
+      }
+    ]
+  },
+  "delta_kwh_per_m2": 0,
+  "heating_match": true,
+  "vent_v40_match": true,
+  "vent_v25_match": true,
+  "all_pass": true
+}

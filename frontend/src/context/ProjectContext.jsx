@@ -721,29 +721,44 @@ function migrateSystemsConfigV40_V1ToV2(rawV40) {
 // also walks interventions through migrateInterventionPatches. Returns
 // a sub-object with the migrated values for the loader to merge into
 // the params set call.
-function _brief42LoaderMigration(bc) {
+//
+// Brief 55 Part 2 (2026-05-26) — extended to v3. v2→v3 converts legacy
+// whole-object `systems_config_v40` snapshots in saved interventions
+// into field-level patches by diffing against the project's BASELINE
+// v40 (bc.systems_config_v40 from disk, post-v1→v2 migration). This
+// fixes Finding D's order-dependence — see docs/audit/55_granular_patch.md.
+function _bcLoaderMigration(bc) {
   const fromVersion = Number.isInteger(bc?.schema_version) ? bc.schema_version : 1
-  const toVersion = 2
+  const toVersion = 3
   if (fromVersion >= toVersion) return null  // already migrated; no-op
 
-  const migratedV40 = bc?.systems_config_v40
+  // Step 1: v1→v2 systems_config_v40 reshape (Brief 42).
+  const v2_migratedV40 = (bc?.systems_config_v40 && fromVersion < 2)
                        ? migrateSystemsConfigV40_V1ToV2(bc.systems_config_v40)
-                       : undefined
+                       : (bc?.systems_config_v40 ?? null)
+
+  // Brief 55 v2→v3 needs the baseline v40 for diffing legacy snapshots.
+  // Use the post-v1→v2 baseline so paths agree with the new shape.
+  const baselineForDiff = { systems_config_v40: v2_migratedV40 }
 
   const migratedInterventions = Array.isArray(bc?.interventions)
     ? bc.interventions.map(intv => {
         const intvFrom = Number.isInteger(intv?.schema_version) ? intv.schema_version : fromVersion
         if (intvFrom >= toVersion) return intv
-        return migrateInterventionPatches(intv, intvFrom, toVersion)
+        return migrateInterventionPatches(intv, intvFrom, toVersion, baselineForDiff)
       })
     : undefined
 
   return {
-    systems_config_v40: migratedV40,
+    systems_config_v40: v2_migratedV40,
     interventions: migratedInterventions,
     schema_version: toVersion,
   }
 }
+
+// Back-compat alias — old name kept until call sites are renamed in a
+// follow-up commit. _bcLoaderMigration is the canonical name now.
+const _brief42LoaderMigration = _bcLoaderMigration
 
 // ── Save status: 'idle' | 'saving' | 'saved' | 'error' ──────────────────────
 

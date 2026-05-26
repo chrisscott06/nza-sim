@@ -805,15 +805,62 @@ function migrateV1toV2(patch) {
   return patch  // no v1→v2 rewrite applies — patch passes through unchanged
 }
 
-export function migratePatch(patch, fromVersion, toVersion) {
+// ── Brief 55 v2 → v3 migration ────────────────────────────────────────
+//
+// Whole-object `systems_config_v40` snapshots → field-level patches.
+// Detects the legacy capture shape (one `op:set` patch on
+// `building.systems_config_v40` with the entire v40 as value), and
+// expands it into one patch per CHANGED leaf by diffing against the
+// project's baseline v40.
+//
+// Needs the baseline systems_config_v40 to diff against — passed via
+// the second arg `baselineV40` on the migration step. Loader supplies
+// it (the project's `building_config.systems_config_v40` at load time);
+// the engine doesn't see baselines, so `migratePatch` exposes the
+// optional `baselineConfig` arg for this case.
+//
+// Audit: docs/audit/55_granular_patch.md §6.
+import { diffV40ToFieldPatches } from '../components/modules/interventions/patchCapture.js'
+
+function migrateV2toV3(patch, baselineV40) {
+  if (!patch || typeof patch !== 'object' || typeof patch.path !== 'string') return patch
+  // Only legacy whole-object v40 snapshots qualify. Other paths
+  // (already field-level building.* / constructions.* / etc.) pass
+  // through unchanged.
+  if (patch.op !== 'set' || patch.path !== 'building.systems_config_v40') return patch
+  const snapshotV40 = patch.value
+  if (!snapshotV40 || typeof snapshotV40 !== 'object' || Array.isArray(snapshotV40)) return patch
+  // Diff against the project baseline. baselineV40 SHOULD be the
+  // bc.systems_config_v40 from disk (the pre-interventions ground truth).
+  // When the loader doesn't provide it (defensive), fall back to a {}
+  // baseline so the diff emits "add everything" — slightly wasteful but
+  // semantically equivalent (the whole snapshot becomes additions).
+  const prev = baselineV40 ?? {}
+  const fieldPatches = diffV40ToFieldPatches(prev, snapshotV40)
+  if (fieldPatches.length === 0) {
+    // Snapshot equals baseline — no-op intervention, drop it.
+    return { deprecated: true, reason: 'Brief 55 v2→v3: legacy whole-object systems_config_v40 snapshot was identical to baseline — no-op patch dropped.' }
+  }
+  return fieldPatches
+}
+
+/**
+ * Migrate a single patch through the version chain.
+ *
+ * `baselineConfig` is optional and is consulted by steps that need to
+ * diff against the project baseline (Brief 55 v2→v3). Pass the project's
+ * `building_config` (or at least `building_config.systems_config_v40`).
+ */
+export function migratePatch(patch, fromVersion, toVersion, baselineConfig = null) {
   if (fromVersion === toVersion) return patch
   if (!Number.isInteger(fromVersion) || !Number.isInteger(toVersion)) return patch
   if (fromVersion > toVersion) return patch   // downgrades not supported
   let cur = patch
+  const baselineV40 = baselineConfig?.systems_config_v40 ?? baselineConfig ?? null
   for (let v = fromVersion; v < toVersion; v++) {
     if (v === 1) cur = _applyMigrationStep(cur, migrateV1toV2)
-    // Future schema-changing briefs add cases here:
-    //   else if (v === 2) cur = _applyMigrationStep(cur, migrateV2toV3)
+    else if (v === 2) cur = _applyMigrationStep(cur, p => migrateV2toV3(p, baselineV40))
+    // Future schema-changing briefs add cases here.
   }
   return cur
 }
@@ -843,13 +890,13 @@ function _applyMigrationStep(input, stepFn) {
  * Used by the project loader on load when `intervention.schema_version
  * < current_schema_version`. Brief 42 Part 2 wires the call site.
  */
-export function migrateInterventionPatches(intervention, fromVersion, toVersion) {
+export function migrateInterventionPatches(intervention, fromVersion, toVersion, baselineConfig = null) {
   if (!intervention || !Array.isArray(intervention.patches)) return intervention
   if (fromVersion === toVersion) return intervention
   const migrated = []
   const deprecated = []
   for (const p of intervention.patches) {
-    const r = migratePatch(p, fromVersion, toVersion)
+    const r = migratePatch(p, fromVersion, toVersion, baselineConfig)
     if (Array.isArray(r)) {
       for (const x of r) {
         if (x && x.deprecated) deprecated.push({ original: p, ...x })
