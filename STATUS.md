@@ -1,5 +1,67 @@
 # NZA SIMULATE — Status
 
+## 🚀 Brief 63 — CLOSED 2026-05-27
+
+**Autonomous engine validation harness.** Permanent regression guard: 242 first-principles physics assertions across monotonicity/bounds/conservation/invariance/ordering/reconciliation. **All PASS / 0 FAIL / 0 BLOCKED** at first all-fixes-landed run. No tolerances tweaked; every initial RED was a harness wiring bug or a P1 introspection-field correction.
+
+### Anchor preserved
+
+**Bridgewater clean baseline EUI: 110.30 kWh/m²·yr** (unchanged from Brief 62 close). Total elec 329.13 MWh, total gas 147.65 MWh, SCOP 2.57, SEER 3.50. The Brief 55 intervention chain (MVHR Bedrooms → VRF 4.0) still marches 99.70 → 95.70. The P1 introspection layer added regime-hour counters + setpoint-source flags as additive fields — no number changed.
+
+### Parts landed
+
+| Part | Commit | Deliverable | Status |
+|---|---|---|---|
+| P1 | `c8320fc` | Engine introspection: `hours_heating_direction`/`cooling_direction`/`shoulder`, `bypass_hours_in_{heat,cool}_dir`, `effective_{heating,cooling}_setpoint_c`, `{heating,cooling}_setpoint_source`. Additive only — Bridgewater 110.30 unchanged. | ✓ |
+| P1 amend | `e68f558` | Corrected `*_setpoint_source` to read user intent (mode flag on building config), not opts.setpointOverride (always populated by Brief 62 P2). | ✓ |
+| P2 | `e68f558` | `scripts/validate_engine.mjs` — 242 assertions across 6 categories. Writes `docs/audit/63_validation_report.json` + `63_validation_matrix.md`. Exit 1 on any FAIL. | ✓ 242 PASS / 0 FAIL |
+| P3 | — | Run → diagnose → fix loop. Initial run had 13 RED (all harness wiring bugs + one P1 introspection correction). Fixed in place; no engine FAILs. No modelling-judgement escalations. | ✓ Green on next run |
+| P4 | (this commit) | Permanent wiring: `npm run validate` from `frontend/`; final narrative report at `docs/audit/63_validation_report.md` with walkthrough nominations. | ✓ |
+
+### Fix groups (root cause → resolution)
+
+| Group | Affected tests | Root cause | Fix |
+|---|---|---|---|
+| §2.1 P1 introspection | C19 | `*_setpoint_source` was reading `opts.setpointOverride.heating` — Brief 62 P2 always populates that with a resolved number, so the field always read `custom_override` regardless of mode. | Engine read from `building.systems_config_v40.*_setpoint_mode` (user intent). |
+| §2.2 DHW pump double-count | C01-C05 | `consumption.dhw.electricity_mwh` already includes the circulation pump (engine adds inside `_computeDhw`); harness summed pump separately. | Removed `dhw_pump_mwh` from carrier sum; kept as diagnostic. |
+| §2.3 Intervention stack callback shape | E06-E11 | `runInterventionStack` callback receives full `{building, constructions, systems, libraryData}` quartet; harness was treating that as `building`. | Added `runEngineFromCfg(cfg)` wrapper; fixed `runStack([])` to fall back to baseline. |
+| §2.4 C20 reconstruction formula | C20 | `recovery_offset_mwh` was double-subtracted (vent losses in `losses_at_setpoint` already have HRE applied). | Dropped recovery_offset from formula. Closes within 0.4 MWh. |
+| §2.5 E06 parity setup | E06 | Cut-paste confusion in test setup; intent correct, naming inconsistent. | Re-built E06 cleanly. |
+
+### Engine introspection now exposes (P1 + correction)
+
+Surfaced on `result.demand`:
+- `hours_heating_direction`, `hours_cooling_direction`, `hours_shoulder` — sum to 8760
+- `bypass_hours_in_heating_dir`, `bypass_hours_in_cooling_dir` — bypass classified by regime
+- `effective_heating_setpoint_c`, `effective_cooling_setpoint_c` — resolved values
+- `heating_setpoint_source`, `cooling_setpoint_source` — `'custom'` | `'comfortBand'` (user intent from mode flag)
+
+### Permanent regression guard
+
+```
+node scripts/validate_engine.mjs        # from project root
+npm run validate                          # from frontend/
+```
+
+Exit 0 if green; exit 1 if any FAIL. Re-runs in ~5s for 242 assertions across 30 engine runs.
+
+### Empty escalation list (the brief's success criterion)
+
+**No genuine modelling-judgement questions to escalate.** Cooling-clamp model change is a queued engine brief (Chris ratified verbatim), not a Brief 63 question — battery is written to accept it without rewriting tests when it lands.
+
+### In-screen walkthrough (REQUIRED, non-negotiable)
+
+8 nominated spot-checks in `docs/audit/63_validation_report.md` §5 spanning every category (1 monotonicity / 1 bound / 2 conservation / 1 ordering / 1 reconciliation / 1 Sankey / 1 setpoint-move). Each is an in-tool action + expected on-screen result. Chris signs off only when the spot-checked screen matches the harness verdict.
+
+### What's queued (NOT in Brief 63 scope)
+
+- **Cooling-clamp engine change** — Chris ratified post-Brief-62. Bridgewater cooling demand expected to rise. Battery is clamp-ready: B11/B12/B13/B13b/B13d would PASS by construction under the new model.
+- **397-vs-198 Energy Flows display doubling** — separate display bug, walkthrough §5.2 spot-checks it.
+- **Brief 60 Part B** (auxiliary energy in Internal Gains) — pending.
+- **Brief 60 Part C** (baseline/intervention parity guard) — partly subsumed by E06-E09c.
+
+---
+
 ## 🚀 Brief 59 — CLOSED 2026-05-27
 
 **Calculation-trace harness + fix v40/v25 ventilation-flow demand decoupling.** Two-part Tier-3 brief: live correctness fix + standing diagnostic capability.

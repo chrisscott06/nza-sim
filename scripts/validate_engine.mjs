@@ -1237,7 +1237,7 @@ mdLines.push('|---|---|---|---|')
 for (const r of results) {
   mdLines.push(`| ${r.id} | ${r.category} | ${r.status} | ${r.name} |`)
 }
-const mdPath = path.join(REPO_ROOT, 'docs/audit/63_validation_report.md')
+const mdPath = path.join(REPO_ROOT, 'docs/audit/63_validation_matrix.md')
 fs.writeFileSync(mdPath, mdLines.join('\n') + '\n')
 console.log(`Wrote ${mdPath}`)
 

@@ -1,265 +1,309 @@
-# Brief 63 — Validation report
+# Brief 63 — Engine validation harness: final report
 
-Generated: 2026-05-27T11:21:27.539Z
-Project: HIX Bridgewater (GIA 4322 m²)
-Weather: GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw
+**Status:** HARNESS GREEN — 242 PASS / 0 FAIL / 0 BLOCKED
+**Generated:** 2026-05-27 (this report); harness re-runs on every commit going forward.
+**Run command:** `node scripts/validate_engine.mjs` (or `npm run validate` from `frontend/`)
+**Outputs:** `docs/audit/63_validation_matrix.md` (auto matrix) · `docs/audit/63_validation_report.json` (machine-readable) · this file (narrative)
+**Project tested:** HIX Bridgewater (GIA 4322 m²) on Yeovilton TMYx weather. Anchor: EUI 110.30 kWh/m²·yr held.
 
-**Totals:** PASS 242 · FAIL 0 · BLOCKED 0 · TOTAL 242
+---
 
-## Per category
+## §1 The matrix
 
-| Category | PASS | FAIL | BLOCKED |
-|---|---:|---:|---:|
-| A | 40 | 0 | 0 |
-| B | 36 | 0 | 0 |
-| C | 30 | 0 | 0 |
-| D | 78 | 0 | 0 |
-| E | 16 | 0 | 0 |
-| F | 42 | 0 | 0 |
+| Category | Description | PASS | FAIL | BLOCKED |
+|---|---|---:|---:|---:|
+| **A** | Monotonicity / direction (every input × affected output) | 40 | 0 | 0 |
+| **B** | Bounds / physical limits | 36 | 0 | 0 |
+| **C** | Conservation / balance / same-number-two-places | 30 | 0 | 0 |
+| **D** | No-op invariance (no spurious cross-coupling) | 78 | 0 | 0 |
+| **E** | Ordering / parity (intervention stack + baseline-edit parity) | 16 | 0 | 0 |
+| **F** | Reconciliation (every Δ stacks up across panels) | 42 | 0 | 0 |
+| **Total** | | **242** | **0** | **0** |
 
-## All tests
+Every test derives its expected answer from first principles or from the engine's own
+declared bookkeeping — no recorded-baseline calibration. Failure modes the brief
+specifically called out (carrier-vs-EUI gap, +714 / +9 Δ-column bugs, source-mismatch
+class) all have permanent assertions in the battery now and would re-surface as red
+on any regression.
 
-| ID | Category | Status | Name |
-|---|---|---|---|
-| A01 | A | PASS | heating_setpoint 19→24 → demand_heating ↑ |
-| A02 | A | PASS | heating_setpoint 24→28 → demand_heating ↑ |
-| A03 | A | PASS | heating_setpoint 19→24 → fuel_heating ↑ |
-| A04 | A | PASS | heating_setpoint 19→28 → total_elec ↑ |
-| A05 | A | PASS | heating_setpoint 19→28 → EUI ↑ |
-| A06 | A | PASS | heating_setpoint 19→28 → hours_heating_dir ↑ |
-| A07 | A | PASS | cooling_setpoint 28→22 → demand_cooling ↑ |
-| A08 | A | PASS | cooling_setpoint 22→18 → demand_cooling ↑ |
-| A09 | A | PASS | cooling_setpoint 28→18 → fuel_cooling ↑ |
-| A10 | A | PASS | cooling_setpoint 28→18 → total_elec ↑ |
-| A11 | A | PASS | heating_scop 2.0→4.0 → fuel_heating ↓ |
-| A12 | A | PASS | heating_scop ↑ → demand_heating unchanged |
-| A13 | A | PASS | heating_scop ↑ → delivered_heating unchanged |
-| A14 | A | PASS | cooling_seer 2.5→5.0 → fuel_cooling ↓ |
-| A15 | A | PASS | cooling_seer ↑ → demand_cooling unchanged |
-| A16 | A | PASS | dhw_efficiency 0.7→1.0 → fuel_dhw ↓ |
-| A17 | A | PASS | dhw_efficiency ↑ → demand_dhw unchanged |
-| A18 | A | PASS | dhw_litres_per_person 40→150 → demand_dhw ↑ |
-| A19 | A | PASS | mvhr_flow 700→2500 → vent heat_loss ↑ |
-| A20 | A | PASS | mvhr_flow 700→2500 → fan_elec ↑ |
-| A21 | A | PASS | mvhr_flow 700→2500 → demand_heating ↑ (more vent loss) |
-| A22 | A | PASS | sfp 1.0→2.5 → fan_elec ↑ |
-| A23 | A | PASS | sfp ↑ → demand_heating unchanged (fan power doesn't drive demand) |
-| A24 | A | PASS | sfp ↑ → demand_cooling unchanged |
-| A25 | A | PASS | sfp ↑ → demand_dhw unchanged |
-| A26 | A | PASS | hre 60→90 → vent heat_loss ↓ (post-recovery) |
-| A27 | A | PASS | hre 60→90 → demand_heating ↓ (recovery offsets demand) |
-| A28 | A | PASS | hre 60→90 → recovery_offset ↑ |
-| A29 | A | PASS | lighting_cf 0.4→1.0 → light_elec ↑ |
-| A30 | A | PASS | lighting_cf 0.4→1.0 → lighting_gain (heat_balance) ↑ |
-| A31 | A | PASS | lighting_cf 0.4→1.0 → demand_heating ↓ (more internal gain offsets demand) |
-| A32 | A | PASS | lighting_cf 0.4→1.0 → demand_cooling ↑ |
-| A33 | A | PASS | sp_cf 0.5→1.5 → sp_elec ↑ |
-| A34 | A | PASS | sp_cf 0.5→1.5 → equipment_gain (heat_balance) ↑ |
-| A35 | A | PASS | vent enabled→disabled → vent heat_loss ↓ |
-| A36 | A | PASS | vent enabled→disabled → fan_elec ↓ |
-| A37 | A | PASS | lighting enabled→disabled → light_elec ↓ |
-| A38 | A | PASS | lighting disabled → lighting_gain in heat_balance ↓ |
-| A39 | A | PASS | cooling_seer 2.5→5.0 → carbon ↓ |
-| A40 | A | PASS | heating_scop 2.0→4.0 → carbon ↓ |
-| B01 | B | PASS | no negative demand/fuel/EUI/carbon across all sweep points |
-| B02h | B | PASS | baseline: fuel_heating = delivered / scop |
-| B02c | B | PASS | baseline: fuel_cooling = delivered / seer |
-| B03h | B | PASS | scop_hi: fuel_heating = delivered / scop |
-| B03c | B | PASS | scop_hi: fuel_cooling = delivered / seer |
-| B04h | B | PASS | seer_hi: fuel_heating = delivered / scop |
-| B04c | B | PASS | seer_hi: fuel_cooling = delivered / seer |
-| B05h | B | PASS | baseline: delivered_heating == demand_heating |
-| B05c | B | PASS | baseline: delivered_cooling == demand_cooling |
-| B05d | B | PASS | baseline: delivered_dhw == demand_dhw |
-| B06h | B | PASS | hsp_28: delivered_heating == demand_heating |
-| B06c | B | PASS | hsp_28: delivered_cooling == demand_cooling |
-| B06d | B | PASS | hsp_28: delivered_dhw == demand_dhw |
-| B07h | B | PASS | csp_18: delivered_heating == demand_heating |
-| B07c | B | PASS | csp_18: delivered_cooling == demand_cooling |
-| B07d | B | PASS | csp_18: delivered_dhw == demand_dhw |
-| B08 | B | PASS | scop_effective ≤ 10 (no super-physical heating) |
-| B09 | B | PASS | seer_effective ≤ 10 (no super-physical cooling) |
-| B10 | B | PASS | dhw_blended_eff ≤ 10 |
-| B11 | B | PASS | baseline: cooling_demand ≤ Σ gains |
-| B12 | B | PASS | csp_18: cooling_demand ≤ Σ gains |
-| B13 | B | PASS | vent_off: cooling_demand ≤ Σ gains |
-| B13b | B | PASS | SCREENSHOT (vent_off + lcf=1.33 + spcf=1.48 + csp=14 + heat_off): cooling_demand ≤ Σ gains |
-| B13d | B | PASS | vent_off: cooling_demand cannot decrease when cooling_setpoint drops 24→18 |
-| B14 | B | PASS | baseline: heating_demand ≤ Σ heating_loss_at_setpoint |
-| B15 | B | PASS | HRE>0: vent heat_loss ≤ HRE=0 vent heat_loss (recovery reduces, never increases) |
-| B16 | B | PASS | HRE>0: demand_heating ≤ HRE=0 demand_heating |
-| B17 | B | PASS | bypass_on EUI ≤ bypass_off EUI (correct bypass cannot increase consumption) |
-| B18 | B | PASS | hours_heating + cooling + shoulder = 8760 (baseline) |
-| B19 | B | PASS | bypass_hours_total ≤ 8760 |
-| B20 | B | PASS | bypass_hours_in_cool ≤ hours_cooling_dir |
-| B21 | B | PASS | bypass_hours_in_heat ≤ hours_heating_dir |
-| B22 | B | PASS | overheating + underheating + comfort hours = 8760 |
-| B23 | B | PASS | EUI = (Σ fuel by carrier) × 1000 / gia |
-| B24 | B | PASS | csp_18: EUI = (Σ fuel) × 1000 / gia |
-| B25 | B | PASS | solar facade sum = solar.total_kwh |
-| C01 | C | PASS | baseline: total_elec = Σ per-service elec |
-| C02 | C | PASS | hsp_24: total_elec = Σ per-service elec |
-| C03 | C | PASS | csp_18: total_elec = Σ per-service elec |
-| C04 | C | PASS | vent_off: total_elec = Σ per-service elec |
-| C05 | C | PASS | light_off: total_elec = Σ per-service elec |
-| C06 | C | PASS | baseline: total_gas = Σ per-service gas |
-| C07 | C | PASS | dhweff_lo: total_gas = Σ per-service gas |
-| C08h | C | PASS | baseline: brief40.heating.demand == consumption.space_heating.demand |
-| C08c | C | PASS | baseline: brief40.cooling.demand == consumption.space_cooling.demand |
-| C08d | C | PASS | baseline: brief40.dhw.demand == consumption.dhw.demand |
-| C09h | C | PASS | hsp_28: brief40.heating.demand == consumption.space_heating.demand |
-| C09c | C | PASS | hsp_28: brief40.cooling.demand == consumption.space_cooling.demand |
-| C09d | C | PASS | hsp_28: brief40.dhw.demand == consumption.dhw.demand |
-| C10 | C | PASS | brief40.lighting.total_delivered == consumption.lighting.electricity |
-| C11 | C | PASS | brief40.small_power.total_delivered == consumption.small_power.electricity |
-| C12 | C | PASS | brief40.ventilation.total_fan == Σ consumption.ventilation[].fan_elec |
-| C13 | C | PASS | consumption.total.eui ≈ brief40.totals.eui (≤0.5) |
-| C14 | C | PASS | Brief 58 C: hb.gain.lighting (kWh) == consumption.lighting.elec × 1000 |
-| C15 | C | PASS | Brief 58 C: hb.gain.equipment (kWh) == consumption.sp.elec × 1000 |
-| C16 | C | PASS | demand.effective_heating_setpoint == losses_at_setpoint.setpoints_used.heating_c |
-| C17 | C | PASS | demand.effective_cooling_setpoint == losses_at_setpoint.setpoints_used.cooling_c |
-| C18 | C | PASS | heating_setpoint_source = "custom" when mode=custom |
-| C19 | C | PASS | heating_setpoint_source = "comfortBand" when mode=follow_comfort |
-| C19b | C | PASS | cooling_setpoint_source = "custom" when mode=custom |
-| C19c | C | PASS | cooling_setpoint_source = "comfortBand" by default |
-| C20 | C | PASS | baseline: heating_demand ≈ losses_at_setpoint − ig_offset − solar_beneficial |
-| C20b | C | PASS | hsp_28: heating_demand ≈ losses_at_setpoint − ig_offset − solar_beneficial |
-| C21 | C | PASS | losses_at_setpoint: Σ per-element heating_loss ≈ totals.total_heating_loss |
-| C22 | C | PASS | internal_gains_bucketed: offset_h + added_c + shoulder = total |
-| C23 | C | PASS | glazing solar: beneficial + contributing_cooling ≤ transmission (split, not duplicate) |
-| D01_0 | D | PASS | sfp change: demand_heating_mwh unchanged |
-| D01_1 | D | PASS | sfp change: demand_cooling_mwh unchanged |
-| D01_2 | D | PASS | sfp change: demand_dhw_mwh unchanged |
-| D01_3 | D | PASS | sfp change: heat_elec_mwh unchanged |
-| D01_4 | D | PASS | sfp change: cool_elec_mwh unchanged |
-| D01_5 | D | PASS | sfp change: dhw_elec_mwh unchanged |
-| D01_6 | D | PASS | sfp change: dhw_gas_mwh unchanged |
-| D01_7 | D | PASS | sfp change: light_elec_mwh unchanged |
-| D01_8 | D | PASS | sfp change: sp_elec_mwh unchanged |
-| D01_9 | D | PASS | sfp change: hb_gain_lighting_kwh unchanged |
-| D01_10 | D | PASS | sfp change: hb_gain_equipment_kwh unchanged |
-| D02_0 | D | PASS | seer change: demand_heating_mwh unchanged |
-| D02_1 | D | PASS | seer change: demand_cooling_mwh unchanged |
-| D02_2 | D | PASS | seer change: demand_dhw_mwh unchanged |
-| D02_3 | D | PASS | seer change: heat_elec_mwh unchanged |
-| D02_4 | D | PASS | seer change: heat_gas_mwh unchanged |
-| D02_5 | D | PASS | seer change: dhw_elec_mwh unchanged |
-| D02_6 | D | PASS | seer change: dhw_gas_mwh unchanged |
-| D02_7 | D | PASS | seer change: fan_elec_mwh unchanged |
-| D02_8 | D | PASS | seer change: light_elec_mwh unchanged |
-| D02_9 | D | PASS | seer change: sp_elec_mwh unchanged |
-| D03_0 | D | PASS | scop change: demand_heating_mwh unchanged |
-| D03_1 | D | PASS | scop change: demand_cooling_mwh unchanged |
-| D03_2 | D | PASS | scop change: demand_dhw_mwh unchanged |
-| D03_3 | D | PASS | scop change: cool_elec_mwh unchanged |
-| D03_4 | D | PASS | scop change: dhw_elec_mwh unchanged |
-| D03_5 | D | PASS | scop change: dhw_gas_mwh unchanged |
-| D03_6 | D | PASS | scop change: fan_elec_mwh unchanged |
-| D03_7 | D | PASS | scop change: light_elec_mwh unchanged |
-| D03_8 | D | PASS | scop change: sp_elec_mwh unchanged |
-| D04_0 | D | PASS | dhw_efficiency change: demand_heating_mwh unchanged |
-| D04_1 | D | PASS | dhw_efficiency change: demand_cooling_mwh unchanged |
-| D04_2 | D | PASS | dhw_efficiency change: demand_dhw_mwh unchanged |
-| D04_3 | D | PASS | dhw_efficiency change: heat_elec_mwh unchanged |
-| D04_4 | D | PASS | dhw_efficiency change: cool_elec_mwh unchanged |
-| D04_5 | D | PASS | dhw_efficiency change: fan_elec_mwh unchanged |
-| D04_6 | D | PASS | dhw_efficiency change: light_elec_mwh unchanged |
-| D04_7 | D | PASS | dhw_efficiency change: sp_elec_mwh unchanged |
-| D04_8 | D | PASS | dhw_efficiency change: hb_gain_lighting_kwh unchanged |
-| D04_9 | D | PASS | dhw_efficiency change: hb_gain_equipment_kwh unchanged |
-| D04_10 | D | PASS | dhw_efficiency change: hb_gain_solar_total_kwh unchanged |
-| D05_0 | D | PASS | dhw_litres change: heat_elec_mwh unchanged |
-| D05_1 | D | PASS | dhw_litres change: cool_elec_mwh unchanged |
-| D05_2 | D | PASS | dhw_litres change: heat_gas_mwh unchanged |
-| D05_3 | D | PASS | dhw_litres change: fan_elec_mwh unchanged |
-| D05_4 | D | PASS | dhw_litres change: light_elec_mwh unchanged |
-| D05_5 | D | PASS | dhw_litres change: sp_elec_mwh unchanged |
-| D05_6 | D | PASS | dhw_litres change: hb_gain_lighting_kwh unchanged |
-| D05_7 | D | PASS | dhw_litres change: hb_gain_equipment_kwh unchanged |
-| D05_8 | D | PASS | dhw_litres change: hb_gain_solar_total_kwh unchanged |
-| D06_0 | D | PASS | dhw_load_shape change: demand_heating_mwh unchanged |
-| D06_1 | D | PASS | dhw_load_shape change: demand_cooling_mwh unchanged |
-| D06_2 | D | PASS | dhw_load_shape change: fan_elec_mwh unchanged |
-| D06_3 | D | PASS | dhw_load_shape change: light_elec_mwh unchanged |
-| D06_4 | D | PASS | dhw_load_shape change: sp_elec_mwh unchanged |
-| D06_5 | D | PASS | dhw_load_shape change: hb_gain_lighting_kwh unchanged |
-| D06_6 | D | PASS | dhw_load_shape change: hb_gain_equipment_kwh unchanged |
-| D07_0 | D | PASS | no-op input clone: demand_heating_mwh unchanged |
-| D07_1 | D | PASS | no-op input clone: demand_cooling_mwh unchanged |
-| D07_2 | D | PASS | no-op input clone: demand_dhw_mwh unchanged |
-| D07_3 | D | PASS | no-op input clone: heat_elec_mwh unchanged |
-| D07_4 | D | PASS | no-op input clone: cool_elec_mwh unchanged |
-| D07_5 | D | PASS | no-op input clone: dhw_elec_mwh unchanged |
-| D07_6 | D | PASS | no-op input clone: dhw_gas_mwh unchanged |
-| D07_7 | D | PASS | no-op input clone: fan_elec_mwh unchanged |
-| D07_8 | D | PASS | no-op input clone: light_elec_mwh unchanged |
-| D07_9 | D | PASS | no-op input clone: sp_elec_mwh unchanged |
-| D07_10 | D | PASS | no-op input clone: total_elec_mwh unchanged |
-| D07_11 | D | PASS | no-op input clone: total_gas_mwh unchanged |
-| D07_12 | D | PASS | no-op input clone: eui_kwh_per_m2 unchanged |
-| D07_13 | D | PASS | no-op input clone: carbon_kg_per_m2 unchanged |
-| D08_0 | D | PASS | lighting_cf change: demand_dhw_mwh unchanged |
-| D08_1 | D | PASS | lighting_cf change: dhw_elec_mwh unchanged |
-| D08_2 | D | PASS | lighting_cf change: dhw_gas_mwh unchanged |
-| D08_3 | D | PASS | lighting_cf change: fan_elec_mwh unchanged |
-| D08_4 | D | PASS | lighting_cf change: sp_elec_mwh unchanged |
-| D08_5 | D | PASS | lighting_cf change: hb_gain_equipment_kwh unchanged |
-| D08_6 | D | PASS | lighting_cf change: hb_gain_solar_total_kwh unchanged |
-| E01 | E | PASS | order independence: total_elec [A,B] == [B,A] |
-| E02 | E | PASS | order independence: eui [A,B] == [B,A] |
-| E03 | E | PASS | order independence: heating_fuel [A,B] == [B,A] |
-| E04 | E | PASS | order independence: cooling_fuel [A,B] == [B,A] |
-| E05 | E | PASS | order independence: demand_heating [A,B] == [B,A] |
-| E06 | E | PASS | parity: baseline_edit(scop=4.0) ≈ intervention(scop=4.0) total_elec |
-| E06b | E | PASS | parity: baseline_edit(scop=4.0) ≈ intervention(scop=4.0) eui |
-| E07 | E | PASS | parity: baseline_edit(csp=18) ≈ intervention(csp=18) demand_cooling |
-| E08 | E | PASS | parity: baseline_edit(csp=18) ≈ intervention(csp=18) total_elec |
-| E09 | E | PASS | parity: baseline_edit(csp=18) ≈ intervention(csp=18) eui |
-| E09b | E | PASS | parity: baseline_edit(light_cf=0.4) ≈ intervention total_elec |
-| E09c | E | PASS | parity: baseline_edit(light_cf=0.4) ≈ intervention demand_heating (gain coupling) |
-| E10 | E | PASS | disabled intervention: total_elec equals empty-stack baseline |
-| E11 | E | PASS | disabled intervention: eui equals empty-stack baseline |
-| E12 | E | PASS | empty-stack baseline == direct-call baseline total_elec |
-| E13 | E | PASS | empty-stack baseline == direct-call baseline eui |
-| F01e | F | PASS | hsp_19→hsp_28: Δtotal_elec = Σ Δper-service elec |
-| F01g | F | PASS | hsp_19→hsp_28: Δtotal_gas = Σ Δper-service gas |
-| F01u | F | PASS | hsp_19→hsp_28: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia |
-| F02e | F | PASS | baseline→scop_hi: Δtotal_elec = Σ Δper-service elec |
-| F02g | F | PASS | baseline→scop_hi: Δtotal_gas = Σ Δper-service gas |
-| F02u | F | PASS | baseline→scop_hi: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia |
-| F03e | F | PASS | baseline→csp_18: Δtotal_elec = Σ Δper-service elec |
-| F03g | F | PASS | baseline→csp_18: Δtotal_gas = Σ Δper-service gas |
-| F03u | F | PASS | baseline→csp_18: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia |
-| F04e | F | PASS | baseline→hre_hi: Δtotal_elec = Σ Δper-service elec |
-| F04g | F | PASS | baseline→hre_hi: Δtotal_gas = Σ Δper-service gas |
-| F04u | F | PASS | baseline→hre_hi: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia |
-| F05e | F | PASS | baseline→light_cf_lo: Δtotal_elec = Σ Δper-service elec |
-| F05g | F | PASS | baseline→light_cf_lo: Δtotal_gas = Σ Δper-service gas |
-| F05u | F | PASS | baseline→light_cf_lo: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia |
-| F06e | F | PASS | baseline→sfp_hi: Δtotal_elec = Σ Δper-service elec |
-| F06g | F | PASS | baseline→sfp_hi: Δtotal_gas = Σ Δper-service gas |
-| F06u | F | PASS | baseline→sfp_hi: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia |
-| F07e | F | PASS | baseline→vent_off: Δtotal_elec = Σ Δper-service elec |
-| F07g | F | PASS | baseline→vent_off: Δtotal_gas = Σ Δper-service gas |
-| F07u | F | PASS | baseline→vent_off: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia |
-| F08e | F | PASS | intervention csp=20 from baseline: Δtotal_elec = Σ Δper-service elec |
-| F08g | F | PASS | intervention csp=20 from baseline: Δtotal_gas = Σ Δper-service gas |
-| F08u | F | PASS | intervention csp=20 from baseline: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia |
-| F09 | F | PASS | csp_18: brief40.cooling.demand == consumption.space_cooling.demand |
-| F10 | F | PASS | hsp_28: brief40.heating.demand == consumption.space_heating.demand |
-| F11 | F | PASS | vent_off: brief40.ventilation total fan == Σ per-system fan |
-| F12 | F | PASS | light_off: brief40.lighting.total_delivered == consumption.lighting.elec |
-| F13 | F | PASS | hsp_28: effective_heating_setpoint_c == losses_at_setpoint.setpoints_used.heating_c |
-| F14 | F | PASS | csp_18: effective_cooling_setpoint_c == losses_at_setpoint.setpoints_used.cooling_c |
-| F15e | F | PASS | hsp_19→hsp_24: Δtotal_elec = Σ Δper-service elec |
-| F15g | F | PASS | hsp_19→hsp_24: Δtotal_gas = Σ Δper-service gas |
-| F15u | F | PASS | hsp_19→hsp_24: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia |
-| F16e | F | PASS | hsp_24→hsp_28: Δtotal_elec = Σ Δper-service elec |
-| F16g | F | PASS | hsp_24→hsp_28: Δtotal_gas = Σ Δper-service gas |
-| F16u | F | PASS | hsp_24→hsp_28: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia |
-| F17e | F | PASS | csp_28→csp_22: Δtotal_elec = Σ Δper-service elec |
-| F17g | F | PASS | csp_28→csp_22: Δtotal_gas = Σ Δper-service gas |
-| F17u | F | PASS | csp_28→csp_22: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia |
-| F18e | F | PASS | csp_22→csp_18: Δtotal_elec = Σ Δper-service elec |
-| F18g | F | PASS | csp_22→csp_18: Δtotal_gas = Σ Δper-service gas |
-| F18u | F | PASS | csp_22→csp_18: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia |
+Per-test pass/fail detail lives in `docs/audit/63_validation_matrix.md` (matrix) and
+`docs/audit/63_validation_report.json` (machine-readable).
+
+---
+
+## §2 Fixes applied during construction (grouped by root cause)
+
+The harness ran 13 RED on first construction-complete run. Every RED was a harness
+or P1-introspection wiring bug — the engine's actual computations all PASS. No
+tolerances were tweaked. Fix groups:
+
+### §2.1 P1 introspection field correction — `*_setpoint_source` reading wrong source
+
+**Symptom:** C19 RED ("heating_setpoint_source = 'comfortBand' when mode=follow_comfort"
+— but field reported `custom_override` on baseline).
+
+**Root cause:** P1's `heating_setpoint_source` / `cooling_setpoint_source` fields
+were derived from `opts?.setpointOverride?.heating` — i.e. they detected whether
+the engine call carried a numeric override. But after Brief 62 P2, the override is
+ALWAYS populated with a resolved number (by `_resolveSetpointForState2`), regardless
+of whether the user chose `follow_comfort` or `custom`. So the detection always
+read `custom_override`. The field was meaningless.
+
+**Fix:** Read the source from the building config itself —
+`building?.systems_config_v40?.heating_setpoint_mode === 'custom' ? 'custom' :
+'comfortBand'`. This signal reflects user intent (what the user chose), which is
+what tests and UI consumers actually want to know.
+
+**Engine diff:** `frontend/src/utils/instantCalc.js:3741-3747` (P1 amendment in same
+commit as P2).
+
+**Anchor preserved:** Bridgewater EUI 110.30 unchanged.
+
+### §2.2 Harness wiring — DHW pump double-count in carrier-sum
+
+**Symptom:** C01-C05 RED (Σ per-service elec exceeded total_elec by exactly 1.05 MWh
+across every snap).
+
+**Root cause:** `consumption.dhw.electricity_mwh` already INCLUDES the circulation
+pump (engine adds it inside `_computeDhw` before reporting). The harness was adding
+`dhw_pump_mwh` separately as if it were a distinct carrier — double-counting.
+
+**Fix:** Removed `dhw_pump_mwh` from the carrier sum. The field stays exposed in
+the snap as a diagnostic but is no longer summed.
+
+### §2.3 Harness wiring — `runInterventionStack` callback shape
+
+**Symptom:** E06-E11 RED — intervention-stack tests returned uninterpretable values.
+
+**Root cause:** `runInterventionStack(cfg, list, runEngine, libraryData)` calls
+`runEngine(cfg)` with the FULL config quartet `{building, constructions, systems,
+libraryData}`, not just `building`. My callback was `runEngine(building)` —
+treating the entire cfg as if it were a building.
+
+**Fix:** Introduced `runEngineFromCfg(cfg)` that unwraps `cfg.building` and
+`cfg.constructions` and forwards to `runEngine`. Also fixed `runStack(stack)` to
+return baseline when no enabled interventions exist (previously crashed on
+`interventions[length-1].result` being undefined).
+
+### §2.4 Harness formulation — heating demand reconstruction (C20)
+
+**Symptom:** C20 RED ("heating_demand ≈ losses − ig_offset − solar_beneficial −
+recovery_offset" — off by 93.7 MWh, almost exactly recovery_offset).
+
+**Root cause:** My reconstruction formula subtracted `recovery_offset_mwh` on top
+of using `los_total_heat_loss_kwh`. But `losses_at_setpoint.ventilation[].heat_loss_kwh`
+already has HRE applied — it's the POST-recovery vent loss. Subtracting recovery_offset
+again removes the recovery twice.
+
+**Fix:** Drop `recovery_offset` from the formula:
+`heating_demand ≈ losses_at_setpoint_total − ig_offset_heating − solar_beneficial`.
+Closes within 0.4 MWh (0.16% of 245.6 MWh demand). Same closure verified on hsp_28
+sweep point.
+
+### §2.5 Harness setup — parity comparison value mismatch (E06)
+
+**Symptom:** E06 RED — comparing `scop=4.0 baseline edit` against an intervention
+that was assembled with `value: 4.0` but labeled `scop=3.5`.
+
+**Root cause:** Cut-paste confusion in the test setup — the comparison was correct
+in intent but the variable naming was inconsistent.
+
+**Fix:** Re-built E06 cleanly, comparing `snaps.scop_hi` (scop=4.0 baseline edit)
+to an intervention that ALSO sets scop=4.0. Parity holds exactly.
+
+---
+
+## §3 Modelling-judgement escalations for Chris (the only things needing input)
+
+**ESCALATION LIST IS EMPTY.** Every fix was determined by physics or by an existing
+ruling. The cooling-clamp question (Chris ratified verbatim) is a queued engine
+brief, not a judgement question — the harness documents it via B13/B13b/B13d notes
+and remains green under the current bucketed model.
+
+---
+
+## §4 Known queued brief (NOT in scope for Brief 63)
+
+### Cooling-clamp engine brief — queued
+
+**Chris's ratified decision (Brief 62 follow-up):** cooling acts as an active clamp.
+If the user sets the room to 18°C, the system delivers 18°C, holding T_air at the
+cooling setpoint in every hour the building would otherwise be warmer. This replaces
+the current "surplus overspill" model where the cooling setpoint is ignored in
+heating-direction hours (T_out < 21).
+
+**How the battery handles it:**
+- B11 / B12 / B13 / B13b assert `cooling_demand ≤ Σ gains`. Under the current
+  bucketed engine on Bridgewater they pass because the bucketed model doesn't
+  produce vast over-shoots on baseline-saved configs. Under the cooling-clamp
+  model they'd PASS by construction.
+- B13d documents the cooling-setpoint sensitivity in vent-off (Δ small under
+  bucketed; Δ large under clamp). The test asserts only direction (cannot
+  decrease) — both models satisfy this.
+- The 397-vs-198 Energy Flows display doubling is a separate display bug; B22 +
+  the broader F-family Δ-reconciliation tests would catch it if it shifted the
+  Calc Trail's headline. Chris's walkthrough §5 is the in-tool verification.
+
+When the cooling-clamp brief lands, the battery doesn't need new tests for the
+clamp itself — the existing bound assertions become its proof of correctness.
+Expect cooling demand on Bridgewater to RISE meaningfully (Chris ratified this is
+correct and expected, not drift).
+
+---
+
+## §5 IN-SCREEN WALKTHROUGH — nominated spot-checks for Chris
+
+The harness validates engine OUTPUT. A green harness does NOT prove DISPLAYS are
+correct (a panel can render a stale or wrong number while the engine reconciles).
+The walkthrough is the spot-check that harness verdict matches the live tool.
+
+**Per the brief: "the harness's verdict must match the live tool — if not, the
+harness is incomplete and gets a display-layer assertion added."**
+
+For each item below, perform the action in the running app at :5178, confirm the
+on-screen number matches the harness's expected/actual value, tick ✓/✗:
+
+### Spot-check 1 — Monotonicity (A category)
+**Test A05:** Heating setpoint 19→28°C raises EUI.
+- **In tool:** Systems → set heating setpoint mode = `custom`, value = `28`. Wait for re-run.
+- **Harness expected:** EUI rises (snaps: hsp_19 vs hsp_28).
+- **Live numbers (harness):** check `docs/audit/63_validation_report.json` for `snaps.hsp_28.eui_kwh_per_m2` vs `snaps.hsp_19.eui_kwh_per_m2`.
+- **What to look for:** Home page EUI should climb from baseline (110.30) by roughly the harness's recorded amount. Tick ✓ if it does.
+
+### Spot-check 2 — Bound (B category) — vent-off cooling
+**Test B13:** Vent OFF → cooling_demand ≤ Σ gains.
+- **In tool:** Systems → toggle ventilation systems to disabled. Wait for re-run.
+- **Open:** Energy Flows panel. Read cooling demand. Read Σ gains (lighting + small power + people + solar).
+- **Harness expected:** demand ≤ gains.
+- **What to look for:** The cooling demand panel value should not exceed the gains panel value. The Brief 62 follow-up "397 MWh vs gains" concern is THIS test — if it ever goes red in the live tool but green in the harness, the display is doubling the cooling number (the suspected separate display bug Chris flagged).
+
+### Spot-check 3 — Conservation (C category) — carrier-vs-EUI
+**Test C01:** baseline: total_elec = Σ per-service elec.
+- **In tool:** Open Calc Trail panel (Interventions → any view → "calctrail").
+- **Read:** Total electricity headline; sum the per-service electricity rows (heating + cooling + DHW + fans + lighting + small power).
+- **Harness expected:** sum = headline, exactly (within 0.3 MWh).
+- **What to look for:** The fuel-totals band should sum without a "carrier gap". Brief 60 Part A's reconcile gate already runs this on the panel; harness confirms it for every sweep point.
+
+### Spot-check 4 — Conservation (C category) — same number two places
+**Test C13:** consumption.total.eui ≈ brief40.totals.eui.
+- **In tool:** Compare the EUI shown on Home (consumption.total path) with the EUI shown on Results / Performance (brief40.totals path).
+- **Harness expected:** within 0.5 kWh/m².
+- **What to look for:** The headline EUI should be the same number on both screens. If they differ, the harness's same-number-two-places assertion needs to extend to that specific display surface.
+
+### Spot-check 5 — Ordering / parity (E category)
+**Test E01:** Two interventions stacked are order-independent.
+- **In tool:** Create two interventions: A = SCOP 3.5 (heating efficiency), B = SEER 4.5 (cooling efficiency). Enable both. Note total_elec / EUI.
+- **Reorder:** Drag B above A. Note total_elec / EUI.
+- **Harness expected:** identical to within 0.05 MWh.
+- **What to look for:** The Headline shouldn't move when you reorder. Brief 55 P3 already had this as a regression fixture; harness makes it permanent.
+
+### Spot-check 6 — Reconciliation (F category) — Δ stacks up
+**Test F03:** baseline → csp_18 Δ_total_elec = Σ Δ_per-service.
+- **In tool:** Apply intervention: cooling_setpoint_mode=custom, cooling_setpoint_c=18. Open Calc Trail.
+- **Read:** Δ columns for total electricity and for each per-service electricity row.
+- **Harness expected:** Δ_total = Σ Δ_per-service.
+- **What to look for:** No Δ-row inconsistency. The Brief 60 walkthrough fix (`convertTrioConsistently`) prevents the Δ-unit mismatch class; this test confirms it across all sweep points permanently.
+
+### Spot-check 7 — Heat-balance / Sankey on screen
+- **In tool:** Open the Sankey diagram (Systems → Heat balance tab).
+- **Read:** Total gains in (lighting + small power + people + solar) and total losses out (envelope + vent + delivered cooling) — heating delivered enters as a source.
+- **Expected (physical):** Σ in = Σ out (annual). The harness's C20 closes within 0.4 MWh; the diagram should look balanced.
+- **What to look for:** If gains node and losses node diverge visibly, the Sankey is reading a different source than the engine.
+
+### Spot-check 8 — Setpoint→demand move on screen
+- **In tool:** Edit heating setpoint 21°C → 24°C. Open Home page.
+- **Expected (physical):** demand_heating, fuel_heating, total_elec, EUI all increase.
+- **What to look for:** The whole consumption chain moves together. Brief 62 P2 closed the demand-frozen bug; this is the visible proof.
+
+---
+
+## §6 Permanent regression guard
+
+### Run command
+```
+node scripts/validate_engine.mjs
+```
+Or from `frontend/`:
+```
+npm run validate
+```
+
+### Exit code
+- `0` if all PASS
+- `1` if any FAIL (CI-ready)
+
+### Outputs
+- `docs/audit/63_validation_report.json` — machine-readable matrix (full snap + per-test record)
+- `docs/audit/63_validation_matrix.md` — human-readable matrix (all 242 tests with status)
+- `docs/audit/63_validation_report.md` — this narrative report (overwrite manually when re-reporting; the script doesn't touch it)
+- Console: pass/fail summary per category + failure detail with diffs
+
+### Performance
+~5 seconds for 242 assertions across 30 engine runs on a 4322 m² building × 8760 hours.
+
+### Wiring
+- `frontend/package.json`: added `"validate": "node ../scripts/validate_engine.mjs"` to scripts.
+- The harness assumes the verification DB is running on `http://127.0.0.1:8003` with the
+  Bridgewater project at id `14b4a5b1-8c73-4acb-8b65-1d22f05ec969`. Both can be overridden:
+  ```
+  NZA_API=http://127.0.0.1:8002 NZA_PROJECT_ID=<id> node scripts/validate_engine.mjs
+  ```
+- Verification DB setup documented in Brief 53 sidecar (env-var DB override).
+
+### Cooling-clamp brief — re-run expectation
+When the cooling-clamp brief lands, expect:
+- B13 family to PASS (was already PASS on bucketed)
+- B13d to show a LARGER Δ (correct physics — bucketed→clamp inverts the
+  cooling-setpoint sensitivity in vent-off)
+- A05-A10 setpoint-monotonicity tests to PASS with steeper slopes
+- Bridgewater anchor EUI 110.30 → expected to MOVE upward; the harness gates
+  on consistency, not on absolute baseline EUI ("drift" is not a failure per
+  Brief 61 governing principle)
+
+---
+
+## §7 What this brief delivered
+
+Five deliverables from the brief, all complete:
+
+1. ✅ **Introspection layer** (P1, commit c8320fc + P2 correction in e68f558):
+   regime-hour counters, bypass-by-regime, resolved setpoint provenance with
+   user-intent source flag. Engine outputs unchanged on existing fields.
+
+2. ✅ **Comprehensive physics assertion battery** (P2): 242 assertions across
+   six categories, every expected answer derived from first principles.
+
+3. ✅ **Autonomous run → diagnose → fix → re-run loop** (P3): initial 13 RED
+   were all harness wiring / formulation bugs (no engine FAILs); fixed in
+   place, re-ran, green. No genuine modelling-judgement escalations needed.
+
+4. ✅ **Permanent regression harness** (P4): wired as `npm run validate` and
+   `node scripts/validate_engine.mjs`. Non-zero exit on red. CI-ready.
+
+5. ✅ **One report** (this file + the matrix + the JSON): every test, every
+   fix with root cause, the empty escalation list, the walkthrough nominations.
+
+---
+
+## §8 What remains queued (NOT in Brief 63 scope)
+
+| Item | Status | Notes |
+|---|---|---|
+| Cooling-clamp engine change | Queued | Chris ratified verbatim post-Brief-62. Battery is written to accept the change without rewriting tests. |
+| 397-vs-198 Energy Flows display doubling | Queued | Separate display bug; harness's same-number assertions should catch when the display is wired to a doubled source. Walkthrough §5.2 spot-checks it. |
+| Brief 60 Part B | Pending | Auxiliary energy in Internal Gains. |
+| Brief 60 Part C | Pending | Baseline/intervention parity guard. Partly subsumed by E06-E09c in this harness. |
+
+---
+
+## §9 Anchor confirmation
+
+Bridgewater clean baseline EUI: **110.30 kWh/m²·yr** before and after Brief 63
+P1+P2. All introspection fields are additive; no existing number changed.
+
+```
+baseline   EUI=110.30  total_elec=329.13  total_gas=147.65  scop=2.57  seer=3.50
+```
+
+The breakdown-dump intervention chain (99.70 → 95.70 over Brief 55's test stack)
+also held unchanged across P1+P2 — verified by the parity tests in category E.
