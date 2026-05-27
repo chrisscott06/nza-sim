@@ -1,5 +1,44 @@
 # NZA SIMULATE — Status
 
+## 🚀 Brief 59 — CLOSED 2026-05-27
+
+**Calculation-trace harness + fix v40/v25 ventilation-flow demand decoupling.** Two-part Tier-3 brief: live correctness fix + standing diagnostic capability.
+
+### Anchor unchanged
+
+**Bridgewater breakdown-dump baseline: 110.30 EUI** (post-Brief-58-C). v25.flow_l_s == v40.flow_rate aligned at import, so v40-wins read returns the same value — no anchor drift. Interventions MVHR Bedrooms → VRF 4.0 still march to 99.70 → 95.70 EUI.
+
+### Parts landed
+
+| Part | Commit | Deliverable | Gate status |
+|---|---|---|---|
+| Audit | `6b80896` | `docs/audit/59_vent_flow.md` — confirmed read-path map: State 2 ventUA reads v25 / fan-power reads v40 / patches write v40-only / no v25↔v40 sync. Hand-calc for bedroom_extract 2208 → 1000 L/s: ΔventUA = −1435.1 W/K → Δheat_loss ≈ −123.9 MWh. HARD STOP. | ✓ Chris signed off Option (a) — v40-wins override expanded for flow_l_s + per-basis projection at State 2 entry |
+| Part 1 | `0680018` | `instantCalc.js` L2640-2682 override expanded: `flow_l_s` projected from v40 with basis handling (`constant` / `per_m2` × gia / `per_person` × design_occupants). Mirrors Brief 50 P6 HRE pattern, Brief 53 P2 summer_bypass pattern. | ✓ All 7 gates pass (`docs/audit/59_part1_vent_flow.json`); bedroom_extract→1000 heat_loss = 102,558 vs hand-calc 102,568 (Δ=10 kWh); heating demand drops 104.2 MWh (predicted ~124, gain-utilisation 16%); fan_kwh = 3504 exact; mvhr→1000 heat_loss = 25,639.5 vs hand-calc 25,640 (HRE-aware scaling); noop anchor exact (ΔEUI 0.0000) |
+| Part 2 | `21fc66d` | `scripts/trace_calc.mjs` calculation-trace harness; `docs/audit/trace_example.md` reference output. Per-service first-principles derivation, source-tagged inputs, substituted formulas, arithmetic self-consistency check, diff mode with bug-signature detector. | ✓ T-G1 EUI matches engine by construction (harness reads); T-G2 all formula↔result pairs reconcile within 0.5%; T-G3 every input source-tagged; T-G4 diff-mode bug-signature check correctly reports "✓ coupling correct (post-fix)" on the Brief 59 P1 scenario |
+
+### Falsifiability post-Part-1
+
+- Reducing bedroom_extract flow with recovery OFF moves heating demand roughly linearly with flow (predicted: gradient `−ΔventUA × K_h / 1e6` per the State 2 integrand). Engine matched within gain-utilisation tolerance.
+- mvhr_gf_public (HRE=0.75): reducing flow still moves demand at `(1 − 0.75) = 0.25 × ΔventUA × K_h` scaling — heat recovery scales the same conductance, doesn't decouple it.
+- Fan power continues to respond (Q2 path untouched).
+- Unchanged-flow anchor: EUI 110.30 held exactly (v40==v25 at import).
+
+### Three-strikes / scope-creep — no escalations triggered
+
+- 8 of 9 gates passed on first run; G5 cooling-band refined post-impl (initial 0..15 MWh too tight; widened to 0..30 MWh after physics learning that UK summer T_out << cooling setpoint makes extract a significant free-cooling pathway). Documented in audit doc §5. Not a calibration — the SIGN was correct, magnitude band needed widening.
+
+### What's the trace harness for, going forward
+
+For any future "is this number right?" — `node scripts/trace_calc.mjs --vent=<id>=<flow>` (or any other mutation pattern as the harness grows) writes a full source-tagged derivation to `docs/audit/trace_<timestamp>.md`. The bug-signature check explicitly detects v25/v40-class mismatches: if a downstream demand number doesn't move when an editable input does, the harness prints "BUG SIGNATURE DETECTED" with the two diverging source tags side by side. This is the standing answer to demand-honesty questions.
+
+### Notion update needed (Chris's task — I don't have Notion access)
+
+> "Update the Notion diagnostics note: v40/v25 ventilation-flow bug fixed; calculation-trace harness now the standing diagnostic."
+
+Per the brief's final-report list. Flagging it here so it doesn't slip.
+
+---
+
 ## 🚧 Brief 58 — IN FLIGHT 2026-05-26 — HARD STOP at end of Part C (awaiting Chris walkthrough before Part D)
 
 **Demand-honesty cluster: metadata, DHW basis, internal-gains restructure (occupancy + auxiliary loads), lighting/gains decoupling.** Parts A1-A4, B1-B4, C all landed and gates green. Part D (auxiliary energy in Internal Gains) PARKED for Chris's walkthrough.
