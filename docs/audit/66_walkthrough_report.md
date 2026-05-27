@@ -1,6 +1,8 @@
 # Brief 66 Walkthrough Report — 2026-05-27 overnight
 
-**WALKTHROUGH COMPLETE: 2026-05-27 22:00, 17 findings logged, no engine changes.**
+**WALKTHROUGH COMPLETE: 2026-05-27 23:30, 18 findings logged (U4 added per brief revision), no engine changes.**
+
+> **Update 2026-05-27 23:30:** Brief revised to specifically request U4 service-toggle bug-class verification (does vent_off propagate to fan_elec → 0; does each service toggle zero its downstream electricity/fuel/delivered?). Addendum added at end of report (§"Addendum: U4 service-toggle bug class"). One new finding (HIGH-8) confirmed: v25-vs-v40 vent enable asymmetry causes fan electricity to remain in the EUI when vent is disabled via certain code paths.
 
 Test building: §1 spec (Small office, 30×20×2 floors at 3.5m = 1200 m² GIA, Bristol EPW, h_sp=21, c_sp=24, active_setpoint clamp).
 Test project ID: `3cb8cac5-2458-49a8-99f5-ac1eed5b9821` (UI-loadable for follow-up review).
@@ -369,3 +371,106 @@ For full walkthrough faithful to the brief's intent, a future run with browser M
 - `docs/briefs/active/66_overnight_integration_walkthrough.md` (brief landed; counts as orientation not a commit)
 
 No engine edits. No UI edits. No commits to engine or frontend code beyond the report.
+
+
+---
+
+# ADDENDUM — U4 service-toggle bug class verification (per brief revision 23:30)
+
+Brief revised to specifically ask: **does disabling each system via the v40 `enabled` flag zero its downstream electricity / fuel / delivered? Specifically — does disabling ventilation zero `consumption.brief40.ventilation.total_fan_electrical_mwh` and does it propagate to the headline EUI?**
+
+Test method: run the engine on both buildings with the baseline config, then flip `enabled=false` on each service one at a time (separately for v25 and v40 schema paths where both exist), and record what zeros vs what doesn't. Raw probe output: `docs/audit/66_u4_probe.txt`.
+
+## HIGH-8 — Ventilation v25/v40 enable-flag asymmetry on Bridgewater
+
+**The U4 bug observed in past sessions IS reproducible — but the precondition is specific.** Bridgewater has BOTH `systems_config_v25.ventilation` (3 systems) AND `systems_config_v40.ventilation` (3 systems) populated. The dual-schema during-migration legacy is what surfaces the bug.
+
+### Bridgewater toggle table (baseline EUI 110.4 kWh/m²·yr)
+
+| Toggle path | fan_elec brief40 | fan_elec v25-sum | vent_heat_loss kWh | total_elec MWh | EUI kWh/m²·yr |
+|---|---:|---:|---:|---:|---:|
+| baseline (no toggle) | 39.415 | 39.415 | 284,521 | 329.5 | **110.4** |
+| v40.ventilation[].enabled = false only | **0** ✓ | **0** ✓ | **0** ✓ | 224.8 | 86.2 ✓ |
+| **v25.ventilation[].enabled = false only** | **39.415** ✗ STAYS | **39.415** ✗ STAYS | **0** ✓ | 264.2 | **95.3** ← residual fan_elec inflates EUI by 9 kWh/m²·yr while vent loss correctly removed |
+| v25 AND v40 both disabled | 0 ✓ | 0 ✓ | 0 ✓ | 224.8 | 86.2 ✓ |
+
+**Mechanism (from prior code reads):**
+- State 2's mech-vent loss loop reads from a projected `ventSystems` array (instantCalc.js:2750-2799) whose `enabled` field is the **AND** of (v25.enabled !== false) AND (v40Match.enabled !== false). Disabling EITHER zeros it.
+- State 3's `consumption.brief40.ventilation.total_fan_electrical_mwh` is computed by `_computeVentilation` in systemsEngine.js:599+ reading **v40-only** entries. v25.enabled has no effect on this path.
+- Asymmetry: heat-loss honours BOTH, fan electricity honours v40 only.
+
+**Where this surfaces in practice:**
+- A user disabling ventilation in the SystemsModule UI: writes to `systems_config_v40.ventilation[i].enabled = false` only (per SystemEditorCard.jsx:157 → onUpdate → updateSystem at SystemsModule.jsx). UI does NOT also touch v25. So for the canonical UI flow, fan_elec correctly zeros (v40 toggle = both zero).
+- A user editing v25 directly via DB / API / older code path: would zero vent loss but leave fan electricity in. This is the precondition that previous sessions hit.
+- Bridgewater specifically has both v25 and v40 populated (migration artefact from Brief 28f → Brief 40). The bug can manifest if any tool or test or future migration touches v25.enabled while leaving v40 alone.
+- Confirms the latent risk noted in Hidden Assumptions register v3 §V12 (ALLOWLIST DRIFT class).
+
+**Headline propagation:** v25-only disable leaves fan electricity in `consumption.total.electricity_mwh` (264.2 vs proper 224.8, +17.5%) and inflates EUI from 86.2 to 95.3 kWh/m²·yr (+10.6%). This IS visible on every headline KPI panel that reads `consumption.total.electricity_mwh` or `consumption.total.kwh_per_m2_yr` (Home page, Systems right panel, EnergyFlowsTab, etc.).
+
+### Office building (v40-only) — no bug
+
+The §1 office has only `systems_config_v40.ventilation` populated. Vent toggle works correctly via v40:
+
+| Toggle | fan_elec brief40 | vent_heat_loss kWh | total_elec | EUI |
+|---|---:|---:|---:|---:|
+| baseline | 7.884 | 0 | 99.174 | 140.0 |
+| v40.ventilation[].enabled = false | **0** ✓ | 0 (already 0) | 91.29 | 133.5 ✓ |
+| v25.ventilation[].enabled = false (no-op — empty array) | 7.884 (unchanged — no v25 to disable) | 0 | 99.174 | 140.0 |
+| both disabled | 0 | 0 | 91.29 | 133.5 |
+
+No v25 dual-path on the office → no bug. **Pre-existing Bridgewater is exposed; new v40-only projects are not.**
+
+## Full service-by-service toggle matrix
+
+### Bridgewater (baseline: EUI 110.4, total_elec 329.5, total_gas 147.7)
+
+| Disabled service | heat_elec | heat_gas | cool_elec | dhw_elec | dhw_gas | fan_elec | light_elec | sp_elec | EUI | Notes |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| baseline | 95.6 | 0 | 20.1 | 29.7 | 147.7 | 39.4 | 65.8 | 78.9 | 110.4 | reference |
+| v40.heating | **0** ✓ | **0** ✓ | 20.1 | 29.7 | 147.7 | 39.4 | 65.8 | 78.9 | 88.3 | Δheat_dem=0 (demand persists, only delivered/fuel zero — expected) |
+| v40.cooling | 95.6 | 0 | **0** ✓ | 29.7 | 147.7 | 39.4 | 65.8 | 78.9 | 105.7 | Δcool_dem=0 (same) |
+| v40.dhw | 95.6 | 0 | 20.1 | **0** ✓ | **0** ✓ | 39.4 | 65.8 | 78.9 | 69.6 | both elec + gas zero ✓ |
+| v40.ventilation | 11.3 ← drops | 0 | 39.1 ← rises (gain coupling) | 29.7 | 147.7 | **0** ✓ | 65.8 | 78.9 | 86.2 | Δheat_dem=-216.7 (no vent loss); Δcool=+66.7 |
+| v40.lighting | 114.1 ← rises | 0 | 14.8 ← drops | 29.7 | 147.7 | 39.4 | **0** ✓ | 78.9 | 98.2 | Brief 58 C gain coupling |
+| v40.small_power | 118.0 ← rises | 0 | 13.9 ← drops | 29.7 | 147.7 | 39.4 | 65.8 | **0** ✓ | 95.9 | gain coupling |
+
+**Bridgewater finding summary:** every v40-path service toggle zeros its own downstream electricity/fuel correctly. The only anomaly is the v25-vs-v40 vent asymmetry (HIGH-8 above), reachable only when v25 is toggled separately from v40.
+
+### Office building (baseline: EUI 140.0, total_elec 99.2, total_gas 68.9)
+
+| Disabled service | heat_gas | cool_elec | dhw_gas | fan_elec | light_elec | sp_elec | EUI | Notes |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| baseline | 63.5 | 18.6 | 5.4 | 7.9 | 15.8 | 56.9 | 140.0 | reference |
+| v40.heating | **0** ✓ | 18.6 | 5.4 | 7.9 | 15.8 | 56.9 | 87.1 | ✓ |
+| v40.cooling | 63.5 | **0** ✓ | 5.4 | 7.9 | 15.8 | 56.9 | 124.5 | ✓ |
+| v40.dhw | 63.5 | 18.6 | **0** ✓ | 7.9 | 15.8 | 56.9 | 135.5 | ✓ |
+| v40.ventilation | 63.5 | 18.6 | 5.4 | **0** ✓ | 15.8 | 56.9 | 133.5 | ✓ |
+| v40.lighting | 63.5 | 14.7 ← drops | 5.4 | 7.9 | **0** ✓ | 56.9 | 123.6 | gain coupling ✓ |
+| v40.small_power | 86.1 ← rises | 9.6 ← drops | 5.4 | 7.9 | 15.8 | **0** ✓ | 103.9 | gain coupling ✓ |
+
+**Office finding summary:** all 6 services toggle cleanly. No bug. v40-only projects (any new project) work correctly.
+
+## Updated findings index
+
+Added to the original 17 findings:
+
+| # | Severity | Module | Summary |
+|---|---|---|---|
+| **HIGH-8** | **🔴** | §5 / U4 | **Ventilation v25/v40 enable-flag asymmetry — disabling v25 only leaves `consumption.brief40.ventilation.total_fan_electrical_mwh` at 39.4 MWh on Bridgewater, propagating 10.6% inflation to headline EUI (95.3 vs proper 86.2). UI's normal toggle path (v40-only) is unaffected; bug surfaces in legacy data, hand-edits, migration scenarios, or scripts that flip v25 without also flipping v40.** |
+
+## Rectification recommendation (per brief's "how to rectify it" ask)
+
+**Option A — single source of truth (recommended long-term):** Retire `systems_config_v25.ventilation` entirely on projects that have `systems_config_v40.ventilation` populated. Migration script Bridgewater-class to drop the v25.ventilation block once v40 is canonical. Removes the dual-path asymmetry at the schema level. Risk: any reader still depending on v25.ventilation.* breaks; needs an audit.
+
+**Option B — sync both flags on UI write:** When the UI writes v40.ventilation[i].enabled, ALSO write v25.ventilation[i].enabled to the same value. Two-line change in SystemsModule's updateSystem helper. Doesn't fix the underlying dual-bookkeeping; only the symptom for UI-driven changes. Hand-edits and scripts still vulnerable.
+
+**Option C — make systemsEngine fan calc honour v25.enabled too (cleanest immediate fix):** Add `&& v25Match?.enabled !== false` guard inside `_computeVentilation` (systemsEngine.js:599+). Matches the AND-gate State 2 uses. Closes the asymmetry directly. Minimal blast radius; passes existing harness (which already exercises v40 disable).
+
+**Option D — validation harness extension:** Add an assertion to `validate_engine.mjs`: `disabling v25-only OR v40-only on a service zeros that service fan_elec`. Catches regressions but doesn't fix the existing bug.
+
+Recommended: **Option C** (closes the bug) + **Option D** (regression guard) + queue **Option A** as a tidy brief (post-clamp) to retire v25 once nothing reads it.
+
+## What did NOT need investigation per brief governance
+
+- The "demand persists when system is disabled" pattern on heating/cooling toggles (Δheat_dem=0 etc.) is **correct behaviour** — demand is what the building NEEDS (envelope-derived); disabling the system zeros what is DELIVERED. Engine correctly reports demand=X, delivered=0 in this case. Not a bug.
+- Gain-coupling effects when lighting/sp disabled (Brief 58 C) shift heat_dem and cool_dem in the expected directions. Not investigated further.
