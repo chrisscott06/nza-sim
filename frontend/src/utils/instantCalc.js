@@ -2594,6 +2594,19 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   let underheating_hours = 0, overheating_hours = 0, comfort_hours = 0
   let T_winter_min = Infinity, T_summer_max = -Infinity
 
+  // Brief 63 P1 (2026-05-27): regime-hour counters — additive
+  // introspection. Counts which BRANCH of the cooling-demand integrand
+  // fired per hour: heating-direction (H_weather>0), cooling-direction
+  // (C_weather>0), or shoulder. The validation harness (scripts/
+  // validate_engine.mjs) reads these to test that lowering cooling
+  // setpoint flips hours from shoulder/heating-dir to cooling-dir as
+  // expected. Bypass hours by regime too (Brief 53 decompose question).
+  let hours_heating_direction = 0
+  let hours_cooling_direction = 0
+  let hours_shoulder = 0
+  let bypass_hours_in_heating_dir = 0
+  let bypass_hours_in_cooling_dir = 0
+
   // Brief 28k Gate 3 — setpoint-convention accumulators (mirror Gate 1 in State 1)
   let acc_heat_loss_wall_n = 0, acc_heat_loss_wall_e = 0, acc_heat_loss_wall_s = 0, acc_heat_loss_wall_w = 0
   let acc_heat_loss_roof = 0, acc_heat_loss_floor = 0
@@ -3320,6 +3333,22 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     heating_demand_hourly_kwh[h] = heating_Wh_at_setpoint / 1000   // Brief 28j: per-hour for State 3 MVHR cap
     cooling_demand_hourly_kwh[h] = cooling_Wh_at_setpoint / 1000
 
+    // Brief 63 P1: regime-hour classification + bypass-regime tracking
+    // (additive — counters only; doesn't change any existing accumulator).
+    if (H_weather > 0)      hours_heating_direction++
+    else if (C_weather > 0) hours_cooling_direction++
+    else                     hours_shoulder++
+    // bypass-hour-by-regime is computed inside the per-system mech-vent
+    // loop above; tracked here at the per-hour level so we can correlate
+    // a bypass-firing hour with the building's regime (Brief 53 decompose).
+    // bypass_h is set inside the per-system loop — we check the
+    // building-wide bypass_gate_h which represents the lagged trigger
+    // before per-system summer_bypass gating.
+    if (bypass_gate_h) {
+      if (H_weather > 0)      bypass_hours_in_heating_dir++
+      else if (C_weather > 0) bypass_hours_in_cooling_dir++
+    }
+
     // Brief 53 Part 2: carry lagged signals into next iteration's bypass
     // decision. T_air is post-solve at this point (set at L2740 earlier in
     // the iteration). cooling_demand_hourly_kwh[h] was just populated above.
@@ -3690,6 +3719,29 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       underheating_hours,
       overheating_hours,
       comfort_hours,
+      // Brief 63 P1 (2026-05-27): regime-hour introspection.
+      //   hours_heating_direction: branch decision H_weather > 0 fired
+      //                            (cool_setpoint not consulted in those hours)
+      //   hours_cooling_direction: branch decision C_weather > 0 fired
+      //                            (cool_setpoint enters via hourly_cool_gain)
+      //   hours_shoulder:          neither branch fired (zero demand attributed)
+      //   bypass_hours_*:          when summer-bypass gate fired, decomposed
+      //                            by building regime (Brief 53 question —
+      //                            bypass-in-heating-dir is the lagged-trigger
+      //                            misfire pattern)
+      // Counts MUST sum to n=8760. Validation harness asserts this.
+      hours_heating_direction,
+      hours_cooling_direction,
+      hours_shoulder,
+      bypass_hours_in_heating_dir,
+      bypass_hours_in_cooling_dir,
+      // Resolved setpoints actually used (per Brief 62 setpointOverride).
+      // Echoed here so tests + UI can confirm which value drove the
+      // integrand without re-deriving the resolution logic.
+      effective_heating_setpoint_c: effectiveLowerC,
+      effective_cooling_setpoint_c: effectiveUpperC,
+      heating_setpoint_source: (typeof opts?.setpointOverride?.heating === 'number') ? 'custom_override' : 'comfortBand',
+      cooling_setpoint_source: (typeof opts?.setpointOverride?.cooling === 'number') ? 'custom_override' : 'comfortBand',
       // Brief 28j: per-hour series consumed by State 3's hour-by-hour MVHR
       // recovery cap (computeVentilationEnergy). Engine-internal data
       // exposed to State 3; not surfaced in normal UI consumers.
