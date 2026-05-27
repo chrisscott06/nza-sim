@@ -1,0 +1,2342 @@
+{
+  "generated_at": "2026-05-27T11:21:27.539Z",
+  "project": {
+    "id": "14b4a5b1-8c73-4acb-8b65-1d22f05ec969",
+    "name": "HIX Bridgewater",
+    "gia_m2": 4322
+  },
+  "weather": {
+    "file": "GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw"
+  },
+  "baseline_snap": {
+    "demand_heating_mwh": 245.6,
+    "demand_cooling_mwh": 69.1,
+    "demand_dhw_mwh": 204.444,
+    "delivered_heating_mwh": 245.6,
+    "delivered_cooling_mwh": 69.1,
+    "delivered_dhw_mwh": 204.443,
+    "heat_elec_mwh": 95.609,
+    "heat_gas_mwh": 0,
+    "cool_elec_mwh": 19.743,
+    "dhw_elec_mwh": 29.673,
+    "dhw_gas_mwh": 147.654,
+    "dhw_pump_mwh": 1.051,
+    "fan_elec_mwh": 39.415,
+    "fan_elec_per_system_sum_mwh": 39.415,
+    "light_elec_mwh": 65.822,
+    "sp_elec_mwh": 78.864,
+    "total_elec_mwh": 329.126,
+    "total_gas_mwh": 147.654,
+    "total_district_mwh": 0,
+    "eui_kwh_per_m2": 110.3,
+    "eui_brief40_kwh_per_m2": 110.1,
+    "carbon_kg_per_m2": 22.02,
+    "scop_effective": 2.57,
+    "seer_effective": 3.5,
+    "dhw_blended_eff": 1.16,
+    "hb_loss_wall_kwh": 39945.7,
+    "hb_loss_roof_kwh": 19466.1,
+    "hb_loss_floor_kwh": 16871.1,
+    "hb_loss_glazing_kwh": 94920.5,
+    "hb_loss_tb_kwh": 10340.4,
+    "hb_loss_infil_kwh": 47513,
+    "hb_loss_pvent_kwh": 13820.9,
+    "hb_loss_total_kwh": 242877.8,
+    "hb_gain_solar_n_kwh": 57430.6,
+    "hb_gain_solar_s_kwh": 39495.6,
+    "hb_gain_solar_e_kwh": 1492.1,
+    "hb_gain_solar_w_kwh": 978.2,
+    "hb_gain_solar_total_kwh": 99396.5,
+    "hb_gain_people_kwh": 0,
+    "hb_gain_lighting_kwh": 65821.5,
+    "hb_gain_equipment_kwh": 78864.1,
+    "hb_gain_total_kwh": 244082.1,
+    "b40_heating_demand_mwh": 245.6,
+    "b40_cooling_demand_mwh": 69.1,
+    "b40_dhw_demand_mwh": 204.444,
+    "b40_light_elec_mwh": 65.822,
+    "b40_sp_elec_mwh": 78.864,
+    "b40_fan_elec_mwh": 39.415,
+    "eff_heating_setpoint_c": 21,
+    "eff_cooling_setpoint_c": 24,
+    "heating_setpoint_source": "comfortBand",
+    "cooling_setpoint_source": "comfortBand",
+    "setpoint_los_heating_c": 21,
+    "setpoint_los_cooling_c": 24,
+    "hours_heating_dir": 8409,
+    "hours_cooling_dir": 327,
+    "hours_shoulder": 24,
+    "hours_bypass_in_heat": 2090,
+    "hours_bypass_in_cool": 327,
+    "los_wall_heating_kwh": 20019.7,
+    "los_wall_cooling_kwh": 875.2,
+    "los_glaz_heating_kwh": 54578.3,
+    "los_glaz_cooling_kwh": 217,
+    "los_glaz_solar_transmission_kwh": 99396.5,
+    "los_glaz_solar_beneficial_kwh": 44174.5,
+    "los_glaz_solar_contributing_cooling_kwh": 55221.9,
+    "los_vent_total_heat_loss_kwh": 284521.60000000003,
+    "los_vent_total_cool_gain_kwh": 1131.3999999999999,
+    "los_vent_total_fan_kwh": 39414.8,
+    "los_total_heat_loss_kwh": 423235.1,
+    "los_ig_offset_heating_kwh": 133036.3,
+    "los_ig_added_cooling_kwh": 11309.2,
+    "los_ig_total_kwh": 144685.6,
+    "gia_m2": 4322,
+    "recovery_offset_mwh": 94.084,
+    "overheating_hours": 5781,
+    "underheating_hours": 1777,
+    "comfort_hours": 1202,
+    "source_heating": "v40"
+  },
+  "totals": {
+    "PASS": 242,
+    "FAIL": 0,
+    "BLOCKED": 0,
+    "total": 242
+  },
+  "by_category": {
+    "A": {
+      "PASS": 40,
+      "FAIL": 0,
+      "BLOCKED": 0
+    },
+    "B": {
+      "PASS": 36,
+      "FAIL": 0,
+      "BLOCKED": 0
+    },
+    "C": {
+      "PASS": 30,
+      "FAIL": 0,
+      "BLOCKED": 0
+    },
+    "D": {
+      "PASS": 78,
+      "FAIL": 0,
+      "BLOCKED": 0
+    },
+    "E": {
+      "PASS": 16,
+      "FAIL": 0,
+      "BLOCKED": 0
+    },
+    "F": {
+      "PASS": 42,
+      "FAIL": 0,
+      "BLOCKED": 0
+    }
+  },
+  "tests": [
+    {
+      "category": "A",
+      "id": "A01",
+      "name": "heating_setpoint 19→24 → demand_heating ↑",
+      "status": "PASS",
+      "expected": "up",
+      "actual": "Δ = 159.000 (need > 0.345)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A02",
+      "name": "heating_setpoint 24→28 → demand_heating ↑",
+      "status": "PASS",
+      "expected": "up",
+      "actual": "Δ = 148.300 (need > 0.493)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A03",
+      "name": "heating_setpoint 19→24 → fuel_heating ↑",
+      "status": "PASS",
+      "expected": "up",
+      "actual": "Δ = 61.896 (need > 0.134)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A04",
+      "name": "heating_setpoint 19→28 → total_elec ↑",
+      "status": "PASS",
+      "expected": "up",
+      "actual": "Δ = 98.713 (need > 0.411)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A05",
+      "name": "heating_setpoint 19→28 → EUI ↑",
+      "status": "PASS",
+      "expected": "up",
+      "actual": "Δ = 22.800 (need > 0.129)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A06",
+      "name": "heating_setpoint 19→28 → hours_heating_dir ↑",
+      "status": "PASS",
+      "expected": "up",
+      "actual": "Δ = 653.000 (need > 8.724)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A07",
+      "name": "cooling_setpoint 28→22 → demand_cooling ↑",
+      "status": "PASS",
+      "expected": "up",
+      "actual": "Δ = 4.400 (need > 0.071)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A08",
+      "name": "cooling_setpoint 22→18 → demand_cooling ↑",
+      "status": "PASS",
+      "expected": "up",
+      "actual": "Δ = 6.800 (need > 0.078)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A09",
+      "name": "cooling_setpoint 28→18 → fuel_cooling ↑",
+      "status": "PASS",
+      "expected": "up",
+      "actual": "Δ = 3.200 (need > 0.050)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A10",
+      "name": "cooling_setpoint 28→18 → total_elec ↑",
+      "status": "PASS",
+      "expected": "up",
+      "actual": "Δ = 3.200 (need > 0.332)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A11",
+      "name": "heating_scop 2.0→4.0 → fuel_heating ↓",
+      "status": "PASS",
+      "expected": "down",
+      "actual": "Δ = -58.330 (need < -0.129)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A12",
+      "name": "heating_scop ↑ → demand_heating unchanged",
+      "status": "PASS",
+      "expected": "unchanged",
+      "actual": "|Δ| = 0.000 (need ≤ 0.246)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A13",
+      "name": "heating_scop ↑ → delivered_heating unchanged",
+      "status": "PASS",
+      "expected": "unchanged",
+      "actual": "|Δ| = 0.000 (need ≤ 0.246)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A14",
+      "name": "cooling_seer 2.5→5.0 → fuel_cooling ↓",
+      "status": "PASS",
+      "expected": "down",
+      "actual": "Δ = -13.820 (need < -0.050)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A15",
+      "name": "cooling_seer ↑ → demand_cooling unchanged",
+      "status": "PASS",
+      "expected": "unchanged",
+      "actual": "|Δ| = 0.000 (need ≤ 0.069)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A16",
+      "name": "dhw_efficiency 0.7→1.0 → fuel_dhw ↓",
+      "status": "PASS",
+      "expected": "down",
+      "actual": "Δ = -56.953 (need < -0.220)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A17",
+      "name": "dhw_efficiency ↑ → demand_dhw unchanged",
+      "status": "PASS",
+      "expected": "unchanged",
+      "actual": "|Δ| = 0.000 (need ≤ 0.204)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A18",
+      "name": "dhw_litres_per_person 40→150 → demand_dhw ↑",
+      "status": "PASS",
+      "expected": "up",
+      "actual": "Δ = 281.110 (need > 0.383)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A19",
+      "name": "mvhr_flow 700→2500 → vent heat_loss ↑",
+      "status": "PASS",
+      "expected": "up",
+      "actual": "Δ = 46151.100 (need > 312.084)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A20",
+      "name": "mvhr_flow 700→2500 → fan_elec ↑",
+      "status": "PASS",
+      "expected": "up",
+      "actual": "Δ = 28.382 (need > 0.056)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A21",
+      "name": "mvhr_flow 700→2500 → demand_heating ↑ (more vent loss)",
+      "status": "PASS",
+      "expected": "up",
+      "actual": "Δ = 40.600 (need > 0.270)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A22",
+      "name": "sfp 1.0→2.5 → fan_elec ↑",
+      "status": "PASS",
+      "expected": "up",
+      "actual": "Δ = 18.725 (need > 0.050)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A23",
+      "name": "sfp ↑ → demand_heating unchanged (fan power doesn't drive demand)",
+      "status": "PASS",
+      "expected": "unchanged",
+      "actual": "|Δ| = 0.000 (need ≤ 0.246)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A24",
+      "name": "sfp ↑ → demand_cooling unchanged",
+      "status": "PASS",
+      "expected": "unchanged",
+      "actual": "|Δ| = 0.000 (need ≤ 0.069)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A25",
+      "name": "sfp ↑ → demand_dhw unchanged",
+      "status": "PASS",
+      "expected": "unchanged",
+      "actual": "|Δ| = 0.000 (need ≤ 0.204)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A26",
+      "name": "hre 60→90 → vent heat_loss ↓ (post-recovery)",
+      "status": "PASS",
+      "expected": "down",
+      "actual": "Δ = -43843.600 (need < -306.443)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A27",
+      "name": "hre 60→90 → demand_heating ↓ (recovery offsets demand)",
+      "status": "PASS",
+      "expected": "down",
+      "actual": "Δ = -38.500 (need < -0.265)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A28",
+      "name": "hre 60→90 → recovery_offset ↑",
+      "status": "PASS",
+      "expected": "up",
+      "actual": "Δ = 32.617 (need > 0.110)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A29",
+      "name": "lighting_cf 0.4→1.0 → light_elec ↑",
+      "status": "PASS",
+      "expected": "up",
+      "actual": "Δ = 45.922 (need > 0.077)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A30",
+      "name": "lighting_cf 0.4→1.0 → lighting_gain (heat_balance) ↑",
+      "status": "PASS",
+      "expected": "up",
+      "actual": "Δ = 45921.900 (need > 76.537)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A31",
+      "name": "lighting_cf 0.4→1.0 → demand_heating ↓ (more internal gain offsets demand)",
+      "status": "PASS",
+      "expected": "down",
+      "actual": "Δ = -32.300 (need < -0.271)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A32",
+      "name": "lighting_cf 0.4→1.0 → demand_cooling ↑",
+      "status": "PASS",
+      "expected": "up",
+      "actual": "Δ = 13.600 (need > 0.072)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A33",
+      "name": "sp_cf 0.5→1.5 → sp_elec ↑",
+      "status": "PASS",
+      "expected": "up",
+      "actual": "Δ = 78.864 (need > 0.118)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A34",
+      "name": "sp_cf 0.5→1.5 → equipment_gain (heat_balance) ↑",
+      "status": "PASS",
+      "expected": "up",
+      "actual": "Δ = 78864.100 (need > 118.296)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A35",
+      "name": "vent enabled→disabled → vent heat_loss ↓",
+      "status": "PASS",
+      "expected": "down",
+      "actual": "Δ = -284521.600 (need < -284.522)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A36",
+      "name": "vent enabled→disabled → fan_elec ↓",
+      "status": "PASS",
+      "expected": "down",
+      "actual": "Δ = -39.415 (need < -0.050)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A37",
+      "name": "lighting enabled→disabled → light_elec ↓",
+      "status": "PASS",
+      "expected": "down",
+      "actual": "Δ = -65.822 (need < -0.066)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A38",
+      "name": "lighting disabled → lighting_gain in heat_balance ↓",
+      "status": "PASS",
+      "expected": "down",
+      "actual": "Δ = -65821.500 (need < -65.822)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A39",
+      "name": "cooling_seer 2.5→5.0 → carbon ↓",
+      "status": "PASS",
+      "expected": "down",
+      "actual": "Δ = -0.660 (need < -0.050)",
+      "notes": ""
+    },
+    {
+      "category": "A",
+      "id": "A40",
+      "name": "heating_scop 2.0→4.0 → carbon ↓",
+      "status": "PASS",
+      "expected": "down",
+      "actual": "Δ = -2.790 (need < -0.050)",
+      "notes": ""
+    },
+    {
+      "category": "B",
+      "id": "B01",
+      "name": "no negative demand/fuel/EUI/carbon across all sweep points",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "notes": "0 negative values across 31 snaps"
+    },
+    {
+      "category": "B",
+      "id": "B02h",
+      "name": "baseline: fuel_heating = delivered / scop",
+      "status": "PASS",
+      "expected": "≈ 95.564",
+      "actual": "95.609",
+      "notes": "delivered=245.60 scop=2.57 (diff 0.0448)"
+    },
+    {
+      "category": "B",
+      "id": "B02c",
+      "name": "baseline: fuel_cooling = delivered / seer",
+      "status": "PASS",
+      "expected": "≈ 19.743",
+      "actual": "19.743",
+      "notes": "delivered=69.10 seer=3.50 (diff 0.0001)"
+    },
+    {
+      "category": "B",
+      "id": "B03h",
+      "name": "scop_hi: fuel_heating = delivered / scop",
+      "status": "PASS",
+      "expected": "≈ 70.575",
+      "actual": "70.610",
+      "notes": "delivered=245.60 scop=3.48 (diff 0.0353)"
+    },
+    {
+      "category": "B",
+      "id": "B03c",
+      "name": "scop_hi: fuel_cooling = delivered / seer",
+      "status": "PASS",
+      "expected": "≈ 19.743",
+      "actual": "19.743",
+      "notes": "delivered=69.10 seer=3.50 (diff 0.0001)"
+    },
+    {
+      "category": "B",
+      "id": "B04h",
+      "name": "seer_hi: fuel_heating = delivered / scop",
+      "status": "PASS",
+      "expected": "≈ 95.564",
+      "actual": "95.609",
+      "notes": "delivered=245.60 scop=2.57 (diff 0.0448)"
+    },
+    {
+      "category": "B",
+      "id": "B04c",
+      "name": "seer_hi: fuel_cooling = delivered / seer",
+      "status": "PASS",
+      "expected": "≈ 13.820",
+      "actual": "13.820",
+      "notes": "delivered=69.10 seer=5.00 (diff 0.0000)"
+    },
+    {
+      "category": "B",
+      "id": "B05h",
+      "name": "baseline: delivered_heating == demand_heating",
+      "status": "PASS",
+      "expected": "≈ 245.600",
+      "actual": "245.600",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "B",
+      "id": "B05c",
+      "name": "baseline: delivered_cooling == demand_cooling",
+      "status": "PASS",
+      "expected": "≈ 69.100",
+      "actual": "69.100",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "B",
+      "id": "B05d",
+      "name": "baseline: delivered_dhw == demand_dhw",
+      "status": "PASS",
+      "expected": "≈ 204.444",
+      "actual": "204.443",
+      "notes": " (diff -0.0010)"
+    },
+    {
+      "category": "B",
+      "id": "B06h",
+      "name": "hsp_28: delivered_heating == demand_heating",
+      "status": "PASS",
+      "expected": "≈ 493.500",
+      "actual": "493.500",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "B",
+      "id": "B06c",
+      "name": "hsp_28: delivered_cooling == demand_cooling",
+      "status": "PASS",
+      "expected": "≈ 17.400",
+      "actual": "17.400",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "B",
+      "id": "B06d",
+      "name": "hsp_28: delivered_dhw == demand_dhw",
+      "status": "PASS",
+      "expected": "≈ 204.444",
+      "actual": "204.443",
+      "notes": " (diff -0.0010)"
+    },
+    {
+      "category": "B",
+      "id": "B07h",
+      "name": "csp_18: delivered_heating == demand_heating",
+      "status": "PASS",
+      "expected": "≈ 245.600",
+      "actual": "245.600",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "B",
+      "id": "B07c",
+      "name": "csp_18: delivered_cooling == demand_cooling",
+      "status": "PASS",
+      "expected": "≈ 77.900",
+      "actual": "77.900",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "B",
+      "id": "B07d",
+      "name": "csp_18: delivered_dhw == demand_dhw",
+      "status": "PASS",
+      "expected": "≈ 204.444",
+      "actual": "204.443",
+      "notes": " (diff -0.0010)"
+    },
+    {
+      "category": "B",
+      "id": "B08",
+      "name": "scop_effective ≤ 10 (no super-physical heating)",
+      "status": "PASS",
+      "expected": "2.570 <= 10.000",
+      "actual": "2.570 <= 10.000",
+      "notes": ""
+    },
+    {
+      "category": "B",
+      "id": "B09",
+      "name": "seer_effective ≤ 10 (no super-physical cooling)",
+      "status": "PASS",
+      "expected": "3.500 <= 10.000",
+      "actual": "3.500 <= 10.000",
+      "notes": ""
+    },
+    {
+      "category": "B",
+      "id": "B10",
+      "name": "dhw_blended_eff ≤ 10",
+      "status": "PASS",
+      "expected": "1.160 <= 10.000",
+      "actual": "1.160 <= 10.000",
+      "notes": ""
+    },
+    {
+      "category": "B",
+      "id": "B11",
+      "name": "baseline: cooling_demand ≤ Σ gains",
+      "status": "PASS",
+      "expected": "69.100 <= 244.082",
+      "actual": "69.100 <= 244.082",
+      "notes": "gains=244.08 MWh"
+    },
+    {
+      "category": "B",
+      "id": "B12",
+      "name": "csp_18: cooling_demand ≤ Σ gains",
+      "status": "PASS",
+      "expected": "77.900 <= 244.082",
+      "actual": "77.900 <= 244.082",
+      "notes": "gains=244.08 MWh"
+    },
+    {
+      "category": "B",
+      "id": "B13",
+      "name": "vent_off: cooling_demand ≤ Σ gains",
+      "status": "PASS",
+      "expected": "135.800 <= 244.082",
+      "actual": "135.800 <= 244.082",
+      "notes": "gains=244.08 MWh — Brief 62 follow-up question"
+    },
+    {
+      "category": "B",
+      "id": "B13b",
+      "name": "SCREENSHOT (vent_off + lcf=1.33 + spcf=1.48 + csp=14 + heat_off): cooling_demand ≤ Σ gains",
+      "status": "PASS",
+      "expected": "198.000 <= 318.139",
+      "actual": "198.000 <= 318.139",
+      "notes": "demand=198.0 gains=318.1 — if FAIL: queued cooling-clamp engine brief, NOT a tolerance issue"
+    },
+    {
+      "category": "B",
+      "id": "B13d",
+      "name": "vent_off: cooling_demand cannot decrease when cooling_setpoint drops 24→18",
+      "status": "PASS",
+      "expected": "up",
+      "actual": "Δ = 3.200 (need > 0.139)",
+      "notes": "Δ = 3.20 MWh. Bucketed model shows small Δ; clamp model would show large Δ"
+    },
+    {
+      "category": "B",
+      "id": "B14",
+      "name": "baseline: heating_demand ≤ Σ heating_loss_at_setpoint",
+      "status": "PASS",
+      "expected": "245.600 <= 423.735",
+      "actual": "245.600 <= 423.735",
+      "notes": "setpoint_losses=423.24 MWh"
+    },
+    {
+      "category": "B",
+      "id": "B15",
+      "name": "HRE>0: vent heat_loss ≤ HRE=0 vent heat_loss (recovery reduces, never increases)",
+      "status": "PASS",
+      "expected": "284521.600 <= 394131.000",
+      "actual": "284521.600 <= 394131.000",
+      "notes": ""
+    },
+    {
+      "category": "B",
+      "id": "B16",
+      "name": "HRE>0: demand_heating ≤ HRE=0 demand_heating",
+      "status": "PASS",
+      "expected": "245.600 <= 344.700",
+      "actual": "245.600 <= 344.700",
+      "notes": ""
+    },
+    {
+      "category": "B",
+      "id": "B17",
+      "name": "bypass_on EUI ≤ bypass_off EUI (correct bypass cannot increase consumption)",
+      "status": "PASS",
+      "expected": "109.900 <= 110.800",
+      "actual": "109.900 <= 110.800",
+      "notes": ""
+    },
+    {
+      "category": "B",
+      "id": "B18",
+      "name": "hours_heating + cooling + shoulder = 8760 (baseline)",
+      "status": "PASS",
+      "expected": "≈ 8760.000",
+      "actual": "8760.000",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "B",
+      "id": "B19",
+      "name": "bypass_hours_total ≤ 8760",
+      "status": "PASS",
+      "expected": "2417.000 <= 8760.000",
+      "actual": "2417.000 <= 8760.000",
+      "notes": ""
+    },
+    {
+      "category": "B",
+      "id": "B20",
+      "name": "bypass_hours_in_cool ≤ hours_cooling_dir",
+      "status": "PASS",
+      "expected": "327.000 <= 327.000",
+      "actual": "327.000 <= 327.000",
+      "notes": ""
+    },
+    {
+      "category": "B",
+      "id": "B21",
+      "name": "bypass_hours_in_heat ≤ hours_heating_dir",
+      "status": "PASS",
+      "expected": "2090.000 <= 8409.000",
+      "actual": "2090.000 <= 8409.000",
+      "notes": ""
+    },
+    {
+      "category": "B",
+      "id": "B22",
+      "name": "overheating + underheating + comfort hours = 8760",
+      "status": "PASS",
+      "expected": "≈ 8760.000",
+      "actual": "8760.000",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "B",
+      "id": "B23",
+      "name": "EUI = (Σ fuel by carrier) × 1000 / gia",
+      "status": "PASS",
+      "expected": "≈ 110.315",
+      "actual": "110.300",
+      "notes": "calc=110.31 (diff -0.0147)"
+    },
+    {
+      "category": "B",
+      "id": "B24",
+      "name": "csp_18: EUI = (Σ fuel) × 1000 / gia",
+      "status": "PASS",
+      "expected": "≈ 110.896",
+      "actual": "110.900",
+      "notes": "calc=110.90 (diff 0.0037)"
+    },
+    {
+      "category": "B",
+      "id": "B25",
+      "name": "solar facade sum = solar.total_kwh",
+      "status": "PASS",
+      "expected": "≈ 99396.500",
+      "actual": "99396.500",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "C",
+      "id": "C01",
+      "name": "baseline: total_elec = Σ per-service elec",
+      "status": "PASS",
+      "expected": "≈ 329.126",
+      "actual": "329.126",
+      "notes": "parts: h=95.61 c=19.74 d=29.67 fan=39.41 l=65.82 sp=78.86 (diff 0.0000)"
+    },
+    {
+      "category": "C",
+      "id": "C02",
+      "name": "hsp_24: total_elec = Σ per-service elec",
+      "status": "PASS",
+      "expected": "≈ 360.184",
+      "actual": "360.184",
+      "notes": "parts: h=134.38 c=12.03 d=29.67 fan=39.41 l=65.82 sp=78.86 (diff 0.0000)"
+    },
+    {
+      "category": "C",
+      "id": "C03",
+      "name": "csp_18: total_elec = Σ per-service elec",
+      "status": "PASS",
+      "expected": "≈ 331.640",
+      "actual": "331.640",
+      "notes": "parts: h=95.61 c=22.26 d=29.67 fan=39.41 l=65.82 sp=78.86 (diff 0.0000)"
+    },
+    {
+      "category": "C",
+      "id": "C04",
+      "name": "vent_off: total_elec = Σ per-service elec",
+      "status": "PASS",
+      "expected": "≈ 224.409",
+      "actual": "224.409",
+      "notes": "parts: h=11.25 c=38.80 d=29.67 fan=0.00 l=65.82 sp=78.86 (diff -0.0000)"
+    },
+    {
+      "category": "C",
+      "id": "C05",
+      "name": "light_off: total_elec = Σ per-service elec",
+      "status": "PASS",
+      "expected": "≈ 276.634",
+      "actual": "276.634",
+      "notes": "parts: h=114.14 c=14.54 d=29.67 fan=39.41 l=0.00 sp=78.86 (diff 0.0000)"
+    },
+    {
+      "category": "C",
+      "id": "C06",
+      "name": "baseline: total_gas = Σ per-service gas",
+      "status": "PASS",
+      "expected": "≈ 147.654",
+      "actual": "147.654",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "C",
+      "id": "C07",
+      "name": "dhweff_lo: total_gas = Σ per-service gas",
+      "status": "PASS",
+      "expected": "≈ 189.841",
+      "actual": "189.841",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "C",
+      "id": "C08h",
+      "name": "baseline: brief40.heating.demand == consumption.space_heating.demand",
+      "status": "PASS",
+      "expected": "≈ 245.600",
+      "actual": "245.600",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "C",
+      "id": "C08c",
+      "name": "baseline: brief40.cooling.demand == consumption.space_cooling.demand",
+      "status": "PASS",
+      "expected": "≈ 69.100",
+      "actual": "69.100",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "C",
+      "id": "C08d",
+      "name": "baseline: brief40.dhw.demand == consumption.dhw.demand",
+      "status": "PASS",
+      "expected": "≈ 204.444",
+      "actual": "204.444",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "C",
+      "id": "C09h",
+      "name": "hsp_28: brief40.heating.demand == consumption.space_heating.demand",
+      "status": "PASS",
+      "expected": "≈ 493.500",
+      "actual": "493.500",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "C",
+      "id": "C09c",
+      "name": "hsp_28: brief40.cooling.demand == consumption.space_cooling.demand",
+      "status": "PASS",
+      "expected": "≈ 17.400",
+      "actual": "17.400",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "C",
+      "id": "C09d",
+      "name": "hsp_28: brief40.dhw.demand == consumption.dhw.demand",
+      "status": "PASS",
+      "expected": "≈ 204.444",
+      "actual": "204.444",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "C",
+      "id": "C10",
+      "name": "brief40.lighting.total_delivered == consumption.lighting.electricity",
+      "status": "PASS",
+      "expected": "≈ 65.822",
+      "actual": "65.822",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "C",
+      "id": "C11",
+      "name": "brief40.small_power.total_delivered == consumption.small_power.electricity",
+      "status": "PASS",
+      "expected": "≈ 78.864",
+      "actual": "78.864",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "C",
+      "id": "C12",
+      "name": "brief40.ventilation.total_fan == Σ consumption.ventilation[].fan_elec",
+      "status": "PASS",
+      "expected": "≈ 39.415",
+      "actual": "39.415",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "C",
+      "id": "C13",
+      "name": "consumption.total.eui ≈ brief40.totals.eui (≤0.5)",
+      "status": "PASS",
+      "expected": "≈ 110.100",
+      "actual": "110.300",
+      "notes": " (diff 0.2000)"
+    },
+    {
+      "category": "C",
+      "id": "C14",
+      "name": "Brief 58 C: hb.gain.lighting (kWh) == consumption.lighting.elec × 1000",
+      "status": "PASS",
+      "expected": "≈ 65822.000",
+      "actual": "65821.500",
+      "notes": " (diff -0.5000)"
+    },
+    {
+      "category": "C",
+      "id": "C15",
+      "name": "Brief 58 C: hb.gain.equipment (kWh) == consumption.sp.elec × 1000",
+      "status": "PASS",
+      "expected": "≈ 78864.000",
+      "actual": "78864.100",
+      "notes": " (diff 0.1000)"
+    },
+    {
+      "category": "C",
+      "id": "C16",
+      "name": "demand.effective_heating_setpoint == losses_at_setpoint.setpoints_used.heating_c",
+      "status": "PASS",
+      "expected": "≈ 21.000",
+      "actual": "21.000",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "C",
+      "id": "C17",
+      "name": "demand.effective_cooling_setpoint == losses_at_setpoint.setpoints_used.cooling_c",
+      "status": "PASS",
+      "expected": "≈ 24.000",
+      "actual": "24.000",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "C",
+      "id": "C18",
+      "name": "heating_setpoint_source = \"custom\" when mode=custom",
+      "status": "PASS",
+      "expected": "custom",
+      "actual": "custom",
+      "notes": ""
+    },
+    {
+      "category": "C",
+      "id": "C19",
+      "name": "heating_setpoint_source = \"comfortBand\" when mode=follow_comfort",
+      "status": "PASS",
+      "expected": "comfortBand",
+      "actual": "comfortBand",
+      "notes": ""
+    },
+    {
+      "category": "C",
+      "id": "C19b",
+      "name": "cooling_setpoint_source = \"custom\" when mode=custom",
+      "status": "PASS",
+      "expected": "custom",
+      "actual": "custom",
+      "notes": ""
+    },
+    {
+      "category": "C",
+      "id": "C19c",
+      "name": "cooling_setpoint_source = \"comfortBand\" by default",
+      "status": "PASS",
+      "expected": "comfortBand",
+      "actual": "comfortBand",
+      "notes": ""
+    },
+    {
+      "category": "C",
+      "id": "C20",
+      "name": "baseline: heating_demand ≈ losses_at_setpoint − ig_offset − solar_beneficial",
+      "status": "PASS",
+      "expected": "≈ 246024.300",
+      "actual": "245600.000",
+      "notes": "losses=423.2 ig_offset=133.0 solar_beneficial=44.2 (diff -424.3000)"
+    },
+    {
+      "category": "C",
+      "id": "C20b",
+      "name": "hsp_28: heating_demand ≈ losses_at_setpoint − ig_offset − solar_beneficial",
+      "status": "PASS",
+      "expected": "≈ 493566.800",
+      "actual": "493500.000",
+      "notes": "losses=721.3 ig_offset=143.5 solar_beneficial=84.2 (diff -66.8000)"
+    },
+    {
+      "category": "C",
+      "id": "C21",
+      "name": "losses_at_setpoint: Σ per-element heating_loss ≈ totals.total_heating_loss",
+      "status": "PASS",
+      "expected": "≈ 423235.100",
+      "actual": "423235.100",
+      "notes": " (diff -0.0000)"
+    },
+    {
+      "category": "C",
+      "id": "C22",
+      "name": "internal_gains_bucketed: offset_h + added_c + shoulder = total",
+      "status": "PASS",
+      "expected": "≈ 144685.600",
+      "actual": "144685.600",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "C",
+      "id": "C23",
+      "name": "glazing solar: beneficial + contributing_cooling ≤ transmission (split, not duplicate)",
+      "status": "PASS",
+      "expected": "99396.400 <= 99401.500",
+      "actual": "99396.400 <= 99401.500",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D01_0",
+      "name": "sfp change: demand_heating_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=1.2280",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D01_1",
+      "name": "sfp change: demand_cooling_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.3455",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D01_2",
+      "name": "sfp change: demand_dhw_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=1.0222",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D01_3",
+      "name": "sfp change: heat_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.4780",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D01_4",
+      "name": "sfp change: cool_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.0987",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D01_5",
+      "name": "sfp change: dhw_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.1484",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D01_6",
+      "name": "sfp change: dhw_gas_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.7383",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D01_7",
+      "name": "sfp change: light_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.3291",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D01_8",
+      "name": "sfp change: sp_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.3943",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D01_9",
+      "name": "sfp change: hb_gain_lighting_kwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=329.1075",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D01_10",
+      "name": "sfp change: hb_gain_equipment_kwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=394.3205",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D02_0",
+      "name": "seer change: demand_heating_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=1.2280",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D02_1",
+      "name": "seer change: demand_cooling_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.3455",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D02_2",
+      "name": "seer change: demand_dhw_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=1.0222",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D02_3",
+      "name": "seer change: heat_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.4780",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D02_4",
+      "name": "seer change: heat_gas_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.0500",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D02_5",
+      "name": "seer change: dhw_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.1484",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D02_6",
+      "name": "seer change: dhw_gas_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.7383",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D02_7",
+      "name": "seer change: fan_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.1971",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D02_8",
+      "name": "seer change: light_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.3291",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D02_9",
+      "name": "seer change: sp_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.3943",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D03_0",
+      "name": "scop change: demand_heating_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=1.2280",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D03_1",
+      "name": "scop change: demand_cooling_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.3455",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D03_2",
+      "name": "scop change: demand_dhw_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=1.0222",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D03_3",
+      "name": "scop change: cool_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.0987",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D03_4",
+      "name": "scop change: dhw_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.1484",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D03_5",
+      "name": "scop change: dhw_gas_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.7383",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D03_6",
+      "name": "scop change: fan_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.1971",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D03_7",
+      "name": "scop change: light_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.3291",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D03_8",
+      "name": "scop change: sp_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.3943",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D04_0",
+      "name": "dhw_efficiency change: demand_heating_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=1.2280",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D04_1",
+      "name": "dhw_efficiency change: demand_cooling_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.3455",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D04_2",
+      "name": "dhw_efficiency change: demand_dhw_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=1.0222",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D04_3",
+      "name": "dhw_efficiency change: heat_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.4780",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D04_4",
+      "name": "dhw_efficiency change: cool_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.0987",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D04_5",
+      "name": "dhw_efficiency change: fan_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.1971",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D04_6",
+      "name": "dhw_efficiency change: light_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.3291",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D04_7",
+      "name": "dhw_efficiency change: sp_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.3943",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D04_8",
+      "name": "dhw_efficiency change: hb_gain_lighting_kwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=329.1075",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D04_9",
+      "name": "dhw_efficiency change: hb_gain_equipment_kwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=394.3205",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D04_10",
+      "name": "dhw_efficiency change: hb_gain_solar_total_kwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=496.9825",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D05_0",
+      "name": "dhw_litres change: heat_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.4780",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D05_1",
+      "name": "dhw_litres change: cool_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.0987",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D05_2",
+      "name": "dhw_litres change: heat_gas_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.0500",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D05_3",
+      "name": "dhw_litres change: fan_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.1971",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D05_4",
+      "name": "dhw_litres change: light_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.3291",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D05_5",
+      "name": "dhw_litres change: sp_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.3943",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D05_6",
+      "name": "dhw_litres change: hb_gain_lighting_kwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=329.1075",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D05_7",
+      "name": "dhw_litres change: hb_gain_equipment_kwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=394.3205",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D05_8",
+      "name": "dhw_litres change: hb_gain_solar_total_kwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=496.9825",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D06_0",
+      "name": "dhw_load_shape change: demand_heating_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=1.2280",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D06_1",
+      "name": "dhw_load_shape change: demand_cooling_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.3455",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D06_2",
+      "name": "dhw_load_shape change: fan_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.1971",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D06_3",
+      "name": "dhw_load_shape change: light_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.3291",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D06_4",
+      "name": "dhw_load_shape change: sp_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.3943",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D06_5",
+      "name": "dhw_load_shape change: hb_gain_lighting_kwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=329.1075",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D06_6",
+      "name": "dhw_load_shape change: hb_gain_equipment_kwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=394.3205",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D07_0",
+      "name": "no-op input clone: demand_heating_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=1.2280",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D07_1",
+      "name": "no-op input clone: demand_cooling_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.3455",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D07_2",
+      "name": "no-op input clone: demand_dhw_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=1.0222",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D07_3",
+      "name": "no-op input clone: heat_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.4780",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D07_4",
+      "name": "no-op input clone: cool_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.0987",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D07_5",
+      "name": "no-op input clone: dhw_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.1484",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D07_6",
+      "name": "no-op input clone: dhw_gas_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.7383",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D07_7",
+      "name": "no-op input clone: fan_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.1971",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D07_8",
+      "name": "no-op input clone: light_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.3291",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D07_9",
+      "name": "no-op input clone: sp_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.3943",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D07_10",
+      "name": "no-op input clone: total_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=1.6456",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D07_11",
+      "name": "no-op input clone: total_gas_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.7383",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D07_12",
+      "name": "no-op input clone: eui_kwh_per_m2 unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.5515",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D07_13",
+      "name": "no-op input clone: carbon_kg_per_m2 unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.1101",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D08_0",
+      "name": "lighting_cf change: demand_dhw_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=1.0222",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D08_1",
+      "name": "lighting_cf change: dhw_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.1484",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D08_2",
+      "name": "lighting_cf change: dhw_gas_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.7383",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D08_3",
+      "name": "lighting_cf change: fan_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.1971",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D08_4",
+      "name": "lighting_cf change: sp_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.3943",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D08_5",
+      "name": "lighting_cf change: hb_gain_equipment_kwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=394.3205",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D08_6",
+      "name": "lighting_cf change: hb_gain_solar_total_kwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=496.9825",
+      "notes": ""
+    },
+    {
+      "category": "E",
+      "id": "E01",
+      "name": "order independence: total_elec [A,B] == [B,A]",
+      "status": "PASS",
+      "expected": "≈ 308.073",
+      "actual": "308.073",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "E",
+      "id": "E02",
+      "name": "order independence: eui [A,B] == [B,A]",
+      "status": "PASS",
+      "expected": "≈ 105.400",
+      "actual": "105.400",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "E",
+      "id": "E03",
+      "name": "order independence: heating_fuel [A,B] == [B,A]",
+      "status": "PASS",
+      "expected": "≈ 78.943",
+      "actual": "78.943",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "E",
+      "id": "E04",
+      "name": "order independence: cooling_fuel [A,B] == [B,A]",
+      "status": "PASS",
+      "expected": "≈ 15.356",
+      "actual": "15.356",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "E",
+      "id": "E05",
+      "name": "order independence: demand_heating [A,B] == [B,A]",
+      "status": "PASS",
+      "expected": "≈ 245.600",
+      "actual": "245.600",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "E",
+      "id": "E06",
+      "name": "parity: baseline_edit(scop=4.0) ≈ intervention(scop=4.0) total_elec",
+      "status": "PASS",
+      "expected": "≈ 304.127",
+      "actual": "304.127",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "E",
+      "id": "E06b",
+      "name": "parity: baseline_edit(scop=4.0) ≈ intervention(scop=4.0) eui",
+      "status": "PASS",
+      "expected": "≈ 104.500",
+      "actual": "104.500",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "E",
+      "id": "E07",
+      "name": "parity: baseline_edit(csp=18) ≈ intervention(csp=18) demand_cooling",
+      "status": "PASS",
+      "expected": "≈ 77.900",
+      "actual": "77.900",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "E",
+      "id": "E08",
+      "name": "parity: baseline_edit(csp=18) ≈ intervention(csp=18) total_elec",
+      "status": "PASS",
+      "expected": "≈ 331.640",
+      "actual": "331.640",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "E",
+      "id": "E09",
+      "name": "parity: baseline_edit(csp=18) ≈ intervention(csp=18) eui",
+      "status": "PASS",
+      "expected": "≈ 110.900",
+      "actual": "110.900",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "E",
+      "id": "E09b",
+      "name": "parity: baseline_edit(light_cf=0.4) ≈ intervention total_elec",
+      "status": "PASS",
+      "expected": "≈ 300.737",
+      "actual": "300.737",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "E",
+      "id": "E09c",
+      "name": "parity: baseline_edit(light_cf=0.4) ≈ intervention demand_heating (gain coupling)",
+      "status": "PASS",
+      "expected": "≈ 270.600",
+      "actual": "270.600",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "E",
+      "id": "E10",
+      "name": "disabled intervention: total_elec equals empty-stack baseline",
+      "status": "PASS",
+      "expected": "≈ 329.126",
+      "actual": "329.126",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "E",
+      "id": "E11",
+      "name": "disabled intervention: eui equals empty-stack baseline",
+      "status": "PASS",
+      "expected": "≈ 110.300",
+      "actual": "110.300",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "E",
+      "id": "E12",
+      "name": "empty-stack baseline == direct-call baseline total_elec",
+      "status": "PASS",
+      "expected": "≈ 329.126",
+      "actual": "329.126",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "E",
+      "id": "E13",
+      "name": "empty-stack baseline == direct-call baseline eui",
+      "status": "PASS",
+      "expected": "≈ 110.300",
+      "actual": "110.300",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F01e",
+      "name": "hsp_19→hsp_28: Δtotal_elec = Σ Δper-service elec",
+      "status": "PASS",
+      "expected": "≈ 98.713",
+      "actual": "98.713",
+      "notes": "Δh=119.63 Δc=-20.91 Δd=0.00 Δfan=0.00 Δl=0.00 Δsp=0.00 (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F01g",
+      "name": "hsp_19→hsp_28: Δtotal_gas = Σ Δper-service gas",
+      "status": "PASS",
+      "expected": "≈ 0.000",
+      "actual": "0.000",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F01u",
+      "name": "hsp_19→hsp_28: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia",
+      "status": "PASS",
+      "expected": "≈ 22.840",
+      "actual": "22.800",
+      "notes": " (diff -0.0397)"
+    },
+    {
+      "category": "F",
+      "id": "F02e",
+      "name": "baseline→scop_hi: Δtotal_elec = Σ Δper-service elec",
+      "status": "PASS",
+      "expected": "≈ -24.999",
+      "actual": "-24.999",
+      "notes": "Δh=-25.00 Δc=0.00 Δd=0.00 Δfan=0.00 Δl=0.00 Δsp=0.00 (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F02g",
+      "name": "baseline→scop_hi: Δtotal_gas = Σ Δper-service gas",
+      "status": "PASS",
+      "expected": "≈ 0.000",
+      "actual": "0.000",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F02u",
+      "name": "baseline→scop_hi: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia",
+      "status": "PASS",
+      "expected": "≈ -5.784",
+      "actual": "-5.800",
+      "notes": " (diff -0.0159)"
+    },
+    {
+      "category": "F",
+      "id": "F03e",
+      "name": "baseline→csp_18: Δtotal_elec = Σ Δper-service elec",
+      "status": "PASS",
+      "expected": "≈ 2.514",
+      "actual": "2.514",
+      "notes": "Δh=0.00 Δc=2.51 Δd=0.00 Δfan=0.00 Δl=0.00 Δsp=0.00 (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F03g",
+      "name": "baseline→csp_18: Δtotal_gas = Σ Δper-service gas",
+      "status": "PASS",
+      "expected": "≈ 0.000",
+      "actual": "0.000",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F03u",
+      "name": "baseline→csp_18: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia",
+      "status": "PASS",
+      "expected": "≈ 0.582",
+      "actual": "0.600",
+      "notes": " (diff 0.0183)"
+    },
+    {
+      "category": "F",
+      "id": "F04e",
+      "name": "baseline→hre_hi: Δtotal_elec = Σ Δper-service elec",
+      "status": "PASS",
+      "expected": "≈ -6.665",
+      "actual": "-6.665",
+      "notes": "Δh=-7.44 Δc=0.77 Δd=0.00 Δfan=0.00 Δl=0.00 Δsp=0.00 (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F04g",
+      "name": "baseline→hre_hi: Δtotal_gas = Σ Δper-service gas",
+      "status": "PASS",
+      "expected": "≈ 0.000",
+      "actual": "0.000",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F04u",
+      "name": "baseline→hre_hi: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia",
+      "status": "PASS",
+      "expected": "≈ -1.542",
+      "actual": "-1.500",
+      "notes": " (diff 0.0421)"
+    },
+    {
+      "category": "F",
+      "id": "F05e",
+      "name": "baseline→light_cf_lo: Δtotal_elec = Σ Δper-service elec",
+      "status": "PASS",
+      "expected": "≈ -28.389",
+      "actual": "-28.389",
+      "notes": "Δh=9.73 Δc=-2.91 Δd=0.00 Δfan=0.00 Δl=-35.21 Δsp=0.00 (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F05g",
+      "name": "baseline→light_cf_lo: Δtotal_gas = Σ Δper-service gas",
+      "status": "PASS",
+      "expected": "≈ 0.000",
+      "actual": "0.000",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F05u",
+      "name": "baseline→light_cf_lo: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia",
+      "status": "PASS",
+      "expected": "≈ -6.568",
+      "actual": "-6.600",
+      "notes": " (diff -0.0315)"
+    },
+    {
+      "category": "F",
+      "id": "F06e",
+      "name": "baseline→sfp_hi: Δtotal_elec = Σ Δper-service elec",
+      "status": "PASS",
+      "expected": "≈ 8.739",
+      "actual": "8.738",
+      "notes": "Δh=0.00 Δc=0.00 Δd=0.00 Δfan=8.74 Δl=0.00 Δsp=0.00 (diff -0.0010)"
+    },
+    {
+      "category": "F",
+      "id": "F06g",
+      "name": "baseline→sfp_hi: Δtotal_gas = Σ Δper-service gas",
+      "status": "PASS",
+      "expected": "≈ 0.000",
+      "actual": "0.000",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F06u",
+      "name": "baseline→sfp_hi: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia",
+      "status": "PASS",
+      "expected": "≈ 2.022",
+      "actual": "2.000",
+      "notes": " (diff -0.0217)"
+    },
+    {
+      "category": "F",
+      "id": "F07e",
+      "name": "baseline→vent_off: Δtotal_elec = Σ Δper-service elec",
+      "status": "PASS",
+      "expected": "≈ -104.717",
+      "actual": "-104.717",
+      "notes": "Δh=-84.36 Δc=19.06 Δd=0.00 Δfan=-39.41 Δl=0.00 Δsp=0.00 (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F07g",
+      "name": "baseline→vent_off: Δtotal_gas = Σ Δper-service gas",
+      "status": "PASS",
+      "expected": "≈ 0.000",
+      "actual": "0.000",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F07u",
+      "name": "baseline→vent_off: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia",
+      "status": "PASS",
+      "expected": "≈ -24.229",
+      "actual": "-24.200",
+      "notes": " (diff 0.0288)"
+    },
+    {
+      "category": "F",
+      "id": "F08e",
+      "name": "intervention csp=20 from baseline: Δtotal_elec = Σ Δper-service elec",
+      "status": "PASS",
+      "expected": "≈ 1.543",
+      "actual": "1.543",
+      "notes": "Δh=0.00 Δc=1.54 Δd=0.00 Δfan=0.00 Δl=0.00 Δsp=0.00 (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F08g",
+      "name": "intervention csp=20 from baseline: Δtotal_gas = Σ Δper-service gas",
+      "status": "PASS",
+      "expected": "≈ 0.000",
+      "actual": "0.000",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F08u",
+      "name": "intervention csp=20 from baseline: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia",
+      "status": "PASS",
+      "expected": "≈ 0.357",
+      "actual": "0.400",
+      "notes": " (diff 0.0430)"
+    },
+    {
+      "category": "F",
+      "id": "F09",
+      "name": "csp_18: brief40.cooling.demand == consumption.space_cooling.demand",
+      "status": "PASS",
+      "expected": "≈ 77.900",
+      "actual": "77.900",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F10",
+      "name": "hsp_28: brief40.heating.demand == consumption.space_heating.demand",
+      "status": "PASS",
+      "expected": "≈ 493.500",
+      "actual": "493.500",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F11",
+      "name": "vent_off: brief40.ventilation total fan == Σ per-system fan",
+      "status": "PASS",
+      "expected": "≈ 0.000",
+      "actual": "0.000",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F12",
+      "name": "light_off: brief40.lighting.total_delivered == consumption.lighting.elec",
+      "status": "PASS",
+      "expected": "≈ 0.000",
+      "actual": "0.000",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F13",
+      "name": "hsp_28: effective_heating_setpoint_c == losses_at_setpoint.setpoints_used.heating_c",
+      "status": "PASS",
+      "expected": "≈ 28.000",
+      "actual": "28.000",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F14",
+      "name": "csp_18: effective_cooling_setpoint_c == losses_at_setpoint.setpoints_used.cooling_c",
+      "status": "PASS",
+      "expected": "≈ 18.000",
+      "actual": "18.000",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F15e",
+      "name": "hsp_19→hsp_24: Δtotal_elec = Σ Δper-service elec",
+      "status": "PASS",
+      "expected": "≈ 48.039",
+      "actual": "48.039",
+      "notes": "Δh=61.90 Δc=-13.86 Δd=0.00 Δfan=0.00 Δl=0.00 Δsp=0.00 (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F15g",
+      "name": "hsp_19→hsp_24: Δtotal_gas = Σ Δper-service gas",
+      "status": "PASS",
+      "expected": "≈ 0.000",
+      "actual": "0.000",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F15u",
+      "name": "hsp_19→hsp_24: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia",
+      "status": "PASS",
+      "expected": "≈ 11.115",
+      "actual": "11.100",
+      "notes": " (diff -0.0150)"
+    },
+    {
+      "category": "F",
+      "id": "F16e",
+      "name": "hsp_24→hsp_28: Δtotal_elec = Σ Δper-service elec",
+      "status": "PASS",
+      "expected": "≈ 50.674",
+      "actual": "50.674",
+      "notes": "Δh=57.73 Δc=-7.06 Δd=0.00 Δfan=0.00 Δl=0.00 Δsp=0.00 (diff -0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F16g",
+      "name": "hsp_24→hsp_28: Δtotal_gas = Σ Δper-service gas",
+      "status": "PASS",
+      "expected": "≈ 0.000",
+      "actual": "0.000",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F16u",
+      "name": "hsp_24→hsp_28: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia",
+      "status": "PASS",
+      "expected": "≈ 11.725",
+      "actual": "11.700",
+      "notes": " (diff -0.0247)"
+    },
+    {
+      "category": "F",
+      "id": "F17e",
+      "name": "csp_28→csp_22: Δtotal_elec = Σ Δper-service elec",
+      "status": "PASS",
+      "expected": "≈ 1.257",
+      "actual": "1.257",
+      "notes": "Δh=0.00 Δc=1.26 Δd=0.00 Δfan=0.00 Δl=0.00 Δsp=0.00 (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F17g",
+      "name": "csp_28→csp_22: Δtotal_gas = Σ Δper-service gas",
+      "status": "PASS",
+      "expected": "≈ 0.000",
+      "actual": "0.000",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F17u",
+      "name": "csp_28→csp_22: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia",
+      "status": "PASS",
+      "expected": "≈ 0.291",
+      "actual": "0.200",
+      "notes": " (diff -0.0908)"
+    },
+    {
+      "category": "F",
+      "id": "F18e",
+      "name": "csp_22→csp_18: Δtotal_elec = Σ Δper-service elec",
+      "status": "PASS",
+      "expected": "≈ 1.943",
+      "actual": "1.943",
+      "notes": "Δh=0.00 Δc=1.94 Δd=0.00 Δfan=0.00 Δl=0.00 Δsp=0.00 (diff -0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F18g",
+      "name": "csp_22→csp_18: Δtotal_gas = Σ Δper-service gas",
+      "status": "PASS",
+      "expected": "≈ 0.000",
+      "actual": "0.000",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "F",
+      "id": "F18u",
+      "name": "csp_22→csp_18: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia",
+      "status": "PASS",
+      "expected": "≈ 0.450",
+      "actual": "0.500",
+      "notes": " (diff 0.0504)"
+    }
+  ],
+  "sweep_keys": [
+    "hsp_19",
+    "hsp_24",
+    "hsp_28",
+    "csp_18",
+    "csp_22",
+    "csp_28",
+    "scop_lo",
+    "scop_hi",
+    "seer_lo",
+    "seer_hi",
+    "dhweff_lo",
+    "dhweff_hi",
+    "dhwlpd_40",
+    "dhwlpd_150",
+    "mvhr_flow_lo",
+    "mvhr_flow_hi",
+    "sfp_lo",
+    "sfp_hi",
+    "hre_lo",
+    "hre_hi",
+    "light_cf_lo",
+    "light_cf_hi",
+    "sp_cf_lo",
+    "sp_cf_hi",
+    "vent_off",
+    "light_off",
+    "bypass_on",
+    "bypass_off",
+    "dhw_flat",
+    "dhw_follow"
+  ]
+}

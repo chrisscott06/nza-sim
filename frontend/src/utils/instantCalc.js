@@ -3740,8 +3740,14 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       // integrand without re-deriving the resolution logic.
       effective_heating_setpoint_c: effectiveLowerC,
       effective_cooling_setpoint_c: effectiveUpperC,
-      heating_setpoint_source: (typeof opts?.setpointOverride?.heating === 'number') ? 'custom_override' : 'comfortBand',
-      cooling_setpoint_source: (typeof opts?.setpointOverride?.cooling === 'number') ? 'custom_override' : 'comfortBand',
+      // Brief 63 P1 (2026-05-27, corrected): source reflects USER INTENT
+      // from building config, not whether the call carried a numeric
+      // override (Brief 62 P2 always passes a resolved number, so the
+      // opts check would always read 'custom_override' regardless of
+      // mode). The right signal is `*_setpoint_mode === 'custom'` on the
+      // building config — that's what the user chose.
+      heating_setpoint_source: building?.systems_config_v40?.heating_setpoint_mode === 'custom' ? 'custom' : 'comfortBand',
+      cooling_setpoint_source: building?.systems_config_v40?.cooling_setpoint_mode === 'custom' ? 'custom' : 'comfortBand',
       // Brief 28j: per-hour series consumed by State 3's hour-by-hour MVHR
       // recovery cap (computeVentilationEnergy). Engine-internal data
       // exposed to State 3; not surfaced in normal UI consumers.
