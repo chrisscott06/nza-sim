@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-27T11:23:36.049Z",
+  "generated_at": "2026-05-27T13:55:42.518Z",
   "project": {
     "id": "14b4a5b1-8c73-4acb-8b65-1d22f05ec969",
     "name": "HIX Bridgewater",
@@ -10,14 +10,14 @@
   },
   "baseline_snap": {
     "demand_heating_mwh": 245.6,
-    "demand_cooling_mwh": 69.1,
+    "demand_cooling_mwh": 70.3,
     "demand_dhw_mwh": 204.444,
     "delivered_heating_mwh": 245.6,
-    "delivered_cooling_mwh": 69.1,
+    "delivered_cooling_mwh": 70.3,
     "delivered_dhw_mwh": 204.443,
     "heat_elec_mwh": 95.609,
     "heat_gas_mwh": 0,
-    "cool_elec_mwh": 19.743,
+    "cool_elec_mwh": 20.086,
     "dhw_elec_mwh": 29.673,
     "dhw_gas_mwh": 147.654,
     "dhw_pump_mwh": 1.051,
@@ -25,12 +25,12 @@
     "fan_elec_per_system_sum_mwh": 39.415,
     "light_elec_mwh": 65.822,
     "sp_elec_mwh": 78.864,
-    "total_elec_mwh": 329.126,
+    "total_elec_mwh": 329.469,
     "total_gas_mwh": 147.654,
     "total_district_mwh": 0,
-    "eui_kwh_per_m2": 110.3,
-    "eui_brief40_kwh_per_m2": 110.1,
-    "carbon_kg_per_m2": 22.02,
+    "eui_kwh_per_m2": 110.4,
+    "eui_brief40_kwh_per_m2": 110.2,
+    "carbon_kg_per_m2": 22.03,
     "scop_effective": 2.57,
     "seer_effective": 3.5,
     "dhw_blended_eff": 1.16,
@@ -52,7 +52,7 @@
     "hb_gain_equipment_kwh": 78864.1,
     "hb_gain_total_kwh": 244082.1,
     "b40_heating_demand_mwh": 245.6,
-    "b40_cooling_demand_mwh": 69.1,
+    "b40_cooling_demand_mwh": 70.3,
     "b40_dhw_demand_mwh": 204.444,
     "b40_light_elec_mwh": 65.822,
     "b40_sp_elec_mwh": 78.864,
@@ -66,7 +66,7 @@
     "hours_heating_dir": 8409,
     "hours_cooling_dir": 327,
     "hours_shoulder": 24,
-    "hours_bypass_in_heat": 2090,
+    "hours_bypass_in_heat": 2107,
     "hours_bypass_in_cool": 327,
     "los_wall_heating_kwh": 20019.7,
     "los_wall_cooling_kwh": 875.2,
@@ -79,8 +79,8 @@
     "los_vent_total_cool_gain_kwh": 1131.3999999999999,
     "los_vent_total_fan_kwh": 39414.8,
     "los_total_heat_loss_kwh": 423235.1,
-    "los_ig_offset_heating_kwh": 133036.3,
-    "los_ig_added_cooling_kwh": 11309.2,
+    "los_ig_offset_heating_kwh": 133420.5,
+    "los_ig_added_cooling_kwh": 11265.1,
     "los_ig_total_kwh": 144685.6,
     "gia_m2": 4322,
     "recovery_offset_mwh": 94.084,
@@ -161,7 +161,7 @@
       "name": "heating_setpoint 19→28 → total_elec ↑",
       "status": "PASS",
       "expected": "up",
-      "actual": "Δ = 98.713 (need > 0.411)",
+      "actual": "Δ = 98.942 (need > 0.412)",
       "notes": ""
     },
     {
@@ -170,7 +170,7 @@
       "name": "heating_setpoint 19→28 → EUI ↑",
       "status": "PASS",
       "expected": "up",
-      "actual": "Δ = 22.800 (need > 0.129)",
+      "actual": "Δ = 22.900 (need > 0.129)",
       "notes": ""
     },
     {
@@ -188,7 +188,7 @@
       "name": "cooling_setpoint 28→22 → demand_cooling ↑",
       "status": "PASS",
       "expected": "up",
-      "actual": "Δ = 4.400 (need > 0.071)",
+      "actual": "Δ = 4.900 (need > 0.073)",
       "notes": ""
     },
     {
@@ -197,7 +197,7 @@
       "name": "cooling_setpoint 22→18 → demand_cooling ↑",
       "status": "PASS",
       "expected": "up",
-      "actual": "Δ = 6.800 (need > 0.078)",
+      "actual": "Δ = 11.800 (need > 0.085)",
       "notes": ""
     },
     {
@@ -206,7 +206,7 @@
       "name": "cooling_setpoint 28→18 → fuel_cooling ↑",
       "status": "PASS",
       "expected": "up",
-      "actual": "Δ = 3.200 (need > 0.050)",
+      "actual": "Δ = 4.772 (need > 0.050)",
       "notes": ""
     },
     {
@@ -215,7 +215,7 @@
       "name": "cooling_setpoint 28→18 → total_elec ↑",
       "status": "PASS",
       "expected": "up",
-      "actual": "Δ = 3.200 (need > 0.332)",
+      "actual": "Δ = 4.772 (need > 0.334)",
       "notes": ""
     },
     {
@@ -251,7 +251,7 @@
       "name": "cooling_seer 2.5→5.0 → fuel_cooling ↓",
       "status": "PASS",
       "expected": "down",
-      "actual": "Δ = -13.820 (need < -0.050)",
+      "actual": "Δ = -14.060 (need < -0.050)",
       "notes": ""
     },
     {
@@ -260,7 +260,7 @@
       "name": "cooling_seer ↑ → demand_cooling unchanged",
       "status": "PASS",
       "expected": "unchanged",
-      "actual": "|Δ| = 0.000 (need ≤ 0.069)",
+      "actual": "|Δ| = 0.000 (need ≤ 0.070)",
       "notes": ""
     },
     {
@@ -341,7 +341,7 @@
       "name": "sfp ↑ → demand_cooling unchanged",
       "status": "PASS",
       "expected": "unchanged",
-      "actual": "|Δ| = 0.000 (need ≤ 0.069)",
+      "actual": "|Δ| = 0.000 (need ≤ 0.070)",
       "notes": ""
     },
     {
@@ -413,7 +413,7 @@
       "name": "lighting_cf 0.4→1.0 → demand_cooling ↑",
       "status": "PASS",
       "expected": "up",
-      "actual": "Δ = 13.600 (need > 0.072)",
+      "actual": "Δ = 13.600 (need > 0.074)",
       "notes": ""
     },
     {
@@ -476,7 +476,7 @@
       "name": "cooling_seer 2.5→5.0 → carbon ↓",
       "status": "PASS",
       "expected": "down",
-      "actual": "Δ = -0.660 (need < -0.050)",
+      "actual": "Δ = -0.680 (need < -0.050)",
       "notes": ""
     },
     {
@@ -485,7 +485,7 @@
       "name": "heating_scop 2.0→4.0 → carbon ↓",
       "status": "PASS",
       "expected": "down",
-      "actual": "Δ = -2.790 (need < -0.050)",
+      "actual": "Δ = -2.800 (need < -0.050)",
       "notes": ""
     },
     {
@@ -511,9 +511,9 @@
       "id": "B02c",
       "name": "baseline: fuel_cooling = delivered / seer",
       "status": "PASS",
-      "expected": "≈ 19.743",
-      "actual": "19.743",
-      "notes": "delivered=69.10 seer=3.50 (diff 0.0001)"
+      "expected": "≈ 20.086",
+      "actual": "20.086",
+      "notes": "delivered=70.30 seer=3.50 (diff 0.0003)"
     },
     {
       "category": "B",
@@ -529,9 +529,9 @@
       "id": "B03c",
       "name": "scop_hi: fuel_cooling = delivered / seer",
       "status": "PASS",
-      "expected": "≈ 19.743",
-      "actual": "19.743",
-      "notes": "delivered=69.10 seer=3.50 (diff 0.0001)"
+      "expected": "≈ 20.086",
+      "actual": "20.086",
+      "notes": "delivered=70.30 seer=3.50 (diff 0.0003)"
     },
     {
       "category": "B",
@@ -547,9 +547,9 @@
       "id": "B04c",
       "name": "seer_hi: fuel_cooling = delivered / seer",
       "status": "PASS",
-      "expected": "≈ 13.820",
-      "actual": "13.820",
-      "notes": "delivered=69.10 seer=5.00 (diff 0.0000)"
+      "expected": "≈ 14.060",
+      "actual": "14.060",
+      "notes": "delivered=70.30 seer=5.00 (diff 0.0000)"
     },
     {
       "category": "B",
@@ -565,8 +565,8 @@
       "id": "B05c",
       "name": "baseline: delivered_cooling == demand_cooling",
       "status": "PASS",
-      "expected": "≈ 69.100",
-      "actual": "69.100",
+      "expected": "≈ 70.300",
+      "actual": "70.300",
       "notes": " (diff 0.0000)"
     },
     {
@@ -592,8 +592,8 @@
       "id": "B06c",
       "name": "hsp_28: delivered_cooling == demand_cooling",
       "status": "PASS",
-      "expected": "≈ 17.400",
-      "actual": "17.400",
+      "expected": "≈ 19.800",
+      "actual": "19.800",
       "notes": " (diff 0.0000)"
     },
     {
@@ -619,8 +619,8 @@
       "id": "B07c",
       "name": "csp_18: delivered_cooling == demand_cooling",
       "status": "PASS",
-      "expected": "≈ 77.900",
-      "actual": "77.900",
+      "expected": "≈ 84.500",
+      "actual": "84.500",
       "notes": " (diff 0.0000)"
     },
     {
@@ -664,8 +664,8 @@
       "id": "B11",
       "name": "baseline: cooling_demand ≤ Σ gains",
       "status": "PASS",
-      "expected": "69.100 <= 244.082",
-      "actual": "69.100 <= 244.082",
+      "expected": "70.300 <= 244.082",
+      "actual": "70.300 <= 244.082",
       "notes": "gains=244.08 MWh"
     },
     {
@@ -673,8 +673,8 @@
       "id": "B12",
       "name": "csp_18: cooling_demand ≤ Σ gains",
       "status": "PASS",
-      "expected": "77.900 <= 244.082",
-      "actual": "77.900 <= 244.082",
+      "expected": "84.500 <= 244.082",
+      "actual": "84.500 <= 244.082",
       "notes": "gains=244.08 MWh"
     },
     {
@@ -682,8 +682,8 @@
       "id": "B13",
       "name": "vent_off: cooling_demand ≤ Σ gains",
       "status": "PASS",
-      "expected": "135.800 <= 244.082",
-      "actual": "135.800 <= 244.082",
+      "expected": "137.000 <= 244.082",
+      "actual": "137.000 <= 244.082",
       "notes": "gains=244.08 MWh — Brief 62 follow-up question"
     },
     {
@@ -691,9 +691,9 @@
       "id": "B13b",
       "name": "SCREENSHOT (vent_off + lcf=1.33 + spcf=1.48 + csp=14 + heat_off): cooling_demand ≤ Σ gains",
       "status": "PASS",
-      "expected": "198.000 <= 318.139",
-      "actual": "198.000 <= 318.139",
-      "notes": "demand=198.0 gains=318.1 — if FAIL: queued cooling-clamp engine brief, NOT a tolerance issue"
+      "expected": "213.300 <= 318.139",
+      "actual": "213.300 <= 318.139",
+      "notes": "demand=213.3 gains=318.1 — if FAIL: queued cooling-clamp engine brief, NOT a tolerance issue"
     },
     {
       "category": "B",
@@ -701,8 +701,8 @@
       "name": "vent_off: cooling_demand cannot decrease when cooling_setpoint drops 24→18",
       "status": "PASS",
       "expected": "up",
-      "actual": "Δ = 3.200 (need > 0.139)",
-      "notes": "Δ = 3.20 MWh. Bucketed model shows small Δ; clamp model would show large Δ"
+      "actual": "Δ = 6.300 (need > 0.143)",
+      "notes": "Δ = 6.30 MWh. Bucketed model shows small Δ; clamp model would show large Δ"
     },
     {
       "category": "B",
@@ -736,8 +736,8 @@
       "id": "B17",
       "name": "bypass_on EUI ≤ bypass_off EUI (correct bypass cannot increase consumption)",
       "status": "PASS",
-      "expected": "109.900 <= 110.800",
-      "actual": "109.900 <= 110.800",
+      "expected": "110.000 <= 110.900",
+      "actual": "110.000 <= 110.900",
       "notes": ""
     },
     {
@@ -754,8 +754,8 @@
       "id": "B19",
       "name": "bypass_hours_total ≤ 8760",
       "status": "PASS",
-      "expected": "2417.000 <= 8760.000",
-      "actual": "2417.000 <= 8760.000",
+      "expected": "2434.000 <= 8760.000",
+      "actual": "2434.000 <= 8760.000",
       "notes": ""
     },
     {
@@ -772,8 +772,8 @@
       "id": "B21",
       "name": "bypass_hours_in_heat ≤ hours_heating_dir",
       "status": "PASS",
-      "expected": "2090.000 <= 8409.000",
-      "actual": "2090.000 <= 8409.000",
+      "expected": "2107.000 <= 8409.000",
+      "actual": "2107.000 <= 8409.000",
       "notes": ""
     },
     {
@@ -790,18 +790,18 @@
       "id": "B23",
       "name": "EUI = (Σ fuel by carrier) × 1000 / gia",
       "status": "PASS",
-      "expected": "≈ 110.315",
-      "actual": "110.300",
-      "notes": "calc=110.31 (diff -0.0147)"
+      "expected": "≈ 110.394",
+      "actual": "110.400",
+      "notes": "calc=110.39 (diff 0.0060)"
     },
     {
       "category": "B",
       "id": "B24",
       "name": "csp_18: EUI = (Σ fuel) × 1000 / gia",
       "status": "PASS",
-      "expected": "≈ 110.896",
-      "actual": "110.900",
-      "notes": "calc=110.90 (diff 0.0037)"
+      "expected": "≈ 111.333",
+      "actual": "111.300",
+      "notes": "calc=111.33 (diff -0.0327)"
     },
     {
       "category": "B",
@@ -817,45 +817,45 @@
       "id": "C01",
       "name": "baseline: total_elec = Σ per-service elec",
       "status": "PASS",
-      "expected": "≈ 329.126",
-      "actual": "329.126",
-      "notes": "parts: h=95.61 c=19.74 d=29.67 fan=39.41 l=65.82 sp=78.86 (diff 0.0000)"
+      "expected": "≈ 329.469",
+      "actual": "329.469",
+      "notes": "parts: h=95.61 c=20.09 d=29.67 fan=39.41 l=65.82 sp=78.86 (diff 0.0000)"
     },
     {
       "category": "C",
       "id": "C02",
       "name": "hsp_24: total_elec = Σ per-service elec",
       "status": "PASS",
-      "expected": "≈ 360.184",
-      "actual": "360.184",
-      "notes": "parts: h=134.38 c=12.03 d=29.67 fan=39.41 l=65.82 sp=78.86 (diff 0.0000)"
+      "expected": "≈ 360.555",
+      "actual": "360.555",
+      "notes": "parts: h=134.38 c=12.40 d=29.67 fan=39.41 l=65.82 sp=78.86 (diff -0.0000)"
     },
     {
       "category": "C",
       "id": "C03",
       "name": "csp_18: total_elec = Σ per-service elec",
       "status": "PASS",
-      "expected": "≈ 331.640",
-      "actual": "331.640",
-      "notes": "parts: h=95.61 c=22.26 d=29.67 fan=39.41 l=65.82 sp=78.86 (diff 0.0000)"
+      "expected": "≈ 333.526",
+      "actual": "333.526",
+      "notes": "parts: h=95.61 c=24.14 d=29.67 fan=39.41 l=65.82 sp=78.86 (diff 0.0000)"
     },
     {
       "category": "C",
       "id": "C04",
       "name": "vent_off: total_elec = Σ per-service elec",
       "status": "PASS",
-      "expected": "≈ 224.409",
-      "actual": "224.409",
-      "notes": "parts: h=11.25 c=38.80 d=29.67 fan=0.00 l=65.82 sp=78.86 (diff -0.0000)"
+      "expected": "≈ 224.752",
+      "actual": "224.752",
+      "notes": "parts: h=11.25 c=39.14 d=29.67 fan=0.00 l=65.82 sp=78.86 (diff 0.0000)"
     },
     {
       "category": "C",
       "id": "C05",
       "name": "light_off: total_elec = Σ per-service elec",
       "status": "PASS",
-      "expected": "≈ 276.634",
-      "actual": "276.634",
-      "notes": "parts: h=114.14 c=14.54 d=29.67 fan=39.41 l=0.00 sp=78.86 (diff 0.0000)"
+      "expected": "≈ 276.920",
+      "actual": "276.920",
+      "notes": "parts: h=114.14 c=14.83 d=29.67 fan=39.41 l=0.00 sp=78.86 (diff 0.0000)"
     },
     {
       "category": "C",
@@ -889,8 +889,8 @@
       "id": "C08c",
       "name": "baseline: brief40.cooling.demand == consumption.space_cooling.demand",
       "status": "PASS",
-      "expected": "≈ 69.100",
-      "actual": "69.100",
+      "expected": "≈ 70.300",
+      "actual": "70.300",
       "notes": " (diff 0.0000)"
     },
     {
@@ -916,8 +916,8 @@
       "id": "C09c",
       "name": "hsp_28: brief40.cooling.demand == consumption.space_cooling.demand",
       "status": "PASS",
-      "expected": "≈ 17.400",
-      "actual": "17.400",
+      "expected": "≈ 19.800",
+      "actual": "19.800",
       "notes": " (diff 0.0000)"
     },
     {
@@ -961,8 +961,8 @@
       "id": "C13",
       "name": "consumption.total.eui ≈ brief40.totals.eui (≤0.5)",
       "status": "PASS",
-      "expected": "≈ 110.100",
-      "actual": "110.300",
+      "expected": "≈ 110.200",
+      "actual": "110.400",
       "notes": " (diff 0.2000)"
     },
     {
@@ -1042,18 +1042,18 @@
       "id": "C20",
       "name": "baseline: heating_demand ≈ losses_at_setpoint − ig_offset − solar_beneficial",
       "status": "PASS",
-      "expected": "≈ 246024.300",
+      "expected": "≈ 245640.100",
       "actual": "245600.000",
-      "notes": "losses=423.2 ig_offset=133.0 solar_beneficial=44.2 (diff -424.3000)"
+      "notes": "losses=423.2 ig_offset=133.4 solar_beneficial=44.2 (diff -40.1000)"
     },
     {
       "category": "C",
       "id": "C20b",
       "name": "hsp_28: heating_demand ≈ losses_at_setpoint − ig_offset − solar_beneficial",
       "status": "PASS",
-      "expected": "≈ 493566.800",
+      "expected": "≈ 493499.100",
       "actual": "493500.000",
-      "notes": "losses=721.3 ig_offset=143.5 solar_beneficial=84.2 (diff -66.8000)"
+      "notes": "losses=721.3 ig_offset=143.5 solar_beneficial=84.2 (diff 0.9000)"
     },
     {
       "category": "C",
@@ -1097,7 +1097,7 @@
       "name": "sfp change: demand_cooling_mwh unchanged",
       "status": "PASS",
       "expected": "|Δ|≤tol",
-      "actual": "Δ=0.0000 tol=0.3455",
+      "actual": "Δ=0.0000 tol=0.3515",
       "notes": ""
     },
     {
@@ -1124,7 +1124,7 @@
       "name": "sfp change: cool_elec_mwh unchanged",
       "status": "PASS",
       "expected": "|Δ|≤tol",
-      "actual": "Δ=0.0000 tol=0.0987",
+      "actual": "Δ=0.0000 tol=0.1004",
       "notes": ""
     },
     {
@@ -1196,7 +1196,7 @@
       "name": "seer change: demand_cooling_mwh unchanged",
       "status": "PASS",
       "expected": "|Δ|≤tol",
-      "actual": "Δ=0.0000 tol=0.3455",
+      "actual": "Δ=0.0000 tol=0.3515",
       "notes": ""
     },
     {
@@ -1286,7 +1286,7 @@
       "name": "scop change: demand_cooling_mwh unchanged",
       "status": "PASS",
       "expected": "|Δ|≤tol",
-      "actual": "Δ=0.0000 tol=0.3455",
+      "actual": "Δ=0.0000 tol=0.3515",
       "notes": ""
     },
     {
@@ -1304,7 +1304,7 @@
       "name": "scop change: cool_elec_mwh unchanged",
       "status": "PASS",
       "expected": "|Δ|≤tol",
-      "actual": "Δ=0.0000 tol=0.0987",
+      "actual": "Δ=0.0000 tol=0.1004",
       "notes": ""
     },
     {
@@ -1367,7 +1367,7 @@
       "name": "dhw_efficiency change: demand_cooling_mwh unchanged",
       "status": "PASS",
       "expected": "|Δ|≤tol",
-      "actual": "Δ=0.0000 tol=0.3455",
+      "actual": "Δ=0.0000 tol=0.3515",
       "notes": ""
     },
     {
@@ -1394,7 +1394,7 @@
       "name": "dhw_efficiency change: cool_elec_mwh unchanged",
       "status": "PASS",
       "expected": "|Δ|≤tol",
-      "actual": "Δ=0.0000 tol=0.0987",
+      "actual": "Δ=0.0000 tol=0.1004",
       "notes": ""
     },
     {
@@ -1466,7 +1466,7 @@
       "name": "dhw_litres change: cool_elec_mwh unchanged",
       "status": "PASS",
       "expected": "|Δ|≤tol",
-      "actual": "Δ=0.0000 tol=0.0987",
+      "actual": "Δ=0.0000 tol=0.1004",
       "notes": ""
     },
     {
@@ -1547,7 +1547,7 @@
       "name": "dhw_load_shape change: demand_cooling_mwh unchanged",
       "status": "PASS",
       "expected": "|Δ|≤tol",
-      "actual": "Δ=0.0000 tol=0.3455",
+      "actual": "Δ=0.0000 tol=0.3515",
       "notes": ""
     },
     {
@@ -1610,7 +1610,7 @@
       "name": "no-op input clone: demand_cooling_mwh unchanged",
       "status": "PASS",
       "expected": "|Δ|≤tol",
-      "actual": "Δ=0.0000 tol=0.3455",
+      "actual": "Δ=0.0000 tol=0.3515",
       "notes": ""
     },
     {
@@ -1637,7 +1637,7 @@
       "name": "no-op input clone: cool_elec_mwh unchanged",
       "status": "PASS",
       "expected": "|Δ|≤tol",
-      "actual": "Δ=0.0000 tol=0.0987",
+      "actual": "Δ=0.0000 tol=0.1004",
       "notes": ""
     },
     {
@@ -1691,7 +1691,7 @@
       "name": "no-op input clone: total_elec_mwh unchanged",
       "status": "PASS",
       "expected": "|Δ|≤tol",
-      "actual": "Δ=0.0000 tol=1.6456",
+      "actual": "Δ=0.0000 tol=1.6473",
       "notes": ""
     },
     {
@@ -1709,7 +1709,7 @@
       "name": "no-op input clone: eui_kwh_per_m2 unchanged",
       "status": "PASS",
       "expected": "|Δ|≤tol",
-      "actual": "Δ=0.0000 tol=0.5515",
+      "actual": "Δ=0.0000 tol=0.5520",
       "notes": ""
     },
     {
@@ -1718,7 +1718,7 @@
       "name": "no-op input clone: carbon_kg_per_m2 unchanged",
       "status": "PASS",
       "expected": "|Δ|≤tol",
-      "actual": "Δ=0.0000 tol=0.1101",
+      "actual": "Δ=0.0000 tol=0.1102",
       "notes": ""
     },
     {
@@ -1789,8 +1789,8 @@
       "id": "E01",
       "name": "order independence: total_elec [A,B] == [B,A]",
       "status": "PASS",
-      "expected": "≈ 308.073",
-      "actual": "308.073",
+      "expected": "≈ 308.339",
+      "actual": "308.339",
       "notes": " (diff 0.0000)"
     },
     {
@@ -1798,8 +1798,8 @@
       "id": "E02",
       "name": "order independence: eui [A,B] == [B,A]",
       "status": "PASS",
-      "expected": "≈ 105.400",
-      "actual": "105.400",
+      "expected": "≈ 105.500",
+      "actual": "105.500",
       "notes": " (diff 0.0000)"
     },
     {
@@ -1816,8 +1816,8 @@
       "id": "E04",
       "name": "order independence: cooling_fuel [A,B] == [B,A]",
       "status": "PASS",
-      "expected": "≈ 15.356",
-      "actual": "15.356",
+      "expected": "≈ 15.622",
+      "actual": "15.622",
       "notes": " (diff 0.0000)"
     },
     {
@@ -1834,8 +1834,8 @@
       "id": "E06",
       "name": "parity: baseline_edit(scop=4.0) ≈ intervention(scop=4.0) total_elec",
       "status": "PASS",
-      "expected": "≈ 304.127",
-      "actual": "304.127",
+      "expected": "≈ 304.470",
+      "actual": "304.470",
       "notes": " (diff 0.0000)"
     },
     {
@@ -1843,8 +1843,8 @@
       "id": "E06b",
       "name": "parity: baseline_edit(scop=4.0) ≈ intervention(scop=4.0) eui",
       "status": "PASS",
-      "expected": "≈ 104.500",
-      "actual": "104.500",
+      "expected": "≈ 104.600",
+      "actual": "104.600",
       "notes": " (diff 0.0000)"
     },
     {
@@ -1852,8 +1852,8 @@
       "id": "E07",
       "name": "parity: baseline_edit(csp=18) ≈ intervention(csp=18) demand_cooling",
       "status": "PASS",
-      "expected": "≈ 77.900",
-      "actual": "77.900",
+      "expected": "≈ 84.500",
+      "actual": "84.500",
       "notes": " (diff 0.0000)"
     },
     {
@@ -1861,8 +1861,8 @@
       "id": "E08",
       "name": "parity: baseline_edit(csp=18) ≈ intervention(csp=18) total_elec",
       "status": "PASS",
-      "expected": "≈ 331.640",
-      "actual": "331.640",
+      "expected": "≈ 333.526",
+      "actual": "333.526",
       "notes": " (diff 0.0000)"
     },
     {
@@ -1870,8 +1870,8 @@
       "id": "E09",
       "name": "parity: baseline_edit(csp=18) ≈ intervention(csp=18) eui",
       "status": "PASS",
-      "expected": "≈ 110.900",
-      "actual": "110.900",
+      "expected": "≈ 111.300",
+      "actual": "111.300",
       "notes": " (diff 0.0000)"
     },
     {
@@ -1879,8 +1879,8 @@
       "id": "E09b",
       "name": "parity: baseline_edit(light_cf=0.4) ≈ intervention total_elec",
       "status": "PASS",
-      "expected": "≈ 300.737",
-      "actual": "300.737",
+      "expected": "≈ 301.051",
+      "actual": "301.051",
       "notes": " (diff 0.0000)"
     },
     {
@@ -1897,8 +1897,8 @@
       "id": "E10",
       "name": "disabled intervention: total_elec equals empty-stack baseline",
       "status": "PASS",
-      "expected": "≈ 329.126",
-      "actual": "329.126",
+      "expected": "≈ 329.469",
+      "actual": "329.469",
       "notes": " (diff 0.0000)"
     },
     {
@@ -1906,8 +1906,8 @@
       "id": "E11",
       "name": "disabled intervention: eui equals empty-stack baseline",
       "status": "PASS",
-      "expected": "≈ 110.300",
-      "actual": "110.300",
+      "expected": "≈ 110.400",
+      "actual": "110.400",
       "notes": " (diff 0.0000)"
     },
     {
@@ -1915,8 +1915,8 @@
       "id": "E12",
       "name": "empty-stack baseline == direct-call baseline total_elec",
       "status": "PASS",
-      "expected": "≈ 329.126",
-      "actual": "329.126",
+      "expected": "≈ 329.469",
+      "actual": "329.469",
       "notes": " (diff 0.0000)"
     },
     {
@@ -1924,8 +1924,8 @@
       "id": "E13",
       "name": "empty-stack baseline == direct-call baseline eui",
       "status": "PASS",
-      "expected": "≈ 110.300",
-      "actual": "110.300",
+      "expected": "≈ 110.400",
+      "actual": "110.400",
       "notes": " (diff 0.0000)"
     },
     {
@@ -1933,9 +1933,9 @@
       "id": "F01e",
       "name": "hsp_19→hsp_28: Δtotal_elec = Σ Δper-service elec",
       "status": "PASS",
-      "expected": "≈ 98.713",
-      "actual": "98.713",
-      "notes": "Δh=119.63 Δc=-20.91 Δd=0.00 Δfan=0.00 Δl=0.00 Δsp=0.00 (diff 0.0000)"
+      "expected": "≈ 98.942",
+      "actual": "98.942",
+      "notes": "Δh=119.63 Δc=-20.69 Δd=0.00 Δfan=0.00 Δl=0.00 Δsp=0.00 (diff 0.0000)"
     },
     {
       "category": "F",
@@ -1951,9 +1951,9 @@
       "id": "F01u",
       "name": "hsp_19→hsp_28: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia",
       "status": "PASS",
-      "expected": "≈ 22.840",
-      "actual": "22.800",
-      "notes": " (diff -0.0397)"
+      "expected": "≈ 22.893",
+      "actual": "22.900",
+      "notes": " (diff 0.0074)"
     },
     {
       "category": "F",
@@ -1987,9 +1987,9 @@
       "id": "F03e",
       "name": "baseline→csp_18: Δtotal_elec = Σ Δper-service elec",
       "status": "PASS",
-      "expected": "≈ 2.514",
-      "actual": "2.514",
-      "notes": "Δh=0.00 Δc=2.51 Δd=0.00 Δfan=0.00 Δl=0.00 Δsp=0.00 (diff 0.0000)"
+      "expected": "≈ 4.057",
+      "actual": "4.057",
+      "notes": "Δh=0.00 Δc=4.06 Δd=0.00 Δfan=0.00 Δl=0.00 Δsp=0.00 (diff 0.0000)"
     },
     {
       "category": "F",
@@ -2005,18 +2005,18 @@
       "id": "F03u",
       "name": "baseline→csp_18: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia",
       "status": "PASS",
-      "expected": "≈ 0.582",
-      "actual": "0.600",
-      "notes": " (diff 0.0183)"
+      "expected": "≈ 0.939",
+      "actual": "0.900",
+      "notes": " (diff -0.0387)"
     },
     {
       "category": "F",
       "id": "F04e",
       "name": "baseline→hre_hi: Δtotal_elec = Σ Δper-service elec",
       "status": "PASS",
-      "expected": "≈ -6.665",
-      "actual": "-6.665",
-      "notes": "Δh=-7.44 Δc=0.77 Δd=0.00 Δfan=0.00 Δl=0.00 Δsp=0.00 (diff 0.0000)"
+      "expected": "≈ -6.693",
+      "actual": "-6.693",
+      "notes": "Δh=-7.44 Δc=0.74 Δd=0.00 Δfan=0.00 Δl=0.00 Δsp=0.00 (diff 0.0000)"
     },
     {
       "category": "F",
@@ -2032,18 +2032,18 @@
       "id": "F04u",
       "name": "baseline→hre_hi: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia",
       "status": "PASS",
-      "expected": "≈ -1.542",
-      "actual": "-1.500",
-      "notes": " (diff 0.0421)"
+      "expected": "≈ -1.549",
+      "actual": "-1.600",
+      "notes": " (diff -0.0514)"
     },
     {
       "category": "F",
       "id": "F05e",
       "name": "baseline→light_cf_lo: Δtotal_elec = Σ Δper-service elec",
       "status": "PASS",
-      "expected": "≈ -28.389",
-      "actual": "-28.389",
-      "notes": "Δh=9.73 Δc=-2.91 Δd=0.00 Δfan=0.00 Δl=-35.21 Δsp=0.00 (diff 0.0000)"
+      "expected": "≈ -28.418",
+      "actual": "-28.418",
+      "notes": "Δh=9.73 Δc=-2.94 Δd=0.00 Δfan=0.00 Δl=-35.21 Δsp=0.00 (diff 0.0000)"
     },
     {
       "category": "F",
@@ -2059,9 +2059,9 @@
       "id": "F05u",
       "name": "baseline→light_cf_lo: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia",
       "status": "PASS",
-      "expected": "≈ -6.568",
+      "expected": "≈ -6.575",
       "actual": "-6.600",
-      "notes": " (diff -0.0315)"
+      "notes": " (diff -0.0248)"
     },
     {
       "category": "F",
@@ -2122,9 +2122,9 @@
       "id": "F08e",
       "name": "intervention csp=20 from baseline: Δtotal_elec = Σ Δper-service elec",
       "status": "PASS",
-      "expected": "≈ 1.543",
-      "actual": "1.543",
-      "notes": "Δh=0.00 Δc=1.54 Δd=0.00 Δfan=0.00 Δl=0.00 Δsp=0.00 (diff 0.0000)"
+      "expected": "≈ 1.885",
+      "actual": "1.885",
+      "notes": "Δh=0.00 Δc=1.89 Δd=0.00 Δfan=0.00 Δl=0.00 Δsp=0.00 (diff -0.0000)"
     },
     {
       "category": "F",
@@ -2140,17 +2140,17 @@
       "id": "F08u",
       "name": "intervention csp=20 from baseline: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia",
       "status": "PASS",
-      "expected": "≈ 0.357",
+      "expected": "≈ 0.436",
       "actual": "0.400",
-      "notes": " (diff 0.0430)"
+      "notes": " (diff -0.0361)"
     },
     {
       "category": "F",
       "id": "F09",
       "name": "csp_18: brief40.cooling.demand == consumption.space_cooling.demand",
       "status": "PASS",
-      "expected": "≈ 77.900",
-      "actual": "77.900",
+      "expected": "≈ 84.500",
+      "actual": "84.500",
       "notes": " (diff 0.0000)"
     },
     {
@@ -2203,9 +2203,9 @@
       "id": "F15e",
       "name": "hsp_19→hsp_24: Δtotal_elec = Σ Δper-service elec",
       "status": "PASS",
-      "expected": "≈ 48.039",
-      "actual": "48.039",
-      "notes": "Δh=61.90 Δc=-13.86 Δd=0.00 Δfan=0.00 Δl=0.00 Δsp=0.00 (diff 0.0000)"
+      "expected": "≈ 47.953",
+      "actual": "47.953",
+      "notes": "Δh=61.90 Δc=-13.94 Δd=0.00 Δfan=0.00 Δl=0.00 Δsp=0.00 (diff 0.0000)"
     },
     {
       "category": "F",
@@ -2221,18 +2221,18 @@
       "id": "F15u",
       "name": "hsp_19→hsp_24: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia",
       "status": "PASS",
-      "expected": "≈ 11.115",
+      "expected": "≈ 11.095",
       "actual": "11.100",
-      "notes": " (diff -0.0150)"
+      "notes": " (diff 0.0049)"
     },
     {
       "category": "F",
       "id": "F16e",
       "name": "hsp_24→hsp_28: Δtotal_elec = Σ Δper-service elec",
       "status": "PASS",
-      "expected": "≈ 50.674",
-      "actual": "50.674",
-      "notes": "Δh=57.73 Δc=-7.06 Δd=0.00 Δfan=0.00 Δl=0.00 Δsp=0.00 (diff -0.0000)"
+      "expected": "≈ 50.989",
+      "actual": "50.989",
+      "notes": "Δh=57.73 Δc=-6.74 Δd=0.00 Δfan=0.00 Δl=0.00 Δsp=0.00 (diff -0.0000)"
     },
     {
       "category": "F",
@@ -2248,18 +2248,18 @@
       "id": "F16u",
       "name": "hsp_24→hsp_28: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia",
       "status": "PASS",
-      "expected": "≈ 11.725",
-      "actual": "11.700",
-      "notes": " (diff -0.0247)"
+      "expected": "≈ 11.798",
+      "actual": "11.800",
+      "notes": " (diff 0.0025)"
     },
     {
       "category": "F",
       "id": "F17e",
       "name": "csp_28→csp_22: Δtotal_elec = Σ Δper-service elec",
       "status": "PASS",
-      "expected": "≈ 1.257",
-      "actual": "1.257",
-      "notes": "Δh=0.00 Δc=1.26 Δd=0.00 Δfan=0.00 Δl=0.00 Δsp=0.00 (diff 0.0000)"
+      "expected": "≈ 1.400",
+      "actual": "1.400",
+      "notes": "Δh=0.00 Δc=1.40 Δd=0.00 Δfan=0.00 Δl=0.00 Δsp=0.00 (diff -0.0000)"
     },
     {
       "category": "F",
@@ -2275,18 +2275,18 @@
       "id": "F17u",
       "name": "csp_28→csp_22: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia",
       "status": "PASS",
-      "expected": "≈ 0.291",
-      "actual": "0.200",
-      "notes": " (diff -0.0908)"
+      "expected": "≈ 0.324",
+      "actual": "0.400",
+      "notes": " (diff 0.0761)"
     },
     {
       "category": "F",
       "id": "F18e",
       "name": "csp_22→csp_18: Δtotal_elec = Σ Δper-service elec",
       "status": "PASS",
-      "expected": "≈ 1.943",
-      "actual": "1.943",
-      "notes": "Δh=0.00 Δc=1.94 Δd=0.00 Δfan=0.00 Δl=0.00 Δsp=0.00 (diff -0.0000)"
+      "expected": "≈ 3.372",
+      "actual": "3.372",
+      "notes": "Δh=0.00 Δc=3.37 Δd=0.00 Δfan=0.00 Δl=0.00 Δsp=0.00 (diff 0.0000)"
     },
     {
       "category": "F",
@@ -2302,9 +2302,9 @@
       "id": "F18u",
       "name": "csp_22→csp_18: ΔEUI = (Δtotal_elec + Δtotal_gas) × 1000 / gia",
       "status": "PASS",
-      "expected": "≈ 0.450",
-      "actual": "0.500",
-      "notes": " (diff 0.0504)"
+      "expected": "≈ 0.780",
+      "actual": "0.700",
+      "notes": " (diff -0.0802)"
     }
   ],
   "sweep_keys": [

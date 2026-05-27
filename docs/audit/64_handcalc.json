@@ -1,0 +1,303 @@
+{
+  "sweeps": {
+    "active": {
+      "16": {
+        "cool_demand_mwh": 97.3,
+        "heat_demand_mwh": 245.6,
+        "cool_delivered_mwh": 97.3,
+        "heat_delivered_mwh": 245.6,
+        "eui": 112.2,
+        "gain_solar_mwh": 99.3965,
+        "gain_light_mwh": 65.8215,
+        "gain_equip_mwh": 78.86410000000001,
+        "gain_people_mwh": 0,
+        "setpoint_used_h": 21,
+        "setpoint_used_c": 16,
+        "hours_h": 8409,
+        "hours_c": 351,
+        "hours_s": 0
+      },
+      "18": {
+        "cool_demand_mwh": 84.5,
+        "heat_demand_mwh": 245.6,
+        "cool_delivered_mwh": 84.5,
+        "heat_delivered_mwh": 245.6,
+        "eui": 111.3,
+        "gain_solar_mwh": 99.3965,
+        "gain_light_mwh": 65.8215,
+        "gain_equip_mwh": 78.86410000000001,
+        "gain_people_mwh": 0,
+        "setpoint_used_h": 21,
+        "setpoint_used_c": 18,
+        "hours_h": 8409,
+        "hours_c": 351,
+        "hours_s": 0
+      },
+      "20": {
+        "cool_demand_mwh": 76.9,
+        "heat_demand_mwh": 245.6,
+        "cool_delivered_mwh": 76.9,
+        "heat_delivered_mwh": 245.6,
+        "eui": 110.8,
+        "gain_solar_mwh": 99.3965,
+        "gain_light_mwh": 65.8215,
+        "gain_equip_mwh": 78.86410000000001,
+        "gain_people_mwh": 0,
+        "setpoint_used_h": 21,
+        "setpoint_used_c": 20,
+        "hours_h": 8409,
+        "hours_c": 351,
+        "hours_s": 0
+      },
+      "22": {
+        "cool_demand_mwh": 72.7,
+        "heat_demand_mwh": 245.6,
+        "cool_delivered_mwh": 72.7,
+        "heat_delivered_mwh": 245.6,
+        "eui": 110.6,
+        "gain_solar_mwh": 99.3965,
+        "gain_light_mwh": 65.8215,
+        "gain_equip_mwh": 78.86410000000001,
+        "gain_people_mwh": 0,
+        "setpoint_used_h": 21,
+        "setpoint_used_c": 22,
+        "hours_h": 8409,
+        "hours_c": 335,
+        "hours_s": 16
+      },
+      "24": {
+        "cool_demand_mwh": 70.3,
+        "heat_demand_mwh": 245.6,
+        "cool_delivered_mwh": 70.3,
+        "heat_delivered_mwh": 245.6,
+        "eui": 110.4,
+        "gain_solar_mwh": 99.3965,
+        "gain_light_mwh": 65.8215,
+        "gain_equip_mwh": 78.86410000000001,
+        "gain_people_mwh": 0,
+        "setpoint_used_h": 21,
+        "setpoint_used_c": 24,
+        "hours_h": 8409,
+        "hours_c": 327,
+        "hours_s": 24
+      },
+      "26": {
+        "cool_demand_mwh": 68.7,
+        "heat_demand_mwh": 245.6,
+        "cool_delivered_mwh": 68.7,
+        "heat_delivered_mwh": 245.6,
+        "eui": 110.3,
+        "gain_solar_mwh": 99.3965,
+        "gain_light_mwh": 65.8215,
+        "gain_equip_mwh": 78.86410000000001,
+        "gain_people_mwh": 0,
+        "setpoint_used_h": 21,
+        "setpoint_used_c": 26,
+        "hours_h": 8409,
+        "hours_c": 318,
+        "hours_s": 33
+      },
+      "28": {
+        "cool_demand_mwh": 67.8,
+        "heat_demand_mwh": 245.6,
+        "cool_delivered_mwh": 67.8,
+        "heat_delivered_mwh": 245.6,
+        "eui": 110.2,
+        "gain_solar_mwh": 99.3965,
+        "gain_light_mwh": 65.8215,
+        "gain_equip_mwh": 78.86410000000001,
+        "gain_people_mwh": 0,
+        "setpoint_used_h": 21,
+        "setpoint_used_c": 28,
+        "hours_h": 8409,
+        "hours_c": 307,
+        "hours_s": 44
+      }
+    },
+    "free": {
+      "16": {
+        "cool_demand_mwh": 81.3,
+        "heat_demand_mwh": 245.6,
+        "cool_delivered_mwh": 81.3,
+        "heat_delivered_mwh": 245.6,
+        "eui": 111.1,
+        "gain_solar_mwh": 99.3965,
+        "gain_light_mwh": 65.8215,
+        "gain_equip_mwh": 78.86410000000001,
+        "gain_people_mwh": 0,
+        "setpoint_used_h": 21,
+        "setpoint_used_c": 16,
+        "hours_h": 8409,
+        "hours_c": 351,
+        "hours_s": 0
+      },
+      "18": {
+        "cool_demand_mwh": 77.9,
+        "heat_demand_mwh": 245.6,
+        "cool_delivered_mwh": 77.9,
+        "heat_delivered_mwh": 245.6,
+        "eui": 110.9,
+        "gain_solar_mwh": 99.3965,
+        "gain_light_mwh": 65.8215,
+        "gain_equip_mwh": 78.86410000000001,
+        "gain_people_mwh": 0,
+        "setpoint_used_h": 21,
+        "setpoint_used_c": 18,
+        "hours_h": 8409,
+        "hours_c": 351,
+        "hours_s": 0
+      },
+      "20": {
+        "cool_demand_mwh": 74.5,
+        "heat_demand_mwh": 245.6,
+        "cool_delivered_mwh": 74.5,
+        "heat_delivered_mwh": 245.6,
+        "eui": 110.7,
+        "gain_solar_mwh": 99.3965,
+        "gain_light_mwh": 65.8215,
+        "gain_equip_mwh": 78.86410000000001,
+        "gain_people_mwh": 0,
+        "setpoint_used_h": 21,
+        "setpoint_used_c": 20,
+        "hours_h": 8409,
+        "hours_c": 351,
+        "hours_s": 0
+      },
+      "22": {
+        "cool_demand_mwh": 71.1,
+        "heat_demand_mwh": 245.6,
+        "cool_delivered_mwh": 71.1,
+        "heat_delivered_mwh": 245.6,
+        "eui": 110.4,
+        "gain_solar_mwh": 99.3965,
+        "gain_light_mwh": 65.8215,
+        "gain_equip_mwh": 78.86410000000001,
+        "gain_people_mwh": 0,
+        "setpoint_used_h": 21,
+        "setpoint_used_c": 22,
+        "hours_h": 8409,
+        "hours_c": 335,
+        "hours_s": 16
+      },
+      "24": {
+        "cool_demand_mwh": 69.1,
+        "heat_demand_mwh": 245.6,
+        "cool_delivered_mwh": 69.1,
+        "heat_delivered_mwh": 245.6,
+        "eui": 110.3,
+        "gain_solar_mwh": 99.3965,
+        "gain_light_mwh": 65.8215,
+        "gain_equip_mwh": 78.86410000000001,
+        "gain_people_mwh": 0,
+        "setpoint_used_h": 21,
+        "setpoint_used_c": 24,
+        "hours_h": 8409,
+        "hours_c": 327,
+        "hours_s": 24
+      },
+      "26": {
+        "cool_demand_mwh": 67.8,
+        "heat_demand_mwh": 245.6,
+        "cool_delivered_mwh": 67.8,
+        "heat_delivered_mwh": 245.6,
+        "eui": 110.2,
+        "gain_solar_mwh": 99.3965,
+        "gain_light_mwh": 65.8215,
+        "gain_equip_mwh": 78.86410000000001,
+        "gain_people_mwh": 0,
+        "setpoint_used_h": 21,
+        "setpoint_used_c": 26,
+        "hours_h": 8409,
+        "hours_c": 318,
+        "hours_s": 33
+      },
+      "28": {
+        "cool_demand_mwh": 66.7,
+        "heat_demand_mwh": 245.6,
+        "cool_delivered_mwh": 66.7,
+        "heat_delivered_mwh": 245.6,
+        "eui": 110.2,
+        "gain_solar_mwh": 99.3965,
+        "gain_light_mwh": 65.8215,
+        "gain_equip_mwh": 78.86410000000001,
+        "gain_people_mwh": 0,
+        "setpoint_used_h": 21,
+        "setpoint_used_c": 28,
+        "hours_h": 8409,
+        "hours_c": 307,
+        "hours_s": 44
+      }
+    }
+  },
+  "gates": [
+    {
+      "name": "G1: monotonicity (cooling_demand rises strictly as csp drops, clamp)",
+      "pass": true,
+      "expected": "strictly increasing",
+      "actual": "all steps positive",
+      "notes": ""
+    },
+    {
+      "name": "G2: heating UNCHANGED across cooling sweep (≤ 0.5 MWh)",
+      "pass": true,
+      "expected": "≤ 0.5 MWh",
+      "actual": "0.000 MWh",
+      "notes": "heating sits at 245.60 MWh at every csp"
+    },
+    {
+      "name": "G3: delivered = demand at every csp (Brief 62 closure)",
+      "pass": true,
+      "expected": "closed everywhere",
+      "actual": "closed",
+      "notes": ""
+    },
+    {
+      "name": "G4: cooling_demand ≤ Σ gains under clamp",
+      "pass": true,
+      "expected": "always ≤ gains",
+      "actual": "within bound",
+      "notes": ""
+    },
+    {
+      "name": "G5: clamp cooling_demand ≥ free_running cooling_demand",
+      "pass": true,
+      "expected": "clamp ≥ free at every csp",
+      "actual": "true",
+      "notes": ""
+    },
+    {
+      "name": "G6a: free_running csp=24 cooling_demand == 69.1 MWh (pre-Brief-64 record)",
+      "pass": true,
+      "expected": "≈ 69.1 MWh",
+      "actual": "69.1 MWh",
+      "notes": ""
+    },
+    {
+      "name": "G6b: free_running csp=24 EUI ≈ 110.3 (pre-Brief-64 anchor)",
+      "pass": true,
+      "expected": "≈ 110.3",
+      "actual": "110.3",
+      "notes": ""
+    },
+    {
+      "name": "G7: default (no control_strategy field) == explicit active_setpoint",
+      "pass": true,
+      "expected": "identical",
+      "actual": "default=70.30 explicit=70.30",
+      "notes": ""
+    },
+    {
+      "name": "G8: acceleration — Δdemand(22→18) > Δdemand(26→22)",
+      "pass": true,
+      "expected": "Δ(22→18) > Δ(26→22)",
+      "actual": "Δ(22→18)=11.80 > Δ(26→22)=4.00",
+      "notes": ""
+    }
+  ],
+  "summary": {
+    "total_gates": 9,
+    "pass": 9,
+    "fail": 0,
+    "all_pass": true
+  }
+}

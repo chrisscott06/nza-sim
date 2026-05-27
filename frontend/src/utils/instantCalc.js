@@ -2415,6 +2415,18 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
                             ? opts.setpointOverride.cooling
                             : comfortBand.upper_c
 
+  // Brief 64 §B (2026-05-27): control_strategy resolution. Default
+  // 'active_setpoint' (clamp model — system holds setpoint every hour zone
+  // would otherwise exceed/fall-below it). Alternative 'free_running' runs
+  // the pre-Brief-64 weather-direction-bucketed branch (the building has
+  // no active cooling system; relies on envelope + ventilation). Legacy
+  // projects without the field migrate to 'active_setpoint' (the new
+  // default) — cooling demand will rise on gains-dominated buildings,
+  // which is correct per Chris's ratified decision.
+  const control_strategy = (building?.control_strategy === 'free_running')
+    ? 'free_running'
+    : 'active_setpoint'
+
   // ── State 1 baseline ─────────────────────────────────────────────────────
   // State 1 is recomputed with the same override so the State 1 baseline
   // sits at the same setpoint as State 2's demand integral. State 1's
@@ -3278,6 +3290,8 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     // Weather-only H/C (gate; floor backed out per option (i)). Thermal bridging
     // and mech ventilation are weather-driven (use T_out) so they stay in
     // H_weather / C_weather per Chris ruling 3.
+    // Computed unconditionally — used both by the free_running branch (gating)
+    // and by introspection counters under either strategy.
     const H_weather = hourly_heat_loss_Wh - H_floor_const
     const C_weather = hourly_cool_gain_Wh - C_floor_const
 
@@ -3289,7 +3303,65 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     let gains_offset_h_Wh = 0
     let gains_cooling_h_Wh = 0
     let gains_shoulder_h_Wh = 0
-    if (H_weather > 0) {
+
+    if (control_strategy === 'active_setpoint') {
+      // BRIEF 64 §A — Active-setpoint clamp (NEW DEFAULT).
+      // Independent setpoint clamps evaluated every hour:
+      //   Heating clamp: holds T_air at T_heat (effectiveLowerC) when free-running
+      //     zone would fall below. Formula UNCHANGED from prior engine:
+      //       heating = max(0, hourly_heat_loss_Wh − Q_solar − Q_internal)
+      //   Cooling clamp: holds T_air at T_cool (effectiveUpperC) when free-running
+      //     zone would exceed. Formula NEW (gains-inclusive every hour):
+      //       cooling = max(0, hourly_cool_gain_Wh + Q_solar + Q_internal − hourly_heat_loss_Wh)
+      //
+      // hourly_cool_gain_Wh carries T_cool via max(0, T_sa − T_cool) for opaque
+      // and dT_cool_out=max(0, T_out − T_cool) for glazing/leakage/permvent/TB/
+      // mech-vent (per L3261-3273). Lowering T_cool grows it — the cooling
+      // setpoint is now active EVERY hour the zone would exceed it, not just
+      // hours where T_out > T_cool. The 397-MWh scenario Chris saw is now
+      // computed honestly.
+      //
+      // ASYMMETRY: heating formula does NOT subtract hourly_cool_gain_Wh — that
+      // preserves Brief 62's heating numbers ("essentially unchanged"). In rare
+      // hours both clamps can fire (when cool_gain > 0 AND heat_loss > Q_solar
+      // + Q_internal — e.g. sunny cold winter day with weak gains). The brief's
+      // "when to escalate" §6 acknowledges this as a modelling judgement; the
+      // bucketing follows heating-direction style (gains absorb heat_loss
+      // first) and the cool_gain term contributes to cooling via its own
+      // accumulator (acc_cool_gain_*), so no double-attribution of solar/IG.
+      heating_Wh_at_setpoint = Math.max(0,
+        hourly_heat_loss_Wh - Q_solar_through_glazing_Wh - Q_internal_gains_Wh)
+      cooling_Wh_at_setpoint = Math.max(0,
+        hourly_cool_gain_Wh + Q_solar_through_glazing_Wh + Q_internal_gains_Wh - hourly_heat_loss_Wh)
+
+      // Solar / internal-gain bucketing: gains absorb heat_loss first (same
+      // priority as pre-Brief-64 heating-direction branch). Conservation:
+      //   beneficial + cooling_solar + shoulder = Q_solar_through_glazing_Wh
+      //   gains_offset + gains_cooling + gains_shoulder = Q_internal_gains_Wh
+      // per the Brief 64 brief's per-hour conservation requirement.
+      const loss_after_gains = Math.max(0, hourly_heat_loss_Wh - Q_internal_gains_Wh)
+      gains_offset_h_Wh   = Math.min(Q_internal_gains_Wh, hourly_heat_loss_Wh)
+      gains_cooling_h_Wh  = Math.max(0, Q_internal_gains_Wh - hourly_heat_loss_Wh)
+      gains_shoulder_h_Wh = 0
+      beneficial_h_Wh    = Math.min(Q_solar_through_glazing_Wh, loss_after_gains)
+      cooling_solar_h_Wh = Math.max(0, Q_solar_through_glazing_Wh - loss_after_gains)
+      shoulder_h_Wh = 0
+
+      // Shoulder reassignment: if neither clamp fires (heating == 0 AND cooling
+      // == 0 — exact gain/loss balance with cool_gain ≤ heat_loss − Q_solar −
+      // Q_internal), re-attribute gains+solar to shoulder buckets to preserve
+      // conservation. In practice this branch rarely fires (requires exact
+      // balance) but we cover it for the no-op invariance test.
+      if (heating_Wh_at_setpoint === 0 && cooling_Wh_at_setpoint === 0) {
+        gains_offset_h_Wh = 0
+        gains_cooling_h_Wh = 0
+        gains_shoulder_h_Wh = Q_internal_gains_Wh
+        beneficial_h_Wh = 0
+        cooling_solar_h_Wh = 0
+        shoulder_h_Wh = Q_solar_through_glazing_Wh
+      }
+    } else if (H_weather > 0) {
+      // FREE-RUNNING (pre-Brief-64 weather-gated branch — PRESERVED EXACTLY).
       // Heating-direction hour. Internal gains and solar both offset fabric
       // loss per brief V1 spec (useful gains = all gains at each hour).
       // Convention: gains offset first (always-on baseline), then solar
@@ -3307,6 +3379,7 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       gains_cooling_h_Wh  = Math.max(0, Q_internal_gains_Wh - hourly_heat_loss_Wh)
       gains_shoulder_h_Wh = 0
     } else if (C_weather > 0) {
+      // FREE-RUNNING (pre-Brief-64 — PRESERVED EXACTLY).
       // Cooling-direction hour. All solar AND all gains add to cooling load.
       heating_Wh_at_setpoint = 0
       cooling_Wh_at_setpoint = hourly_cool_gain_Wh + Q_solar_through_glazing_Wh + Q_internal_gains_Wh
@@ -3317,6 +3390,7 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       gains_cooling_h_Wh = Q_internal_gains_Wh
       gains_shoulder_h_Wh = 0
     } else {
+      // FREE-RUNNING (pre-Brief-64 — PRESERVED EXACTLY).
       // Weather-shoulder. No demand attributed; gains and solar both go to
       // their respective shoulder buckets.
       heating_Wh_at_setpoint = 0
