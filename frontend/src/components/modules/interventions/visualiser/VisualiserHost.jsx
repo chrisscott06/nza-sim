@@ -40,16 +40,23 @@
  */
 
 import { useEffect, useState } from 'react'
-import { BarChart3, GitCompareArrows, Flame, Receipt } from 'lucide-react'
+import { BarChart3, GitCompareArrows, Flame, Receipt, Calculator } from 'lucide-react'
 import EUIWaterfall from '../EUIWaterfall.jsx'
 import BeforeAfterBars from './BeforeAfterBars.jsx'
 import PhysicsView from './PhysicsView.jsx'
 import BreakdownPanel from './BreakdownPanel.jsx'
+import BreakdownTable from './BreakdownTable.jsx'
 
+// Brief 60 Part A (2026-05-27): added 'calctrail' view — the redesigned
+// three-band breakdown table (DEMAND / DELIVERED÷EFF=FUEL / FUEL TOTALS
+// + Headline + summary cards). Lives BESIDE the existing 'breakdown'
+// view (per-intervention audit trail / chain navigation, Brief 48
+// Part 3), per Chris's "build a NEW component beside it" sign-off.
 const VIEWS = [
   { id: 'waterfall',   label: 'Waterfall',     icon: BarChart3,         hint: 'Per-intervention marginal impact' },
   { id: 'beforeafter', label: 'Before/after',  icon: GitCompareArrows,  hint: 'Cumulative stack vs baseline' },
   { id: 'physics',     label: 'Heat balance',  icon: Flame,             hint: 'Current stack heat balance' },
+  { id: 'calctrail',   label: 'Calc trail',    icon: Calculator,        hint: 'Three-band calculation trail (Brief 60)' },
   { id: 'breakdown',   label: 'Breakdown',     icon: Receipt,           hint: 'Per-intervention audit trail' },
 ]
 
@@ -156,6 +163,12 @@ export default function VisualiserHost({ interventions, stackResult, orientation
             baselineResult={baselineResult}
             cumulativeResult={cumulativeResult}
             orientationDeg={orientationDeg}
+          />
+        )}
+        {view === 'calctrail' && (
+          <BreakdownTable
+            baselineResult={baselineResult}
+            cumulativeResult={cumulativeResult}
           />
         )}
         {view === 'breakdown' && (
