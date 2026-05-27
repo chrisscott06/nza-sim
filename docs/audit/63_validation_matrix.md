@@ -1,6 +1,6 @@
 # Brief 63 — Validation report
 
-Generated: 2026-05-27T14:04:30.565Z
+Generated: 2026-05-27T21:38:05.407Z
 Project: HIX Bridgewater (GIA 4322 m²)
 Weather: GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw
 

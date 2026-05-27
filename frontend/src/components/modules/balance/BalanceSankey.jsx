@@ -90,10 +90,39 @@ function buildGraph(data, unit, orientationDeg = 0, mode = DEFAULT_MODE, modules
     }
   }
   if (gainAllowed.has('heating')) {
-    const heatV = readValue(gains?.heating, unit)
-    if (heatV > 0) {
-      addNode('heating', LABELS.heating, colourForElement('heating'))
-      addLink('heating', BUILDING_NODE_ID, heatV, colourForElement('heating'))
+    // Brief 28a Part 5 walkthrough Finding HB3 (2026-05-14): mirror the
+    // synthetic-heating fallback used by HeatBalance.flattenGains at L324-352.
+    // The engine emits `heat_balance.annual.gains.{solar,internal}` but not
+    // `gains.heating` — heating is a system service, not a heat-balance gain
+    // term per the engine's convention. Stacked / Rows views synthesise the
+    // ribbon from `data.demand.heating_demand_mwh`; the Sankey was missing
+    // that fallback, so the heating gain ribbon was dropped from the diagram
+    // (visible in Stacked + Rows, invisible in Sankey — display parity gap
+    // confirmed in Chris's walkthrough 2026-05-27).
+    //
+    // Source: `data.demand.heating_demand_mwh` (State 2 demand-at-comfort,
+    // matches the same number Stacked uses). Falls through to the engine's
+    // `gains.heating` block if it's ever emitted (forward compat with future
+    // State 3 changes that surface heating directly on the gain side).
+    const engineHeating = gains?.heating
+    if (engineHeating?.kwh != null) {
+      const heatV = readValue(engineHeating, unit)
+      if (heatV > 0) {
+        addNode('heating', LABELS.heating, colourForElement('heating'))
+        addLink('heating', BUILDING_NODE_ID, heatV, colourForElement('heating'))
+      }
+    } else {
+      const mwh = data?.demand?.heating_demand_mwh
+      if (mwh != null && mwh > 0.01) {
+        const kwh = mwh * 1000
+        const gia = data?.metadata?.gia_m2 ?? 0
+        const kwh_per_m2 = gia > 0 ? kwh / gia : 0
+        const heatV = unit === 'kwh_per_m2' ? kwh_per_m2 : kwh
+        if (heatV > 0) {
+          addNode('heating', LABELS.heating, colourForElement('heating'))
+          addLink('heating', BUILDING_NODE_ID, heatV, colourForElement('heating'))
+        }
+      }
     }
   }
 
