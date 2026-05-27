@@ -93,6 +93,39 @@ function lightingControlFactor(control) {
   }
 }
 
+/**
+ * Brief 62 Part 2 (2026-05-27) — single-source setpoint resolution.
+ *
+ * Resolves the heating or cooling setpoint that State 2's demand
+ * integrand should use. Mirror of `systemsEngine.js _resolveSetpoint`
+ * (which already feeds the delivered-side recompute in
+ * `_computeHeatingOrCooling`). Pulling both reads into the SAME
+ * resolution function closes Brief 61 Root Cause A — demand was
+ * frozen at comfortBand while delivered moved with the v40 setpoint.
+ *
+ * Resolution rule:
+ *   mode === 'custom' AND _c is a number → use _c   (override)
+ *   otherwise → use comfortBand[lower_c | upper_c]  (inherit)
+ *
+ * Safe fallbacks for missing data: defaults to comfortBand values
+ * so legacy projects without v40 service-level setpoints stay
+ * byte-identical to pre-Brief-62 behaviour. State 1 / Building-page
+ * path stays unaffected — `mode === 'envelope-only'` calls
+ * `_calculateEnvelopeOnly` DIRECTLY without going through
+ * `_calculateState3`, so the resolved override never reaches it.
+ */
+function _resolveSetpointForState2(building, service, comfortBand) {
+  const v40 = building?.systems_config_v40
+  const mode  = v40?.[`${service}_setpoint_mode`]
+  const value = v40?.[`${service}_setpoint_c`]
+  if (mode === 'custom' && typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+  return service === 'heating'
+    ? (comfortBand?.lower_c ?? 21)
+    : (comfortBand?.upper_c ?? 24)
+}
+
 // ── UK Climate defaults ────────────────────────────────────────────────────────
 
 const UK_HDD   = 2200   // Heating degree days (15.5°C base, UK average)
@@ -1897,7 +1930,14 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
         ),
         total_solar_transmission_kwh: r1(acc_solar_n + acc_solar_e + acc_solar_s + acc_solar_w),
       },
-      setpoints_used: { heating_c: comfortBand.lower_c, cooling_c: comfortBand.upper_c },
+      // Brief 62 Part 2 (2026-05-27) — echo the EFFECTIVE setpoint the
+      // integration actually ran at (not the comfortBand). Pre-fix this
+      // said comfortBand even when called with a setpointOverride —
+      // harmless when no caller passed an override; post-Brief-62 the
+      // v40-custom setpoint flows through via _calculateState3 →
+      // _calculateState2 → _calculateEnvelopeOnly's opts forward.
+      // Display-only field, no physics consumer.
+      setpoints_used: { heating_c: effectiveLowerC, cooling_c: effectiveUpperC },
     },
     // Brief 28-IM IM-M2 (Profiles upgrade): daily-aggregated arrays fed to
     // the WeatherSynchronisedProfile chart strip on the Building Profiles
@@ -3599,7 +3639,14 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
           ),
           total_solar_transmission_kwh: r1k(solar),
         },
-        setpoints_used: { heating_c: comfortBand.lower_c, cooling_c: comfortBand.upper_c },
+        // Brief 62 Part 2 (2026-05-27) — echo the EFFECTIVE setpoint the
+      // integration actually ran at (not the comfortBand). Pre-fix this
+      // said comfortBand even when called with a setpointOverride —
+      // harmless when no caller passed an override; post-Brief-62 the
+      // v40-custom setpoint flows through via _calculateState3 →
+      // _calculateState2 → _calculateEnvelopeOnly's opts forward.
+      // Display-only field, no physics consumer.
+      setpoints_used: { heating_c: effectiveLowerC, cooling_c: effectiveUpperC },
       }
     })(),
     // Brief 28-IM IM-M3 (Operation Profiles): State 2 mirror of State 1's
@@ -4365,7 +4412,40 @@ function computeVentilationEnergy(ventSystems, weatherData, T_setpoint_c, buildi
  * MissingLibraryField on any missing template / required field.
  */
 function _calculateState3(building, constructions, libraryData, weatherData, hourlySolar, comfortBand) {
-  const state2Result = _calculateState2(building, constructions, libraryData, weatherData, hourlySolar, comfortBand)
+  // Brief 62 Part 2 (2026-05-27) — single-source setpoint resolution.
+  // Closes Brief 61 Root Cause A: pre-fix, this main _calculateState2
+  // call passed NO setpointOverride, so the demand integrand always
+  // used comfortBand even when a v40 custom setpoint was set.
+  // Meanwhile _computeHeatingOrCooling correctly resolved the v40
+  // setpoint and used state2Recompute to produce delivered against
+  // it — so delivered moved with the slider but demand stayed frozen.
+  // Two State 2 results, two fields, no reconciliation, on-screen
+  // contradiction ("493 MWh delivered against 246 MWh need").
+  //
+  // Fix: resolve heating + cooling setpoints HERE (mirror of
+  // systemsEngine.js:_resolveSetpoint), pass them as setpointOverride
+  // so demand and delivered both read from the SAME source. Approach
+  // (a) from the brief — smallest diff, mirrors Brief 50 P6 (HRE) /
+  // Brief 59 P1 (vent flow) v40-wins-with-comfortBand-fallback pattern.
+  //
+  // Inherit/override behaviour preserved:
+  //   - heating_setpoint_mode === 'follow_comfort' → comfortBand.lower_c
+  //     → demand integrand byte-identical to pre-Brief-62 behaviour
+  //     (anchor 110.30 EUI holds on Bridgewater by construction).
+  //   - heating_setpoint_mode === 'custom' + numeric _c → that value
+  //     → demand moves with the slider, no contradiction with delivered.
+  //   - Cooling identical pattern.
+  //
+  // State 1 / Building page UNAFFECTED — `mode === 'envelope-only'`
+  // dispatches to _calculateEnvelopeOnly DIRECTLY at instantCalc.js
+  // :5859 without going through _calculateState3, so this resolved
+  // override never reaches it. Verified in brief audit §3.4.
+  const resolvedHeatingSetpoint = _resolveSetpointForState2(building, 'heating', comfortBand)
+  const resolvedCoolingSetpoint = _resolveSetpointForState2(building, 'cooling', comfortBand)
+  const state2Result = _calculateState2(
+    building, constructions, libraryData, weatherData, hourlySolar, comfortBand,
+    { setpointOverride: { heating: resolvedHeatingSetpoint, cooling: resolvedCoolingSetpoint } },
+  )
   if (state2Result.state !== 2) return state2Result   // bailout: _empty()
 
   // Brief 40 Part 2 (2026-05-19): closure for systemsEngine.computeSystemsDelivered

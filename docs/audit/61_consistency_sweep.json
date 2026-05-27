@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-27T09:56:13.355Z",
+  "generated_at": "2026-05-27T10:18:43.813Z",
   "project": {
     "id": "14b4a5b1-8c73-4acb-8b65-1d22f05ec969",
     "name": "HIX Bridgewater",
@@ -101,24 +101,24 @@
         {
           "value": 24,
           "snap": {
-            "demand_heating_mwh": 245.6,
-            "demand_cooling_mwh": 69.1,
+            "demand_heating_mwh": 345.2,
+            "demand_cooling_mwh": 42.1,
             "demand_dhw_mwh": 204.444,
             "delivered_heating_mwh": 345.2,
-            "delivered_cooling_mwh": 69.1,
+            "delivered_cooling_mwh": 42.1,
             "delivered_dhw_mwh": 204.443,
             "heat_elec_mwh": 134.381,
             "heat_gas_mwh": 0,
-            "cool_elec_mwh": 19.743,
+            "cool_elec_mwh": 12.029,
             "dhw_elec_mwh": 29.673,
             "dhw_gas_mwh": 147.654,
             "fan_elec_mwh": 39.415,
             "light_elec_mwh": 65.822,
             "sp_elec_mwh": 78.864,
-            "total_elec_mwh": 367.898,
+            "total_elec_mwh": 360.184,
             "total_gas_mwh": 147.654,
-            "eui_kwh_per_m2": 119.3,
-            "carbon_kg_per_m2": 23.87,
+            "eui_kwh_per_m2": 117.5,
+            "carbon_kg_per_m2": 23.5,
             "hb_loss_external_wall_mwh": 39.945699999999995,
             "hb_loss_glazing_mwh": 94.9205,
             "hb_loss_fabric_leakage_mwh": 47.513,
@@ -127,9 +127,9 @@
             "hb_gain_equipment_mwh": 78.86410000000001,
             "hb_gain_people_mwh": 0,
             "hb_gain_solar_mwh": 99.3965,
-            "vent_heat_loss_mvhr_kwh": 36536.3,
-            "vent_heat_loss_bedroom_kwh": 226448.1,
-            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_heat_loss_mvhr_kwh": 47384.9,
+            "vent_heat_loss_bedroom_kwh": 293686.4,
+            "vent_heat_loss_toilet_kwh": 27932.1,
             "vent_fan_mvhr_kwh": 22469.4,
             "state2_avg_occupants": 0,
             "state2_peak_occupants": 0,
@@ -144,24 +144,24 @@
         {
           "value": 28,
           "snap": {
-            "demand_heating_mwh": 245.6,
-            "demand_cooling_mwh": 69.1,
+            "demand_heating_mwh": 493.5,
+            "demand_cooling_mwh": 17.4,
             "demand_dhw_mwh": 204.444,
             "delivered_heating_mwh": 493.5,
-            "delivered_cooling_mwh": 69.1,
+            "delivered_cooling_mwh": 17.4,
             "delivered_dhw_mwh": 204.443,
             "heat_elec_mwh": 192.113,
             "heat_gas_mwh": 0,
-            "cool_elec_mwh": 19.743,
+            "cool_elec_mwh": 4.971,
             "dhw_elec_mwh": 29.673,
             "dhw_gas_mwh": 147.654,
             "fan_elec_mwh": 39.415,
             "light_elec_mwh": 65.822,
             "sp_elec_mwh": 78.864,
-            "total_elec_mwh": 425.63,
+            "total_elec_mwh": 410.858,
             "total_gas_mwh": 147.654,
-            "eui_kwh_per_m2": 132.6,
-            "carbon_kg_per_m2": 26.64,
+            "eui_kwh_per_m2": 129.2,
+            "carbon_kg_per_m2": 25.93,
             "hb_loss_external_wall_mwh": 39.945699999999995,
             "hb_loss_glazing_mwh": 94.9205,
             "hb_loss_fabric_leakage_mwh": 47.513,
@@ -170,9 +170,9 @@
             "hb_gain_equipment_mwh": 78.86410000000001,
             "hb_gain_people_mwh": 0,
             "hb_gain_solar_mwh": 99.3965,
-            "vent_heat_loss_mvhr_kwh": 36536.3,
-            "vent_heat_loss_bedroom_kwh": 226448.1,
-            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_heat_loss_mvhr_kwh": 62083.3,
+            "vent_heat_loss_bedroom_kwh": 384786,
+            "vent_heat_loss_toilet_kwh": 36596.5,
             "vent_fan_mvhr_kwh": 22469.4,
             "state2_avg_occupants": 0,
             "state2_peak_occupants": 0,
@@ -188,11 +188,32 @@
       "classification": {
         "moved": [
           {
+            "field": "demand_heating_mwh",
+            "min": 245.6,
+            "max": 493.5,
+            "range": 247.9,
+            "mean": 361.43333333333334
+          },
+          {
+            "field": "demand_cooling_mwh",
+            "min": 17.4,
+            "max": 69.1,
+            "range": 51.699999999999996,
+            "mean": 42.86666666666667
+          },
+          {
             "field": "delivered_heating_mwh",
             "min": 245.6,
             "max": 493.5,
             "range": 247.9,
             "mean": 361.43333333333334
+          },
+          {
+            "field": "delivered_cooling_mwh",
+            "min": 17.4,
+            "max": 69.1,
+            "range": 51.699999999999996,
+            "mean": 42.86666666666667
           },
           {
             "field": "heat_elec_mwh",
@@ -202,43 +223,59 @@
             "mean": 140.701
           },
           {
+            "field": "cool_elec_mwh",
+            "min": 4.971,
+            "max": 19.743,
+            "range": 14.771999999999998,
+            "mean": 12.247666666666666
+          },
+          {
             "field": "total_elec_mwh",
             "min": 329.126,
-            "max": 425.63,
-            "range": 96.50400000000002,
-            "mean": 374.218
+            "max": 410.858,
+            "range": 81.73200000000003,
+            "mean": 366.7226666666666
           },
           {
             "field": "eui_kwh_per_m2",
             "min": 110.3,
-            "max": 132.6,
-            "range": 22.299999999999997,
-            "mean": 120.73333333333333
+            "max": 129.2,
+            "range": 18.89999999999999,
+            "mean": 119
           },
           {
             "field": "carbon_kg_per_m2",
             "min": 22.02,
-            "max": 26.64,
-            "range": 4.620000000000001,
-            "mean": 24.176666666666666
+            "max": 25.93,
+            "range": 3.91,
+            "mean": 23.816666666666663
+          },
+          {
+            "field": "vent_heat_loss_mvhr_kwh",
+            "min": 36536.3,
+            "max": 62083.3,
+            "range": 25547,
+            "mean": 48668.166666666664
+          },
+          {
+            "field": "vent_heat_loss_bedroom_kwh",
+            "min": 226448.1,
+            "max": 384786,
+            "range": 158337.9,
+            "mean": 301640.1666666667
+          },
+          {
+            "field": "vent_heat_loss_toilet_kwh",
+            "min": 21537.2,
+            "max": 36596.5,
+            "range": 15059.3,
+            "mean": 28688.600000000002
           }
         ],
         "frozen": [
           {
-            "field": "demand_heating_mwh",
-            "value": 245.6
-          },
-          {
-            "field": "demand_cooling_mwh",
-            "value": 69.1
-          },
-          {
             "field": "demand_dhw_mwh",
             "value": 204.444
-          },
-          {
-            "field": "delivered_cooling_mwh",
-            "value": 69.1
           },
           {
             "field": "delivered_dhw_mwh",
@@ -247,10 +284,6 @@
           {
             "field": "heat_gas_mwh",
             "value": 0
-          },
-          {
-            "field": "cool_elec_mwh",
-            "value": 19.743
           },
           {
             "field": "dhw_elec_mwh",
@@ -309,18 +342,6 @@
             "value": 99.3965
           },
           {
-            "field": "vent_heat_loss_mvhr_kwh",
-            "value": 36536.3
-          },
-          {
-            "field": "vent_heat_loss_bedroom_kwh",
-            "value": 226448.1
-          },
-          {
-            "field": "vent_heat_loss_toilet_kwh",
-            "value": 21537.2
-          },
-          {
             "field": "vent_fan_mvhr_kwh",
             "value": 22469.4
           },
@@ -352,7 +373,7 @@
           "value": 18,
           "snap": {
             "demand_heating_mwh": 245.6,
-            "demand_cooling_mwh": 69.1,
+            "demand_cooling_mwh": 77.9,
             "demand_dhw_mwh": 204.444,
             "delivered_heating_mwh": 245.6,
             "delivered_cooling_mwh": 77.9,
@@ -395,7 +416,7 @@
           "value": 21,
           "snap": {
             "demand_heating_mwh": 245.6,
-            "demand_cooling_mwh": 69.1,
+            "demand_cooling_mwh": 72.7,
             "demand_dhw_mwh": 204.444,
             "delivered_heating_mwh": 245.6,
             "delivered_cooling_mwh": 72.7,
@@ -481,6 +502,13 @@
       "classification": {
         "moved": [
           {
+            "field": "demand_cooling_mwh",
+            "min": 69.1,
+            "max": 77.9,
+            "range": 8.800000000000011,
+            "mean": 73.23333333333333
+          },
+          {
             "field": "delivered_cooling_mwh",
             "min": 69.1,
             "max": 77.9,
@@ -520,10 +548,6 @@
           {
             "field": "demand_heating_mwh",
             "value": 245.6
-          },
-          {
-            "field": "demand_cooling_mwh",
-            "value": 69.1
           },
           {
             "field": "demand_dhw_mwh",

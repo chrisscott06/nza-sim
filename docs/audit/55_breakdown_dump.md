@@ -1,6 +1,6 @@
 # Breakdown-panel audit-trail dump
 
-Generated: 2026-05-27T09:23:21.748Z
+Generated: 2026-05-27T10:19:46.179Z
 Source backend: `http://127.0.0.1:8003`  ·  Project: **HIX Bridgewater** (`14b4a5b1-8c73-4acb-8b65-1d22f05ec969`)
 Comfort band: 21–24 °C
 Baseline EUI: **110.30 kWh/m²·yr**
