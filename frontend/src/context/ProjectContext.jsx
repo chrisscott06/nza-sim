@@ -247,6 +247,36 @@ const DEFAULT_PARAMS = {
   // loader-side lift (Parts 2 + 4).
   //
   // Full schema reference: docs/audit/42_systems_ux_schema.md
+  // Brief 64 §B (2026-05-27): control_strategy is a building-wide
+  // demand-model selector that governs how _calculateState2 derives
+  // heating/cooling demand against the setpoints. Two options:
+  //
+  //   'active_setpoint' (default) — independent setpoint clamps. The
+  //     cooling clamp holds T_air at the cooling setpoint in every
+  //     hour the free-running zone would exceed it (gains-inclusive:
+  //     fabric + solar + internal + ventilation air-change). The
+  //     heating clamp behaves as before (gains + solar offset loss).
+  //     This is what a properly-controlled conditioned building does
+  //     and what you assume when sizing cooling plant.
+  //
+  //   'free_running' — preserved pre-Brief-64 weather-direction-bucketed
+  //     three-way branch. The building has no active cooling system;
+  //     cooling only occurs when the weather assists. Use this to
+  //     show overheating risk for a naturally-ventilated / mixed-mode
+  //     design. NOT labelled "weather-compensated" — that term means
+  //     heating flow-temperature modulation and would misdescribe the
+  //     physics.
+  //
+  // Engine reads at the State 2 demand-derivation branch site (see
+  // instantCalc.js ~L3307). Legacy projects without the field default
+  // to 'active_setpoint'; their cooling demand will rise on gains-
+  // dominated buildings — that's correct per Chris's ratified clamp
+  // decision (gates on consistency, not absolute EUI).
+  //
+  // ⚠ ALLOWLIST DRIFT: also added to withMode's `base` block in
+  // instantCalc.js or the field would be silently dropped on the way
+  // into the engine. Same shape of bug as Brief 33's flow_mode.
+  control_strategy: 'active_setpoint',
   systems_config_v40: {
     // ── Heating service ────────────────────────────────────────────
     // setpoint_mode: 'follow_comfort' uses the comfort band's lower_c at
@@ -951,6 +981,17 @@ export function ProjectProvider({ children }) {
       // dhw / ventilation v25 contracts continue to drive their Sankey
       // visuals unchanged).
       systems_config_v40: bc.systems_config_v40 ?? DEFAULT_PARAMS.systems_config_v40,
+      // Brief 64 §B (2026-05-27) — control_strategy demand-model selector.
+      // Default 'active_setpoint' (clamp) for both new projects AND legacy
+      // projects without the field. Cooling demand will rise on gains-
+      // dominated buildings under the new default — that's correct per
+      // Chris's ratified post-Brief-62 decision. Persisted choice
+      // round-trips via mutate('building.control_strategy', ...) and the
+      // standard PUT /api/projects/{id}/building → bc.control_strategy
+      // path.
+      control_strategy: (bc.control_strategy === 'free_running' || bc.control_strategy === 'active_setpoint')
+                          ? bc.control_strategy
+                          : DEFAULT_PARAMS.control_strategy,
       // Brief 40 Part 3 (2026-05-19) — per-project systems library.
       // Same load semantics as systems_config_v40.
       library_systems: Array.isArray(bc.library_systems) ? bc.library_systems : (DEFAULT_PARAMS.library_systems ?? []),

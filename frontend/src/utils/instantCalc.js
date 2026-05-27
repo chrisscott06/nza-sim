@@ -534,6 +534,15 @@ function withMode(building, mode) {
     thermal_mass_category: building?.thermal_mass_category ?? 'light',
     openings:      passThroughOpenings,
     location:      building?.location,
+    // Brief 64 §B (2026-05-27): control_strategy is a building-wide
+    // demand-model selector — 'active_setpoint' (clamp, new default) vs
+    // 'free_running' (preserved pre-Brief-64 weather-gated branch).
+    // ⚠ ALLOWLIST DRIFT discipline: this field MUST be carried through
+    // withMode or the engine silently falls back to the default and the
+    // user's free_running selection is dropped. State 2 reads it at the
+    // clamp branch site (~L3307); State 1 doesn't consume it (envelope-
+    // only path stays free-running by construction).
+    control_strategy: building?.control_strategy ?? 'active_setpoint',
     // Brief 28k Gate 3+: thermal bridging is a pure fabric input. Belongs
     // to both State 1 and State 2 — junction-loss contribution on the
     // area-element UA. Brief 28-TB-Simple replaces the SBEM α convention

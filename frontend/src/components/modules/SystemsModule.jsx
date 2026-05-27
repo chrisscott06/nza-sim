@@ -714,8 +714,70 @@ export function InputsColumn({ params, updateParam, consumption, comfortBand, op
     }
   }
 
+  // Brief 64 §B (2026-05-27) — control_strategy is a building-wide
+  // demand-model selector that affects how _calculateState2 derives
+  // heating/cooling demand against the setpoints. The choice is visible
+  // and explicit here at the top of the Systems left panel because it
+  // governs every service's demand integral. Two options per Brief 64:
+  //   'active_setpoint' (default) — the clamp; system holds setpoint
+  //     every hour the free-running zone would exceed/fall-below it.
+  //   'free_running' — passive only; cooling occurs only when weather
+  //     assists. NOT labelled "weather-compensated" — that term means
+  //     heating flow-temperature modulation and would mislabel the
+  //     physics here.
+  // Writes route through mutate so intervention-capture mode can patch
+  // this field too (an intervention can switch a building from active
+  // to free-running at a future stage of a retrofit).
+  const controlStrategy = (params?.control_strategy === 'free_running')
+    ? 'free_running'
+    : 'active_setpoint'
+  const setControlStrategy = (val) => mutate('building.control_strategy', val)
+
   return (
     <div className="p-3 space-y-2">
+      {/* Brief 64 §B — building-wide demand-model selector. */}
+      <div className="px-2 py-2 mb-1 border border-light-grey/60 rounded bg-off-white/30 space-y-1.5">
+        <label className="block text-xxs uppercase tracking-wider text-mid-grey font-medium">
+          Control strategy
+        </label>
+        <div className="flex items-start gap-2 text-xxs">
+          <input
+            type="radio"
+            id="cs_active"
+            checked={controlStrategy === 'active_setpoint'}
+            onChange={() => setControlStrategy('active_setpoint')}
+            className="mt-0.5 flex-shrink-0"
+          />
+          <label htmlFor="cs_active" className="flex-1 cursor-pointer">
+            <span className={controlStrategy === 'active_setpoint' ? 'text-navy font-medium' : 'text-mid-grey'}>
+              Active setpoint (hold to temperature)
+            </span>
+            <span className="block text-xxs text-mid-grey/70 mt-0.5">
+              The system holds the cooling / heating setpoint regardless of outdoor temperature.
+              Use this for a properly-conditioned building.
+            </span>
+          </label>
+        </div>
+        <div className="flex items-start gap-2 text-xxs">
+          <input
+            type="radio"
+            id="cs_free"
+            checked={controlStrategy === 'free_running'}
+            onChange={() => setControlStrategy('free_running')}
+            className="mt-0.5 flex-shrink-0"
+          />
+          <label htmlFor="cs_free" className="flex-1 cursor-pointer">
+            <span className={controlStrategy === 'free_running' ? 'text-navy font-medium' : 'text-mid-grey'}>
+              Free-running / passive only (no active cooling)
+            </span>
+            <span className="block text-xxs text-mid-grey/70 mt-0.5">
+              The building relies on envelope + ventilation; cooling only occurs when the weather assists.
+              Use this to show overheating risk for a naturally-ventilated or mixed-mode design.
+            </span>
+          </label>
+        </div>
+      </div>
+
       {SERVICES_IN_ORDER.map(service => {
         const list = getList(service)
         const isOpen = open[service]
