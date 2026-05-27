@@ -1,0 +1,129 @@
+{
+  "generated_at": "2026-05-27T08:17:58.494Z",
+  "brief": "59 Part 1 — Vent flow → demand coupling",
+  "api": "http://127.0.0.1:8003",
+  "project": {
+    "id": "14b4a5b1-8c73-4acb-8b65-1d22f05ec969",
+    "name": "HIX Bridgewater",
+    "gia_m2": 4322
+  },
+  "predictions": {
+    "bedroom_1000_heat_loss_kwh": 102568,
+    "bedroom_1800_heat_loss_kwh": 184597,
+    "bedroom_1000_heating_drop_mwh": -123.9,
+    "bedroom_1800_heating_drop_mwh": -41.9,
+    "bedroom_1000_fan_kwh": 3504,
+    "mvhr_1000_heat_loss_kwh": 25639.508771929824
+  },
+  "runs": {
+    "baseline": {
+      "eui_kwh_per_m2": 106.2,
+      "heating_demand_mwh": 245.6,
+      "cooling_demand_mwh": 69.1,
+      "bedroom_extract": {
+        "flow_l_s": 2208,
+        "hre": 0,
+        "heat_loss_kwh": 226448.1,
+        "cooling_gain_kwh": 900.5,
+        "fan_kwh": 7736.8
+      },
+      "mvhr_gf_public": {
+        "flow_l_s": 1425,
+        "hre": 0.75,
+        "heat_loss_kwh": 36536.3
+      }
+    },
+    "bedroom_1000": {
+      "eui_kwh_per_m2": 98,
+      "heating_demand_mwh": 141.4,
+      "cooling_demand_mwh": 88.3,
+      "bedroom_extract": {
+        "flow_l_s": 1000,
+        "hre": 0,
+        "heat_loss_kwh": 102558,
+        "cooling_gain_kwh": 407.8,
+        "fan_kwh": 3504
+      },
+      "mvhr_gf_public": {
+        "flow_l_s": 1425,
+        "hre": 0.75,
+        "heat_loss_kwh": 36536.3
+      }
+    },
+    "bedroom_1800": {
+      "eui_kwh_per_m2": 103.2,
+      "heating_demand_mwh": 209.3,
+      "cooling_demand_mwh": 74.5,
+      "bedroom_extract": {
+        "flow_l_s": 1800,
+        "hre": 0,
+        "heat_loss_kwh": 184604.4,
+        "cooling_gain_kwh": 734.1,
+        "fan_kwh": 6307.2
+      },
+      "mvhr_gf_public": {
+        "flow_l_s": 1425,
+        "hre": 0.75,
+        "heat_loss_kwh": 36536.3
+      }
+    },
+    "bedroom_noop": {
+      "eui_kwh_per_m2": 106.2,
+      "heating_demand_mwh": 245.6,
+      "cooling_demand_mwh": 69.1,
+      "bedroom_extract": {
+        "flow_l_s": 2208,
+        "hre": 0,
+        "heat_loss_kwh": 226448.1,
+        "cooling_gain_kwh": 900.5,
+        "fan_kwh": 7736.8
+      },
+      "mvhr_gf_public": {
+        "flow_l_s": 1425,
+        "hre": 0.75,
+        "heat_loss_kwh": 36536.3
+      }
+    },
+    "mvhr_1000": {
+      "eui_kwh_per_m2": 103.8,
+      "heating_demand_mwh": 236.1,
+      "cooling_demand_mwh": 70.4,
+      "bedroom_extract": {
+        "flow_l_s": 2208,
+        "hre": 0,
+        "heat_loss_kwh": 226448.1,
+        "cooling_gain_kwh": 900.5,
+        "fan_kwh": 7736.8
+      },
+      "mvhr_gf_public": {
+        "flow_l_s": 1000,
+        "hre": 0.75,
+        "heat_loss_kwh": 25639.5
+      }
+    }
+  },
+  "diffs": {
+    "bedroom_1000_minus_baseline": {
+      "heating_demand_mwh": -104.19999999999999,
+      "cooling_demand_mwh": 19.200000000000003,
+      "eui_kwh_per_m2": -8.200000000000003,
+      "vent_heat_loss_kwh": -123890.1
+    },
+    "bedroom_1800_minus_baseline": {
+      "heating_demand_mwh": -36.29999999999998
+    },
+    "noop_minus_baseline": {
+      "eui_kwh_per_m2": 0
+    }
+  },
+  "gates": {
+    "59-G1 noop flow leaves EUI unchanged (|Δ|<0.05)": true,
+    "59-G3 bedroom→1000 heat_loss matches hand-calc 102568±200": true,
+    "59-G4 bedroom→1000 heating demand drops 90..130 MWh": true,
+    "59-G5 bedroom→1000 cooling demand within 0..+30 MWh": true,
+    "59-G6 bedroom→1800 heating demand drops 30..50 MWh": true,
+    "59-G7 bedroom→1000 fan_kwh ≈ 3504 ± 50": true,
+    "59-G8 mvhr→1000 heat_loss scales linearly with flow (HRE preserved)": true
+  },
+  "all_pass": true
+}

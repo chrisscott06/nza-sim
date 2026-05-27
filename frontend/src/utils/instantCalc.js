@@ -2633,16 +2633,40 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   //    to "no recovery" levels, matching what State 3 (via the v40
   //    adapter) already does.
   //
-  // Other fields (flow_l_s, sfp_w_per_l_s, hours, schedule_ref) continue
-  // to read from v25. They drift less than HRE in practice; if drift
-  // appears in those fields, expand this override or rewire State 2 to
-  // read v40 ventilation completely (architectural change deferred).
+  // Brief 59 Part 1 (2026-05-27): flow_l_s NOW reads from v40 too,
+  // closing the demand-decoupling bug where v40.flow_rate intervention
+  // edits never reached the State 2 demand integrand (audit:
+  // docs/audit/59_vent_flow.md). Same v40-wins-with-v25-fallback pattern
+  // Brief 50 Part 6 used for HRE. v40 carries `flow_rate` +
+  // `flow_rate_basis ∈ {'constant', 'per_m2', 'per_person'}`; project
+  // to absolute L/s at this entry point. Bridgewater is `basis='constant'`
+  // for all three vent systems so the projection is the identity there.
+  // Other fields (sfp_w_per_l_s, hours, schedule_ref) continue to read
+  // from v25 — they have no v40 equivalent yet.
   const v40VentMap = new Map(
     (Array.isArray(building?.systems_config_v40?.ventilation)
       ? building.systems_config_v40.ventilation
       : []
     ).map(v40 => [v40?.id, v40])
   )
+  // Design occupancy for the 'per_person' flow-rate basis projection —
+  // the headcount the ventilation system is sized to serve. Uses the
+  // same per-room/per-m²/total resolution as computeHourlyGains so the
+  // flow projection and the gain integrand agree on "who's here".
+  const designOccupants = (() => {
+    const occ = building?.occupancy
+    if (!occ) return 0
+    const totalAt100 = computeTotalOccupants(occ, building, gia)
+    return Math.max(0, totalAt100 * Number(occ.occupancy_rate ?? 1))
+  })()
+  const projectV40FlowToLps = (v40Match) => {
+    if (!v40Match || v40Match.flow_rate == null) return null
+    const rate = Number(v40Match.flow_rate)
+    const basis = v40Match.flow_rate_basis ?? 'constant'
+    if (basis === 'per_m2')     return rate * gia
+    if (basis === 'per_person') return rate * designOccupants
+    return rate   // 'constant' — already L/s
+  }
   const ventSystems = (building?.systems_config_v25?.ventilation ?? []).map(v => {
     const v40Match = v40VentMap.get(v?.id)
     // HRE: v40 wins when v40 entry exists; else v25 fallback.
@@ -2662,10 +2686,15 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     const summer_bypass = (v40Match?.summer_bypass != null)
       ? (v40Match.summer_bypass === true)
       : (v?.summer_bypass === true)
+    // Brief 59 Part 1 (2026-05-27): flow_l_s v40-wins-with-v25-fallback.
+    const flowFromV40 = projectV40FlowToLps(v40Match)
+    const flow_l_s = (flowFromV40 != null)
+      ? flowFromV40
+      : Number(v.flow_l_s ?? v.flow_L_s ?? 0)
     return {
       name:       v.name ?? v.id ?? v.library_id ?? '?',
       library_id: v.library_id,
-      flow_l_s:   Number(v.flow_l_s ?? v.flow_L_s ?? 0),
+      flow_l_s,
       hre,
       sfp:        Number(v.sfp_w_per_l_s ?? v.sfp ?? 0),
       hours:      Number(v.hours ?? 8760),
