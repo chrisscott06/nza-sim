@@ -120,6 +120,45 @@ export default function VisualiserHost({ interventions, stackResult, orientation
   // is self-contained so it can own chain-context navigation cleanly).
   // VisualiserHost only owns the persisted selection id.
 
+  // Brief 60 Part A walkthrough fix (2026-05-27): Calc Trail
+  // intervention selector. Mirrors the Breakdown selector pattern
+  // above. Selection options:
+  //   ''         — Combined stack (default; vs final cumulative)
+  //   <intvId>   — Single intervention: panel renders baseline vs
+  //                THAT intervention's cumulative result, so the
+  //                user can see what each intervention does at its
+  //                position in the stack.
+  // Disabled interventions surface in the dropdown but are labeled
+  // as such (matching Breakdown panel behaviour).
+  const [selectedCalctrailId, setSelectedCalctrailId] = useState(() => {
+    try { return localStorage.getItem('nza-interventions-calctrail-id') || '' }
+    catch { return '' }
+  })
+  const handleSetCalctrailId = (id) => {
+    setSelectedCalctrailId(id ?? '')
+    try { localStorage.setItem('nza-interventions-calctrail-id', id ?? '') } catch {}
+  }
+  // Resolve the "after" result for the Calc Trail:
+  //   '' / null → combined-stack cumulative (the default)
+  //   id present → that intervention's cumulative result
+  const calctrailAfterResult = (() => {
+    if (!selectedCalctrailId) return cumulativeResult   // combined
+    if (!Array.isArray(stackResult?.interventions)) return cumulativeResult
+    const found = stackResult.interventions.find((row, idx) => {
+      const intv = interventionList[idx]
+      return intv?.id === selectedCalctrailId && row?.result
+    })
+    return found?.result ?? cumulativeResult
+  })()
+  const calctrailLabel = (() => {
+    if (!selectedCalctrailId) return 'Combined stack (all enabled interventions)'
+    const idx = interventionList.findIndex(i => i?.id === selectedCalctrailId)
+    if (idx < 0) return 'Combined stack (selection not found)'
+    const intv = interventionList[idx]
+    const disabled = intv?.enabled === false ? ' · disabled' : ''
+    return `${idx + 1}. ${intv?.label || '(unnamed)'}${disabled} — cumulative through this step`
+  })()
+
   return (
     <div className="h-full flex flex-col">
       {/* View switcher */}
@@ -166,10 +205,32 @@ export default function VisualiserHost({ interventions, stackResult, orientation
           />
         )}
         {view === 'calctrail' && (
-          <BreakdownTable
-            baselineResult={baselineResult}
-            cumulativeResult={cumulativeResult}
-          />
+          <div className="h-full flex flex-col">
+            {/* Brief 60 Part A walkthrough fix: intervention selector
+                (mirrors the Breakdown view's selector pattern). */}
+            <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2 border-b border-light-grey bg-white">
+              <label className="text-xxs uppercase tracking-wider text-mid-grey">Show</label>
+              <select
+                value={selectedCalctrailId}
+                onChange={(e) => handleSetCalctrailId(e.target.value)}
+                className="text-xxs px-2 py-1 rounded border border-light-grey bg-white text-navy focus:outline-none focus:border-navy"
+              >
+                <option value="">Combined stack</option>
+                {interventionList.map((i, idx) => (
+                  <option key={i?.id ?? idx} value={i?.id ?? ''}>
+                    {idx + 1}. {i?.label || '(unnamed)'}{i?.enabled === false ? '  · disabled' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex-1 min-h-0 overflow-auto">
+              <BreakdownTable
+                baselineResult={baselineResult}
+                cumulativeResult={calctrailAfterResult}
+                viewLabel={calctrailLabel}
+              />
+            </div>
+          </div>
         )}
         {view === 'breakdown' && (
           <div className="h-full flex flex-col">

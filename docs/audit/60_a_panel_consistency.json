@@ -1,0 +1,235 @@
+{
+  "generated_at": "2026-05-27T09:49:55.211Z",
+  "stack": [
+    {
+      "id": "int_3ad13c2d-b3fa-4938-835a-4c1949cd2f42",
+      "label": "MVHR Bedrooms",
+      "enabled": true
+    },
+    {
+      "id": "int_aafbb12c-b294-4e1f-97a3-486295e48113",
+      "label": "VRF 4.0",
+      "enabled": true
+    }
+  ],
+  "gia": 4322,
+  "before": {
+    "demand_heating": 245.6,
+    "demand_cooling": 69.1,
+    "demand_dhw": 204.444,
+    "heat_elec": 95.609,
+    "heat_gas": 0,
+    "cool_elec": 19.743,
+    "dhw_elec": 29.673,
+    "dhw_gas": 147.654,
+    "fan_elec": 39.415,
+    "light_elec": 65.822,
+    "sp_elec": 78.864,
+    "total_elec": 329.126,
+    "total_gas": 147.654,
+    "eui": 110.3,
+    "carbon": 22.02,
+    "gia": 4322
+  },
+  "after": {
+    "demand_heating": 101.9,
+    "demand_cooling": 103,
+    "demand_dhw": 204.444,
+    "heat_elec": 25.475,
+    "heat_gas": 0,
+    "cool_elec": 29.429,
+    "dhw_elec": 29.673,
+    "dhw_gas": 147.654,
+    "fan_elec": 25.949,
+    "light_elec": 76.537,
+    "sp_elec": 78.864,
+    "total_elec": 265.927,
+    "total_gas": 147.654,
+    "eui": 95.7,
+    "carbon": 18.99,
+    "gia": 4322
+  },
+  "rows": [
+    {
+      "label": "Heat needed",
+      "baseline": 245.6,
+      "after": 101.9,
+      "delta": -143.7,
+      "unit": "MWh"
+    },
+    {
+      "label": "Cooling needed",
+      "baseline": 69.1,
+      "after": 103,
+      "delta": 33.900000000000006,
+      "unit": "MWh"
+    },
+    {
+      "label": "Hot water needed",
+      "baseline": 204.444,
+      "after": 204.444,
+      "delta": 0,
+      "unit": "MWh"
+    },
+    {
+      "label": "Heating fuel (elec+gas)",
+      "baseline": 95.609,
+      "after": 25.475,
+      "delta": -70.13399999999999,
+      "unit": "MWh"
+    },
+    {
+      "label": "Cooling fuel (elec)",
+      "baseline": 19.743,
+      "after": 29.429,
+      "delta": 9.686,
+      "unit": "MWh"
+    },
+    {
+      "label": "Hot water fuel (elec+gas)",
+      "baseline": 177.327,
+      "after": 177.327,
+      "delta": 0,
+      "unit": "MWh"
+    },
+    {
+      "label": "Ventilation / fans",
+      "baseline": 39.415,
+      "after": 25.949,
+      "delta": -13.465999999999998,
+      "unit": "MWh"
+    },
+    {
+      "label": "Lighting",
+      "baseline": 65.822,
+      "after": 76.537,
+      "delta": 10.715000000000003,
+      "unit": "MWh"
+    },
+    {
+      "label": "Small power",
+      "baseline": 78.864,
+      "after": 78.864,
+      "delta": 0,
+      "unit": "MWh"
+    },
+    {
+      "label": "Total electricity",
+      "baseline": 329.126,
+      "after": 265.927,
+      "delta": -63.198999999999955,
+      "unit": "MWh"
+    },
+    {
+      "label": "Total gas",
+      "baseline": 147.654,
+      "after": 147.654,
+      "delta": 0,
+      "unit": "MWh"
+    },
+    {
+      "label": "EUI",
+      "baseline": 110.3,
+      "after": 95.7,
+      "delta": -14.599999999999994,
+      "unit": "kWh/m²·yr"
+    },
+    {
+      "label": "Carbon",
+      "baseline": 22.02,
+      "after": 18.99,
+      "delta": -3.030000000000001,
+      "unit": "kgCO₂/m²·yr"
+    }
+  ],
+  "sums": [
+    {
+      "label": "Σ per-service elec (baseline) = Total elec",
+      "expected": 329.126,
+      "actual": 329.126,
+      "residual": 0,
+      "tol": 0.1,
+      "unit": "MWh",
+      "pass": true,
+      "fail": false
+    },
+    {
+      "label": "Σ per-service elec (after)    = Total elec",
+      "expected": 265.927,
+      "actual": 265.927,
+      "residual": 0,
+      "tol": 0.1,
+      "unit": "MWh",
+      "pass": true,
+      "fail": false
+    },
+    {
+      "label": "Σ per-service Δelec           = Total Δelec",
+      "expected": -63.198999999999955,
+      "actual": -63.198999999999955,
+      "residual": 0,
+      "tol": 0.1,
+      "unit": "MWh",
+      "pass": true,
+      "fail": false
+    },
+    {
+      "label": "Σ per-service gas  (baseline) = Total gas",
+      "expected": 147.654,
+      "actual": 147.654,
+      "residual": 0,
+      "tol": 0.1,
+      "unit": "MWh",
+      "pass": true,
+      "fail": false
+    },
+    {
+      "label": "Σ per-service gas  (after)    = Total gas",
+      "expected": 147.654,
+      "actual": 147.654,
+      "residual": 0,
+      "tol": 0.1,
+      "unit": "MWh",
+      "pass": true,
+      "fail": false
+    },
+    {
+      "label": "Σ per-service Δgas            = Total Δgas",
+      "expected": 0,
+      "actual": 0,
+      "residual": 0,
+      "tol": 0.1,
+      "unit": "MWh",
+      "pass": true,
+      "fail": false
+    }
+  ],
+  "xrefs": [
+    {
+      "label": "(elec+gas) × 1000 / GIA vs EUI (baseline) [other carriers expected when >0]",
+      "expected": 110.3,
+      "actual": 110.31466913465988,
+      "residual": 0.014669134659882843,
+      "unit": "kWh/m²·yr",
+      "pass": true
+    },
+    {
+      "label": "(elec+gas) × 1000 / GIA vs EUI (after)",
+      "expected": 95.7,
+      "actual": 95.69204072188802,
+      "residual": -0.007959278111982826,
+      "unit": "kWh/m²·yr",
+      "pass": true
+    },
+    {
+      "label": "Total Δelec (Band 3) vs Σ per-service Δelec (Band 2)",
+      "expected": -63.198999999999955,
+      "actual": -63.198999999999955,
+      "residual": 0,
+      "unit": "MWh",
+      "pass": true
+    }
+  ],
+  "failures": [],
+  "passed": true
+}

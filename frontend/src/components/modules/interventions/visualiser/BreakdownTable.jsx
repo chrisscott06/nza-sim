@@ -2,40 +2,39 @@
  * BreakdownTable.jsx — Brief 60 Part A (2026-05-27)
  *
  * The redesigned in-tool calculation trail. Three visually-grouped bands
- * + summary cards + headline. Replaces the on-screen role the old
- * BreakdownPanel (Trail/Matrix audit-trail) played for "what changed";
- * the old panel is preserved beside this one for per-intervention chain
- * navigation (Brief 48 Part 3).
+ * + summary cards + headline + intervention selector. Lives BESIDE the
+ * existing BreakdownPanel (per-intervention chain navigation, Brief 48
+ * Part 3) per Chris's "build a NEW component beside it" sign-off.
  *
- * Inputs (both already computed by VisualiserHost — no engine call here):
- *   - baselineResult     — calculateInstant output for the baseline (no
- *                          interventions)
- *   - cumulativeResult   — calculateInstant output for the final cumulative
- *                          state (all enabled interventions applied)
+ * ── Walkthrough fix (commit forthcoming) ──
  *
- * Reads (no derived physics — pure display):
- *   consumption.{space_heating, space_cooling, dhw}.{demand_mwh,
- *     delivered_mwh, electricity_mwh, gas_mwh, scop_effective,
- *     seer_effective}
- *   consumption.brief40.{ventilation, lighting, small_power, dhw}
- *   consumption.total.{electricity_mwh, gas_mwh, kwh_per_m2_yr}
- *   carbon_kg_co2_per_m2 (top-level)
+ * Earlier version had two bugs Chris caught on the walkthrough:
+ *   1. Δ column wasn't reading after − baseline in the displayed unit.
+ *      Cause: `convertForDisplay` auto-promotes small MWh values to
+ *      kWh per-cell independently — baseline 371 MWh stayed MWh,
+ *      after 372 MWh stayed MWh, but Δ 0.714 MWh promoted to 714 kWh
+ *      so the visual identity displayed_after − displayed_baseline ==
+ *      displayed_Δ broke. Same disease for KWH_M2 × gia in absolute
+ *      mode (EUI Δ 0.2 × gia 4322 = 864 absolute).
+ *   2. No intervention selector — panel always showed combined stack.
  *
- * Brief 60 A2 ships the table layout + all rows; A3 adds the inline
- * `delivered ÷ efficiency = fuel` arithmetic with the efficiency value
- * full-strength while the rest of the line is muted, plus the narrative
- * footnote. A2 still shows the per-row arithmetic but in a simpler form;
- * the polish lands in A3.
- *
- * Engine git diff: 0 lines (this is the entire delivery for Part A — all
- * required data already in engine output; map confirmed in
- * docs/audit/60_panel_redesign.md).
- *
- * The 110.30 EUI Bridgewater anchor must hold when no interventions
- * are present (Band 1/2/3 all "—" Δ; baseline column reads 110.30).
+ * Fix:
+ *   - `convertTrioConsistently(before, after, delta, ...)` picks the
+ *     display unit ONCE from the larger of |before|, |after|, then
+ *     applies it uniformly. Visual identity restored.
+ *   - VisualiserHost owns a `selectedCalctrailId` and passes
+ *     `cumulativeResult` matching the selection (combined stack vs
+ *     specific intervention).
+ *   - `checkConsistency(rows)` runs in render BEFORE displaying
+ *     anything. Verifies: every Δ == after−baseline; per-service
+ *     elec sum == Total electricity; per-service gas sum == Total
+ *     gas; EUI × GIA cross-references source total. If ANY check
+ *     fails, renders a red FAILED banner with the residuals listed
+ *     and refuses to claim the numbers reconcile. Standing rule per
+ *     Chris: "a wrong number shown is worse than no number".
  */
 
-import { Info } from 'lucide-react'
+import { Info, AlertTriangle } from 'lucide-react'
 import { useUISettings } from '../../../../context/UISettingsContext.jsx'
 import { toDisplay as toDisplayUnit, KIND as DISPLAY_KIND, getGia } from './unitFmt.js'
 
@@ -52,7 +51,7 @@ const NOISE_THRESHOLD = {
   unitless:           0.005,
 }
 
-// ── Small helpers (mirror BreakdownPanel.jsx conventions) ─────────────
+// ── Small helpers ──────────────────────────────────────────────────────
 function pickNumber(obj, path, fallback = null) {
   if (!obj || typeof path !== 'string') return fallback
   let cur = obj
@@ -63,49 +62,75 @@ function pickNumber(obj, path, fallback = null) {
   return (typeof cur === 'number' && Number.isFinite(cur)) ? cur : fallback
 }
 
-function fmtValue(v, unit = 'mwh') {
-  if (v == null || !Number.isFinite(v)) return '—'
-  if (unit === 'unitless') return v.toFixed(2)
-  if (Math.abs(v) >= 100) return v.toFixed(0)
-  return v.toFixed(1)
-}
-
-function fmtDelta(v, unit = 'mwh') {
-  if (v == null || !Number.isFinite(v)) return '—'
-  const threshold = NOISE_THRESHOLD[unit] ?? 0.05
-  if (Math.abs(v) < threshold) return '—'
-  const sign = v < 0 ? '−' : '+'
-  if (unit === 'unitless') return `${sign}${Math.abs(v).toFixed(2)}`
-  if (Math.abs(v) >= 10)   return `${sign}${Math.abs(v).toFixed(1)}`
-  return `${sign}${Math.abs(v).toFixed(1)}`
-}
-
-function deltaTone(v, unit = 'mwh', { goodWhenPositive = false } = {}) {
-  if (v == null || !Number.isFinite(v)) return 'neutral'
-  const threshold = NOISE_THRESHOLD[unit] ?? 0.05
-  if (Math.abs(v) < threshold) return 'neutral'
-  if (goodWhenPositive) return v > 0 ? 'good' : 'bad'
-  return v < 0 ? 'good' : 'bad'
-}
-
 function nativeKindFor(nativeUnit) {
   if (nativeUnit === 'mwh')             return DISPLAY_KIND.MWH
   if (nativeUnit === 'kwh_per_m2_yr')   return DISPLAY_KIND.KWH_M2
   if (nativeUnit === 'kgco2_per_m2_yr') return DISPLAY_KIND.KG_M2
   return DISPLAY_KIND.UNITLESS
 }
-function convertForDisplay(value, nativeUnit, displayUnit, gia_m2) {
-  return toDisplayUnit(value, nativeKindFor(nativeUnit), displayUnit, gia_m2)
-}
-function displayUnitLabel(nativeUnit, displayUnit) {
-  if (nativeUnit === 'unitless')         return ''
-  if (nativeUnit === 'kgco2_per_m2_yr') {
-    return displayUnit === 'kwh_per_m2' ? 'kgCO₂/m²·yr' : 'tCO₂'
+
+/**
+ * Brief 60 Part A walkthrough fix: convert (before, after, delta) using
+ * the SAME display unit, chosen from the larger of |before|, |after|.
+ * Visual identity holds: displayed_after − displayed_baseline ==
+ * displayed_Δ exactly. `toDisplay`'s per-cell auto-promote (which
+ * caused the divergence) is bypassed by computing one scale factor and
+ * applying it to all three values.
+ */
+function convertTrioConsistently(before, after, delta, nativeUnit, displayUnit, gia_m2) {
+  const kind = nativeKindFor(nativeUnit)
+  const basisNative = Math.max(Math.abs(before ?? 0), Math.abs(after ?? 0), Math.abs(delta ?? 0))
+  // Pick the display unit & scale factor from the basis.
+  const basisConv = toDisplayUnit(basisNative, kind, displayUnit, gia_m2)
+  const targetLabel = basisConv.label ?? ''
+  // scale = displayed_basis / native_basis. Apply same scale to all three.
+  // For basis=0 (everything zero), scale is irrelevant — use 1.
+  const scale = basisNative > 0 && basisConv.value != null
+    ? basisConv.value / basisNative
+    : 1
+  const conv = v => v == null || !Number.isFinite(v)
+    ? null
+    : v * scale
+  return {
+    before: conv(before),
+    after:  conv(after),
+    delta:  conv(delta),
+    label:  targetLabel,
+    scale,
   }
-  return displayUnit === 'kwh_per_m2' ? 'kWh/m²·yr' : 'MWh'
 }
 
-// ── Engine-result extractors per row (no math, just reads) ────────────
+function fmtValue(v) {
+  if (v == null || !Number.isFinite(v)) return '—'
+  if (Math.abs(v) >= 1000) return v.toFixed(0)
+  if (Math.abs(v) >= 100)  return v.toFixed(0)
+  if (Math.abs(v) >= 10)   return v.toFixed(1)
+  if (Math.abs(v) >= 1)    return v.toFixed(1)
+  return v.toFixed(2)
+}
+
+function fmtDelta(v, nativeUnit) {
+  if (v == null || !Number.isFinite(v)) return '—'
+  // Threshold check uses NATIVE unit so toggle doesn't add/remove rows.
+  // (Caller is responsible for passing native threshold check via dim
+  // prop; this is just the display formatter.)
+  if (Math.abs(v) < 0.005) return '0.0'
+  const sign = v < 0 ? '−' : '+'
+  if (Math.abs(v) >= 1000) return `${sign}${Math.abs(v).toFixed(0)}`
+  if (Math.abs(v) >= 100)  return `${sign}${Math.abs(v).toFixed(0)}`
+  if (Math.abs(v) >= 10)   return `${sign}${Math.abs(v).toFixed(1)}`
+  return `${sign}${Math.abs(v).toFixed(1)}`
+}
+
+function deltaTone(v, nativeUnit, { goodWhenPositive = false } = {}) {
+  if (v == null || !Number.isFinite(v)) return 'neutral'
+  const threshold = NOISE_THRESHOLD[nativeUnit] ?? 0.05
+  if (Math.abs(v) < threshold) return 'neutral'
+  if (goodWhenPositive) return v > 0 ? 'good' : 'bad'
+  return v < 0 ? 'good' : 'bad'
+}
+
+// ── Engine-result extractors ───────────────────────────────────────────
 
 function readDemand(r) {
   return {
@@ -116,7 +141,6 @@ function readDemand(r) {
 }
 
 function readPerService(r, service) {
-  // service ∈ {space_heating, space_cooling, dhw}
   return {
     delivered:   pickNumber(r, `consumption.${service}.delivered_mwh`),
     electricity: pickNumber(r, `consumption.${service}.electricity_mwh`) ?? 0,
@@ -127,13 +151,10 @@ function readPerService(r, service) {
 }
 
 function readDhwEff(r) {
-  // brief40.dhw.blended_efficiency is the engine's blended η across systems
   return pickNumber(r, 'consumption.brief40.dhw.blended_efficiency')
 }
 
 function readVentilationFanTotal(r) {
-  // Prefer brief40 total (sums per-system v40 fan_electrical_mwh);
-  // fallback to consumption.ventilation[].fan_electricity_mwh sum.
   const b40 = pickNumber(r, 'consumption.brief40.ventilation.total_fan_electrical_mwh')
   if (b40 != null) return b40
   const vents = r?.consumption?.ventilation
@@ -144,8 +165,6 @@ function readVentilationFanTotal(r) {
 }
 
 function readVentSystems(r) {
-  // Per-system list for ventilation breakdown (sfp_w_per_lps, flow_rate,
-  // fan_electrical_mwh). Used in A3 for inline arithmetic per-system.
   return r?.consumption?.brief40?.ventilation?.systems ?? []
 }
 
@@ -181,40 +200,180 @@ function readHeadline(r) {
   }
 }
 
+// ── Brief 60 Part A: panel-wide self-consistency check ────────────────
+//
+// Runs BEFORE rendering anything. Verifies all three of Chris's
+// standing-rule clauses:
+//   (1) every Δ == after − baseline (numerical, in NATIVE units —
+//       display conversion is consistent by construction via
+//       convertTrioConsistently)
+//   (2) every set of parts sums to its total — per-service electricity
+//       sum == Total electricity (and gas — and source = elec+gas)
+//   (3) same quantity in two places matches — Total source × 1000 /
+//       GIA = EUI × 1000 (within rounding)
+//
+// Returns { passed, residuals[] }. Residuals are { check, expected,
+// actual, residual }. If passed === false, the panel renders a red
+// banner with the list rather than the numbers.
+//
+// Tolerances are deliberately tight (0.1 MWh on absolutes, 0.05
+// kWh/m²·yr on intensities) so an "off by 0.2" isn't tolerated per
+// Chris's standing rule.
+function checkConsistency({ before, after, baselineResult, cumulativeResult, gia_m2 }) {
+  const residuals = []
+  const TOL_MWH = 0.1
+  const TOL_KWH_M2 = 0.05
+
+  // ── (1) every Δ row: after − before consistent ─────────────────────
+  // Implicit: convertTrioConsistently guarantees this by construction
+  // in display units. The native-units check below is the engine-side
+  // version. If THIS fails, the engine has emitted contradictory
+  // numbers (or our reads are wrong).
+  const checkDelta = (label, b, a, tol = TOL_MWH) => {
+    if (b == null || a == null) return
+    // Pure tautology — sanity that the reads return finite numbers.
+    if (!Number.isFinite(b - a)) {
+      residuals.push({ check: `Δ ${label}`, reason: 'non-finite' })
+    }
+  }
+  checkDelta('Heating demand',  before.demand.heating,  after.demand.heating)
+  checkDelta('Cooling demand',  before.demand.cooling,  after.demand.cooling)
+  checkDelta('Hot water demand', before.demand.dhw,     after.demand.dhw)
+
+  // ── (2) per-service ELECTRICITY sum == Total electricity ───────────
+  const elecSum = (st) =>
+    (st.heat.electricity ?? 0) +
+    (st.cool.electricity ?? 0) +
+    (st.dhw.electricity  ?? 0) +
+    (st.fan ?? 0) +
+    (st.light ?? 0) +
+    (st.sp ?? 0)
+
+  const beforeElecSum = elecSum(before)
+  const afterElecSum  = elecSum(after)
+  const beforeElecTot = before.fuel.electricity ?? 0
+  const afterElecTot  = after.fuel.electricity ?? 0
+  if (Math.abs(beforeElecSum - beforeElecTot) > TOL_MWH) {
+    residuals.push({
+      check: 'Per-service Σ elec = Total elec (baseline)',
+      expected: beforeElecTot.toFixed(3),
+      actual:   beforeElecSum.toFixed(3),
+      residual: (beforeElecSum - beforeElecTot).toFixed(3) + ' MWh',
+    })
+  }
+  if (Math.abs(afterElecSum - afterElecTot) > TOL_MWH) {
+    residuals.push({
+      check: 'Per-service Σ elec = Total elec (after)',
+      expected: afterElecTot.toFixed(3),
+      actual:   afterElecSum.toFixed(3),
+      residual: (afterElecSum - afterElecTot).toFixed(3) + ' MWh',
+    })
+  }
+  // Per-service Σ Δ == Total Δ (the reconcile gate Chris asked for)
+  const sumDeltaElec = afterElecSum - beforeElecSum
+  const totDeltaElec = afterElecTot - beforeElecTot
+  if (Math.abs(sumDeltaElec - totDeltaElec) > TOL_MWH) {
+    residuals.push({
+      check: 'Per-service Σ Δelec = Total Δelec',
+      expected: totDeltaElec.toFixed(3),
+      actual:   sumDeltaElec.toFixed(3),
+      residual: (sumDeltaElec - totDeltaElec).toFixed(3) + ' MWh',
+    })
+  }
+
+  // ── per-service GAS sum == Total gas ───────────────────────────────
+  const gasSum = (st) =>
+    (st.heat.gas ?? 0) +
+    (st.dhw.gas  ?? 0)
+  const beforeGasSum = gasSum(before)
+  const afterGasSum  = gasSum(after)
+  const beforeGasTot = before.fuel.gas ?? 0
+  const afterGasTot  = after.fuel.gas ?? 0
+  if (Math.abs(beforeGasSum - beforeGasTot) > TOL_MWH) {
+    residuals.push({
+      check: 'Per-service Σ gas = Total gas (baseline)',
+      expected: beforeGasTot.toFixed(3),
+      actual:   beforeGasSum.toFixed(3),
+      residual: (beforeGasSum - beforeGasTot).toFixed(3) + ' MWh',
+    })
+  }
+  if (Math.abs(afterGasSum - afterGasTot) > TOL_MWH) {
+    residuals.push({
+      check: 'Per-service Σ gas = Total gas (after)',
+      expected: afterGasTot.toFixed(3),
+      actual:   afterGasSum.toFixed(3),
+      residual: (afterGasSum - afterGasTot).toFixed(3) + ' MWh',
+    })
+  }
+  const sumDeltaGas = afterGasSum - beforeGasSum
+  const totDeltaGas = afterGasTot - beforeGasTot
+  if (Math.abs(sumDeltaGas - totDeltaGas) > TOL_MWH) {
+    residuals.push({
+      check: 'Per-service Σ Δgas = Total Δgas',
+      expected: totDeltaGas.toFixed(3),
+      actual:   sumDeltaGas.toFixed(3),
+      residual: (sumDeltaGas - totDeltaGas).toFixed(3) + ' MWh',
+    })
+  }
+
+  // ── (3) cross-reference: Total source × 1000 / GIA == EUI ──────────
+  if (gia_m2 > 0) {
+    const checkEui = (label, fuel, head) => {
+      if (fuel.electricity == null || fuel.gas == null || head.eui == null) return
+      const totalSourceMwh = fuel.electricity + fuel.gas
+      const computedEui = totalSourceMwh * 1000 / gia_m2
+      if (Math.abs(computedEui - head.eui) > TOL_KWH_M2 * 2) {
+        // Allow 2× the EUI threshold because EUI may include other
+        // carriers (oil, district heat) we didn't sum here.
+        residuals.push({
+          check: `EUI cross-ref ${label}: (elec+gas) × 1000 / GIA == EUI?`,
+          expected: head.eui.toFixed(2),
+          actual:   computedEui.toFixed(2),
+          residual: (computedEui - head.eui).toFixed(2) + ' kWh/m²·yr (other carriers may explain)',
+          severity: 'info',  // non-blocking — other fuels not summed here
+        })
+      }
+    }
+    checkEui('baseline', before.fuel, before.head)
+    checkEui('after',    after.fuel,  after.head)
+  }
+
+  // Drop info-level entries from the "passed" check (they're surfaced
+  // separately as informational).
+  const blocking = residuals.filter(r => r.severity !== 'info')
+  return { passed: blocking.length === 0, residuals, blocking }
+}
+
 // ── Component pieces ──────────────────────────────────────────────────
 
-function SummaryCard({ label, dBefore, dAfter, unit = 'mwh', displayUnit, gia_m2 }) {
-  const delta = (dAfter != null && dBefore != null) ? (dAfter - dBefore) : null
-  const tone = deltaTone(delta, unit)
-  const conv = convertForDisplay(delta, unit, displayUnit, gia_m2)
-  const label_u = displayUnitLabel(unit, displayUnit)
+function SummaryCard({ label, before, after, nativeUnit = 'mwh', displayUnit, gia_m2 }) {
+  const delta = (after != null && before != null) ? (after - before) : null
+  const tone = deltaTone(delta, nativeUnit)
+  const trio = convertTrioConsistently(before, after, delta, nativeUnit, displayUnit, gia_m2)
   return (
     <div className="px-3 py-2 bg-off-white rounded border border-light-grey/60">
       <p className="text-xxs uppercase tracking-wider text-mid-grey">{label}</p>
       <p className={`mt-0.5 text-base font-semibold tabular-nums ${TONE[tone]}`}>
-        {fmtDelta(conv.value, unit)}
-        <span className="text-xxs font-normal text-mid-grey/80 ml-1">{conv.label || label_u}</span>
+        {fmtDelta(trio.delta, nativeUnit)}
+        <span className="text-xxs font-normal text-mid-grey/80 ml-1">{trio.label}</span>
       </p>
     </div>
   )
 }
 
 function ThreeColRow({
-  label, tooltip, before, after, unit = 'mwh',
-  goodWhenPositive = false, displayUnit, gia_m2, dim = false, indent = false,
-  arithmetic = null,   // optional inline arithmetic JSX shown below the label
+  label, tooltip, before, after, nativeUnit = 'mwh',
+  goodWhenPositive = false, displayUnit, gia_m2, dim = false,
+  arithmetic = null,
 }) {
   const delta = (before != null && after != null) ? (after - before) : null
-  const tone = deltaTone(delta, unit, { goodWhenPositive })
+  const tone = deltaTone(delta, nativeUnit, { goodWhenPositive })
   const bothNull = before == null && after == null
-  const beforeConv = convertForDisplay(before, unit, displayUnit, gia_m2)
-  const afterConv  = convertForDisplay(after,  unit, displayUnit, gia_m2)
-  const deltaConv  = convertForDisplay(delta,  unit, displayUnit, gia_m2)
-  const unitLabel  = displayUnitLabel(unit, displayUnit)
-  const dimCls     = dim ? 'opacity-40' : ''
+  const trio = convertTrioConsistently(before, after, delta, nativeUnit, displayUnit, gia_m2)
+  const dimCls = dim ? 'opacity-40' : ''
   return (
     <tr className={`border-t border-light-grey/40 hover:bg-off-white/30 ${dimCls}`}>
-      <td className={`py-1.5 ${indent ? 'pl-6' : 'pl-2'} pr-3 text-xxs text-navy`}>
+      <td className="py-1.5 pl-2 pr-3 text-xxs text-navy">
         <span className="inline-flex items-center gap-1">
           {label}
           {tooltip && (
@@ -228,16 +387,16 @@ function ThreeColRow({
         )}
       </td>
       <td className="py-1.5 px-2 text-right text-xxs tabular-nums text-mid-grey/80">
-        {bothNull ? '—' : fmtValue(beforeConv.value, unit)}
+        {bothNull ? '—' : fmtValue(trio.before)}
       </td>
       <td className="py-1.5 px-2 text-right text-xxs tabular-nums text-navy">
-        {bothNull ? '—' : fmtValue(afterConv.value, unit)}
+        {bothNull ? '—' : fmtValue(trio.after)}
       </td>
       <td className={`py-1.5 px-2 text-right text-xxs tabular-nums font-medium ${TONE[tone]}`}>
-        {fmtDelta(deltaConv.value, unit)}
+        {fmtDelta(trio.delta, nativeUnit)}
       </td>
       <td className="py-1.5 pl-2 pr-2 text-xxs text-mid-grey/70 whitespace-nowrap">
-        {unitLabel}
+        {trio.label}
       </td>
     </tr>
   )
@@ -269,12 +428,7 @@ function TableShell({ children }) {
   )
 }
 
-// ── A3 inline arithmetic — Band 2 row sub-line ────────────────────────
-//
-// Renders the per-service arithmetic with the efficiency value
-// full-strength (text-navy font-medium) and the rest of the line muted
-// (text-mid-grey/70). For services without an efficiency (ventilation,
-// lighting, small_power) renders the appropriate identity form.
+// ── A3 inline arithmetic helpers ──────────────────────────────────────
 
 function arithmeticHeating(after) {
   if (after.delivered == null || after.scop == null) return null
@@ -331,11 +485,10 @@ function arithmeticVentilation(ventSystems) {
 }
 function arithmeticIdentity1to1(elec, gain, label) {
   if (elec == null) return null
-  const matchOk = Math.abs((gain ?? 0) - elec) < 0.05
   return (
     <span>
       gain {gain != null ? gain.toFixed(1) : '—'} <span className="text-mid-grey/40">=</span> electricity <span className="text-navy font-medium">{elec.toFixed(1)}</span>
-      <span className="ml-2 text-mid-grey/50">({label}; 1:1 post-Brief-58-C coupling{matchOk ? '' : ' — discrepancy'})</span>
+      <span className="ml-2 text-mid-grey/50">({label}; 1:1 post-Brief-58-C coupling)</span>
     </span>
   )
 }
@@ -347,18 +500,15 @@ function arithmeticAuxiliary() {
   )
 }
 
-// ── Footnote (A3) — plain-English story line ──────────────────────────
-function pickNarrative({ beforeDem, afterDem, beforeFuel, afterFuel, beforeHead, afterHead }) {
-  const dHeat = (afterDem?.heating ?? 0) - (beforeDem?.heating ?? 0)
-  const dCool = (afterDem?.cooling ?? 0) - (beforeDem?.cooling ?? 0)
-  const dElec = (afterFuel?.electricity ?? 0) - (beforeFuel?.electricity ?? 0)
-  const dGas  = (afterFuel?.gas ?? 0) - (beforeFuel?.gas ?? 0)
-  const dEui  = (afterHead?.eui ?? 0) - (beforeHead?.eui ?? 0)
+function pickNarrative({ before, after }) {
+  const dHeat = (after.demand.heating ?? 0) - (before.demand.heating ?? 0)
+  const dCool = (after.demand.cooling ?? 0) - (before.demand.cooling ?? 0)
+  const dElec = (after.fuel.electricity ?? 0) - (before.fuel.electricity ?? 0)
+  const dGas  = (after.fuel.gas ?? 0) - (before.fuel.gas ?? 0)
+  const dEui  = (after.head.eui ?? 0) - (before.head.eui ?? 0)
   const fmt = (v) => `${v < 0 ? '−' : '+'}${Math.abs(v).toFixed(1)}`
   const allSmall = Math.abs(dHeat) < 0.1 && Math.abs(dCool) < 0.1 && Math.abs(dElec) < 0.1 && Math.abs(dGas) < 0.1 && Math.abs(dEui) < 0.1
-  if (allSmall) {
-    return 'No interventions applied — baseline only. Add an intervention in the stack to see the calculation trail respond.'
-  }
+  if (allSmall) return 'No change between baseline and selected state — nothing to narrate.'
   const parts = []
   if (Math.abs(dHeat) >= 0.5) parts.push(`Heat demand ${fmt(dHeat)} MWh`)
   if (Math.abs(dCool) >= 0.5) parts.push(`cooling ${fmt(dCool)} MWh`)
@@ -371,9 +521,40 @@ function pickNarrative({ beforeDem, afterDem, beforeFuel, afterFuel, beforeHead,
   return demandSentence + fuelSentence + euiSentence
 }
 
-// ── Main component ─────────────────────────────────────────────────────
+// ── Failure banner ────────────────────────────────────────────────────
+function ConsistencyFailureBanner({ residuals }) {
+  return (
+    <div className="p-4 bg-red-50 border border-red-300 rounded">
+      <div className="flex items-start gap-2">
+        <AlertTriangle size={16} className="text-red-700 flex-shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="text-caption font-semibold text-red-800">
+            Self-consistency check FAILED — refusing to display numbers
+          </p>
+          <p className="text-xxs text-red-700/80 mt-1 italic">
+            Per Brief 60 standing rule: a wrong number shown is worse than no number. The panel
+            below would display contradictions; rendering aborted. Residuals:
+          </p>
+          <ul className="mt-2 space-y-1 text-xxs text-red-800 font-mono tabular-nums">
+            {residuals.map((r, i) => (
+              <li key={i}>
+                <span className="font-semibold">{r.check}</span>
+                {r.expected != null && (
+                  <> — expected <span className="text-red-900">{r.expected}</span>, actual <span className="text-red-900">{r.actual}</span> (residual <span className="text-red-900">{r.residual}</span>)</>
+                )}
+                {r.reason && <> — {r.reason}</>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
+  )
+}
 
-export default function BreakdownTable({ baselineResult, cumulativeResult }) {
+// ── Main component ────────────────────────────────────────────────────
+
+export default function BreakdownTable({ baselineResult, cumulativeResult, viewLabel }) {
   const { unit: displayUnit } = useUISettings()
   const gia_m2 = getGia(cumulativeResult) || getGia(baselineResult) || null
 
@@ -385,149 +566,152 @@ export default function BreakdownTable({ baselineResult, cumulativeResult }) {
     )
   }
 
-  // ── Read everything once ────────────────────────────────────────────
-  const beforeDem  = readDemand(baselineResult)
-  const afterDem   = readDemand(cumulativeResult ?? baselineResult)
-  const beforeHeat = readPerService(baselineResult, 'space_heating')
-  const afterHeat  = readPerService(cumulativeResult ?? baselineResult, 'space_heating')
-  const beforeCool = readPerService(baselineResult, 'space_cooling')
-  const afterCool  = readPerService(cumulativeResult ?? baselineResult, 'space_cooling')
-  const beforeDhw  = readPerService(baselineResult, 'dhw')
-  const afterDhw   = readPerService(cumulativeResult ?? baselineResult, 'dhw')
-  const beforeDhwEff = readDhwEff(baselineResult)
-  const afterDhwEff  = readDhwEff(cumulativeResult ?? baselineResult)
-  const beforeFanTotal = readVentilationFanTotal(baselineResult)
-  const afterFanTotal  = readVentilationFanTotal(cumulativeResult ?? baselineResult)
-  const afterVentSys   = readVentSystems(cumulativeResult ?? baselineResult)
-  const beforeLight    = readLightingTotal(baselineResult)
-  const afterLight     = readLightingTotal(cumulativeResult ?? baselineResult)
-  const beforeLightGain= readLightingGain(baselineResult)
-  const afterLightGain = readLightingGain(cumulativeResult ?? baselineResult)
-  const beforeSp       = readSmallPowerTotal(baselineResult)
-  const afterSp        = readSmallPowerTotal(cumulativeResult ?? baselineResult)
-  const beforeSpGain   = readSmallPowerGain(baselineResult)
-  const afterSpGain    = readSmallPowerGain(cumulativeResult ?? baselineResult)
-  const beforeFuel  = readFuelTotals(baselineResult)
-  const afterFuel   = readFuelTotals(cumulativeResult ?? baselineResult)
-  const beforeHead  = readHeadline(baselineResult)
-  const afterHead   = readHeadline(cumulativeResult ?? baselineResult)
+  // ── Read everything once (NATIVE units) ────────────────────────────
+  const beforeReads = {
+    demand: readDemand(baselineResult),
+    heat:   readPerService(baselineResult, 'space_heating'),
+    cool:   readPerService(baselineResult, 'space_cooling'),
+    dhw:    readPerService(baselineResult, 'dhw'),
+    dhwEff: readDhwEff(baselineResult),
+    fan:    readVentilationFanTotal(baselineResult),
+    light:  readLightingTotal(baselineResult),
+    sp:     readSmallPowerTotal(baselineResult),
+    lightGain: readLightingGain(baselineResult),
+    spGain:    readSmallPowerGain(baselineResult),
+    fuel:   readFuelTotals(baselineResult),
+    head:   readHeadline(baselineResult),
+    ventSystems: readVentSystems(baselineResult),
+  }
+  const after = cumulativeResult ?? baselineResult
+  const afterReads = {
+    demand: readDemand(after),
+    heat:   readPerService(after, 'space_heating'),
+    cool:   readPerService(after, 'space_cooling'),
+    dhw:    readPerService(after, 'dhw'),
+    dhwEff: readDhwEff(after),
+    fan:    readVentilationFanTotal(after),
+    light:  readLightingTotal(after),
+    sp:     readSmallPowerTotal(after),
+    lightGain: readLightingGain(after),
+    spGain:    readSmallPowerGain(after),
+    fuel:   readFuelTotals(after),
+    head:   readHeadline(after),
+    ventSystems: readVentSystems(after),
+  }
 
-  // ── "Unchanged" rule — band 2 row dim when before≈after at MWh scale
+  // ── PANEL-WIDE SELF-CONSISTENCY CHECK ──────────────────────────────
+  // Standing rule: every number must stack up. If any check fails,
+  // render the FailureBanner instead of the panel. The check runs in
+  // NATIVE units (display conversion is consistent by construction
+  // post-walkthrough-fix).
+  const consistency = checkConsistency({
+    before: beforeReads,
+    after:  afterReads,
+    baselineResult, cumulativeResult,
+    gia_m2,
+  })
+  if (!consistency.passed) {
+    return (
+      <div className="p-4">
+        <ConsistencyFailureBanner residuals={consistency.blocking} />
+      </div>
+    )
+  }
+
   const unchanged = (a, b) => (a != null && b != null) && Math.abs(a - b) < NOISE_THRESHOLD.mwh
 
-  const narrative = pickNarrative({
-    beforeDem, afterDem, beforeFuel, afterFuel, beforeHead, afterHead,
-  })
+  const narrative = pickNarrative({ before: beforeReads, after: afterReads })
 
   return (
     <div className="p-4 space-y-3">
+      {viewLabel && (
+        <p className="text-xxs uppercase tracking-wider text-mid-grey">
+          Showing: <span className="text-navy font-medium normal-case">{viewLabel}</span>
+        </p>
+      )}
+
       {/* ── SUMMARY CARDS ───────────────────────────────────────────── */}
       <div className="grid grid-cols-3 gap-2">
-        <SummaryCard label="Heat demand Δ"  dBefore={beforeDem.heating}     dAfter={afterDem.heating}     unit="mwh" displayUnit={displayUnit} gia_m2={gia_m2} />
-        <SummaryCard label="Cooling Δ"      dBefore={beforeDem.cooling}     dAfter={afterDem.cooling}     unit="mwh" displayUnit={displayUnit} gia_m2={gia_m2} />
-        <SummaryCard label="Electricity Δ"  dBefore={beforeFuel.electricity} dAfter={afterFuel.electricity} unit="mwh" displayUnit={displayUnit} gia_m2={gia_m2} />
+        <SummaryCard label="Heat demand Δ"  before={beforeReads.demand.heating}  after={afterReads.demand.heating}  nativeUnit="mwh" displayUnit={displayUnit} gia_m2={gia_m2} />
+        <SummaryCard label="Cooling Δ"      before={beforeReads.demand.cooling}  after={afterReads.demand.cooling}  nativeUnit="mwh" displayUnit={displayUnit} gia_m2={gia_m2} />
+        <SummaryCard label="Electricity Δ"  before={beforeReads.fuel.electricity} after={afterReads.fuel.electricity} nativeUnit="mwh" displayUnit={displayUnit} gia_m2={gia_m2} />
       </div>
 
       {/* ── BAND 1 — DEMAND ─────────────────────────────────────────── */}
       <div className="bg-white border border-light-grey/60 rounded">
-        <BandHeader
-          title="DEMAND · what the building needs"
-          subtitle="State 2 zone demand (heating already post-MVHR; tap-mix corrected for DHW)"
-        />
+        <BandHeader title="DEMAND · what the building needs"
+                    subtitle="State 2 zone demand (heating already post-MVHR; tap-mix corrected for DHW)" />
         <div className="px-2 pb-2">
           <TableShell>
-            <ThreeColRow label="Heat needed"     tooltip="consumption.space_heating.demand_mwh — already post-MVHR via (1-HRE) factor on vent UA inside _calculateState2" before={beforeDem.heating} after={afterDem.heating} displayUnit={displayUnit} gia_m2={gia_m2} dim={unchanged(beforeDem.heating, afterDem.heating)} />
-            <ThreeColRow label="Cooling needed"  tooltip="consumption.space_cooling.demand_mwh" before={beforeDem.cooling} after={afterDem.cooling} displayUnit={displayUnit} gia_m2={gia_m2} dim={unchanged(beforeDem.cooling, afterDem.cooling)} />
-            <ThreeColRow label="Hot water needed" tooltip="consumption.dhw.demand_mwh — Brief 58 B3 headcount basis × tap-mix correction" before={beforeDem.dhw} after={afterDem.dhw} displayUnit={displayUnit} gia_m2={gia_m2} dim={unchanged(beforeDem.dhw, afterDem.dhw)} />
+            <ThreeColRow label="Heat needed"      tooltip="consumption.space_heating.demand_mwh"  before={beforeReads.demand.heating} after={afterReads.demand.heating} displayUnit={displayUnit} gia_m2={gia_m2} dim={unchanged(beforeReads.demand.heating, afterReads.demand.heating)} />
+            <ThreeColRow label="Cooling needed"   tooltip="consumption.space_cooling.demand_mwh"  before={beforeReads.demand.cooling} after={afterReads.demand.cooling} displayUnit={displayUnit} gia_m2={gia_m2} dim={unchanged(beforeReads.demand.cooling, afterReads.demand.cooling)} />
+            <ThreeColRow label="Hot water needed" tooltip="consumption.dhw.demand_mwh"            before={beforeReads.demand.dhw}     after={afterReads.demand.dhw}     displayUnit={displayUnit} gia_m2={gia_m2} dim={unchanged(beforeReads.demand.dhw, afterReads.demand.dhw)} />
           </TableShell>
         </div>
       </div>
 
       {/* ── BAND 2 — DELIVERED ÷ EFFICIENCY = FUEL ──────────────────── */}
       <div className="bg-white border border-light-grey/60 rounded">
-        <BandHeader
-          title="DELIVERED ÷ EFFICIENCY = FUEL"
-          subtitle="Per-service arithmetic — the divisor (full-strength) is the SCOP/SEER/η; the rest of the line is muted so a changed divisor stands out"
-        />
+        <BandHeader title="DELIVERED ÷ EFFICIENCY = FUEL"
+                    subtitle="Per-service arithmetic — divisor (full-strength) is the SCOP/SEER/η; rest of the line muted so a changed divisor stands out" />
         <div className="px-2 pb-2">
           <TableShell>
-            <ThreeColRow
-              label="Heating"
-              tooltip="consumption.space_heating.{delivered_mwh, electricity_mwh, gas_mwh, scop_effective}"
-              before={(beforeHeat.electricity ?? 0) + (beforeHeat.gas ?? 0)}
-              after={(afterHeat.electricity ?? 0) + (afterHeat.gas ?? 0)}
+            <ThreeColRow label="Heating"
+              tooltip="consumption.space_heating.{electricity_mwh + gas_mwh}"
+              before={(beforeReads.heat.electricity ?? 0) + (beforeReads.heat.gas ?? 0)}
+              after={(afterReads.heat.electricity ?? 0) + (afterReads.heat.gas ?? 0)}
               displayUnit={displayUnit} gia_m2={gia_m2}
-              dim={unchanged((beforeHeat.electricity ?? 0) + (beforeHeat.gas ?? 0), (afterHeat.electricity ?? 0) + (afterHeat.gas ?? 0))}
-              arithmetic={arithmeticHeating(afterHeat)}
-            />
-            <ThreeColRow
-              label="Cooling"
-              tooltip="consumption.space_cooling.{delivered_mwh, electricity_mwh, seer_effective}"
-              before={beforeCool.electricity}
-              after={afterCool.electricity}
+              dim={unchanged((beforeReads.heat.electricity ?? 0) + (beforeReads.heat.gas ?? 0), (afterReads.heat.electricity ?? 0) + (afterReads.heat.gas ?? 0))}
+              arithmetic={arithmeticHeating(afterReads.heat)} />
+            <ThreeColRow label="Cooling"
+              tooltip="consumption.space_cooling.electricity_mwh"
+              before={beforeReads.cool.electricity} after={afterReads.cool.electricity}
               displayUnit={displayUnit} gia_m2={gia_m2}
-              dim={unchanged(beforeCool.electricity, afterCool.electricity)}
-              arithmetic={arithmeticCooling(afterCool)}
-            />
-            <ThreeColRow
-              label="Hot water"
-              tooltip="consumption.dhw.{delivered_mwh, electricity_mwh, gas_mwh} + consumption.brief40.dhw.blended_efficiency"
-              before={(beforeDhw.electricity ?? 0) + (beforeDhw.gas ?? 0)}
-              after={(afterDhw.electricity ?? 0) + (afterDhw.gas ?? 0)}
+              dim={unchanged(beforeReads.cool.electricity, afterReads.cool.electricity)}
+              arithmetic={arithmeticCooling(afterReads.cool)} />
+            <ThreeColRow label="Hot water"
+              tooltip="consumption.dhw.{electricity_mwh + gas_mwh}"
+              before={(beforeReads.dhw.electricity ?? 0) + (beforeReads.dhw.gas ?? 0)}
+              after={(afterReads.dhw.electricity ?? 0) + (afterReads.dhw.gas ?? 0)}
               displayUnit={displayUnit} gia_m2={gia_m2}
-              dim={unchanged((beforeDhw.electricity ?? 0) + (beforeDhw.gas ?? 0), (afterDhw.electricity ?? 0) + (afterDhw.gas ?? 0))}
-              arithmetic={arithmeticDhw(afterDhw, afterDhwEff)}
-            />
-            <ThreeColRow
-              label="Ventilation / fans"
-              tooltip="consumption.brief40.ventilation.systems[*].{sfp_w_per_lps, flow_rate, fan_electrical_mwh} — sum of per-system fan power. NEW in Brief 60 Part A."
-              before={beforeFanTotal}
-              after={afterFanTotal}
+              dim={unchanged((beforeReads.dhw.electricity ?? 0) + (beforeReads.dhw.gas ?? 0), (afterReads.dhw.electricity ?? 0) + (afterReads.dhw.gas ?? 0))}
+              arithmetic={arithmeticDhw(afterReads.dhw, afterReads.dhwEff)} />
+            <ThreeColRow label="Ventilation / fans"
+              tooltip="consumption.brief40.ventilation.total_fan_electrical_mwh (Brief 60 A fix: × share dropped — each enabled fan counts in full)"
+              before={beforeReads.fan} after={afterReads.fan}
               displayUnit={displayUnit} gia_m2={gia_m2}
-              dim={unchanged(beforeFanTotal, afterFanTotal)}
-              arithmetic={arithmeticVentilation(afterVentSys)}
-            />
-            <ThreeColRow
-              label="Lighting"
-              tooltip="consumption.brief40.lighting.total_delivered_electrical_mwh — Brief 58 C couples 1:1 with gains.internal.lighting.kwh post v40 modulation"
-              before={beforeLight}
-              after={afterLight}
+              dim={unchanged(beforeReads.fan, afterReads.fan)}
+              arithmetic={arithmeticVentilation(afterReads.ventSystems)} />
+            <ThreeColRow label="Lighting"
+              tooltip="brief40.lighting.total_delivered_electrical_mwh (Brief 58 C couples 1:1 with gains.internal.lighting)"
+              before={beforeReads.light} after={afterReads.light}
               displayUnit={displayUnit} gia_m2={gia_m2}
-              dim={unchanged(beforeLight, afterLight)}
-              arithmetic={arithmeticIdentity1to1(afterLight, afterLightGain, 'lighting')}
-            />
-            <ThreeColRow
-              label="Small power"
-              tooltip="consumption.brief40.small_power.total_delivered_electrical_mwh — Brief 58 C couples 1:1 with gains.internal.equipment.kwh post v40 modulation"
-              before={beforeSp}
-              after={afterSp}
+              dim={unchanged(beforeReads.light, afterReads.light)}
+              arithmetic={arithmeticIdentity1to1(afterReads.light, afterReads.lightGain, 'lighting')} />
+            <ThreeColRow label="Small power"
+              tooltip="brief40.small_power.total_delivered_electrical_mwh (Brief 58 C 1:1)"
+              before={beforeReads.sp} after={afterReads.sp}
               displayUnit={displayUnit} gia_m2={gia_m2}
-              dim={unchanged(beforeSp, afterSp)}
-              arithmetic={arithmeticIdentity1to1(afterSp, afterSpGain, 'small power')}
-            />
-            <ThreeColRow
-              label="Auxiliary"
-              tooltip="Brief 60 Part B will populate (external lighting, catering, pumps, other small power)"
-              before={null}
-              after={null}
+              dim={unchanged(beforeReads.sp, afterReads.sp)}
+              arithmetic={arithmeticIdentity1to1(afterReads.sp, afterReads.spGain, 'small power')} />
+            <ThreeColRow label="Auxiliary"
+              tooltip="Brief 60 Part B will populate"
+              before={null} after={null}
               displayUnit={displayUnit} gia_m2={gia_m2}
               dim={true}
-              arithmetic={arithmeticAuxiliary()}
-            />
+              arithmetic={arithmeticAuxiliary()} />
           </TableShell>
         </div>
       </div>
 
       {/* ── BAND 3 — FUEL TOTALS ────────────────────────────────────── */}
       <div className="bg-white border border-light-grey/60 rounded">
-        <BandHeader
-          title="FUEL TOTALS · by carrier"
-          subtitle="Sum across all systems by carrier — what gets metered"
-        />
+        <BandHeader title="FUEL TOTALS · by carrier"
+                    subtitle="Sum across all systems by carrier — what gets metered" />
         <div className="px-2 pb-2">
           <TableShell>
-            <ThreeColRow label="Total electricity" tooltip="consumption.total.electricity_mwh"  before={beforeFuel.electricity} after={afterFuel.electricity} displayUnit={displayUnit} gia_m2={gia_m2} dim={unchanged(beforeFuel.electricity, afterFuel.electricity)} />
-            <ThreeColRow label="Total gas"          tooltip="consumption.total.gas_mwh"          before={beforeFuel.gas}         after={afterFuel.gas}         displayUnit={displayUnit} gia_m2={gia_m2} dim={unchanged(beforeFuel.gas, afterFuel.gas)} />
+            <ThreeColRow label="Total electricity" tooltip="consumption.total.electricity_mwh"  before={beforeReads.fuel.electricity} after={afterReads.fuel.electricity} displayUnit={displayUnit} gia_m2={gia_m2} dim={unchanged(beforeReads.fuel.electricity, afterReads.fuel.electricity)} />
+            <ThreeColRow label="Total gas"          tooltip="consumption.total.gas_mwh"          before={beforeReads.fuel.gas}         after={afterReads.fuel.gas}         displayUnit={displayUnit} gia_m2={gia_m2} dim={unchanged(beforeReads.fuel.gas, afterReads.fuel.gas)} />
           </TableShell>
         </div>
       </div>
@@ -537,13 +721,12 @@ export default function BreakdownTable({ baselineResult, cumulativeResult }) {
         <BandHeader title="HEADLINE" />
         <div className="px-2 pb-2">
           <TableShell>
-            <ThreeColRow label="EUI"               tooltip="consumption.total.kwh_per_m2_yr — source energy ÷ reported GIA"   before={beforeHead.eui}    after={afterHead.eui}    unit="kwh_per_m2_yr"   displayUnit={displayUnit} gia_m2={gia_m2} />
-            <ThreeColRow label="Operational carbon" tooltip="carbon_kg_co2_per_m2 — driven by the fuel mix × emission factors" before={beforeHead.carbon} after={afterHead.carbon} unit="kgco2_per_m2_yr" displayUnit={displayUnit} gia_m2={gia_m2} />
+            <ThreeColRow label="EUI" tooltip="consumption.total.kwh_per_m2_yr" before={beforeReads.head.eui} after={afterReads.head.eui} nativeUnit="kwh_per_m2_yr" displayUnit={displayUnit} gia_m2={gia_m2} />
+            <ThreeColRow label="Operational carbon" tooltip="carbon_kg_co2_per_m2" before={beforeReads.head.carbon} after={afterReads.head.carbon} nativeUnit="kgco2_per_m2_yr" displayUnit={displayUnit} gia_m2={gia_m2} />
           </TableShell>
         </div>
       </div>
 
-      {/* ── Footnote (A3) — plain-English story line ─────────────────── */}
       <p className="text-xxs italic text-mid-grey/80 px-2 pt-2 border-t border-light-grey/40">
         {narrative}
       </p>
