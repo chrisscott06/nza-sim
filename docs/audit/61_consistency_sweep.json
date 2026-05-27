@@ -1,0 +1,4722 @@
+{
+  "generated_at": "2026-05-27T09:56:13.355Z",
+  "project": {
+    "id": "14b4a5b1-8c73-4acb-8b65-1d22f05ec969",
+    "name": "HIX Bridgewater",
+    "gia_m2": 4322
+  },
+  "baseline": {
+    "demand_heating_mwh": 245.6,
+    "demand_cooling_mwh": 69.1,
+    "demand_dhw_mwh": 204.444,
+    "delivered_heating_mwh": 245.6,
+    "delivered_cooling_mwh": 69.1,
+    "delivered_dhw_mwh": 204.443,
+    "heat_elec_mwh": 95.609,
+    "heat_gas_mwh": 0,
+    "cool_elec_mwh": 19.743,
+    "dhw_elec_mwh": 29.673,
+    "dhw_gas_mwh": 147.654,
+    "fan_elec_mwh": 39.415,
+    "light_elec_mwh": 65.822,
+    "sp_elec_mwh": 78.864,
+    "total_elec_mwh": 329.126,
+    "total_gas_mwh": 147.654,
+    "eui_kwh_per_m2": 110.3,
+    "carbon_kg_per_m2": 22.02,
+    "hb_loss_external_wall_mwh": 39.945699999999995,
+    "hb_loss_glazing_mwh": 94.9205,
+    "hb_loss_fabric_leakage_mwh": 47.513,
+    "hb_loss_permanent_vents_mwh": 13.8209,
+    "hb_gain_lighting_mwh": 65.8215,
+    "hb_gain_equipment_mwh": 78.86410000000001,
+    "hb_gain_people_mwh": 0,
+    "hb_gain_solar_mwh": 99.3965,
+    "vent_heat_loss_mvhr_kwh": 36536.3,
+    "vent_heat_loss_bedroom_kwh": 226448.1,
+    "vent_heat_loss_toilet_kwh": 21537.2,
+    "vent_fan_mvhr_kwh": 22469.4,
+    "state2_avg_occupants": 0,
+    "state2_peak_occupants": 0,
+    "b40_heating_scop": 2.57,
+    "b40_cooling_seer": 3.5,
+    "b40_dhw_blended_eff": 1.16,
+    "gia_m2": 4322,
+    "comfort_lower_c": 21,
+    "comfort_upper_c": 24
+  },
+  "sweeps": [
+    {
+      "name": "heating_setpoint",
+      "axis": "systems_config_v40.heating_setpoint_c (mode=custom)",
+      "values": [
+        21,
+        24,
+        28
+      ],
+      "points": [
+        {
+          "value": 21,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 329.126,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 110.3,
+            "carbon_kg_per_m2": 22.02,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": 24,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 345.2,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 134.381,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 367.898,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 119.3,
+            "carbon_kg_per_m2": 23.87,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": 28,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 493.5,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 192.113,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 425.63,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 132.6,
+            "carbon_kg_per_m2": 26.64,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        }
+      ],
+      "classification": {
+        "moved": [
+          {
+            "field": "delivered_heating_mwh",
+            "min": 245.6,
+            "max": 493.5,
+            "range": 247.9,
+            "mean": 361.43333333333334
+          },
+          {
+            "field": "heat_elec_mwh",
+            "min": 95.609,
+            "max": 192.113,
+            "range": 96.504,
+            "mean": 140.701
+          },
+          {
+            "field": "total_elec_mwh",
+            "min": 329.126,
+            "max": 425.63,
+            "range": 96.50400000000002,
+            "mean": 374.218
+          },
+          {
+            "field": "eui_kwh_per_m2",
+            "min": 110.3,
+            "max": 132.6,
+            "range": 22.299999999999997,
+            "mean": 120.73333333333333
+          },
+          {
+            "field": "carbon_kg_per_m2",
+            "min": 22.02,
+            "max": 26.64,
+            "range": 4.620000000000001,
+            "mean": 24.176666666666666
+          }
+        ],
+        "frozen": [
+          {
+            "field": "demand_heating_mwh",
+            "value": 245.6
+          },
+          {
+            "field": "demand_cooling_mwh",
+            "value": 69.1
+          },
+          {
+            "field": "demand_dhw_mwh",
+            "value": 204.444
+          },
+          {
+            "field": "delivered_cooling_mwh",
+            "value": 69.1
+          },
+          {
+            "field": "delivered_dhw_mwh",
+            "value": 204.443
+          },
+          {
+            "field": "heat_gas_mwh",
+            "value": 0
+          },
+          {
+            "field": "cool_elec_mwh",
+            "value": 19.743
+          },
+          {
+            "field": "dhw_elec_mwh",
+            "value": 29.673
+          },
+          {
+            "field": "dhw_gas_mwh",
+            "value": 147.654
+          },
+          {
+            "field": "fan_elec_mwh",
+            "value": 39.415
+          },
+          {
+            "field": "light_elec_mwh",
+            "value": 65.822
+          },
+          {
+            "field": "sp_elec_mwh",
+            "value": 78.864
+          },
+          {
+            "field": "total_gas_mwh",
+            "value": 147.654
+          },
+          {
+            "field": "hb_loss_external_wall_mwh",
+            "value": 39.945699999999995
+          },
+          {
+            "field": "hb_loss_glazing_mwh",
+            "value": 94.9205
+          },
+          {
+            "field": "hb_loss_fabric_leakage_mwh",
+            "value": 47.513
+          },
+          {
+            "field": "hb_loss_permanent_vents_mwh",
+            "value": 13.8209
+          },
+          {
+            "field": "hb_gain_lighting_mwh",
+            "value": 65.8215
+          },
+          {
+            "field": "hb_gain_equipment_mwh",
+            "value": 78.86410000000001
+          },
+          {
+            "field": "hb_gain_people_mwh",
+            "value": 0
+          },
+          {
+            "field": "hb_gain_solar_mwh",
+            "value": 99.3965
+          },
+          {
+            "field": "vent_heat_loss_mvhr_kwh",
+            "value": 36536.3
+          },
+          {
+            "field": "vent_heat_loss_bedroom_kwh",
+            "value": 226448.1
+          },
+          {
+            "field": "vent_heat_loss_toilet_kwh",
+            "value": 21537.2
+          },
+          {
+            "field": "vent_fan_mvhr_kwh",
+            "value": 22469.4
+          },
+          {
+            "field": "b40_heating_scop",
+            "value": 2.57
+          },
+          {
+            "field": "b40_cooling_seer",
+            "value": 3.5
+          },
+          {
+            "field": "b40_dhw_blended_eff",
+            "value": 1.16
+          }
+        ]
+      }
+    },
+    {
+      "name": "cooling_setpoint",
+      "axis": "systems_config_v40.cooling_setpoint_c (mode=custom)",
+      "values": [
+        18,
+        21,
+        24
+      ],
+      "points": [
+        {
+          "value": 18,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 77.9,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 22.257,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 331.64,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 110.9,
+            "carbon_kg_per_m2": 22.14,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": 21,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 72.7,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 20.771,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 330.154,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 110.6,
+            "carbon_kg_per_m2": 22.06,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": 24,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 329.126,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 110.3,
+            "carbon_kg_per_m2": 22.02,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        }
+      ],
+      "classification": {
+        "moved": [
+          {
+            "field": "delivered_cooling_mwh",
+            "min": 69.1,
+            "max": 77.9,
+            "range": 8.800000000000011,
+            "mean": 73.23333333333333
+          },
+          {
+            "field": "cool_elec_mwh",
+            "min": 19.743,
+            "max": 22.257,
+            "range": 2.514000000000003,
+            "mean": 20.923666666666666
+          },
+          {
+            "field": "total_elec_mwh",
+            "min": 329.126,
+            "max": 331.64,
+            "range": 2.51400000000001,
+            "mean": 330.3066666666667
+          },
+          {
+            "field": "eui_kwh_per_m2",
+            "min": 110.3,
+            "max": 110.9,
+            "range": 0.6000000000000085,
+            "mean": 110.60000000000001
+          },
+          {
+            "field": "carbon_kg_per_m2",
+            "min": 22.02,
+            "max": 22.14,
+            "range": 0.120000000000001,
+            "mean": 22.073333333333334
+          }
+        ],
+        "frozen": [
+          {
+            "field": "demand_heating_mwh",
+            "value": 245.6
+          },
+          {
+            "field": "demand_cooling_mwh",
+            "value": 69.1
+          },
+          {
+            "field": "demand_dhw_mwh",
+            "value": 204.444
+          },
+          {
+            "field": "delivered_heating_mwh",
+            "value": 245.6
+          },
+          {
+            "field": "delivered_dhw_mwh",
+            "value": 204.443
+          },
+          {
+            "field": "heat_elec_mwh",
+            "value": 95.609
+          },
+          {
+            "field": "heat_gas_mwh",
+            "value": 0
+          },
+          {
+            "field": "dhw_elec_mwh",
+            "value": 29.673
+          },
+          {
+            "field": "dhw_gas_mwh",
+            "value": 147.654
+          },
+          {
+            "field": "fan_elec_mwh",
+            "value": 39.415
+          },
+          {
+            "field": "light_elec_mwh",
+            "value": 65.822
+          },
+          {
+            "field": "sp_elec_mwh",
+            "value": 78.864
+          },
+          {
+            "field": "total_gas_mwh",
+            "value": 147.654
+          },
+          {
+            "field": "hb_loss_external_wall_mwh",
+            "value": 39.945699999999995
+          },
+          {
+            "field": "hb_loss_glazing_mwh",
+            "value": 94.9205
+          },
+          {
+            "field": "hb_loss_fabric_leakage_mwh",
+            "value": 47.513
+          },
+          {
+            "field": "hb_loss_permanent_vents_mwh",
+            "value": 13.8209
+          },
+          {
+            "field": "hb_gain_lighting_mwh",
+            "value": 65.8215
+          },
+          {
+            "field": "hb_gain_equipment_mwh",
+            "value": 78.86410000000001
+          },
+          {
+            "field": "hb_gain_people_mwh",
+            "value": 0
+          },
+          {
+            "field": "hb_gain_solar_mwh",
+            "value": 99.3965
+          },
+          {
+            "field": "vent_heat_loss_mvhr_kwh",
+            "value": 36536.3
+          },
+          {
+            "field": "vent_heat_loss_bedroom_kwh",
+            "value": 226448.1
+          },
+          {
+            "field": "vent_heat_loss_toilet_kwh",
+            "value": 21537.2
+          },
+          {
+            "field": "vent_fan_mvhr_kwh",
+            "value": 22469.4
+          },
+          {
+            "field": "b40_heating_scop",
+            "value": 2.57
+          },
+          {
+            "field": "b40_cooling_seer",
+            "value": 3.5
+          },
+          {
+            "field": "b40_dhw_blended_eff",
+            "value": 1.16
+          }
+        ]
+      }
+    },
+    {
+      "name": "heating_scop",
+      "axis": "systems_config_v40.heating[0].efficiency_metric",
+      "values": [
+        0.85,
+        2.5,
+        4
+      ],
+      "points": [
+        {
+          "value": 0.85,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 286.774,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 520.291,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 154.5,
+            "carbon_kg_per_m2": 31.17,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 0.86,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": 2.5,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 105.608,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 339.125,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 112.6,
+            "carbon_kg_per_m2": 22.49,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.33,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": 4,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 70.61,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 304.127,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 104.5,
+            "carbon_kg_per_m2": 20.82,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 3.48,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        }
+      ],
+      "classification": {
+        "moved": [
+          {
+            "field": "heat_elec_mwh",
+            "min": 70.61,
+            "max": 286.774,
+            "range": 216.164,
+            "mean": 154.33066666666667
+          },
+          {
+            "field": "total_elec_mwh",
+            "min": 304.127,
+            "max": 520.291,
+            "range": 216.16400000000004,
+            "mean": 387.8476666666667
+          },
+          {
+            "field": "eui_kwh_per_m2",
+            "min": 104.5,
+            "max": 154.5,
+            "range": 50,
+            "mean": 123.86666666666667
+          },
+          {
+            "field": "carbon_kg_per_m2",
+            "min": 20.82,
+            "max": 31.17,
+            "range": 10.350000000000001,
+            "mean": 24.826666666666664
+          },
+          {
+            "field": "b40_heating_scop",
+            "min": 0.86,
+            "max": 3.48,
+            "range": 2.62,
+            "mean": 2.223333333333333
+          }
+        ],
+        "frozen": [
+          {
+            "field": "demand_heating_mwh",
+            "value": 245.6
+          },
+          {
+            "field": "demand_cooling_mwh",
+            "value": 69.1
+          },
+          {
+            "field": "demand_dhw_mwh",
+            "value": 204.444
+          },
+          {
+            "field": "delivered_heating_mwh",
+            "value": 245.6
+          },
+          {
+            "field": "delivered_cooling_mwh",
+            "value": 69.1
+          },
+          {
+            "field": "delivered_dhw_mwh",
+            "value": 204.443
+          },
+          {
+            "field": "heat_gas_mwh",
+            "value": 0
+          },
+          {
+            "field": "cool_elec_mwh",
+            "value": 19.743
+          },
+          {
+            "field": "dhw_elec_mwh",
+            "value": 29.673
+          },
+          {
+            "field": "dhw_gas_mwh",
+            "value": 147.654
+          },
+          {
+            "field": "fan_elec_mwh",
+            "value": 39.415
+          },
+          {
+            "field": "light_elec_mwh",
+            "value": 65.822
+          },
+          {
+            "field": "sp_elec_mwh",
+            "value": 78.864
+          },
+          {
+            "field": "total_gas_mwh",
+            "value": 147.654
+          },
+          {
+            "field": "hb_loss_external_wall_mwh",
+            "value": 39.945699999999995
+          },
+          {
+            "field": "hb_loss_glazing_mwh",
+            "value": 94.9205
+          },
+          {
+            "field": "hb_loss_fabric_leakage_mwh",
+            "value": 47.513
+          },
+          {
+            "field": "hb_loss_permanent_vents_mwh",
+            "value": 13.8209
+          },
+          {
+            "field": "hb_gain_lighting_mwh",
+            "value": 65.8215
+          },
+          {
+            "field": "hb_gain_equipment_mwh",
+            "value": 78.86410000000001
+          },
+          {
+            "field": "hb_gain_people_mwh",
+            "value": 0
+          },
+          {
+            "field": "hb_gain_solar_mwh",
+            "value": 99.3965
+          },
+          {
+            "field": "vent_heat_loss_mvhr_kwh",
+            "value": 36536.3
+          },
+          {
+            "field": "vent_heat_loss_bedroom_kwh",
+            "value": 226448.1
+          },
+          {
+            "field": "vent_heat_loss_toilet_kwh",
+            "value": 21537.2
+          },
+          {
+            "field": "vent_fan_mvhr_kwh",
+            "value": 22469.4
+          },
+          {
+            "field": "b40_cooling_seer",
+            "value": 3.5
+          },
+          {
+            "field": "b40_dhw_blended_eff",
+            "value": 1.16
+          }
+        ]
+      }
+    },
+    {
+      "name": "cooling_seer",
+      "axis": "systems_config_v40.cooling[0].efficiency_metric",
+      "values": [
+        2.5,
+        3.5,
+        5
+      ],
+      "points": [
+        {
+          "value": 2.5,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 27.64,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 337.023,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 112.1,
+            "carbon_kg_per_m2": 22.39,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 2.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": 3.5,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 329.126,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 110.3,
+            "carbon_kg_per_m2": 22.02,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": 5,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 13.82,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 323.203,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 108.9,
+            "carbon_kg_per_m2": 21.73,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        }
+      ],
+      "classification": {
+        "moved": [
+          {
+            "field": "cool_elec_mwh",
+            "min": 13.82,
+            "max": 27.64,
+            "range": 13.82,
+            "mean": 20.401
+          },
+          {
+            "field": "total_elec_mwh",
+            "min": 323.203,
+            "max": 337.023,
+            "range": 13.82000000000005,
+            "mean": 329.784
+          },
+          {
+            "field": "eui_kwh_per_m2",
+            "min": 108.9,
+            "max": 112.1,
+            "range": 3.1999999999999886,
+            "mean": 110.43333333333332
+          },
+          {
+            "field": "carbon_kg_per_m2",
+            "min": 21.73,
+            "max": 22.39,
+            "range": 0.6600000000000001,
+            "mean": 22.046666666666667
+          },
+          {
+            "field": "b40_cooling_seer",
+            "min": 2.5,
+            "max": 5,
+            "range": 2.5,
+            "mean": 3.6666666666666665
+          }
+        ],
+        "frozen": [
+          {
+            "field": "demand_heating_mwh",
+            "value": 245.6
+          },
+          {
+            "field": "demand_cooling_mwh",
+            "value": 69.1
+          },
+          {
+            "field": "demand_dhw_mwh",
+            "value": 204.444
+          },
+          {
+            "field": "delivered_heating_mwh",
+            "value": 245.6
+          },
+          {
+            "field": "delivered_cooling_mwh",
+            "value": 69.1
+          },
+          {
+            "field": "delivered_dhw_mwh",
+            "value": 204.443
+          },
+          {
+            "field": "heat_elec_mwh",
+            "value": 95.609
+          },
+          {
+            "field": "heat_gas_mwh",
+            "value": 0
+          },
+          {
+            "field": "dhw_elec_mwh",
+            "value": 29.673
+          },
+          {
+            "field": "dhw_gas_mwh",
+            "value": 147.654
+          },
+          {
+            "field": "fan_elec_mwh",
+            "value": 39.415
+          },
+          {
+            "field": "light_elec_mwh",
+            "value": 65.822
+          },
+          {
+            "field": "sp_elec_mwh",
+            "value": 78.864
+          },
+          {
+            "field": "total_gas_mwh",
+            "value": 147.654
+          },
+          {
+            "field": "hb_loss_external_wall_mwh",
+            "value": 39.945699999999995
+          },
+          {
+            "field": "hb_loss_glazing_mwh",
+            "value": 94.9205
+          },
+          {
+            "field": "hb_loss_fabric_leakage_mwh",
+            "value": 47.513
+          },
+          {
+            "field": "hb_loss_permanent_vents_mwh",
+            "value": 13.8209
+          },
+          {
+            "field": "hb_gain_lighting_mwh",
+            "value": 65.8215
+          },
+          {
+            "field": "hb_gain_equipment_mwh",
+            "value": 78.86410000000001
+          },
+          {
+            "field": "hb_gain_people_mwh",
+            "value": 0
+          },
+          {
+            "field": "hb_gain_solar_mwh",
+            "value": 99.3965
+          },
+          {
+            "field": "vent_heat_loss_mvhr_kwh",
+            "value": 36536.3
+          },
+          {
+            "field": "vent_heat_loss_bedroom_kwh",
+            "value": 226448.1
+          },
+          {
+            "field": "vent_heat_loss_toilet_kwh",
+            "value": 21537.2
+          },
+          {
+            "field": "vent_fan_mvhr_kwh",
+            "value": 22469.4
+          },
+          {
+            "field": "b40_heating_scop",
+            "value": 2.57
+          },
+          {
+            "field": "b40_dhw_blended_eff",
+            "value": 1.16
+          }
+        ]
+      }
+    },
+    {
+      "name": "dhw_eff_primary",
+      "axis": "systems_config_v40.dhw[0].efficiency_metric",
+      "values": [
+        0.7,
+        0.9,
+        1
+      ],
+      "points": [
+        {
+          "value": 0.7,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 189.841,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 329.126,
+            "total_gas_mwh": 189.841,
+            "eui_kwh_per_m2": 120.1,
+            "carbon_kg_per_m2": 23.8,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 0.936,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": 0.9,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 329.126,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 110.3,
+            "carbon_kg_per_m2": 22.02,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": 1,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 132.888,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 329.126,
+            "total_gas_mwh": 132.888,
+            "eui_kwh_per_m2": 106.9,
+            "carbon_kg_per_m2": 21.39,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.266,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        }
+      ],
+      "classification": {
+        "moved": [
+          {
+            "field": "dhw_gas_mwh",
+            "min": 132.888,
+            "max": 189.841,
+            "range": 56.953,
+            "mean": 156.79433333333336
+          },
+          {
+            "field": "total_gas_mwh",
+            "min": 132.888,
+            "max": 189.841,
+            "range": 56.953,
+            "mean": 156.79433333333336
+          },
+          {
+            "field": "eui_kwh_per_m2",
+            "min": 106.9,
+            "max": 120.1,
+            "range": 13.199999999999989,
+            "mean": 112.43333333333332
+          },
+          {
+            "field": "carbon_kg_per_m2",
+            "min": 21.39,
+            "max": 23.8,
+            "range": 2.41,
+            "mean": 22.403333333333336
+          },
+          {
+            "field": "b40_dhw_blended_eff",
+            "min": 0.936,
+            "max": 1.266,
+            "range": 0.32999999999999996,
+            "mean": 1.1206666666666667
+          }
+        ],
+        "frozen": [
+          {
+            "field": "demand_heating_mwh",
+            "value": 245.6
+          },
+          {
+            "field": "demand_cooling_mwh",
+            "value": 69.1
+          },
+          {
+            "field": "demand_dhw_mwh",
+            "value": 204.444
+          },
+          {
+            "field": "delivered_heating_mwh",
+            "value": 245.6
+          },
+          {
+            "field": "delivered_cooling_mwh",
+            "value": 69.1
+          },
+          {
+            "field": "delivered_dhw_mwh",
+            "value": 204.443
+          },
+          {
+            "field": "heat_elec_mwh",
+            "value": 95.609
+          },
+          {
+            "field": "heat_gas_mwh",
+            "value": 0
+          },
+          {
+            "field": "cool_elec_mwh",
+            "value": 19.743
+          },
+          {
+            "field": "dhw_elec_mwh",
+            "value": 29.673
+          },
+          {
+            "field": "fan_elec_mwh",
+            "value": 39.415
+          },
+          {
+            "field": "light_elec_mwh",
+            "value": 65.822
+          },
+          {
+            "field": "sp_elec_mwh",
+            "value": 78.864
+          },
+          {
+            "field": "total_elec_mwh",
+            "value": 329.126
+          },
+          {
+            "field": "hb_loss_external_wall_mwh",
+            "value": 39.945699999999995
+          },
+          {
+            "field": "hb_loss_glazing_mwh",
+            "value": 94.9205
+          },
+          {
+            "field": "hb_loss_fabric_leakage_mwh",
+            "value": 47.513
+          },
+          {
+            "field": "hb_loss_permanent_vents_mwh",
+            "value": 13.8209
+          },
+          {
+            "field": "hb_gain_lighting_mwh",
+            "value": 65.8215
+          },
+          {
+            "field": "hb_gain_equipment_mwh",
+            "value": 78.86410000000001
+          },
+          {
+            "field": "hb_gain_people_mwh",
+            "value": 0
+          },
+          {
+            "field": "hb_gain_solar_mwh",
+            "value": 99.3965
+          },
+          {
+            "field": "vent_heat_loss_mvhr_kwh",
+            "value": 36536.3
+          },
+          {
+            "field": "vent_heat_loss_bedroom_kwh",
+            "value": 226448.1
+          },
+          {
+            "field": "vent_heat_loss_toilet_kwh",
+            "value": 21537.2
+          },
+          {
+            "field": "vent_fan_mvhr_kwh",
+            "value": 22469.4
+          },
+          {
+            "field": "b40_heating_scop",
+            "value": 2.57
+          },
+          {
+            "field": "b40_cooling_seer",
+            "value": 3.5
+          }
+        ]
+      }
+    },
+    {
+      "name": "dhw_demand_basis_perm2",
+      "axis": "systems_config_v40.dhw_demand_basis = per_m2 + L/m2",
+      "values": [
+        0.5,
+        1.1,
+        2
+      ],
+      "points": [
+        {
+          "value": 0.5,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 27.475,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 27.475,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 4.898,
+            "dhw_gas_mwh": 19.843,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 304.351,
+            "total_gas_mwh": 19.843,
+            "eui_kwh_per_m2": 75,
+            "carbon_kg_per_m2": 15.42,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": 1.1,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 60.446,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 60.446,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 9.513,
+            "dhw_gas_mwh": 43.655,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 308.966,
+            "total_gas_mwh": 43.655,
+            "eui_kwh_per_m2": 81.6,
+            "carbon_kg_per_m2": 16.65,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": 2,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 109.901,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 109.901,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 16.437,
+            "dhw_gas_mwh": 79.373,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 315.89,
+            "total_gas_mwh": 79.373,
+            "eui_kwh_per_m2": 91.5,
+            "carbon_kg_per_m2": 18.49,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        }
+      ],
+      "classification": {
+        "moved": [
+          {
+            "field": "demand_dhw_mwh",
+            "min": 27.475,
+            "max": 109.901,
+            "range": 82.42599999999999,
+            "mean": 65.94066666666667
+          },
+          {
+            "field": "delivered_dhw_mwh",
+            "min": 27.475,
+            "max": 109.901,
+            "range": 82.42599999999999,
+            "mean": 65.94066666666667
+          },
+          {
+            "field": "dhw_elec_mwh",
+            "min": 4.898,
+            "max": 16.437,
+            "range": 11.539000000000001,
+            "mean": 10.282666666666666
+          },
+          {
+            "field": "dhw_gas_mwh",
+            "min": 19.843,
+            "max": 79.373,
+            "range": 59.53,
+            "mean": 47.62366666666667
+          },
+          {
+            "field": "total_elec_mwh",
+            "min": 304.351,
+            "max": 315.89,
+            "range": 11.538999999999987,
+            "mean": 309.73566666666665
+          },
+          {
+            "field": "total_gas_mwh",
+            "min": 19.843,
+            "max": 79.373,
+            "range": 59.53,
+            "mean": 47.62366666666667
+          },
+          {
+            "field": "eui_kwh_per_m2",
+            "min": 75,
+            "max": 91.5,
+            "range": 16.5,
+            "mean": 82.7
+          },
+          {
+            "field": "carbon_kg_per_m2",
+            "min": 15.42,
+            "max": 18.49,
+            "range": 3.0699999999999985,
+            "mean": 16.853333333333335
+          }
+        ],
+        "frozen": [
+          {
+            "field": "demand_heating_mwh",
+            "value": 245.6
+          },
+          {
+            "field": "demand_cooling_mwh",
+            "value": 69.1
+          },
+          {
+            "field": "delivered_heating_mwh",
+            "value": 245.6
+          },
+          {
+            "field": "delivered_cooling_mwh",
+            "value": 69.1
+          },
+          {
+            "field": "heat_elec_mwh",
+            "value": 95.609
+          },
+          {
+            "field": "heat_gas_mwh",
+            "value": 0
+          },
+          {
+            "field": "cool_elec_mwh",
+            "value": 19.743
+          },
+          {
+            "field": "fan_elec_mwh",
+            "value": 39.415
+          },
+          {
+            "field": "light_elec_mwh",
+            "value": 65.822
+          },
+          {
+            "field": "sp_elec_mwh",
+            "value": 78.864
+          },
+          {
+            "field": "hb_loss_external_wall_mwh",
+            "value": 39.945699999999995
+          },
+          {
+            "field": "hb_loss_glazing_mwh",
+            "value": 94.9205
+          },
+          {
+            "field": "hb_loss_fabric_leakage_mwh",
+            "value": 47.513
+          },
+          {
+            "field": "hb_loss_permanent_vents_mwh",
+            "value": 13.8209
+          },
+          {
+            "field": "hb_gain_lighting_mwh",
+            "value": 65.8215
+          },
+          {
+            "field": "hb_gain_equipment_mwh",
+            "value": 78.86410000000001
+          },
+          {
+            "field": "hb_gain_people_mwh",
+            "value": 0
+          },
+          {
+            "field": "hb_gain_solar_mwh",
+            "value": 99.3965
+          },
+          {
+            "field": "vent_heat_loss_mvhr_kwh",
+            "value": 36536.3
+          },
+          {
+            "field": "vent_heat_loss_bedroom_kwh",
+            "value": 226448.1
+          },
+          {
+            "field": "vent_heat_loss_toilet_kwh",
+            "value": 21537.2
+          },
+          {
+            "field": "vent_fan_mvhr_kwh",
+            "value": 22469.4
+          },
+          {
+            "field": "b40_heating_scop",
+            "value": 2.57
+          },
+          {
+            "field": "b40_cooling_seer",
+            "value": 3.5
+          },
+          {
+            "field": "b40_dhw_blended_eff",
+            "value": 1.16
+          }
+        ]
+      }
+    },
+    {
+      "name": "dhw_basis_perperson_litres",
+      "axis": "systems_config_v40.dhw_demand_litres_per_person_per_day (basis=per_person)",
+      "values": [
+        40,
+        80,
+        150
+      ],
+      "points": [
+        {
+          "value": 40,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 102.222,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 102.222,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 15.362,
+            "dhw_gas_mwh": 73.827,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 314.815,
+            "total_gas_mwh": 73.827,
+            "eui_kwh_per_m2": 89.9,
+            "carbon_kg_per_m2": 18.2,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": 80,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 329.126,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 110.3,
+            "carbon_kg_per_m2": 22.02,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": 150,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 383.332,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 383.332,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 54.717,
+            "dhw_gas_mwh": 276.851,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 354.17,
+            "total_gas_mwh": 276.851,
+            "eui_kwh_per_m2": 146,
+            "carbon_kg_per_m2": 28.69,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        }
+      ],
+      "classification": {
+        "moved": [
+          {
+            "field": "demand_dhw_mwh",
+            "min": 102.222,
+            "max": 383.332,
+            "range": 281.11,
+            "mean": 229.99933333333334
+          },
+          {
+            "field": "delivered_dhw_mwh",
+            "min": 102.222,
+            "max": 383.332,
+            "range": 281.11,
+            "mean": 229.99900000000002
+          },
+          {
+            "field": "dhw_elec_mwh",
+            "min": 15.362,
+            "max": 54.717,
+            "range": 39.355,
+            "mean": 33.25066666666667
+          },
+          {
+            "field": "dhw_gas_mwh",
+            "min": 73.827,
+            "max": 276.851,
+            "range": 203.024,
+            "mean": 166.11066666666667
+          },
+          {
+            "field": "total_elec_mwh",
+            "min": 314.815,
+            "max": 354.17,
+            "range": 39.35500000000002,
+            "mean": 332.7036666666667
+          },
+          {
+            "field": "total_gas_mwh",
+            "min": 73.827,
+            "max": 276.851,
+            "range": 203.024,
+            "mean": 166.11066666666667
+          },
+          {
+            "field": "eui_kwh_per_m2",
+            "min": 89.9,
+            "max": 146,
+            "range": 56.099999999999994,
+            "mean": 115.39999999999999
+          },
+          {
+            "field": "carbon_kg_per_m2",
+            "min": 18.2,
+            "max": 28.69,
+            "range": 10.490000000000002,
+            "mean": 22.97
+          }
+        ],
+        "frozen": [
+          {
+            "field": "demand_heating_mwh",
+            "value": 245.6
+          },
+          {
+            "field": "demand_cooling_mwh",
+            "value": 69.1
+          },
+          {
+            "field": "delivered_heating_mwh",
+            "value": 245.6
+          },
+          {
+            "field": "delivered_cooling_mwh",
+            "value": 69.1
+          },
+          {
+            "field": "heat_elec_mwh",
+            "value": 95.609
+          },
+          {
+            "field": "heat_gas_mwh",
+            "value": 0
+          },
+          {
+            "field": "cool_elec_mwh",
+            "value": 19.743
+          },
+          {
+            "field": "fan_elec_mwh",
+            "value": 39.415
+          },
+          {
+            "field": "light_elec_mwh",
+            "value": 65.822
+          },
+          {
+            "field": "sp_elec_mwh",
+            "value": 78.864
+          },
+          {
+            "field": "hb_loss_external_wall_mwh",
+            "value": 39.945699999999995
+          },
+          {
+            "field": "hb_loss_glazing_mwh",
+            "value": 94.9205
+          },
+          {
+            "field": "hb_loss_fabric_leakage_mwh",
+            "value": 47.513
+          },
+          {
+            "field": "hb_loss_permanent_vents_mwh",
+            "value": 13.8209
+          },
+          {
+            "field": "hb_gain_lighting_mwh",
+            "value": 65.8215
+          },
+          {
+            "field": "hb_gain_equipment_mwh",
+            "value": 78.86410000000001
+          },
+          {
+            "field": "hb_gain_people_mwh",
+            "value": 0
+          },
+          {
+            "field": "hb_gain_solar_mwh",
+            "value": 99.3965
+          },
+          {
+            "field": "vent_heat_loss_mvhr_kwh",
+            "value": 36536.3
+          },
+          {
+            "field": "vent_heat_loss_bedroom_kwh",
+            "value": 226448.1
+          },
+          {
+            "field": "vent_heat_loss_toilet_kwh",
+            "value": 21537.2
+          },
+          {
+            "field": "vent_fan_mvhr_kwh",
+            "value": 22469.4
+          },
+          {
+            "field": "b40_heating_scop",
+            "value": 2.57
+          },
+          {
+            "field": "b40_cooling_seer",
+            "value": 3.5
+          },
+          {
+            "field": "b40_dhw_blended_eff",
+            "value": 1.16
+          }
+        ]
+      }
+    },
+    {
+      "name": "dhw_load_shape",
+      "axis": "systems_config_v40.dhw_load_shape (Brief 58 B4)",
+      "values": [
+        "flat",
+        "follow_occupancy"
+      ],
+      "points": [
+        {
+          "value": "flat",
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 329.126,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 110.3,
+            "carbon_kg_per_m2": 22.02,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": "follow_occupancy",
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 329.126,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 110.3,
+            "carbon_kg_per_m2": 22.02,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        }
+      ],
+      "classification": {
+        "moved": [],
+        "frozen": [
+          {
+            "field": "demand_heating_mwh",
+            "value": 245.6
+          },
+          {
+            "field": "demand_cooling_mwh",
+            "value": 69.1
+          },
+          {
+            "field": "demand_dhw_mwh",
+            "value": 204.444
+          },
+          {
+            "field": "delivered_heating_mwh",
+            "value": 245.6
+          },
+          {
+            "field": "delivered_cooling_mwh",
+            "value": 69.1
+          },
+          {
+            "field": "delivered_dhw_mwh",
+            "value": 204.443
+          },
+          {
+            "field": "heat_elec_mwh",
+            "value": 95.609
+          },
+          {
+            "field": "heat_gas_mwh",
+            "value": 0
+          },
+          {
+            "field": "cool_elec_mwh",
+            "value": 19.743
+          },
+          {
+            "field": "dhw_elec_mwh",
+            "value": 29.673
+          },
+          {
+            "field": "dhw_gas_mwh",
+            "value": 147.654
+          },
+          {
+            "field": "fan_elec_mwh",
+            "value": 39.415
+          },
+          {
+            "field": "light_elec_mwh",
+            "value": 65.822
+          },
+          {
+            "field": "sp_elec_mwh",
+            "value": 78.864
+          },
+          {
+            "field": "total_elec_mwh",
+            "value": 329.126
+          },
+          {
+            "field": "total_gas_mwh",
+            "value": 147.654
+          },
+          {
+            "field": "eui_kwh_per_m2",
+            "value": 110.3
+          },
+          {
+            "field": "carbon_kg_per_m2",
+            "value": 22.02
+          },
+          {
+            "field": "hb_loss_external_wall_mwh",
+            "value": 39.945699999999995
+          },
+          {
+            "field": "hb_loss_glazing_mwh",
+            "value": 94.9205
+          },
+          {
+            "field": "hb_loss_fabric_leakage_mwh",
+            "value": 47.513
+          },
+          {
+            "field": "hb_loss_permanent_vents_mwh",
+            "value": 13.8209
+          },
+          {
+            "field": "hb_gain_lighting_mwh",
+            "value": 65.8215
+          },
+          {
+            "field": "hb_gain_equipment_mwh",
+            "value": 78.86410000000001
+          },
+          {
+            "field": "hb_gain_people_mwh",
+            "value": 0
+          },
+          {
+            "field": "hb_gain_solar_mwh",
+            "value": 99.3965
+          },
+          {
+            "field": "vent_heat_loss_mvhr_kwh",
+            "value": 36536.3
+          },
+          {
+            "field": "vent_heat_loss_bedroom_kwh",
+            "value": 226448.1
+          },
+          {
+            "field": "vent_heat_loss_toilet_kwh",
+            "value": 21537.2
+          },
+          {
+            "field": "vent_fan_mvhr_kwh",
+            "value": 22469.4
+          },
+          {
+            "field": "b40_heating_scop",
+            "value": 2.57
+          },
+          {
+            "field": "b40_cooling_seer",
+            "value": 3.5
+          },
+          {
+            "field": "b40_dhw_blended_eff",
+            "value": 1.16
+          }
+        ]
+      }
+    },
+    {
+      "name": "vent_flow_bedroom_v40",
+      "axis": "v40.ventilation[id=vent_bedroom_extract].flow_rate (Brief 59 P1 path)",
+      "values": [
+        1000,
+        2208,
+        3000
+      ],
+      "points": [
+        {
+          "value": 1000,
+          "snap": {
+            "demand_heating_mwh": 141.4,
+            "demand_cooling_mwh": 88.3,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 141.4,
+            "delivered_cooling_mwh": 88.3,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 55.045,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 25.229,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 30.949,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 285.582,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 100.2,
+            "carbon_kg_per_m2": 19.93,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 102558,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": 2208,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 329.126,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 110.3,
+            "carbon_kg_per_m2": 22.02,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": 3000,
+          "snap": {
+            "demand_heating_mwh": 318.3,
+            "demand_cooling_mwh": 61,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 318.3,
+            "delivered_cooling_mwh": 61,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 123.91,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 17.429,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 44.965,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 360.663,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 117.6,
+            "carbon_kg_per_m2": 23.53,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 307674.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        }
+      ],
+      "classification": {
+        "moved": [
+          {
+            "field": "demand_heating_mwh",
+            "min": 141.4,
+            "max": 318.3,
+            "range": 176.9,
+            "mean": 235.1
+          },
+          {
+            "field": "demand_cooling_mwh",
+            "min": 61,
+            "max": 88.3,
+            "range": 27.299999999999997,
+            "mean": 72.8
+          },
+          {
+            "field": "delivered_heating_mwh",
+            "min": 141.4,
+            "max": 318.3,
+            "range": 176.9,
+            "mean": 235.1
+          },
+          {
+            "field": "delivered_cooling_mwh",
+            "min": 61,
+            "max": 88.3,
+            "range": 27.299999999999997,
+            "mean": 72.8
+          },
+          {
+            "field": "heat_elec_mwh",
+            "min": 55.045,
+            "max": 123.91,
+            "range": 68.865,
+            "mean": 91.52133333333332
+          },
+          {
+            "field": "cool_elec_mwh",
+            "min": 17.429,
+            "max": 25.229,
+            "range": 7.800000000000001,
+            "mean": 20.80033333333333
+          },
+          {
+            "field": "fan_elec_mwh",
+            "min": 30.949,
+            "max": 44.965,
+            "range": 14.016000000000002,
+            "mean": 38.443000000000005
+          },
+          {
+            "field": "total_elec_mwh",
+            "min": 285.582,
+            "max": 360.663,
+            "range": 75.08100000000002,
+            "mean": 325.1236666666667
+          },
+          {
+            "field": "eui_kwh_per_m2",
+            "min": 100.2,
+            "max": 117.6,
+            "range": 17.39999999999999,
+            "mean": 109.36666666666667
+          },
+          {
+            "field": "carbon_kg_per_m2",
+            "min": 19.93,
+            "max": 23.53,
+            "range": 3.6000000000000014,
+            "mean": 21.826666666666668
+          },
+          {
+            "field": "vent_heat_loss_bedroom_kwh",
+            "min": 102558,
+            "max": 307674.1,
+            "range": 205116.09999999998,
+            "mean": 212226.7333333333
+          }
+        ],
+        "frozen": [
+          {
+            "field": "demand_dhw_mwh",
+            "value": 204.444
+          },
+          {
+            "field": "delivered_dhw_mwh",
+            "value": 204.443
+          },
+          {
+            "field": "heat_gas_mwh",
+            "value": 0
+          },
+          {
+            "field": "dhw_elec_mwh",
+            "value": 29.673
+          },
+          {
+            "field": "dhw_gas_mwh",
+            "value": 147.654
+          },
+          {
+            "field": "light_elec_mwh",
+            "value": 65.822
+          },
+          {
+            "field": "sp_elec_mwh",
+            "value": 78.864
+          },
+          {
+            "field": "total_gas_mwh",
+            "value": 147.654
+          },
+          {
+            "field": "hb_loss_external_wall_mwh",
+            "value": 39.945699999999995
+          },
+          {
+            "field": "hb_loss_glazing_mwh",
+            "value": 94.9205
+          },
+          {
+            "field": "hb_loss_fabric_leakage_mwh",
+            "value": 47.513
+          },
+          {
+            "field": "hb_loss_permanent_vents_mwh",
+            "value": 13.8209
+          },
+          {
+            "field": "hb_gain_lighting_mwh",
+            "value": 65.8215
+          },
+          {
+            "field": "hb_gain_equipment_mwh",
+            "value": 78.86410000000001
+          },
+          {
+            "field": "hb_gain_people_mwh",
+            "value": 0
+          },
+          {
+            "field": "hb_gain_solar_mwh",
+            "value": 99.3965
+          },
+          {
+            "field": "vent_heat_loss_mvhr_kwh",
+            "value": 36536.3
+          },
+          {
+            "field": "vent_heat_loss_toilet_kwh",
+            "value": 21537.2
+          },
+          {
+            "field": "vent_fan_mvhr_kwh",
+            "value": 22469.4
+          },
+          {
+            "field": "b40_heating_scop",
+            "value": 2.57
+          },
+          {
+            "field": "b40_cooling_seer",
+            "value": 3.5
+          },
+          {
+            "field": "b40_dhw_blended_eff",
+            "value": 1.16
+          }
+        ]
+      }
+    },
+    {
+      "name": "vent_sfp_mvhr_v40",
+      "axis": "v40.ventilation[id=vent_mvhr_gf_public].efficiency_metric.sfp_w_per_lps",
+      "values": [
+        1,
+        1.8,
+        2.5
+      ],
+      "points": [
+        {
+          "value": 1,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 29.429,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 319.14,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 108,
+            "carbon_kg_per_m2": 21.54,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 12483,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": 1.8,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 329.126,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 110.3,
+            "carbon_kg_per_m2": 22.02,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": 2.5,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 48.154,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 337.864,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 112.3,
+            "carbon_kg_per_m2": 22.43,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 31207.5,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        }
+      ],
+      "classification": {
+        "moved": [
+          {
+            "field": "fan_elec_mwh",
+            "min": 29.429,
+            "max": 48.154,
+            "range": 18.725000000000005,
+            "mean": 38.99933333333333
+          },
+          {
+            "field": "total_elec_mwh",
+            "min": 319.14,
+            "max": 337.864,
+            "range": 18.72399999999999,
+            "mean": 328.71
+          },
+          {
+            "field": "eui_kwh_per_m2",
+            "min": 108,
+            "max": 112.3,
+            "range": 4.299999999999997,
+            "mean": 110.2
+          },
+          {
+            "field": "carbon_kg_per_m2",
+            "min": 21.54,
+            "max": 22.43,
+            "range": 0.8900000000000006,
+            "mean": 21.99666666666667
+          },
+          {
+            "field": "vent_fan_mvhr_kwh",
+            "min": 12483,
+            "max": 31207.5,
+            "range": 18724.5,
+            "mean": 22053.3
+          }
+        ],
+        "frozen": [
+          {
+            "field": "demand_heating_mwh",
+            "value": 245.6
+          },
+          {
+            "field": "demand_cooling_mwh",
+            "value": 69.1
+          },
+          {
+            "field": "demand_dhw_mwh",
+            "value": 204.444
+          },
+          {
+            "field": "delivered_heating_mwh",
+            "value": 245.6
+          },
+          {
+            "field": "delivered_cooling_mwh",
+            "value": 69.1
+          },
+          {
+            "field": "delivered_dhw_mwh",
+            "value": 204.443
+          },
+          {
+            "field": "heat_elec_mwh",
+            "value": 95.609
+          },
+          {
+            "field": "heat_gas_mwh",
+            "value": 0
+          },
+          {
+            "field": "cool_elec_mwh",
+            "value": 19.743
+          },
+          {
+            "field": "dhw_elec_mwh",
+            "value": 29.673
+          },
+          {
+            "field": "dhw_gas_mwh",
+            "value": 147.654
+          },
+          {
+            "field": "light_elec_mwh",
+            "value": 65.822
+          },
+          {
+            "field": "sp_elec_mwh",
+            "value": 78.864
+          },
+          {
+            "field": "total_gas_mwh",
+            "value": 147.654
+          },
+          {
+            "field": "hb_loss_external_wall_mwh",
+            "value": 39.945699999999995
+          },
+          {
+            "field": "hb_loss_glazing_mwh",
+            "value": 94.9205
+          },
+          {
+            "field": "hb_loss_fabric_leakage_mwh",
+            "value": 47.513
+          },
+          {
+            "field": "hb_loss_permanent_vents_mwh",
+            "value": 13.8209
+          },
+          {
+            "field": "hb_gain_lighting_mwh",
+            "value": 65.8215
+          },
+          {
+            "field": "hb_gain_equipment_mwh",
+            "value": 78.86410000000001
+          },
+          {
+            "field": "hb_gain_people_mwh",
+            "value": 0
+          },
+          {
+            "field": "hb_gain_solar_mwh",
+            "value": 99.3965
+          },
+          {
+            "field": "vent_heat_loss_mvhr_kwh",
+            "value": 36536.3
+          },
+          {
+            "field": "vent_heat_loss_bedroom_kwh",
+            "value": 226448.1
+          },
+          {
+            "field": "vent_heat_loss_toilet_kwh",
+            "value": 21537.2
+          },
+          {
+            "field": "b40_heating_scop",
+            "value": 2.57
+          },
+          {
+            "field": "b40_cooling_seer",
+            "value": 3.5
+          },
+          {
+            "field": "b40_dhw_blended_eff",
+            "value": 1.16
+          }
+        ]
+      }
+    },
+    {
+      "name": "vent_hre_mvhr_v40",
+      "axis": "v40.ventilation[id=vent_mvhr_gf_public].efficiency_metric.recovery_sensible_pct",
+      "values": [
+        60,
+        75,
+        90
+      ],
+      "points": [
+        {
+          "value": 60,
+          "snap": {
+            "demand_heating_mwh": 265,
+            "demand_cooling_mwh": 66.7,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 265,
+            "delivered_cooling_mwh": 66.7,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 103.161,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.057,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 335.992,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 111.9,
+            "carbon_kg_per_m2": 22.34,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 58458.1,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": 75,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 329.126,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 110.3,
+            "carbon_kg_per_m2": 22.02,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": 90,
+          "snap": {
+            "demand_heating_mwh": 226.5,
+            "demand_cooling_mwh": 71.8,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 226.5,
+            "delivered_cooling_mwh": 71.8,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 88.173,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 20.514,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 322.461,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 108.8,
+            "carbon_kg_per_m2": 21.7,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 14614.5,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        }
+      ],
+      "classification": {
+        "moved": [
+          {
+            "field": "demand_heating_mwh",
+            "min": 226.5,
+            "max": 265,
+            "range": 38.5,
+            "mean": 245.70000000000002
+          },
+          {
+            "field": "demand_cooling_mwh",
+            "min": 66.7,
+            "max": 71.8,
+            "range": 5.099999999999994,
+            "mean": 69.2
+          },
+          {
+            "field": "delivered_heating_mwh",
+            "min": 226.5,
+            "max": 265,
+            "range": 38.5,
+            "mean": 245.70000000000002
+          },
+          {
+            "field": "delivered_cooling_mwh",
+            "min": 66.7,
+            "max": 71.8,
+            "range": 5.099999999999994,
+            "mean": 69.2
+          },
+          {
+            "field": "heat_elec_mwh",
+            "min": 88.173,
+            "max": 103.161,
+            "range": 14.988,
+            "mean": 95.64766666666667
+          },
+          {
+            "field": "cool_elec_mwh",
+            "min": 19.057,
+            "max": 20.514,
+            "range": 1.4570000000000007,
+            "mean": 19.77133333333333
+          },
+          {
+            "field": "total_elec_mwh",
+            "min": 322.461,
+            "max": 335.992,
+            "range": 13.531000000000006,
+            "mean": 329.193
+          },
+          {
+            "field": "eui_kwh_per_m2",
+            "min": 108.8,
+            "max": 111.9,
+            "range": 3.1000000000000085,
+            "mean": 110.33333333333333
+          },
+          {
+            "field": "carbon_kg_per_m2",
+            "min": 21.7,
+            "max": 22.34,
+            "range": 0.6400000000000006,
+            "mean": 22.02
+          },
+          {
+            "field": "vent_heat_loss_mvhr_kwh",
+            "min": 14614.5,
+            "max": 58458.1,
+            "range": 43843.6,
+            "mean": 36536.299999999996
+          }
+        ],
+        "frozen": [
+          {
+            "field": "demand_dhw_mwh",
+            "value": 204.444
+          },
+          {
+            "field": "delivered_dhw_mwh",
+            "value": 204.443
+          },
+          {
+            "field": "heat_gas_mwh",
+            "value": 0
+          },
+          {
+            "field": "dhw_elec_mwh",
+            "value": 29.673
+          },
+          {
+            "field": "dhw_gas_mwh",
+            "value": 147.654
+          },
+          {
+            "field": "fan_elec_mwh",
+            "value": 39.415
+          },
+          {
+            "field": "light_elec_mwh",
+            "value": 65.822
+          },
+          {
+            "field": "sp_elec_mwh",
+            "value": 78.864
+          },
+          {
+            "field": "total_gas_mwh",
+            "value": 147.654
+          },
+          {
+            "field": "hb_loss_external_wall_mwh",
+            "value": 39.945699999999995
+          },
+          {
+            "field": "hb_loss_glazing_mwh",
+            "value": 94.9205
+          },
+          {
+            "field": "hb_loss_fabric_leakage_mwh",
+            "value": 47.513
+          },
+          {
+            "field": "hb_loss_permanent_vents_mwh",
+            "value": 13.8209
+          },
+          {
+            "field": "hb_gain_lighting_mwh",
+            "value": 65.8215
+          },
+          {
+            "field": "hb_gain_equipment_mwh",
+            "value": 78.86410000000001
+          },
+          {
+            "field": "hb_gain_people_mwh",
+            "value": 0
+          },
+          {
+            "field": "hb_gain_solar_mwh",
+            "value": 99.3965
+          },
+          {
+            "field": "vent_heat_loss_bedroom_kwh",
+            "value": 226448.1
+          },
+          {
+            "field": "vent_heat_loss_toilet_kwh",
+            "value": 21537.2
+          },
+          {
+            "field": "vent_fan_mvhr_kwh",
+            "value": 22469.4
+          },
+          {
+            "field": "b40_heating_scop",
+            "value": 2.57
+          },
+          {
+            "field": "b40_cooling_seer",
+            "value": 3.5
+          },
+          {
+            "field": "b40_dhw_blended_eff",
+            "value": 1.16
+          }
+        ]
+      }
+    },
+    {
+      "name": "summer_bypass_mvhr",
+      "axis": "v40.ventilation[id=vent_mvhr_gf_public].summer_bypass",
+      "values": [
+        false,
+        true
+      ],
+      "points": [
+        {
+          "value": false,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 329.126,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 110.3,
+            "carbon_kg_per_m2": 22.02,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": true,
+          "snap": {
+            "demand_heating_mwh": 247.7,
+            "demand_cooling_mwh": 60.5,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 247.7,
+            "delivered_cooling_mwh": 60.5,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 96.426,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 17.286,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 327.486,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 109.9,
+            "carbon_kg_per_m2": 21.94,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 47702.6,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        }
+      ],
+      "classification": {
+        "moved": [
+          {
+            "field": "demand_heating_mwh",
+            "min": 245.6,
+            "max": 247.7,
+            "range": 2.0999999999999943,
+            "mean": 246.64999999999998
+          },
+          {
+            "field": "demand_cooling_mwh",
+            "min": 60.5,
+            "max": 69.1,
+            "range": 8.599999999999994,
+            "mean": 64.8
+          },
+          {
+            "field": "delivered_heating_mwh",
+            "min": 245.6,
+            "max": 247.7,
+            "range": 2.0999999999999943,
+            "mean": 246.64999999999998
+          },
+          {
+            "field": "delivered_cooling_mwh",
+            "min": 60.5,
+            "max": 69.1,
+            "range": 8.599999999999994,
+            "mean": 64.8
+          },
+          {
+            "field": "heat_elec_mwh",
+            "min": 95.609,
+            "max": 96.426,
+            "range": 0.8170000000000073,
+            "mean": 96.0175
+          },
+          {
+            "field": "cool_elec_mwh",
+            "min": 17.286,
+            "max": 19.743,
+            "range": 2.456999999999997,
+            "mean": 18.514499999999998
+          },
+          {
+            "field": "total_elec_mwh",
+            "min": 327.486,
+            "max": 329.126,
+            "range": 1.6399999999999864,
+            "mean": 328.306
+          },
+          {
+            "field": "eui_kwh_per_m2",
+            "min": 109.9,
+            "max": 110.3,
+            "range": 0.3999999999999915,
+            "mean": 110.1
+          },
+          {
+            "field": "carbon_kg_per_m2",
+            "min": 21.94,
+            "max": 22.02,
+            "range": 0.0799999999999983,
+            "mean": 21.98
+          },
+          {
+            "field": "vent_heat_loss_mvhr_kwh",
+            "min": 36536.3,
+            "max": 47702.6,
+            "range": 11166.299999999996,
+            "mean": 42119.45
+          }
+        ],
+        "frozen": [
+          {
+            "field": "demand_dhw_mwh",
+            "value": 204.444
+          },
+          {
+            "field": "delivered_dhw_mwh",
+            "value": 204.443
+          },
+          {
+            "field": "heat_gas_mwh",
+            "value": 0
+          },
+          {
+            "field": "dhw_elec_mwh",
+            "value": 29.673
+          },
+          {
+            "field": "dhw_gas_mwh",
+            "value": 147.654
+          },
+          {
+            "field": "fan_elec_mwh",
+            "value": 39.415
+          },
+          {
+            "field": "light_elec_mwh",
+            "value": 65.822
+          },
+          {
+            "field": "sp_elec_mwh",
+            "value": 78.864
+          },
+          {
+            "field": "total_gas_mwh",
+            "value": 147.654
+          },
+          {
+            "field": "hb_loss_external_wall_mwh",
+            "value": 39.945699999999995
+          },
+          {
+            "field": "hb_loss_glazing_mwh",
+            "value": 94.9205
+          },
+          {
+            "field": "hb_loss_fabric_leakage_mwh",
+            "value": 47.513
+          },
+          {
+            "field": "hb_loss_permanent_vents_mwh",
+            "value": 13.8209
+          },
+          {
+            "field": "hb_gain_lighting_mwh",
+            "value": 65.8215
+          },
+          {
+            "field": "hb_gain_equipment_mwh",
+            "value": 78.86410000000001
+          },
+          {
+            "field": "hb_gain_people_mwh",
+            "value": 0
+          },
+          {
+            "field": "hb_gain_solar_mwh",
+            "value": 99.3965
+          },
+          {
+            "field": "vent_heat_loss_bedroom_kwh",
+            "value": 226448.1
+          },
+          {
+            "field": "vent_heat_loss_toilet_kwh",
+            "value": 21537.2
+          },
+          {
+            "field": "vent_fan_mvhr_kwh",
+            "value": 22469.4
+          },
+          {
+            "field": "b40_heating_scop",
+            "value": 2.57
+          },
+          {
+            "field": "b40_cooling_seer",
+            "value": 3.5
+          },
+          {
+            "field": "b40_dhw_blended_eff",
+            "value": 1.16
+          }
+        ]
+      }
+    },
+    {
+      "name": "lighting_control_factor",
+      "axis": "v40.lighting[0].control_factor",
+      "values": [
+        0.5,
+        0.86,
+        1
+      ],
+      "points": [
+        {
+          "value": 0.5,
+          "snap": {
+            "demand_heating_mwh": 265.1,
+            "demand_cooling_mwh": 61.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 265.1,
+            "delivered_cooling_mwh": 61.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 103.2,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 17.457,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 38.268,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 306.877,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 105.2,
+            "carbon_kg_per_m2": 20.95,
+            "hb_loss_external_wall_mwh": 35.9163,
+            "hb_loss_glazing_mwh": 85.3457,
+            "hb_loss_fabric_leakage_mwh": 42.7202,
+            "hb_loss_permanent_vents_mwh": 12.3276,
+            "hb_gain_lighting_mwh": 38.2683,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": 0.86,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 329.126,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 110.3,
+            "carbon_kg_per_m2": 22.02,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": 1,
+          "snap": {
+            "demand_heating_mwh": 238.3,
+            "demand_cooling_mwh": 72.5,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 238.3,
+            "delivered_cooling_mwh": 72.5,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 92.767,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 20.714,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 76.537,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 337.97,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 112.4,
+            "carbon_kg_per_m2": 22.44,
+            "hb_loss_external_wall_mwh": 41.512800000000006,
+            "hb_loss_glazing_mwh": 98.64439999999999,
+            "hb_loss_fabric_leakage_mwh": 49.377,
+            "hb_loss_permanent_vents_mwh": 14.4017,
+            "hb_gain_lighting_mwh": 76.5366,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        }
+      ],
+      "classification": {
+        "moved": [
+          {
+            "field": "demand_heating_mwh",
+            "min": 238.3,
+            "max": 265.1,
+            "range": 26.80000000000001,
+            "mean": 249.66666666666666
+          },
+          {
+            "field": "demand_cooling_mwh",
+            "min": 61.1,
+            "max": 72.5,
+            "range": 11.399999999999999,
+            "mean": 67.56666666666666
+          },
+          {
+            "field": "delivered_heating_mwh",
+            "min": 238.3,
+            "max": 265.1,
+            "range": 26.80000000000001,
+            "mean": 249.66666666666666
+          },
+          {
+            "field": "delivered_cooling_mwh",
+            "min": 61.1,
+            "max": 72.5,
+            "range": 11.399999999999999,
+            "mean": 67.56666666666666
+          },
+          {
+            "field": "heat_elec_mwh",
+            "min": 92.767,
+            "max": 103.2,
+            "range": 10.433000000000007,
+            "mean": 97.19200000000001
+          },
+          {
+            "field": "cool_elec_mwh",
+            "min": 17.457,
+            "max": 20.714,
+            "range": 3.256999999999998,
+            "mean": 19.304666666666666
+          },
+          {
+            "field": "light_elec_mwh",
+            "min": 38.268,
+            "max": 76.537,
+            "range": 38.269000000000005,
+            "mean": 60.209
+          },
+          {
+            "field": "total_elec_mwh",
+            "min": 306.877,
+            "max": 337.97,
+            "range": 31.093000000000018,
+            "mean": 324.65766666666667
+          },
+          {
+            "field": "eui_kwh_per_m2",
+            "min": 105.2,
+            "max": 112.4,
+            "range": 7.200000000000003,
+            "mean": 109.3
+          },
+          {
+            "field": "carbon_kg_per_m2",
+            "min": 20.95,
+            "max": 22.44,
+            "range": 1.490000000000002,
+            "mean": 21.80333333333333
+          },
+          {
+            "field": "hb_loss_external_wall_mwh",
+            "min": 35.9163,
+            "max": 41.512800000000006,
+            "range": 5.596500000000006,
+            "mean": 39.12493333333333
+          },
+          {
+            "field": "hb_loss_glazing_mwh",
+            "min": 85.3457,
+            "max": 98.64439999999999,
+            "range": 13.298699999999997,
+            "mean": 92.97019999999999
+          },
+          {
+            "field": "hb_loss_fabric_leakage_mwh",
+            "min": 42.7202,
+            "max": 49.377,
+            "range": 6.656800000000004,
+            "mean": 46.53673333333333
+          },
+          {
+            "field": "hb_loss_permanent_vents_mwh",
+            "min": 12.3276,
+            "max": 14.4017,
+            "range": 2.0740999999999996,
+            "mean": 13.516733333333333
+          },
+          {
+            "field": "hb_gain_lighting_mwh",
+            "min": 38.2683,
+            "max": 76.5366,
+            "range": 38.2683,
+            "mean": 60.2088
+          }
+        ],
+        "frozen": [
+          {
+            "field": "demand_dhw_mwh",
+            "value": 204.444
+          },
+          {
+            "field": "delivered_dhw_mwh",
+            "value": 204.443
+          },
+          {
+            "field": "heat_gas_mwh",
+            "value": 0
+          },
+          {
+            "field": "dhw_elec_mwh",
+            "value": 29.673
+          },
+          {
+            "field": "dhw_gas_mwh",
+            "value": 147.654
+          },
+          {
+            "field": "fan_elec_mwh",
+            "value": 39.415
+          },
+          {
+            "field": "sp_elec_mwh",
+            "value": 78.864
+          },
+          {
+            "field": "total_gas_mwh",
+            "value": 147.654
+          },
+          {
+            "field": "hb_gain_equipment_mwh",
+            "value": 78.86410000000001
+          },
+          {
+            "field": "hb_gain_people_mwh",
+            "value": 0
+          },
+          {
+            "field": "hb_gain_solar_mwh",
+            "value": 99.3965
+          },
+          {
+            "field": "vent_heat_loss_mvhr_kwh",
+            "value": 36536.3
+          },
+          {
+            "field": "vent_heat_loss_bedroom_kwh",
+            "value": 226448.1
+          },
+          {
+            "field": "vent_heat_loss_toilet_kwh",
+            "value": 21537.2
+          },
+          {
+            "field": "vent_fan_mvhr_kwh",
+            "value": 22469.4
+          },
+          {
+            "field": "b40_heating_scop",
+            "value": 2.57
+          },
+          {
+            "field": "b40_cooling_seer",
+            "value": 3.5
+          },
+          {
+            "field": "b40_dhw_blended_eff",
+            "value": 1.16
+          }
+        ]
+      }
+    },
+    {
+      "name": "lighting_enabled",
+      "axis": "v40.lighting[0].enabled",
+      "values": [
+        false,
+        true
+      ],
+      "points": [
+        {
+          "value": false,
+          "snap": {
+            "demand_heating_mwh": 293.2,
+            "demand_cooling_mwh": 50.9,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 293.2,
+            "delivered_cooling_mwh": 50.9,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 114.139,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 14.543,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 0,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 276.634,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 98.2,
+            "carbon_kg_per_m2": 19.5,
+            "hb_loss_external_wall_mwh": 30.323400000000003,
+            "hb_loss_glazing_mwh": 72.0557,
+            "hb_loss_fabric_leakage_mwh": 36.067800000000005,
+            "hb_loss_permanent_vents_mwh": 10.255799999999999,
+            "hb_gain_lighting_mwh": 0,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": true,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 329.126,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 110.3,
+            "carbon_kg_per_m2": 22.02,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        }
+      ],
+      "classification": {
+        "moved": [
+          {
+            "field": "demand_heating_mwh",
+            "min": 245.6,
+            "max": 293.2,
+            "range": 47.599999999999994,
+            "mean": 269.4
+          },
+          {
+            "field": "demand_cooling_mwh",
+            "min": 50.9,
+            "max": 69.1,
+            "range": 18.199999999999996,
+            "mean": 60
+          },
+          {
+            "field": "delivered_heating_mwh",
+            "min": 245.6,
+            "max": 293.2,
+            "range": 47.599999999999994,
+            "mean": 269.4
+          },
+          {
+            "field": "delivered_cooling_mwh",
+            "min": 50.9,
+            "max": 69.1,
+            "range": 18.199999999999996,
+            "mean": 60
+          },
+          {
+            "field": "heat_elec_mwh",
+            "min": 95.609,
+            "max": 114.139,
+            "range": 18.53,
+            "mean": 104.874
+          },
+          {
+            "field": "cool_elec_mwh",
+            "min": 14.543,
+            "max": 19.743,
+            "range": 5.199999999999999,
+            "mean": 17.143
+          },
+          {
+            "field": "light_elec_mwh",
+            "min": 0,
+            "max": 65.822,
+            "range": 65.822,
+            "mean": 32.911
+          },
+          {
+            "field": "total_elec_mwh",
+            "min": 276.634,
+            "max": 329.126,
+            "range": 52.49199999999996,
+            "mean": 302.88
+          },
+          {
+            "field": "eui_kwh_per_m2",
+            "min": 98.2,
+            "max": 110.3,
+            "range": 12.099999999999994,
+            "mean": 104.25
+          },
+          {
+            "field": "carbon_kg_per_m2",
+            "min": 19.5,
+            "max": 22.02,
+            "range": 2.5199999999999996,
+            "mean": 20.759999999999998
+          },
+          {
+            "field": "hb_loss_external_wall_mwh",
+            "min": 30.323400000000003,
+            "max": 39.945699999999995,
+            "range": 9.622299999999992,
+            "mean": 35.13455
+          },
+          {
+            "field": "hb_loss_glazing_mwh",
+            "min": 72.0557,
+            "max": 94.9205,
+            "range": 22.864800000000002,
+            "mean": 83.4881
+          },
+          {
+            "field": "hb_loss_fabric_leakage_mwh",
+            "min": 36.067800000000005,
+            "max": 47.513,
+            "range": 11.445199999999993,
+            "mean": 41.790400000000005
+          },
+          {
+            "field": "hb_loss_permanent_vents_mwh",
+            "min": 10.255799999999999,
+            "max": 13.8209,
+            "range": 3.565100000000001,
+            "mean": 12.03835
+          },
+          {
+            "field": "hb_gain_lighting_mwh",
+            "min": 0,
+            "max": 65.8215,
+            "range": 65.8215,
+            "mean": 32.91075
+          }
+        ],
+        "frozen": [
+          {
+            "field": "demand_dhw_mwh",
+            "value": 204.444
+          },
+          {
+            "field": "delivered_dhw_mwh",
+            "value": 204.443
+          },
+          {
+            "field": "heat_gas_mwh",
+            "value": 0
+          },
+          {
+            "field": "dhw_elec_mwh",
+            "value": 29.673
+          },
+          {
+            "field": "dhw_gas_mwh",
+            "value": 147.654
+          },
+          {
+            "field": "fan_elec_mwh",
+            "value": 39.415
+          },
+          {
+            "field": "sp_elec_mwh",
+            "value": 78.864
+          },
+          {
+            "field": "total_gas_mwh",
+            "value": 147.654
+          },
+          {
+            "field": "hb_gain_equipment_mwh",
+            "value": 78.86410000000001
+          },
+          {
+            "field": "hb_gain_people_mwh",
+            "value": 0
+          },
+          {
+            "field": "hb_gain_solar_mwh",
+            "value": 99.3965
+          },
+          {
+            "field": "vent_heat_loss_mvhr_kwh",
+            "value": 36536.3
+          },
+          {
+            "field": "vent_heat_loss_bedroom_kwh",
+            "value": 226448.1
+          },
+          {
+            "field": "vent_heat_loss_toilet_kwh",
+            "value": 21537.2
+          },
+          {
+            "field": "vent_fan_mvhr_kwh",
+            "value": 22469.4
+          },
+          {
+            "field": "b40_heating_scop",
+            "value": 2.57
+          },
+          {
+            "field": "b40_cooling_seer",
+            "value": 3.5
+          },
+          {
+            "field": "b40_dhw_blended_eff",
+            "value": 1.16
+          }
+        ]
+      }
+    },
+    {
+      "name": "small_power_control_factor",
+      "axis": "v40.small_power[0].control_factor",
+      "values": [
+        0.5,
+        1,
+        1.5
+      ],
+      "points": [
+        {
+          "value": 0.5,
+          "snap": {
+            "demand_heating_mwh": 273.7,
+            "demand_cooling_mwh": 57.9,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 273.7,
+            "delivered_cooling_mwh": 57.9,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 106.548,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 16.543,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 39.432,
+            "total_elec_mwh": 297.433,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 103,
+            "carbon_kg_per_m2": 20.5,
+            "hb_loss_external_wall_mwh": 34.1499,
+            "hb_loss_glazing_mwh": 81.1484,
+            "hb_loss_fabric_leakage_mwh": 40.6192,
+            "hb_loss_permanent_vents_mwh": 11.6783,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 39.4321,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": 1,
+          "snap": {
+            "demand_heating_mwh": 245.6,
+            "demand_cooling_mwh": 69.1,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 245.6,
+            "delivered_cooling_mwh": 69.1,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 95.609,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 19.743,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 78.864,
+            "total_elec_mwh": 329.126,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 110.3,
+            "carbon_kg_per_m2": 22.02,
+            "hb_loss_external_wall_mwh": 39.945699999999995,
+            "hb_loss_glazing_mwh": 94.9205,
+            "hb_loss_fabric_leakage_mwh": 47.513,
+            "hb_loss_permanent_vents_mwh": 13.8209,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 78.86410000000001,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        },
+        {
+          "value": 1.5,
+          "snap": {
+            "demand_heating_mwh": 219,
+            "demand_cooling_mwh": 81.8,
+            "demand_dhw_mwh": 204.444,
+            "delivered_heating_mwh": 219,
+            "delivered_cooling_mwh": 81.8,
+            "delivered_dhw_mwh": 204.443,
+            "heat_elec_mwh": 85.254,
+            "heat_gas_mwh": 0,
+            "cool_elec_mwh": 23.371,
+            "dhw_elec_mwh": 29.673,
+            "dhw_gas_mwh": 147.654,
+            "fan_elec_mwh": 39.415,
+            "light_elec_mwh": 65.822,
+            "sp_elec_mwh": 118.296,
+            "total_elec_mwh": 361.831,
+            "total_gas_mwh": 147.654,
+            "eui_kwh_per_m2": 117.9,
+            "carbon_kg_per_m2": 23.58,
+            "hb_loss_external_wall_mwh": 45.7423,
+            "hb_loss_glazing_mwh": 108.6945,
+            "hb_loss_fabric_leakage_mwh": 54.407599999999995,
+            "hb_loss_permanent_vents_mwh": 15.964,
+            "hb_gain_lighting_mwh": 65.8215,
+            "hb_gain_equipment_mwh": 118.2962,
+            "hb_gain_people_mwh": 0,
+            "hb_gain_solar_mwh": 99.3965,
+            "vent_heat_loss_mvhr_kwh": 36536.3,
+            "vent_heat_loss_bedroom_kwh": 226448.1,
+            "vent_heat_loss_toilet_kwh": 21537.2,
+            "vent_fan_mvhr_kwh": 22469.4,
+            "state2_avg_occupants": 0,
+            "state2_peak_occupants": 0,
+            "b40_heating_scop": 2.57,
+            "b40_cooling_seer": 3.5,
+            "b40_dhw_blended_eff": 1.16,
+            "gia_m2": 4322,
+            "comfort_lower_c": 21,
+            "comfort_upper_c": 24
+          }
+        }
+      ],
+      "classification": {
+        "moved": [
+          {
+            "field": "demand_heating_mwh",
+            "min": 219,
+            "max": 273.7,
+            "range": 54.69999999999999,
+            "mean": 246.1
+          },
+          {
+            "field": "demand_cooling_mwh",
+            "min": 57.9,
+            "max": 81.8,
+            "range": 23.9,
+            "mean": 69.60000000000001
+          },
+          {
+            "field": "delivered_heating_mwh",
+            "min": 219,
+            "max": 273.7,
+            "range": 54.69999999999999,
+            "mean": 246.1
+          },
+          {
+            "field": "delivered_cooling_mwh",
+            "min": 57.9,
+            "max": 81.8,
+            "range": 23.9,
+            "mean": 69.60000000000001
+          },
+          {
+            "field": "heat_elec_mwh",
+            "min": 85.254,
+            "max": 106.548,
+            "range": 21.293999999999997,
+            "mean": 95.80366666666667
+          },
+          {
+            "field": "cool_elec_mwh",
+            "min": 16.543,
+            "max": 23.371,
+            "range": 6.827999999999999,
+            "mean": 19.885666666666665
+          },
+          {
+            "field": "sp_elec_mwh",
+            "min": 39.432,
+            "max": 118.296,
+            "range": 78.864,
+            "mean": 78.864
+          },
+          {
+            "field": "total_elec_mwh",
+            "min": 297.433,
+            "max": 361.831,
+            "range": 64.39800000000002,
+            "mean": 329.4633333333333
+          },
+          {
+            "field": "eui_kwh_per_m2",
+            "min": 103,
+            "max": 117.9,
+            "range": 14.900000000000006,
+            "mean": 110.40000000000002
+          },
+          {
+            "field": "carbon_kg_per_m2",
+            "min": 20.5,
+            "max": 23.58,
+            "range": 3.0799999999999983,
+            "mean": 22.03333333333333
+          },
+          {
+            "field": "hb_loss_external_wall_mwh",
+            "min": 34.1499,
+            "max": 45.7423,
+            "range": 11.592399999999998,
+            "mean": 39.94596666666666
+          },
+          {
+            "field": "hb_loss_glazing_mwh",
+            "min": 81.1484,
+            "max": 108.6945,
+            "range": 27.54610000000001,
+            "mean": 94.92113333333333
+          },
+          {
+            "field": "hb_loss_fabric_leakage_mwh",
+            "min": 40.6192,
+            "max": 54.407599999999995,
+            "range": 13.788399999999996,
+            "mean": 47.51326666666666
+          },
+          {
+            "field": "hb_loss_permanent_vents_mwh",
+            "min": 11.6783,
+            "max": 15.964,
+            "range": 4.2857,
+            "mean": 13.821066666666667
+          },
+          {
+            "field": "hb_gain_equipment_mwh",
+            "min": 39.4321,
+            "max": 118.2962,
+            "range": 78.86410000000001,
+            "mean": 78.86413333333333
+          }
+        ],
+        "frozen": [
+          {
+            "field": "demand_dhw_mwh",
+            "value": 204.444
+          },
+          {
+            "field": "delivered_dhw_mwh",
+            "value": 204.443
+          },
+          {
+            "field": "heat_gas_mwh",
+            "value": 0
+          },
+          {
+            "field": "dhw_elec_mwh",
+            "value": 29.673
+          },
+          {
+            "field": "dhw_gas_mwh",
+            "value": 147.654
+          },
+          {
+            "field": "fan_elec_mwh",
+            "value": 39.415
+          },
+          {
+            "field": "light_elec_mwh",
+            "value": 65.822
+          },
+          {
+            "field": "total_gas_mwh",
+            "value": 147.654
+          },
+          {
+            "field": "hb_gain_lighting_mwh",
+            "value": 65.8215
+          },
+          {
+            "field": "hb_gain_people_mwh",
+            "value": 0
+          },
+          {
+            "field": "hb_gain_solar_mwh",
+            "value": 99.3965
+          },
+          {
+            "field": "vent_heat_loss_mvhr_kwh",
+            "value": 36536.3
+          },
+          {
+            "field": "vent_heat_loss_bedroom_kwh",
+            "value": 226448.1
+          },
+          {
+            "field": "vent_heat_loss_toilet_kwh",
+            "value": 21537.2
+          },
+          {
+            "field": "vent_fan_mvhr_kwh",
+            "value": 22469.4
+          },
+          {
+            "field": "b40_heating_scop",
+            "value": 2.57
+          },
+          {
+            "field": "b40_cooling_seer",
+            "value": 3.5
+          },
+          {
+            "field": "b40_dhw_blended_eff",
+            "value": 1.16
+          }
+        ]
+      }
+    }
+  ],
+  "parity": [
+    {
+      "sweepName": "heating_scop",
+      "value": 4,
+      "baselineEditSnap": {
+        "demand_heating_mwh": 245.6,
+        "demand_cooling_mwh": 69.1,
+        "demand_dhw_mwh": 204.444,
+        "delivered_heating_mwh": 245.6,
+        "delivered_cooling_mwh": 69.1,
+        "delivered_dhw_mwh": 204.443,
+        "heat_elec_mwh": 70.61,
+        "heat_gas_mwh": 0,
+        "cool_elec_mwh": 19.743,
+        "dhw_elec_mwh": 29.673,
+        "dhw_gas_mwh": 147.654,
+        "fan_elec_mwh": 39.415,
+        "light_elec_mwh": 65.822,
+        "sp_elec_mwh": 78.864,
+        "total_elec_mwh": 304.127,
+        "total_gas_mwh": 147.654,
+        "eui_kwh_per_m2": 104.5,
+        "carbon_kg_per_m2": 20.82,
+        "hb_loss_external_wall_mwh": 39.945699999999995,
+        "hb_loss_glazing_mwh": 94.9205,
+        "hb_loss_fabric_leakage_mwh": 47.513,
+        "hb_loss_permanent_vents_mwh": 13.8209,
+        "hb_gain_lighting_mwh": 65.8215,
+        "hb_gain_equipment_mwh": 78.86410000000001,
+        "hb_gain_people_mwh": 0,
+        "hb_gain_solar_mwh": 99.3965,
+        "vent_heat_loss_mvhr_kwh": 36536.3,
+        "vent_heat_loss_bedroom_kwh": 226448.1,
+        "vent_heat_loss_toilet_kwh": 21537.2,
+        "vent_fan_mvhr_kwh": 22469.4,
+        "state2_avg_occupants": 0,
+        "state2_peak_occupants": 0,
+        "b40_heating_scop": 3.48,
+        "b40_cooling_seer": 3.5,
+        "b40_dhw_blended_eff": 1.16,
+        "gia_m2": 4322,
+        "comfort_lower_c": 21,
+        "comfort_upper_c": 24
+      },
+      "interventionSnap": {
+        "demand_heating_mwh": 195.5,
+        "demand_cooling_mwh": 66.7,
+        "demand_dhw_mwh": 0,
+        "delivered_heating_mwh": 0,
+        "delivered_cooling_mwh": 0,
+        "delivered_dhw_mwh": 0,
+        "heat_elec_mwh": 0,
+        "heat_gas_mwh": 0,
+        "cool_elec_mwh": 0,
+        "dhw_elec_mwh": 0,
+        "dhw_gas_mwh": 0,
+        "fan_elec_mwh": 0,
+        "light_elec_mwh": 0,
+        "sp_elec_mwh": 0,
+        "total_elec_mwh": 0,
+        "total_gas_mwh": 0,
+        "eui_kwh_per_m2": 0,
+        "carbon_kg_per_m2": 0,
+        "hb_loss_external_wall_mwh": 9.470600000000001,
+        "hb_loss_glazing_mwh": 31.5686,
+        "hb_loss_fabric_leakage_mwh": 89.2942,
+        "hb_loss_permanent_vents_mwh": 0,
+        "hb_gain_lighting_mwh": 0,
+        "hb_gain_equipment_mwh": 0,
+        "hb_gain_people_mwh": 0,
+        "hb_gain_solar_mwh": 125.8638,
+        "vent_heat_loss_mvhr_kwh": null,
+        "vent_heat_loss_bedroom_kwh": null,
+        "vent_heat_loss_toilet_kwh": null,
+        "vent_fan_mvhr_kwh": null,
+        "state2_avg_occupants": 0,
+        "state2_peak_occupants": 0,
+        "b40_heating_scop": null,
+        "b40_cooling_seer": null,
+        "b40_dhw_blended_eff": null,
+        "gia_m2": 3600,
+        "comfort_lower_c": 21,
+        "comfort_upper_c": 24
+      },
+      "delta": {
+        "total_elec_mwh": -304.127,
+        "eui_kwh_per_m2": -104.5
+      },
+      "identical": false
+    },
+    {
+      "sweepName": "vent_hre_mvhr_v40",
+      "value": 90,
+      "baselineEditSnap": {
+        "demand_heating_mwh": 226.5,
+        "demand_cooling_mwh": 71.8,
+        "demand_dhw_mwh": 204.444,
+        "delivered_heating_mwh": 226.5,
+        "delivered_cooling_mwh": 71.8,
+        "delivered_dhw_mwh": 204.443,
+        "heat_elec_mwh": 88.173,
+        "heat_gas_mwh": 0,
+        "cool_elec_mwh": 20.514,
+        "dhw_elec_mwh": 29.673,
+        "dhw_gas_mwh": 147.654,
+        "fan_elec_mwh": 39.415,
+        "light_elec_mwh": 65.822,
+        "sp_elec_mwh": 78.864,
+        "total_elec_mwh": 322.461,
+        "total_gas_mwh": 147.654,
+        "eui_kwh_per_m2": 108.8,
+        "carbon_kg_per_m2": 21.7,
+        "hb_loss_external_wall_mwh": 39.945699999999995,
+        "hb_loss_glazing_mwh": 94.9205,
+        "hb_loss_fabric_leakage_mwh": 47.513,
+        "hb_loss_permanent_vents_mwh": 13.8209,
+        "hb_gain_lighting_mwh": 65.8215,
+        "hb_gain_equipment_mwh": 78.86410000000001,
+        "hb_gain_people_mwh": 0,
+        "hb_gain_solar_mwh": 99.3965,
+        "vent_heat_loss_mvhr_kwh": 14614.5,
+        "vent_heat_loss_bedroom_kwh": 226448.1,
+        "vent_heat_loss_toilet_kwh": 21537.2,
+        "vent_fan_mvhr_kwh": 22469.4,
+        "state2_avg_occupants": 0,
+        "state2_peak_occupants": 0,
+        "b40_heating_scop": 2.57,
+        "b40_cooling_seer": 3.5,
+        "b40_dhw_blended_eff": 1.16,
+        "gia_m2": 4322,
+        "comfort_lower_c": 21,
+        "comfort_upper_c": 24
+      },
+      "interventionSnap": {
+        "demand_heating_mwh": 195.5,
+        "demand_cooling_mwh": 66.7,
+        "demand_dhw_mwh": 0,
+        "delivered_heating_mwh": 0,
+        "delivered_cooling_mwh": 0,
+        "delivered_dhw_mwh": 0,
+        "heat_elec_mwh": 0,
+        "heat_gas_mwh": 0,
+        "cool_elec_mwh": 0,
+        "dhw_elec_mwh": 0,
+        "dhw_gas_mwh": 0,
+        "fan_elec_mwh": 0,
+        "light_elec_mwh": 0,
+        "sp_elec_mwh": 0,
+        "total_elec_mwh": 0,
+        "total_gas_mwh": 0,
+        "eui_kwh_per_m2": 0,
+        "carbon_kg_per_m2": 0,
+        "hb_loss_external_wall_mwh": 9.470600000000001,
+        "hb_loss_glazing_mwh": 31.5686,
+        "hb_loss_fabric_leakage_mwh": 89.2942,
+        "hb_loss_permanent_vents_mwh": 0,
+        "hb_gain_lighting_mwh": 0,
+        "hb_gain_equipment_mwh": 0,
+        "hb_gain_people_mwh": 0,
+        "hb_gain_solar_mwh": 125.8638,
+        "vent_heat_loss_mvhr_kwh": null,
+        "vent_heat_loss_bedroom_kwh": null,
+        "vent_heat_loss_toilet_kwh": null,
+        "vent_fan_mvhr_kwh": null,
+        "state2_avg_occupants": 0,
+        "state2_peak_occupants": 0,
+        "b40_heating_scop": null,
+        "b40_cooling_seer": null,
+        "b40_dhw_blended_eff": null,
+        "gia_m2": 3600,
+        "comfort_lower_c": 21,
+        "comfort_upper_c": 24
+      },
+      "delta": {
+        "total_elec_mwh": -322.461,
+        "eui_kwh_per_m2": -108.8
+      },
+      "identical": false
+    },
+    {
+      "sweepName": "lighting_control_factor",
+      "value": 0.5,
+      "baselineEditSnap": {
+        "demand_heating_mwh": 265.1,
+        "demand_cooling_mwh": 61.1,
+        "demand_dhw_mwh": 204.444,
+        "delivered_heating_mwh": 265.1,
+        "delivered_cooling_mwh": 61.1,
+        "delivered_dhw_mwh": 204.443,
+        "heat_elec_mwh": 103.2,
+        "heat_gas_mwh": 0,
+        "cool_elec_mwh": 17.457,
+        "dhw_elec_mwh": 29.673,
+        "dhw_gas_mwh": 147.654,
+        "fan_elec_mwh": 39.415,
+        "light_elec_mwh": 38.268,
+        "sp_elec_mwh": 78.864,
+        "total_elec_mwh": 306.877,
+        "total_gas_mwh": 147.654,
+        "eui_kwh_per_m2": 105.2,
+        "carbon_kg_per_m2": 20.95,
+        "hb_loss_external_wall_mwh": 35.9163,
+        "hb_loss_glazing_mwh": 85.3457,
+        "hb_loss_fabric_leakage_mwh": 42.7202,
+        "hb_loss_permanent_vents_mwh": 12.3276,
+        "hb_gain_lighting_mwh": 38.2683,
+        "hb_gain_equipment_mwh": 78.86410000000001,
+        "hb_gain_people_mwh": 0,
+        "hb_gain_solar_mwh": 99.3965,
+        "vent_heat_loss_mvhr_kwh": 36536.3,
+        "vent_heat_loss_bedroom_kwh": 226448.1,
+        "vent_heat_loss_toilet_kwh": 21537.2,
+        "vent_fan_mvhr_kwh": 22469.4,
+        "state2_avg_occupants": 0,
+        "state2_peak_occupants": 0,
+        "b40_heating_scop": 2.57,
+        "b40_cooling_seer": 3.5,
+        "b40_dhw_blended_eff": 1.16,
+        "gia_m2": 4322,
+        "comfort_lower_c": 21,
+        "comfort_upper_c": 24
+      },
+      "interventionSnap": {
+        "demand_heating_mwh": 195.5,
+        "demand_cooling_mwh": 66.7,
+        "demand_dhw_mwh": 0,
+        "delivered_heating_mwh": 0,
+        "delivered_cooling_mwh": 0,
+        "delivered_dhw_mwh": 0,
+        "heat_elec_mwh": 0,
+        "heat_gas_mwh": 0,
+        "cool_elec_mwh": 0,
+        "dhw_elec_mwh": 0,
+        "dhw_gas_mwh": 0,
+        "fan_elec_mwh": 0,
+        "light_elec_mwh": 0,
+        "sp_elec_mwh": 0,
+        "total_elec_mwh": 0,
+        "total_gas_mwh": 0,
+        "eui_kwh_per_m2": 0,
+        "carbon_kg_per_m2": 0,
+        "hb_loss_external_wall_mwh": 9.470600000000001,
+        "hb_loss_glazing_mwh": 31.5686,
+        "hb_loss_fabric_leakage_mwh": 89.2942,
+        "hb_loss_permanent_vents_mwh": 0,
+        "hb_gain_lighting_mwh": 0,
+        "hb_gain_equipment_mwh": 0,
+        "hb_gain_people_mwh": 0,
+        "hb_gain_solar_mwh": 125.8638,
+        "vent_heat_loss_mvhr_kwh": null,
+        "vent_heat_loss_bedroom_kwh": null,
+        "vent_heat_loss_toilet_kwh": null,
+        "vent_fan_mvhr_kwh": null,
+        "state2_avg_occupants": 0,
+        "state2_peak_occupants": 0,
+        "b40_heating_scop": null,
+        "b40_cooling_seer": null,
+        "b40_dhw_blended_eff": null,
+        "gia_m2": 3600,
+        "comfort_lower_c": 21,
+        "comfort_upper_c": 24
+      },
+      "delta": {
+        "total_elec_mwh": -306.877,
+        "eui_kwh_per_m2": -105.2
+      },
+      "identical": false
+    }
+  ]
+}
