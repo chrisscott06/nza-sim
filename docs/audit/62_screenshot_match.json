@@ -1,0 +1,87 @@
+{
+  "generated_at": "2026-05-27T10:40:04.181Z",
+  "target": {
+    "cooling_demand_mwh": 397.3,
+    "lighting_mwh": 102,
+    "sp_mwh": 116.7
+  },
+  "results": [
+    {
+      "label": "baseline (cf=0.86 light, 1.0 sp, vent on, follow_comfort)",
+      "demand_h": 245.6,
+      "demand_c": 69.1,
+      "delivered_c": 69.1,
+      "cool_elec_mwh": 19.743,
+      "total_elec": 329.126,
+      "total_gas": 147.654,
+      "gain_people": 0,
+      "gain_light": 65.8215,
+      "gain_equip": 78.86410000000001,
+      "gain_solar": 99.3965,
+      "gain_total": 244.08210000000003,
+      "ratio_demand_over_gain": 0.28310146463013874
+    },
+    {
+      "label": "screenshot-match: vent OFF + light_cf=1.333 + sp_cf=1.480 + heating disabled + cool=14",
+      "demand_h": 11.7,
+      "demand_c": 198,
+      "delivered_c": 198,
+      "cool_elec_mwh": 56.571,
+      "total_elec": 304.986,
+      "total_gas": 147.654,
+      "gain_people": 0,
+      "gain_light": 102.0233,
+      "gain_equip": 116.71889999999999,
+      "gain_solar": 99.3965,
+      "gain_total": 318.1387,
+      "ratio_demand_over_gain": 0.6223700543190753
+    },
+    {
+      "label": "variant: same as above + heating still ON",
+      "demand_h": 11.7,
+      "demand_c": 198,
+      "delivered_c": 198,
+      "cool_elec_mwh": 56.571,
+      "total_elec": 309.541,
+      "total_gas": 147.654,
+      "gain_people": 0,
+      "gain_light": 102.0233,
+      "gain_equip": 116.71889999999999,
+      "gain_solar": 99.3965,
+      "gain_total": 318.1387,
+      "ratio_demand_over_gain": 0.6223700543190753
+    },
+    {
+      "label": "variant: vent OFF + cfs + cool=18",
+      "demand_h": 11.7,
+      "demand_c": 195.8,
+      "delivered_c": 195.8,
+      "cool_elec_mwh": 55.943,
+      "total_elec": 308.913,
+      "total_gas": 147.654,
+      "gain_people": 0,
+      "gain_light": 102.0233,
+      "gain_equip": 116.71889999999999,
+      "gain_solar": 99.3965,
+      "gain_total": 318.1387,
+      "ratio_demand_over_gain": 0.6154548314933079
+    },
+    {
+      "label": "variant: vent OFF + cfs + cool=24 (follow_comfort)",
+      "demand_h": 11.7,
+      "demand_c": 192.5,
+      "delivered_c": 192.5,
+      "cool_elec_mwh": 55,
+      "total_elec": 307.97,
+      "total_gas": 147.654,
+      "gain_people": 0,
+      "gain_light": 102.0233,
+      "gain_equip": 116.71889999999999,
+      "gain_solar": 99.3965,
+      "gain_total": 318.1387,
+      "ratio_demand_over_gain": 0.6050819972546566
+    }
+  ],
+  "closest": "screenshot-match: vent OFF + light_cf=1.333 + sp_cf=1.480 + heating disabled + cool=14",
+  "any_unphysical": false
+}

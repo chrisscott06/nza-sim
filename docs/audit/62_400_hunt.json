@@ -1,0 +1,121 @@
+{
+  "generated_at": "2026-05-27T10:38:24.290Z",
+  "comfortBand": {
+    "lower_c": 21,
+    "upper_c": 24
+  },
+  "results": [
+    {
+      "label": "A0 plain baseline",
+      "demand_h": 245.6,
+      "demand_c": 69.1,
+      "delivered_h": 245.6,
+      "delivered_c": 69.1,
+      "cool_elec_mwh": 19.743,
+      "eui": 110.3,
+      "gain_total": 244.0821
+    },
+    {
+      "label": "A1 vent OFF (no other change)",
+      "demand_h": 28.9,
+      "demand_c": 135.8,
+      "delivered_h": 28.9,
+      "delivered_c": 135.8,
+      "cool_elec_mwh": 38.8,
+      "eui": 86.1,
+      "gain_total": 244.0821
+    },
+    {
+      "label": "B1 vent OFF + cool=18 custom",
+      "demand_h": 28.9,
+      "demand_c": 139,
+      "delivered_h": 28.9,
+      "delivered_c": 139,
+      "cool_elec_mwh": 39.714,
+      "eui": 86.3,
+      "gain_total": 244.0821
+    },
+    {
+      "label": "B2 vent OFF + cool=18 + heat=21 explicit",
+      "demand_h": 28.9,
+      "demand_c": 139,
+      "delivered_h": 28.9,
+      "delivered_c": 139,
+      "cool_elec_mwh": 39.714,
+      "eui": 86.3,
+      "gain_total": 244.0821
+    },
+    {
+      "label": "B3 vent OFF + cool=15 custom (very low)",
+      "demand_h": 28.9,
+      "demand_c": 140.6,
+      "delivered_h": 28.9,
+      "delivered_c": 140.6,
+      "cool_elec_mwh": 40.171,
+      "eui": 86.4,
+      "gain_total": 244.0821
+    },
+    {
+      "label": "C1 vent OFF + cool=18 + gain bump 1.5x (lighting+sp)",
+      "demand_h": 9.7,
+      "demand_c": 208.2,
+      "delivered_h": 9.7,
+      "delivered_c": 208.2,
+      "cool_elec_mwh": 59.486,
+      "eui": 109.6,
+      "gain_total": 332.4977
+    },
+    {
+      "label": "C2 vent OFF + cool=15 + gain bump 2.0x",
+      "demand_h": 3.1,
+      "demand_c": 280.9,
+      "delivered_h": 3.1,
+      "delivered_c": 280.9,
+      "cool_elec_mwh": 80.257,
+      "eui": 131.8,
+      "gain_total": 410.198
+    },
+    {
+      "label": "C3 vent OFF + cool=15 + gain bump 3.0x",
+      "demand_h": 0.1,
+      "demand_c": 433.3,
+      "delivered_h": 0.1,
+      "delivered_c": 433.3,
+      "cool_elec_mwh": 123.8,
+      "eui": 177.5,
+      "gain_total": 565.5988000000001
+    },
+    {
+      "label": "D1 vent OFF + cool=18 + ALL heating systems disabled",
+      "demand_h": 28.9,
+      "demand_c": 139,
+      "delivered_h": 0,
+      "delivered_c": 139,
+      "cool_elec_mwh": 39.714,
+      "eui": 83.7,
+      "gain_total": 244.0821
+    },
+    {
+      "label": "E1 vent OFF + cool=15 + gain 3x + ALL heating OFF",
+      "demand_h": 0.1,
+      "demand_c": 433.3,
+      "delivered_h": 0,
+      "delivered_c": 433.3,
+      "cool_elec_mwh": 123.8,
+      "eui": 177.5,
+      "gain_total": 565.5988000000001
+    },
+    {
+      "label": "F1 vent OFF + cool=18 + 3x WWR via override",
+      "demand_h": 37.3,
+      "demand_c": 187,
+      "delivered_h": 37.3,
+      "delivered_c": 187,
+      "cool_elec_mwh": 53.429,
+      "eui": 90.2,
+      "gain_total": 298.8688
+    }
+  ],
+  "max_demand_mwh": 433.3,
+  "hit_400": false
+}
