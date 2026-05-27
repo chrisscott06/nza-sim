@@ -408,6 +408,17 @@ function withBypass(b40Bypass) {
 function withDhwLoadShape(v) {
   return b => { b.systems_config_v40.dhw_load_shape = v }
 }
+// Brief 64: control_strategy field mutators
+function withControlStrategy(v) {
+  return b => { b.control_strategy = v }
+}
+function withFreeRunningAndCsp(c) {
+  return b => {
+    b.control_strategy = 'free_running'
+    b.systems_config_v40.cooling_setpoint_mode = 'custom'
+    b.systems_config_v40.cooling_setpoint_c = c
+  }
+}
 
 const snaps = {} // cache keyed by short name
 function getSnap(key, mutate) {
@@ -449,6 +460,12 @@ const sweepKeys = [
   ['bypass_off', withBypass(false)],
   ['dhw_flat', withDhwLoadShape('flat')],
   ['dhw_follow', withDhwLoadShape('follow_occupancy')],
+  // Brief 64: control_strategy probes (clamp vs free_running)
+  ['free_run_default', withControlStrategy('free_running')],
+  ['active_explicit',  withControlStrategy('active_setpoint')],
+  ['free_run_csp_28',  withFreeRunningAndCsp(28)],
+  ['free_run_csp_18',  withFreeRunningAndCsp(18)],
+  ['active_csp_18',    withCoolingSp(18)],   // baseline default is already active_setpoint
 ]
 for (const [k, m] of sweepKeys) {
   process.stdout.write(`  ${k}... `)
@@ -763,6 +780,47 @@ const solarSum = baseline.hb_gain_solar_n_kwh + baseline.hb_gain_solar_s_kwh + b
 assertApproxEq('B', 'B25', 'solar facade sum = solar.total_kwh',
   solarSum, baseline.hb_gain_solar_total_kwh, 0.005, 5)
 
+// Brief 64 §C — Free-running INVARIANCE.
+// With control_strategy='free_running', engine output must reproduce the
+// pre-Brief-64 numbers byte-exact. This is the regression guard that
+// proves Part A only added a code path rather than altering the old one.
+// The pre-Brief-64 anchor (Brief 63 baseline record):
+//   default csp=24 (follow_comfort): cool_demand=69.1, EUI=110.3
+//   csp=28: cool_demand=66.7 (from Brief 62 follow-up record)
+//   csp=18: cool_demand=77.9
+assertApproxEq('B', 'B26', 'free_running default (csp=24 follow_comfort): cool_demand == 69.1 (pre-Brief-64 anchor)',
+  snaps.free_run_default.demand_cooling_mwh, 69.1, 0.005, 0.5,
+  'engine output under free_running must reproduce pre-Brief-64 byte-exact')
+assertApproxEq('B', 'B27', 'free_running default: EUI == 110.3 (pre-Brief-64 anchor)',
+  snaps.free_run_default.eui_kwh_per_m2, 110.3, 0.003, 0.5)
+assertApproxEq('B', 'B28', 'free_running csp=28: cool_demand == 66.7 (pre-Brief-64 record)',
+  snaps.free_run_csp_28.demand_cooling_mwh, 66.7, 0.005, 0.5)
+assertApproxEq('B', 'B29', 'free_running csp=18: cool_demand == 77.9 (pre-Brief-64 record)',
+  snaps.free_run_csp_18.demand_cooling_mwh, 77.9, 0.005, 0.5)
+
+// Brief 64 §C — Clamp ≥ free_running at every csp (the clamp catches
+// hours the bucketed model bypassed). Both bounds must hold.
+assertInequality('B', 'B30', 'csp=18: clamp cool_demand ≥ free_running cool_demand',
+  snaps.active_csp_18.demand_cooling_mwh, '>=', snaps.free_run_csp_18.demand_cooling_mwh,
+  `clamp catches more cooling hours than the bucketed model`)
+assertInequality('B', 'B31', 'baseline (csp=24 follow_comfort): clamp cool_demand ≥ free_running cool_demand',
+  baseline.demand_cooling_mwh, '>=', snaps.free_run_default.demand_cooling_mwh)
+
+// Brief 64 §C — Heating UNCHANGED across control_strategy toggle.
+// The clamp formula deliberately preserves the heating side (active_setpoint
+// uses the same heating formula as the old free_running heating-direction
+// branch). At default setpoints, heating_demand must be IDENTICAL.
+assertApproxEq('B', 'B32', 'control_strategy toggle leaves heating_demand unchanged',
+  baseline.demand_heating_mwh, snaps.free_run_default.demand_heating_mwh, 0.001, 0.05,
+  'heating clamp formula = pre-Brief-64 heating-direction formula (intentional preservation)')
+
+// Brief 64 §C — Explicit active_setpoint == default (no field).
+// The default behaviour when control_strategy is absent must equal what the
+// user gets when they explicitly select active_setpoint. Documents that the
+// default is the clamp.
+assertApproxEq('B', 'B33', 'control_strategy default (no field) == explicit active_setpoint',
+  baseline.demand_cooling_mwh, snaps.active_explicit.demand_cooling_mwh, 0.001, 0.05)
+
 // ════════════════════════════════════════════════════════════════════════
 // CATEGORY C — CONSERVATION
 // ════════════════════════════════════════════════════════════════════════
@@ -975,6 +1033,26 @@ expectFrozenBetween(snaps.light_cf_lo, snaps.light_cf_hi,
    'hb_gain_equipment_kwh','hb_gain_solar_total_kwh'],
   'D08', 'lighting_cf change')
 
+// Brief 64 §C — control_strategy invariance.
+// D9: switching control_strategy = 'free_running' must NOT move any field
+// other than the demand-derivation outputs (cooling demand + downstream
+// fuel/EUI). Heating demand UNCHANGED (formulas are identical between
+// strategies). DHW, lighting, small-power, vent fan, vent fan elec must
+// all be frozen (control_strategy doesn't touch these services).
+expectFrozenBetween(baseline, snaps.free_run_default,
+  ['demand_heating_mwh','demand_dhw_mwh','heat_elec_mwh','heat_gas_mwh',
+   'dhw_elec_mwh','dhw_gas_mwh','fan_elec_mwh','light_elec_mwh','sp_elec_mwh',
+   'hb_gain_lighting_kwh','hb_gain_equipment_kwh','hb_gain_solar_total_kwh',
+   'hb_loss_total_kwh'],
+  'D09', 'control_strategy toggle')
+
+// D10: control_strategy = 'free_running' under csp=18 leaves heating
+// demand UNCHANGED relative to active_setpoint csp=18.
+expectFrozenBetween(snaps.csp_18, snaps.free_run_csp_18,
+  ['demand_heating_mwh','demand_dhw_mwh','heat_elec_mwh','heat_gas_mwh',
+   'dhw_elec_mwh','dhw_gas_mwh','fan_elec_mwh','light_elec_mwh','sp_elec_mwh'],
+  'D10', 'control_strategy toggle at csp=18')
+
 // ════════════════════════════════════════════════════════════════════════
 // CATEGORY E — ORDERING / PARITY
 // ════════════════════════════════════════════════════════════════════════
@@ -1066,6 +1144,21 @@ assertApproxEq('E', 'E09b', 'parity: baseline_edit(light_cf=0.4) ≈ interventio
   snaps.light_cf_lo.total_elec_mwh, sLightCfIntv.total_elec_mwh, 0.005, 0.5)
 assertApproxEq('E', 'E09c', 'parity: baseline_edit(light_cf=0.4) ≈ intervention demand_heating (gain coupling)',
   snaps.light_cf_lo.demand_heating_mwh, sLightCfIntv.demand_heating_mwh, 0.01, 0.5)
+
+// Brief 64 §C — control_strategy parity: setting via intervention patch
+// must produce the same engine output as setting via baseline edit.
+// No separate path; same engine code.
+const sFreeRunningIntv = readSnap(runStack([{
+  id: 'intv_free_running', label: 'Switch to free_running', enabled: true, schema_version: 3,
+  patches: [{ id: 'p1', op: 'set', path: 'building.control_strategy', value: 'free_running', source: 'inline' }],
+}]))
+assertApproxEq('E', 'E09d', 'parity: baseline_edit(control_strategy=free_running) ≈ intervention cool_demand',
+  snaps.free_run_default.demand_cooling_mwh, sFreeRunningIntv.demand_cooling_mwh, 0.005, 0.5,
+  'Brief 64: control_strategy patch must produce same result as direct field write')
+assertApproxEq('E', 'E09e', 'parity: baseline_edit(control_strategy=free_running) ≈ intervention EUI',
+  snaps.free_run_default.eui_kwh_per_m2, sFreeRunningIntv.eui_kwh_per_m2, 0.005, 0.5)
+assertApproxEq('E', 'E09f', 'parity: baseline_edit(control_strategy=free_running) ≈ intervention heating_demand',
+  snaps.free_run_default.demand_heating_mwh, sFreeRunningIntv.demand_heating_mwh, 0.001, 0.05)
 
 // E10-E11: Disabled intervention == baseline
 const sDisabled = readSnap(runStack([{

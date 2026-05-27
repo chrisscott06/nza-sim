@@ -1,20 +1,20 @@
 # Brief 63 — Validation report
 
-Generated: 2026-05-27T14:01:46.822Z
+Generated: 2026-05-27T14:04:30.565Z
 Project: HIX Bridgewater (GIA 4322 m²)
 Weather: GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw
 
-**Totals:** PASS 242 · FAIL 0 · BLOCKED 0 · TOTAL 242
+**Totals:** PASS 275 · FAIL 0 · BLOCKED 0 · TOTAL 275
 
 ## Per category
 
 | Category | PASS | FAIL | BLOCKED |
 |---|---:|---:|---:|
 | A | 40 | 0 | 0 |
-| B | 36 | 0 | 0 |
+| B | 44 | 0 | 0 |
 | C | 30 | 0 | 0 |
-| D | 78 | 0 | 0 |
-| E | 16 | 0 | 0 |
+| D | 100 | 0 | 0 |
+| E | 19 | 0 | 0 |
 | F | 42 | 0 | 0 |
 
 ## All tests
@@ -97,6 +97,14 @@ Weather: GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw
 | B23 | B | PASS | EUI = (Σ fuel by carrier) × 1000 / gia |
 | B24 | B | PASS | csp_18: EUI = (Σ fuel) × 1000 / gia |
 | B25 | B | PASS | solar facade sum = solar.total_kwh |
+| B26 | B | PASS | free_running default (csp=24 follow_comfort): cool_demand == 69.1 (pre-Brief-64 anchor) |
+| B27 | B | PASS | free_running default: EUI == 110.3 (pre-Brief-64 anchor) |
+| B28 | B | PASS | free_running csp=28: cool_demand == 66.7 (pre-Brief-64 record) |
+| B29 | B | PASS | free_running csp=18: cool_demand == 77.9 (pre-Brief-64 record) |
+| B30 | B | PASS | csp=18: clamp cool_demand ≥ free_running cool_demand |
+| B31 | B | PASS | baseline (csp=24 follow_comfort): clamp cool_demand ≥ free_running cool_demand |
+| B32 | B | PASS | control_strategy toggle leaves heating_demand unchanged |
+| B33 | B | PASS | control_strategy default (no field) == explicit active_setpoint |
 | C01 | C | PASS | baseline: total_elec = Σ per-service elec |
 | C02 | C | PASS | hsp_24: total_elec = Σ per-service elec |
 | C03 | C | PASS | csp_18: total_elec = Σ per-service elec |
@@ -205,6 +213,28 @@ Weather: GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw
 | D08_4 | D | PASS | lighting_cf change: sp_elec_mwh unchanged |
 | D08_5 | D | PASS | lighting_cf change: hb_gain_equipment_kwh unchanged |
 | D08_6 | D | PASS | lighting_cf change: hb_gain_solar_total_kwh unchanged |
+| D09_0 | D | PASS | control_strategy toggle: demand_heating_mwh unchanged |
+| D09_1 | D | PASS | control_strategy toggle: demand_dhw_mwh unchanged |
+| D09_2 | D | PASS | control_strategy toggle: heat_elec_mwh unchanged |
+| D09_3 | D | PASS | control_strategy toggle: heat_gas_mwh unchanged |
+| D09_4 | D | PASS | control_strategy toggle: dhw_elec_mwh unchanged |
+| D09_5 | D | PASS | control_strategy toggle: dhw_gas_mwh unchanged |
+| D09_6 | D | PASS | control_strategy toggle: fan_elec_mwh unchanged |
+| D09_7 | D | PASS | control_strategy toggle: light_elec_mwh unchanged |
+| D09_8 | D | PASS | control_strategy toggle: sp_elec_mwh unchanged |
+| D09_9 | D | PASS | control_strategy toggle: hb_gain_lighting_kwh unchanged |
+| D09_10 | D | PASS | control_strategy toggle: hb_gain_equipment_kwh unchanged |
+| D09_11 | D | PASS | control_strategy toggle: hb_gain_solar_total_kwh unchanged |
+| D09_12 | D | PASS | control_strategy toggle: hb_loss_total_kwh unchanged |
+| D10_0 | D | PASS | control_strategy toggle at csp=18: demand_heating_mwh unchanged |
+| D10_1 | D | PASS | control_strategy toggle at csp=18: demand_dhw_mwh unchanged |
+| D10_2 | D | PASS | control_strategy toggle at csp=18: heat_elec_mwh unchanged |
+| D10_3 | D | PASS | control_strategy toggle at csp=18: heat_gas_mwh unchanged |
+| D10_4 | D | PASS | control_strategy toggle at csp=18: dhw_elec_mwh unchanged |
+| D10_5 | D | PASS | control_strategy toggle at csp=18: dhw_gas_mwh unchanged |
+| D10_6 | D | PASS | control_strategy toggle at csp=18: fan_elec_mwh unchanged |
+| D10_7 | D | PASS | control_strategy toggle at csp=18: light_elec_mwh unchanged |
+| D10_8 | D | PASS | control_strategy toggle at csp=18: sp_elec_mwh unchanged |
 | E01 | E | PASS | order independence: total_elec [A,B] == [B,A] |
 | E02 | E | PASS | order independence: eui [A,B] == [B,A] |
 | E03 | E | PASS | order independence: heating_fuel [A,B] == [B,A] |
@@ -217,6 +247,9 @@ Weather: GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw
 | E09 | E | PASS | parity: baseline_edit(csp=18) ≈ intervention(csp=18) eui |
 | E09b | E | PASS | parity: baseline_edit(light_cf=0.4) ≈ intervention total_elec |
 | E09c | E | PASS | parity: baseline_edit(light_cf=0.4) ≈ intervention demand_heating (gain coupling) |
+| E09d | E | PASS | parity: baseline_edit(control_strategy=free_running) ≈ intervention cool_demand |
+| E09e | E | PASS | parity: baseline_edit(control_strategy=free_running) ≈ intervention EUI |
+| E09f | E | PASS | parity: baseline_edit(control_strategy=free_running) ≈ intervention heating_demand |
 | E10 | E | PASS | disabled intervention: total_elec equals empty-stack baseline |
 | E11 | E | PASS | disabled intervention: eui equals empty-stack baseline |
 | E12 | E | PASS | empty-stack baseline == direct-call baseline total_elec |

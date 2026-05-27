@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-27T14:01:46.822Z",
+  "generated_at": "2026-05-27T14:04:30.565Z",
   "project": {
     "id": "14b4a5b1-8c73-4acb-8b65-1d22f05ec969",
     "name": "HIX Bridgewater",
@@ -90,10 +90,10 @@
     "source_heating": "v40"
   },
   "totals": {
-    "PASS": 242,
+    "PASS": 275,
     "FAIL": 0,
     "BLOCKED": 0,
-    "total": 242
+    "total": 275
   },
   "by_category": {
     "A": {
@@ -102,7 +102,7 @@
       "BLOCKED": 0
     },
     "B": {
-      "PASS": 36,
+      "PASS": 44,
       "FAIL": 0,
       "BLOCKED": 0
     },
@@ -112,12 +112,12 @@
       "BLOCKED": 0
     },
     "D": {
-      "PASS": 78,
+      "PASS": 100,
       "FAIL": 0,
       "BLOCKED": 0
     },
     "E": {
-      "PASS": 16,
+      "PASS": 19,
       "FAIL": 0,
       "BLOCKED": 0
     },
@@ -495,7 +495,7 @@
       "status": "PASS",
       "expected": 0,
       "actual": 0,
-      "notes": "0 negative values across 31 snaps"
+      "notes": "0 negative values across 36 snaps"
     },
     {
       "category": "B",
@@ -810,6 +810,78 @@
       "status": "PASS",
       "expected": "≈ 99396.500",
       "actual": "99396.500",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "B",
+      "id": "B26",
+      "name": "free_running default (csp=24 follow_comfort): cool_demand == 69.1 (pre-Brief-64 anchor)",
+      "status": "PASS",
+      "expected": "≈ 69.100",
+      "actual": "69.100",
+      "notes": "engine output under free_running must reproduce pre-Brief-64 byte-exact (diff 0.0000)"
+    },
+    {
+      "category": "B",
+      "id": "B27",
+      "name": "free_running default: EUI == 110.3 (pre-Brief-64 anchor)",
+      "status": "PASS",
+      "expected": "≈ 110.300",
+      "actual": "110.300",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "B",
+      "id": "B28",
+      "name": "free_running csp=28: cool_demand == 66.7 (pre-Brief-64 record)",
+      "status": "PASS",
+      "expected": "≈ 66.700",
+      "actual": "66.700",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "B",
+      "id": "B29",
+      "name": "free_running csp=18: cool_demand == 77.9 (pre-Brief-64 record)",
+      "status": "PASS",
+      "expected": "≈ 77.900",
+      "actual": "77.900",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "B",
+      "id": "B30",
+      "name": "csp=18: clamp cool_demand ≥ free_running cool_demand",
+      "status": "PASS",
+      "expected": "84.500 >= 77.900",
+      "actual": "84.500 >= 77.900",
+      "notes": "clamp catches more cooling hours than the bucketed model"
+    },
+    {
+      "category": "B",
+      "id": "B31",
+      "name": "baseline (csp=24 follow_comfort): clamp cool_demand ≥ free_running cool_demand",
+      "status": "PASS",
+      "expected": "70.300 >= 69.100",
+      "actual": "70.300 >= 69.100",
+      "notes": ""
+    },
+    {
+      "category": "B",
+      "id": "B32",
+      "name": "control_strategy toggle leaves heating_demand unchanged",
+      "status": "PASS",
+      "expected": "≈ 245.600",
+      "actual": "245.600",
+      "notes": "heating clamp formula = pre-Brief-64 heating-direction formula (intentional preservation) (diff 0.0000)"
+    },
+    {
+      "category": "B",
+      "id": "B33",
+      "name": "control_strategy default (no field) == explicit active_setpoint",
+      "status": "PASS",
+      "expected": "≈ 70.300",
+      "actual": "70.300",
       "notes": " (diff 0.0000)"
     },
     {
@@ -1785,6 +1857,204 @@
       "notes": ""
     },
     {
+      "category": "D",
+      "id": "D09_0",
+      "name": "control_strategy toggle: demand_heating_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=1.2280",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D09_1",
+      "name": "control_strategy toggle: demand_dhw_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=1.0222",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D09_2",
+      "name": "control_strategy toggle: heat_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.4780",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D09_3",
+      "name": "control_strategy toggle: heat_gas_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.0500",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D09_4",
+      "name": "control_strategy toggle: dhw_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.1484",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D09_5",
+      "name": "control_strategy toggle: dhw_gas_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.7383",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D09_6",
+      "name": "control_strategy toggle: fan_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.1971",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D09_7",
+      "name": "control_strategy toggle: light_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.3291",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D09_8",
+      "name": "control_strategy toggle: sp_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.3943",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D09_9",
+      "name": "control_strategy toggle: hb_gain_lighting_kwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=329.1075",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D09_10",
+      "name": "control_strategy toggle: hb_gain_equipment_kwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=394.3205",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D09_11",
+      "name": "control_strategy toggle: hb_gain_solar_total_kwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=496.9825",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D09_12",
+      "name": "control_strategy toggle: hb_loss_total_kwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=1214.3890",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D10_0",
+      "name": "control_strategy toggle at csp=18: demand_heating_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=1.2280",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D10_1",
+      "name": "control_strategy toggle at csp=18: demand_dhw_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=1.0222",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D10_2",
+      "name": "control_strategy toggle at csp=18: heat_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.4780",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D10_3",
+      "name": "control_strategy toggle at csp=18: heat_gas_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.0500",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D10_4",
+      "name": "control_strategy toggle at csp=18: dhw_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.1484",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D10_5",
+      "name": "control_strategy toggle at csp=18: dhw_gas_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.7383",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D10_6",
+      "name": "control_strategy toggle at csp=18: fan_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.1971",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D10_7",
+      "name": "control_strategy toggle at csp=18: light_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.3291",
+      "notes": ""
+    },
+    {
+      "category": "D",
+      "id": "D10_8",
+      "name": "control_strategy toggle at csp=18: sp_elec_mwh unchanged",
+      "status": "PASS",
+      "expected": "|Δ|≤tol",
+      "actual": "Δ=0.0000 tol=0.3943",
+      "notes": ""
+    },
+    {
       "category": "E",
       "id": "E01",
       "name": "order independence: total_elec [A,B] == [B,A]",
@@ -1890,6 +2160,33 @@
       "status": "PASS",
       "expected": "≈ 270.600",
       "actual": "270.600",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "E",
+      "id": "E09d",
+      "name": "parity: baseline_edit(control_strategy=free_running) ≈ intervention cool_demand",
+      "status": "PASS",
+      "expected": "≈ 69.100",
+      "actual": "69.100",
+      "notes": "Brief 64: control_strategy patch must produce same result as direct field write (diff 0.0000)"
+    },
+    {
+      "category": "E",
+      "id": "E09e",
+      "name": "parity: baseline_edit(control_strategy=free_running) ≈ intervention EUI",
+      "status": "PASS",
+      "expected": "≈ 110.300",
+      "actual": "110.300",
+      "notes": " (diff 0.0000)"
+    },
+    {
+      "category": "E",
+      "id": "E09f",
+      "name": "parity: baseline_edit(control_strategy=free_running) ≈ intervention heating_demand",
+      "status": "PASS",
+      "expected": "≈ 245.600",
+      "actual": "245.600",
       "notes": " (diff 0.0000)"
     },
     {
@@ -2337,6 +2634,11 @@
     "bypass_on",
     "bypass_off",
     "dhw_flat",
-    "dhw_follow"
+    "dhw_follow",
+    "free_run_default",
+    "active_explicit",
+    "free_run_csp_28",
+    "free_run_csp_18",
+    "active_csp_18"
   ]
 }

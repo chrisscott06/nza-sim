@@ -1,5 +1,81 @@
 # NZA SIMULATE — Status
 
+## 🚀 Brief 64 — BUILT (walkthrough PENDING Chris) 2026-05-27
+
+**Cooling clamp + visible control strategy.** Replaces the weather-direction-bucketed three-way demand branch in `_calculateState2` with independent setpoint clamps (cooling clamp gains-inclusive every hour; heating clamp formula unchanged). Adds `control_strategy` field as an explicit visible choice — `'active_setpoint'` (new default, clamp) vs `'free_running'` (preserved pre-Brief-64 weather-gated branch). Three commits.
+
+### Anchor — drift is correct and expected per Chris's ratified decision
+
+**Bridgewater cooling demand RISES under active_setpoint:**
+
+| csp | clamp (active) | free_running | Δ |
+|---|---:|---:|---:|
+| 24 (default) | **70.3 MWh** (EUI 110.4) | 69.1 MWh (EUI 110.3) | +1.2 / +0.1 |
+| 22 | 72.7 | 71.1 | +1.6 |
+| 20 | 76.9 | 74.5 | +2.4 |
+| 18 | 84.5 | 77.9 | +6.6 |
+| 16 | 97.3 | 81.3 | +16.0 |
+
+**Heating demand UNCHANGED across all csp / strategy combinations: 245.6 MWh.** The cooling clamp acceleration as csp drops (Δ at 22→18 = 11.8 MWh vs 26→22 = 4.0 MWh) matches the brief's gains-dominated-hotel expectation.
+
+### Parts landed
+
+| Part | Commit | Deliverable | Status |
+|---|---|---|---|
+| A | `367aedf` | `_calculateState2` clamp branch under `control_strategy === 'active_setpoint'` (default). Heating formula unchanged. Cooling formula gains-inclusive: `max(0, hourly_cool_gain + Q_solar + Q_internal − hourly_heat_loss)`. Free-running branch preserved exactly. | ✓ 9 / 9 hand-calc gates PASS (`scripts/_brief64_handcalc.mjs`) |
+| B | `78924bb` | `control_strategy` field: DEFAULT_PARAMS, ProjectContext loader migration (legacy → active_setpoint), withMode allowlist (per ALLOWLIST DRIFT discipline), Systems module UI with verbatim Brief 64 labels (no "weather-compensated"), mutate('building.control_strategy') routing. | ✓ Build clean, persistence round-trips |
+| C | (this commit) | Validation harness extensions: B26-B33 (free-running anchor reproduction byte-exact, clamp ≥ free_running, heating preserved), D09-D10 (control_strategy invariance — only demand-derivation moves), E09d-f (intervention parity for control_strategy patch). | ✓ 275 / 275 PASS (33 new tests) |
+
+### Hand-calc gates (Part A)
+
+`scripts/_brief64_handcalc.mjs` writes `docs/audit/64_handcalc.json`:
+
+| Gate | Result | Detail |
+|---|---|---|
+| G1: cooling demand monotonic ↑ as csp ↓ (clamp) | PASS | strictly increasing 67.8 → 97.3 over csp 28→16 |
+| G2: heating UNCHANGED across cooling-setpoint sweep | PASS | sits at 245.6 MWh at every csp (max dev 0.000) |
+| G3: delivered = demand (Brief 62 closure) | PASS | reconciled at every csp |
+| G4: cooling_demand ≤ Σ gains under clamp | PASS | bound holds everywhere |
+| G5: clamp cool_demand ≥ free_running cool_demand | PASS | clamp catches more cooling hours |
+| G6a: free_running csp=24 = 69.1 MWh (pre-Brief-64 anchor) | PASS | byte-exact reproduction |
+| G6b: free_running csp=24 EUI = 110.3 | PASS | pre-Brief-64 anchor exact |
+| G7: default (no field) == explicit active_setpoint | PASS | semantic clarity |
+| G8: acceleration — Δ(22→18) > Δ(26→22) | PASS | 11.80 > 4.00 (gains-dominated hotel behaviour) |
+
+### Brief 63 validation harness — extended
+
+`node scripts/validate_engine.mjs` → **275 PASS / 0 FAIL / 0 BLOCKED** (was 242 pre-Brief-64; added 33 new tests for clamp + free-running invariance + intervention parity). Per category: A=40, B=44, C=30, D=100, E=19, F=42.
+
+### Asymmetry & double-fire footnote
+
+The heating formula does NOT subtract `hourly_cool_gain_Wh` — that's deliberate, preserves Brief 62 heating numbers. In rare hours both clamps can fire (when cool_gain > 0 AND heat_loss > Q_solar + Q_internal — e.g. sunny cold winter day with weak gains). The bucketing follows heating-direction style (gains absorb heat_loss first); cool_gain carries into cooling via its own accumulator. This is the brief's flagged modelling judgement (§6 "When to escalate") — chosen to preserve heating stability, not silently picked.
+
+### Walkthrough remains PENDING Chris in browser
+
+Per Brief 64 §IN-SCREEN WALKTHROUGH (required, non-optional). Six spot-checks:
+
+1. **CSP responds** — drag cooling setpoint 24→18 with `active_setpoint` selected; cooling demand should rise substantially and visibly, accelerating as it drops.
+2. **Staged demand reads sensibly** — Envelope (State 1) cooling unchanged; Internal Gains (State 2) higher (adds gains); Systems (State 3) accounts for system performance.
+3. **Strategy toggle** — `active_setpoint` → `free_running`; cooling drops back to old weather-gated behaviour. Switch back. Labels read as written.
+4. **State 1 untouched** — Envelope module cooling demand identical to before this brief.
+5. **Reconciliation holds** — Systems breakdown / calc-trail: demand → delivered → fuel still reconciles, no new residual, no consistency-failure banner.
+6. **Persistence** — Save, reload, `control_strategy` round-trips; cooling demand stable across reload.
+
+Until Chris signs off the walkthrough, this brief is "built + gates run" — not "done".
+
+### What's queued (NOT in Brief 64 scope)
+
+- **System sizing logic** — peak load, capacity, oversizing, part-load. Natural next brief after walkthrough. The clamp gives honest annual demand; sizing reads it.
+- **Peak-hour cooling load figure** — held to the sizing brief per Chris's decision in Brief 64 §SCOPE.
+- **397-vs-198 Energy Flows display doubling** — separate display fix, not bundled.
+- **carrier-vs-EUI ~0.3 MWh gap** — display-layer, parked.
+- **share_pct full retirement** — own brief.
+- **Sankey gross-vs-net / bidirectional-flow rebuild** — display brief.
+- **AIR_HEAT_CAPACITY 0.33 vs 1206 ~1.5% inconsistency** — tidy brief.
+- **Brief 60 Part B** (auxiliary energy in Internal Gains) — kept separate.
+
+---
+
 ## 🚀 Brief 63 — CLOSED 2026-05-27
 
 **Autonomous engine validation harness.** Permanent regression guard: 242 first-principles physics assertions across monotonicity/bounds/conservation/invariance/ordering/reconciliation. **All PASS / 0 FAIL / 0 BLOCKED** at first all-fixes-landed run. No tolerances tweaked; every initial RED was a harness wiring bug or a P1 introspection-field correction.
