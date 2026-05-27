@@ -624,7 +624,12 @@ function _computeVentilation(systems, gia, peakOccupants, hoursActive = 8760) {
   }
 
   const out_systems = enabledSystems.map(sys => {
-    const share = Number(sys?.share_pct ?? 0) / 100
+    // Brief 60 Part A reconcile fix (2026-05-27): share_pct removed
+    // from the fan calc (fans don't share a demand). share_pct is
+    // still preserved on the per-system result for display via
+    // sys.share_pct ?? 0 below. The other read sites of share_pct
+    // (heating/cooling/DHW demand-split, lighting/small-power Brief
+    // 58 C weighted pro-rata) are unaffected by this fix.
     const eff   = sys?.efficiency_metric ?? {}
     const sfp_w_per_lps        = Number(eff?.sfp_w_per_lps ?? 0)
     const recovery_sensible_pct = Number(eff?.recovery_sensible_pct ?? 0)
@@ -637,9 +642,31 @@ function _computeVentilation(systems, gia, peakOccupants, hoursActive = 8760) {
     else if (flow_rate_basis === 'per_person') flow_lps = flow_rate * peakOccupants
     else                                       flow_lps = flow_rate   // 'constant'
 
-    // Fan electrical = SFP × flow × hours_active × share
+    // Fan electrical = SFP × flow × hours_active (NO × share).
+    // Brief 60 Part A reconcile fix (2026-05-27, Chris-authorised):
+    // share_pct is a "fraction of demand served" — meaningful for
+    // multi-system heating/cooling/DHW that split ONE zone demand,
+    // meaningless for ventilation because each enabled extract fan
+    // runs at its OWN flow continuously, independent of any demand
+    // allocation. Pre-fix the × share term made brief40's fan total
+    // exclude every system with share=0% (Bridgewater's two extract
+    // fans, 100/0/0 shares) while consumption.total.electricity_mwh
+    // includes the full fan electricity via consumption.ventilation[]
+    // (the State 3 path which doesn't apply share). Result: the new
+    // Calc Trail panel's row sum was missing ~17 MWh baseline. This
+    // fix makes brief40 fan total match the consumption.ventilation[]
+    // sum: every enabled fan contributes its full SFP × flow × hours.
+    // Anchor 110.30 holds because consumption.total already counts
+    // the unshared sum; this corrects the brief40 display block only.
+    // share_pct is preserved on the per-system result for downstream
+    // display, just not multiplied into the fan electricity. See
+    // docs/audit/60_share_pct_audit.md for the full audit of every
+    // remaining share_pct read site and the proposed primary/
+    // secondary-fuel-mix replacement for the demand-split services
+    // (heating/cooling/DHW) — that retirement is Chris-scoped as its
+    // own brief.
     // SFP units: W/(l/s); flow in l/s; result in Wh, /1000 → kWh
-    const fan_electrical_kwh = sfp_w_per_lps * flow_lps * hoursActive * share / 1000
+    const fan_electrical_kwh = sfp_w_per_lps * flow_lps * hoursActive / 1000
     const fan_electrical_mwh = fan_electrical_kwh / 1000
 
     // Recovery is per-system: the kWh recovered by this system's MVHR core

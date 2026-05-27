@@ -2691,12 +2691,27 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     const flow_l_s = (flowFromV40 != null)
       ? flowFromV40
       : Number(v.flow_l_s ?? v.flow_L_s ?? 0)
+    // Brief 60 Part A reconcile fix (2026-05-27, Chris-authorised):
+    // route SFP from v40, mirror of the Brief 59 P1 flow routing above.
+    // State 3's consumption.ventilation already reads v40 SFP via
+    // v40VentilationToV25List; this closes the State 2 internal drift
+    // so losses_at_setpoint.ventilation[].fan_kwh (and any other State 2
+    // diagnostic that reads `vs.sfp`) matches the State 3 path. The
+    // Brief 59 audit doc §4.1 noted SFP routing "had no v40 equivalent
+    // yet" — that was wrong (v40.efficiency_metric.sfp_w_per_lps exists);
+    // closing the omission now.
+    const sfpFromV40 = (v40Match?.efficiency_metric?.sfp_w_per_lps != null)
+      ? Number(v40Match.efficiency_metric.sfp_w_per_lps)
+      : null
+    const sfp = (sfpFromV40 != null)
+      ? sfpFromV40
+      : Number(v.sfp_w_per_l_s ?? v.sfp ?? 0)
     return {
       name:       v.name ?? v.id ?? v.library_id ?? '?',
       library_id: v.library_id,
       flow_l_s,
       hre,
-      sfp:        Number(v.sfp_w_per_l_s ?? v.sfp ?? 0),
+      sfp,
       hours:      Number(v.hours ?? 8760),
       schedule_ref: v.schedule_ref ?? 'always_on',
       // Brief 28-IM IM-M4.5 Phase 2: carry `enabled` through so the State 2
