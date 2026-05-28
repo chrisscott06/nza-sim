@@ -267,7 +267,19 @@ const DHW_SETPOINT          = 60   // °C
 //   overhang.depth_m / offset_m  per face
 //   fin.left_depth_m / right_depth_m  per face
 //
-// Returns: { north, south, east, west } each a multiplier in [0.4, 1.0]
+// Returns: { north, south, east, west } each a multiplier in [0.15, 1.0]
+//
+// Brief 68 Part B (register U1, 2026-05-28): the outer floor was 0.4. The
+// inner caps Math.min(0.65, …) on overhang and Math.min(0.45, …) on fin
+// already enforce the empirical-fit guarantee from the EnergyPlus
+// calibration; the outer floor was a redundant clip that prevented south-
+// facing windows with heavy overhang AND fins from reaching their natural
+// minimum factor (≈0.31), capping the cooling-demand benefit of deep
+// shading interventions. Floor reduced to 0.15 — the lower bound the
+// brief calls out as physically achievable with external shading geometry.
+// Geometry alone cannot reach an external-blind level of ≈0.1 because the
+// sky-diffuse component remains; 0.15 is the boundary between "real deep
+// shading" and "impossible".
 
 const WINDOW_HEIGHT_DEFAULT = 1.5  // matches geometry.py WINDOW_HEIGHT
 
@@ -312,7 +324,7 @@ function computeShadingFactors(building) {
     const pfFin = (finL + finR) / Math.max(finWidth, 0.1)
     const reductionFin = ORIENT_FIN_EFF[face] * Math.min(0.45, pfFin * 0.4)
 
-    out[face] = Math.max(0.4, 1.0 - reductionOverhang - reductionFin)
+    out[face] = Math.max(0.15, 1.0 - reductionOverhang - reductionFin)
   }
   return out
 }
