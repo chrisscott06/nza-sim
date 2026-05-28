@@ -141,3 +141,13 @@ input[type="range"]::-webkit-slider-thumb {
 input[type="range"]::-webkit-slider-thumb:hover {
   background: var(--color-teal);
 }
+
+/* ── Chart export — browser Print dialog (Pablo CHART_EXPORT_HANDOFF §5) ── */
+/* Hide everything except the .print-target container so the Print button on
+   ChartPrintModal shows ONLY the chart. Uses visibility (not display) so
+   layout stays at original positions. */
+@media print {
+  body * { visibility: hidden !important; }
+  .print-target, .print-target * { visibility: visible !important; }
+  .print-target { position: absolute; left: 0; top: 0; width: 100%; }
+}
