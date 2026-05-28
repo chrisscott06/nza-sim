@@ -1,10 +1,10 @@
 # Current brief
 
-**No active brief on disk.** Brief 71 just closed (2026-05-28); Brief 72 is authored by Chris's architect session and lands on disk as its own Part 1 first commit per its BEFORE-DOING-ANYTHING.
+**Brief 72 — Auxiliary loads, gain_fraction, and DHW load-shape UI.** Architect-authored at [`active/72_auxiliary_loads_dhw_shape.md`](active/72_auxiliary_loads_dhw_shape.md); 11 parts. Carries forward the never-shipped Brief 60 Part B/D addendum and folds in two correctness fixes uncovered during the Brief 71 walkthrough (headcount unification + Occupancy/Calc-trail discriminator).
 
-## Next up
+**Anchor** (Principle 5, captured at Part 1, HEAD `286f57c`): Bridgewater clean = **EUI 130.0 kWh/m²·yr / 536.4 MWh total** (electricity 356.3 + gas 180.1). Demand split: Heating 55.9 / Cooling 87.6 / DHW 210.5 MWh. Full anchor table at `docs/audit/72_auxiliary_loads_dhw_shape.md` §1.
 
-**Brief 72 — Auxiliary loads, gain_fraction, and DHW load-shape UI** (architect-authored, awaiting Code's "Part 1 first commit"). Adds a fourth Internal-Gains section (External lighting / Catering / Pumps / Small power / Lifts / Custom), promotes `gain_fraction` to a first-class editable field on lighting / equipment / auxiliary profiles, and surfaces the `dhw_load_shape` control (flat vs follow-occupancy) that has shipped in the engine since Brief 58 without a UI. Anchor is captured, not hardcoded — STATUS.md reconcile is the first commit (Brief 72 P1). Brief on disk lands at `docs/briefs/active/72_auxiliary_loads_dhw_shape.md` as part of P1.
+**Sequencing:** P1 anchor + STATUS reconcile (this commit) → P2 discriminator (read-only, H1/H2/H3 settled, decides whether P2b fix is needed) → P3 headcount unification + num_bedrooms capture → P4 schema → P5 engine wiring (Rule 14 check) → P6 colour → P7 Aux UI [HARD STOP] → P8 gain_fraction editor [HARD STOP] → P9 DHW load-shape UI → P10 patch capture → P11 walkthrough + close. Each Part = one commit. HARD STOPs at P7 and P8 for Chris's browser pass.
 
 ## Recently closed
 
@@ -14,9 +14,11 @@
 
 ## Queued (not yet started)
 
-- **Brief 73** — Operable door heat_loss=0 on Systems Heat Balance (engine-side natvent parity bug between direct-State-2 and State-3-via-State-2 invocations). Three diagnosis angles exhausted during the Brief 71 session; needs a dedicated brief. Trace summary at the bottom of `archive/71_interventions_isolated_vs_combined_COMPLETED.md`.
-- **Brief 74 (conditional)** — Isolated-view value factor-of-2 vs Calc Trail for mid-stack interventions. Documented diagnosis at `docs/audit/71_interventions_isolated_vs_combined.md §6` is that this is cumulative-vs-isolated semantics, not a math bug; caption rewording in Brief 71 Part 4 addresses the UX side. Stays unqueued if Chris's first-in-stack browser test confirms first-row agreement across views.
-- **Brief 60 Parts B + C** — auxiliary energy in Internal Gains (now superseded by Brief 72) and baseline/intervention parity guard (parity guard still pending; the auxiliary work moves under Brief 72's umbrella).
+- **Brief 70 Parts 2–4** — day-zoom + week-zoom + walkthrough close (Brief 70 Part 1 + adhoc polish landed; remainder pending)
+- **Brief 73** — Operable door heat_loss=0 on Systems Heat Balance (engine-side natvent parity bug). Trace summary at the bottom of `archive/71_interventions_isolated_vs_combined_COMPLETED.md`.
+- **Brief 60 Part C (folded back in via Brief 74+)** — baseline/intervention parity guard. Brief 60 Part B is absorbed into Brief 72 (auxiliary loads).
+- **Brief 74 (drafted, awaiting Brief 72 close)** — interventions diagnostic harness + tab redesign.
+- **Brief 76 (queued)** — WWHR (needs a DHW end-use split first).
 
 ## Pending housekeeping (catalogued, not picked up)
 
@@ -34,3 +36,4 @@ Carried forward from the pre-Brief-71 list:
 ## Paused
 
 [`archive/30_dynamic_engine_rebuild_PAUSED.md`](archive/30_dynamic_engine_rebuild_PAUSED.md) — eligible for resumption when the Static work cycle pauses.
+[`archive/67_zone_temperature_trajectory_PAUSED.md`](archive/67_zone_temperature_trajectory_PAUSED.md) — Part B paused with three modelling judgements flagged for Chris.

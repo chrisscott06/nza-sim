@@ -1,6 +1,118 @@
 # NZA SIMULATE — Status
 
-> **STATUS.md is known stale** — last full reconcile was Brief 64. Briefs 65–71 landed without updating this file end-to-end; full reconciliation is the first commit of Brief 72 (per its BEFORE-DOING-ANYTHING). The Brief 71 entry below is the only Brief-65+ section here; treat the rest of the file as a historical Brief-64-and-earlier snapshot. Authoritative sources for current state: `git log`, `docs/briefs/active/`, `docs/briefs/archive/`.
+> **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
+
+## 🚀 Brief 72 — STARTED (Part 1) 2026-05-28
+
+**Auxiliary loads + gain_fraction + DHW load-shape UI** + headcount unification + Calc-trail discriminator. Architect-authored brief, supersedes the never-shipped Brief 60 Part B/D addendum. Anchor captured (§1 of audit doc); Bridgewater clean baseline = **EUI 130.0 kWh/m²·yr / 536.4 MWh total** at HEAD `286f57c`.
+
+Active at `docs/briefs/active/72_auxiliary_loads_dhw_shape.md`; audit at `docs/audit/72_auxiliary_loads_dhw_shape.md` with the Brief 72 Part 2 discriminator cross-referencing `docs/audit/72_occupancy_intervention_disagreement.md` (landed `286f57c`).
+
+## ✅ Brief 71 — CLOSED 2026-05-28
+
+**Interventions: Isolated vs Combined evaluation + theme grouping.** Reused `runInterventionStack` with singleton lists for the standalone-impact view; sortable bars + group-by-theme + theme authoring combobox; falsifiability #1 console assertion baked into the hook. Five parts. Archive: [`archive/71_interventions_isolated_vs_combined_COMPLETED.md`](docs/briefs/archive/71_interventions_isolated_vs_combined_COMPLETED.md).
+
+| Part | SHA | Deliverable |
+|---|---|---|
+| Land | `128424c` | Brief + audit stub (renumbered from provisional 61) |
+| 1 | `b2a1ea5` | `useIsolatedResults` hook |
+| 2 | `bb2ceb1` | `IsolatedView.jsx` |
+| 3 | `a757902` | VisualiserHost switcher entry |
+| 4 | `e337945` | Theme combobox in editor + Isolated caption polish |
+| 5 | `692c404` | Close — STATUS reconcile (partial), archive, current.md repoint |
+
+**Carry-overs from Brief 71:** Door-on-Systems bug (Brief 73 queued); factor-of-2 vs Calc Trail diagnosed as cumulative-vs-isolated semantics, addressed via caption rewording in Part 4. Brief 72 Part 2 settles the remaining "is the engine producing different numbers" question with the §4.1 discriminator dump.
+
+## ✅ Brief 70 — Part 1 BUILT (Part 2 PENDING) 2026-05-28
+
+**Zone temperature + demand viewer.** Annual heatmap (24 × 365 cells, diverging blue/grey/red palette) + KPI strip. Reads `result.demand.hourly_zone_air_free_c` (T_zone_free, the float-gated pre-clamp trace) so the heatmap surfaces what's *driving* heating/cooling demand, not the post-clamp result.
+
+| Commit | What |
+|---|---|
+| `149d27d` | Land brief in active/ |
+| `dd0e8fe` | Part 1: heatmap + KPI strip |
+| `a171206` | Part 1 fix: show T_zone_free (not post-clamp); replace block of explainer text with info popover |
+
+Walkthrough-driven polish commits between Brief 70 Part 1 and Brief 71 landing (technically part of Brief 70's surface):
+
+| SHA | What |
+|---|---|
+| `86f014f` | Setpoint guard: cooling can never drop below heating |
+| `147ad48` | Systems Control strategy panel collapse + compact header |
+| `0a1f49b` | State 2 active_setpoint init: start at heating SP, not T_out (fixes Jan-1 cold-start 3-MW heating spike) |
+| `cc7cac4` | Heat Balance Sankey: `.nodeSort(null)` to preserve group order (solar / envelope / air-flow) |
+| `68e75bb` | Same `.nodeSort(null)` applied across all five Sankeys |
+
+Brief 70 Parts 2-4 (day-zoom panel + week-zoom + free_running compare overlay + walkthrough close) remain pending.
+
+## ✅ Brief 69 — CLOSED 2026-05-28
+
+**Zone-temp demand model, Part B continuation (Option α).** Mech-vent UA into implicit-Euler; float-gated demand on vent-aware C_coef; `free_running = 0` conditioning + harness rewrite. Three parts.
+
+| Part | SHA |
+|---|---|
+| Land | `86f8b88` |
+| 1 | `0f0b677` mech-vent UA into implicit-Euler |
+| 2 | `e54bae8` float-gated demand on vent-aware C_coef |
+| 3 | `b490ed7` free_running = 0 conditioning + harness rewrite |
+
+Pre-Brief-69 polish that shipped on its way in: `59803a5` Heat-balance green air-flow palette, group order, vent labels.
+
+## ⏸ Brief 67 — PAUSED (Part B) 2026-05-27
+
+**Zone-temperature trajectory diagnostic.** Part A landed; Part B paused with three modelling judgements flagged for Chris.
+
+| Part | SHA |
+|---|---|
+| A | `4c53ca9` T_zone_free trajectory diagnostic — exists, sensible |
+| B | `d84507d` PAUSED — three modelling judgements flagged |
+
+(Brief 68 sequencing landed Brief 67 + 68 together — see `defd3cf` for the joint land commit.)
+
+## ✅ Brief 68 — CLOSED 2026-05-28
+
+**Batch fixes A–F.** Six small additive corrections; carbon factors single-sourced; shading-factor floor lowered; vent enable flag honoured on both v25 + v40; SCOP label fixed for gas; v40 passthrough for envelope-gains; Jan-1-Monday read-only investigation.
+
+| Part | SHA |
+|---|---|
+| Land | `defd3cf` (joint with Brief 67) |
+| A | `c6600ea` single-source carbon factors |
+| B | `9a00b08` shading factor floor 0.4 → 0.15 |
+| C | `f5425c2` fan elec honours both v25 + v40 vent enable flags |
+| D | `ee66298` `scop_effective` label fix for gas systems |
+| E | `2c08956` allowlist drift fix — pass v40 through envelope-gains |
+| F | `860d84b` U2 Jan-1-Monday investigation (read-only) |
+
+## ✅ Brief 66 — CLOSED 2026-05-27
+
+**Overnight integration walkthrough findings.** 17 issues logged from end-to-end walkthrough; U4 service-toggle bug class verified as an 18th separately.
+
+| SHA | What |
+|---|---|
+| `3c168d1` | Walkthrough — 17 issues logged |
+| `f741434` | Addendum: U4 service-toggle bug class verified (18 findings total) |
+
+(Brief 65 number was skipped between Briefs 64 and 66; no commits with "Brief 65" exist in the range.)
+
+## 🧱 Cross-brief infrastructure (Chart export, Plan Part C)
+
+Landed in parallel with the briefs above; not numbered as a brief but a deliberate piece of work.
+
+| SHA | What |
+|---|---|
+| `1a7e088` | Chart export Phase 1: shared ChartContainer + ChartPrintModal + print CSS |
+| `f89c8ae` | Phase 2a: bake export modal into chart/ChartContainer |
+| `6871a0f` `b80808d` `461ffb8` `9706c68` `1bad92b` `0c33738` `4d0cdeb` `944156a` | Phase 2b: wrap Results / Sankey + HeatBalance / Internal Gains canvas / Interventions / Building / Consumption / Profiles / top-level module charts |
+| `b1ece54` | Plan Part C: sidebar reorder + chart export rename fix |
+| `64e13df` | Heat balance Sankey: render heating gain ribbon (mirror Stacked/Rows synthesis) |
+
+## 🚀 Pending at start of Brief 72
+
+- **Brief 70 Parts 2–4** — day-zoom + week-zoom + walkthrough close
+- **Brief 73 (queued)** — operable door heat_loss = 0 on Systems Heat Balance
+- **Brief 60 Part C (queued)** — baseline/intervention parity guard (Part B folded into Brief 72)
+
+Below the line: historical Brief-64-and-earlier snapshot retained for context.
 
 ---
 
