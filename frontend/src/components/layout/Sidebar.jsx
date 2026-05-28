@@ -16,18 +16,23 @@ import {
 } from 'lucide-react'
 import { accentForPath } from '../../data/moduleThemes.js'
 
-// Sidebar order (Brief 27 Revised Part 7): input-to-output workflow
-//   Overview → Weather → Building → Internal Gains → Operation → Systems → Results
+// Sidebar grouping — inputs (top) → outputs (middle) → reference (bottom)
+//
+// Two separator lines split the sidebar into three visual groups:
+//   • INPUT_ITEMS    — things you set up to define the building
+//   • OUTPUT_ITEMS   — analysis tabs that depend on a configured baseline
+//   • Library        — global reference, pinned to the very bottom
+//
+// History:
+//   • Brief 27 Part 7  — input-to-output workflow established.
+//   • Brief 41 (2026-05-20) — /scenarios removed, /interventions added.
+//   • Plan Part C  (2026-05-28) — Consumption + CRREM hoisted from a
+//     separate bottom group into the main inputs/outputs grouping. All
+//     route names left as-is (no Profiles/Scenarios renames).
 //
 // "Overview" is a label rename of the existing /information route — the URL
-// stays /information for backward compatibility. A future Brief 30 (Weather
-// module redesign) may rename the route to /overview at the same time as
-// other URL-shape changes.
-//
-// Brief 41 (2026-05-20) — /scenarios removed (entire scenarios module
-// deleted per Notion design note §9). The new Interventions module is added
-// in Brief 41 Part 3.
-const TOP_ITEMS = [
+// stays /information for backward compatibility.
+const INPUT_ITEMS = [
   { to: '/',            icon: Home,            label: 'Home' },
   { to: '/information', icon: ClipboardList,   label: 'Overview' },
   { to: '/weather',     icon: Cloud,           label: 'Weather' },
@@ -35,19 +40,18 @@ const TOP_ITEMS = [
   { to: '/gains',       icon: Flame,           label: 'Internal Gains' },
   { to: '/operation',   icon: Wind,            label: 'Operation' },
   { to: '/systems',     icon: Thermometer,     label: 'Systems' },
-  // Brief 41 (2026-05-20) — Interventions module. Pattern Y declarative
-  // patches against the baseline; engine runs cumulative state for each
-  // enabled intervention in order.
-  { to: '/interventions', icon: Layers,        label: 'Interventions' },
-  { to: '/results',     icon: BarChart3,       label: 'Results' },
-  // Brief 28-IM IM-M6: Retrofit Roadmap — sequenced interventions against
-  // CRREM 1.5°C target with per-year leave-one-out marginal attribution.
-  { to: '/roadmap',     icon: RouteIcon,       label: 'Roadmap' },
+  { to: '/consumption', icon: FileSpreadsheet, label: 'Consumption' },
 ]
 
-const BOTTOM_ITEMS = [
-  { to: '/consumption', icon: FileSpreadsheet, label: 'Consumption' },
-  { to: '/crrem',       icon: TrendingDown,    label: 'CRREM'       },
+const OUTPUT_ITEMS = [
+  { to: '/results',     icon: BarChart3,       label: 'Results' },
+  { to: '/crrem',       icon: TrendingDown,    label: 'CRREM' },
+  // Brief 41 — Interventions: Pattern Y declarative patches against the
+  // baseline; engine runs cumulative state for each enabled intervention.
+  { to: '/interventions', icon: Layers,        label: 'Interventions' },
+  // Brief 28-IM IM-M6 — Retrofit Roadmap: sequenced interventions against
+  // CRREM 1.5°C target with per-year leave-one-out marginal attribution.
+  { to: '/roadmap',     icon: RouteIcon,       label: 'Roadmap' },
 ]
 
 function NavItem({ to, icon: Icon, label }) {
@@ -114,19 +118,19 @@ export default function Sidebar() {
         <span className="text-white font-medium text-caption tracking-widest">N</span>
       </NavLink>
 
-      {/* Top navigation items */}
+      {/* Input modules (top) */}
       <div className="flex flex-col pt-1">
-        {TOP_ITEMS.map(item => (
+        {INPUT_ITEMS.map(item => (
           <NavItem key={item.to} {...item} />
         ))}
       </div>
 
-      {/* Divider */}
+      {/* Divider — inputs / outputs */}
       <div className="my-2 mx-3 border-t border-white/12" />
 
-      {/* Bottom navigation items (output modules) */}
+      {/* Output modules (middle) */}
       <div className="flex flex-col">
-        {BOTTOM_ITEMS.map(item => (
+        {OUTPUT_ITEMS.map(item => (
           <NavItem key={item.to} {...item} />
         ))}
       </div>

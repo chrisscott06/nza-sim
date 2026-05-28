@@ -1,13 +1,18 @@
 /**
- * ChartContainer — wrap a chart with a hover-revealed export icon.
+ * ChartExportCard — wrap a chart with a hover-revealed export icon.
  *
  * Adapted from PABLO 2.0's CHART_EXPORT_HANDOFF.md (Chris's sibling tool).
  * Source: /c/Users/ChrisScott/Dev/pablo-2/CHART_EXPORT_HANDOFF.md
  *
+ * Named ChartExportCard (not ChartContainer) to avoid a name collision with
+ * frontend/src/components/chart/ChartContainer.jsx — the existing Recharts
+ * ResponsiveContainer wrapper card. The two components serve different
+ * purposes: this one adds an export-modal trigger; that one wraps Recharts.
+ *
  * Usage:
- *   <ChartContainer title="Heat balance" height="h-72">
+ *   <ChartExportCard title="Heat balance" height="h-72">
  *     <YourChart ... />
- *   </ChartContainer>
+ *   </ChartExportCard>
  *
  * The print icon fades in on card hover (top-right corner). Click → opens
  * ChartPrintModal with Copy / PNG / SVG / PDF / Print. The same children
@@ -34,7 +39,7 @@ import { useState } from 'react'
 import { Printer } from 'lucide-react'
 import ChartPrintModal from './ChartPrintModal.jsx'
 
-export default function ChartContainer({
+export default function ChartExportCard({
   title,
   actions,
   children,
