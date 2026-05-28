@@ -364,6 +364,25 @@ export default function InterventionsModule() {
     comfortBand,
   }), [params, constructions, systems, libraryData, comfortBand])
 
+  // Brief 71 Part 3 (2026-05-28): runEngine closure for the Isolated view
+  // (VisualiserHost → IsolatedView → useIsolatedResults → runInterventionStack).
+  // Mirrors the inner closure calculateInstant builds at instantCalc.js:6991
+  // for its own stack runner: same engine quartet, same weather/solar args,
+  // _skipInterventions:true to avoid recursive stack dispatch when the
+  // isolated hook calls runInterventionStack with singletons.
+  const runEngine = useMemo(() => {
+    return (cfg) => calculateInstant(
+      cfg?.building ?? params,
+      cfg?.constructions ?? constructions,
+      cfg?.systems ?? systems,
+      cfg?.libraryData ?? libraryData,
+      weatherData,
+      hourlySolar,
+      null,
+      { mode: 'full', comfortBand, engine: 'v2.5', _skipInterventions: true },
+    )
+  }, [params, constructions, systems, libraryData, weatherData, hourlySolar, comfortBand])
+
   // ── Render ──────────────────────────────────────────────────────────
 
   return (
@@ -423,6 +442,11 @@ export default function InterventionsModule() {
             interventions={interventions}
             stackResult={stackResult}
             orientationDeg={Number(params?.orientation ?? 0)}
+            baselineConfig={baselineConfig}
+            runEngine={runEngine}
+            libraryData={libraryData}
+            onToggleEnabled={handleToggleEnabled}
+            onEdit={handleEdit}
           />
         </main>
       </div>

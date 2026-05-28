@@ -40,27 +40,48 @@
  */
 
 import { useEffect, useState } from 'react'
-import { BarChart3, GitCompareArrows, Flame, Receipt, Calculator } from 'lucide-react'
+import { BarChart3, GitCompareArrows, Flame, Receipt, Calculator, SplitSquareHorizontal } from 'lucide-react'
 import EUIWaterfall from '../EUIWaterfall.jsx'
 import BeforeAfterBars from './BeforeAfterBars.jsx'
 import PhysicsView from './PhysicsView.jsx'
 import BreakdownPanel from './BreakdownPanel.jsx'
 import BreakdownTable from './BreakdownTable.jsx'
+import IsolatedView from './IsolatedView.jsx'
 
 // Brief 60 Part A (2026-05-27): added 'calctrail' view — the redesigned
 // three-band breakdown table (DEMAND / DELIVERED÷EFF=FUEL / FUEL TOTALS
 // + Headline + summary cards). Lives BESIDE the existing 'breakdown'
 // view (per-intervention audit trail / chain navigation, Brief 48
 // Part 3), per Chris's "build a NEW component beside it" sign-off.
+//
+// Brief 71 Part 3 (2026-05-28): added 'isolated' view adjacent to
+// 'waterfall' — every intervention run alone vs the unmodified
+// baseline (vs Waterfall's compounded marginals). Uses the same
+// localStorage view-memory mechanism — no new persistence.
 const VIEWS = [
-  { id: 'waterfall',   label: 'Waterfall',     icon: BarChart3,         hint: 'Per-intervention marginal impact' },
-  { id: 'beforeafter', label: 'Before/after',  icon: GitCompareArrows,  hint: 'Cumulative stack vs baseline' },
-  { id: 'physics',     label: 'Heat balance',  icon: Flame,             hint: 'Current stack heat balance' },
-  { id: 'calctrail',   label: 'Calc trail',    icon: Calculator,        hint: 'Three-band calculation trail (Brief 60)' },
-  { id: 'breakdown',   label: 'Breakdown',     icon: Receipt,           hint: 'Per-intervention audit trail' },
+  { id: 'waterfall',   label: 'Waterfall',     icon: BarChart3,             hint: 'Per-intervention marginal impact' },
+  { id: 'isolated',    label: 'Isolated',      icon: SplitSquareHorizontal, hint: 'Each intervention alone vs baseline' },
+  { id: 'beforeafter', label: 'Before/after',  icon: GitCompareArrows,      hint: 'Cumulative stack vs baseline' },
+  { id: 'physics',     label: 'Heat balance',  icon: Flame,                 hint: 'Current stack heat balance' },
+  { id: 'calctrail',   label: 'Calc trail',    icon: Calculator,            hint: 'Three-band calculation trail (Brief 60)' },
+  { id: 'breakdown',   label: 'Breakdown',     icon: Receipt,               hint: 'Per-intervention audit trail' },
 ]
 
-export default function VisualiserHost({ interventions, stackResult, orientationDeg = 0 }) {
+export default function VisualiserHost({
+  interventions,
+  stackResult,
+  orientationDeg = 0,
+  // Brief 71 Part 3 (2026-05-28): the Isolated view needs the engine
+  // quartet + runEngine closure to call useIsolatedResults. Existing views
+  // (waterfall / beforeafter / physics / calctrail / breakdown) read
+  // pre-computed stackResult only — these props are optional from their
+  // perspective. InterventionsModule threads them in unconditionally.
+  baselineConfig = null,
+  runEngine = null,
+  libraryData = null,
+  onToggleEnabled = null,
+  onEdit = null,
+}) {
   const [view, setView] = useState(() => {
     try { return localStorage.getItem('nza-interventions-visualiser-view') || 'waterfall' }
     catch { return 'waterfall' }
@@ -190,6 +211,19 @@ export default function VisualiserHost({ interventions, stackResult, orientation
         {view === 'waterfall' && (
           <div className="p-4">
             <EUIWaterfall interventions={interventions ?? []} stackResult={stackResult} />
+          </div>
+        )}
+        {view === 'isolated' && (
+          <div className="p-4">
+            <IsolatedView
+              interventions={interventions ?? []}
+              baselineConfig={baselineConfig}
+              runEngine={runEngine}
+              libraryData={libraryData}
+              stackResult={stackResult}
+              onToggleEnabled={onToggleEnabled}
+              onEdit={onEdit}
+            />
           </div>
         )}
         {view === 'beforeafter' && (
