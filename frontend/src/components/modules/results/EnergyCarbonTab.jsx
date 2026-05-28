@@ -20,9 +20,9 @@
  * when measured-data ingest reveals the need for richer export pipeline.
  */
 
-import { useContext, useEffect, useMemo, useState, useRef } from 'react'
+import { useContext, useEffect, useMemo, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
-import { Settings2, Download, AlertTriangle, Zap, Flame, Thermometer, Wind } from 'lucide-react'
+import { Settings2, AlertTriangle, Zap, Flame, Thermometer, Wind } from 'lucide-react'
 
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { WeatherContext } from '../../../context/WeatherContext.jsx'
@@ -56,41 +56,6 @@ function fmtKwh(n) {
 function fmtMwh(n, dp = 2) {
   if (n == null || !Number.isFinite(n)) return '—'
   return Number(n).toFixed(dp)
-}
-
-function downloadSvg(svgNode, filename) {
-  if (!svgNode) return
-  const clone = svgNode.cloneNode(true)
-  // Inline minimal styling so the standalone file looks the same as in-app.
-  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
-  const serializer = new XMLSerializer()
-  const source = '<?xml version="1.0" standalone="no"?>\n' + serializer.serializeToString(clone)
-  const blob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
-}
-
-function ExportSvgButton({ chartRef, filename }) {
-  const onClick = () => {
-    const node = chartRef.current?.querySelector('svg')
-    downloadSvg(node, filename)
-  }
-  return (
-    <button
-      onClick={onClick}
-      className="flex items-center gap-1 px-2 py-1 text-xxs text-mid-grey hover:text-navy hover:bg-off-white rounded transition-colors"
-      title="Download chart as SVG"
-    >
-      <Download size={11} />
-      SVG
-    </button>
-  )
 }
 
 function ServiceIcon({ service, size = 14 }) {
@@ -324,9 +289,6 @@ export default function EnergyCarbonTab() {
     ? { eui_low: 178, eui_high: 199, carbon: 36, period: '2024–25' }
     : null
 
-  const chartFuelSplitRef = useRef(null)
-  const chartFuelTotalRef = useRef(null)
-
   return (
     <div className="p-4 space-y-5">
       {/* ─── Uncalibrated-model banner (flag (c) — protects against the tab
@@ -423,56 +385,40 @@ export default function EnergyCarbonTab() {
 
       {/* ─── Per-service energy split by fuel ─────────────────────────────── */}
       {fuelSplitData.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xxs uppercase tracking-wider text-mid-grey">Energy by service & fuel</p>
-            <ExportSvgButton chartRef={chartFuelSplitRef} filename="energy_by_service_fuel.svg" />
-          </div>
-          <div ref={chartFuelSplitRef}>
-            <ChartContainer title="" height={240}>
-              <BarChart data={fuelSplitData} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
-                <CartesianGrid {...GRID_STYLE} vertical={false} />
-                <XAxis dataKey="service" {...AXIS_PROPS} />
-                <YAxis {...AXIS_PROPS} tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
-                <Tooltip
-                  contentStyle={TOOLTIP_STYLE}
-                  wrapperStyle={TOOLTIP_WRAPPER_STYLE}
-                  formatter={(value, name) => [`${Math.round(value).toLocaleString()} kWh`, name]}
-                />
-                <Legend wrapperStyle={LEGEND_STYLE} iconType="square" iconSize={8} />
-                <Bar dataKey="electricity" stackId="fuel" name="Electricity" fill={FUEL_COLORS.electricity} />
-                <Bar dataKey="gas"         stackId="fuel" name="Gas"         fill={FUEL_COLORS.gas} />
-              </BarChart>
-            </ChartContainer>
-          </div>
-        </div>
+        <ChartContainer title="Energy by service & fuel" height={240}>
+          <BarChart data={fuelSplitData} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
+            <CartesianGrid {...GRID_STYLE} vertical={false} />
+            <XAxis dataKey="service" {...AXIS_PROPS} />
+            <YAxis {...AXIS_PROPS} tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
+            <Tooltip
+              contentStyle={TOOLTIP_STYLE}
+              wrapperStyle={TOOLTIP_WRAPPER_STYLE}
+              formatter={(value, name) => [`${Math.round(value).toLocaleString()} kWh`, name]}
+            />
+            <Legend wrapperStyle={LEGEND_STYLE} iconType="square" iconSize={8} />
+            <Bar dataKey="electricity" stackId="fuel" name="Electricity" fill={FUEL_COLORS.electricity} />
+            <Bar dataKey="gas"         stackId="fuel" name="Gas"         fill={FUEL_COLORS.gas} />
+          </BarChart>
+        </ChartContainer>
       )}
 
       {/* ─── Total energy by fuel (alternative view) ──────────────────────── */}
       {fuelTotalData.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xxs uppercase tracking-wider text-mid-grey">Total by fuel</p>
-            <ExportSvgButton chartRef={chartFuelTotalRef} filename="total_by_fuel.svg" />
-          </div>
-          <div ref={chartFuelTotalRef}>
-            <ChartContainer title="" height={160}>
-              <BarChart data={fuelTotalData} layout="vertical" margin={{ top: 10, right: 24, left: 56, bottom: 0 }}>
-                <CartesianGrid {...GRID_STYLE} horizontal={false} />
-                <XAxis type="number" {...AXIS_PROPS} tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
-                <YAxis type="category" dataKey="fuel" {...AXIS_PROPS} width={50} />
-                <Tooltip
-                  contentStyle={TOOLTIP_STYLE}
-                  wrapperStyle={TOOLTIP_WRAPPER_STYLE}
-                  formatter={(value) => [`${Math.round(value).toLocaleString()} kWh`, 'Total']}
-                />
-                <Bar dataKey="value" name="Total">
-                  {fuelTotalData.map((d, i) => <Cell key={i} fill={d.color} />)}
-                </Bar>
-              </BarChart>
-            </ChartContainer>
-          </div>
-        </div>
+        <ChartContainer title="Total by fuel" height={160}>
+          <BarChart data={fuelTotalData} layout="vertical" margin={{ top: 10, right: 24, left: 56, bottom: 0 }}>
+            <CartesianGrid {...GRID_STYLE} horizontal={false} />
+            <XAxis type="number" {...AXIS_PROPS} tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
+            <YAxis type="category" dataKey="fuel" {...AXIS_PROPS} width={50} />
+            <Tooltip
+              contentStyle={TOOLTIP_STYLE}
+              wrapperStyle={TOOLTIP_WRAPPER_STYLE}
+              formatter={(value) => [`${Math.round(value).toLocaleString()} kWh`, 'Total']}
+            />
+            <Bar dataKey="value" name="Total">
+              {fuelTotalData.map((d, i) => <Cell key={i} fill={d.color} />)}
+            </Bar>
+          </BarChart>
+        </ChartContainer>
       )}
 
       {/* ─── Per-system performance table ─────────────────────────────────── */}

@@ -13,6 +13,7 @@ import {
   Legend, ResponsiveContainer, Brush,
 } from 'recharts'
 import DataCard from '../../chart/DataCard.jsx'
+import ChartExportCard from '../../shared/ChartExportCard.jsx'
 import {
   TICK_STYLE, TOOLTIP_STYLE, TOOLTIP_WRAPPER_STYLE, LEGEND_STYLE,
   GRID_STYLE, AXIS_PROPS,
@@ -209,7 +210,8 @@ export default function FullYearView({ results, fuelFilter }) {
 
       {/* Detail chart — zoomed view */}
       <div className="bg-white rounded-lg border border-light-grey p-3">
-        <ResponsiveContainer width="100%" height={240}>
+        <ChartExportCard noChrome title={`Load profile — ${selectedLabel}`}>
+          <ResponsiveContainer width="100%" height={240}>
           <AreaChart data={detailData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
             <defs>
               {ALL_SERIES.map(s => (
@@ -247,12 +249,14 @@ export default function FullYearView({ results, fuelFilter }) {
             ))}
           </AreaChart>
         </ResponsiveContainer>
+        </ChartExportCard>
       </div>
 
       {/* Navigator chart — full year overview with Brush */}
       <div>
         <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1.5">Full year — drag handles to zoom</p>
         <div className="bg-white rounded-lg border border-light-grey px-3 pt-2 pb-1">
+          <ChartExportCard noChrome title="Full year load navigator">
           <ResponsiveContainer width="100%" height={90}>
             <AreaChart
               data={dailyData}
@@ -303,6 +307,7 @@ export default function FullYearView({ results, fuelFilter }) {
               />
             </AreaChart>
           </ResponsiveContainer>
+          </ChartExportCard>
         </div>
       </div>
 

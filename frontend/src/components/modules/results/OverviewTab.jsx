@@ -4,6 +4,7 @@ import { SimulationContext } from '../../../context/SimulationContext.jsx'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import DataCard from '../../chart/DataCard.jsx'
 import ModuleEmptyState from '../../ui/ModuleEmptyState.jsx'
+import ChartExportCard from '../../shared/ChartExportCard.jsx'
 import { TOOLTIP_STYLE, TOOLTIP_WRAPPER_STYLE, LEGEND_STYLE } from '../../../data/chartTokens.js'
 import { BarChart3, AlertTriangle, CheckCircle2 } from 'lucide-react'
 
@@ -172,6 +173,7 @@ export default function OverviewTab({ activeResults } = {}) {
         <div>
           <p className="text-xxs uppercase tracking-wider text-mid-grey mb-2">End-use breakdown</p>
           <div className="bg-white rounded-lg border border-light-grey p-3">
+            <ChartExportCard noChrome title="End-use breakdown">
             <ResponsiveContainer width="100%" height={180}>
               <PieChart>
                 <Pie
@@ -199,6 +201,7 @@ export default function OverviewTab({ activeResults } = {}) {
                 />
               </PieChart>
             </ResponsiveContainer>
+            </ChartExportCard>
           </div>
         </div>
       )}

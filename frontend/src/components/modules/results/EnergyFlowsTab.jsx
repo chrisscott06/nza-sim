@@ -2,6 +2,7 @@ import { useContext, useRef, useEffect, useState, useCallback } from 'react'
 import { sankey, sankeyLinkHorizontal, sankeyJustify } from 'd3-sankey'
 import { SimulationContext } from '../../../context/SimulationContext.jsx'
 import ModuleEmptyState from '../../ui/ModuleEmptyState.jsx'
+import ChartExportCard from '../../shared/ChartExportCard.jsx'
 import { GitFork } from 'lucide-react'
 
 /* ── Colour palette ──────────────────────────────────────────────────────────── */
@@ -341,7 +342,9 @@ export default function EnergyFlowsTab({ activeResults } = {}) {
       </div>
 
       <div ref={containerRef} className="bg-white rounded-lg border border-light-grey p-3 overflow-x-auto overflow-y-hidden">
-        <SankeyChart data={sankeyData} width={dims.width - 24} height={dims.height} />
+        <ChartExportCard noChrome title={`Energy flows — ${scenarioName}`}>
+          <SankeyChart data={sankeyData} width={dims.width - 24} height={dims.height} />
+        </ChartExportCard>
       </div>
 
       <p className="text-xxs text-mid-grey">

@@ -6,6 +6,7 @@ import {
 import { SimulationContext } from '../../../context/SimulationContext.jsx'
 import DataCard from '../../chart/DataCard.jsx'
 import ModuleEmptyState from '../../ui/ModuleEmptyState.jsx'
+import ChartExportCard from '../../shared/ChartExportCard.jsx'
 import FullYearView from './FullYearView.jsx'
 import {
   TICK_STYLE, TOOLTIP_STYLE, TOOLTIP_WRAPPER_STYLE, LEGEND_STYLE,
@@ -220,45 +221,47 @@ export default function LoadProfilesTab({ activeResults } = {}) {
         {/* Stacked area chart */}
         {profile && (
           <div className="bg-white rounded-lg border border-light-grey p-3">
-            <ResponsiveContainer width="100%" height={260}>
-              <AreaChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 16 }}>
-                <defs>
-                  {ALL_SERIES.map(s => (
-                    <linearGradient key={s.key} id={`grad-lp-${s.key}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor={s.color} stopOpacity={0.5} />
-                      <stop offset="95%" stopColor={s.color} stopOpacity={0.05} />
-                    </linearGradient>
-                  ))}
-                </defs>
-                <CartesianGrid {...GRID_STYLE} vertical={false} />
-                <XAxis
-                  dataKey="hour"
-                  {...AXIS_PROPS}
-                  interval={2}
-                  label={{ value: 'Hour of day', position: 'insideBottom', offset: -10, style: { ...TICK_STYLE, fontSize: 8 } }}
-                />
-                <YAxis
-                  {...AXIS_PROPS}
-                  label={{ value: 'kWh', angle: -90, position: 'insideLeft', offset: 8, style: { ...TICK_STYLE, fontSize: 8 } }}
-                />
-                <Tooltip content={<CustomTooltip />} wrapperStyle={TOOLTIP_WRAPPER_STYLE} />
-                <Legend wrapperStyle={LEGEND_STYLE} iconType="circle" iconSize={7} />
-                {visibleSeries.map(s => (
-                  <Area
-                    key={s.key}
-                    type="monotone"
-                    dataKey={s.key}
-                    name={s.label}
-                    stackId="a"
-                    stroke={s.color}
-                    strokeWidth={1.5}
-                    fill={`url(#grad-lp-${s.key})`}
-                    dot={false}
-                    activeDot={{ r: 3, stroke: s.color }}
+            <ChartExportCard noChrome title={`Load profile — ${DAY_TYPES.find(d => d.key === selectedDayType)?.label ?? 'typical day'}`}>
+              <ResponsiveContainer width="100%" height={260}>
+                <AreaChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 16 }}>
+                  <defs>
+                    {ALL_SERIES.map(s => (
+                      <linearGradient key={s.key} id={`grad-lp-${s.key}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%"  stopColor={s.color} stopOpacity={0.5} />
+                        <stop offset="95%" stopColor={s.color} stopOpacity={0.05} />
+                      </linearGradient>
+                    ))}
+                  </defs>
+                  <CartesianGrid {...GRID_STYLE} vertical={false} />
+                  <XAxis
+                    dataKey="hour"
+                    {...AXIS_PROPS}
+                    interval={2}
+                    label={{ value: 'Hour of day', position: 'insideBottom', offset: -10, style: { ...TICK_STYLE, fontSize: 8 } }}
                   />
-                ))}
-              </AreaChart>
-            </ResponsiveContainer>
+                  <YAxis
+                    {...AXIS_PROPS}
+                    label={{ value: 'kWh', angle: -90, position: 'insideLeft', offset: 8, style: { ...TICK_STYLE, fontSize: 8 } }}
+                  />
+                  <Tooltip content={<CustomTooltip />} wrapperStyle={TOOLTIP_WRAPPER_STYLE} />
+                  <Legend wrapperStyle={LEGEND_STYLE} iconType="circle" iconSize={7} />
+                  {visibleSeries.map(s => (
+                    <Area
+                      key={s.key}
+                      type="monotone"
+                      dataKey={s.key}
+                      name={s.label}
+                      stackId="a"
+                      stroke={s.color}
+                      strokeWidth={1.5}
+                      fill={`url(#grad-lp-${s.key})`}
+                      dot={false}
+                      activeDot={{ r: 3, stroke: s.color }}
+                    />
+                  ))}
+                </AreaChart>
+              </ResponsiveContainer>
+            </ChartExportCard>
           </div>
         )}
 

@@ -5,6 +5,7 @@ import {
 } from 'recharts'
 import { SimulationContext } from '../../../context/SimulationContext.jsx'
 import ModuleEmptyState from '../../ui/ModuleEmptyState.jsx'
+import ChartExportCard from '../../shared/ChartExportCard.jsx'
 import {
   TICK_STYLE, TOOLTIP_STYLE, TOOLTIP_WRAPPER_STYLE, LEGEND_STYLE,
   GRID_STYLE, AXIS_PROPS,
@@ -91,35 +92,37 @@ export default function EnergyBalanceTab({ activeResults } = {}) {
       <div>
         <p className="text-xxs uppercase tracking-wider text-mid-grey mb-3">Monthly energy by end-use</p>
         <div className="bg-white rounded-lg border border-light-grey p-3">
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid {...GRID_STYLE} vertical={false} />
-              <XAxis dataKey="month" {...AXIS_PROPS} />
-              <YAxis
-                {...AXIS_PROPS}
-                tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
-                label={{
-                  value: 'kWh',
-                  angle: -90,
-                  position: 'insideLeft',
-                  offset: 8,
-                  style: { ...TICK_STYLE, fontSize: 8 },
-                }}
-              />
-              <Tooltip content={<CustomTooltip />} wrapperStyle={TOOLTIP_WRAPPER_STYLE} />
-              <Legend wrapperStyle={LEGEND_STYLE} iconType="square" iconSize={8} />
-              {activeSeries.map((s, idx) => (
-                <Bar
-                  key={s.key}
-                  dataKey={s.key}
-                  name={s.label}
-                  stackId="a"
-                  fill={s.color}
-                  radius={idx === activeSeries.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]}
+          <ChartExportCard noChrome title="Monthly energy by end-use">
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid {...GRID_STYLE} vertical={false} />
+                <XAxis dataKey="month" {...AXIS_PROPS} />
+                <YAxis
+                  {...AXIS_PROPS}
+                  tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
+                  label={{
+                    value: 'kWh',
+                    angle: -90,
+                    position: 'insideLeft',
+                    offset: 8,
+                    style: { ...TICK_STYLE, fontSize: 8 },
+                  }}
                 />
-              ))}
-            </BarChart>
-          </ResponsiveContainer>
+                <Tooltip content={<CustomTooltip />} wrapperStyle={TOOLTIP_WRAPPER_STYLE} />
+                <Legend wrapperStyle={LEGEND_STYLE} iconType="square" iconSize={8} />
+                {activeSeries.map((s, idx) => (
+                  <Bar
+                    key={s.key}
+                    dataKey={s.key}
+                    name={s.label}
+                    stackId="a"
+                    fill={s.color}
+                    radius={idx === activeSeries.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]}
+                  />
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartExportCard>
         </div>
       </div>
 

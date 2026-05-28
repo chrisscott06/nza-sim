@@ -6,6 +6,7 @@ import {
 import { SimulationContext } from '../../../context/SimulationContext.jsx'
 import DataCard from '../../chart/DataCard.jsx'
 import ModuleEmptyState from '../../ui/ModuleEmptyState.jsx'
+import ChartExportCard from '../../shared/ChartExportCard.jsx'
 import {
   TICK_STYLE, TOOLTIP_STYLE, TOOLTIP_WRAPPER_STYLE,
   GRID_STYLE, AXIS_PROPS,
@@ -114,6 +115,7 @@ export default function FabricAnalysisTab({ activeResults } = {}) {
           Net heat flows by element {!ed ? '(run a new simulation for per-facade detail)' : ''}
         </p>
         <div className="bg-white rounded-lg border border-light-grey p-3">
+          <ChartExportCard noChrome title="Net heat flows by element">
           <ResponsiveContainer width="100%" height={Math.max(180, heatLossData.length * 30)}>
             <BarChart
               layout="vertical"
@@ -143,6 +145,7 @@ export default function FabricAnalysisTab({ activeResults } = {}) {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+          </ChartExportCard>
         </div>
         <p className="text-xxs text-mid-grey mt-1">Positive = net heat gain · Negative = net heat loss</p>
       </div>
@@ -152,6 +155,7 @@ export default function FabricAnalysisTab({ activeResults } = {}) {
         <div>
           <p className="text-xxs uppercase tracking-wider text-mid-grey mb-2">Solar gains by facade</p>
           <div className="bg-white rounded-lg border border-light-grey p-3">
+            <ChartExportCard noChrome title="Solar gains by facade">
             <ResponsiveContainer width="100%" height={160}>
               <BarChart data={solarData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid {...GRID_STYLE} vertical={false} />
@@ -169,6 +173,7 @@ export default function FabricAnalysisTab({ activeResults } = {}) {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+            </ChartExportCard>
           </div>
           <p className="text-xxs text-mid-grey mt-1">
             Best solar facade: <span className="font-medium text-navy">{bestSolarFace.charAt(0).toUpperCase() + bestSolarFace.slice(1)}</span>{' '}
