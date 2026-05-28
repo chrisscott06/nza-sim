@@ -18,6 +18,7 @@ import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { useWeather } from '../../../context/WeatherContext.jsx'
 import { useHourlySolar } from '../../../hooks/useHourlySolar.js'
 import { calculateInstant } from '../../../utils/instantCalc.js'
+import ChartExportCard from '../../shared/ChartExportCard.jsx'
 
 // ── Colour palette ────────────────────────────────────────────────────────────
 
@@ -391,7 +392,8 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
       </div>
 
       {/* Sankey canvas */}
-      <div ref={containerRef} className="flex-1 relative overflow-hidden">
+      <ChartExportCard noChrome title="Systems energy flow" className="flex-1 min-h-0">
+      <div ref={containerRef} className="w-full h-full relative overflow-hidden">
         {!sankeyResult && (
           <div className="absolute inset-0 flex items-center justify-center text-xxs text-mid-grey">
             No energy flow data
@@ -639,6 +641,7 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
           </div>
         )}
       </div>
+      </ChartExportCard>
 
       {/* Footer — energy balance */}
       <div className="px-4 py-2 border-t border-light-grey flex-shrink-0">

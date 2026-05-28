@@ -29,6 +29,7 @@ import { solarLabel } from '../../../utils/facadeLabel.js'
 import { MODES, DEFAULT_MODE, isEnvelopeOnly, modeBadgeText, loadOrderFor, gainOrderFor } from '../../../utils/stateMode.js'
 import { useUISettings } from '../../../context/UISettingsContext.jsx'
 import BalanceSankey from './BalanceSankey.jsx'
+import ChartExportCard from '../../shared/ChartExportCard.jsx'
 
 // Chris UX overhaul (2026-05-17): engine + unit toggles lifted to the global
 // top-bar UISettingsContext, so the local UNIT_KEY / EngineToggle / UnitToggle
@@ -724,7 +725,11 @@ export default function HeatBalance({
       </div>
 
       {/* Bars: rows / stacked / sankey */}
-      <div className="flex-1 overflow-hidden px-5 pb-2">
+      <ChartExportCard
+        noChrome
+        title={`Heat balance — ${layout === 'rows' ? 'Rows' : layout === 'stacked' ? 'Stacked' : 'Sankey'}`}
+        className="flex-1 overflow-hidden px-5 pb-2"
+      >
         {layout === 'rows' && (
           <div className="grid grid-cols-2 gap-8 h-full overflow-y-auto">
             <StackColumn items={gains}  scale={scale} unit={unit} side="gains"  onClick={onElementClick} />
@@ -746,7 +751,7 @@ export default function HeatBalance({
             modules={modules}
           />
         )}
-      </div>
+      </ChartExportCard>
 
       {/* Net balance check — pulled OUT of the flex-1 overflow region so it
           always renders at the bottom of the chart area regardless of

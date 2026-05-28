@@ -15,6 +15,7 @@
 
 import { useRef, useEffect, useState, useMemo, useCallback } from 'react'
 import { sankey, sankeyLeft, sankeyLinkHorizontal } from 'd3-sankey'
+import ChartExportCard from '../../shared/ChartExportCard.jsx'
 
 // ── Colour palette ─────────────────────────────────────────────────────────────
 
@@ -251,6 +252,7 @@ export default function FabricSankey({ result, orientation = 0 }) {
   const totalLosses = result.fabric_losses?.total_kWh ?? 0
 
   return (
+    <ChartExportCard noChrome title="Fabric heat balance — Sankey" className="relative w-full h-full bg-white">
     <div ref={containerRef} className="relative w-full h-full bg-white">
       <svg width={dims.width} height={dims.height} className="overflow-visible">
         <defs>
@@ -402,5 +404,6 @@ export default function FabricSankey({ result, orientation = 0 }) {
         </div>
       )}
     </div>
+    </ChartExportCard>
   )
 }
