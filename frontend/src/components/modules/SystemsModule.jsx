@@ -30,6 +30,7 @@
 
 import { useContext, useEffect, useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
+import { ChevronDown } from 'lucide-react'
 import { ProjectContext } from '../../context/ProjectContext.jsx'
 import { useProjectMutation } from '../../hooks/useProjectMutation.js'
 import { useUISettings } from '../../context/UISettingsContext.jsx'
@@ -752,49 +753,77 @@ export function InputsColumn({ params, updateParam, consumption, comfortBand, op
     : 'active_setpoint'
   const setControlStrategy = (val) => mutate('building.control_strategy', val)
 
+  // 2026-05-28 (Chris-flag): control-strategy panel collapsed by default
+  // to free up vertical space in the left panel. Compact one-line summary
+  // shows the current selection; click to expand for the radios + helper
+  // text. Same pattern as the Zone-temperature info popover landed today.
+  const [csOpen, setCsOpen] = useState(false)
+
   return (
     <div className="p-3 space-y-2">
-      {/* Brief 64 §B — building-wide demand-model selector. */}
-      <div className="px-2 py-2 mb-1 border border-light-grey/60 rounded bg-off-white/30 space-y-1.5">
-        <label className="block text-xxs uppercase tracking-wider text-mid-grey font-medium">
-          Control strategy
-        </label>
-        <div className="flex items-start gap-2 text-xxs">
-          <input
-            type="radio"
-            id="cs_active"
-            checked={controlStrategy === 'active_setpoint'}
-            onChange={() => setControlStrategy('active_setpoint')}
-            className="mt-0.5 flex-shrink-0"
+      {/* Brief 64 §B — building-wide demand-model selector. Compact header
+          row + collapsible body so the descriptive text doesn't eat the
+          left panel. */}
+      <div className="border border-light-grey/60 rounded bg-off-white/30 mb-1">
+        <button
+          type="button"
+          onClick={() => setCsOpen(o => !o)}
+          className="w-full flex items-center justify-between gap-2 px-2 py-1.5 hover:bg-off-white/50 transition-colors rounded"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-xxs uppercase tracking-wider text-mid-grey font-medium">
+              Control strategy
+            </span>
+            <span className="text-xxs text-navy font-medium truncate">
+              {controlStrategy === 'active_setpoint' ? 'Active setpoint' : 'Free-running'}
+            </span>
+          </div>
+          <ChevronDown
+            size={12}
+            className="text-mid-grey flex-shrink-0 transition-transform"
+            style={{ transform: csOpen ? 'rotate(180deg)' : 'none' }}
           />
-          <label htmlFor="cs_active" className="flex-1 cursor-pointer">
-            <span className={controlStrategy === 'active_setpoint' ? 'text-navy font-medium' : 'text-mid-grey'}>
-              Active setpoint (hold to temperature)
-            </span>
-            <span className="block text-xxs text-mid-grey/70 mt-0.5">
-              The system holds the cooling / heating setpoint regardless of outdoor temperature.
-              Use this for a properly-conditioned building.
-            </span>
-          </label>
-        </div>
-        <div className="flex items-start gap-2 text-xxs">
-          <input
-            type="radio"
-            id="cs_free"
-            checked={controlStrategy === 'free_running'}
-            onChange={() => setControlStrategy('free_running')}
-            className="mt-0.5 flex-shrink-0"
-          />
-          <label htmlFor="cs_free" className="flex-1 cursor-pointer">
-            <span className={controlStrategy === 'free_running' ? 'text-navy font-medium' : 'text-mid-grey'}>
-              Free-running / passive only (no active cooling)
-            </span>
-            <span className="block text-xxs text-mid-grey/70 mt-0.5">
-              The building relies on envelope + ventilation; cooling only occurs when the weather assists.
-              Use this to show overheating risk for a naturally-ventilated or mixed-mode design.
-            </span>
-          </label>
-        </div>
+        </button>
+        {csOpen && (
+          <div className="px-2 pb-2 pt-1 space-y-1.5 border-t border-light-grey/60">
+            <div className="flex items-start gap-2 text-xxs">
+              <input
+                type="radio"
+                id="cs_active"
+                checked={controlStrategy === 'active_setpoint'}
+                onChange={() => setControlStrategy('active_setpoint')}
+                className="mt-0.5 flex-shrink-0"
+              />
+              <label htmlFor="cs_active" className="flex-1 cursor-pointer">
+                <span className={controlStrategy === 'active_setpoint' ? 'text-navy font-medium' : 'text-mid-grey'}>
+                  Active setpoint (hold to temperature)
+                </span>
+                <span className="block text-xxs text-mid-grey/70 mt-0.5">
+                  The system holds the cooling / heating setpoint regardless of outdoor temperature.
+                  Use this for a properly-conditioned building.
+                </span>
+              </label>
+            </div>
+            <div className="flex items-start gap-2 text-xxs">
+              <input
+                type="radio"
+                id="cs_free"
+                checked={controlStrategy === 'free_running'}
+                onChange={() => setControlStrategy('free_running')}
+                className="mt-0.5 flex-shrink-0"
+              />
+              <label htmlFor="cs_free" className="flex-1 cursor-pointer">
+                <span className={controlStrategy === 'free_running' ? 'text-navy font-medium' : 'text-mid-grey'}>
+                  Free-running / passive only (no active cooling)
+                </span>
+                <span className="block text-xxs text-mid-grey/70 mt-0.5">
+                  The building relies on envelope + ventilation; cooling only occurs when the weather assists.
+                  Use this to show overheating risk for a naturally-ventilated or mixed-mode design.
+                </span>
+              </label>
+            </div>
+          </div>
+        )}
       </div>
 
       {SERVICES_IN_ORDER.map(service => {
