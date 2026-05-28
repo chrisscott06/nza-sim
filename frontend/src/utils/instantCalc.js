@@ -2590,6 +2590,16 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   // T_air_hourly array → reconciliation byte-exact (Brief 53 audit §4.3
   // Option A).
   const T_air_hourly = new Float32Array(n)
+  // Brief 70 Part 1 follow-up (2026-05-28): expose the FREE-FLOATING
+  // zone-air trace separately from T_air_hourly. The latter holds the
+  // post-clamp value Brief 53 needs as a T_extract proxy for the
+  // free-cooling bypass trigger (the air actually being extracted) —
+  // overwritten to the setpoint when conditioning fires. For the new
+  // Zone temperature tab on Systems (Brief 70), the useful diagnostic
+  // signal is what the building WOULD reach with no conditioning —
+  // i.e. T_air_free pre-clamp. Captured into this parallel array each
+  // hour after the implicit-Euler solve.
+  const T_air_free_hourly = new Float32Array(n)
   const dt = 3600
 
   // Brief 28-IM IM-M2 add 1: State 2 mirror — initialise from T_out at hour 0.
@@ -3141,6 +3151,11 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     // bypass trigger is precise (and reconciliation byte-exact since both
     // sites read the same array).
     T_air_hourly[h] = T_air
+    // Brief 70 Part 1 follow-up (2026-05-28): also capture the pre-clamp
+    // free-floating temperature so the Zone-temperature heatmap can show
+    // what the building would reach with no conditioning (the diagnostic
+    // signal). T_air_free was computed at line 3083 above.
+    T_air_free_hourly[h] = T_air_free
 
     // ── Free-running loss accumulators (legacy convention; retained for ──
     //    transition. Brief 28k Gate 3 adds setpoint-convention block below.)
@@ -4011,6 +4026,13 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       // sites of the bypass decision. Engine-internal; not surfaced in
       // normal UI consumers.
       hourly_zone_air_c: T_air_hourly,
+      // Brief 70 Part 1 follow-up (2026-05-28): pre-clamp free-floating
+      // trace. Different from hourly_zone_air_c (which holds the post-
+      // clamp value — Brief 53's T_extract proxy is the air being
+      // EXTRACTED, which is the conditioned value). For diagnostic UI
+      // (the Systems Zone-temperature heatmap) the user wants to see
+      // what the building would reach with no conditioning — the float.
+      hourly_zone_air_free_c: T_air_free_hourly,
     },
     // Brief 53 Part 2 reconciliation log: per-system bypass-hours +
     // suppressed-recovery integral on the State 2 side. State 3's

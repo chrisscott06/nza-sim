@@ -59,7 +59,14 @@ export default function ZoneTempHeatmap({ result, onCellClick }) {
   const [hover, setHover] = useState(null)
 
   const data = useMemo(() => {
-    const T  = result?.demand?.hourly_zone_air_c
+    // 2026-05-28: read the FREE-FLOATING trace (pre-conditioning), not
+    // the post-clamp T_zone. The latter is held at setpoint by the
+    // Brief 69 active-setpoint clamp and would show every hour as
+    // "in dead band" because conditioning succeeds — that's correct
+    // but useless to look at. The free trace reveals what the building
+    // would do without systems running — the diagnostic signal.
+    const T  = result?.demand?.hourly_zone_air_free_c
+              ?? result?.demand?.hourly_zone_air_c   // back-compat fallback
     const hH = result?.demand?.heating_demand_hourly_kwh
     const hC = result?.demand?.cooling_demand_hourly_kwh
     const hsp = result?.demand?.effective_heating_setpoint_c ?? 21

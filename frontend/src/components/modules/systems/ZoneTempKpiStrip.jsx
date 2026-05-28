@@ -32,7 +32,13 @@ function Tile({ label, value, sub, accent }) {
 }
 
 export default function ZoneTempKpiStrip({ result }) {
-  const T = result?.demand?.hourly_zone_air_c
+  // 2026-05-28: read the FREE trace (pre-conditioning) so KPIs reflect
+  // what the building WOULD reach with no systems — the diagnostic
+  // signal. The post-clamp T_zone is held at setpoint by Brief 69's
+  // active-setpoint clamp, so KPIs computed off it would always read
+  // 100% in dead band (correct but useless).
+  const T = result?.demand?.hourly_zone_air_free_c
+           ?? result?.demand?.hourly_zone_air_c   // back-compat fallback
   const hH = result?.demand?.heating_demand_hourly_kwh
   const hC = result?.demand?.cooling_demand_hourly_kwh
   const hsp = result?.demand?.effective_heating_setpoint_c ?? 21
@@ -64,12 +70,12 @@ export default function ZoneTempKpiStrip({ result }) {
 
   return (
     <div className="flex flex-wrap gap-2">
-      <Tile label="Hours above csp"   value={above.toLocaleString()} sub={`${(above / T.length * 100).toFixed(1)}% · cooling-mode hours`} accent="text-rose-700" />
-      <Tile label="Hours below hsp"   value={below.toLocaleString()} sub={`${(below / T.length * 100).toFixed(1)}% · heating-mode hours`} accent="text-sky-700" />
-      <Tile label="Dead-band hours"   value={dead.toLocaleString()}  sub={`${(dead / T.length * 100).toFixed(1)}% · system idle`} />
+      <Tile label="Hours above csp"   value={above.toLocaleString()} sub={`${(above / T.length * 100).toFixed(1)}% · free-float > cooling SP`} accent="text-rose-700" />
+      <Tile label="Hours below hsp"   value={below.toLocaleString()} sub={`${(below / T.length * 100).toFixed(1)}% · free-float < heating SP`} accent="text-sky-700" />
+      <Tile label="Dead-band hours"   value={dead.toLocaleString()}  sub={`${(dead / T.length * 100).toFixed(1)}% · free-float in band`} />
       <Tile label="Peak heating"      value={`${peakHeat.toFixed(1)} kW`} sub="hourly maximum" accent="text-rose-700" />
       <Tile label="Peak cooling"      value={`${peakCool.toFixed(1)} kW`} sub="hourly maximum" accent="text-sky-700" />
-      <Tile label="Hottest hour"      value={`${hottestT.toFixed(1)} °C`} sub={fmtDateFromHour(hottestH)} accent="text-rose-700" />
+      <Tile label="Hottest float"     value={`${hottestT.toFixed(1)} °C`} sub={fmtDateFromHour(hottestH)} accent="text-rose-700" />
     </div>
   )
 }
