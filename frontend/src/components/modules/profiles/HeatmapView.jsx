@@ -5,6 +5,8 @@
  * Cell colour intensity = schedule value × monthly multiplier.
  */
 
+import ChartExportCard from '../../shared/ChartExportCard.jsx'
+
 const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const HOURS        = Array.from({ length: 24 }, (_, i) => i)
 
@@ -53,7 +55,7 @@ export default function HeatmapView({ schedule, accentColour = '#2B2A4C' }) {
   const totalHeight = HEADER_H + 24 * CELL_H
 
   return (
-    <div>
+    <ChartExportCard noChrome title={`${schedule.name ?? 'Schedule'} — Annual Pattern (Weekday)`}>
       <p className="text-xxs uppercase tracking-wider text-mid-grey mb-3">Annual Pattern (Weekday)</p>
       <div className="overflow-x-auto">
         <svg
@@ -126,6 +128,6 @@ export default function HeatmapView({ schedule, accentColour = '#2B2A4C' }) {
         </svg>
         <span className="text-xxs text-mid-grey">High</span>
       </div>
-    </div>
+    </ChartExportCard>
   )
 }
