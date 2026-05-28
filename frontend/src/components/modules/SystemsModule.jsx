@@ -65,6 +65,9 @@ import SchedulePopout from '../shared/SchedulePopout.jsx'
 import { SERVICE_COLOURS } from './systems/SystemEditorCard.jsx'
 import AddSystemButton from './systems/AddSystemButton.jsx'
 import SystemsDiagnosticPanel from './systems/SystemsDiagnosticPanel.jsx'
+// Brief 70 Part 1 (2026-05-28): Zone temperature + demand viewer. Surfaces
+// the Brief 67/69 demand-model trace as an annual heatmap + KPI strip.
+import ZoneTempTab from './systems/ZoneTempTab.jsx'
 // Brief 53 Part 3 (2026-05-26): heat-balance Sankey on Systems so the
 // demand-shaping role of ventilation (envelope → +gains → +ventilation →
 // demand) is visible alongside the existing energy-flow Sankey
@@ -97,6 +100,11 @@ const CENTRE_TABS = [
   // start with the systems." Sankey (energy-flow) stays as the next tab.
   { id: 'heatbalance', label: 'Heat balance' },
   { id: 'sankey',     label: 'Energy flows' },
+  // Brief 70 Part 1 (2026-05-28): Zone temperature trace + demand power
+  // viewer. Placed after Heat balance / Energy flows so the demand-shaping
+  // story flows: how heat moves through the zone → how the engine clamps
+  // the float to setpoint → which hours the systems fire.
+  { id: 'zonetemp',   label: 'Zone temperature' },
   { id: 'profiles',   label: 'Profiles' },
   { id: 'schedule',  label: 'Schedule' },
   { id: 'monthly',    label: 'Monthly' },
@@ -373,6 +381,12 @@ export default function SystemsModule() {
                 sysCfgV40={params?.systems_config_v40}
                 giaM2={result?.metadata?.gia_m2 ?? result?.heat_balance?.metadata?.gia_m2 ?? 0}
               />
+            )}
+            {/* Brief 70 Part 1: zone-temperature heatmap + KPI strip.
+                Reads result.demand.hourly_zone_air_c etc. — no engine work,
+                pure renderer of what Brief 67/69 already exposes. */}
+            {centreView === 'zonetemp' && (
+              <ZoneTempTab result={result} />
             )}
             {consumption && centreView === 'profiles' && (
               <SystemsProfiles result={result} />
