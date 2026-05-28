@@ -88,12 +88,10 @@ export function useIsolatedResults(interventions, baselineConfig, runEngine, lib
       if (firstEnabledIdx >= 0) {
         const isoCum = rows[firstEnabledIdx]?.cumulativeDelta
         const stkMrg = stackResult.interventions[firstEnabledIdx]?.marginal_delta
-        const isoEUI = isoCum?.energy_use?.totals?.eui_kwh_per_m2?.delta
-                    ?? isoCum?.eui?.delta
-                    ?? null
-        const stkEUI = stkMrg?.energy_use?.totals?.eui_kwh_per_m2?.delta
-                    ?? stkMrg?.eui?.delta
-                    ?? null
+        // computeDelta emits records under `eui_kwh_per_m2.{from,to,delta,delta_pct}`
+        // — see interventionsEngine.js L536. Read the delta directly.
+        const isoEUI = isoCum?.eui_kwh_per_m2?.delta ?? null
+        const stkEUI = stkMrg?.eui_kwh_per_m2?.delta ?? null
         if (Number.isFinite(isoEUI) && Number.isFinite(stkEUI)) {
           const drift = Math.abs(isoEUI - stkEUI)
           if (drift > 0.05) {
