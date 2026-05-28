@@ -26,6 +26,7 @@ import {
 import { CheckCircle2, AlertTriangle, TrendingDown, ChevronDown } from 'lucide-react'
 import { ProjectContext }    from '../../context/ProjectContext.jsx'
 import { SimulationContext } from '../../context/SimulationContext.jsx'
+import ChartExportCard from '../shared/ChartExportCard.jsx'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -176,7 +177,7 @@ function CRREMChartPair({ euiTargets, carbonTargets, actualDataPoints, modelledE
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div>
+      <ChartExportCard noChrome title="CRREM trajectory — EUI (kWh/m²)">
         <p className="text-xxs font-medium text-mid-grey mb-2 uppercase tracking-wider">EUI — kWh/m²</p>
         <div className="h-[260px]">
           <ComposedChart width={520} height={260} data={euiData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
@@ -195,9 +196,9 @@ function CRREMChartPair({ euiTargets, carbonTargets, actualDataPoints, modelledE
             <ReferenceLine x={CURRENT_YEAR} stroke="#E5E7EB" strokeDasharray="3 3" />
           </ComposedChart>
         </div>
-      </div>
+      </ChartExportCard>
 
-      <div>
+      <ChartExportCard noChrome title="CRREM trajectory — Carbon (kgCO₂e/m²)">
         <p className="text-xxs font-medium text-mid-grey mb-2 uppercase tracking-wider">Carbon — kgCO₂e/m²</p>
         <div className="h-[260px]">
           <ComposedChart width={520} height={260} data={carbonData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
@@ -216,7 +217,7 @@ function CRREMChartPair({ euiTargets, carbonTargets, actualDataPoints, modelledE
             <ReferenceLine x={CURRENT_YEAR} stroke="#E5E7EB" strokeDasharray="3 3" />
           </ComposedChart>
         </div>
-      </div>
+      </ChartExportCard>
     </div>
   )
 }

@@ -397,7 +397,7 @@ export default function SystemsModule() {
             {consumption && centreView === 'summary' && (
               <SystemsSummary consumption={consumption} />
             )}
-          </div>
+          </ChartExportCard>
         </div>
 
         {/* RIGHT: Live Results — Brief 28-IM-Polish POL-M2 IA 3.2.

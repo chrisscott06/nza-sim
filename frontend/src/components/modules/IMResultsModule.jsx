@@ -29,6 +29,7 @@ import { CRREM_HOTEL_KGCO2_PER_M2_YR } from '../../data/crremTargets.js'
 // Brief 28-IM-Polish POL-M2: shared chart-consistency components.
 import EnginePill from '../shared/EnginePill.jsx'
 import ChartTotalsBadge from '../shared/ChartTotalsBadge.jsx'
+import ChartExportCard from '../shared/ChartExportCard.jsx'
 
 const ACCENT = '#0F766E'   // results theme — teal-700
 const FUEL_COLOURS = {
@@ -421,6 +422,7 @@ function CarbonView({ r }) {
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-4">
       <div className="bg-white border border-light-grey rounded p-4">
+        <ChartExportCard noChrome title="Annual carbon trajectory 2024–2050">
         {/* Brief 28-IM-Polish POL-M2 */}
         <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
           <div className="flex items-center gap-2">
@@ -529,6 +531,7 @@ function CarbonView({ r }) {
             </p>
           </div>
         </div>
+        </ChartExportCard>
       </div>
 
       {/* Breakdown by carrier */}
@@ -613,6 +616,7 @@ function MonthlyView({ staticResult, weatherData }) {
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="bg-white border border-light-grey rounded p-4">
+        <ChartExportCard noChrome title="Monthly site energy + outdoor temperature">
         {/* Brief 28-IM-Polish POL-M2 */}
         <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
           <div className="flex items-center gap-2">
@@ -676,6 +680,7 @@ function MonthlyView({ staticResult, weatherData }) {
           <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-sm" style={{ backgroundColor: FUEL_COLOURS.gas }} /> Gas</div>
           <div className="flex items-center gap-1 text-amber-600"><span>···</span> Outdoor T (monthly mean)</div>
         </div>
+        </ChartExportCard>
       </div>
     </div>
   )

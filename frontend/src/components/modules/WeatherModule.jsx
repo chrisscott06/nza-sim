@@ -18,6 +18,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Legend,
 } from 'recharts'
 import { ProjectContext } from '../../context/ProjectContext.jsx'
+import ChartExportCard from '../shared/ChartExportCard.jsx'
 
 const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -228,7 +229,7 @@ export default function WeatherModule() {
         {/* Monthly summary */}
         <Section title="Monthly summary">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div>
+            <ChartExportCard noChrome title={`${location.city} — Monthly dry-bulb temperature`}>
               <p className="text-xxs uppercase tracking-wider text-mid-grey mb-2">Dry-bulb temperature (°C)</p>
               <div className="h-[220px]">
                 <ResponsiveContainer>
@@ -244,8 +245,8 @@ export default function WeatherModule() {
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
-            </div>
-            <div>
+            </ChartExportCard>
+            <ChartExportCard noChrome title={`${location.city} — Monthly global solar irradiance`}>
               <p className="text-xxs uppercase tracking-wider text-mid-grey mb-2">Global solar irradiance (kWh/m²)</p>
               <div className="h-[220px]">
                 <ResponsiveContainer>
@@ -259,7 +260,7 @@ export default function WeatherModule() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-            </div>
+            </ChartExportCard>
           </div>
         </Section>
 
@@ -269,7 +270,9 @@ export default function WeatherModule() {
             <span className="text-mid-grey">Variable:</span>
             <VariableToggle current={selectedVar} onChange={setSelectedVar} />
           </div>
-          <TimeSeriesChart hourly={hourly} variable={selectedVar} />
+          <ChartExportCard noChrome title={`${location.city} — ${VARIABLES.find(v => v.id === selectedVar)?.label ?? 'Time series'}`}>
+            <TimeSeriesChart hourly={hourly} variable={selectedVar} />
+          </ChartExportCard>
         </Section>
 
         {/* Calendar heatmap — same data, year-at-a-glance overview */}
@@ -278,7 +281,9 @@ export default function WeatherModule() {
             24 hours × 365 days. Drag any cell on the time-series chart above
             to zoom; this heatmap stays as the always-on overview.
           </p>
-          <DailyHeatmap hourly={hourly} variable={selectedVar} />
+          <ChartExportCard noChrome title={`${location.city} — ${VARIABLES.find(v => v.id === selectedVar)?.label ?? 'Weather'} (year heatmap)`}>
+            <DailyHeatmap hourly={hourly} variable={selectedVar} />
+          </ChartExportCard>
         </Section>
 
       </div>
