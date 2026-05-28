@@ -395,6 +395,22 @@ function withVentEnabled(enabled) {
     for (const v of (b.systems_config_v25?.ventilation ?? [])) v.enabled = enabled
   }
 }
+// Brief 68 Part C (register U4, 2026-05-28): asymmetric vent-disable mutators
+// for the regression check that fan electricity honours BOTH enable flags.
+// Pre-Brief-68 the v40-only path (_computeVentilation) ignored v25.enabled
+// and fan_elec stayed at full value while State 2 mech-vent loss correctly
+// zeroed — a known dual-source-of-truth bug. The harness now guards against
+// regression by asserting fan_elec → 0 under either single-flag disable.
+function withV25VentEnabled(enabled) {
+  return b => {
+    for (const v of (b.systems_config_v25?.ventilation ?? [])) v.enabled = enabled
+  }
+}
+function withV40VentEnabled(enabled) {
+  return b => {
+    for (const v of (b.systems_config_v40?.ventilation ?? [])) v.enabled = enabled
+  }
+}
 function withLightingEnabled(enabled) {
   return b => { for (const s of (b.systems_config_v40?.lighting ?? [])) s.enabled = enabled }
 }
@@ -455,6 +471,9 @@ const sweepKeys = [
   ['sp_cf_lo', withSmallPowerCf(0.5)],
   ['sp_cf_hi', withSmallPowerCf(1.5)],
   ['vent_off', withVentEnabled(false)],
+  // Brief 68 Part C: asymmetric vent-disable snapshots for D11/D12
+  ['v25_vent_off', withV25VentEnabled(false)],
+  ['v40_vent_off', withV40VentEnabled(false)],
   ['light_off', withLightingEnabled(false)],
   ['bypass_on', withBypass(true)],
   ['bypass_off', withBypass(false)],
@@ -1052,6 +1071,19 @@ expectFrozenBetween(snaps.csp_18, snaps.free_run_csp_18,
   ['demand_heating_mwh','demand_dhw_mwh','heat_elec_mwh','heat_gas_mwh',
    'dhw_elec_mwh','dhw_gas_mwh','fan_elec_mwh','light_elec_mwh','sp_elec_mwh'],
   'D10', 'control_strategy toggle at csp=18')
+
+// Brief 68 Part C (register U4 / Brief 66 HIGH-8) — fan_elec zeros under
+// EITHER v25-only OR v40-only ventilation disable.
+//
+// Pre-Brief-68 the v40-only path read v40.enabled only; disabling
+// v25.ventilation[].enabled alone left fan_elec at full value while State
+// 2 correctly zeroed mech-vent loss. Fix: _computeVentilation now AND-gates
+// v25 and v40 (mirror of instantCalc.js:2771-2772). Both assertions must
+// hold post-fix; either failing is a regression to the bug class.
+assertApproxEq('D', 'D11', 'v25.ventilation[].enabled = false zeros fan_elec',
+  snaps.v25_vent_off.fan_elec_mwh, 0, 0.5)
+assertApproxEq('D', 'D12', 'v40.ventilation[].enabled = false zeros fan_elec',
+  snaps.v40_vent_off.fan_elec_mwh, 0, 0.5)
 
 // ════════════════════════════════════════════════════════════════════════
 // CATEGORY E — ORDERING / PARITY

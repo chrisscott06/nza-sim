@@ -595,11 +595,32 @@ function _computeDhw(systems, serviceLevel, gia, building, presenceHourly = null
  * Returns per-system fan_electrical + recovery numbers. Recovery composition:
  * sum recovered kWh per system (NOT compose recovery percentages).
  */
-function _computeVentilation(systems, gia, peakOccupants, hoursActive = 8760) {
+function _computeVentilation(systems, gia, peakOccupants, hoursActive = 8760, v25Systems = null) {
   // Brief 40 Part 5b Section A (2026-05-19): filter enabled; validate sum
   // of enabled shares; error blocks compute (same shape as heating/cooling/
   // DHW). Disabled vent systems preserved on disk but skipped in compute.
-  const enabledSystems = _enabledSystems(systems)
+  //
+  // Brief 68 Part C (register U4 / Brief 66 HIGH-8, 2026-05-28): match the
+  // State 2 AND-gate at instantCalc.js:2771-2772 — a ventilation system
+  // counts as enabled only when BOTH the v40 `enabled` flag and the
+  // matching v25 `enabled` flag agree. Pre-fix, this function read v40-only
+  // while State 2's mech-vent loss read both — so disabling
+  // v25.ventilation[].enabled alone (a real Bridgewater path coming from
+  // the dual v25+v40 migration) left fan electricity at full value (~39.4
+  // MWh) while State 2 correctly zeroed the loss term. Result: EUI
+  // inflated by ~10.6% on Bridgewater (95.3 vs the correct ~86.2).
+  // v25Systems defaults to null so callers that already filter upstream
+  // (or have no v25 to match) are unaffected — same behaviour as before.
+  const v25EnabledMap = new Map(
+    Array.isArray(v25Systems) ? v25Systems.map(v => [v?.id, v?.enabled !== false]) : []
+  )
+  const v25EnabledFor = (v40) => {
+    if (v25EnabledMap.size === 0) return true               // no v25 to gate against
+    const id = v40?.id
+    if (id == null || !v25EnabledMap.has(id)) return true   // no v25 entry for this v40 — v40 wins
+    return v25EnabledMap.get(id)
+  }
+  const enabledSystems = _enabledSystems(systems).filter(v25EnabledFor)
   if (!Array.isArray(systems) || systems.length === 0) {
     return {
       systems: [], total_fan_electrical_mwh: 0,
@@ -862,7 +883,12 @@ export function computeSystemsDelivered({ building, state2Result, comfortBand, s
   // _computeDhw falls back to 'flat' when this is missing — no error.
   const presenceHourly = state2Result?.occupancy_summary?.presence_hourly ?? null
   const dhw     = _computeDhw(cfg.dhw ?? [], cfg, gia, building, presenceHourly)
-  const ventilation = _computeVentilation(cfg.ventilation ?? [], gia, peakOccupants)
+  // Brief 68 Part C (register U4, 2026-05-28): pass v25 ventilation array
+  // through so _computeVentilation can AND-gate the enabled flag the same
+  // way State 2 does (instantCalc.js:2771-2772). The v25 array reaches us
+  // via `building.systems_config_v25.ventilation`; pass null when absent.
+  const v25Vent = building?.systems_config_v25?.ventilation ?? null
+  const ventilation = _computeVentilation(cfg.ventilation ?? [], gia, peakOccupants, 8760, v25Vent)
   const lighting    = _computeThin(cfg.lighting ?? [], lightingGainMwh)
   const small_power = _computeThin(cfg.small_power ?? [], equipmentGainMwh)
 
