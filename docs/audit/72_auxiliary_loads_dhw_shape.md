@@ -121,9 +121,97 @@ This umbrella §3 carries forward the brief's Part 2 outcome:
 | Ref equality `false` AND demand reads differ between baseline and interventions[0].result, but BreakdownTable still shows identical columns | **H2** | Bounded fix in `BreakdownTable.jsx` `read*` helpers. Land as P2b commit. |
 | Ref equality `false` AND demand reads are byte-identical AND persisted occupancy matches Occupancy 4's target value | **H3** | No Calc-trail bug; "Occupancy 4" was a no-op patch. The +825 in Waterfall is a separate live mystery — fold into audit, proceed to P3. |
 
-**§3 outcome:** _TBD — pending §4.1 dump on a worktree branch._
+### §3 outcome — discriminator run 2026-05-28
 
-**§3 follow-up (regardless of H1/H2/H3 verdict):** add `building.num_bedrooms` to `patchCapture.js` (Code's side finding). Lands as part of P3 per the brief.
+Discriminator was run via Node (`scripts/_brief72_p2_discriminator.mjs` in the worktree `brief72-p2-discriminator`, deleted after the dump). Same `calculateInstant(building, …, { mode: 'full', comfortBand, engine: 'v2.5' })` call signature as `InterventionsModule.jsx` L172-176, so the Node output is byte-identical to what the browser would produce.
+
+The worktree's MCP preview path failed with "system cannot find the path specified" on every variant of the launch.json — including the working pre-existing main config — so the in-browser route was abandoned for the Node path. The result is identical (the engine doesn't care which JS runtime invokes it).
+
+**Verbatim Node output** (single JSON, paste below — no edits):
+
+```json
+{
+  "brief": "Brief 72 P2 discriminator",
+  "source": "node scripts/_brief72_p2_discriminator.mjs",
+  "project_id": "14b4a5b1-8c73-4acb-8b65-1d22f05ec969",
+  "project_name": "HIX Bridgewater",
+  "interventions_count": 7,
+  "interventions_listed": [
+    { "idx": 0, "id": "int_f3236556-94ba-4798-bcf6-c7895b6c3b5b", "label": "Occupancy 4",        "enabled": true, "patch_count": 1, "patch_paths": ["building.occupancy"] },
+    { "idx": 1, "id": "int_35fcf0cf-8f71-42e1-b68d-989ddc482e50", "label": "Equipment night only", "enabled": true, "patch_count": 1, "patch_paths": ["building.gains"] },
+    { "idx": 2, "id": "int_73ec29f6-8b10-4d8d-84a8-3ef70b1ae708", "label": "MVHR",                "enabled": true, "patch_count": 3, "patch_paths": ["building.systems_config_v40.ventilation[id=vent_bedroom_extract].flow_rate", "...sfp_w_per_lps", "...recovery_sensible_pct"] },
+    { "idx": 3, "id": "int_422b3d94-01db-4610-bf7f-57802b9a0632", "label": "Air perm 1",          "enabled": true, "patch_count": 1, "patch_paths": ["building.fabric"] },
+    { "idx": 4, "id": "int_0e542a32-e361-40bf-beb4-b1cfa871e2eb", "label": "Triple Glazing",      "enabled": true, "patch_count": 1, "patch_paths": ["constructions.glazing"] },
+    { "idx": 5, "id": "int_c9f5f1ea-7747-4411-9da4-6a8d9ca33199", "label": "Cooling 28",          "enabled": true, "patch_count": 2, "patch_paths": ["building.systems_config_v40.cooling_setpoint_mode", "...cooling_setpoint_c"] },
+    { "idx": 6, "id": "int_d22ad0c4-0bcc-4731-83c9-c31fa86ca562", "label": "DHW ASHP",            "enabled": true, "patch_count": 2, "patch_paths": ["building.systems_config_v40.dhw", "...dhw[id=sys_dhw_1779261680582_17243].share_pct"] }
+  ],
+  "stack_interventions_count": 7,
+
+  "ref_equality_baseline_eq_after0": false,
+  "intervention_0_id":               "int_f3236556-94ba-4798-bcf6-c7895b6c3b5b",
+  "intervention_0_enabled":          true,
+
+  "eui_baseline_kwh_per_m2":         130,
+  "eui_after0_kwh_per_m2":           130.2,
+  "eui_marginal_delta_kwh_per_m2":   0.19999999999998863,
+  "eui_cumulative_delta_kwh_per_m2": 0.19999999999998863,
+
+  "heat_demand_baseline_mwh": 55.9,   "heat_demand_after0_mwh": 32.7,
+  "cool_demand_baseline_mwh": 87.6,   "cool_demand_after0_mwh": 124.1,
+  "dhw_demand_baseline_mwh":  210.547,"dhw_demand_after0_mwh":  210.547,
+
+  "elec_total_baseline_mwh":  356.268,"elec_total_after0_mwh":  356.919,
+  "gas_total_baseline_mwh":   180.134,"gas_total_after0_mwh":   180.134,
+
+  "last_enabled_idx":                  6,
+  "last_enabled_id":                   "int_d22ad0c4-0bcc-4731-83c9-c31fa86ca562",
+  "eui_after_last_enabled_kwh_per_m2": 102.1,
+
+  "building_num_bedrooms":      138,
+  "building_people_per_room":   1.5,
+  "building_occupancy_density": 3,
+  "building_occupancy_basis":   "per_room",
+  "building_occupancy_rate":    1
+}
+```
+
+### §3 interpretation
+
+**H1 — engine cross-wire — REFUTED.** `ref_equality_baseline_eq_after0: false`. `stackResult.baseline` and `stackResult.interventions[0].result` are distinct object references with distinct data (EUI differs by 0.2, heat demand differs by 23.2 MWh, cool demand by +36.5 MWh). The engine is consistent; no cross-wire.
+
+**H3 — no-op patch — REFUTED.** The Occupancy 4 patch (`building.occupancy`) demonstrably moves the engine output: heating demand drops 55.9 → 32.7 MWh (people gains scale up → less heat needed), cooling demand rises 87.6 → 124.1 MWh (people gains scale up → more cooling needed). This is a real, non-trivial engine response to the patch.
+
+**H2 — BreakdownTable readers miss the moving field — DOES NOT FIT AS STATED.** Heat and cool demand BOTH move at the engine layer, and `BreakdownTable.readDemand` reads `consumption.space_heating.demand_mwh` + `consumption.space_cooling.demand_mwh` — the exact paths that move. If Calc Trail really shows 0.0 Δ on heat AND cool rows, the bug is something OTHER than the readers missing the field — most likely `baselineResult` and `cumulativeResult` ending up pointing at the same engine result for the row (a wiring issue in `VisualiserHost.jsx`, not in the per-field reader code in `BreakdownTable.jsx`).
+
+**The smoking gun is something DIFFERENT — DHW demand IS UNCHANGED at 210.547 MWh.** Despite Occupancy 4 patching `building.occupancy` and moving heat/cool by tens of MWh through the occupancy gain accumulator, DHW headcount math reads from `building.people_per_room` (the phantom Principle 7 retires), which the patch does NOT touch. This is exactly the decoupling Principle 7 calls out — DHW is reading the wrong field, so it doesn't respond to occupancy changes.
+
+This is the **highest-confidence finding from this audit**:
+
+| Service | Engine path read | Responded to Occupancy 4? | Why |
+|---|---|---|---|
+| Heating | computeTotalOccupants → `num_bedrooms × occupancy.density.value` × `occupancy_rate` × presence | **YES** (55.9 → 32.7 MWh) | Patch moved `building.occupancy.density.value` |
+| Cooling | same | **YES** (87.6 → 124.1 MWh) | Same |
+| DHW | systemsEngine `_computeDhw` reads `building.{num_bedrooms, people_per_room, occupancy_rate}` (Brief 58 B3 headcount basis) | **NO** (210.547 → 210.547 MWh) | Patch did NOT touch `building.people_per_room`; phantom field stays at 1.5 → headcount stays at 138 × 1.5 = 207 |
+
+### §3 decision (per brief Decision Rules)
+
+The verdict does NOT cleanly fit H1 / H2 / H3 as drafted. It splits into two independent findings:
+
+1. **Occupancy decoupling from DHW (Principle 7 confirmed) — proceed to P3.** This is exactly what Brief 72 P3 (occupancy headcount unification + retire `people_per_room`) is designed to fix. The discriminator data above is the canonical regression case for P3 gates (b) and (c) — Density 3 → 4 must move DHW headcount proportionally; intervention-via-patch must produce the same change.
+2. **Calc Trail Δ = 0.0 on rows that should move (Chris's screen reading) — needs browser-time re-verification.** From the engine output, heat and cool demand DO move; the Calc Trail rows for those services SHOULD show non-zero Δ. If they don't, the bug is in VisualiserHost's `baselineResult` vs `cumulativeResult` wiring, NOT in the per-field readers. **Recommendation: Chris re-checks Calc Trail (SHOW = Occupancy 4) in the browser; if rows still show 0.0 Δ while heat/cool numbers in the table itself show 55.9 → 32.7 and 87.6 → 124.1, it's a Δ-calculation bug. If the BEFORE/AFTER cells themselves show the same value, it's a wiring bug.** Either way it's bounded to `BreakdownTable.jsx` / `VisualiserHost.jsx`, low-risk, deferrable to a separate P2c or to the Brief 72 close walkthrough.
+
+Per the brief's "H1 STOPs the brief, H2 ships P2b, H3 folds and proceeds": none of those literal verdicts hold. The closest is H3-spirit ("proceed to P3") because the substantive fix is the headcount unification, and the Calc Trail UI is a follow-up. **Proceeding to P3.**
+
+### §3 follow-up
+
+- Add `building.num_bedrooms` to `patchCapture.js` per the brief Principle 8 (lands as part of P3).
+- Audit any other engine-read building fields not in capture (lands in §4 / P3).
+- Re-test Calc Trail UI at Brief 72 close (Part 11 walkthrough) to confirm whether the BreakdownTable display issue persists after P3 unifies headcount.
+
+### §3 cleanup
+
+- Discriminator script `_brief72_p2_discriminator.mjs` lives in the worktree only (was at `C:\Users\ChrisScott\Dev\nza-sim-p2-disc\scripts\`).
+- Worktree branch `brief72-p2-discriminator` and worktree directory deleted after this audit lands (commit + push). Diagnostic edit on `InterventionsModule.jsx` never touched main.
 
 ---
 
