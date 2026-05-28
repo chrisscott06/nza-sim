@@ -178,6 +178,16 @@ export default function BalanceSankey({ data, unit, orientationDeg = 0, onElemen
         .nodeWidth(14)
         .nodePadding(12)
         .nodeAlign(sankeyLeft)
+        // 2026-05-28 (Chris-flag): preserve input order so the gain side
+        // stays grouped (all solar → people → equipment → lighting →
+        // heating) per gainOrderFor(mode) and the loss side stays grouped
+        // (envelope → air-flow → cooling) per loadOrderFor(mode). Default
+        // d3-sankey behaviour re-sorts nodes within each column to
+        // minimise ribbon crossings, which can split solar above + below
+        // a tall People ribbon — visually confusing because the eye no
+        // longer reads "all solar together". Some ribbon crossings may
+        // reappear; that's an acceptable trade for a legible group order.
+        .nodeSort(null)
         .extent([[140, 12], [dims.width - 140, dims.height - 12]])
       const cloned = {
         nodes: raw.nodes.map(n => ({ ...n })),
