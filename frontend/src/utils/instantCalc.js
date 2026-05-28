@@ -2603,7 +2603,25 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   const dt = 3600
 
   // Brief 28-IM IM-M2 add 1: State 2 mirror — initialise from T_out at hour 0.
-  const T_init = (weatherData?.temperature?.[0] != null) ? weatherData.temperature[0] : comfortBand.lower_c
+  //
+  // 2026-05-28 (Chris-flag, post-Brief-70 walkthrough): when
+  // control_strategy === 'active_setpoint', initialise the air node + wall
+  // node temperatures at the heating setpoint instead of T_out. A real
+  // continuously-conditioned building did not end Dec 31 sitting at the
+  // outdoor air temperature — it was at setpoint, walls warm. Initialising
+  // at T_out (Bristol Jan 1 hour 0 ≈ -2 °C) produced a ≈ 5 MW Jan-1 spike
+  // in the Brief 69 Part 2 C_coef demand formula, because the first hour
+  // had to lift the air mass (C_air_per_dt ≈ 250 kW/K × ΔT 23 °C) up to
+  // setpoint in one timestep. Visible as a thin blue stripe on the very
+  // left edge of the Zone-temperature heatmap.
+  //
+  // For free_running mode (no conditioning at all) keep the T_out init —
+  // the building genuinely floats from whatever it last reached, and
+  // there's no setpoint to seed from. For State 1 envelope-only this code
+  // path doesn't fire (State 1 has its own init at instantCalc.js:1066),
+  // so the change is contained to State 2's active_setpoint branch.
+  const _coldStartT = (weatherData?.temperature?.[0] != null) ? weatherData.temperature[0] : comfortBand.lower_c
+  const T_init = (control_strategy === 'active_setpoint') ? effectiveLowerC : _coldStartT
   let TS_wall  = new Float64Array(extWallModel.type === 'mass' ? extWallModel.n : 0).fill(T_init)
   let TS_roof  = new Float64Array(roofModel.type    === 'mass' ? roofModel.n    : 0).fill(T_init)
   let TS_floor = new Float64Array(floorModel.type   === 'mass' ? floorModel.n   : 0).fill(T_init)
