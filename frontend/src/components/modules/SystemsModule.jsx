@@ -84,6 +84,7 @@ import SystemEditorPopout from './systems/SystemEditorPopout.jsx'
 
 const SYSTEMS_ACCENT = '#00AEEF'
 import LiveResultsStrip from '../shared/LiveResultsStrip.jsx'
+import ChartExportCard from '../shared/ChartExportCard.jsx'
 
 const ACCENT = '#00AEEF'   // systems theme — cyan-bright
 
@@ -335,7 +336,11 @@ export default function SystemsModule() {
               )
             })}
           </div>
-          <div className="flex-1 min-h-0 overflow-hidden">
+          <ChartExportCard
+            noChrome
+            title={`Systems — ${CENTRE_TABS.find(t => t.id === centreView)?.label ?? 'View'}`}
+            className="flex-1 min-h-0 overflow-hidden"
+          >
             {!consumption && (
               <div className="h-full flex items-center justify-center text-mid-grey text-xxs">
                 Engine output not ready — load weather data + library.
@@ -2138,6 +2143,13 @@ function SystemsMonthly({ consumption, result }) {
    CENTRE — SUMMARY
    ─────────────────────────────────────────────────────────────────────── */
 function SystemsSummary({ consumption }) {
+  // Brief 68 Part D (Brief 66 HIGH-4, 2026-05-28): `scop_effective` is also
+  // used by gas boilers (the engine writes delivered/fuel = boiler efficiency
+  // ≈ 0.92 to the same field for non-heat-pump heating). SCOP is a heat-
+  // pump concept, so showing "0.92" in a column literally labelled
+  // "SCOP / SEER" reads as a broken COP. The Sankey label code at
+  // SystemsModule.jsx:1240/1280 already routes >1 → "SCOP", <1 → "X% eff";
+  // do the same here. Format helper below picks the right label per row.
   const rows = [
     { key: 'space_heating', label: 'Space heating', node: consumption.space_heating, effKey: 'scop_effective' },
     { key: 'space_cooling', label: 'Space cooling', node: consumption.space_cooling, effKey: 'seer_effective' },
@@ -2151,6 +2163,20 @@ function SystemsSummary({ consumption }) {
   const totalGas  = consumption.total?.gas_mwh ?? 0
   const eui       = consumption.total?.kwh_per_m2_yr ?? 0
   const CRREM_TARGET = 184
+
+  // Brief 68 Part D: format effective performance with the right label.
+  //   • space_heating (effKey scop_effective): ≥1 → "SCOP X.XX", <1 → "η X.XX"
+  //     (the engine writes delivered/fuel; for gas boilers that's the combustion
+  //      efficiency, not a SCOP — labelling it SCOP is misleading)
+  //   • space_cooling (effKey seer_effective): ≥1 → "SEER X.XX", <1 → "η X.XX"
+  //   • dhw / fans / lighting / small_power: no efficiency column applies (effKey null)
+  const fmtEff = (effKey, value) => {
+    if (effKey == null || value == null || !Number.isFinite(value)) return '—'
+    const v = value.toFixed(2)
+    if (effKey === 'seer_effective') return value >= 1 ? `SEER ${v}` : `η ${v}`
+    // default: scop_effective
+    return value >= 1 ? `SCOP ${v}` : `η ${v}`
+  }
 
   return (
     <div className="w-full h-full overflow-auto p-4">
@@ -2166,9 +2192,11 @@ function SystemsSummary({ consumption }) {
         </div>
       </div>
       <p className="text-xxs text-mid-grey mb-3">
-        Per-category demand → delivered → carrier breakdown. SCOP/SEER columns
-        show the effective seasonal performance the engine derived from the
-        installed system mix.
+        Per-category demand → delivered → carrier breakdown. The Efficiency
+        column shows the effective seasonal performance the engine derived from
+        the installed system mix — labelled "SCOP" for heat-pump heating,
+        "SEER" for heat-pump cooling, and "η" (Greek eta) for combustion-based
+        efficiency where the value is below 1 (e.g. gas boiler ≈ 0.92).
       </p>
 
       <table className="w-full max-w-4xl text-xxs border-collapse">
@@ -2179,7 +2207,7 @@ function SystemsSummary({ consumption }) {
             <th className="text-right py-2 pr-3 font-medium">Delivered (MWh)</th>
             <th className="text-right py-2 pr-3 font-medium">Electricity (MWh)</th>
             <th className="text-right py-2 pr-3 font-medium">Gas (MWh)</th>
-            <th className="text-right py-2 font-medium">SCOP / SEER</th>
+            <th className="text-right py-2 font-medium">Efficiency</th>
           </tr>
         </thead>
         <tbody>
@@ -2192,7 +2220,7 @@ function SystemsSummary({ consumption }) {
               <td className="py-1.5 pr-3 text-right tabular-nums text-navy">{(r.node.delivered_mwh ?? 0).toFixed(1)}</td>
               <td className="py-1.5 pr-3 text-right tabular-nums text-navy">{(r.node.electricity_mwh ?? 0).toFixed(1)}</td>
               <td className="py-1.5 pr-3 text-right tabular-nums text-navy">{(r.node.gas_mwh ?? 0).toFixed(1)}</td>
-              <td className="py-1.5 text-right tabular-nums text-mid-grey">{r.effKey && r.node[r.effKey] ? r.node[r.effKey].toFixed(2) : '—'}</td>
+              <td className="py-1.5 text-right tabular-nums text-mid-grey">{fmtEff(r.effKey, r.node?.[r.effKey])}</td>
             </tr>
           ))}
           <tr className="border-t-2 border-navy/30 font-semibold">
