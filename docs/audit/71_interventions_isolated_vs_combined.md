@@ -10,10 +10,10 @@ Confirm the line numbers cited in the brief's BEFORE-DOING-ANYTHING §5 against 
 
 | File | Reference in brief | Actual on main (HEAD) | Notes |
 |---|---|---|---|
-| `frontend/src/utils/interventionsEngine.js` | `runInterventionStack` L365-401 | _TBD_ | |
-| `frontend/src/utils/interventionsEngine.js` | `applyPatch` L247 | _TBD_ | |
-| `frontend/src/utils/interventionsEngine.js` | never-mutate-baseline invariant L48-51 | _TBD_ | |
-| `frontend/src/utils/interventionsEngine.js` | disabled-row handling L334 | _TBD_ | |
+| `frontend/src/utils/interventionsEngine.js` | `runInterventionStack` L365-401 | **L365-402** ✓ | Exported, signature unchanged. |
+| `frontend/src/utils/interventionsEngine.js` | `applyPatch` L247 | **L247** ✓ | Exported, signature `(config, patch, libraryData)`. |
+| `frontend/src/utils/interventionsEngine.js` | never-mutate-baseline invariant L48-51 | _TBD (Part 2)_ | Not required for Part 1's hook. |
+| `frontend/src/utils/interventionsEngine.js` | disabled-row handling L334 | _TBD (Part 2)_ | Hook force-enables singleton; combined-stack handling is `applyIntervention` at L334 region. |
 | `frontend/src/components/modules/interventions/InterventionsModule.jsx` | `VisualiserHost` mount ~L422 | _TBD_ | |
 | `frontend/src/components/modules/interventions/visualiser/VisualiserHost.jsx` | `VIEWS` array ~L55-61 | _TBD_ | Brief 60 Part A may have shifted these. |
 | `frontend/src/components/modules/interventions/visualiser/VisualiserHost.jsx` | localStorage view-memory ~L64-71 | _TBD_ | |
@@ -26,14 +26,17 @@ Confirm the line numbers cited in the brief's BEFORE-DOING-ANYTHING §5 against 
 Record verbatim from current `main`:
 
 ```js
-// runInterventionStack signature — to fill in
-function runInterventionStack(baselineConfig, interventions, runEngine, libraryData) { ... }
-
-// fresh intervention object — to fill in
-function fresh() {
-  return { id, label, theme, enabled, patches: [], schema_version }
+// runInterventionStack — verified from instantCalc.js / interventionsEngine.js L365 (HEAD: 128424c)
+export function runInterventionStack(baselineConfig, interventions, runEngine, libraryData) {
+  // builds rolling configs (disabled rows don't advance), runs engine per
+  // config, returns { baseline, interventions: [{ id, enabled, result,
+  // marginal_delta, cumulative_delta }] }
 }
+
+// fresh intervention object — verified in Part 2 audit pass.
 ```
+
+**Hook consumes** `runInterventionStack` with a singleton list per intervention. The first element of `runInterventionStack(baseline, [x], …).interventions` is the isolated row for `x`; that row's `cumulative_delta` is the standalone delta from baseline.
 
 ## §3 Per-run engine cost on Bridgewater (Part 1)
 
