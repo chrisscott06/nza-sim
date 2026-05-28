@@ -2496,7 +2496,16 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
 
   // Match State 1 v3 production tuning
   const TUNE_SOLAR_RAD_FRAC = 0.30
-  const TUNE_INTERNAL_MASS_J_M2 = 250_000
+  // Brief 69 Part 2 (2026-05-28): thermal-mass override hook for the
+  // 3-mass office sensitivity test (Decision 2). Default 250_000 J/K·m²
+  // (medium, per register G3 — single hardcoded value pending the
+  // building-type-driven mass UI brief). Tests pass
+  // `opts.tuning.internal_mass_J_per_K_per_m2` to measure the
+  // setpoint-independence coupling at lightweight (50_000) and
+  // heavyweight (450_000) without persisting any change.
+  const TUNE_INTERNAL_MASS_J_M2 = (opts?.tuning && Number.isFinite(opts.tuning.internal_mass_J_per_K_per_m2))
+    ? opts.tuning.internal_mass_J_per_K_per_m2
+    : 250_000
   const TUNE_GLAZ_INSIDE_ABS = 0.07
 
   // Glazing U + g, shading factors (same as State 1)
@@ -3059,8 +3068,52 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       (UA_glaz + UA_leakage + UA_permanent + UA_mech_vent_h) * T_out +
       C_air_per_dt * T_air +
       Q_to_zone_air
-    T_air = (Math.abs(C_coef) > 1e-9) ? (-D_coef / C_coef) : T_out
+    // Free-floating zone air temperature (implicit-Euler solve, no
+    // conditioning feedback). Brief 67 calls this T_zone_free.
+    const T_air_free = (Math.abs(C_coef) > 1e-9) ? (-D_coef / C_coef) : T_out
 
+    // Brief 69 Part 2 (2026-05-28): float-gated demand. Replace the Brief 64
+    // unconditional clamp with a dead-band gate on the free-floating zone
+    // temperature. The energy formulas (at-setpoint heat balance) are
+    // unchanged; what changes is WHEN they apply:
+    //
+    //   • T_zone_free <  effectiveLowerC → heating fires; zone held at lower
+    //   • T_zone_free >  effectiveUpperC → cooling fires; zone held at upper
+    //   • effectiveLowerC ≤ T_zone_free ≤ effectiveUpperC → dead band
+    //                                       (neither system runs)
+    //
+    // When conditioning fires, the zone ends the hour AT the setpoint, so
+    // T_air carries forward at the setpoint into the next hour's free-float
+    // solve. This makes heating and cooling genuinely independent: each is
+    // gated on the actual (tracked) zone temperature, not on a shared
+    // balance equation. The Part 1 mech-vent injection into C_coef means
+    // toggling ventilation now physically changes T_zone_free and thus
+    // changes which hours cross the dead-band thresholds.
+    //
+    // The free_running control_strategy preserves the pre-Brief-67 behaviour
+    // (T_air = T_air_free always, no clamping, no conditioning) for back-
+    // compat and overheating-risk display.
+    let conditioning_mode = 'dead_band'   // 'heating' | 'cooling' | 'dead_band'
+    if (control_strategy === 'active_setpoint') {
+      if (T_air_free < effectiveLowerC) {
+        T_air = effectiveLowerC
+        conditioning_mode = 'heating'
+      } else if (T_air_free > effectiveUpperC) {
+        T_air = effectiveUpperC
+        conditioning_mode = 'cooling'
+      } else {
+        T_air = T_air_free
+        // conditioning_mode stays 'dead_band'
+      }
+    } else {
+      // free_running: zone floats freely, no conditioning
+      T_air = T_air_free
+    }
+
+    // Wall states reflect the EFFECTIVE air temperature (clamped to setpoint
+    // when conditioning fires; free-float otherwise). Propagates thermal-mass
+    // dynamics correctly: a conditioned hour resets the wall-surface
+    // temperatures' coupling reference.
     TS_wall  = combineLinearizedStep(stepWall,  T_air)
     TS_roof  = combineLinearizedStep(stepRoof,  T_air)
     TS_floor = combineLinearizedStep(stepFloor, T_air)
@@ -3431,6 +3484,78 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
         beneficial_h_Wh = 0
         cooling_solar_h_Wh = 0
         shoulder_h_Wh = Q_solar_through_glazing_Wh
+      }
+
+      // Brief 69 Part 2 (2026-05-28): float-gated demand REPLACES the Brief
+      // 64 at-setpoint balance formulas above with demand derived directly
+      // from the implicit-Euler C_coef.
+      //
+      // Rationale (see brief §1 + register Decision 1): the Brief 64 cooling
+      // formula references hourly_heat_loss_Wh which is evaluated against
+      // T_heat (the heating setpoint). That creates a structural coupling —
+      // change T_heat and cooling shifts — which the brief's setpoint-
+      // independence test catches.
+      //
+      // The implicit-Euler equation already solves the air-node energy
+      // balance:
+      //   C_coef × T_air^{n+1} + D_coef = 0   ⇒   T_air_free = -D_coef / C_coef
+      //
+      // When a conditioning system holds the zone at T_setpoint instead of
+      // letting it reach T_air_free, the system supplies/removes energy
+      // Q_cond such that:
+      //   C_coef × T_setpoint + D_coef + Q_cond_W = 0
+      //   Q_cond_W = -C_coef × (T_setpoint - T_air_free)
+      //
+      // C_coef is negative (built from negative loss terms — and now
+      // includes mech-vent UA per Part 1). So:
+      //   • T_setpoint > T_air_free (heating): Q_cond_W > 0   ✓
+      //   • T_setpoint < T_air_free (cooling): Q_cond_W < 0  → magnitude = -Q_cond_W
+      //
+      // The formula depends ONLY on T_air_free (the float), T_setpoint (the
+      // relevant one), and C_coef (UA values + thermal capacity —
+      // independent of either setpoint). Cooling becomes genuinely
+      // independent of heating-setpoint changes (the headline test).
+      //
+      // Conservation: re-attribute gain buckets to match the conditioning
+      // mode (dead-band → shoulder; heating mode → drop cooling-side
+      // buckets; cooling mode → drop heating-side buckets).
+      if (conditioning_mode === 'dead_band') {
+        heating_Wh_at_setpoint = 0
+        cooling_Wh_at_setpoint = 0
+        gains_offset_h_Wh = 0
+        gains_cooling_h_Wh = 0
+        gains_shoulder_h_Wh = Q_internal_gains_Wh
+        beneficial_h_Wh = 0
+        cooling_solar_h_Wh = 0
+        shoulder_h_Wh = Q_solar_through_glazing_Wh
+      } else if (conditioning_mode === 'heating') {
+        // Implicit-Euler-derived heating energy. C_coef is negative; the gap
+        // (effectiveLowerC - T_air_free) is positive when heating fires, so
+        // -C_coef × gap is positive (heating power for the hour).
+        heating_Wh_at_setpoint = Math.max(0, -C_coef * (effectiveLowerC - T_air_free))
+        cooling_Wh_at_setpoint = 0
+        if (gains_cooling_h_Wh > 0) {
+          gains_shoulder_h_Wh += gains_cooling_h_Wh
+          gains_cooling_h_Wh = 0
+        }
+        if (cooling_solar_h_Wh > 0) {
+          shoulder_h_Wh += cooling_solar_h_Wh
+          cooling_solar_h_Wh = 0
+        }
+      } else if (conditioning_mode === 'cooling') {
+        heating_Wh_at_setpoint = 0
+        // Implicit-Euler-derived cooling energy. C_coef is negative; the gap
+        // (T_air_free - effectiveUpperC) is positive when cooling fires, so
+        // -C_coef × gap is positive (cooling magnitude for the hour).
+        cooling_Wh_at_setpoint = Math.max(0, -C_coef * (T_air_free - effectiveUpperC))
+        if (gains_offset_h_Wh > 0) {
+          gains_shoulder_h_Wh += gains_offset_h_Wh
+          gains_offset_h_Wh = 0
+        }
+        if (beneficial_h_Wh > 0) {
+          shoulder_h_Wh += beneficial_h_Wh
+          beneficial_h_Wh = 0
+        }
       }
     } else if (H_weather > 0) {
       // FREE-RUNNING (pre-Brief-64 weather-gated branch — PRESERVED EXACTLY).
@@ -6155,6 +6280,11 @@ function _calculateInstantBaseline(building = {}, constructions = {}, systems = 
       withMode(building, mode),
       constructions, libraryData, weatherData, hourlySolar,
       options.comfortBand,   // Brief 58 A2: required, validated at entry
+      // Brief 69 Part 2 (2026-05-28): forward `tuning` (currently used by
+      // the 3-mass office sensitivity test to override internal mass; no
+      // production caller passes it). Other opts also forwarded so caller-
+      // passed setpointOverride, etc., keep their existing semantics.
+      { tuning: options.tuning },
     )
   }
 
