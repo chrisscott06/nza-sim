@@ -23,6 +23,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts'
+import ChartExportCard from '../../shared/ChartExportCard.jsx'
 
 const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -107,6 +108,7 @@ export default function ModelComparisonChart({
 
       {/* Chart */}
       <div className="bg-light-grey/15 rounded-lg p-3">
+        <ChartExportCard noChrome title="Actual vs modelled monthly energy">
         <p className="text-xxs font-semibold text-mid-grey uppercase tracking-wide mb-2">
           Actual vs modelled monthly energy
         </p>
@@ -137,6 +139,7 @@ export default function ModelComparisonChart({
             )}
           </ComposedChart>
         </ResponsiveContainer>
+        </ChartExportCard>
       </div>
 
       {/* Explanatory panel */}

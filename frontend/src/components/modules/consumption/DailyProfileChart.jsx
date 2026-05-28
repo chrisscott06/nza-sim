@@ -17,6 +17,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { RefreshCw } from 'lucide-react'
+import ChartExportCard from '../../shared/ChartExportCard.jsx'
 
 const DAY_MS = 86400000
 
@@ -104,6 +105,7 @@ export default function DailyProfileChart({ datasetId, projectId, fuelType = 'el
 
       {/* Chart */}
       <div className="bg-light-grey/15 rounded-lg p-3">
+        <ChartExportCard noChrome title={`Daily consumption — ${isElec ? 'electricity' : 'gas'}`}>
         <p className="text-xxs font-semibold text-mid-grey uppercase tracking-wide mb-2">
           Daily consumption — {isElec ? 'electricity' : 'gas'}
         </p>
@@ -162,6 +164,7 @@ export default function DailyProfileChart({ datasetId, projectId, fuelType = 'el
             </Brush>
           </AreaChart>
         </ResponsiveContainer>
+        </ChartExportCard>
       </div>
     </div>
   )

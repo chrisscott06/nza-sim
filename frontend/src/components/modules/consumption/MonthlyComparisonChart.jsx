@@ -22,6 +22,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { CheckCircle2, AlertTriangle, AlertOctagon } from 'lucide-react'
+import ChartExportCard from '../../shared/ChartExportCard.jsx'
 
 // ── CRREM 1.5°C pathway — UK Hotel EUI targets (CRREM V2.07, real values) ─────
 const CRREM_EUI = {
@@ -149,6 +150,7 @@ export default function MonthlyComparisonChart({ monthly = [], fuelType = 'elect
 
       {/* Chart */}
       <div className="bg-light-grey/15 rounded-lg p-3">
+        <ChartExportCard noChrome title={`Monthly consumption — ${yearForCrrem}`}>
         <p className="text-xxs font-semibold text-mid-grey uppercase tracking-wide mb-2">
           Monthly consumption — {yearForCrrem}
           {gia > 0 && <span className="font-normal ml-1">(GIA {Math.round(gia).toLocaleString()} m²)</span>}
@@ -195,6 +197,7 @@ export default function MonthlyComparisonChart({ monthly = [], fuelType = 'elect
             )}
           </ComposedChart>
         </ResponsiveContainer>
+        </ChartExportCard>
       </div>
 
       {/* Footer note */}

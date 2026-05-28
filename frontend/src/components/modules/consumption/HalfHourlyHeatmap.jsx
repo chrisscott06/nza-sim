@@ -14,6 +14,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { RefreshCw } from 'lucide-react'
+import ChartExportCard from '../../shared/ChartExportCard.jsx'
 
 const CHUNK_DAYS = 90 // how many days to fetch at a time
 
@@ -162,6 +163,7 @@ export default function HalfHourlyHeatmap({
 
       {/* Heatmap + Y-axis wrapper */}
       <div className="bg-light-grey/15 rounded-lg p-3">
+        <ChartExportCard noChrome title="Load heatmap — time of day vs date">
         <p className="text-xxs font-semibold text-mid-grey uppercase tracking-wide mb-2">
           Load heatmap — time of day vs date
         </p>
@@ -222,6 +224,7 @@ export default function HalfHourlyHeatmap({
           <span className="ml-2 w-4 h-2 rounded" style={{ backgroundColor: '#F1F5F9', border: '1px solid #E6E6E6', display: 'inline-block' }} />
           <span className="text-xxs text-mid-grey">Missing</span>
         </div>
+        </ChartExportCard>
       </div>
     </div>
   )
