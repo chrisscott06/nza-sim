@@ -3021,19 +3021,42 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     const UA_roof_eff  = stepRoof.U_eff  * roof_area
     const UA_floor_eff = stepFloor.U_eff * ground_area
 
+    // Brief 69 Part 1 (Option α, 2026-05-28): mechanical-ventilation
+    // conductance into the implicit-Euler air-node balance. Pre-fix,
+    // C_coef included fabric + glazing + infiltration + permanent-vent
+    // UA but NOT mech-vent. That meant turning ventilation on/off had
+    // no effect on T_zone_free — for Bridgewater (ventilation-dominated)
+    // this silenced the sealed-building effect entirely.
+    //
+    // The per-hour effective UA is the same value the existing mech-
+    // vent loss loop uses (instantCalc.js:3197) — reuse it here so there
+    // is ONE conductance, in ONE place. Each system contributes:
+    //   • zero if disabled (Brief 68 Part C v25 AND v40 enable-gate
+    //     already applied upstream to ventSystems[vi].enabled)
+    //   • ventUA[vi]        (W/K, post-HRE recovery) when bypass is
+    //                       closed
+    //   • ventUA_bypass[vi] (W/K, no HRE) when bypass damper is open
+    //                       (summer free-cooling gate fires)
+    let UA_mech_vent_h = 0
+    for (let vi = 0; vi < ventSystems.length; vi++) {
+      if (ventSystems[vi]?.enabled === false) continue
+      const bypass_h_for_C = ventSystems[vi].summer_bypass && bypass_gate_h
+      UA_mech_vent_h += bypass_h_for_C ? ventUA_bypass[vi] : ventUA[vi]
+    }
+
     // Zone air implicit Euler balance
     const C_air_per_dt = C_air_total_J / dt
     const C_coef =
       UA_wall_eff  * (stepWall.b_inside_node  - 1) +
       UA_roof_eff  * (stepRoof.b_inside_node  - 1) +
       UA_floor_eff * (stepFloor.b_inside_node - 1) -
-      UA_glaz - UA_leakage - UA_permanent -
+      UA_glaz - UA_leakage - UA_permanent - UA_mech_vent_h -
       C_air_per_dt
     const D_coef =
       UA_wall_eff  * stepWall.a_inside_node +
       UA_roof_eff  * stepRoof.a_inside_node +
       UA_floor_eff * stepFloor.a_inside_node +
-      (UA_glaz + UA_leakage + UA_permanent) * T_out +
+      (UA_glaz + UA_leakage + UA_permanent + UA_mech_vent_h) * T_out +
       C_air_per_dt * T_air +
       Q_to_zone_air
     T_air = (Math.abs(C_coef) > 1e-9) ? (-D_coef / C_coef) : T_out
