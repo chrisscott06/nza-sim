@@ -1,5 +1,41 @@
 # NZA SIMULATE — Status
 
+> **STATUS.md is known stale** — last full reconcile was Brief 64. Briefs 65–71 landed without updating this file end-to-end; full reconciliation is the first commit of Brief 72 (per its BEFORE-DOING-ANYTHING). The Brief 71 entry below is the only Brief-65+ section here; treat the rest of the file as a historical Brief-64-and-earlier snapshot. Authoritative sources for current state: `git log`, `docs/briefs/active/`, `docs/briefs/archive/`.
+
+---
+
+## ✅ Brief 71 — LANDED (browser walkthrough PENDING Chris) 2026-05-28
+
+**Interventions: Isolated vs Combined evaluation + theme grouping.** New right-pane "Isolated" view that runs each intervention alone against the unmodified baseline (reusing `runInterventionStack` with singleton lists — no engine edit). Standalone EUI deltas with sortable bars (saving / name / theme) and a group-by-theme toggle with subtotals. Theme authoring combobox in the editor footer with datalist autocomplete from existing tags.
+
+### Parts landed
+
+| Part | Commit | Deliverable |
+|---|---|---|
+| 1 | `b2a1ea5` | `useIsolatedResults` hook (engine consumer; one extra `runInterventionStack` singleton call per intervention; falsifiability #1 console assertion baked in) |
+| 2 | `bb2ceb1` | `IsolatedView.jsx` — centre-anchored bidirectional bars, sort + group-by-theme, isolated≠marginal caption |
+| 3 | `a757902` | Register in `VisualiserHost` switcher adjacent to Waterfall (SplitSquareHorizontal icon); thread `baselineConfig` + `runEngine` + handlers from `InterventionsModule` |
+| Brief landing | `128424c` | Renumbered from provisional 61 to 71; carry-over note for the deferred door-on-Systems bug (now Brief 73) |
+| 4 | `e337945` | Theme combobox in `EditorFooter` (datalist-backed free-text); `localTheme` wired through editor popout; Isolated caption rewritten to point at the cumulative-vs-isolated semantic gap |
+
+### Falsifiability checks
+
+- **#1 — isolated first-enabled row == its combined-stack marginal_delta** (must hold by construction): hook prints `[Brief 71 falsifiability #1 PASS]` or `FAIL` to the browser console on every render with `stackResult`. Chris's first-in-stack browser test at walkthrough confirms.
+- **#2 — Combined surface byte-equal**: Brief 71 is additive only (new files + new props + new useMemo); existing Waterfall / Before-after / Heat balance / Calc trail / Breakdown unchanged.
+
+### Carry-overs surfaced this session (deferred to their own briefs)
+
+- **Brief 72** (Chris-architect-authored, lands separately) — auxiliary loads + gain_fraction + DHW load-shape UI.
+- **Brief 73** — operable door added in Operations renders correctly there but reports `heat_loss_kwh = 0` on Systems Heat Balance (mode='full' → State 3 → internal State 2 path). Engine surfaces the entry (`natvent_count = 1`) but the per-hour accumulator never increments. Three diagnosis angles tried this session, root cause not pinpointed — needs dedicated brief. See bottom of `docs/briefs/active/71_interventions_isolated_vs_combined.md` for the trace summary.
+- **Brief 74 (conditional)** — Isolated-view value factor-of-2 vs Calc Trail for mid-stack interventions. Documented diagnosis at `docs/audit/71_*.md §6` is that this is cumulative-vs-isolated semantics, not a math bug (caption rewording in Part 4 addresses the UX side). If Chris's first-in-stack browser test shows the two views agree there, Brief 74 stays unqueued. If they disagree, this becomes engine-side instrumentation work.
+
+### Pending at close
+
+- Browser walkthrough of the 12-item checklist in `docs/briefs/active/71_*.md` "Walkthrough checklist" — Chris runs locally; no engine work required.
+- Single push: `git push origin main` after this commit lands.
+
+---
+
 ## 🚀 Brief 64 — BUILT (walkthrough PENDING Chris) 2026-05-27
 
 **Cooling clamp + visible control strategy.** Replaces the weather-direction-bucketed three-way demand branch in `_calculateState2` with independent setpoint clamps (cooling clamp gains-inclusive every hour; heating clamp formula unchanged). Adds `control_strategy` field as an explicit visible choice — `'active_setpoint'` (new default, clamp) vs `'free_running'` (preserved pre-Brief-64 weather-gated branch). Three commits.
