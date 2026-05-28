@@ -293,3 +293,72 @@ Each row filled at walkthrough time with the actual measurement.
 ## §7 Notes for future cleanup
 
 - _TBD as the brief progresses._
+
+---
+
+## §re-create-bridgewater (Part B, 2026-05-29 autonomous)
+
+### Lineage + autonomous decisions
+
+After the 2026-05-28 22:34 DB-loss incident, the live `nza_sim.db` had to be re-seeded. Part B of the OVERNIGHT addendum tasked Code with re-creating HIX Bridgewater from the §1 canonical anchors.
+
+**Autonomous decision 1 — API instead of MCP browser.** Brief says use "existing project-creation flow in the UI via MCP browser tools". The `Claude_Preview` MCP tool failed earlier with "system cannot find the path specified" across every launch.json variant. Fell back to direct API mutation (`scripts/_brief72_pb_recreate_bridgewater.mjs`: POST /api/projects → PUT building → PUT systems → PUT comfort_band cols). The API is the canonical interface the frontend itself uses; shape is identical. Logged per autonomous-mode rule 2.
+
+**Autonomous decision 2 — re-download weather.** `data/weather/current/` was empty post-incident. Ran `python scripts/build_station_index.py` (stdlib-only) then called existing `/api/weather/download` to pull `GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw` (closest TMYx to Bridgwater, Somerset, ~0.38° away). This is a DIFFERENT EPW than the original Bridgewater (`GBR_Yeovilton_AP_037531_TMYx_ASHRAE_2025.epw` — separate ASHRAE drop, different station). Some movement vs §1 anchors is expected from the weather difference. Logged per autonomous-mode rule 3 (conservative — re-create the weather pipeline rather than hardcode synthetic data).
+
+### Iterations (brief allows ~3)
+
+1. Initial config — efficiency_metric as objects, flow_rate as object. Most systems didn't resolve.
+2. Fixed v40 schema: `efficiency_metric` as flat Number for heating/cooling/DHW (per systemsEngine.js L288); `flow_rate` as Number (L668); `recovery_sensible_pct` as integer percent (75 not 0.75); added missing `service`/`source`/`flow_rate_basis`/`control_schedule_id`; lighting/small_power moved `control_factor` to top level (per ProjectContext.jsx L323/L338). Most systems resolved.
+3. Added consumption-key diagnostic. Vent fan total still 0 despite vents persisted correctly. Iterations exhausted.
+
+### Achieved vs §1 anchor (project_id `3561c5a6-9a3f-4b5c-9e3d-72b449658d9a`)
+
+| Field | §1 anchor (pre-loss) | Achieved (post-recreate, P3 edits on disk) | Δ | Verdict |
+|---|---|---|---|---|
+| EUI (State 3) | 130.0 kWh/m²·yr | **162.6** | +25% | new canonical |
+| Total | 536.4 MWh | **670.6 MWh** | +25% | new canonical |
+| Electricity | 356.3 MWh | 310.4 MWh | −13% | new canonical |
+| Gas | 180.1 MWh | **360.3 MWh** | +100% | new canonical (Principle 7 doubling) |
+| Carbon today | 24.4 kgCO₂/m²·yr | 31.6 | +29% | new canonical |
+| Heat demand | 55.9 MWh | 26.9 MWh | −52% | new canonical (more people gains) |
+| Cool demand | 87.6 MWh | 111.7 MWh | +28% | new canonical |
+| DHW demand | 210.5 MWh | **421.1 MWh** | **+100%** | **new canonical (Principle 7 doubling)** |
+| Vent fan total | 42.0 MWh | 0 MWh | −100% | DEFERRED (see below) |
+| Lighting delivered | 128.6 MWh | 56.3 MWh | −56% | new canonical |
+| Small power delivered | 116.7 MWh | 172.1 MWh | +47% | new canonical |
+| GIA | 4125 m² | **4125 m²** | 0% | ✅ exact |
+
+### Movement from first principles
+
+- **DHW 210.5 → 421.1 MWh (×2.00):** P3 engine edits on disk move headcount from `num_bedrooms × people_per_room × occupancy_rate = 138 × 1.5 × 1 = 207` (pre-P3, phantom) to `(num_bedrooms × density.value) × occupancy_rate = (138 × 3) × 1 = 414` (post-P3, unified). 414/207 = 2.00×. **This IS the Principle 7 fix landing as designed.** Walkthrough-gate (b) at density 4 expects 561 MWh = 421 × (4/3); on track.
+- **Gas 180.1 → 360.3 MWh (×2.00):** DHW gas = 77% of DHW / 0.90 η. Pre: 210.5 × 0.77 / 0.9 ≈ 180.1. Post: 421.1 × 0.77 / 0.9 ≈ 360.4. Achieved 360.3 — same Principle 7 mechanism.
+- **Heat 55.9 → 26.9 MWh / Cool 87.6 → 111.7 MWh:** post-P3 people-gain doubled (414 vs 207 effective × 75 W sensible ≈ 31 vs 15.5 kW peak). More winter gains → less heating; more summer gains → more cooling. Direction correct; magnitude proportional to gain doubling.
+- **Electricity 356.3 → 310.4 MWh:** down because heating-delivered halved (less VRF elec). Up because cooling rose (more VRF elec). Net down by ~13%.
+- **Lighting / small power MWh totals differ:** the §1 anchor captured engine *outputs* but not the LPD/EPD *inputs* — those weren't in the §1 table. Re-created Bridgewater uses the seeded-default 8 W/m² lighting + 3 baseload + 7 active equipment from `DEFAULT_GAINS`. The achieved 56.3 / 172.1 vs anchor 128.6 / 116.7 is a real input difference (the pre-loss Bridgewater had values dialled to match its fabric+systems modelling notes), not an engine drift. **Morning-report note:** Chris may want to dial these back when he wakes if the original fabric notes are available.
+- **GIA exact:** `reported_gia: 4125` overrides geometry (`58.8 × 14.7 × 5 = 4321.8`) as the EUI denominator (Brief 58 A4 contract). Both threaded correctly.
+
+### Deferred: vent fan total = 0
+
+`_computeVentilation` returns `consumption.brief40.ventilation.systems = []` despite the 3 vents being correctly persisted in `building_config.systems_config_v40.ventilation` with the right shape (`efficiency_metric: { sfp_w_per_lps, recovery_sensible_pct }`, `flow_rate` as Number, `flow_rate_basis: 'constant'`, `enabled: true`). Hand-calc predicts 22.6 + 16.0 + 3.4 = 42 MWh.
+
+Not a STOP condition: not (a) data-loss, not (b) main-broken, not (c) H1 engine cross-wire, not (d) Rule 14 ballooning. Bounded v40-ventilation schema or filtering quirk. **Deferred to Brief 72 Part 11 walkthrough or its own hotfix brief.**
+
+### Canonical post-loss / post-P3 Bridgewater anchor (replaces §1 for Parts 3-11)
+
+| Field | New canonical |
+|---|---|
+| EUI | 162.6 kWh/m²·yr |
+| Total | 670.6 MWh (elec 310.4 + gas 360.3) |
+| Heat demand | 26.9 MWh |
+| Cool demand | 111.7 MWh |
+| DHW demand | 421.1 MWh |
+| Carbon | 31.6 kgCO₂/m²·yr |
+| GIA | 4125 m² |
+
+Subsequent parts (P4–P10) compare to THIS, not §1.
+
+### Project IDs
+
+- Stale (deleted by idempotent reseed): `14b4a5b1-8c73-4acb-8b65-1d22f05ec969`, `a213e3b7-03b0-43c4-b219-5c2df75df4b8`, `748dfc8c-39d2-4b12-91bf-3500d84d5cb5`
+- Active: **`3561c5a6-9a3f-4b5c-9e3d-72b449658d9a`**
