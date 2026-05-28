@@ -44,6 +44,7 @@
 
 import { useUISettings } from '../../../context/UISettingsContext.jsx'
 import { toDisplay, displayUnitLabel, KIND, getGia } from './visualiser/unitFmt.js'
+import ChartExportCard from '../../shared/ChartExportCard.jsx'
 
 const COLORS = {
   total:    '#94A3B8',  // slate-400 — baseline + final
@@ -207,7 +208,7 @@ export default function EUIWaterfall({ interventions = [], stackResult }) {
   const barWidth = Math.min(48, colW * 0.55)
 
   return (
-    <div className="rounded-xl border border-light-grey bg-white p-4 space-y-2">
+    <ChartExportCard noChrome title="EUI waterfall" className="rounded-xl border border-light-grey bg-white p-4 space-y-2">
       <div className="flex items-baseline justify-between">
         <p className="text-caption font-semibold text-navy">EUI waterfall</p>
         <p className="text-xxs text-mid-grey">marginal Δ per intervention · {axisLabel}</p>
@@ -330,6 +331,6 @@ export default function EUIWaterfall({ interventions = [], stackResult }) {
       <p className="text-xxs text-mid-grey italic pt-1">
         Each floating bar is one intervention's marginal contribution to the running EUI. Anchor bars at the ends show the baseline and the cumulative state after the stack. Reads directly from <code className="text-xxs">consumption.interventions[].marginal_delta</code> per Brief 41 Part 2.
       </p>
-    </div>
+    </ChartExportCard>
   )
 }

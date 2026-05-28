@@ -29,6 +29,7 @@ import { useMemo, useState } from 'react'
 import EUIWaterfall from './EUIWaterfall.jsx'
 import { useUISettings } from '../../../context/UISettingsContext.jsx'
 import { toDisplay, KIND, getGia } from './visualiser/unitFmt.js'
+import ChartExportCard from '../../shared/ChartExportCard.jsx'
 
 const INTERVENTIONS_ACCENT = '#E84393'
 
@@ -278,7 +279,7 @@ export default function ComparisonView({
       </div>
 
       {/* Paired heat-balance bars */}
-      <div className="rounded-xl border border-light-grey bg-white px-4 py-4 space-y-3">
+      <ChartExportCard noChrome title="Paired heat balance — baseline vs cumulative" className="rounded-xl border border-light-grey bg-white px-4 py-4 space-y-3">
         <div className="flex items-center justify-between">
           <p className="text-caption font-semibold text-navy">Paired heat balance</p>
           <div className="flex items-center gap-3 text-xxs text-mid-grey">
@@ -290,7 +291,7 @@ export default function ComparisonView({
         <PairedBar label="Cooling demand" baselineValue={baselineMetrics?.cool} targetValue={targetMetrics?.cool} unit={labelAbs} />
         <PairedBar label="Electricity" baselineValue={baselineMetrics?.elec} targetValue={targetMetrics?.elec} unit={labelAbs} />
         <PairedBar label="Gas" baselineValue={baselineMetrics?.gas} targetValue={targetMetrics?.gas} unit={labelAbs} />
-      </div>
+      </ChartExportCard>
 
       {/* Delta table */}
       <div className="rounded-xl border border-light-grey bg-white overflow-hidden">

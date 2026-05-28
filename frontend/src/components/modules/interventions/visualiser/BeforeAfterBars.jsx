@@ -22,6 +22,7 @@
 
 import { useUISettings } from '../../../../context/UISettingsContext.jsx'
 import { toDisplay, KIND, getGia } from './unitFmt.js'
+import ChartExportCard from '../../../shared/ChartExportCard.jsx'
 
 const INTERVENTIONS_ACCENT = '#E84393'
 
@@ -92,7 +93,7 @@ function MetricBars({ label, unit, baseline, current }) {
   const pct = fmtPct(baseline, current)
 
   return (
-    <div className="rounded-lg border border-light-grey bg-white p-4 space-y-3">
+    <ChartExportCard noChrome title={`Before vs after — ${label}`} className="rounded-lg border border-light-grey bg-white p-4 space-y-3">
       <div className="flex items-baseline justify-between">
         <span className="text-xxs uppercase tracking-wider font-semibold text-mid-grey">{label}</span>
         <span className={`text-caption font-semibold tabular-nums ${
@@ -134,7 +135,7 @@ function MetricBars({ label, unit, baseline, current }) {
           />
         </div>
       </div>
-    </div>
+    </ChartExportCard>
   )
 }
 
