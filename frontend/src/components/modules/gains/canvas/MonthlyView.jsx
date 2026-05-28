@@ -14,6 +14,7 @@ import ChartTotalsBadge from '../../../shared/ChartTotalsBadge.jsx'
 // Chris UX request (2026-05-17): diverging-bars chart — fixed middle axis
 // with gains UP and losses DOWN. Same component as Building / Operation.
 import DivergingMonthlyChart from '../../../shared/DivergingMonthlyChart.jsx'
+import ChartExportCard from '../../../shared/ChartExportCard.jsx'
 // Brief 36 Part 2: pull gain colours from the canonical module palette so
 // People / Lighting / Equipment match the Sankey, Heat Balance, Summary,
 // LoadShape views uniformly. Was hardcoded #7C3AED / #C4B5FD / #A78BFA;
@@ -103,19 +104,21 @@ export default function MonthlyView() {
         {/* Chris UX request (2026-05-17): diverging-bars chart with solar
             now included (was missing in the previous Monthly view). */}
         <div className="mt-4">
-          <DivergingMonthlyChart
-            gainsStacks={[
-              { key: 'solar',     label: `Solar (${grandSolar.toLocaleString()} kWh)`,           color: '#F59E0B', values: solarM },
-              { key: 'people',    label: `People (${totalGain(peopleM).toLocaleString()} kWh)`, color: GAIN_COLOURS.occupancy, values: peopleM },
-              { key: 'lighting',  label: `Lighting (${totalGain(lightingM).toLocaleString()} kWh)`, color: GAIN_COLOURS.lighting, values: lightingM },
-              { key: 'equipment', label: `Equipment (${totalGain(equipmentM).toLocaleString()} kWh)`, color: GAIN_COLOURS.equipment, values: equipmentM },
-            ]}
-            lossesStacks={[
-              { key: 'fabric',    label: `Fabric loss (${grandLoss.toLocaleString()} kWh)`,    color: '#475569', values: lossMonthly },
-            ]}
-            height={320}
-            unit="kWh"
-          />
+          <ChartExportCard title="Monthly gains vs losses">
+            <DivergingMonthlyChart
+              gainsStacks={[
+                { key: 'solar',     label: `Solar (${grandSolar.toLocaleString()} kWh)`,           color: '#F59E0B', values: solarM },
+                { key: 'people',    label: `People (${totalGain(peopleM).toLocaleString()} kWh)`, color: GAIN_COLOURS.occupancy, values: peopleM },
+                { key: 'lighting',  label: `Lighting (${totalGain(lightingM).toLocaleString()} kWh)`, color: GAIN_COLOURS.lighting, values: lightingM },
+                { key: 'equipment', label: `Equipment (${totalGain(equipmentM).toLocaleString()} kWh)`, color: GAIN_COLOURS.equipment, values: equipmentM },
+              ]}
+              lossesStacks={[
+                { key: 'fabric',    label: `Fabric loss (${grandLoss.toLocaleString()} kWh)`,    color: '#475569', values: lossMonthly },
+              ]}
+              height={320}
+              unit="kWh"
+            />
+          </ChartExportCard>
         </div>
       </div>
     </div>

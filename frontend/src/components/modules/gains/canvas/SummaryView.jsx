@@ -29,6 +29,7 @@ import EnginePill from '../../../shared/EnginePill.jsx'
 import ChartTotalsBadge from '../../../shared/ChartTotalsBadge.jsx'
 // Brief 28-IM-Polish POL-M3 §7.2: cross-chart reconciliation row.
 import ReconciliationRow from '../../../shared/ReconciliationRow.jsx'
+import ChartExportCard from '../../../shared/ChartExportCard.jsx'
 
 const HEATING_COLOUR = '#DC2626'
 const COOLING_COLOUR = '#00AEEF'
@@ -347,42 +348,46 @@ export default function SummaryView() {
 
       {/* ── Gains vs Demand stacked bar (Brief 28a Part 2 sub-step 3) ── */}
       <div className="bg-white border border-light-grey rounded p-5">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-xxs uppercase tracking-wider text-mid-grey">Gains vs demand</div>
-          <div className="flex items-center bg-off-white rounded-lg p-0.5 text-xxs">
-            <button
-              onClick={() => setUnitPersisted('kwh')}
-              className={`px-2 py-0.5 rounded transition-colors ${unit === 'kwh' ? 'bg-white text-navy font-medium shadow-sm' : 'text-mid-grey hover:text-navy'}`}>
-              kWh
-            </button>
-            <button
-              onClick={() => setUnitPersisted('kwh_per_m2')}
-              className={`px-2 py-0.5 rounded transition-colors ${unit === 'kwh_per_m2' ? 'bg-white text-navy font-medium shadow-sm' : 'text-mid-grey hover:text-navy'}`}>
-              kWh/m²·yr
-            </button>
+        <ChartExportCard noChrome title="Gains vs demand">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xxs uppercase tracking-wider text-mid-grey">Gains vs demand</div>
+            <div className="flex items-center bg-off-white rounded-lg p-0.5 text-xxs">
+              <button
+                onClick={() => setUnitPersisted('kwh')}
+                className={`px-2 py-0.5 rounded transition-colors ${unit === 'kwh' ? 'bg-white text-navy font-medium shadow-sm' : 'text-mid-grey hover:text-navy'}`}>
+                kWh
+              </button>
+              <button
+                onClick={() => setUnitPersisted('kwh_per_m2')}
+                className={`px-2 py-0.5 rounded transition-colors ${unit === 'kwh_per_m2' ? 'bg-white text-navy font-medium shadow-sm' : 'text-mid-grey hover:text-navy'}`}>
+                kWh/m²·yr
+              </button>
+            </div>
           </div>
-        </div>
-        <GainsVsDemandBar
-          peopleKwh={peopleKwh}
-          lightingKwh={lightingKwh}
-          equipmentKwh={equipmentKwh}
-          heatingKwh={heatingKwh}
-          coolingKwh={coolingKwh}
-          gia={gia}
-          unit={unit}
-        />
+          <GainsVsDemandBar
+            peopleKwh={peopleKwh}
+            lightingKwh={lightingKwh}
+            equipmentKwh={equipmentKwh}
+            heatingKwh={heatingKwh}
+            coolingKwh={coolingKwh}
+            gia={gia}
+            unit={unit}
+          />
+        </ChartExportCard>
       </div>
 
       {/* ── Demand paired bars (State 1 vs State 2) ─────────────────── */}
       <div className="bg-white border border-light-grey rounded p-5">
-        <BarPair label="Heating demand"
-                 state1Value={s1d.heating_demand_mwh}
-                 state2Value={s2d.heating_demand_mwh}
-                 accent={HEATING_COLOUR} />
-        <BarPair label="Cooling demand"
-                 state1Value={s1d.cooling_demand_mwh}
-                 state2Value={s2d.cooling_demand_mwh}
-                 accent={COOLING_COLOUR} />
+        <ChartExportCard noChrome title="Heating & cooling demand — State 1 vs State 2">
+          <BarPair label="Heating demand"
+                   state1Value={s1d.heating_demand_mwh}
+                   state2Value={s2d.heating_demand_mwh}
+                   accent={HEATING_COLOUR} />
+          <BarPair label="Cooling demand"
+                   state1Value={s1d.cooling_demand_mwh}
+                   state2Value={s2d.cooling_demand_mwh}
+                   accent={COOLING_COLOUR} />
+        </ChartExportCard>
       </div>
 
       {/* ── Comfort impact (hours + free-running shift) ─────────────── */}
