@@ -69,6 +69,25 @@ function SetpointEditor({ service, serviceLevel, comfortBand, onUpdateServiceLev
   const customVal = serviceLevel?.[`${service}_setpoint_c`]
   const isCustom = mode === 'custom'
 
+  // 2026-05-28 (Chris-flag, post-Brief-69 walkthrough): cross-clamp the two
+  // setpoints so cooling can never go below heating (and vice versa). Pre-fix,
+  // sliding cooling below heating created an inverted dead band — the Brief
+  // 69 active_setpoint model handles this by giving heating priority via
+  // if/else if, but the result is both clamps fighting in alternate hours
+  // and producing huge spurious demand. The guard keeps the model in a
+  // physically sensible regime. MIN_BAND_WIDTH = 0.5°C is the same step
+  // size the sliders use — so the guard never blocks a single click.
+  const MIN_BAND_WIDTH = 0.5
+  const otherService = service === 'heating' ? 'cooling' : 'heating'
+  const otherMode = serviceLevel?.[`${otherService}_setpoint_mode`] ?? 'follow_comfort'
+  const otherCustomVal = serviceLevel?.[`${otherService}_setpoint_c`]
+  const otherComfortVal = otherService === 'heating'
+    ? (comfortBand?.lower_c ?? 21)
+    : (comfortBand?.upper_c ?? 24)
+  const otherResolved = (otherMode === 'custom' && typeof otherCustomVal === 'number')
+    ? otherCustomVal
+    : otherComfortVal
+
   const setMode = (nextMode) => {
     if (nextMode === 'follow_comfort') {
       onUpdateServiceLevel({
@@ -91,8 +110,12 @@ function SetpointEditor({ service, serviceLevel, comfortBand, onUpdateServiceLev
     })
   }
 
-  const sliderMin = service === 'heating' ? 10 : 18
-  const sliderMax = service === 'heating' ? 28 : 32
+  // Compute the effective slider range with the cross-clamp applied. Heating
+  // can't rise above (cooling - 0.5); cooling can't fall below (heating + 0.5).
+  const baseMin = service === 'heating' ? 10 : 18
+  const baseMax = service === 'heating' ? 28 : 32
+  const sliderMin = service === 'heating' ? baseMin : Math.max(baseMin, otherResolved + MIN_BAND_WIDTH)
+  const sliderMax = service === 'heating' ? Math.min(baseMax, otherResolved - MIN_BAND_WIDTH) : baseMax
   const sliderVal = isCustom && typeof customVal === 'number' ? customVal : comfortVal
 
   return (

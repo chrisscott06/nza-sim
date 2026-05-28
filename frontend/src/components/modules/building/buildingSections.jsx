@@ -982,6 +982,13 @@ export function BuildingMetadataSection({ isOpen, onToggle }) {
         </div>
 
         {/* ── Comfort band ────────────────────────────────────────── */}
+        {/* 2026-05-28 (Chris-flag, post-Brief-69 walkthrough): cross-clamped
+            so cooling can never go below heating. Brief 69's float-gated
+            demand model is sensible only when the dead band has positive
+            width; inverted setpoints produce a logical contradiction the
+            engine handles via heating-priority but with spurious paired
+            demand (heating + cooling fighting). 0.5°C minimum band width
+            matches the slider step so the guard never blocks a single click. */}
         <div className="pt-2 border-t border-light-grey/60">
           <p className="text-xxs uppercase tracking-wider text-mid-grey/70 font-semibold mb-1.5">
             Comfort band
@@ -994,7 +1001,7 @@ export function BuildingMetadataSection({ isOpen, onToggle }) {
               </div>
               <PatchedInputBadge path="comfort_band.lower_c">
                 <input
-                  type="range" min={12} max={26} step={0.5}
+                  type="range" min={12} max={Math.min(26, hi - 0.5)} step={0.5}
                   value={lo}
                   onChange={e => mutate('comfort_band.lower_c', parseFloat(e.target.value))}
                   className="w-full h-[3px] accent-navy"
@@ -1008,7 +1015,7 @@ export function BuildingMetadataSection({ isOpen, onToggle }) {
               </div>
               <PatchedInputBadge path="comfort_band.upper_c">
                 <input
-                  type="range" min={20} max={32} step={0.5}
+                  type="range" min={Math.max(20, lo + 0.5)} max={32} step={0.5}
                   value={hi}
                   onChange={e => mutate('comfort_band.upper_c', parseFloat(e.target.value))}
                   className="w-full h-[3px] accent-navy"
@@ -1018,7 +1025,8 @@ export function BuildingMetadataSection({ isOpen, onToggle }) {
             <p className="text-xxs text-mid-grey/80 italic pt-1">
               Drives heating/cooling demand against the setpoint convention.
               Wide bands (12 → 32) yield free-running behaviour; tight
-              bands force more system work.
+              bands force more system work. Cooling cannot drop below heating
+              (minimum 0.5 °C dead band).
             </p>
           </div>
         </div>
@@ -1042,7 +1050,7 @@ export function ComfortBandSection({ isOpen, onToggle }) {
           </div>
           <PatchedInputBadge path="comfort_band.lower_c">
             <input
-              type="range" min={12} max={26} step={0.5}
+              type="range" min={12} max={Math.min(26, hi - 0.5)} step={0.5}
               value={lo}
               onChange={e => mutate('comfort_band.lower_c', parseFloat(e.target.value))}
               className="w-full h-[3px] accent-navy"
@@ -1056,7 +1064,7 @@ export function ComfortBandSection({ isOpen, onToggle }) {
           </div>
           <PatchedInputBadge path="comfort_band.upper_c">
             <input
-              type="range" min={20} max={32} step={0.5}
+              type="range" min={Math.max(20, lo + 0.5)} max={32} step={0.5}
               value={hi}
               onChange={e => mutate('comfort_band.upper_c', parseFloat(e.target.value))}
               className="w-full h-[3px] accent-navy"
@@ -1066,6 +1074,7 @@ export function ComfortBandSection({ isOpen, onToggle }) {
         <p className="text-xxs text-mid-grey/80 italic pt-1">
           Drives heating/cooling demand against the setpoint convention (Brief 28k).
           Wide bands (12 → 32) yield free-running behaviour; tight bands force more system work.
+          Cooling cannot drop below heating (minimum 0.5 °C dead band).
         </p>
       </div>
     </CollapsibleSection>
