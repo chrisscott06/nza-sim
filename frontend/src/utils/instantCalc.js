@@ -3557,39 +3557,19 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
           beneficial_h_Wh = 0
         }
       }
-    } else if (H_weather > 0) {
-      // FREE-RUNNING (pre-Brief-64 weather-gated branch — PRESERVED EXACTLY).
-      // Heating-direction hour. Internal gains and solar both offset fabric
-      // loss per brief V1 spec (useful gains = all gains at each hour).
-      // Convention: gains offset first (always-on baseline), then solar
-      // fills in remaining loss. Surplus (Q + G − H) pushes into cooling.
-      const offsetters_total = Q_solar_through_glazing_Wh + Q_internal_gains_Wh
-      heating_Wh_at_setpoint = Math.max(0, hourly_heat_loss_Wh - offsetters_total)
-      cooling_Wh_at_setpoint = Math.max(0, offsetters_total - hourly_heat_loss_Wh)
-      // Solar bucketing: gains absorbed first, then solar
-      const loss_after_gains = Math.max(0, hourly_heat_loss_Wh - Q_internal_gains_Wh)
-      beneficial_h_Wh    = Math.min(Q_solar_through_glazing_Wh, loss_after_gains)
-      cooling_solar_h_Wh = Math.max(0, Q_solar_through_glazing_Wh - loss_after_gains)
-      shoulder_h_Wh = 0
-      // Gain bucketing
-      gains_offset_h_Wh   = Math.min(Q_internal_gains_Wh, hourly_heat_loss_Wh)
-      gains_cooling_h_Wh  = Math.max(0, Q_internal_gains_Wh - hourly_heat_loss_Wh)
-      gains_shoulder_h_Wh = 0
-    } else if (C_weather > 0) {
-      // FREE-RUNNING (pre-Brief-64 — PRESERVED EXACTLY).
-      // Cooling-direction hour. All solar AND all gains add to cooling load.
-      heating_Wh_at_setpoint = 0
-      cooling_Wh_at_setpoint = hourly_cool_gain_Wh + Q_solar_through_glazing_Wh + Q_internal_gains_Wh
-      beneficial_h_Wh = 0
-      cooling_solar_h_Wh = Q_solar_through_glazing_Wh
-      shoulder_h_Wh = 0
-      gains_offset_h_Wh = 0
-      gains_cooling_h_Wh = Q_internal_gains_Wh
-      gains_shoulder_h_Wh = 0
     } else {
-      // FREE-RUNNING (pre-Brief-64 — PRESERVED EXACTLY).
-      // Weather-shoulder. No demand attributed; gains and solar both go to
-      // their respective shoulder buckets.
+      // Brief 69 Part 3 (2026-05-28): free_running = zone floats with NO
+      // active conditioning (per Brief 67 §Part A definition: "free_running
+      // reports the float with no conditioning (cooling/heating = 0, zone
+      // simply floats — useful for overheating-risk display)").
+      //
+      // Replaces the pre-Brief-64 weather-bucketed branches (which produced
+      // synthetic demand off a balance equation — exactly the "demand off a
+      // balance equation" disease Brief 67 set out to retire). The zone air
+      // trajectory IS already free-floating in this branch (T_air = T_air_free
+      // higher up in this iteration) — demand is now zero to match. All
+      // solar + internal gains go to their shoulder buckets (no conditioning
+      // to "offset" or "add to").
       heating_Wh_at_setpoint = 0
       cooling_Wh_at_setpoint = 0
       beneficial_h_Wh = 0

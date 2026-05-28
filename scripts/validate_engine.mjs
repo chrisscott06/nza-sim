@@ -683,24 +683,28 @@ assertInequality('B', 'B10', 'dhw_blended_eff ≤ 10', baseline.dhw_blended_eff,
 function gainsTotalMwh(s) {
   return (s.hb_gain_solar_total_kwh + s.hb_gain_people_kwh + s.hb_gain_lighting_kwh + s.hb_gain_equipment_kwh) / 1000
 }
-assertInequality('B', 'B11', 'baseline: cooling_demand ≤ Σ gains',
-  baseline.demand_cooling_mwh, '<=', gainsTotalMwh(baseline),
-  `gains=${gainsTotalMwh(baseline).toFixed(2)} MWh`)
-assertInequality('B', 'B12', 'csp_18: cooling_demand ≤ Σ gains',
-  snaps.csp_18.demand_cooling_mwh, '<=', gainsTotalMwh(snaps.csp_18),
-  `gains=${gainsTotalMwh(snaps.csp_18).toFixed(2)} MWh`)
-assertInequality('B', 'B13', 'vent_off: cooling_demand ≤ Σ gains',
-  snaps.vent_off.demand_cooling_mwh, '<=', gainsTotalMwh(snaps.vent_off),
-  `gains=${gainsTotalMwh(snaps.vent_off).toFixed(2)} MWh — Brief 62 follow-up question`)
+// Brief 69 Part 3 (2026-05-28, register Decision 3): the `cooling_demand ≤
+// Σ gains` bound is SUPERSEDED. Under the Brief 64 unconditional clamp the
+// cooling formula was max(0, gains + cool_gain - heat_loss_at_T_heat) and
+// was naturally bounded above by Σ gains. Under Brief 69 float-gated
+// demand the cooling magnitude when conditioning fires is
+// -C_coef × (T_air_free - T_cool) — energy to offset ALL conductance
+// losses at T_cool (fabric + glazing + infiltration + mech-vent), not
+// just gains. Cooling can therefore legitimately exceed gains, especially
+// at low cooling setpoints. The new bound is non-negativity.
+assertInequality('B', 'B11', 'baseline: cooling_demand ≥ 0',
+  baseline.demand_cooling_mwh, '>=', 0)
+assertInequality('B', 'B12', 'csp_18: cooling_demand ≥ 0',
+  snaps.csp_18.demand_cooling_mwh, '>=', 0)
+assertInequality('B', 'B13', 'vent_off: cooling_demand ≥ 0',
+  snaps.vent_off.demand_cooling_mwh, '>=', 0)
 
-// B13b — THE SCREENSHOT SCENARIO. Vent off + low cooling setpoint + gain bumps.
-// On the current bucketed engine, demand could exceed gains because the
-// cooling integrand is bypassed in heating-direction hours (the weather-bucketed
-// model). Under the queued cooling-CLAMP model (Chris ratified), both setpoints
-// would be active every hour, and cooling demand would be physically bounded
-// by gains + envelope flow at the clamp temperature.
-// A FAIL here documents the cooling-clamp brief is still queued; not a
-// tolerance issue. PASS would indicate the clamp has landed.
+// B13b — THE SCREENSHOT SCENARIO. Brief 69 (2026-05-28, register Decision 3):
+// the `cooling ≤ Σ gains` bound is gone (see B11/B12/B13 above). Under the
+// new float-gated model, an extreme scenario (vent off + low cooling setpoint
+// + gain bumps) can produce huge cooling because the C_coef-derived demand
+// covers all conductance losses at the low setpoint. The bound is no longer
+// applicable; non-negativity is what remains.
 const screenshotMutate = b => {
   for (const v of (b.systems_config_v40?.ventilation ?? [])) v.enabled = false
   for (const v of (b.systems_config_v25?.ventilation ?? [])) v.enabled = false
@@ -713,9 +717,9 @@ const screenshotMutate = b => {
 const screenshotSnap = readSnap(runOnce(screenshotMutate))
 const screenshotGains = gainsTotalMwh(screenshotSnap)
 assertInequality('B', 'B13b',
-  'SCREENSHOT (vent_off + lcf=1.33 + spcf=1.48 + csp=14 + heat_off): cooling_demand ≤ Σ gains',
-  screenshotSnap.demand_cooling_mwh, '<=', screenshotGains,
-  `demand=${screenshotSnap.demand_cooling_mwh?.toFixed(1)} gains=${screenshotGains.toFixed(1)} — if FAIL: queued cooling-clamp engine brief, NOT a tolerance issue`)
+  'SCREENSHOT (vent_off + lcf=1.33 + spcf=1.48 + csp=14 + heat_off): cooling_demand ≥ 0',
+  screenshotSnap.demand_cooling_mwh, '>=', 0,
+  `demand=${screenshotSnap.demand_cooling_mwh?.toFixed(1)} gains=${screenshotGains.toFixed(1)} — Brief 69 model: cooling can far exceed gains because it covers full conductance losses at low csp`)
 
 // B13c — Cooling-setpoint sensitivity in vent-off. The bucketed model means
 // cooling_setpoint barely moves demand in vent-off configs (because the cooling
@@ -799,39 +803,45 @@ const solarSum = baseline.hb_gain_solar_n_kwh + baseline.hb_gain_solar_s_kwh + b
 assertApproxEq('B', 'B25', 'solar facade sum = solar.total_kwh',
   solarSum, baseline.hb_gain_solar_total_kwh, 0.005, 5)
 
-// Brief 64 §C — Free-running INVARIANCE.
-// With control_strategy='free_running', engine output must reproduce the
-// pre-Brief-64 numbers byte-exact. This is the regression guard that
-// proves Part A only added a code path rather than altering the old one.
-// The pre-Brief-64 anchor (Brief 63 baseline record):
-//   default csp=24 (follow_comfort): cool_demand=69.1, EUI=110.3
-//   csp=28: cool_demand=66.7 (from Brief 62 follow-up record)
-//   csp=18: cool_demand=77.9
-assertApproxEq('B', 'B26', 'free_running default (csp=24 follow_comfort): cool_demand == 69.1 (pre-Brief-64 anchor)',
-  snaps.free_run_default.demand_cooling_mwh, 69.1, 0.005, 0.5,
-  'engine output under free_running must reproduce pre-Brief-64 byte-exact')
-assertApproxEq('B', 'B27', 'free_running default: EUI == 110.3 (pre-Brief-64 anchor)',
-  snaps.free_run_default.eui_kwh_per_m2, 110.3, 0.003, 0.5)
-assertApproxEq('B', 'B28', 'free_running csp=28: cool_demand == 66.7 (pre-Brief-64 record)',
-  snaps.free_run_csp_28.demand_cooling_mwh, 66.7, 0.005, 0.5)
-assertApproxEq('B', 'B29', 'free_running csp=18: cool_demand == 77.9 (pre-Brief-64 record)',
-  snaps.free_run_csp_18.demand_cooling_mwh, 77.9, 0.005, 0.5)
+// Brief 69 Part 3 (2026-05-28, register Decision 3): free_running INVARIANCE
+// REDEFINED. Per Brief 67 §Part A and Brief 69 §Part C battery, free_running
+// is now "zone floats with no conditioning (heating = cooling = 0)" — the
+// pre-Brief-64 weather-bucketed branches that produced synthetic demand have
+// been retired (they were exactly the "demand off a balance equation"
+// disease Brief 67 set out to retire). The B26-B29 anchors to pre-Brief-64
+// numbers (69.1/110.3/66.7/77.9 MWh) are SUPERSEDED — that engine model no
+// longer exists.
+assertApproxEq('B', 'B26', 'free_running default: cool_demand == 0 (no conditioning)',
+  snaps.free_run_default.demand_cooling_mwh, 0, 0.001, 0.01,
+  'Brief 67/69: free_running = zone floats freely, no synthetic demand')
+assertApproxEq('B', 'B27', 'free_running default: heating_demand == 0',
+  snaps.free_run_default.demand_heating_mwh, 0, 0.001, 0.01)
+assertApproxEq('B', 'B28', 'free_running csp=28: cool_demand == 0',
+  snaps.free_run_csp_28.demand_cooling_mwh, 0, 0.001, 0.01)
+assertApproxEq('B', 'B29', 'free_running csp=18: cool_demand == 0',
+  snaps.free_run_csp_18.demand_cooling_mwh, 0, 0.001, 0.01)
 
-// Brief 64 §C — Clamp ≥ free_running at every csp (the clamp catches
-// hours the bucketed model bypassed). Both bounds must hold.
-assertInequality('B', 'B30', 'csp=18: clamp cool_demand ≥ free_running cool_demand',
+// Brief 69 Part 3: clamp ≥ free_running at every csp is now trivially true
+// (free_running = 0). Kept as a degenerate sanity gate — if either flips
+// negative, something has broken in the demand bookkeeping.
+assertInequality('B', 'B30', 'csp=18: active_setpoint cool_demand ≥ free_running cool_demand (= 0)',
   snaps.active_csp_18.demand_cooling_mwh, '>=', snaps.free_run_csp_18.demand_cooling_mwh,
-  `clamp catches more cooling hours than the bucketed model`)
-assertInequality('B', 'B31', 'baseline (csp=24 follow_comfort): clamp cool_demand ≥ free_running cool_demand',
+  `free_running = 0 by Brief 67/69 definition; active_setpoint integrates dead-band-gated demand`)
+assertInequality('B', 'B31', 'baseline: active_setpoint cool_demand ≥ free_running cool_demand (= 0)',
   baseline.demand_cooling_mwh, '>=', snaps.free_run_default.demand_cooling_mwh)
 
-// Brief 64 §C — Heating UNCHANGED across control_strategy toggle.
-// The clamp formula deliberately preserves the heating side (active_setpoint
-// uses the same heating formula as the old free_running heating-direction
-// branch). At default setpoints, heating_demand must be IDENTICAL.
-assertApproxEq('B', 'B32', 'control_strategy toggle leaves heating_demand unchanged',
-  baseline.demand_heating_mwh, snaps.free_run_default.demand_heating_mwh, 0.001, 0.05,
-  'heating clamp formula = pre-Brief-64 heating-direction formula (intentional preservation)')
+// Brief 69 Part 3 (Decision 3): the "heating unchanged across strategies"
+// invariant is RETIRED. Brief 64 had it (heating formula was preserved
+// between strategies); Brief 69 has different heating formulas (active_setpoint
+// uses C_coef-derived Q_cond; free_running = 0). Replace with the new
+// asymmetry: active_setpoint heating > 0 on any building with winter losses;
+// free_running heating == 0 by definition.
+assertInequality('B', 'B32a', 'active_setpoint baseline: heating_demand > 0 (real winter losses)',
+  baseline.demand_heating_mwh, '>', 0,
+  'Bridgewater has substantial winter heat loss; active_setpoint integrates it')
+assertApproxEq('B', 'B32b', 'free_running default: heating_demand == 0 (no conditioning)',
+  snaps.free_run_default.demand_heating_mwh, 0, 0.001, 0.01,
+  'Brief 67/69 free_running definition')
 
 // Brief 64 §C — Explicit active_setpoint == default (no field).
 // The default behaviour when control_strategy is absent must equal what the
@@ -935,21 +945,27 @@ record('C', 'C19c', 'cooling_setpoint_source = "comfortBand" by default',
 // recovery_offset must NOT be subtracted again. This is conservation in
 // the engine's own bookkeeping — if it closes, the engine isn't quietly
 // adding or dropping terms.
-const heatingDemandReconstructedKwh = baseline.los_total_heat_loss_kwh
-  - baseline.los_ig_offset_heating_kwh
-  - baseline.los_glaz_solar_beneficial_kwh
-assertApproxEq('C', 'C20', 'baseline: heating_demand ≈ losses_at_setpoint − ig_offset − solar_beneficial',
-  baseline.demand_heating_mwh * 1000, heatingDemandReconstructedKwh, 0.005, 2000,
-  `losses=${(baseline.los_total_heat_loss_kwh/1000).toFixed(1)} ig_offset=${(baseline.los_ig_offset_heating_kwh/1000).toFixed(1)} solar_beneficial=${(baseline.los_glaz_solar_beneficial_kwh/1000).toFixed(1)}`)
-
-// Same closure on a higher-heating-setpoint case (should still balance)
-const c20_hsp28 = snaps.hsp_28
-const heatingReconHsp28Kwh = c20_hsp28.los_total_heat_loss_kwh
-  - c20_hsp28.los_ig_offset_heating_kwh
-  - c20_hsp28.los_glaz_solar_beneficial_kwh
-assertApproxEq('C', 'C20b', 'hsp_28: heating_demand ≈ losses_at_setpoint − ig_offset − solar_beneficial',
-  c20_hsp28.demand_heating_mwh * 1000, heatingReconHsp28Kwh, 0.005, 2000,
-  `losses=${(c20_hsp28.los_total_heat_loss_kwh/1000).toFixed(1)} ig_offset=${(c20_hsp28.los_ig_offset_heating_kwh/1000).toFixed(1)} solar_beneficial=${(c20_hsp28.los_glaz_solar_beneficial_kwh/1000).toFixed(1)}`)
+// Brief 69 Part 3 (2026-05-28, Decision 3): the heating reconstruction
+// identity `heating = losses_at_setpoint − ig_offset − solar_beneficial`
+// was Brief 64's at-setpoint balance formula. Brief 69 demand is
+// implicit-Euler-derived: heating[h] = -C_coef × (lower_SP - T_air_free)
+// integrated over heating-mode hours. The per-element loss accumulators
+// (which sum losses at the EFFECTIVE T_air, which depends on conditioning
+// state) no longer reconstruct demand by simple subtraction. Replace with
+// non-negativity and a loose physical sanity bound (heating ≤ total
+// at-setpoint envelope loss is no longer a meaningful upper bound because
+// mech-vent UA enters C_coef but isn't in los_total_heat_loss_kwh).
+assertInequality('C', 'C20', 'baseline: heating_demand ≥ 0',
+  baseline.demand_heating_mwh, '>=', 0)
+assertInequality('C', 'C20b', 'hsp_28: heating_demand ≥ 0',
+  snaps.hsp_28.demand_heating_mwh, '>=', 0)
+// C20c — heating demand is monotonic in hsp (raising heating setpoint
+// raises heating demand). This IS a robust invariant in the new model.
+assertInequality('C', 'C20c', 'heating_demand monotonic in hsp (hsp_24 ≥ baseline)',
+  snaps.hsp_24.demand_heating_mwh, '>=', baseline.demand_heating_mwh - 0.5,
+  'heating fires on more hours when hsp rises')
+assertInequality('C', 'C20d', 'heating_demand monotonic in hsp (hsp_28 ≥ hsp_24)',
+  snaps.hsp_28.demand_heating_mwh, '>=', snaps.hsp_24.demand_heating_mwh - 0.5)
 
 // losses_at_setpoint per-element totals: Σ per-element heating_loss_kwh ≈ totals
 const sumPerElementHeatLoss = baseline.los_wall_heating_kwh + baseline.los_glaz_heating_kwh
@@ -1052,25 +1068,27 @@ expectFrozenBetween(snaps.light_cf_lo, snaps.light_cf_hi,
    'hb_gain_equipment_kwh','hb_gain_solar_total_kwh'],
   'D08', 'lighting_cf change')
 
-// Brief 64 §C — control_strategy invariance.
-// D9: switching control_strategy = 'free_running' must NOT move any field
-// other than the demand-derivation outputs (cooling demand + downstream
-// fuel/EUI). Heating demand UNCHANGED (formulas are identical between
-// strategies). DHW, lighting, small-power, vent fan, vent fan elec must
-// all be frozen (control_strategy doesn't touch these services).
+// Brief 69 Part 3 (2026-05-28, Decision 3): control_strategy invariance
+// REDEFINED. Brief 64 froze heating + heat_elec + hb_loss_total across the
+// strategies (Brief 64 preserved the heating formula across both). Brief 69
+// has different demand formulas per strategy (active_setpoint = C_coef-
+// derived Q_cond; free_running = 0). The fields that REMAIN frozen between
+// strategies are those that don't depend on demand: DHW, lighting,
+// small-power, vent fan electricity, and the gain accumulators on the
+// gains side of the heat balance (people/equipment/lighting/solar — the
+// physical heat-balance terms reflect zone state, which changes between
+// strategies, so removing hb_loss_total). Run only on demand-independent
+// fields.
 expectFrozenBetween(baseline, snaps.free_run_default,
-  ['demand_heating_mwh','demand_dhw_mwh','heat_elec_mwh','heat_gas_mwh',
+  ['demand_dhw_mwh',
    'dhw_elec_mwh','dhw_gas_mwh','fan_elec_mwh','light_elec_mwh','sp_elec_mwh',
-   'hb_gain_lighting_kwh','hb_gain_equipment_kwh','hb_gain_solar_total_kwh',
-   'hb_loss_total_kwh'],
-  'D09', 'control_strategy toggle')
+   'hb_gain_lighting_kwh','hb_gain_equipment_kwh','hb_gain_solar_total_kwh'],
+  'D09', 'control_strategy toggle (demand-independent fields)')
 
-// D10: control_strategy = 'free_running' under csp=18 leaves heating
-// demand UNCHANGED relative to active_setpoint csp=18.
 expectFrozenBetween(snaps.csp_18, snaps.free_run_csp_18,
-  ['demand_heating_mwh','demand_dhw_mwh','heat_elec_mwh','heat_gas_mwh',
+  ['demand_dhw_mwh',
    'dhw_elec_mwh','dhw_gas_mwh','fan_elec_mwh','light_elec_mwh','sp_elec_mwh'],
-  'D10', 'control_strategy toggle at csp=18')
+  'D10', 'control_strategy toggle at csp=18 (demand-independent fields)')
 
 // Brief 68 Part C (register U4 / Brief 66 HIGH-8) — fan_elec zeros under
 // EITHER v25-only OR v40-only ventilation disable.
@@ -1207,6 +1225,120 @@ assertApproxEq('E', 'E12', 'empty-stack baseline == direct-call baseline total_e
   sBaseStack.total_elec_mwh, baseline.total_elec_mwh, 0.001, 0.05)
 assertApproxEq('E', 'E13', 'empty-stack baseline == direct-call baseline eui',
   sBaseStack.eui_kwh_per_m2, baseline.eui_kwh_per_m2, 0.001, 0.05)
+
+// ════════════════════════════════════════════════════════════════════════
+// Brief 67/69 Part C battery — float-gated demand model assertions
+// ════════════════════════════════════════════════════════════════════════
+// Six new invariants for the post-Brief-67 demand model. Each codifies one
+// physical property of "demand is gated on T_zone_free, not on a balance
+// equation":
+//
+//   B69-01  Setpoint independence (the headline): cooling demand is
+//           bounded over an hsp sweep at fixed csp. Per Decision 2 the
+//           threshold is generous (~30%) because thermal-mass coupling
+//           is real physics on lighter buildings; the gate catches
+//           regression to the Brief-64 first-order coupling.
+//   B69-02  Dead band exists: count of hours with both heating and
+//           cooling demand = 0 is non-zero on a real building.
+//   B69-03  Cooling monotonic in csp: lowering csp does not decrease
+//           cooling demand.
+//   B69-04  Heating monotonic in hsp: raising hsp does not decrease
+//           heating demand (already C20c/C20d above — re-asserted here
+//           explicitly under the Brief 69 banner).
+//   B69-05  Conservation: Σ hourly heating == annual heating (the engine
+//           isn't quietly dropping or double-counting hourly contributions).
+//   B69-06  Float never NaN: T_zone_free has no NaN/Inf hours.
+//   B69-07  free_running invariance: heating = cooling = 0 (already
+//           B26-B29 above — re-asserted explicitly under the new banner).
+console.log('--- Brief 67/69 Part C battery ---')
+
+// B69-01: setpoint independence — cool span over hsp sweep BELOW csp_default.
+// Only hsp_19 and baseline (hsp=21, default) lie below csp=24 in the
+// harness's snapshot set; hsp_24/hsp_28 would invert the dead band (heat
+// fires above the cooling sp = both clamps engaged simultaneously). The
+// brief's specified range was hsp 19→23 at csp 24; we test the subset
+// available from the harness's pre-built snapshots — fully bracketed
+// versions live in the per-brief gate script.
+const hsp_sweep_cools = [snaps.hsp_19.demand_cooling_mwh, baseline.demand_cooling_mwh]
+const cool_min = Math.min(...hsp_sweep_cools)
+const cool_max = Math.max(...hsp_sweep_cools)
+const cool_mean = hsp_sweep_cools.reduce((s, x) => s + x, 0) / hsp_sweep_cools.length
+const cool_span_pct = cool_mean > 0 ? ((cool_max - cool_min) / cool_mean) * 100 : 0
+// Threshold: 35% per Decision 2 — covers Bridgewater (~27%) + office
+// (~28%) thermal-mass coupling at default mass while catching a
+// regression to the Brief-64 first-order coupling (which would be 50%+).
+assertInequality('B69', 'B69-01', 'setpoint independence: cool span over hsp 19→21 (both < csp=24) ≤ 35%',
+  cool_span_pct, '<=', 35,
+  `cool: hsp_19=${snaps.hsp_19.demand_cooling_mwh.toFixed(2)} / baseline=${baseline.demand_cooling_mwh.toFixed(2)} MWh, span=${cool_span_pct.toFixed(1)}%`)
+
+// B69-02: dead band exists. Count hours where both hourly demand arrays = 0.
+function countDeadBandHours(building) {
+  const r = runEngine(building)
+  const hH = r?.demand?.heating_demand_hourly_kwh
+  const hC = r?.demand?.cooling_demand_hourly_kwh
+  if (!hH || !hC) return null
+  let dead = 0
+  for (let i = 0; i < hH.length; i++) if (hH[i] < 1e-6 && hC[i] < 1e-6) dead++
+  return dead
+}
+const dbHours = countDeadBandHours(baseBuilding)
+assertInequality('B69', 'B69-02', 'dead-band hours > 0 (baseline)',
+  dbHours ?? 0, '>', 0,
+  `${dbHours}/8760 hours with zero heating AND zero cooling`)
+
+// B69-03: cooling monotonic in csp — lowering csp never decreases cooling.
+assertInequality('B69', 'B69-03a', 'cool monotonic: csp_22 cool ≥ csp_28 cool',
+  snaps.csp_22.demand_cooling_mwh, '>=', snaps.csp_28.demand_cooling_mwh - 0.5)
+assertInequality('B69', 'B69-03b', 'cool monotonic: csp_18 cool ≥ csp_22 cool',
+  snaps.csp_18.demand_cooling_mwh, '>=', snaps.csp_22.demand_cooling_mwh - 0.5)
+
+// B69-04: heating monotonic in hsp — re-asserted under Brief 69 banner.
+assertInequality('B69', 'B69-04', 'heat monotonic: hsp_28 heat ≥ hsp_19 heat',
+  snaps.hsp_28.demand_heating_mwh, '>=', snaps.hsp_19.demand_heating_mwh - 0.5)
+
+// B69-05: conservation — Σ hourly heating == annual heating
+function checkConservation(snap, building) {
+  const r = runEngine(building)
+  const hH = r?.demand?.heating_demand_hourly_kwh
+  const hC = r?.demand?.cooling_demand_hourly_kwh
+  if (!hH || !hC) return { ok: false }
+  let sumH_kwh = 0, sumC_kwh = 0
+  for (let i = 0; i < hH.length; i++) { sumH_kwh += hH[i]; sumC_kwh += hC[i] }
+  return {
+    ok: true,
+    sumH_mwh: sumH_kwh / 1000,
+    sumC_mwh: sumC_kwh / 1000,
+    annualH: snap.demand_heating_mwh,
+    annualC: snap.demand_cooling_mwh,
+  }
+}
+const cons = checkConservation(baseline, baseBuilding)
+if (cons.ok) {
+  assertApproxEq('B69', 'B69-05a', 'conservation: Σ hourly heating == annual heating',
+    cons.sumH_mwh, cons.annualH, 0.005, 0.5)
+  assertApproxEq('B69', 'B69-05b', 'conservation: Σ hourly cooling == annual cooling',
+    cons.sumC_mwh, cons.annualC, 0.005, 0.5)
+}
+
+// B69-06: float never NaN. T_zone_free trace must be finite everywhere.
+function countNaNInFloat(building) {
+  const r = runEngine(building)
+  const T = r?.demand?.hourly_zone_air_c
+  if (!T) return -1
+  let n = 0
+  for (const v of T) if (!Number.isFinite(v)) n++
+  return n
+}
+const nanBaseline = countNaNInFloat(baseBuilding)
+assertApproxEq('B69', 'B69-06', 'T_zone_free has zero NaN/Inf hours (baseline)',
+  nanBaseline, 0, 0, 0)
+
+// B69-07: free_running invariance — already B26-B29 above; re-asserted for
+// completeness under the Brief 69 banner.
+assertApproxEq('B69', 'B69-07a', 'free_running: heating_demand == 0 (zone floats)',
+  snaps.free_run_default.demand_heating_mwh, 0, 0.001, 0.01)
+assertApproxEq('B69', 'B69-07b', 'free_running: cooling_demand == 0 (zone floats)',
+  snaps.free_run_default.demand_cooling_mwh, 0, 0.001, 0.01)
 
 // ════════════════════════════════════════════════════════════════════════
 // CATEGORY F — RECONCILIATION (every Δ stacks up; same number two places)
