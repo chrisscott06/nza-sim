@@ -586,12 +586,25 @@ function withMode(building, mode) {
   // array — extract-only flows are real continuous heat losses (no recovery)
   // and need to be in the State 2 setpoint demand. Other systems_config_v25
   // fields (heating, cooling, dhw) are inert in State 2.
+  //
+  // Brief 68 Part E (Brief 66 MED-8 / CONS-1, register G9/A7, 2026-05-28):
+  // ALSO pass through systems_config_v40. State 2 legitimately reads v40 for
+  // ventilation flow (Brief 59 P1) and cooling-setpoint clamp (Brief 62 P2 +
+  // Brief 64). Pre-fix the Internal Gains module's envelope-gains call
+  // dropped v40 here, so its State 2 instance saw no ventilation/setpoint
+  // config and computed a different cooling number (82.5 MWh) than the
+  // Systems module (75.7 MWh, which goes through State 3's full v40 path).
+  // The two numbers now reconcile because both stages see the same config.
+  // State 1 envelope-only is unaffected — that branch returns `base` above
+  // (line 582) and never reaches this spread, so systems config still stays
+  // out of the envelope-only path by construction.
   return {
     ...base,
     num_bedrooms:        building?.num_bedrooms,
     occupancy:           building?.occupancy,
     gains:               building?.gains,
     systems_config_v25:  building?.systems_config_v25,
+    systems_config_v40:  building?.systems_config_v40,
   }
 }
 
