@@ -285,7 +285,7 @@ Each row filled at walkthrough time with the actual measurement.
 | # | Item | ✓/✗ | Number / note |
 |---|---|---|---|
 | P3a | Internal Gains → Occupancy: "People per room" field GONE | _TBD_ | |
-| P3b | Density 3 → 4 on Bridgewater moves DHW demand 210 → ~280 MWh | _TBD_ | |
+| P3b | Density 3 → 4 on Bridgewater moves DHW demand **210.5 → ~561 MWh** (ratio `4 × 138 / 207` ≈ 2.67× the phantom-headcount baseline; corrected 2026-05-28 from the earlier "~280 MWh" estimate) | _TBD_ | |
 | P3c | "Occupancy 4" intervention via patch produces same DHW change as P3b | _TBD_ | |
 
 ---

@@ -78,7 +78,7 @@ Single source of truth in the engine for occupant headcount. When `basis = peopl
 
 **Gates (all must pass):**
 - (a) Bridgewater baseline with no interventions: EUI ± 0 from Part 1 anchor (assuming engine was already reading `density × num_bedrooms` and ignoring the phantom 1.5). If EUI moves, that itself is a finding — the engine WAS reading 1.5 — and the new value is the canonical Bridgewater baseline going forward. Document the movement from first principles; do NOT adjust to match the old anchor.
-- (b) Density 3 → 4 on Bridgewater: DHW demand moves proportionally (138 × 3 × 80 L → 138 × 4 × 80 L = +33% on DHW headcount → ~+70 MWh on DHW). Sign must be right; magnitude within ~5% of arithmetic prediction.
+- (b) Density 3 → 4 on Bridgewater: DHW demand moves from 210.5 MWh (pre-P3 phantom-headcount-of-207) to ~561 MWh (post-P3 actual-headcount-of-552). The ratio is `4 × 138 / 207` ≈ 2.67×. Sign must be right; magnitude within ~5% of `210.5 × (4 × 138) / 207`. (Note: 2026-05-28 arithmetic correction — earlier draft said "+70 MWh" which was wrong; the actual post-P3 jump from the live pre-P3 baseline is ~+350 MWh because the phantom 1.5 was capping headcount at 207 instead of the real 414 at density 3.)
 - (c) "Occupancy 4" intervention, applied via patch: DHW demand moves to match (b). If it doesn't, capture is still broken.
 
 Commit: `Brief 72 P3: occupancy headcount unification + num_bedrooms capture`.
@@ -136,8 +136,8 @@ Use the design note's B.9 (11 items) and D.4 (5 items) verbatim, plus the P3 gat
 - DHW load-shape select present, default flat, follow-occupancy reshapes hourly but not annual. ✓/✗
 - Anchor (P1 / P3 number) holds with no auxiliary profiles + gain_fraction 1.0. ✓/✗
 - **Internal Gains → Occupancy: the "People per room" field is GONE.** ✓/✗
-- **Density 3 → 4 on Bridgewater moves DHW demand from ~210 MWh to ~280 MWh** (proportional to the headcount ratio). ✓/✗
-- **Applying an "Occupancy 4" intervention via the Interventions module produces the same DHW change** (capture round-trips correctly). ✓/✗
+- **Density 3 → 4 on Bridgewater moves DHW demand from 210.5 MWh to ~561 MWh** (ratio ≈ `density × num_bedrooms` / old-phantom-headcount-of-207 = `4 × 138 / 207` ≈ 2.67×, so 210.5 × 2.67 ≈ 561). ✓/✗
+- **Applying an "Occupancy 4" intervention via the Interventions module produces the same DHW change** (capture round-trips correctly — post-P3, the patch path `building.occupancy.density.value` propagates through `computeTotalOccupants` to DHW headcount). ✓/✗
 
 ---
 
