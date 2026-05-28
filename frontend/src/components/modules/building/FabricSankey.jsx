@@ -192,9 +192,15 @@ export default function FabricSankey({ result, orientation = 0 }) {
       links: fabricData.links.map(l => ({ ...l })),
     }
     try {
+      // 2026-05-28 (Chris-flag): .nodeSort(null) keeps nodes in the order
+      // they were added in buildGraph so categorical groups stay together
+      // and magnitudes are easy to compare by eye. Same discipline as
+      // BalanceSankey (commit cc7cac4) — beat ribbon-crossing tidiness for
+      // group legibility.
       const layout = sankey()
         .nodeId(d => d.id)
         .nodeAlign(sankeyLeft)
+        .nodeSort(null)
         .nodeWidth(nodeW)
         .nodePadding(nodeP)
         .extent([[leftPad, topPad], [dims.width - rightPad - 80, dims.height - topPad]])

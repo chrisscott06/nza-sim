@@ -123,11 +123,14 @@ function SankeyChart({ result, width, height }) {
     const innerW = width  - pad.l - pad.r
     const innerH = height - pad.t - pad.b
 
-    // Run d3-sankey layout
+    // Run d3-sankey layout. 2026-05-28 (Chris-flag): .nodeSort(null)
+    // keeps nodes in input order so categorical groups stay together
+    // (same discipline as BalanceSankey, commit cc7cac4).
     const sankeyLayout = sankey()
       .nodeWidth(14)
       .nodePadding(16)
       .nodeAlign(sankeyLeft)
+      .nodeSort(null)
       .extent([[0, 0], [innerW, innerH]])
 
     const graph = sankeyLayout({

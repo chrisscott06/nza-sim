@@ -144,11 +144,14 @@ function SankeyChart({ data, width, height }) {
   const innerW = width  - PADDING.left - PADDING.right
   const innerH = height - PADDING.top  - PADDING.bottom
 
-  // Build Sankey layout
+  // Build Sankey layout. 2026-05-28 (Chris-flag): .nodeSort(null) keeps
+  // nodes in input order so categorical groups stay together (same
+  // discipline as BalanceSankey, commit cc7cac4).
   const sankeyLayout = sankey()
     .nodeWidth(14)
     .nodePadding(12)
     .nodeAlign(sankeyJustify)
+    .nodeSort(null)
     .extent([[0, 0], [innerW, innerH]])
 
   let graph

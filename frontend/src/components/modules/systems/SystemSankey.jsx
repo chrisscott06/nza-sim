@@ -162,9 +162,14 @@ export default function SystemSankey({ openSection, setOpenSection, libraryData 
     }
 
     try {
+      // 2026-05-28 (Chris-flag): .nodeSort(null) keeps nodes in the order
+      // they were added in buildGraph so categorical groups stay together
+      // and magnitudes are easy to compare by eye. Same discipline as
+      // BalanceSankey (commit cc7cac4).
       const layout = sankey()
         .nodeId(d => d.id)   // nodes use string id field; links reference nodes by id string
         .nodeAlign(sankeyLeft)
+        .nodeSort(null)
         .nodeWidth(nodeW)
         .nodePadding(nodeP)
         .extent([[pad, pad], [dims.width - pad - 90, dims.height - pad]])

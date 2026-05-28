@@ -141,12 +141,16 @@ function SystemsSankeyPanel({ instantResult }) {
     const raw = buildSankeyGraph(instantResult.systems_flow)
     if (!raw) return null
     try {
+      // 2026-05-28 (Chris-flag): .nodeSort(null) keeps nodes in input
+      // order so categorical groups stay together (same discipline as
+      // BalanceSankey, commit cc7cac4).
       const layout = sankey()
         .nodeId(n => n.id)
         .nodeWidth(16)
         .nodePadding(10)
         .extent([[24, 16], [dims.width - 60, dims.height - 16]])
         .nodeAlign(sankeyLeft)
+        .nodeSort(null)
       return layout({
         nodes: raw.nodes.map(n => ({ ...n })),
         links: raw.links.map(l => ({ ...l })),
