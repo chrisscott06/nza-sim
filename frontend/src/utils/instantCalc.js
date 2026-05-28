@@ -2813,7 +2813,15 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       ? sfpFromV40
       : Number(v.sfp_w_per_l_s ?? v.sfp ?? 0)
     return {
-      name:       v.name ?? v.id ?? v.library_id ?? '?',
+      // 2026-05-28 (Chris-flag): v40_label wins over v25 name. The user
+      // edits ventilation system labels in the Systems editor, which
+      // writes to systems_config_v40.ventilation[].label. The v25 mirror's
+      // `name` field is the engine seed (often the original library name)
+      // and is NOT updated when the user renames the system. Reading v40's
+      // `label` first means the Heat Balance / Sankey labels match what
+      // the user just typed. Same v40-wins-with-v25-fallback pattern as
+      // SFP / flow / HRE elsewhere in this builder.
+      name:       v40Match?.label ?? v.name ?? v.id ?? v.library_id ?? '?',
       library_id: v.library_id,
       flow_l_s,
       hre,

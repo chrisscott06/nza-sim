@@ -185,7 +185,13 @@ export function buildLossesMap(data, mode = DEFAULT_MODE, modules = null) {
         const key = `ventilation_${v.name}`
         const kwh = v.heat_loss_kwh
         const kwh_per_m2 = gia > 0 ? kwh / gia : 0
-        losses[key] = { kwh, kwh_per_m2, _label: `Ventilation: ${v.name}` }
+        // 2026-05-28 (Chris-flag): drop the "Ventilation: " prefix so the
+        // legend reads the user's edited label verbatim — e.g. "MVHR Ground
+        // Floor" instead of "Ventilation: MVHR Ground Floor". The user
+        // already knows these entries are ventilation (they're in the
+        // ventilation group), and v.name now picks up v40_label first
+        // (instantCalc.js:2816) so it reflects the Systems-editor rename.
+        losses[key] = { kwh, kwh_per_m2, _label: v.name }
         orderWithNew.push(key)
       }
     }

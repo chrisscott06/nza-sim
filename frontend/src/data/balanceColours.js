@@ -64,22 +64,26 @@ export const SYSTEMS_ACCENT        = '#00AEEF' // cyan-bright
 export const INTERNAL_GAINS_ACCENT = '#EA580C' // orange-600
 
 // Fabric losses — grey family for conductive elements;
-// air-flow losses (infiltration + permanent vents) paired in a blue family
-// per Brief 33 Part 2 (2026-05-18) so the eye groups them as "air-flow"
-// while still distinguishing baseline crack infiltration from intentional
-// permanent vents.
+// air-flow losses (infiltration + permanent vents + mech vent) now in a
+// green family (2026-05-28 — Chris's call): blue was reserved for the
+// Cooling service (#00AEEF), so any air-flow term in a blue shade read as
+// "cooling" at a glance. Greens give the air-flow group its own identity,
+// gradiated from light (uncontrolled baseline leakage) to dark (engineered
+// mechanical ventilation). Tealish-green (#14B8A6) is the Systems fan
+// service colour and is intentionally avoided here so air-flow heat-loss
+// doesn't clash with fan-electricity displays.
 export const FABRIC_COLOURS = {
   external_wall:    '#6B7280', // grey-500
   roof:             '#475569', // slate-600
   ground_floor:     '#94A3B8', // slate-400
   glazing:          '#A1A1AA', // zinc-400
   thermal_bridging: '#374151', // grey-700 — Y-factor contribution surfaces here at State 1
-  infiltration:     '#7DD3FC', // sky-300 — softer/lighter blue (baseline q50-driven leakage)
-  fabric_leakage:   '#7DD3FC', // sky-300 — engine-internal alias for infiltration; same colour, display label is "Infiltration"
-  permanent_vents:  '#0EA5E9', // sky-500 — louvre flow, State-1-correct alias for openings_louvre
-  openings_louvre:  '#0EA5E9', // sky-500 — wind-driven, distinct from baseline crack infiltration
-  openings_window:  '#0284C7', // sky-600 — State 2.5 operable-window flow
-  ventilation:      '#9CA3AF', // grey-400 — mechanical (MEV/MVHR), State 3 only
+  infiltration:     '#86EFAC', // green-300 — uncontrolled baseline crack leakage (lightest)
+  fabric_leakage:   '#86EFAC', // green-300 — engine alias for infiltration; same colour, label "Infiltration"
+  permanent_vents:  '#4ADE80', // green-400 — passive louvre flow
+  openings_louvre:  '#22C55E', // green-500 — wind-driven louvres (State 2.5)
+  openings_window:  '#16A34A', // green-600 — operable windows (State 2.5)
+  ventilation:      '#047857', // emerald-700 — mechanical (MEV/MVHR), State 3 — darkest (most engineered)
 }
 
 // Element labels.

@@ -213,24 +213,30 @@ const LOSS_ORDERS = {
   // Results /full Sankey + Rows + Stacked views — surfacing as the +10
   // kWh/m²·yr heat-balance residual Chris flagged. State 1 (envelope-only)
   // and State 2 (envelope-gains) order tables already listed the canonical
-  // keys; FULL had drifted. Placement: after `glazing` (envelope conduction
-  // group), before per-system ventilation (the ventilation key with
-  // dynamic per-system children). Legacy aliases retained as no-ops —
-  // engine emits nothing under those keys so they render nothing, but
-  // removing them risks breaking external readers of LOSS_ORDERS. See
+  // keys; FULL had drifted. Legacy aliases retained as no-ops — engine
+  // emits nothing under those keys so they render nothing, but removing
+  // them risks breaking external readers of LOSS_ORDERS. See
   // docs/audit/53_ventilation.md §1.0 for the residual branch-test verdict.
+  //
+  // 2026-05-28 (Chris-flag): re-ordered into three visual groups so the
+  // legend tells a coherent story top-to-bottom:
+  //   • Envelope conduction:  wall → roof → floor → glazing → thermal_bridging
+  //   • Air-flow:             infiltration → permanent vents → openings → mech vent
+  //   • Cooling:              always last
+  // Previously thermal_bridging sat AFTER permanent_vents (splitting the
+  // air-flow group with a fabric term). Same set, just re-ordered.
   [MODES.FULL]: [
     'external_wall',
     'roof',
     'ground_floor',
     'glazing',
-    'fabric_leakage',     // Brief 53 Part 4 — was missing, caused +10 residual
-    'permanent_vents',    // Brief 53 Part 4 — was missing
-    'thermal_bridging',   // Brief 53 Part 4 — was missing
+    'thermal_bridging',   // envelope group (moved here — was after permanent_vents)
+    'fabric_leakage',     // air-flow group starts
+    'permanent_vents',
     'infiltration',       // legacy alias — engine no longer emits under this key
     'openings_louvre',    // legacy alias — engine no longer emits under this key
     'openings_window',
-    'ventilation',
+    'ventilation',        // mechanical (per-system entries appended at runtime)
     'cooling',
   ],
 }
