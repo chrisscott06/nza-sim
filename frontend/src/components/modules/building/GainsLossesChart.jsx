@@ -17,6 +17,7 @@
  */
 
 import { useState } from 'react'
+import ChartExportCard from '../../shared/ChartExportCard.jsx'
 
 // ── Facade label helper ───────────────────────────────────────────────────────
 // F1=north (0°), F2=east (90°), F3=south (180°), F4=west (270°)
@@ -218,7 +219,7 @@ export default function GainsLossesChart({ result, orientation, onExpand }) {
   const topGain = GAIN_ROWS[0]  // solar — always first if present
 
   return (
-    <div className="relative">
+    <ChartExportCard noChrome title="Gains & losses (butterfly)" className="relative">
       <div className="flex items-center justify-between mb-1">
         <p className="text-xxs uppercase tracking-wider text-mid-grey">Gains &amp; Losses</p>
         <div className="flex items-center gap-2">
@@ -331,6 +332,6 @@ export default function GainsLossesChart({ result, orientation, onExpand }) {
         totalH={solarTotalH}
         totalC={solarTotalC}
       />
-    </div>
+    </ChartExportCard>
   )
 }

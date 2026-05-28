@@ -13,6 +13,7 @@ import { useHourlySolar } from '../../../hooks/useHourlySolar.js'
 import { calculateInstant } from '../../../utils/instantCalc.js'
 import { FABRIC_COLORS } from '../../../data/chartTokens.js'
 import GainsLossesChart from './GainsLossesChart.jsx'
+import ChartExportCard from '../../shared/ChartExportCard.jsx'
 
 // ── EUI Bar Gauge ─────────────────────────────────────────────────────────────
 // Simple horizontal bar gauge — stable rendering, no SVG arc floating-point jitter.
@@ -181,6 +182,7 @@ function MonthlyChart({ monthly }) {
   const BAR_H = 36   // max bar height in px
 
   return (
+    <ChartExportCard noChrome title="Monthly heating & cooling profile">
     <div>
       <p className="text-xxs uppercase tracking-wider text-mid-grey mb-1.5">Monthly profile</p>
       <div className="flex items-end gap-px justify-between" style={{ height: BAR_H * 2 + 10 }}>
@@ -223,6 +225,7 @@ function MonthlyChart({ monthly }) {
         </div>
       </div>
     </div>
+    </ChartExportCard>
   )
 }
 
