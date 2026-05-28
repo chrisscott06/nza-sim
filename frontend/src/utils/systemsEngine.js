@@ -34,21 +34,20 @@
  * Caller attaches the return under `consumption.brief40`.
  */
 
+import { CARBON_FACTORS_CURRENT } from '../data/carbonFactors.js'
+
 const VALID_SERVICES = ['heating', 'cooling', 'dhw', 'ventilation', 'lighting', 'small_power']
 
-// Carbon factors (CIBSE TM65 2024 — matches BEIS_2024_FACTORS in instantCalc.js)
-// Re-declared here to keep this module self-contained; cross-check on
-// drift in a future cleanup pass.
-const CARBON_KG_PER_KWH = {
-  electricity:        0.193,
-  gas:                0.183,
-  oil:                0.249,
-  biomass:            0.039,
-  district_heating:   0.170,
-  district_cooling:   0.193,
-  ambient_air:        0,      // heat pump fuel is electricity — counted there
-  ambient_ground:     0,
-}
+// Brief 68 Part A (B1 register fix, 2026-05-28): the carrier-sum carbon factors
+// now come from the canonical data/carbonFactors.js module. Previously this
+// file declared its own table whose electricity factor was 0.193 — 7.3%
+// below BEIS_2024_FACTORS.electricity (0.207) in instantCalc.js, and the
+// comment falsely claimed they matched. They now genuinely match (both
+// import ELECTRICITY_CURRENT from the canonical source).
+//
+// `district_cooling` is a documented placeholder there (= electricity);
+// real per-network values need to come from the operator.
+const CARBON_KG_PER_KWH = CARBON_FACTORS_CURRENT
 
 // Water specific heat: 4.18 kJ/(L·K) ÷ 3600 s/h
 const WATER_SHC_KWH_PER_L_PER_K = 4.18 / 3600

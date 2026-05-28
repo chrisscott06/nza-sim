@@ -26,6 +26,11 @@ import {
   ukGridIntensityForYear,
   GAS_CARBON_FACTOR_gCO2_per_kWh,
 } from '../data/ukGridCarbonTrajectory.js'
+import {
+  ELECTRICITY_CURRENT,
+  ELECTRICITY_FES_2026,
+  GAS as GAS_KG_PER_KWH,
+} from '../data/carbonFactors.js'
 import { buildCrremYearlyTargets, crremTargetForYear } from '../data/crremTargets.js'
 import {
   buildWallModel,
@@ -234,9 +239,11 @@ const HOTEL_OPERATING_HOURS    = 2200  // Effective lighting hours (hotel bedroo
 const HOTEL_EQUIP_HOURS        = 1800  // Equipment operating hours (lower than lighting)
 const HOTEL_OCCUPIED_FRACTION  = 0.35  // Fraction of time people present
 
-// Carbon factors
-const GRID_INTENSITY_2026  = 0.145  // kgCO₂/kWh (UK grid 2026, FES Leading the Way)
-const GAS_CARBON_KG_KWH    = 0.183  // kgCO₂/kWh (constant)
+// Carbon factors — Brief 68 Part A: source the inline-legacy path's factors
+// from the canonical carbonFactors.js module. Names retained for local
+// readability; values are now bound at import time to the single source.
+const GRID_INTENSITY_2026 = ELECTRICITY_FES_2026   // 0.145 — projected 2026 grid (FES Leading the Way)
+const GAS_CARBON_KG_KWH   = GAS_KG_PER_KWH         // 0.183 — natural gas (DESNZ)
 
 // DHW constants — area-based benchmark (CIBSE Guide F UK hotels)
 const DHW_LITRES_PER_M2_DAY = 1.1  // L/m² GIA/day (CIBSE Guide F UK hotels) — gives ≈84 MWh thermal for 3600 m² GIA
@@ -4232,19 +4239,17 @@ function computeDhwFuelMix(serviceCfg, demand_mwh, resolved) {
 /**
  * BEIS 2024 fuel-to-CO2 factors (kg CO2e per kWh delivered).
  *
- * Source: BEIS / DESNZ 2024 conversion factors publication (UK government,
- * annual update). Pinned here as a snapshot of the 2024-published values.
- * Grid factors are per-year-global, not per-project — different from
- * construction U-values which are project-specific library items.
+ * Brief 68 Part A (B1 register fix, 2026-05-28): bound to the canonical
+ * factors in data/carbonFactors.js so this export and systemsEngine.js's
+ * carrier-sum table read the same numbers. Kept as a named alias so
+ * existing imports continue to work.
  *
- * **Update annually until per-year grid-factor infrastructure lands**
- * (which itself is queued behind CRREM-pathway work — future briefs).
- * Future CRREM work needs per-year curves to model decarbonisation
- * trajectories; that's distinct storage and out of scope for V1 systems.
+ * Source: UK DESNZ Greenhouse Gas Conversion Factors 2024 publication
+ * (canonical values in data/carbonFactors.js — see source comment there).
  */
 export const BEIS_2024_FACTORS = {
-  electricity: 0.207,   // kg CO2e/kWh — UK grid average, BEIS 2024
-  gas:         0.183,   // kg CO2e/kWh — natural gas, BEIS 2024
+  electricity: ELECTRICITY_CURRENT,   // 0.207 — UK grid average, DESNZ 2024
+  gas:         GAS_KG_PER_KWH,        // 0.183 — natural gas, DESNZ
 }
 
 /**
