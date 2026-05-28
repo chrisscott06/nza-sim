@@ -306,12 +306,21 @@ export default function IsolatedView({
         </div>
       </div>
 
-      {/* Caption — isolated ≠ marginal (Principle 4) */}
+      {/* Caption — Brief 71 Part 4 (2026-05-28): rewording per the close-out
+          audit (docs/audit/71_*.md §6). Calls out the cumulative-vs-isolated
+          semantic difference more pointedly: Calc Trail / Waterfall include
+          the effect of every intervention ABOVE the row, so their per-row
+          numbers will look bigger than the Isolated equivalent. Only the
+          first-in-stack row agrees across views (the falsifiability invariant
+          asserted by the hook). */}
       <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
         <p className="text-xxs text-amber-900">
-          <span className="font-semibold">Isolated ≠ marginal.</span> Each bar shows what a measure
-          would deliver on its own, measured from the unmodified baseline. The bars do NOT sum to
-          the combined-stack total — for the compounded picture, switch to the Waterfall view.
+          <span className="font-semibold">Standalone deltas, not stack contributions.</span> Each
+          bar shows what the measure would deliver ALONE against the unmodified baseline. Calc Trail
+          and Waterfall typically show LARGER numbers for the same row because they include the
+          effect of every intervention ABOVE this one in the stack. Isolated and Calc Trail will
+          only agree for the first-in-stack intervention; they diverge thereafter by design. The
+          bars here do NOT sum to the combined After-stack total.
         </p>
       </div>
 

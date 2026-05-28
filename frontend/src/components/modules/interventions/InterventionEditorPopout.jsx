@@ -172,6 +172,7 @@ export default function InterventionEditorPopout({
   onDelete,
   onDirtyChange,
   onLivePatchesChange,   // Brief 47 Part 4 — visualiser live update
+  themeSuggestions = [], // Brief 71 Part 4 — distinct existing themes for the combobox
 }) {
   const isOpen = !!intervention
 
@@ -187,6 +188,11 @@ export default function InterventionEditorPopout({
   // two seeds are independent but agree on initial value. The deep
   // clone protects the persisted intervention from accidental mutation.
   const [localLabel, setLocalLabel] = useState(intervention?.label ?? '')
+  // Brief 71 Part 4 (2026-05-28): theme local state, mirrors the label
+  // pattern. Round-trips through onSave the same way (existing field on
+  // the persisted intervention — Brief 41 schema; only the control was
+  // missing).
+  const [localTheme, setLocalTheme] = useState(intervention?.theme ?? '')
   const [localPatches, setLocalPatches] = useState(
     () => cloneIncomingPatches(intervention?.patches)
   )
@@ -198,6 +204,7 @@ export default function InterventionEditorPopout({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     setLocalLabel(intervention?.label ?? '')
+    setLocalTheme(intervention?.theme ?? '')
     setLocalPatches(cloneIncomingPatches(intervention?.patches))
   }, [intervention?.id])
 
@@ -260,6 +267,9 @@ export default function InterventionEditorPopout({
   const isDirty = useMemo(() => {
     if (!intervention) return false
     if ((intervention.label ?? '') !== (localLabel ?? '').trim() && (localLabel ?? '').trim() !== '') return true
+    // Brief 71 Part 4: theme can be edited to '' (clearing the tag). Empty
+    // strings differ from null/undefined so trim + nullish-coalesce both sides.
+    if ((intervention.theme ?? '') !== (localTheme ?? '').trim()) return true
     const persisted = Array.isArray(intervention.patches) ? intervention.patches : []
     if (persisted.length !== localPatches.length) return true
     for (let i = 0; i < persisted.length; i++) {
@@ -270,7 +280,7 @@ export default function InterventionEditorPopout({
       if (JSON.stringify(a.match ?? null) !== JSON.stringify(b.match ?? null)) return true
     }
     return false
-  }, [intervention, localLabel, localPatches])
+  }, [intervention, localLabel, localTheme, localPatches])
 
   useEffect(() => {
     onDirtyChange?.(isDirty)
@@ -280,9 +290,13 @@ export default function InterventionEditorPopout({
   const canSave = !!(localLabel ?? '').trim()
   const handleSave = () => {
     if (!canSave) return
+    // Brief 71 Part 4: persist theme as a trimmed string. Empty string drops
+    // the tag back to '' (kept as a string for shape stability — InterventionRow
+    // only renders the badge when `intervention?.theme` is truthy).
     onSave?.({
       ...intervention,
       label: localLabel.trim(),
+      theme: (localTheme ?? '').trim(),
       patches: localPatches,
     })
   }
@@ -585,6 +599,9 @@ function EditorBody({
         <EditorFooter
           label={localLabel}
           onLabelChange={setLocalLabel}
+          theme={localTheme}
+          onThemeChange={setLocalTheme}
+          themeSuggestions={themeSuggestions}
           baselineEui={baselineEui}
           baselineCarbon={baselineCarbon}
           previewEui={previewEui}

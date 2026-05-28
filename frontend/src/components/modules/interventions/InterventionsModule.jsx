@@ -364,6 +364,19 @@ export default function InterventionsModule() {
     comfortBand,
   }), [params, constructions, systems, libraryData, comfortBand])
 
+  // Brief 71 Part 4 (2026-05-28): distinct theme values from the current
+  // interventions list, alphabetised. Threaded to the editor popout so its
+  // theme combobox surfaces existing tags as datalist autocomplete — tag
+  // consistency without enforcing a closed vocabulary.
+  const themeSuggestions = useMemo(() => {
+    const set = new Set()
+    for (const i of interventions ?? []) {
+      const t = (i?.theme ?? '').trim()
+      if (t) set.add(t)
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [interventions])
+
   // Brief 71 Part 3 (2026-05-28): runEngine closure for the Isolated view
   // (VisualiserHost → IsolatedView → useIsolatedResults → runInterventionStack).
   // Mirrors the inner closure calculateInstant builds at instantCalc.js:6991
@@ -468,6 +481,7 @@ export default function InterventionsModule() {
         onDelete={handleDeleteEditing}
         onDirtyChange={handleDirtyChange}
         onLivePatchesChange={handleLivePatchesChange}
+        themeSuggestions={themeSuggestions}
       />
 
       {/* Brief 47 Part 1 (2026-05-24): library save/load modals removed. */}

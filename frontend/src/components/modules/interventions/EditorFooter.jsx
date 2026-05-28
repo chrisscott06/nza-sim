@@ -59,6 +59,13 @@ function DeltaPill({ delta, unit, tone, title }) {
 export default function EditorFooter({
   label,
   onLabelChange,
+  // Brief 71 Part 4 (2026-05-28): theme is a free-text tag stored on every
+  // intervention. The Isolated view (Brief 71 Part 2) groups by it; the
+  // InterventionRow badge surfaces it. Existing field on every persisted
+  // intervention; only the editor control was missing.
+  theme,
+  onThemeChange,
+  themeSuggestions = [],
   baselineEui,
   baselineCarbon,
   previewEui,
@@ -101,6 +108,27 @@ export default function EditorFooter({
           placeholder="Intervention name"
           className="w-44 px-2 py-1 rounded border border-light-grey text-xxs text-navy focus:outline-none focus:border-navy"
         />
+      </div>
+
+      {/* Theme input — Brief 71 Part 4 (2026-05-28). Free-text combobox via
+          a native <datalist> so existing distinct theme values from the
+          interventions list surface as autocomplete suggestions. Tag
+          consistency without enforcing a closed vocabulary. */}
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        <span className="text-xxs uppercase tracking-wider text-mid-grey font-medium" title="Group tag — shown as a badge on the stack row and used by the Isolated view's group-by-theme toggle">Theme</span>
+        <input
+          type="text"
+          list="brief71-theme-suggestions"
+          value={theme ?? ''}
+          onChange={(e) => onThemeChange?.(e.target.value)}
+          placeholder="e.g. Fabric, Systems"
+          className="w-32 px-2 py-1 rounded border border-light-grey text-xxs text-navy focus:outline-none focus:border-navy"
+        />
+        <datalist id="brief71-theme-suggestions">
+          {themeSuggestions.map((t) => (
+            <option key={t} value={t} />
+          ))}
+        </datalist>
       </div>
 
       {/* Patches counter */}
