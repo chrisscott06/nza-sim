@@ -369,6 +369,35 @@ https://www.notion.so/365d645e05cc81b79160e49029d2158c.)
 
 ---
 
+## Backup discipline (Brief 72 PA, 2026-05-28 — Bible addendum)
+
+The 2026-05-28 22:34 DB-loss incident (worktree backend sharing the data directory via junction with the main backend, causing a clean WAL checkpoint of an empty schema into the live `nza_sim.db`) is the reason this section exists. Two rules apply.
+
+### Rule 1 — Worktree diagnostics never share a data directory with main backend.
+
+If a worktree needs to run the backend for any reason (browser-side discriminator, regression run, sidecar verification, etc.), it MUST have its own `data/` directory — not a junction or symlink back to the main repo's `data/`. Two safer alternatives:
+
+- **Pure-Node fixture path (preferred for read-only diagnostics):** use a JSON fixture saved into `docs/audit/fixtures/`, run the engine code directly with `node scripts/...`, no backend, no SQLite contention.
+- **Scratch DB path (for diagnostics that need the backend):** copy the live DB to `data-scratch/` inside the worktree, point the worktree backend at it via `NZA_DB_FILE=data-scratch/nza_sim.db`, run isolated. Even if it gets wiped, the live one is untouched.
+
+NEVER `mklink /J` a worktree's `data/` to the main repo's `data/`. NEVER copy a worktree's empty DB back over the main one. Treat the live `data/nza_sim.db` as production state.
+
+### Rule 2 — Local DB snapshot is mandatory and scheduled.
+
+A daily snapshot of `data/nza_sim.db` (and `.db-wal`, `.db-shm` if present) is captured automatically by the Windows Scheduled Task **`nza-sim-db-daily-snapshot`** (daily at 02:00 local). Implementation lives at `scripts/snapshot-db.ps1`. Snapshots land in `C:\Users\ChrisScott\Backups\nza-sim-db\nza_sim_YYYY-MM-DD_HHMM.db` with 14-day rolling retention.
+
+**You may not disable, skip, or delete this scheduled task.** If the brief you are working on touches the DB schema, the snapshot is your safety net — confirm the task is `State: Ready` before starting any DB migration:
+
+```powershell
+Get-ScheduledTask -TaskName 'nza-sim-db-daily-snapshot' | Select-Object State
+```
+
+If the task is missing or disabled, re-register it before proceeding by re-running the `Register-ScheduledTask` block in `scripts/snapshot-db.ps1`'s register comment (or by following the original Brief 72 PA registration steps).
+
+**Autonomous-mode note from Brief 72 PA registration (2026-05-28):** the scheduled task was registered with the default principal (current logged-on user). The brief's instruction "Run whether user logged on or not" requires the `S4U` LogonType which needs an admin/elevated PowerShell session — not available from the autonomous shell. The fallback (current-user, logged-on-only) still fires reliably because Chris's laptop is awake by 02:00 most nights; if it isn't, the task fires on next wake. If Chris wants the elevated form, he can re-register from an admin PowerShell with `-Principal (New-ScheduledTaskPrincipal -UserId <user> -LogonType S4U)`.
+
+---
+
 ## Brief management
 
 1. **Active brief:** `docs/briefs/current.md` — this is always the brief being worked on right now.
