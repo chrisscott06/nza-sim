@@ -51,6 +51,32 @@ export default function LightingSection({
     })
   }, [params, mutate])
 
+  // Brief 72 P8 (2026-05-29): section-level gain_fraction editor. Sets
+  // gain_fraction uniformly across all profiles in the section. The
+  // display value is the area-share-weighted average of the per-profile
+  // values; when profiles disagree the box still shows the average and
+  // editing collapses them onto a single value (the brief's UX: one
+  // editor per section, not per profile, because lighting/equipment
+  // profiles share a category-level gain assumption — auxiliary's
+  // per-preset variance lives on its profile panels per P7).
+  //
+  // Principle 3 (orthogonality): this editor touches gain_fraction only;
+  // daylight_factor is per-profile on the panel and stays independent.
+  const totalArea = profiles.reduce((s, p) => s + Number(p.area_share ?? 0), 0) || 1
+  const weightedGF = profiles.length === 0
+    ? 1.0
+    : profiles.reduce((s, p) => s + (Number(p.gain_fraction ?? 1.0) * Number(p.area_share ?? 0)), 0) / totalArea
+  const gfPctDisplay = Math.round(weightedGF * 100)
+
+  const handleGainFractionChange = useCallback((pct) => {
+    const v = Math.max(0, Math.min(1, Number(pct) / 100))
+    const nextProfiles = profiles.map(p => ({ ...p, gain_fraction: v }))
+    mutate('building.gains', {
+      ...(params?.gains ?? {}),
+      lighting: { ...(params?.gains?.lighting ?? {}), profiles: nextProfiles },
+    })
+  }, [profiles, params, mutate])
+
   const renderDetail = (profile) => {
     const mag = profile.magnitude
     return (
@@ -91,6 +117,23 @@ export default function LightingSection({
             {l?.effective_lpd_w_per_m2 != null && annual?.ready
               ? `${l.effective_lpd_w_per_m2.toFixed(2)} W/m²`
               : '—'}
+          </span>
+        </div>
+        {/* Brief 72 P8 (2026-05-29): inline gain_fraction editor on the
+            section header. One value applies to all lighting profiles
+            (category-level assumption). For per-profile variance, edit
+            on the profile panel. Daylight factor stays independent
+            per profile. */}
+        <div className="flex justify-between mt-1 pt-1 border-t border-light-grey/40 items-center">
+          <span className="text-mid-grey">Heat gain</span>
+          <span className="flex items-center gap-1">
+            <input
+              type="number" min={0} max={100} step={5}
+              value={gfPctDisplay}
+              onChange={e => handleGainFractionChange(e.target.value)}
+              className="w-12 px-1 py-0 text-xxs text-navy text-right tabular-nums border border-light-grey rounded focus:outline-none focus:border-mid-grey"
+            />
+            <span className="text-xxs text-mid-grey">%</span>
           </span>
         </div>
       </div>

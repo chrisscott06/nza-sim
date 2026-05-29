@@ -41,6 +41,23 @@ export default function EquipmentSection({
     })
   }, [params, mutate])
 
+  // Brief 72 P8 (2026-05-29): section-level gain_fraction editor — mirror
+  // of LightingSection. See LightingSection.jsx for the design rationale.
+  const totalArea = profiles.reduce((s, p) => s + Number(p.area_share ?? 0), 0) || 1
+  const weightedGF = profiles.length === 0
+    ? 1.0
+    : profiles.reduce((s, p) => s + (Number(p.gain_fraction ?? 1.0) * Number(p.area_share ?? 0)), 0) / totalArea
+  const gfPctDisplay = Math.round(weightedGF * 100)
+
+  const handleGainFractionChange = useCallback((pct) => {
+    const v = Math.max(0, Math.min(1, Number(pct) / 100))
+    const nextProfiles = profiles.map(p => ({ ...p, gain_fraction: v }))
+    mutate('building.gains', {
+      ...(params?.gains ?? {}),
+      equipment: { ...(params?.gains?.equipment ?? {}), profiles: nextProfiles },
+    })
+  }, [profiles, params, mutate])
+
   const renderDetail = (profile) => {
     const baseStr = profile.baseload  ? `${profile.baseload.value}`  : '?'
     const actStr  = profile.active    ? `${profile.active.value}`    : '?'
@@ -88,6 +105,20 @@ export default function EquipmentSection({
           <span className="text-mid-grey">Peak</span>
           <span className="text-navy font-medium">
             {e?.peak_kw != null ? `${e.peak_kw.toFixed(1)} kW` : '—'}
+          </span>
+        </div>
+        {/* Brief 72 P8 (2026-05-29): inline gain_fraction editor — see
+            LightingSection for the design rationale. */}
+        <div className="flex justify-between mt-1 pt-1 border-t border-light-grey/40 items-center">
+          <span className="text-mid-grey">Heat gain</span>
+          <span className="flex items-center gap-1">
+            <input
+              type="number" min={0} max={100} step={5}
+              value={gfPctDisplay}
+              onChange={e2 => handleGainFractionChange(e2.target.value)}
+              className="w-12 px-1 py-0 text-xxs text-navy text-right tabular-nums border border-light-grey rounded focus:outline-none focus:border-mid-grey"
+            />
+            <span className="text-xxs text-mid-grey">%</span>
           </span>
         </div>
       </div>
