@@ -1,0 +1,95 @@
+{
+  "brief": "Brief 73 P1 — Bridgewater clean anchor (post-Brief-72 close)",
+  "source": "node scripts/_brief73_p1_anchor.mjs",
+  "tip_sha": "3e21f3b",
+  "project_id": "3561c5a6-9a3f-4b5c-9e3d-72b449658d9a",
+  "project_name": "HIX Bridgewater",
+  "captured_at": "2026-05-29T14:23:07.213Z",
+  "building": {
+    "num_bedrooms": 138,
+    "occupancy_density": {
+      "value": 3,
+      "basis": "per_room"
+    },
+    "occupancy_rate": 1,
+    "geometry_gia_m2": 4321.799999999999,
+    "reported_gia_m2": 4125,
+    "weather_file": "GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw",
+    "comfort_band_c": {
+      "lower_c": 21,
+      "upper_c": 24
+    }
+  },
+  "totals": {
+    "eui_kwh_per_m2": 185.2,
+    "total_mwh": null,
+    "electricity_mwh": 403.543,
+    "gas_mwh": 360.269,
+    "carbon_kg_per_m2": null,
+    "carbon_t_total": null
+  },
+  "space_heating": {
+    "demand_mwh": 0,
+    "delivered_mwh": 0,
+    "systems": []
+  },
+  "space_cooling": {
+    "demand_mwh": 330.6,
+    "delivered_mwh": 330.6,
+    "systems": []
+  },
+  "dhw": {
+    "demand_mwh": 421.093,
+    "delivered_mwh": 421.093,
+    "systems": []
+  },
+  "ventilation": {
+    "fan_total_mwh": null,
+    "systems": []
+  },
+  "lighting": {
+    "delivered_mwh": null,
+    "systems": []
+  },
+  "small_power": {
+    "delivered_mwh": null,
+    "systems": []
+  },
+  "internal_gains": {
+    "people": {
+      "kwh": 144490.9,
+      "kwh_per_m2": 33.43
+    },
+    "lighting": {
+      "kwh": 56281.8,
+      "electricity_kwh": 56281.8,
+      "kwh_per_m2": 13.02
+    },
+    "equipment": {
+      "kwh": 172100.6,
+      "electricity_kwh": 172100.6,
+      "kwh_per_m2": 39.82
+    },
+    "auxiliary": {
+      "kwh": 41117,
+      "electricity_kwh": 78320.1,
+      "kwh_per_m2": 9.51
+    },
+    "auxiliary_profile_count": 3,
+    "auxiliary_profile_labels": [
+      "External lighting: 1.5 w_per_m2 × gain 0%",
+      "Catering: 6 w_per_m2 × gain 27%",
+      "Pumps: 1 w_per_m2 × gain 100%"
+    ]
+  },
+  "expected_per_brief": {
+    "eui_kwh_per_m2": 163.5,
+    "electricity_mwh": 314.2,
+    "gas_mwh": 360.3,
+    "fan_total_mwh": 0,
+    "lighting_mwh": 56.3,
+    "small_power_mwh": 172.1,
+    "dhw_mwh": 421.1,
+    "note": "Brief notes \"If your numbers diverge materially, log it and proceed\". This run is the anchor; expected is for reference."
+  }
+}

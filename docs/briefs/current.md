@@ -1,24 +1,30 @@
 # Current brief
 
-**Brief 72 — Auxiliary loads, gain_fraction, and DHW load-shape UI.** Architect-authored at [`active/72_auxiliary_loads_dhw_shape.md`](active/72_auxiliary_loads_dhw_shape.md); 11 parts. Carries forward the never-shipped Brief 60 Part B/D addendum and folds in two correctness fixes uncovered during the Brief 71 walkthrough (headcount unification + Occupancy/Calc-trail discriminator).
+**Brief 73 — Ventilation share rule + auxiliary visualisation + lighting baseline check.** Architect-authored at [`active/73_ventilation_auxiliary_lighting.md`](active/73_ventilation_auxiliary_lighting.md); 7 parts. First brief after Brief 72 close. Bundles three findings from the post-Brief-72 walkthrough — ventilation share rule (engine refuses fan electricity → 0 MWh), auxiliary not rendering on Heat Balance / Energy Flows Sankeys despite Brief 72 P5 rollups, lighting + small power post-recreation reconciliation. Build on Brief 72's auxiliary infrastructure (P5 rollups, P6 colour token) — consume, not modify.
 
-**Anchor** (Principle 5, captured at Part 1, HEAD `286f57c`): Bridgewater clean = **EUI 130.0 kWh/m²·yr / 536.4 MWh total** (electricity 356.3 + gas 180.1). Demand split: Heating 55.9 / Cooling 87.6 / DHW 210.5 MWh. Full anchor table at `docs/audit/72_auxiliary_loads_dhw_shape.md` §1.
+**Anchor** (captured at Part 1, HEAD `3e21f3b`): Bridgewater clean = **EUI 185.2 kWh/m²·yr** (electricity 403.5 + gas 360.3 MWh). Diverges from brief's expected 163.5 because Chris's walkthrough authored 3 auxiliary profiles (External lighting 0% / Catering 6 W/m² @ 27% / Pumps 1 W/m² @ 100%); their +78.3 MWh electricity is the entire EUI shift. Heat demand 0 / Cool 330.6 / DHW 421.1 MWh. Per-system rollups returned empty — path-discovery is Part 2 territory. Full anchor table at [`docs/audit/73_ventilation_auxiliary_lighting.md`](../audit/73_ventilation_auxiliary_lighting.md) §1.
 
-**Sequencing:** P1 anchor + STATUS reconcile (this commit) → P2 discriminator (read-only, H1/H2/H3 settled, decides whether P2b fix is needed) → P3 headcount unification + num_bedrooms capture → P4 schema → P5 engine wiring (Rule 14 check) → P6 colour → P7 Aux UI [HARD STOP] → P8 gain_fraction editor [HARD STOP] → P9 DHW load-shape UI → P10 patch capture → P11 walkthrough + close. Each Part = one commit. HARD STOPs at P7 and P8 for Chris's browser pass.
+**Ventilation fan total**: null in the engine result (THE BUG — Part 2 diagnoses, Part 3 fixes).
+
+**Sequencing:** P1 land + anchor (this commit) → P2 ventilation share diagnostic (read-only) → P3 ventilation share fix → P4 auxiliary viz diagnostic (read-only) → P5 auxiliary ribbon in Heat Balance + Energy Flows Sankeys + per-service breakdown → P6 lighting + small power reconciliation (read-only, outcome a/b/c) → P7 walkthrough + close [HARD STOP for Chris's browser pass]. Each Part = one commit.
 
 ## Recently closed
 
 | Brief | Closed | Title | Archive |
 |---|---|---|---|
+| 72 | 2026-05-29 | Auxiliary loads, gain_fraction, DHW load-shape UI + DB recovery (OVERNIGHT) | [`archive/72_auxiliary_loads_dhw_shape_COMPLETED.md`](archive/72_auxiliary_loads_dhw_shape_COMPLETED.md) |
 | 71 | 2026-05-28 | Interventions: Isolated vs Combined evaluation + theme grouping | [`archive/71_interventions_isolated_vs_combined_COMPLETED.md`](archive/71_interventions_isolated_vs_combined_COMPLETED.md) |
 
 ## Queued (not yet started)
 
-- **Brief 70 Parts 2–4** — day-zoom + week-zoom + walkthrough close (Brief 70 Part 1 + adhoc polish landed; remainder pending)
-- **Brief 73** — Operable door heat_loss=0 on Systems Heat Balance (engine-side natvent parity bug). Trace summary at the bottom of `archive/71_interventions_isolated_vs_combined_COMPLETED.md`.
-- **Brief 60 Part C (folded back in via Brief 74+)** — baseline/intervention parity guard. Brief 60 Part B is absorbed into Brief 72 (auxiliary loads).
-- **Brief 74 (drafted, awaiting Brief 72 close)** — interventions diagnostic harness + tab redesign.
+- **Brief 70 Parts 2–4** — day-zoom + week-zoom + walkthrough close (Brief 70 Part 1 + adhoc polish landed; remainder pending).
+- **Brief 74 (drafted, awaiting Brief 73 close)** — interventions diagnostic harness + tab redesign.
+- **Brief 75 (renumber the door-bug placeholder)** — Operable door heat_loss=0 on Systems Heat Balance (engine-side natvent parity bug). Was queued as "Brief 73" in the door-bug placeholder; per Brief 73 brief text this renumbers to 75 on close.
 - **Brief 76 (queued)** — WWHR (needs a DHW end-use split first).
+
+## Out of scope (per Brief 73 brief text)
+
+Door bug (→ Brief 75), interventions diagnostic harness + tab redesign (→ Brief 74), WWHR (→ Brief 76), lighting room-vs-communal split, Sankey redesign beyond adding the missing ribbon, any change to Brief 72's auxiliary engine layer.
 
 ## Pending housekeeping (catalogued, not picked up)
 
