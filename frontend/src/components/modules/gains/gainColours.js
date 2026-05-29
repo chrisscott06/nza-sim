@@ -30,10 +30,21 @@ export const GAIN_COLOURS = {
   occupancy: '#8B5CF6',  // violet-500 — people  (deepest)
   equipment: '#A78BFA',  // violet-400 — equipment (medium)
   lighting:  '#C4B5FD',  // violet-300 — lighting  (lightest)
+  // Brief 72 P6 (2026-05-29): auxiliary loads. Sits outside the violet
+  // gain family deliberately — auxiliary plug/equipment loads (external
+  // lighting, catering hoods, pumps, lifts, small power) are independent
+  // infrastructure rather than occupancy-driven internal gains. Neutral
+  // gray-600 marks that distinction. Same hex appears in
+  // balanceColours.js INTERNAL_COLOURS — both palettes must stay in
+  // lockstep (single source of truth requires updating in the same
+  // commit, Rule 14 spirit applied to UI palettes per the brief).
+  auxiliary: '#4B5563',  // gray-600 — auxiliary
 }
 
 export const GAIN_LABELS = {
   occupancy: 'Occupancy',
   lighting:  'Lighting',
   equipment: 'Equipment',
+  // Brief 72 P6 (2026-05-29): auxiliary label.
+  auxiliary: 'Auxiliary',
 }

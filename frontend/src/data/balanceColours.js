@@ -15,6 +15,18 @@ export const INTERNAL_COLOURS = {
   people:    '#8B5CF6', // violet-500
   equipment: '#A78BFA', // violet-400
   lighting:  '#C4B5FD', // violet-300
+  // Brief 72 P6 (2026-05-29): auxiliary loads — outside the violet
+  // gain family deliberately. Auxiliary plug/equipment loads (external
+  // lighting, catering hoods, pumps, lifts, small power) aren't an
+  // occupancy-driven internal gain in the same way People / Equipment /
+  // Lighting are — they're independent infrastructure that happens to
+  // contribute heat. The neutral gray-600 (#4B5563) marks that
+  // distinction visually while keeping the gain palette tonally
+  // coherent. Same hex appears in gainColours.js — single source of
+  // truth requires both files agree on this constant in the SAME
+  // commit (Rule 14 spirit applied to UI palettes — pattern from the
+  // brief).
+  auxiliary: '#4B5563', // gray-600
 }
 
 // Mechanical
@@ -107,6 +119,8 @@ export const LABELS = {
   people:           'People',
   equipment:        'Equipment',
   lighting:         'Lighting',
+  // Brief 72 P6 (2026-05-29): auxiliary loads label.
+  auxiliary:        'Auxiliary',
   heating:          'Heating',
   solar_north:      'Solar — North',
   solar_east:       'Solar — East',
@@ -119,7 +133,9 @@ export const LABELS = {
 // — components should call those helpers, not import these constants directly,
 // except as a State 3 default fallback.
 export const LOSS_ORDER  = ['external_wall', 'roof', 'ground_floor', 'glazing', 'infiltration', 'openings_louvre', 'openings_window', 'ventilation', 'cooling']
-export const GAIN_ORDER  = ['solar_south', 'solar_east', 'solar_west', 'solar_north', 'people', 'equipment', 'lighting', 'heating']
+// Brief 72 P6 (2026-05-29): auxiliary slots between equipment and lighting
+// — same band as the other plug/equipment-class loads, distinct hex.
+export const GAIN_ORDER  = ['solar_south', 'solar_east', 'solar_west', 'solar_north', 'people', 'equipment', 'auxiliary', 'lighting', 'heating']
 
 export function colourForElement(elementKey) {
   if (elementKey.startsWith('solar_')) {
