@@ -75,6 +75,16 @@ const DEFAULT_GAINS = {
         relationship_to_occupancy: 'proportional_with_spill',
         spill_minutes:   15,
         daylight_factor: 0.6,
+        // Brief 72 P4 (2026-05-29): gain_fraction — the fraction of the
+        // profile's electricity consumption that becomes a zone-heat gain.
+        // Independent of daylight_factor: daylight_factor reduces the
+        // *load* (kWh of electricity), gain_fraction routes the *remaining
+        // load's heat side* into the heat balance. Default 1.0 keeps the
+        // pre-brief behaviour byte-identical (all electricity becomes heat,
+        // the long-standing implicit assumption for lighting). External /
+        // task lighting that radiates outdoors can drop this below 1.0
+        // without altering the electrical load. Bounded [0, 1].
+        gain_fraction: 1.0,
         // Fraction of GIA this profile applies to. Sum across profiles
         // SHOULD equal 1.0 (warning surfaced in UI if not); engine
         // weights each profile's contribution by area_share.
@@ -104,6 +114,13 @@ const DEFAULT_GAINS = {
         relationship_to_occupancy: 'proportional',
         // Fraction of `active` that runs when unoccupied (active floor)
         standby_factor: 0.10,
+        // Brief 72 P4 (2026-05-29): gain_fraction — see lighting comment
+        // above. Equipment's pre-brief implicit assumption was also 1.0
+        // (computers, kitchen appliances, all radiate to the zone). Default
+        // 1.0 keeps existing projects byte-identical. Catering equipment
+        // with extract hoods (gain_fraction ≈ 0.5) is the canonical use
+        // case for editing this below 1.0. Bounded [0, 1].
+        gain_fraction: 1.0,
         area_share: 1.0,
         schedule: {
           weekday:             [..._hotelEquipPreset.schedule.weekday],
@@ -115,6 +132,36 @@ const DEFAULT_GAINS = {
         _provenance: { source: 'seeded_default', confidence: 'medium' },
       },
     ],
+  },
+  // Brief 72 P4 (2026-05-29) — auxiliary loads. Top-level parallel to
+  // lighting / equipment so the engine can iterate uniformly. Default
+  // is an empty profiles array; new projects start with no auxiliary
+  // loads (anchor unchanged for projects that don't opt in).
+  //
+  // The six P7 preset items (External lighting, Catering, Pumps, Small
+  // power, Lifts, Custom) each build a profile with this minimum shape:
+  //
+  //   { id, label,
+  //     magnitude: { value: <W/m²>, unit: 'w_per_m2' },
+  //     gain_fraction: <0–1>,                  // brief default per preset
+  //     relationship_to_occupancy: 'proportional' | 'independent' | 'always_on',
+  //     spill_minutes: 0,
+  //     area_share: 1.0,
+  //     schedule: { weekday, saturday, sunday, monthly_multipliers, exceptions },
+  //     _provenance: { source, confidence }
+  //   }
+  //
+  // No `standby_factor` (auxiliary doesn't have equipment's active /
+  // baseload split — single magnitude × schedule × gain_fraction).
+  // No `daylight_factor` (auxiliary isn't daylight-responsive; External
+  // Lighting is on at night by schedule, not by daylight curve).
+  // No `baseload` / `active` (single magnitude).
+  //
+  // The shape is established here so P5 engine wiring and P7 UI can
+  // both reference DEFAULT_GAINS.auxiliary; the empty default keeps P4
+  // strictly schema-only (no behavioural change).
+  auxiliary: {
+    profiles: [],
   },
 }
 
@@ -445,6 +492,10 @@ function _lightingProfileFromV23(v23Lighting) {
     relationship_to_occupancy: v23Lighting.relationship_to_occupancy ?? DEFAULT_GAINS.lighting.profiles[0].relationship_to_occupancy,
     spill_minutes:   v23Lighting.spill_minutes   ?? DEFAULT_GAINS.lighting.profiles[0].spill_minutes,
     daylight_factor: v23Lighting.daylight_factor ?? DEFAULT_GAINS.lighting.profiles[0].daylight_factor,
+    // Brief 72 P4 (2026-05-29): gain_fraction defaults to 1.0 — anchor
+    // preservation. v2.3 projects never carried this field; 1.0 means
+    // all the electricity becomes heat (the pre-brief implicit assumption).
+    gain_fraction:   v23Lighting.gain_fraction   ?? DEFAULT_GAINS.lighting.profiles[0].gain_fraction,
     area_share: 1.0,
     schedule: sched,
     _provenance: v23Lighting._provenance ?? { source: 'migrated_v23_to_v24', confidence: 'medium' },
@@ -463,6 +514,10 @@ function _equipmentProfileFromV23(v23Equipment) {
     active:   { ...DEFAULT_GAINS.equipment.profiles[0].active,   ...(v23Equipment.active   ?? {}) },
     relationship_to_occupancy: v23Equipment.relationship_to_occupancy ?? DEFAULT_GAINS.equipment.profiles[0].relationship_to_occupancy,
     standby_factor: v23Equipment.standby_factor ?? DEFAULT_GAINS.equipment.profiles[0].standby_factor,
+    // Brief 72 P4 (2026-05-29): gain_fraction defaults to 1.0 — anchor
+    // preservation. v2.3 projects never carried this field; 1.0 means
+    // all the electricity becomes heat (the pre-brief implicit assumption).
+    gain_fraction:  v23Equipment.gain_fraction  ?? DEFAULT_GAINS.equipment.profiles[0].gain_fraction,
     area_share: 1.0,
     schedule: sched,
     _provenance: v23Equipment._provenance ?? { source: 'migrated_v23_to_v24', confidence: 'medium' },
@@ -547,7 +602,50 @@ function migrateGainsV23(bc) {
     }
   }
 
-  return { lighting, equipment }
+  // ── Auxiliary (Brief 72 P4, 2026-05-29) ──────────────────────────────────
+  // No v2.3 source — auxiliary is wholly new in this brief. Two cases:
+  //
+  //   1. bc.gains.auxiliary.profiles already present  → preserve verbatim,
+  //      just normalise per-profile shape via _ensureProfileFields so any
+  //      future migration (e.g. v2.5 adding a new auxiliary field) lands.
+  //   2. Absent                                       → seed empty profiles
+  //      array. Existing projects get NO auxiliary loads automatically;
+  //      anchor stays byte-identical. Users opt in by adding profiles
+  //      via the AuxiliarySection preset picker (P7).
+  //
+  // The auxiliary "default profile" for _ensureProfileFields is shaped on
+  // lighting (single magnitude, no baseload/active split, gain_fraction
+  // present) but with gain-side fields stripped. We hand-build a minimal
+  // default here rather than referencing DEFAULT_GAINS.auxiliary.profiles[0]
+  // (which is empty — auxiliary has no canonical default profile).
+  const _auxDefaultProfile = {
+    id: 'auxiliary_profile',
+    label: 'Auxiliary',
+    magnitude: { value: 0, unit: 'w_per_m2' },
+    gain_fraction: 1.0,
+    relationship_to_occupancy: 'independent',
+    spill_minutes: 0,
+    area_share: 1.0,
+    schedule: {
+      weekday:             new Array(24).fill(0),
+      saturday:            new Array(24).fill(0),
+      sunday:              new Array(24).fill(0),
+      monthly_multipliers: new Array(12).fill(1.0),
+      exceptions:          [],
+    },
+    _provenance: { source: 'seeded_default', confidence: 'low' },
+  }
+  let auxiliary
+  const haveAuxiliary = Array.isArray(bc?.gains?.auxiliary?.profiles)
+  if (haveAuxiliary) {
+    auxiliary = {
+      profiles: _ensureProfileFields(bc.gains.auxiliary.profiles, _auxDefaultProfile),
+    }
+  } else {
+    auxiliary = { profiles: [] }
+  }
+
+  return { lighting, equipment, auxiliary }
 }
 
 const DEFAULT_CONSTRUCTIONS = {
