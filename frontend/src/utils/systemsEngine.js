@@ -35,6 +35,12 @@
  */
 
 import { CARBON_FACTORS_CURRENT } from '../data/carbonFactors.js'
+// Brief 72 P3 (2026-05-28): unified headcount source. The v40 _computeDhw
+// path previously read `building.people_per_room` directly (a phantom field
+// that decoupled DHW from occupancy density changes — Brief 72 P2
+// discriminator). Now routes through the same `computeTotalOccupants`
+// helper the State 2 hourly occupancy gain accumulator uses.
+import { computeTotalOccupants } from './instantCalc.js'
 
 const VALID_SERVICES = ['heating', 'cooling', 'dhw', 'ventilation', 'lighting', 'small_power']
 
@@ -465,10 +471,15 @@ function _computeDhw(systems, serviceLevel, gia, building, presenceHourly = null
     // = 201 occupants → total_tap = 201 × 80 = 16,080 L/day →
     // annual thermal = 204.8 MWh (matches B1 hand-calc, B3 gate
     // ±0.5 MWh).
-    const num_rooms = Number(building?.num_bedrooms ?? 0)
-    const ppr       = Number(building?.people_per_room ?? 1.5)
-    const occ_rate  = Number(building?.occupancy_rate ?? 1)
-    const occupants = Math.max(0, num_rooms * ppr * occ_rate)
+    // Brief 72 P3 (2026-05-28): unified headcount via computeTotalOccupants
+    // (basis-aware: num_bedrooms × density.value for per_room; density.value
+    // × gia for per_m2). Retires the phantom `building.people_per_room` that
+    // decoupled DHW from occupancy patches. Bridgewater pre-P3 = 138 × 1.5 = 207;
+    // post-P3 = 138 × 3 = 414 effective headcount at 100% rate.
+    const occupancy_block = building?.occupancy
+    const occ_rate        = Number(occupancy_block?.occupancy_rate ?? building?.occupancy_rate ?? 1)
+    const total_at_100    = computeTotalOccupants(occupancy_block, building, gia)
+    const occupants       = Math.max(0, total_at_100 * occ_rate)
     total_tap_litres_per_day = occupants * litres_per_person_per_day
   } else {  // 'per_m2'
     const litres_per_m2_per_day = Number(serviceLevel?.dhw_demand_litres_per_m2_per_day ?? 1.1)

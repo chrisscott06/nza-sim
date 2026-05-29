@@ -4838,10 +4838,20 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
   // demand_at_comfort_mwh at L4413 (`dhw_demand_displayed_mwh`). The fix
   // here keeps the legacy v25 path consistent for projects without v40
   // DHW (Brief 28k-era projects). The v40 fix lives in systemsEngine.js.
-  const dhw_num_rooms = Number(building?.num_bedrooms ?? 0)
-  const dhw_ppr       = Number(building?.people_per_room ?? 1.5)
-  const dhw_occ_rate  = Number(building?.occupancy_rate ?? 1)
-  const dhw_headcount = Math.max(0, dhw_num_rooms * dhw_ppr * dhw_occ_rate)
+  //
+  // Brief 72 P3 (2026-05-28): unified headcount via computeTotalOccupants —
+  // retires the phantom `building.people_per_room` that decoupled DHW from
+  // occupancy. Pre-P3: `num_bedrooms × people_per_room × occupancy_rate`
+  // (Bridgewater = 138 × 1.5 × 1 = 207, independent of density.value).
+  // Post-P3: `computeTotalOccupants(occupancy, building, gia) × occupancy_rate`
+  // — basis-aware (per_room: num_bedrooms × density.value;
+  //                per_m2:   gia × density.value).
+  // Bridgewater post-P3 = 138 × 3 × 1 = 414, responds to density patches.
+  const dhw_gia          = state2Result?.heat_balance?.metadata?.gia_m2 ?? state2Result?.metadata?.gia_m2 ?? 0
+  const dhw_occupancy    = building?.occupancy
+  const dhw_occ_rate     = Number(dhw_occupancy?.occupancy_rate ?? building?.occupancy_rate ?? 1)
+  const dhw_total_at_100 = computeTotalOccupants(dhw_occupancy, building, dhw_gia)
+  const dhw_headcount    = Math.max(0, dhw_total_at_100 * dhw_occ_rate)
   // dhwKwhPerPersonHour(L, store, cold) returns kWh per PERSON·HOUR using
   // tap-mix-corrected storage delta. Multiplying by 8760 h/yr gives the
   // annual headcount-based DHW demand (no occupancy_rate or schedule
@@ -5675,10 +5685,14 @@ export function calculateInstantDegreeDay(building = {}, constructions = {}, sys
   const total_solar = Object.values(solar_gains).reduce((a, b) => a + b, 0) + opaque_wall_total + roof_solar_kWh
 
   // ── Occupancy ─────────────────────────────────────────────────────────────
+  // Brief 72 P3 (2026-05-28): unified via computeTotalOccupants —
+  // see Brief 72 audit §3 / Principle 7.
   const num_bedrooms    = Number(building.num_bedrooms    ?? 138)
-  const occupancy_rate  = Math.max(0, Math.min(1, Number(building.occupancy_rate  ?? 0.75)))
-  const people_per_room = Number(building.people_per_room ?? 1.5)
-  const avg_occupants   = num_bedrooms * occupancy_rate * people_per_room
+  const occupancy_rate  = Math.max(0, Math.min(1,
+    Number(building.occupancy?.occupancy_rate ?? building.occupancy_rate ?? 0.75)
+  ))
+  const total_at_100    = computeTotalOccupants(building.occupancy, building, gia)
+  const avg_occupants   = total_at_100 * occupancy_rate
 
   // ── Internal gains ────────────────────────────────────────────────────────
   const lpd_raw = Number(systems.lighting_power_density ?? 8)   // W/m²
@@ -6381,10 +6395,14 @@ function _calculateInstantBaseline(building = {}, constructions = {}, systems = 
   const COOLING_GAIN_FRACTION = 0.25
 
   // ── Occupancy ─────────────────────────────────────────────────────────────
+  // Brief 72 P3 (2026-05-28): unified via computeTotalOccupants
+  // (inline-legacy 'full' path — Rule 14 Pattern C location).
   const num_bedrooms    = Number(building.num_bedrooms    ?? 138)
-  const occupancy_rate  = Math.max(0, Math.min(1, Number(building.occupancy_rate  ?? 0.75)))
-  const people_per_room = Number(building.people_per_room ?? 1.5)
-  const avg_occupants   = num_bedrooms * occupancy_rate * people_per_room
+  const occupancy_rate  = Math.max(0, Math.min(1,
+    Number(building.occupancy?.occupancy_rate ?? building.occupancy_rate ?? 0.75)
+  ))
+  const total_at_100    = computeTotalOccupants(building.occupancy, building, gia)
+  const avg_occupants   = total_at_100 * occupancy_rate
 
   // ── Internal gain watts (peak, before schedule fraction) ──────────────────
   const lpd = Number(systems.lighting_power_density ?? 8) * lightingControlFactor(systems.lighting_control)
