@@ -233,6 +233,33 @@ function DHWServiceFields({ serviceLevel, onUpdateServiceLevel }) {
             min={0.1} max={10.0} step={0.1} unit="L/m²/day"
           />
         )}
+        {/* Brief 72 P9 (2026-05-29): DHW load-shape toggle. Engine
+            already supports 'flat' | 'follow_occupancy' via Brief 58 B4
+            (systemsEngine.js:497–520); this surfaces the field as a
+            first-class UI control.
+
+            'flat' — annual L/day spread uniformly across 8760 hours
+                     (the pre-B4 anchor; default for all existing
+                     projects).
+            'follow_occupancy' — annual draw weighted by the building
+                     occupancy schedule's per-hour presence. Annual
+                     total invariant by construction (weights normalised
+                     to sum to 1); only the distribution changes. Useful
+                     when the user wants DHW peaks to align with
+                     check-in / shower hours rather than a flat baseline.
+
+            Demand per-person / per-m² is unaffected (80 L/p/day default
+            stays put). The toggle changes hourly distribution, not
+            annual quantity. */}
+        <LabeledSelect
+          label="Load shape"
+          value={serviceLevel?.dhw_load_shape ?? 'flat'}
+          onChange={v => onUpdateServiceLevel({ dhw_load_shape: v })}
+          options={[
+            { value: 'flat',              label: 'Flat (uniform 8760)' },
+            { value: 'follow_occupancy',  label: 'Follow occupancy' },
+          ]}
+        />
       </Group>
     </>
   )
