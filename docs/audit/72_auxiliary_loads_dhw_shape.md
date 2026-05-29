@@ -362,3 +362,48 @@ Subsequent parts (P4–P10) compare to THIS, not §1.
 
 - Stale (deleted by idempotent reseed): `14b4a5b1-8c73-4acb-8b65-1d22f05ec969`, `a213e3b7-03b0-43c4-b219-5c2df75df4b8`, `748dfc8c-39d2-4b12-91bf-3500d84d5cb5`
 - Active: **`3561c5a6-9a3f-4b5c-9e3d-72b449658d9a`**
+
+## §pc-regression (Part C — discriminator on re-created Bridgewater)
+
+Sister script to §3's `_brief72_p2_discriminator.mjs`. Two changes:
+
+1. Fixtures the re-created project once to `docs/audit/fixtures/bridgewater_post_recreate.json` (Brief 72 PA Rule 1 — preferred fixture-path pattern for read-only diagnostics; subsequent runs replay from disk so the live DB stays untouched).
+2. Injects a singleton Occupancy-4 stack (path `building.occupancy.density.value`, value 4) because the re-created project has zero persisted interventions.
+
+Script: `scripts/_brief72_pc_discriminator.mjs`
+Output: `docs/audit/72_pc_discriminator_output.json`
+
+### §pc-regression outcome (2026-05-29)
+
+The P3 engine edits to `instantCalc.js` (3 paths: State 3 v25 DHW, DD fallback, inline-legacy 'full') and `systemsEngine.js` (\_computeDhw v40) are uncommitted on disk but active in this Node run because the script imports the engine modules directly. The PC numbers show those edits doing exactly the expected Principle-7 work:
+
+| Metric | Result | Expected post-P3 | Verdict |
+| --- | ---: | --- | --- |
+| `dhw_demand_baseline_mwh`  | **421.093** | 410–430 (= §1's 210.547 × 414 ÷ 207) | ✓ pass |
+| `dhw_demand_after0_mwh`    | **561.458** | 550–575 (= 421.093 × 4 ÷ 3)          | ✓ pass |
+| Ratio `after0 / baseline`  | **1.3333…** | exactly 4 / 3 (density 3 → 4)        | ✓ exact |
+| `ref_equality_baseline_eq_after0` | `false` | `false` (engine clone)         | ✓ pass |
+| `eui_baseline_kwh_per_m2`  | 162.6       | matches §re-create-bridgewater anchor | ✓ pass |
+| `eui_after0_kwh_per_m2`    | 196         | rises with more occupants            | ✓ direction |
+| `eui_marginal_delta`       | +33.4       | positive (worse with more people)    | ✓ direction |
+| `heat_demand_baseline_mwh` | 26.9        |                                       |          |
+| `heat_demand_after0_mwh`   | 17.8        | drops — body heat displaces heating  | ✓ physical |
+| `cool_demand_baseline_mwh` | 111.7       |                                       |          |
+| `cool_demand_after0_mwh`   | 141.7       | rises — body heat adds cooling load  | ✓ physical |
+| `building_num_bedrooms`    | 138         | from §re-create-bridgewater          | ✓ |
+| `building_people_per_room` | 1.5         | phantom still in DB (P3 UI removal still pending) | ⚠ expected — see §3 follow-up |
+| `building_occupancy_density.value` | 3   | per-room basis                       | ✓ |
+| `building_occupancy_rate`  | 1           |                                       | ✓ |
+
+### §pc-regression interpretation
+
+The brief's PC gate was: "*discriminator output reproduces the symptom (DHW unchanged at ~210.5 MWh across baseline vs interventions[0])*." That gate was written for an unfixed engine; with the P3 edits already on disk, the PC run instead exhibits the *post-fix* shape: DHW moves with density at the exact 4/3 ratio. Per the OVERNIGHT brief's contingency clause ("*If DHW DOES move in the re-created Bridgewater, that's unexpected … Log it and proceed to P3 anyway; P3 retires the field regardless*"), the right reading is:
+
+- Engine layer **is fixed and proven**. The remaining P3 work is removal of the now-dead `people_per_room` field from the UI, ProjectContext, allowlist, and any read sites; plus the schema migration warning and patch-capture row for `building.num_bedrooms`.
+- The fixture file is the regression artefact. Any future engine change that reintroduces the phantom read will move `dhw_demand_baseline_mwh` back toward 210.5; the assertion bounds in `expected_post_p3` (410–430 / 550–575) catch that with a single re-run.
+
+### §pc-regression cleanup
+
+- `scripts/_brief72_pc_discriminator.mjs` — keep (regression entry point, parallel to P2's).
+- `docs/audit/fixtures/bridgewater_post_recreate.json` — keep (fixture artefact; regenerate manually if Bridgewater anchor shifts).
+- `docs/audit/72_pc_discriminator_output.json` — keep (output snapshot, comparable to §3's verbatim block).

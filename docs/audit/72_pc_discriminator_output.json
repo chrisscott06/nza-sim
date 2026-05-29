@@ -1,0 +1,50 @@
+{
+  "brief": "Brief 72 PC discriminator (regression on re-created Bridgewater)",
+  "source": "node scripts/_brief72_pc_discriminator.mjs",
+  "fixture": "docs/audit/fixtures/bridgewater_post_recreate.json",
+  "project_id": "3561c5a6-9a3f-4b5c-9e3d-72b449658d9a",
+  "project_name": "HIX Bridgewater",
+  "injected_intervention": {
+    "id": "occ4",
+    "label": "Occupancy 4",
+    "theme": "Occupancy",
+    "enabled": true,
+    "patches": [
+      {
+        "op": "set",
+        "path": "building.occupancy.density.value",
+        "value": 4
+      }
+    ]
+  },
+  "stack_interventions_count": 1,
+  "ref_equality_baseline_eq_after0": false,
+  "intervention_0_id": "occ4",
+  "intervention_0_enabled": true,
+  "eui_baseline_kwh_per_m2": 162.6,
+  "eui_after0_kwh_per_m2": 196,
+  "eui_marginal_delta_kwh_per_m2": 33.400000000000006,
+  "eui_cumulative_delta_kwh_per_m2": 33.400000000000006,
+  "heat_demand_baseline_mwh": 26.9,
+  "heat_demand_after0_mwh": 17.8,
+  "cool_demand_baseline_mwh": 111.7,
+  "cool_demand_after0_mwh": 141.7,
+  "dhw_demand_baseline_mwh": 421.093,
+  "dhw_demand_after0_mwh": 561.458,
+  "elec_total_baseline_mwh": 310.374,
+  "elec_total_after0_mwh": 328.024,
+  "gas_total_baseline_mwh": 360.269,
+  "gas_total_after0_mwh": 480.358,
+  "building_num_bedrooms": 138,
+  "building_people_per_room": 1.5,
+  "building_occupancy_density": 3,
+  "building_occupancy_basis": "per_room",
+  "building_occupancy_rate": 1,
+  "expected_post_p3": {
+    "dhw_demand_baseline_mwh_min": 410,
+    "dhw_demand_baseline_mwh_max": 430,
+    "dhw_demand_after0_mwh_min": 550,
+    "dhw_demand_after0_mwh_max": 575,
+    "note": "138 num_bedrooms × density × occupancy_rate; density 3→4 ⇒ DHW × 4/3"
+  }
+}
