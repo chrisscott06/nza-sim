@@ -2261,13 +2261,23 @@ function computeHourlyGains(building, h, weatherData, gia) {
   // relationship_to_occupancy. profile.schedule carries its own exceptions
   // (independent mode) — proportional / proportional_with_spill cascade
   // from the OCCUPANCY schedule + presence value computed above.
+  //
+  // Brief 72 P5 (2026-05-29): the per-hour value is split into ELECTRICITY
+  // (the carrier the user paid for) and GAIN (zone heat = electricity ×
+  // gain_fraction). gain_fraction defaults to 1.0 (anchor preservation —
+  // pre-brief implicit assumption that all electricity becomes heat).
+  // Returned `lighting` is the GAIN (heat balance integrand); returned
+  // `lighting_electricity` is the ELECTRICITY (systemsEngine consumer).
+  // Per-profile entries carry both `value` (gain) and `electricity`.
   const lightingProfiles = building?.gains?.lighting?.profiles
   let Q_lighting = 0
+  let Q_lighting_electricity = 0
   const lighting_per_profile = []
   if (Array.isArray(lightingProfiles)) {
     for (const profile of lightingProfiles) {
       const lpd = magnitudeToWPerM2(profile.magnitude, building, gia)
       const area_share = Number(profile.area_share ?? 1.0)
+      const gain_fraction = Math.max(0, Math.min(1, Number(profile.gain_fraction ?? 1.0)))
       // For 'independent' lighting profiles, the profile's own exception
       // calendar may differ from occupancy's — re-resolve here.
       let pFrac
@@ -2286,9 +2296,11 @@ function computeHourlyGains(building, h, weatherData, gia) {
       } else {
         pFrac = lightingFractionForHour(profile, presence, hourOfDay, monthIdx, dayType, sched, occupancy_rate)
       }
-      const Q = gia * lpd * area_share * pFrac
-      Q_lighting += Q
-      lighting_per_profile.push({ id: profile.id, value: Q, fraction: pFrac })
+      const Q_e = gia * lpd * area_share * pFrac   // electricity (W·h-equivalent)
+      const Q_g = Q_e * gain_fraction              // zone gain
+      Q_lighting             += Q_g
+      Q_lighting_electricity += Q_e
+      lighting_per_profile.push({ id: profile.id, value: Q_g, electricity: Q_e, gain_fraction, fraction: pFrac })
     }
   }
 
@@ -2296,15 +2308,24 @@ function computeHourlyGains(building, h, weatherData, gia) {
   //
   // baseload is occupancy-independent 24/7; active follows the relationship.
   // Each profile contributes baseload AND active scaled by its area_share.
+  //
+  // Brief 72 P5 (2026-05-29): same gain_fraction split as lighting. Applied
+  // to BOTH baseload and active (the fraction is a property of the
+  // equipment, not of its duty cycle). `value` is the gain side;
+  // `electricity` is the carrier; both `baseload` and `active` reflect
+  // the gain side (legacy field semantics preserved).
   const equipmentProfiles = building?.gains?.equipment?.profiles
   let Q_equipment_baseload = 0
   let Q_equipment_active   = 0
+  let Q_equipment_electricity_baseload = 0
+  let Q_equipment_electricity_active   = 0
   const equipment_per_profile = []
   if (Array.isArray(equipmentProfiles)) {
     for (const profile of equipmentProfiles) {
       const baseload_W = magnitudeToWPerM2(profile.baseload, building, gia)
       const active_W   = magnitudeToWPerM2(profile.active,   building, gia)
       const area_share = Number(profile.area_share ?? 1.0)
+      const gain_fraction = Math.max(0, Math.min(1, Number(profile.gain_fraction ?? 1.0)))
       let pFrac
       if (profile.relationship_to_occupancy === 'independent') {
         const pSched = profile.schedule ?? sched
@@ -2321,17 +2342,66 @@ function computeHourlyGains(building, h, weatherData, gia) {
       } else {
         pFrac = equipmentFractionForHour(profile, presence, hourOfDay, monthIdx, dayType, sched, occupancy_rate)
       }
-      const Q_base = gia * baseload_W * area_share
-      const Q_act  = gia * active_W   * area_share * pFrac
-      Q_equipment_baseload += Q_base
-      Q_equipment_active   += Q_act
+      const Q_base_e = gia * baseload_W * area_share              // electricity
+      const Q_act_e  = gia * active_W   * area_share * pFrac      // electricity
+      const Q_base_g = Q_base_e * gain_fraction                   // gain
+      const Q_act_g  = Q_act_e  * gain_fraction                   // gain
+      Q_equipment_baseload             += Q_base_g
+      Q_equipment_active               += Q_act_g
+      Q_equipment_electricity_baseload += Q_base_e
+      Q_equipment_electricity_active   += Q_act_e
       equipment_per_profile.push({
         id: profile.id,
-        value:    Q_base + Q_act,
-        baseload: Q_base,
-        active:   Q_act,
-        fraction: pFrac,
+        value:       Q_base_g + Q_act_g,
+        baseload:    Q_base_g,
+        active:      Q_act_g,
+        electricity: Q_base_e + Q_act_e,
+        gain_fraction,
+        fraction:    pFrac,
       })
+    }
+  }
+
+  // ── Auxiliary (Brief 72 P5, 2026-05-29) ─────────────────────────────────
+  // New v2.4 gain category for non-occupant-driven plug/equipment loads
+  // (external lighting, catering hoods, pumps, lifts, etc.). Shape mirrors
+  // lighting: single `magnitude` (W/m²), schedule, gain_fraction,
+  // area_share. No baseload/active split, no standby_factor. No v40 system
+  // scalar (auxiliary loads aren't a Brief 40 service — they roll up
+  // directly to fuel_split.electricity downstream).
+  const auxiliaryProfiles = building?.gains?.auxiliary?.profiles
+  let Q_auxiliary = 0
+  let Q_auxiliary_electricity = 0
+  const auxiliary_per_profile = []
+  if (Array.isArray(auxiliaryProfiles)) {
+    for (const profile of auxiliaryProfiles) {
+      const mag = magnitudeToWPerM2(profile.magnitude, building, gia)
+      const area_share = Number(profile.area_share ?? 1.0)
+      const gain_fraction = Math.max(0, Math.min(1, Number(profile.gain_fraction ?? 1.0)))
+      // Auxiliary supports the same three relationship modes as lighting:
+      // 'independent', 'proportional', 'proportional_with_spill', 'always_on'.
+      // The lighting helper handles all of them — reuse rather than fork.
+      let pFrac
+      if (profile.relationship_to_occupancy === 'independent') {
+        const pSched = profile.schedule ?? sched
+        const pExc = findActiveException(pSched.exceptions, dateMMDD)
+        if (pExc) {
+          const v = Number(pExc[dayType]?.[hourOfDay] ?? 0)
+          const mm = pExc.ignore_monthly_multipliers
+            ? 1
+            : Number(pSched.monthly_multipliers?.[monthIdx] ?? 1)
+          pFrac = v * mm
+        } else {
+          pFrac = lightingFractionForHour(profile, presence, hourOfDay, monthIdx, dayType, sched, occupancy_rate)
+        }
+      } else {
+        pFrac = lightingFractionForHour(profile, presence, hourOfDay, monthIdx, dayType, sched, occupancy_rate)
+      }
+      const Q_e = gia * mag * area_share * pFrac
+      const Q_g = Q_e * gain_fraction
+      Q_auxiliary             += Q_g
+      Q_auxiliary_electricity += Q_e
+      auxiliary_per_profile.push({ id: profile.id, value: Q_g, electricity: Q_e, gain_fraction, fraction: pFrac })
     }
   }
   // Brief 58 Part C (2026-05-26): couple the load and its internal
@@ -2347,35 +2417,61 @@ function computeHourlyGains(building, h, weatherData, gia) {
   // profile annual totals reconcile with the aggregate.
   const lightingScalar = effectiveSystemScalar(building?.systems_config_v40?.lighting)
   const smallPwrScalar = effectiveSystemScalar(building?.systems_config_v40?.small_power)
+  // Brief 72 P5 (2026-05-29): the v40 system scalar (Brief 58 Part C) still
+  // couples gain AND electricity together — it modulates the LOAD (and
+  // therefore both consequences uniformly). gain_fraction is the only
+  // lever that splits gain from electricity, and it lives upstream
+  // (already applied in the per-profile loop above).
   if (lightingScalar !== 1) {
-    Q_lighting *= lightingScalar
-    for (const p of lighting_per_profile) p.value *= lightingScalar
-  }
-  if (smallPwrScalar !== 1) {
-    Q_equipment_baseload *= smallPwrScalar
-    Q_equipment_active   *= smallPwrScalar
-    for (const p of equipment_per_profile) {
-      p.value    *= smallPwrScalar
-      p.baseload *= smallPwrScalar
-      p.active   *= smallPwrScalar
+    Q_lighting             *= lightingScalar
+    Q_lighting_electricity *= lightingScalar
+    for (const p of lighting_per_profile) {
+      p.value       *= lightingScalar
+      p.electricity *= lightingScalar
     }
   }
-  const Q_equipment = Q_equipment_baseload + Q_equipment_active
+  if (smallPwrScalar !== 1) {
+    Q_equipment_baseload             *= smallPwrScalar
+    Q_equipment_active               *= smallPwrScalar
+    Q_equipment_electricity_baseload *= smallPwrScalar
+    Q_equipment_electricity_active   *= smallPwrScalar
+    for (const p of equipment_per_profile) {
+      p.value       *= smallPwrScalar
+      p.baseload    *= smallPwrScalar
+      p.active      *= smallPwrScalar
+      p.electricity *= smallPwrScalar
+    }
+  }
+  // Auxiliary has no v40 system scalar (auxiliary loads are not a Brief 40
+  // service; their on/off is governed by the profile's `relationship_to_
+  // occupancy` and area_share, not by a downstream systems array).
+  const Q_equipment             = Q_equipment_baseload             + Q_equipment_active
+  const Q_equipment_electricity = Q_equipment_electricity_baseload + Q_equipment_electricity_active
 
   return {
     people:             Q_people,
-    lighting:           Q_lighting,
-    equipment_baseload: Q_equipment_baseload,
-    equipment_active:   Q_equipment_active,
-    equipment:          Q_equipment,
-    total:              Q_people + Q_lighting + Q_equipment,
+    lighting:           Q_lighting,                  // gain side (heat balance)
+    equipment_baseload: Q_equipment_baseload,        // gain
+    equipment_active:   Q_equipment_active,          // gain
+    equipment:          Q_equipment,                 // gain
+    auxiliary:          Q_auxiliary,                 // gain (Brief 72 P5)
+    // Brief 72 P5 (2026-05-29): electricity-side carriers. Identical to
+    // the gain side when every profile's gain_fraction = 1.0 (anchor
+    // preservation). Downstream consumers: systemsEngine._computeThin for
+    // lighting/small_power; fuel_split.electricity rollup for auxiliary.
+    lighting_electricity:  Q_lighting_electricity,
+    equipment_electricity: Q_equipment_electricity,
+    auxiliary_electricity: Q_auxiliary_electricity,
+    total:              Q_people + Q_lighting + Q_equipment + Q_auxiliary,
     presence,
     effective_occupants,
     // v2.4 multi-profile breakdown — same numbers as the aggregates above,
     // sliced by profile id. Callers that need per-profile annual totals
-    // accumulate from these arrays.
+    // accumulate from these arrays. Each entry carries both `value` (gain)
+    // and `electricity` (carrier).
     lighting_per_profile,
     equipment_per_profile,
+    auxiliary_per_profile,
   }
 }
 
@@ -2633,6 +2729,18 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   // Internal-gain accumulators (existing State 2 pattern)
   let acc_people = 0, acc_lighting = 0
   let acc_equip_baseload = 0, acc_equip_active = 0
+  // Brief 72 P5 (2026-05-29): electricity-side accumulators (vs the gain
+  // side above). Equal to the gain side when every profile's
+  // gain_fraction = 1.0 (anchor preservation). Surfaced on
+  // heat_balance.annual.gains.internal.{lighting,equipment,auxiliary}.
+  // electricity_kwh; systemsEngine._computeThin reads this instead of the
+  // gain kwh to roll up electricity correctly when gain_fraction < 1.0.
+  let acc_lighting_electricity = 0
+  let acc_equipment_electricity = 0
+  let acc_auxiliary = 0
+  let acc_auxiliary_electricity = 0
+  let peak_auxiliary = 0
+  let hours_auxiliary = 0
   let peak_people = 0, peak_lighting = 0, peak_equipment = 0
   let hours_people = 0, hours_lighting = 0, hours_equipment_active = 0
   let sum_effective_occupants = 0, peak_occupants = 0
@@ -2975,6 +3083,14 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     const gains = computeHourlyGains(building, h, weatherData, gia)
     acc_people += gains.people; acc_lighting += gains.lighting
     acc_equip_baseload += gains.equipment_baseload; acc_equip_active += gains.equipment_active
+    // Brief 72 P5 (2026-05-29): electricity-side + auxiliary accumulators.
+    // gain_fraction = 1.0 default keeps these byte-equal to the gain side.
+    acc_lighting_electricity  += gains.lighting_electricity  ?? gains.lighting
+    acc_equipment_electricity += gains.equipment_electricity ?? gains.equipment
+    acc_auxiliary             += gains.auxiliary             ?? 0
+    acc_auxiliary_electricity += gains.auxiliary_electricity ?? 0
+    if (gains.auxiliary > peak_auxiliary) peak_auxiliary = gains.auxiliary
+    if (gains.auxiliary > 0.01) hours_auxiliary++
     // Brief 28-IM IM-M2 add 2: monthly internal gain aggregation.
     {
       const _mi = (weatherData?.month?.[h] ?? 1) - 1
@@ -4108,15 +4224,36 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
             ...state1Result.heat_balance.annual.gains,
             internal: {
               people:    { kwh: r1(acc_people),    kwh_per_m2: Math.round(acc_people / 1000 / gia * 100) / 100 },
-              lighting:  { kwh: r1(acc_lighting),  kwh_per_m2: Math.round(acc_lighting / 1000 / gia * 100) / 100 },
-              equipment: { kwh: r1(totalEquipmentWh), kwh_per_m2: Math.round(totalEquipmentWh / 1000 / gia * 100) / 100 },
+              // Brief 72 P5 (2026-05-29): `kwh` is the GAIN side (heat to
+              // zone — heat balance integrand). `electricity_kwh` is the
+              // ELECTRICITY carrier. Equal when gain_fraction = 1.0
+              // (anchor preservation). systemsEngine reads electricity_kwh
+              // for _computeThin / fuel rollup; heat balance reads kwh.
+              lighting:  {
+                kwh:             r1(acc_lighting),
+                electricity_kwh: r1(acc_lighting_electricity),
+                kwh_per_m2:      Math.round(acc_lighting / 1000 / gia * 100) / 100,
+              },
+              equipment: {
+                kwh:             r1(totalEquipmentWh),
+                electricity_kwh: r1(acc_equipment_electricity),
+                kwh_per_m2:      Math.round(totalEquipmentWh / 1000 / gia * 100) / 100,
+              },
+              auxiliary: {
+                kwh:             r1(acc_auxiliary),
+                electricity_kwh: r1(acc_auxiliary_electricity),
+                kwh_per_m2:      Math.round(acc_auxiliary / 1000 / gia * 100) / 100,
+              },
             },
           },
           totals: {
             losses_kwh:         r1(total_loss_Wh),
             losses_kwh_per_m2:  perM2(total_loss_Wh),
-            gains_kwh:          r1((state1Result.heat_balance.annual.totals.gains_kwh ?? 0) * 1000 + acc_people + acc_lighting + totalEquipmentWh),
-            gains_kwh_per_m2:   Math.round(((state1Result.heat_balance.annual.totals.gains_kwh ?? 0) + (acc_people + acc_lighting + totalEquipmentWh) / 1000) / gia * 100) / 100,
+            // Brief 72 P5 (2026-05-29): auxiliary gain joins the heat-balance
+            // totals (heat to zone). Empty auxiliary block → acc_auxiliary = 0
+            // → byte-identical to pre-brief.
+            gains_kwh:          r1((state1Result.heat_balance.annual.totals.gains_kwh ?? 0) * 1000 + acc_people + acc_lighting + totalEquipmentWh + acc_auxiliary),
+            gains_kwh_per_m2:   Math.round(((state1Result.heat_balance.annual.totals.gains_kwh ?? 0) + (acc_people + acc_lighting + totalEquipmentWh + acc_auxiliary) / 1000) / gia * 100) / 100,
           },
         },
         // Brief 58 A3 (2026-05-26): GIA two-role split.

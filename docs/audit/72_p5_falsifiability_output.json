@@ -1,0 +1,41 @@
+{
+  "brief": "Brief 72 P5 falsifiability — gain_fraction directionality",
+  "scenarios": {
+    "A": {
+      "label": "A: gain_fraction = 1.0 (baseline)",
+      "eui_kwh_per_m2": 162.6,
+      "heat_demand_mwh": 26.9,
+      "cool_demand_mwh": 111.7,
+      "dhw_demand_mwh": 421.093,
+      "elec_total_mwh": 310.374,
+      "equipment_gain_kwh": 172100.6,
+      "equipment_electricity_kwh": 172100.6
+    },
+    "B": {
+      "label": "B: equipment gain_fraction = 0.5",
+      "eui_kwh_per_m2": 162.4,
+      "heat_demand_mwh": 55.3,
+      "cool_demand_mwh": 67.6,
+      "dhw_demand_mwh": 421.093,
+      "elec_total_mwh": 309.743,
+      "equipment_gain_kwh": 86050.3,
+      "equipment_electricity_kwh": 172100.6
+    }
+  },
+  "deltas_B_minus_A": {
+    "eui": -0.2,
+    "heat_demand_mwh": 28.4,
+    "cool_demand_mwh": -44.1,
+    "dhw_demand_mwh": 0,
+    "elec_total_mwh": -0.63,
+    "equipment_gain_kwh": -86050.3,
+    "equipment_electricity_kwh": 0
+  },
+  "expected_directions": {
+    "heat_demand": "heat_B > heat_A (less zone heat → heating works harder)",
+    "cool_demand": "cool_B < cool_A (less zone heat → cooling works less)",
+    "elec_total": "elec_B ≈ elec_A  (same electricity, same fuel rollup)",
+    "dhw_demand": "dhw_B  ≈ dhw_A   (DHW path unaffected)",
+    "boundary_invariant": "equipment_gain_kwh halves; equipment_electricity_kwh holds (Principle 4 boundary discipline)"
+  }
+}

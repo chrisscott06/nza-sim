@@ -877,8 +877,17 @@ export function computeSystemsDelivered({ building, state2Result, comfortBand, s
   // ventilation (peakOccupants below) and any future per-second flow
   // calculations.
   const peakOccupants       = state2Result?.occupancy_summary?.peak_people ?? 0
-  const lightingGainMwh     = (state2Result?.heat_balance?.annual?.gains?.internal?.lighting?.kwh ?? 0) / 1000
-  const equipmentGainMwh    = (state2Result?.heat_balance?.annual?.gains?.internal?.equipment?.kwh ?? 0) / 1000
+  // Brief 72 P5 (2026-05-29): _computeThin now reads ELECTRICITY (the
+  // user-paid carrier), not the gain side. gain_kwh = electricity_kwh ×
+  // gain_fraction at the State 2 emit — when every profile's
+  // gain_fraction = 1.0, these are equal (anchor preservation). Fallback
+  // to `kwh` for pre-P5 cached State 2 outputs (back-compat).
+  const lightingInternal    = state2Result?.heat_balance?.annual?.gains?.internal?.lighting  ?? {}
+  const equipmentInternal   = state2Result?.heat_balance?.annual?.gains?.internal?.equipment ?? {}
+  const auxiliaryInternal   = state2Result?.heat_balance?.annual?.gains?.internal?.auxiliary ?? {}
+  const lightingElecMwh     = (lightingInternal.electricity_kwh  ?? lightingInternal.kwh  ?? 0) / 1000
+  const equipmentElecMwh    = (equipmentInternal.electricity_kwh ?? equipmentInternal.kwh ?? 0) / 1000
+  const auxiliaryElecMwh    = (auxiliaryInternal.electricity_kwh ?? 0) / 1000
 
   // ── Per-service compute ──
   // Brief 42 Part 2 (2026-05-20): pass the whole `cfg` (systems_config_v40)
@@ -900,8 +909,8 @@ export function computeSystemsDelivered({ building, state2Result, comfortBand, s
   // via `building.systems_config_v25.ventilation`; pass null when absent.
   const v25Vent = building?.systems_config_v25?.ventilation ?? null
   const ventilation = _computeVentilation(cfg.ventilation ?? [], gia, peakOccupants, 8760, v25Vent)
-  const lighting    = _computeThin(cfg.lighting ?? [], lightingGainMwh)
-  const small_power = _computeThin(cfg.small_power ?? [], equipmentGainMwh)
+  const lighting    = _computeThin(cfg.lighting ?? [], lightingElecMwh)
+  const small_power = _computeThin(cfg.small_power ?? [], equipmentElecMwh)
 
   // ── Totals: fuel split + EUI + carbon ──
   // Heating + cooling + DHW source_energy is summed per fuel; ventilation +
@@ -917,6 +926,10 @@ export function computeSystemsDelivered({ building, state2Result, comfortBand, s
   fuel_split.electricity += ventilation.total_fan_electrical_mwh * 1000
   fuel_split.electricity += lighting.total_delivered_electrical_mwh * 1000
   fuel_split.electricity += small_power.total_delivered_electrical_mwh * 1000
+  // Brief 72 P5 (2026-05-29): auxiliary loads roll up directly to fuel
+  // electricity (no Brief 40 systems list, no _computeThin split).
+  // Empty auxiliary profiles → auxiliaryElecMwh = 0 → identity.
+  fuel_split.electricity += auxiliaryElecMwh * 1000
 
   const annual_source_kWh = Object.values(fuel_split).reduce((s, x) => s + x, 0)
   const eui_kWh_per_m2    = gia > 0 ? annual_source_kWh / gia : 0
