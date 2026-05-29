@@ -294,6 +294,15 @@ const PATH_HANDLERS = [
   { test: /^constructions\.glazing\.library_id$/,                                      label: 'Glazing library' },
   { test: /^constructions\.glazing\.u_value_override$/,                                label: 'Glazing U override', unit: ' W/m²·K' },
   // Internal gains
+  // Brief 72 P3 (2026-05-29): building.num_bedrooms added as a capture-able
+  // path. Post-Principle-7 unification, num_bedrooms is one of the three
+  // inputs to DHW headcount (num_bedrooms × density.value × occupancy_rate
+  // for per_room basis); an intervention that patches num_bedrooms now
+  // moves DHW demand, so the patch must appear in the patch list. The
+  // path lives at the building root rather than under occupancy because
+  // num_bedrooms is also the per_room density's multiplier — geometry-
+  // adjacent rather than occupancy-internal.
+  { test: /^building\.num_bedrooms$/,                                                  label: 'Number of bedrooms' },
   { test: /^building\.occupancy_rate$/,                                                label: 'Occupancy rate' },
   { test: /^building\.occupancy\.occupancy_rate$/,                                     label: 'Occupancy rate (v2.3)' },
   { test: /^building\.occupancy\.density\.value$/,                                     label: 'Occupancy density' },

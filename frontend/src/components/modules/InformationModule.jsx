@@ -164,10 +164,20 @@ export default function InformationModule() {
     : 0
 
   // ── Derived occupancy summary (read-only)
-  const numBedrooms  = params?.num_bedrooms    ?? 0
-  const occRate      = params?.occupancy_rate  ?? 0
-  const peoplePerRm  = params?.people_per_room ?? 0
-  const avgOccupants = Math.round(numBedrooms * occRate * peoplePerRm)
+  //
+  // Brief 72 P3 (2026-05-29): density.value replaces the retired
+  // `people_per_room`. Read site mirrors the engine's unified
+  // computeTotalOccupants helper for per_room basis (the basis on which
+  // num_bedrooms is meaningful as a multiplier). Per_m2 projects fall
+  // back to a placeholder — InformationModule's summary card just shows
+  // a dash for those because the density.value lives in different units.
+  const numBedrooms  = params?.num_bedrooms             ?? 0
+  const occRate      = params?.occupancy?.occupancy_rate ?? params?.occupancy_rate ?? 0
+  const occBasis     = params?.occupancy?.density?.basis ?? 'per_room'
+  const density      = params?.occupancy?.density?.value ?? 0
+  const avgOccupants = occBasis === 'per_room'
+    ? Math.round(numBedrooms * occRate * density)
+    : null
 
   // ── Derived consumption summary
   const yearsInData = new Set(
@@ -309,7 +319,11 @@ export default function InformationModule() {
           stats={[
             { label: 'Rooms',           value: numBedrooms || null },
             { label: 'Occupancy rate',  value: occRate ? `${Math.round(occRate * 100)}%` : null },
-            { label: 'People / room',   value: peoplePerRm ? peoplePerRm.toFixed(1) : null },
+            // Brief 72 P3 (2026-05-29): label switched from "People / room"
+            // (read of the retired `params.people_per_room` phantom) to
+            // "Density" reading `params.occupancy.density.value`. Unit suffix
+            // tracks the basis so per_m2 projects show "x / m²".
+            { label: 'Density',         value: density ? `${density.toFixed(1)} / ${occBasis === 'per_room' ? 'room' : 'm²'}` : null },
             { label: 'Avg occupants',   value: avgOccupants || null },
           ]}
           footnote="Schedules and occupancy parameters · Edit in Internal Gains →"

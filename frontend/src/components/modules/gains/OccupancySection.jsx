@@ -188,31 +188,19 @@ export default function OccupancySection({ annual, onEditSchedule }) {
         )}
       </div>
 
-      {/* ── People per room — Brief 58 B2 sensitivity input ──────────────
-          Surface for `building.people_per_room` — fundamentally an
-          internal gain (drives occupancy gains via the legacy
-          `num_bedrooms × occupancy_rate × people_per_room` formula AND
-          B3's headcount-basis DHW). Lifted into Internal Gains as a
-          first-class sensitivity lever per Brief 58 B2 (was previously
-          editable only via project import, never a tunable input).
-          Storage path unchanged — engine reads building.people_per_room
-          at every existing call site (instantCalc.js:5066/5758). */}
-      <div className="space-y-1">
-        <PatchedInputBadge path="people_per_room">
-          <NumField
-            label="People per room"
-            value={params?.people_per_room ?? 1.5}
-            onChange={v => mutate('people_per_room', v ?? 0)}
-            step={0.1}
-            min={0}
-          />
-        </PatchedInputBadge>
-        <p className="text-xxs italic text-mid-grey/70 pl-1">
-          Sensitivity lever. Flexes occupancy gains (via legacy avg-occupants)
-          and DHW demand (after B3 — headcount basis) together. Independent
-          of `density.value` above; engine selects via basis.
-        </p>
-      </div>
+      {/* ── People per room input retired — Brief 72 P3 (2026-05-29) ─────
+          The `building.people_per_room` field was a phantom: it sat
+          alongside `building.occupancy.density.value` (the v2.3 unified
+          source) and was read by DHW headcount paths in parallel,
+          decoupling DHW demand from the density slider above. The P2
+          discriminator showed Occupancy 4 interventions moved heat /
+          cool but not DHW because of it; P3a unified all four engine
+          read sites onto `computeTotalOccupants(occupancy, building,
+          gia)`. The input is removed because (a) it's no longer read
+          and (b) keeping it would invite the next user to think they
+          can flex DHW separately from occupancy gains — exactly the
+          drift Principle 7 retires. Use the `Density.value` slider
+          above; per_room basis multiplies by `num_bedrooms`. */}
 
       {/* ── Occupancy rate ─────────────────────────────────────────────── */}
       <PatchedInputBadge path="building.occupancy.occupancy_rate">

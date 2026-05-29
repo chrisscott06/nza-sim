@@ -54,7 +54,8 @@ export const FORBIDDEN_ENVELOPE_ONLY_INPUTS = Object.freeze([
   // `nza_engine/generators/hvac_dhw.py` still reads them).
   'params.num_bedrooms',
   'params.occupancy_rate',
-  'params.people_per_room',
+  // Brief 72 P3 (2026-05-29): params.people_per_room retired (Principle 7).
+  // Removed from this State-1 allowlist along with the engine read sites.
   'systems.lighting_power_density',
   'systems.equipment_power_density',
   'systems.lighting_control',
@@ -122,8 +123,8 @@ export const FORBIDDEN_ENVELOPE_GAINS_INPUTS = Object.freeze([
   // Legacy occupancy fields superseded by v2.3 occupancy block.
   // params.num_bedrooms is INTENTIONALLY ABSENT — still used as the room
   // count for per_room density basis.
+  // Brief 72 P3 (2026-05-29): params.people_per_room retired (Principle 7).
   'params.occupancy_rate',
-  'params.people_per_room',
   // Legacy load fields superseded by v2.3 gains block.
   'systems.lighting_power_density',
   'systems.equipment_power_density',

@@ -203,9 +203,16 @@ const DEFAULT_PARAMS = {
   // and existing State 1 code that reads them. Brief 27 introduces
   // `occupancy.*` as the v2.3 contract source of truth; these fields
   // mirror the same numbers and stay in sync via the migration on load.
+  //
+  // Brief 72 P3 (2026-05-29): people_per_room retired (Principle 7).
+  // The unified DHW headcount path reads `occupancy.density.value` via
+  // computeTotalOccupants; the phantom field is no longer in DEFAULT_PARAMS
+  // and is not threaded by the loader. Legacy projects whose persisted
+  // building_config still carries people_per_room are detected in the
+  // loader and the value is migrated into `occupancy.density.value`
+  // exactly once (see `_buildOccupancyFromLegacy` below).
   num_bedrooms:    134,
   occupancy_rate:  0.75,
-  people_per_room: 1.5,
   // Brief 27 v2.3 — occupancy is a first-class building property.
   // Sensible/latent heat per person, presence schedule, exception
   // periods all live here. Density.basis controls how `density.value`
@@ -877,6 +884,29 @@ export function ProjectProvider({ children }) {
           interventions:      _v2Migration.interventions      ?? bcRaw.interventions,
           schema_version:     _v2Migration.schema_version }
       : bcRaw
+    // Brief 72 P3 (2026-05-29): schema migration warning for the retired
+    // `people_per_room` phantom field. When a persisted project still
+    // carries the field, log a one-shot console.warn explaining what
+    // happens to the value (it's migrated into `occupancy.density.value`
+    // via `_buildOccupancyFromLegacy` if the v2.3 occupancy block is
+    // absent; otherwise it's silently ignored). The warning is
+    // intentionally a console diagnostic, not a UI banner — it's a
+    // developer signal during the deprecation window, not a user-facing
+    // alarm. Will be removed in a later brief once all stored projects
+    // have been opened and re-saved at least once (the field naturally
+    // disappears from the persisted bc on the next save because it's
+    // no longer in params).
+    if (bcRaw?.people_per_room != null && typeof console !== 'undefined') {
+      const ppr   = Number(bcRaw.people_per_room)
+      const hasV23 = bcRaw?.occupancy?.density?.value != null
+      console.warn(
+        `[Brief 72 P3] Project "${project.name ?? project.id}" carries a ` +
+        `legacy building.people_per_room=${ppr}. ` +
+        (hasV23
+          ? `v2.3 occupancy.density.value=${bcRaw.occupancy.density.value} is present and authoritative; the legacy value is ignored.`
+          : `Migrated into occupancy.density.value=${ppr} (basis per_room). Re-save the project to drop the legacy field.`)
+      )
+    }
     setParams({
       // Project name lives on the top-level row (so the Home list shows it
       // correctly). Fall back to building_config.name for old projects, then default.
@@ -891,7 +921,11 @@ export function ProjectProvider({ children }) {
       window_count: bc.window_count ?? DEFAULT_PARAMS.window_count,
       num_bedrooms:    bc.num_bedrooms    ?? DEFAULT_PARAMS.num_bedrooms,
       occupancy_rate:  bc.occupancy_rate  ?? DEFAULT_PARAMS.occupancy_rate,
-      people_per_room: bc.people_per_room ?? DEFAULT_PARAMS.people_per_room,
+      // Brief 72 P3 (2026-05-29): people_per_room dropped from loader output —
+      // the field is now phantom (no engine read site). If a legacy
+      // building_config still has it, `_buildOccupancyFromLegacy` below
+      // migrates the value into `occupancy.density.value` (basis per_room);
+      // a console.warn surfaces the migration on the first load.
       // Brief 58 A4 (2026-05-26): reported_gia — the EUI denominator
       // (A3 engine surface). null when absent on load → engine falls
       // back to geometry-derived gia (length × width × num_floors).
