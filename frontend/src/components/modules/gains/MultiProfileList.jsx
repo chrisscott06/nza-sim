@@ -134,14 +134,21 @@ function ProfileActionsMenu({ onDuplicate, onDelete, disabled }) {
 function ProfileEditPanel({ profile, category, onChange, accent }) {
   const isLighting  = category === 'lighting'
   const isEquipment = category === 'equipment'
+  // Brief 72 P7 (2026-05-29): auxiliary category — modelled on lighting
+  // (single magnitude, no baseload/active split) plus a first-class
+  // gain_fraction editor that auxiliary surfaces explicitly because the
+  // preset defaults span 0–100% (external lighting 0%, catering 50%,
+  // lifts 85%, pumps/small_power/custom 100%). Lighting/equipment get
+  // their gain_fraction editor in P8 on their section headers.
+  const isAuxiliary = category === 'auxiliary'
   const rel         = profile.relationship_to_occupancy
 
   return (
     <div className="mt-2 p-2 bg-white border border-light-grey rounded space-y-1.5 text-xxs"
          style={{ borderLeftWidth: '2px', borderLeftColor: accent + '60' }}>
       {/* Magnitude — first because it's the headline parameter */}
-      {isLighting && (
-        <Field label="LPD">
+      {(isLighting || isAuxiliary) && (
+        <Field label={isAuxiliary ? 'Load' : 'LPD'}>
           <NumberWithUnit
             value={profile.magnitude?.value}
             unit={profile.magnitude?.unit ?? 'w_per_m2'}
@@ -169,6 +176,21 @@ function ProfileEditPanel({ profile, category, onChange, accent }) {
         </>
       )}
 
+      {/* Auxiliary gain_fraction — first-class editor on the profile
+          panel. Lighting / equipment get this on their section headers
+          in P8 (one inline editor per category, not per profile, because
+          lighting/equipment profiles share a category-level gain
+          assumption). Auxiliary's per-preset defaults make per-profile
+          editing the right shape. */}
+      {isAuxiliary && (
+        <Field label="Heat gain">
+          <PercentInput
+            value={profile.gain_fraction ?? 1.0}
+            onChange={v => onChange({ ...profile, gain_fraction: v })}
+          />
+        </Field>
+      )}
+
       {/* Area share — independently editable per profile. Sum across
           profiles is INFORMATIONAL only; never auto-balanced. Per the
           v2.4 contract the canvas Area-coverage indicator surfaces over/
@@ -187,7 +209,7 @@ function ProfileEditPanel({ profile, category, onChange, accent }) {
           onChange={e => onChange({ ...profile, relationship_to_occupancy: e.target.value })}
           className="w-full px-1.5 py-0.5 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-mid-grey"
         >
-          {isLighting && <option value="proportional_with_spill">proportional + spill</option>}
+          {(isLighting || isAuxiliary) && <option value="proportional_with_spill">proportional + spill</option>}
           <option value="proportional">proportional</option>
           <option value="independent">independent</option>
           <option value="always_on">always on</option>

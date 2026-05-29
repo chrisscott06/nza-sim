@@ -36,6 +36,7 @@ import { Flame } from 'lucide-react'
 import OccupancySection from './OccupancySection.jsx'
 import LightingSection  from './LightingSection.jsx'
 import EquipmentSection from './EquipmentSection.jsx'
+import AuxiliarySection from './AuxiliarySection.jsx'
 import { GAIN_COLOURS, GAIN_LABELS } from './gainColours.js'
 import { useAnnualGains } from './useAnnualGains.js'
 // Brief 37 Part 3 (2026-05-18): ScheduleEditorCanvas swapped for the
@@ -233,7 +234,7 @@ function TabContent({ tab }) {
 // pop-out.
 function resolveScheduleSection({
   activeSection, params, updateParam,
-  activeLightingId, activeEquipmentId,
+  activeLightingId, activeEquipmentId, activeAuxiliaryId,
 }) {
   let parentSchedule = null
   let parentOnChange = null
@@ -242,10 +243,13 @@ function resolveScheduleSection({
     parentSchedule = params?.occupancy?.schedule
     label = GAIN_LABELS.occupancy
     parentOnChange = (next) => updateParam('occupancy', { ...(params?.occupancy ?? {}), schedule: next })
-  } else if (activeSection === 'lighting' || activeSection === 'equipment') {
+  } else if (activeSection === 'lighting' || activeSection === 'equipment' || activeSection === 'auxiliary') {
     const category = activeSection
     const profiles = params?.gains?.[category]?.profiles ?? []
-    const activeProfileId = category === 'lighting' ? activeLightingId : activeEquipmentId
+    const activeProfileId =
+      category === 'lighting'  ? activeLightingId  :
+      category === 'equipment' ? activeEquipmentId :
+                                 activeAuxiliaryId
     const activeIdx = (() => {
       if (activeProfileId) {
         const idx = profiles.findIndex(p => p.id === activeProfileId)
@@ -285,6 +289,9 @@ export default function InternalGainsModule() {
   // active-profile highlight.
   const [activeLightingId,  setActiveLightingId]  = useState(null)
   const [activeEquipmentId, setActiveEquipmentId] = useState(null)
+  // Brief 72 P7 (2026-05-29): same session-local active-profile pattern
+  // for the auxiliary section.
+  const [activeAuxiliaryId, setActiveAuxiliaryId] = useState(null)
 
   const { params, updateParam } = useContext(ProjectContext)
   const annual = useAnnualGains()
@@ -309,6 +316,13 @@ export default function InternalGainsModule() {
       setActiveEquipmentId(equipmentProfiles[0].id)
     }
   }, [params?.gains?.equipment?.profiles, activeEquipmentId])
+
+  useEffect(() => {
+    const auxiliaryProfiles = params?.gains?.auxiliary?.profiles ?? []
+    if (auxiliaryProfiles.length > 0 && !auxiliaryProfiles.find(p => p.id === activeAuxiliaryId)) {
+      setActiveAuxiliaryId(auxiliaryProfiles[0].id)
+    }
+  }, [params?.gains?.auxiliary?.profiles, activeAuxiliaryId])
 
   const onResizeLeft = useCallback((dx) => {
     setPrefs(p => ({ ...p, left: clamp(p.left + dx, LEFT_MIN, LEFT_MAX) }))
@@ -426,6 +440,24 @@ export default function InternalGainsModule() {
                 onSelectProfile={setActiveEquipmentId}
               />
             </CollapsibleSection>
+
+            {/* Brief 72 P7 (2026-05-29) — auxiliary section mounted below
+                Equipment. Empty profiles array by default (P4 schema);
+                the section's empty-state hint invites opt-in. */}
+            <CollapsibleSection
+              title="Auxiliary"
+              accent={GAIN_COLOURS.auxiliary}
+              onActivate={() => setActiveSection('auxiliary')}
+              isOpen={openSection === 'auxiliary'}
+              onToggle={() => toggleAccordion('auxiliary')}
+            >
+              <AuxiliarySection
+                annual={annual}
+                onEditSchedule={() => onEditSchedule('auxiliary')}
+                activeProfileId={activeAuxiliaryId}
+                onSelectProfile={setActiveAuxiliaryId}
+              />
+            </CollapsibleSection>
           </div>
         </div>
 
@@ -503,7 +535,7 @@ export default function InternalGainsModule() {
         const accent = GAIN_COLOURS[activeSection] ?? GAINS_ACCENT
         const { parentSchedule, parentOnChange, label } = resolveScheduleSection({
           activeSection, params, updateParam,
-          activeLightingId, activeEquipmentId,
+          activeLightingId, activeEquipmentId, activeAuxiliaryId,
         })
         const editingException = editingExceptionId
           ? (parentSchedule?.exceptions ?? []).find(e => e.id === editingExceptionId) ?? null
@@ -517,11 +549,17 @@ export default function InternalGainsModule() {
         }
         let profileSelector = null
         let areaShareTotal  = null
-        if (activeSection === 'lighting' || activeSection === 'equipment') {
+        if (activeSection === 'lighting' || activeSection === 'equipment' || activeSection === 'auxiliary') {
           const category = activeSection
           const profiles = params?.gains?.[category]?.profiles ?? []
-          const activeId = category === 'lighting' ? activeLightingId : activeEquipmentId
-          const onChange = category === 'lighting' ? setActiveLightingId : setActiveEquipmentId
+          const activeId =
+            category === 'lighting'  ? activeLightingId  :
+            category === 'equipment' ? activeEquipmentId :
+                                       activeAuxiliaryId
+          const onChange =
+            category === 'lighting'  ? setActiveLightingId  :
+            category === 'equipment' ? setActiveEquipmentId :
+                                       setActiveAuxiliaryId
           profileSelector = {
             profiles: profiles.map(p => ({ id: p.id, label: p.label })),
             activeId,

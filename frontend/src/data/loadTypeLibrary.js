@@ -365,6 +365,96 @@ export const CUSTOM_EQUIPMENT_TEMPLATE = {
   schedule_preset_id: 'office_equipment',
 }
 
+// ── Auxiliary loads (Brief 72 P7, 2026-05-29) ─────────────────────────────
+//
+// Six-item preset picker per the design note. Auxiliary differs from
+// equipment in three ways:
+//   1. Single `magnitude` (W/m²), not a baseload/active split.
+//   2. `gain_fraction` is a first-class field (defaults vary per preset —
+//      external lighting 0%, catering 50%, lifts 85%, the rest 100%).
+//   3. No `standby_factor` (no duty cycle split).
+//
+// The presets are intentionally NOT keyed by building type — auxiliary
+// loads tend to be similar across building types (a pump is a pump, a
+// catering hood is a catering hood). One list for everyone.
+//
+// area_share defaults are sized for the load to be "noticeable but not
+// dominant" on a building like Bridgewater (4125 m²); users tune from
+// there.
+export const AUXILIARY_LOAD_TYPES = [
+  {
+    id: 'aux_external_lighting',
+    label: 'External lighting',
+    magnitude: { value: 1.5, unit: 'w_per_m2' },
+    // Anchored to dusk-till-dawn; doesn't radiate to the zone — almost all
+    // heat goes outdoors. Pre-brief implicit was 100% gain (wrong for any
+    // façade lighting); 0% is the canonical anchor for properly-routed
+    // external loads.
+    gain_fraction: 0.0,
+    relationship_to_occupancy: 'independent',
+    area_share: 1.0,
+    schedule_preset_id: 'baseload_constant',  // overridden by a dusk-dawn pattern in P7's profile build
+  },
+  {
+    id: 'aux_catering',
+    label: 'Catering',
+    magnitude: { value: 6, unit: 'w_per_m2' },
+    // Extract hoods remove ~50% of the heat directly outdoors before it
+    // joins the zone air. The other ~50% (radiant + convective spill from
+    // the equipment housings) does become zone gain.
+    gain_fraction: 0.5,
+    relationship_to_occupancy: 'proportional',
+    area_share: 0.1,
+    schedule_preset_id: 'office_equipment',
+  },
+  {
+    id: 'aux_pumps',
+    label: 'Pumps',
+    magnitude: { value: 1, unit: 'w_per_m2' },
+    // Pump electrical work is dissipated as heat in the working fluid and
+    // bearings; in a hot-water system that heat re-enters the building.
+    // 100% is the conservative anchor.
+    gain_fraction: 1.0,
+    relationship_to_occupancy: 'always_on',
+    area_share: 1.0,
+    schedule_preset_id: 'baseload_constant',
+  },
+  {
+    id: 'aux_small_power',
+    label: 'Small power',
+    magnitude: { value: 2, unit: 'w_per_m2' },
+    // Generic small plug loads beyond what the Equipment category covers —
+    // chargers, monitors, small appliances. All electrical → all heat.
+    gain_fraction: 1.0,
+    relationship_to_occupancy: 'proportional',
+    area_share: 1.0,
+    schedule_preset_id: 'office_equipment',
+  },
+  {
+    id: 'aux_lifts',
+    label: 'Lifts',
+    magnitude: { value: 0.5, unit: 'w_per_m2' },
+    // Lifts dissipate motor heat into the shaft + machine room; some
+    // fraction radiates to occupied space, the rest stays in the shaft
+    // and either escapes or recirculates with the building. 85% is the
+    // CIBSE Guide F default for hydraulic / MRL lifts.
+    gain_fraction: 0.85,
+    relationship_to_occupancy: 'proportional',
+    area_share: 1.0,
+    schedule_preset_id: 'office_equipment',
+  },
+]
+
+export const CUSTOM_AUXILIARY_TEMPLATE = {
+  id: 'custom_auxiliary',
+  label: 'Custom auxiliary',
+  magnitude: { value: 1, unit: 'w_per_m2' },
+  gain_fraction: 1.0,
+  relationship_to_occupancy: 'independent',
+  area_share: 1.0,
+  schedule_preset_id: 'baseload_constant',
+}
+
 // ── Profile factory ──────────────────────────────────────────────────────────
 //
 // Convert a load-type template (which carries `schedule_preset_id`) into a
@@ -407,6 +497,12 @@ export function profileFromTemplate(template, gainType, schedulePresets, fallbac
     spill_minutes:    template.spill_minutes,
     daylight_factor:  template.daylight_factor,
     standby_factor:   template.standby_factor,
+    // Brief 72 P7 (2026-05-29): gain_fraction threaded through from
+    // template. Lighting / equipment templates that omit it inherit the
+    // schema default of 1.0 (anchor preservation per P4). Auxiliary
+    // templates carry it explicitly because the preset values vary
+    // (external lighting 0.0, catering 0.5, lifts 0.85, etc.).
+    gain_fraction:    template.gain_fraction,
     area_share: template.area_share ?? 0.1,
     schedule: {
       weekday:             [...(sched.weekday ?? new Array(24).fill(0))],
@@ -457,4 +553,14 @@ export function lightingTemplatesFor(buildingType) {
 export function equipmentTemplatesFor(buildingType) {
   const list = EQUIPMENT_LOAD_TYPES[buildingType] ?? EQUIPMENT_LOAD_TYPES.hotel
   return [...list, CUSTOM_EQUIPMENT_TEMPLATE]
+}
+
+/**
+ * Return the auxiliary preset list — unkeyed by building type (a pump is
+ * a pump, a catering hood is a catering hood). The Custom entry is the
+ * last item so users can author from scratch when no preset fits.
+ * Brief 72 P7 (2026-05-29).
+ */
+export function auxiliaryTemplatesFor(_buildingType) {
+  return [...AUXILIARY_LOAD_TYPES, CUSTOM_AUXILIARY_TEMPLATE]
 }
