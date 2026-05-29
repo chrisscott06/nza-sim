@@ -309,6 +309,18 @@ const PATH_HANDLERS = [
   { test: /^building\.gains\.lighting\.profiles\[[^\]]+\]\.magnitude\.value$/,         label: 'Lighting load',                unit: ' W/m²' },
   { test: /^building\.gains\.equipment\.profiles\[[^\]]+\]\.active\.value$/,           label: 'Equipment active load',        unit: ' W/m²' },
   { test: /^building\.gains\.equipment\.profiles\[[^\]]+\]\.baseload\.value$/,         label: 'Equipment baseload',           unit: ' W/m²' },
+  // Brief 72 P10 (2026-05-29): gain_fraction + auxiliary + DHW load-shape
+  // patch rows (B.7 / D.2 in the design note). num_bedrooms already
+  // landed in P3. gain_fraction is per-profile in the schema; the
+  // section-header editor (P8) writes to every profile in the section,
+  // which produces one patch row per profile. PatchList collapses
+  // identical labels for sane summary rendering.
+  { test: /^building\.gains\.lighting\.profiles\[[^\]]+\]\.gain_fraction$/,            label: 'Lighting heat gain',           unit: '×' },
+  { test: /^building\.gains\.equipment\.profiles\[[^\]]+\]\.gain_fraction$/,           label: 'Equipment heat gain',          unit: '×' },
+  { test: /^building\.gains\.auxiliary\.profiles\[[^\]]+\]\.magnitude\.value$/,        label: 'Auxiliary load',               unit: ' W/m²' },
+  { test: /^building\.gains\.auxiliary\.profiles\[[^\]]+\]\.gain_fraction$/,           label: 'Auxiliary heat gain',          unit: '×' },
+  // DHW load-shape — service-level field on systems_config_v40 (D.2).
+  { test: /^building\.systems_config_v40\.dhw_load_shape$/,                            label: 'DHW load shape' },
   // Systems v40
   { test: /^building\.systems_config_v40\.heating\[id=([^\]]+)\]\.efficiency_metric$/, label: m => `Heating "${m[1]}" efficiency` },
   { test: /^building\.systems_config_v40\.heating\[id=([^\]]+)\]\.share_pct$/,         label: m => `Heating "${m[1]}" share`,        unit: '%' },
