@@ -2,11 +2,41 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
-## 🚀 Brief 72 — STARTED (Part 1) 2026-05-28
+## ✅ Brief 72 — CLOSED 2026-05-29
 
-**Auxiliary loads + gain_fraction + DHW load-shape UI** + headcount unification + Calc-trail discriminator. Architect-authored brief, supersedes the never-shipped Brief 60 Part B/D addendum. Anchor captured (§1 of audit doc); Bridgewater clean baseline = **EUI 130.0 kWh/m²·yr / 536.4 MWh total** at HEAD `286f57c`.
+**Auxiliary loads + gain_fraction + DHW load-shape UI** + headcount unification + Calc-trail discriminator + autonomous overnight DB recovery. Architect-authored OVERNIGHT brief — eleven parts including the unscheduled DB-loss recovery sub-sequence (PA/PB/PC) that the 2026-05-28 22:34 worktree-junction incident forced into scope. Post-Brief-72 anchor: **EUI 162.6 kWh/m²·yr / 670.6 MWh total** at HEAD `5a7222d` (post-Principle-7 unification — DHW doubled from 210.5 → 421.1 MWh because the phantom `people_per_room=1.5` was retired and headcount now reads `num_bedrooms × density.value × occupancy_rate` everywhere).
 
-Active at `docs/briefs/active/72_auxiliary_loads_dhw_shape.md`; audit at `docs/audit/72_auxiliary_loads_dhw_shape.md` with the Brief 72 Part 2 discriminator cross-referencing `docs/audit/72_occupancy_intervention_disagreement.md` (landed `286f57c`).
+Archive: [`archive/72_auxiliary_loads_dhw_shape_COMPLETED.md`](docs/briefs/archive/72_auxiliary_loads_dhw_shape_COMPLETED.md). Audit with §re-create-bridgewater + §pc-regression: [`docs/audit/72_auxiliary_loads_dhw_shape.md`](docs/audit/72_auxiliary_loads_dhw_shape.md). DB-loss-recovery decisions logged at §re-create-bridgewater.
+
+| Part | SHA | Deliverable |
+|---|---|---|
+| Land | `df8387f` | Brief + audit stub + STATUS reconcile |
+| 2 | `18d1146` | Occupancy / Calc-trail discriminator (H1/H2/H3 settled; refuted engine cross-wire; found Principle 7 phantom DHW headcount) |
+| 2 fix | `f97c089` | Walkthrough gate (b) arithmetic correction (DHW 210.5 → ~561 MWh) |
+| PA | `3a33afa` | Local DB snapshot scheduled task + CLAUDE.md Bible addendum (Backup discipline) |
+| PB | `b9ae15b` | Re-create HIX Bridgewater from anchor after 22:34 DB-loss incident |
+| HK | `840d23d` | Housekeeping: archive 8 completed briefs (58, 60, 61, 62, 66, 67, 68, 69) |
+| PC | `e48dfce` | Discriminator regression on re-created Bridgewater (DHW 421.093/561.458 — exact 4/3 ratio at density 3→4) |
+| 3a | `1fac3bf` | Engine: unify DHW headcount via `computeTotalOccupants` (4 read sites — 3 `instantCalc` paths + v40 `systemsEngine`) |
+| 3b | `2369c52` | UI/state retirement of `people_per_room` (OccupancySection control deleted; ProjectContext defaults + loader pruned; stateMode allowlist trimmed; InformationModule reads density; schema migration warning; patchCapture `num_bedrooms` row) |
+| 4 | `5353585` | Schema: `gain_fraction = 1.0` defaults on lighting + equipment; `auxiliary = { profiles: [] }` top-level; v23 migration helpers updated |
+| 5 | `842fe17` | Engine: per-profile `gain_fraction` split in `computeHourlyGains`; State 2 emits `electricity_kwh` siblings + auxiliary block; `systemsEngine` reads `electricity_kwh` + rolls up auxiliary; falsifiability (equipment × 0.5 → gain halves, electricity holds, heat +28 / cool −44 MWh) |
+| 6 | `f6b9565` | Auxiliary colour token `#4B5563` in both `gainColours.js` AND `balanceColours.js INTERNAL_COLOURS` same commit |
+| 7 | `9dd37e1` | `AuxiliarySection.jsx` mounted below Equipment; 5-preset + Custom picker; auxiliary category in `MultiProfileList` |
+| 8 | `22be7fb` | Section-header `gain_fraction` editor on Lighting + Equipment (orthogonality non-collapse preserved structurally) |
+| 9 | `76883e3` | DHW load-shape `LabeledSelect` (flat / follow_occupancy) in `DHWServiceFields` |
+| 10 | `5a7222d` | `patchCapture.js` regex rows: lighting/equipment/auxiliary `gain_fraction` + auxiliary `magnitude` + DHW load shape |
+
+**Anchor preservation gate** (PC discriminator re-run after every commit): PASS — EUI 162.6 / 196 with Occupancy 4 stack; DHW 421.093 / 561.458; heat 26.9 / 17.8; cool 111.7 / 141.7; electricity 310.374 / 328.024; DHW ratio exactly 4/3. Byte-identical across P3a → P10.
+
+**Boundary discipline gate** (P5 falsifiability — equipment `gain_fraction = 0.5`): PASS — `equipment_gain_kwh` halves (172,100 → 86,050); `equipment_electricity_kwh` holds (172,100 → 172,100). Heat +28.4 MWh, cool −44.1 MWh, DHW unchanged, electricity ≈ unchanged. Principle 4 boundary discipline (electricity vs gain are distinct carriers) holds.
+
+**Rule 14 (gain_fraction)**: applied at State 2 + State 3 v25 (via shared `computeHourlyGains`). Inline-legacy `_calculateInstantBaseline` uses simplified scalar LPD/EPD and does NOT see `gain_fraction` — explicit divergence documented in P5 commit message (anchor unchanged for legacy projects; `gain_fraction` support comes free when the inline-legacy rationalisation follow-up lands).
+
+**Carry-overs from Brief 72**:
+- Ventilation fan total = 0 on re-created Bridgewater (PB iteration 3 deferred — bounded engine quirk, not a STOP condition). Audit doc §re-create-bridgewater logs the autonomous decision and the deferred diagnostic.
+- In-browser walkthrough at `:5178` deferred — autonomous mode shipped on engine-level falsifiability + PC anchor preservation across all 11 commits.
+- Schema migration `console.warn` for `people_per_room` is a one-shot diagnostic (not a UI banner) — quiets itself once all stored projects have been opened + re-saved at least once.
 
 ## ✅ Brief 71 — CLOSED 2026-05-28
 

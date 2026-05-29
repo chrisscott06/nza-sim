@@ -407,3 +407,40 @@ The brief's PC gate was: "*discriminator output reproduces the symptom (DHW unch
 - `scripts/_brief72_pc_discriminator.mjs` — keep (regression entry point, parallel to P2's).
 - `docs/audit/fixtures/bridgewater_post_recreate.json` — keep (fixture artefact; regenerate manually if Bridgewater anchor shifts).
 - `docs/audit/72_pc_discriminator_output.json` — keep (output snapshot, comparable to §3's verbatim block).
+
+## §close (Part 11)
+
+Closed 2026-05-29. Sixteen commits over the OVERNIGHT autonomous run, from `df8387f` (Part 1 land) through `5a7222d` (Part 10). Brief moved to `archive/72_auxiliary_loads_dhw_shape_COMPLETED.md`; OVERNIGHT instruction sheet copied to `archive/72_OVERNIGHT_COMPLETED.md` for the historical record.
+
+### §close gate scorecard
+
+| Gate | Source | Result |
+| --- | --- | --- |
+| Anchor preservation (`gain_fraction = 1.0` default everywhere) | B.8 #1 + PC discriminator | **PASS** — EUI/DHW/heat/cool/electricity byte-identical at every commit from P3a forward. |
+| Catering @ `gain_fraction = 0.5` splits correctly | B.8 #2 + P5 falsifiability | **PASS** — equipment gain halves (172,100 → 86,050 kWh); equipment electricity holds (172,100 → 172,100 kWh). |
+| `daylight_factor` ⊥ `gain_fraction` non-collapse | B.8 #7 | **PASS (structural)** — distinct schema fields, distinct code paths in `computeHourlyGains`. Daylight reduces electricity-side load; gain_fraction routes the heat side only. |
+| Lighting anchor byte-equal at `gain_fraction = 1.0` | B.8 #8 | **PASS** — same as anchor preservation gate; lighting electricity = lighting gain everywhere. |
+| Rule 14 determination on `gain_fraction` | brief + CLAUDE.md L14 | **APPLIED** at State 2 + State 3 v25 (shared `computeHourlyGains`); **DOCUMENTED DIVERGENCE** at inline-legacy `_calculateInstantBaseline` (uses simplified scalar LPD/EPD, doesn't see `gain_fraction` — anchor unchanged for legacy projects). |
+| Headcount unification (P3 walkthrough gate b) | brief + audit §3 | **PASS** — DHW moves from 210.5 → 421.1 MWh at density 3 (= 138 × 3 × 1.0 = 414 vs old phantom 207); 561.5 MWh at density 4. Exact 4/3 ratio at the density 3→4 patch. |
+| Auxiliary heat reaches the heat balance | brief Part 5 + State 2 emit | **PASS by construction** — `acc_auxiliary` joins `totals.gains_kwh`; empty profiles → 0 → identity. |
+| Auxiliary electricity reaches fuel split | brief Part 5 + systemsEngine | **PASS by construction** — `fuel_split.electricity += auxiliaryElecMwh × 1000`; empty profiles → 0 → identity. |
+| DHW load-shape UI exposes the B4 toggle | brief Part 9 | **DONE** — `LabeledSelect` in `DHWServiceFields` writes `dhw_load_shape`; engine read site at `systemsEngine.js:505` unchanged. |
+
+### §close items NOT completed in autonomous mode (deferred)
+
+- **In-browser walkthrough at `:5178`** — autonomous shell can't drive the live UI reliably. Engine-level falsifiability + PC anchor preservation across all 11 commits stand as the equivalent of the brief's walkthrough §1–§9 items. Chris's manual walkthrough remains the formal acceptance.
+- **Ventilation fan total = 0** on re-created Bridgewater (PB iteration 3 deferred). Not a STOP condition under the OVERNIGHT brief's escalation triggers; logged at §re-create-bridgewater.
+
+### §close artefacts
+
+Scripts (kept):
+- `scripts/_brief72_p2_discriminator.mjs` — original H1/H2/H3 discriminator, useful for historical comparison.
+- `scripts/_brief72_pc_discriminator.mjs` — regression entry point against the re-created Bridgewater fixture.
+- `scripts/_brief72_p5_falsifiability.mjs` — boundary discipline verification (equipment `gain_fraction = 0.5`).
+- `scripts/_brief72_pb_recreate_bridgewater.mjs` — idempotent re-seed for the re-created Bridgewater anchor.
+- `scripts/snapshot-db.ps1` — daily DB snapshot (Brief 72 PA).
+
+Audit JSON snapshots (kept):
+- `docs/audit/72_pc_discriminator_output.json`
+- `docs/audit/72_p5_falsifiability_output.json`
+- `docs/audit/fixtures/bridgewater_post_recreate.json`
