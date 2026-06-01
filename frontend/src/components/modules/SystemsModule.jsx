@@ -591,6 +591,25 @@ export function InputsColumn({ params, updateParam, consumption, comfortBand, op
     const enabledList = list.filter(s => s?.enabled !== false)
     if (enabledList.length === 0) return { sum: 0, valid: true, allCount: list.length, enabledCount: 0, allDisabled: true }
     const sum = enabledList.reduce((s, x) => s + Number(x?.share_pct ?? 0), 0)
+    // Brief 73 P3-redux (2026-06-01): ventilation has NO share rule —
+    // each fan runs at its OWN flow_rate × flow_rate_basis independently,
+    // not splitting a shared demand. The engine guard at systemsEngine.js
+    // _computeVentilation was removed in P3 (2026-05-29) and the loader
+    // strips share_pct from persisted vent rows. The original P3 commit
+    // gated the share UI at TWO surfaces (SystemEditorCard share input,
+    // ServiceSplitBar Σ chip) but missed THREE more downstream surfaces
+    // that consume `valid` from this helper: the section-header amber
+    // chip (V40SectionHeader L994-1003), the inline "Engine will not
+    // compute" warning + Normalise button (SystemsModule:925-934), and
+    // SystemSummaryRow's row-level shareInvalid tint. All three render
+    // amber-when-sum≠100, which fires permanently for vent because the
+    // stripped share_pct → sum 0. Forcing `valid: true` at the source
+    // closes all three downstream surfaces in one place — pattern parity
+    // with the engine guard skip (single source of truth, not five). See
+    // audit §3.6 for the full enumeration.
+    if (service === 'ventilation') {
+      return { sum, valid: true, allCount: list.length, enabledCount: enabledList.length, allDisabled: false }
+    }
     return { sum, valid: Math.abs(sum - 100) < 0.5, allCount: list.length, enabledCount: enabledList.length, allDisabled: false }
   }
 

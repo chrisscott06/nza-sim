@@ -156,6 +156,36 @@ The P1 anchor reported `c.ventilation.fan_total_mwh = null` which read as "the b
 
 All three produce the SAME 41.962 MWh total — fan electricity now depends only on per-system `SFP × flow × hours_active`, regardless of `share_pct`. The invariant is the closure of Brief 60 Part A's incomplete fix.
 
+### §3.6 P3-redux — full enumeration of vent share UI surfaces (2026-06-01)
+
+P3 walkthrough surfaced ✗ items (Σ 0% chip + Normalise button still rendering on the live Ventilation panel at `:5176`). Root cause: P2 diagnostic enumerated **two** share UI surfaces but missed **three** downstream surfaces in `SystemsModule.jsx` that all consume the same `valid` flag from `shareValidation(service)`. Exhaustive enumeration:
+
+| # | File | Lines | Surface | Gated by P3? | Gated by P3-redux? |
+| ---: | --- | --- | --- | --- | --- |
+| 1 | `SystemEditorCard.jsx` | 182–194 | Collapsed-row share % chip | ✓ `service !== 'ventilation'` | (unchanged) |
+| 2 | `SystemEditorCard.jsx` | 254–289 | Expanded share editor | ✓ `service !== 'ventilation'` | (unchanged) |
+| 3 | `ServiceSplitBar.jsx` | full body | Σ NN% chip on segmented bar | ✓ caller-side skip at `SystemsModule:872` | (unchanged) |
+| 4 | `SystemsModule.jsx` | 925–934 | Inline ⚠ + Normalise button | **✗ MISSED** | **✓ via `shareValidation` override** |
+| 5 | `SystemsModule.jsx` | 994–1003 (V40SectionHeader) | Section-header amber chip (⚠ NN%) | **✗ MISSED** | **✓ via `shareValid` prop derived from same helper** |
+| 5a | `SystemSummaryRow.jsx` | 84–215 | Row-level `shareInvalid` text tint | (was firing for vent) | ✓ via `shareInvalid={!valid}` flowing through |
+| 5b | `SystemEditorPopout` (via `editingValid` L752) | n/a | Popout shareInvalid prop | (would fire if editing vent) | ✓ via `editingValid = shareValidation(svc).valid` |
+
+**The fix is a single override in `shareValidation` at `SystemsModule.jsx:588-595`** — force `valid: true` for ventilation regardless of actual share sum. This collapses all downstream surfaces (chip 4, chip 5, row tint 5a, popout flag 5b) because they ALL consume `valid` from this helper. Pattern matches the engine-side fix at `systemsEngine.js:648` (single guard removed, not five). Single source of truth — not five distinct gates that can drift apart.
+
+Total UI surface count: **5 distinct render sites** (at the brief's hard-STOP threshold of "~5"). The hard-STOP would have fired had there been a sixth.
+
+### §3.7 P5-redux Part A — right-strip auxiliary path correction (2026-06-01)
+
+P5 walkthrough item 9: "No Auxiliary entry on right-strip per-service breakdown." Root cause: the P5 edit at `SystemsModule.jsx:2210` reads `consumption?.heat_balance?.annual?.gains?.internal?.auxiliary` — but `heat_balance` is **not** under `consumption`. The engine result has `heat_balance` at the TOP level (`result.heat_balance`), as confirmed by:
+
+- `scripts/_brief73_p3_probe.mjs` output: `consumption` keys = `['space_heating','space_cooling','dhw','ventilation','lighting','small_power','total','daily_profiles','brief40','source_path']` — no `heat_balance`.
+- `scripts/_brief73_p1_anchor.mjs` reads from `result?.heat_balance?.annual?.gains?.internal` (correct path).
+- Audit §1.5 quoted the same path.
+
+Wrong path in the React component → `aux = {}` → `electricity_kwh = 0` → row auto-disabled → no Auxiliary entry rendered.
+
+**Fix:** route through the top-level `result.heat_balance.annual.gains.internal.auxiliary`. Investigating the component's data access in P5-redux.
+
 ### Per-system rollup paths (verified via probe `scripts/_brief73_p3_probe.mjs`)
 
 `consumption` keys at the top level: `['space_heating','space_cooling','dhw','ventilation','lighting','small_power','total','daily_profiles','brief40','source_path']`.
