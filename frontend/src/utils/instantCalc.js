@@ -4204,9 +4204,19 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     // nested under gains.internal per Brief 27 cleanup Part 3.
     heat_balance: (() => {
       const total_cond_glaz_Wh = acc_cond_glaz_n + acc_cond_glaz_e + acc_cond_glaz_s + acc_cond_glaz_w
+      // Brief 74 P5 (2026-06-01): mech vent heat loss aggregated from the
+      // per-system accumulator. acc_mech_vent_heat_per_system entries are
+      // gated on dT_heat_out > 0 — i.e. setpoint-convention losses
+      // (mirrors fabric_leakage / permanent_vents convention at L3305-3306).
+      // Already consumed by total_heating_loss_kwh at L4054-4061, but was
+      // NEVER surfaced in heat_balance.annual.losses for the Sankey to
+      // render as a ribbon. Display-parity gap from Brief 28k — Brief 74
+      // P5 closes it.
+      const acc_mech_vent_total_Wh = acc_mech_vent_heat_per_system.reduce((s, x) => s + x, 0)
       const total_loss_Wh = acc_cond_wall + acc_cond_roof + acc_cond_floor +
                             total_cond_glaz_Wh + acc_thermal_bridging +
-                            acc_vent_leakage + acc_vent_permanent
+                            acc_vent_leakage + acc_vent_permanent +
+                            acc_mech_vent_total_Wh
       const perM2 = (Wh) => Math.round(Wh / 1000 / gia * 100) / 100
       return {
         annual: {
@@ -4218,6 +4228,12 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
             thermal_bridging: { kwh: r1(acc_thermal_bridging), kwh_per_m2: perM2(acc_thermal_bridging) },
             fabric_leakage:   { kwh: r1(acc_vent_leakage), kwh_per_m2: perM2(acc_vent_leakage), ach },
             permanent_vents:  { kwh: r1(acc_vent_permanent), kwh_per_m2: perM2(acc_vent_permanent) },
+            // Brief 74 P5 (2026-06-01): mech vent setpoint-convention
+            // heat loss — sum across all enabled vent systems. Zero for
+            // projects whose `dT_heat_out > 0` gate never fires (e.g.
+            // Bridgewater with heating_demand = 0). Non-zero where
+            // heating is active and recovery < 100%.
+            mech_ventilation: { kwh: r1(acc_mech_vent_total_Wh), kwh_per_m2: perM2(acc_mech_vent_total_Wh) },
           },
           gains: {
             // Solar from State 1 (envelope-only physics — same as State 2 by design)

@@ -205,6 +205,12 @@ const LOSS_ORDERS = {
     'thermal_bridging',
     'fabric_leakage',
     'permanent_vents',
+    // Brief 74 P5 (2026-06-01): mech ventilation heat loss. Engine
+    // accumulates per-system in _calculateState2 (heat_loss_kwh
+    // gated on dT_heat_out > 0); aggregate emitted to
+    // heat_balance.annual.losses.mech_ventilation. Grouped adjacent to
+    // permanent_vents (both air-movement losses).
+    'mech_ventilation',
   ],
   // Brief 53 Part 4 (2026-05-26): added the Brief 28k+ canonical loss keys
   // (fabric_leakage, permanent_vents, thermal_bridging) that State 2 emits
@@ -234,6 +240,13 @@ const LOSS_ORDERS = {
     'thermal_bridging',   // envelope group (moved here — was after permanent_vents)
     'fabric_leakage',     // air-flow group starts
     'permanent_vents',
+    // Brief 74 P5 (2026-06-01): canonical mech vent loss key. The
+    // legacy 'ventilation' entry below was the original placeholder
+    // ("mechanical (per-system entries appended at runtime)") but the
+    // engine never emitted under that key. P5 adds aggregate emit at
+    // heat_balance.annual.losses.mech_ventilation. Legacy 'ventilation'
+    // key retained for back-compat (resolves to nothing — harmless).
+    'mech_ventilation',
     'infiltration',       // legacy alias — engine no longer emits under this key
     'openings_louvre',    // legacy alias — engine no longer emits under this key
     'openings_window',

@@ -367,6 +367,56 @@ Total: ~12-15 line additions across 5 files. No deletions.
 
 ---
 
+## §5 — Mech vent loss ribbon implementation (Part 5, 2026-06-01)
+
+### §5.1 Files touched
+
+| File | Change | Lines |
+| --- | --- | ---: |
+| `frontend/src/utils/instantCalc.js` | State 2 `heat_balance.annual.losses` emit (`_calculateState2`): added `mech_ventilation: { kwh, kwh_per_m2 }` derived from `acc_mech_vent_heat_per_system.reduce(...)`; added the same sum to `total_loss_Wh` for the `totals.losses_kwh` aggregate. State 1 untouched (envelope-only, no vent). | ~6 |
+| `frontend/src/utils/stateMode.js` | `LOSS_ORDERS[MODES.ENVELOPE_GAINS]` + `LOSS_ORDERS[MODES.FULL]`: added `'mech_ventilation'` adjacent to `permanent_vents` (air-flow group). Legacy `'ventilation'` entry kept in MODES.FULL for back-compat. | ~6 |
+| `frontend/src/components/modules/balance/HeatBalance.jsx` | `MODULE_CATEGORY_KEYS.mechanical_ventilation` extended to include `'mech_ventilation'`. `appendPerSystemVent` gated to skip per-system entries when the aggregate `mech_ventilation` is non-zero (avoids double-count). | ~6 |
+| `frontend/src/data/balanceColours.js` | `FABRIC_COLOURS.mech_ventilation = '#047857'` (emerald-700, same family as the existing `ventilation` token) + `LABELS.mech_ventilation = 'Mech ventilation'`. | ~4 |
+
+Total: ~22 lines across 4 files. No new exported functions. No engine math changes — the accumulator `acc_mech_vent_heat_per_system` has been computed since Brief 28k Gate 3+; P5 just exposes the aggregate sum at `heat_balance.annual.losses`.
+
+### §5.2 BalanceSankey + flattenLosses inherit the new key automatically
+
+`BalanceSankey.jsx` reads losses through the shared `buildLossesMap(data, mode, modules)` helper. The helper iterates `loadOrderFor(mode)` (which now includes `'mech_ventilation'`) and reads `data.annual.losses[k]` (which now includes `mech_ventilation`). No code change needed in BalanceSankey itself — the new key surfaces automatically.
+
+Same pattern for `flattenLosses` (also calls `buildLossesMap`). The display-parity discipline that bit Brief 73 P5 is structurally avoided here: ONE source of truth (`buildLossesMap`), three renderer paths (Rows / Stacked / Sankey) all flow through it.
+
+### §5.3 P5 gates
+
+| Gate | Status | Evidence |
+| --- | --- | --- |
+| (a) Mech vent ribbon visible in vent emerald `#047857` | ✓ structural | `mech_ventilation` key in `heat_balance.annual.losses`; `colourForElement('mech_ventilation')` → `FABRIC_COLOURS.mech_ventilation` = `#047857`; `LABELS.mech_ventilation = 'Mech ventilation'`. Renders adjacent to Infiltration / Permanent vents per `LOSS_ORDERS[MODES.*]`. **For Bridgewater specifically, ribbon renders at zero width** (kwh = 0 per first-principles — heating demand = 0 → no setpoint-convention mech vent loss). Verify on a project with heating demand. |
+| (b) Σ losses rises | ✓ engine | `total_loss_Wh` (used to compute `totals.losses_kwh`) now includes `acc_mech_vent_total_Wh`. For Bridgewater the contribution is 0 → no change. For projects with heating demand, Σ losses rises by the mech vent value. |
+| (c) Net residual reconciliation | n/a for Bridgewater (mech vent = 0); ✓ structural for projects with heating demand | The residual moves by exactly `mech_ventilation.kwh`. Brief's "substantially smaller / closer to zero" claim applies only to projects where the mech vent term was the missing balance term. Bridgewater's residual driver is cooling-synth (already accounted at display time), not mech vent — see §4.5. |
+| (d) Disabling vent systems collapses ribbon; HRE 0→75 reduces proportionally | ✓ engine | Per-system loop at `instantCalc.js:3414-3428` is `if (ventSystems[vi]?.enabled === false) continue` — disabled systems contribute 0. HRE folded into `ventUA[vi] = flow × ρCp × (1 − hre)` — raising HRE reduces UA_eff proportionally. Aggregate = sum over all systems → both effects propagate. |
+| (e) Anchor preserved except mech vent | ✓ engine | Per-element loss block: external_wall, roof, ground_floor, glazing, thermal_bridging, fabric_leakage, permanent_vents all unchanged. Gains block unchanged. EUI unchanged from P3 (= 150.7). Σ electricity unchanged (= 416.938). Σ gas unchanged (= 204.698). For Bridgewater, mech_ventilation = 0 → all numbers identical to P3 post-anchor. |
+
+### §5.4 Anchor post-P5 (Bridgewater clean)
+
+  EUI:                 150.7 kWh/m²·yr   (unchanged from P3)
+  Σ electricity:       416.938 MWh       (unchanged from P3)
+  Σ gas:               204.698 MWh       (unchanged from P3)
+  Σ losses:            221,398.2 kWh     (unchanged from P3, mech_vent contributes 0)
+  Σ gains:             488,011.1 kWh     (unchanged)
+  Net residual:        +266,612.9 kWh    (unchanged — see §4.5)
+  mech_ventilation:    0 kWh             (correct — heating_demand = 0)
+  systems_flow:        present at root   (from P3)
+  Auxiliary node:      present in systems_flow (from P3)
+
+### §5.5 Rule 14 spirit on the new loss-block emit
+
+- **State 1** (`_calculateState1`): envelope-only scope, no mechanical ventilation exists. No emit needed. N/A.
+- **State 2** (`_calculateState2`): the only path where `acc_mech_vent_heat_per_system` exists. P5 adds the aggregate here.
+- **State 3**: inherits via `...state2Result` spread at `_calculateState3:5230`. No separate State 3 emit needed.
+- **Inline-legacy 'full'**: uses simplified scalar vent loss model (`acc_vent_loss` at L6592 etc.), not the per-system accumulator. Doesn't need `mech_ventilation` because it doesn't have one to emit. Documented divergence — same pattern as Brief 72 P5's gain_fraction divergence at inline-legacy.
+
+---
+
 ## §6-walkthrough — Code self-verification + handoff (Part 6, pending)
 
 To be filled at Part 6.

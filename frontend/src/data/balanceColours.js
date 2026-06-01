@@ -96,6 +96,17 @@ export const FABRIC_COLOURS = {
   openings_louvre:  '#22C55E', // green-500 — wind-driven louvres (State 2.5)
   openings_window:  '#16A34A', // green-600 — operable windows (State 2.5)
   ventilation:      '#047857', // emerald-700 — mechanical (MEV/MVHR), State 3 — darkest (most engineered)
+  // Brief 74 P5 (2026-06-01): mech ventilation HEAT LOSS ribbon on Heat
+  // Balance Sankey. Same emerald-700 family as the `ventilation` token
+  // above so a single visual identity covers "mechanical ventilation"
+  // across the Heat Balance Sankey (loss side) and the Energy Flows
+  // Sankey (system node, where SERVICE_COLOURS.ventilation = '#14B8A6'
+  // teal-500 is used). Two adjacent emerald/teal shades are an
+  // intentional design choice — the Heat Balance Sankey is a thermal
+  // view (heat moving out), Energy Flows is an electrical view (fans
+  // consuming kWh). Same family signals "same service", different
+  // shade signals "different physics being depicted".
+  mech_ventilation: '#047857',
 }
 
 // Element labels.
@@ -115,6 +126,8 @@ export const LABELS = {
   openings_louvre:  'Openings — louvres',
   openings_window:  'Openings — windows',
   ventilation:      'Ventilation (mech.)',
+  // Brief 74 P5 (2026-06-01): canonical key for mech ventilation heat loss.
+  mech_ventilation: 'Mech ventilation',
   cooling:          'Cooling',
   people:           'People',
   equipment:        'Equipment',

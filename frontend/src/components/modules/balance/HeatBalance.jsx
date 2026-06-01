@@ -109,7 +109,11 @@ const MODULE_CATEGORY_KEYS = Object.freeze({
   permanent_vents:        new Set(['permanent_vents', 'openings_louvre']),
   internal_gains:         new Set([]),  // gains-side only; no loss filter contribution
   natural_ventilation:    'prefix:natvent_',
-  mechanical_ventilation: new Set(['ventilation']).add('prefix:ventilation_'),
+  // Brief 74 P5 (2026-06-01): include the new canonical `mech_ventilation`
+  // key emitted by State 2 at heat_balance.annual.losses.mech_ventilation.
+  // Legacy 'ventilation' entry retained for back-compat (engine never
+  // emitted under it; harmless).
+  mechanical_ventilation: new Set(['mech_ventilation', 'ventilation']).add('prefix:ventilation_'),
 })
 
 function _modulesToCategoryMatcher(modules) {
@@ -179,6 +183,16 @@ export function buildLossesMap(data, mode = DEFAULT_MODE, modules = null) {
   const appendPerSystemVent = () => {
     if (perSystemVentAppended) return
     perSystemVentAppended = true
+    // Brief 74 P5 (2026-06-01): if the aggregate `mech_ventilation`
+    // ribbon (new in Brief 74) is non-zero, skip per-system appending —
+    // the aggregate replaces the per-system ribbons to avoid double-
+    // counting. Per-system breakdown remains accessible via the
+    // Diagnostic panel (which reads losses_at_setpoint.ventilation
+    // directly). When the aggregate is 0 (e.g. Bridgewater with
+    // heating_demand = 0), the per-system entries are also 0 and the
+    // guard at L188 (heat_loss_kwh > 0.01) short-circuits anyway.
+    const aggregateMechVentKwh = Number(legacyLosses?.mech_ventilation?.kwh ?? 0)
+    if (aggregateMechVentKwh > 0.01) return
     const ventSystems = setpoint?.ventilation ?? []
     for (const v of ventSystems) {
       if ((v.heat_loss_kwh ?? 0) > 0.01) {
