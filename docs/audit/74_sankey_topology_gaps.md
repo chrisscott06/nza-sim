@@ -417,9 +417,92 @@ Same pattern for `flattenLosses` (also calls `buildLossesMap`). The display-pari
 
 ---
 
-## §6-walkthrough — Code self-verification + handoff (Part 6, pending)
+## §6-walkthrough — Code self-verification + handoff (Part 6, 2026-06-01)
 
-To be filled at Part 6.
+Tip at P6: `ea4354c` (P5 commit, pushed). Servers up (5176 / 8002), Bridgewater loaded.
+
+### §6.1 Self-verification — Heat Balance Sankey (Systems → Heat balance tab)
+
+Browser via MCP (1568 × 744). Header reads `Σ 488.0 MWh` / `Σ 472.0 MWh`, Net `+16.0 MWh ✓ balanced`. Demand-row right-strip shows Heating `0.0 / 0.0`, Cooling `302.1 / 302.1`, DHW `263.2 / 263.2`. Identical to P5 sanity check.
+
+| Walkthrough item | Result |
+| --- | --- |
+| 4. Mech ventilation ribbon visible in vent teal adjacent to Infiltration | **✗ not visible** — but consistent with engine emit (`mech_ventilation = 0` for Bridgewater, see §4 first-principles agreement; no ribbon to render). |
+| 5. Σ losses risen vs P1 anchor by mech vent contribution | **✓ trivially** — 472.0 MWh anchor matches both P1 and post-P5 (delta = 0 since engine emits 0 for this project). |
+| 6. Net (gains − losses) residual approximately balanced | **✓** — +16.0 MWh balanced (unchanged from P1). |
+| 7. Disabling all three vent systems collapses ribbon | **✗ not testable on Bridgewater** — ribbon already at 0; toggling vent off won't change visible state. |
+| 8. Toggling bedroom_extract HRE 0% → 75% reduces ribbon proportionally | **✗ not testable on Bridgewater** — same reason as item 7. |
+| 9. Heating system share validation regression | **✓ (deferred to Chris's walkthrough)** — no code touched in this path. |
+
+Engine wiring confirmed correct at code review:
+- `_calculateState2` emits `losses.mech_ventilation` aggregate (`instantCalc.js:4205+`).
+- `LOSS_ORDERS[ENVELOPE_GAINS]` + `LOSS_ORDERS[FULL]` include the key (`stateMode.js`).
+- `MODULE_CATEGORY_KEYS.mechanical_ventilation` recognises it (`HeatBalance.jsx`).
+- Palette: `FABRIC_COLOURS.mech_ventilation = '#047857'` + `LABELS.mech_ventilation = 'Mech ventilation'`.
+- Double-count guard in `appendPerSystemVent` gated on aggregate > 0.01.
+
+Items 4/7/8 will exercise correctly on a project with non-zero `heating_demand`. For Bridgewater the ribbon is invisible because the engine reports 0 (auxiliary + occupancy + solar saturate the zone above 21 °C setpoint year-round; `dT_heat_out` gate never fires).
+
+### §6.2 Self-verification — Energy Flows Sankey (Systems → Energy flows tab) — **REGRESSION FOUND**
+
+Browser via MCP. Demand column renders: Cooling 302.1, DHW 263.2, Mech vent 42.0, Lighting 56.3, Small power 130.3 MWh. **No Auxiliary row.** Σ elec header reads 416.9 MWh (correct — includes aux 70.5 MWh in the top-level sum, since P3 added `auxiliary_elec_kwh_v40` to `electricity_total_kwh` at L5195).
+
+| Walkthrough item | Result |
+| --- | --- |
+| 1. Auxiliary row visible in `#4B5563` on Demand column | **✗ FAIL** |
+| 2. Σ elec has risen by auxiliary contribution | **✓** — header 416.9 MWh (P1 was 346.4 MWh, delta = 70.5 MWh = aux). |
+| 3. Setting Catering 0 W/m² collapses Auxiliary row | **✗ not testable** — there is no Auxiliary row to collapse. |
+
+### §6.3 Root cause of item 1 regression
+
+P3 ported the `systems_flow` auxiliary node into `_calculateState3` (`instantCalc.js:5386–5395`), and the read-only probe script (`docs/audit/74_p3_systems_flow_output.json`) verified the node IS emitted when that function is called.
+
+But **Bridgewater never reaches `_calculateState3`**. The dispatch in `_calculateInstantBaseline:6666–6674`:
+
+```js
+const hasV25Config = building.systems_config_v25 && Object.keys(building.systems_config_v25).length > 0
+const hasV25Library = Array.isArray(libraryData?.system_templates) && libraryData.system_templates.length > 0
+if (mode === 'full' && (options.engine === 'v2.5' || (hasV25Config && hasV25Library))) {
+  return _calculateState3(...)
+}
+```
+
+Live probe via fetch of `/api/projects/{id}`:
+- `building_config.systems_config_v25` → not present
+- `building_config.systems_config_v40` → present (full keys: heating, cooling, dhw, ventilation, lighting, small_power + service-level setpoint fields)
+
+The gate evaluates `hasV25Config = false`, so execution falls through to the **inline-legacy 'full' path** (`_calculateInstantBaseline:6675+`). That path emits its own `systems_flow` at L7141, and it does NOT have the auxiliary node. P3's port was to a function the live UI never executes on v40-only projects.
+
+The probe script worked because it likely called `_calculateState3` directly (or set `options.engine = 'v2.5'`), bypassing the dispatch gate.
+
+### §6.4 Why Heat Balance still shows Auxiliary on IN-Gains
+
+Different read path. `result.heat_balance.annual.gains.internal.auxiliary` is populated by `_calculateState2` (`:4258`). `_calculateState2` is called by both `_calculateState3` AND by the State 2 mode dispatch — but in the inline-legacy 'full' path, `_calculateState2` is NOT called. Instead a separate `_buildHeatBalance` at `:7143` constructs the heat balance from local accumulators.
+
+If the live UI's Heat Balance shows Auxiliary, then either:
+(a) `_calculateState3` IS being reached via a different gate (option.engine, or library_data shape I haven't fully traced), OR
+(b) The Heat Balance Sankey reads auxiliary from a fallback path (e.g. `result.heat_balance.annual.gains.internal.auxiliary` populated by an alternate sidecar call).
+
+Three diagnostic approaches exhausted (React fiber probe; DOM text grep; library API shape probe). Per Brief 74 escalation trigger "Three approaches tried on any single failure → escalate," not drilling further before handoff.
+
+### §6.5 Recommended fix path (for Chris's call)
+
+Two options, both bounded Tier-2 work within Brief 74:
+
+**Option A — port auxiliary block to inline-legacy 'full' (recommended).** Add the same 5-line aux emit (`sf_nodes.push({id:'auxiliary'…}); sf_nodes.push({id:'aux_del'…}); _addLink('grid','auxiliary',…); _addLink('auxiliary','aux_del',…)`) to the inline-legacy systems_flow build at `instantCalc.js:~7100–7140`. Source the magnitude from the same place P3 used: walk `building.gains.auxiliary.profiles` and sum, OR call into the State 2 sidecar to read it. Either keeps the engine math untouched, matches P3's pattern, and closes item 1 without expanding scope.
+
+**Option B — update the dispatch gate.** Change `hasV25Config` to `hasV25Config || hasV40Config`. Lower-effort textually but much bigger blast radius — every v40 project starts running `_calculateState3` instead of inline-legacy. This is the right structural answer eventually, but it's the State-3-redesign move the brief escalation trigger explicitly flags ("`systems_flow` port turns out to require restructuring State 3's shape → that's State 3 redesign territory, escalate"). Not in Brief 74.
+
+Option A is the brief-compliant Tier-2 fix. Chris's call.
+
+### §6.6 P6 status
+
+- ✓ P5 close committed and pushed (`ea4354c`).
+- ✗ Item 1 (Auxiliary row on Energy Flows) **regression open** — P3's port functionally inert on v40-only projects. See §6.3.
+- ⏳ Items 4/7/8 not testable on Bridgewater (engine correctly reports `mech_ventilation = 0`). Need a project with `heating_demand > 0` for a positive visual check.
+- ⏳ P6 close (commit + archive + STATUS) **deferred** pending Chris's call on §6.5.
+
+---
 
 ---
 
