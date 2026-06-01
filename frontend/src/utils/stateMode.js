@@ -272,6 +272,11 @@ const GAIN_ORDERS = {
     'solar_north',
     'people',
     'equipment',
+    // Brief 73 P5 (2026-05-29): auxiliary surfaces between equipment and
+    // lighting, matching balanceColours.js GAIN_ORDER (Brief 72 P6).
+    // HeatBalance.jsx's `allowed.has(k)` filter consults this list — without
+    // entry, the ribbon is dropped even when the gain block exists.
+    'auxiliary',
     'lighting',
   ],
   [MODES.FULL]: [
@@ -281,6 +286,8 @@ const GAIN_ORDERS = {
     'solar_north',
     'people',
     'equipment',
+    // Brief 73 P5 (2026-05-29): see ENVELOPE_GAINS comment.
+    'auxiliary',
     'lighting',
     'heating',
   ],

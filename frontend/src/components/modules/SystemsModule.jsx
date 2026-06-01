@@ -2207,6 +2207,25 @@ function SystemsSummary({ consumption }) {
     { key: 'fans',          label: 'Vent fans',     node: { delivered_mwh: (consumption.ventilation ?? []).reduce((s, v) => s + (v.fan_electricity_mwh ?? 0), 0), demand_mwh: (consumption.ventilation ?? []).reduce((s, v) => s + (v.fan_electricity_mwh ?? 0), 0), electricity_mwh: (consumption.ventilation ?? []).reduce((s, v) => s + (v.fan_electricity_mwh ?? 0), 0), gas_mwh: 0, enabled: (consumption.ventilation ?? []).some(v => v.enabled !== false) } },
     { key: 'lighting',      label: 'Lighting',      node: { delivered_mwh: consumption.lighting?.electricity_mwh ?? 0, demand_mwh: consumption.lighting?.electricity_mwh ?? 0, electricity_mwh: consumption.lighting?.electricity_mwh ?? 0, gas_mwh: 0, enabled: true } },
     { key: 'small_power',   label: 'Small power',   node: { delivered_mwh: consumption.small_power?.electricity_mwh ?? 0, demand_mwh: consumption.small_power?.electricity_mwh ?? 0, electricity_mwh: consumption.small_power?.electricity_mwh ?? 0, gas_mwh: 0, enabled: true } },
+    // Brief 73 P5 (2026-05-29): auxiliary loads. Reads
+    // consumption.heat_balance.annual.gains.internal.auxiliary — the
+    // accurate schedule-aware values produced by Brief 72 P5's State 2
+    // emit. `delivered_mwh` here is electricity (the row's headline
+    // number, matching lighting/small_power); the heat-gain side
+    // (.kwh) appears in the Heat Balance Sankey and not double-counted
+    // here. demand_mwh kept equal to electricity for visual parity
+    // with the lighting/small_power rows above.
+    { key: 'auxiliary',     label: 'Auxiliary',     node: (() => {
+      const aux = consumption?.heat_balance?.annual?.gains?.internal?.auxiliary ?? {}
+      const elecMwh = (aux.electricity_kwh ?? 0) / 1000
+      return {
+        delivered_mwh:   elecMwh,
+        demand_mwh:      elecMwh,
+        electricity_mwh: elecMwh,
+        gas_mwh:         0,
+        enabled:         elecMwh > 0,
+      }
+    })() },
   ]
 
   const totalElec = consumption.total?.electricity_mwh ?? 0

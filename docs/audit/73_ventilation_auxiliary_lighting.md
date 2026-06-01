@@ -252,6 +252,52 @@ No engine-physics changes — all surfaces are display-only readers of `consumpt
 
 `frontend/src/components/modules/results/EnergyFlowsTab.jsx` is the Results module's own Energy Flows Sankey (different from the Systems Sankey). It currently reads `ae.lighting_kWh` and `ae.equipment_kWh` from a parallel `annualEnergy` aggregation (L41–47) — NOT from `consumption.heat_balance.annual.gains.internal`. Wiring auxiliary here would require adding `ae.auxiliary_kWh` to the upstream `annualEnergy` builder, which is a different code path. **The brief's "Energy Flows Sankey" mention is consistent with the Systems-page tab (SystemSankey.jsx), and the brief excludes "any Sankey redesign beyond adding the missing ribbon."** Leaving Results EnergyFlowsTab for a future brief — flagged in §future.
 
+## §5 — Auxiliary ribbon implementation (Part 5, 2026-05-29)
+
+Three deliverables planned per the brief. Realised scope:
+
+| Deliverable | Gate | Outcome | Implementation |
+| --- | --- | --- | --- |
+| Heat Balance Sankey aux ribbon | (a) | **DONE** | `HeatBalance.jsx` L309 loop extended to `['people', 'equipment', 'auxiliary', 'lighting']`. `stateMode.js GAIN_ORDERS` extended in `MODES.ENVELOPE_GAINS` and `MODES.FULL` (same Brief-72-P6 oversight pattern — palette in one place, allowlist in another). Reads `internal.auxiliary.kwh` (the heat-gain side) directly from State 2's emit. INTERNAL_COLOURS.auxiliary = `#4B5563` from Brief 72 P6 already in place. |
+| Right-strip per-service breakdown | (c) | **DONE** | `SystemsModule.jsx` L2210 added auxiliary entry below small_power. Reads `consumption.heat_balance.annual.gains.internal.auxiliary.electricity_kwh / 1000` for delivered_mwh. Visible whenever aux electricity > 0; auto-disabled in the UI when 0 (matches lighting/small_power behaviour). |
+| Systems "Energy flows" Sankey aux node | (b) | **DEFERRED** — see §5.2 below | Adding to inline-legacy `_calculateInstantBaseline` sf_nodes wouldn't help v40 projects like Bridgewater because `_calculateState3` (the v40 path) doesn't emit `systems_flow` at all; it only emits `consumption.*`. SystemSankey.jsx renders empty for v40 projects today, independent of auxiliary. This is a pre-existing v25-vs-v40 wiring gap that needs its own brief — see §future. |
+
+### §5.1 Anchor preservation (gate e)
+
+PC discriminator paths re-run after the three edits: EUI 185.2, Σ elec 403.543 MWh, Σ gas 360.269 MWh, DHW 421.093 MWh — all byte-identical to P1. None of the P5 changes touch engine compute; they're display reads of fields that already existed in the result.
+
+### §5.2 Why the Systems Energy Flows Sankey is deferred
+
+Two distinct code paths emit `systems_flow`:
+
+- `calculateInstantDegreeDay` (L5998) — legacy DD fallback. Used when weatherData is missing.
+- `_calculateInstantBaseline` (L6959) — inline-legacy 'full' path. Used when `mode === 'full'` AND no v25 config or `options.engine !== 'v2.5'`.
+
+But Bridgewater routes to `_calculateState3` (the v40 path) at `_calculateInstantBaseline:6486`:
+
+```js
+if (mode === 'full' && (options.engine === 'v2.5' || (hasV25Config && hasV25Library))) {
+  return _calculateState3(...)
+}
+```
+
+`_calculateState3` doesn't construct sf_nodes/sf_links. It returns `consumption.{space_heating, space_cooling, dhw, ventilation, lighting, small_power, total, daily_profiles, brief40, source_path}` — no `systems_flow` field. SystemSankey.jsx therefore has no data to render for v40 projects today.
+
+This is a pre-existing v25-vs-v40 wiring gap that:
+1. Predates Brief 73 (the Brief 72 close commit `3e21f3b` already had this gap).
+2. Means the user has never actually seen lighting / small_power / equipment on the Systems "Energy flows" tab for Bridgewater post-Brief-40 migration either.
+3. Cannot be fixed by adding auxiliary in isolation — the entire systems_flow emission needs to be ported to State 3.
+
+**Decision:** Document the gap, flag it for a follow-up brief, and ship the two deliverables that do work for v40 projects (Heat Balance + Right-strip). Per the brief's "no scope expansion" principle, the systems_flow port is its own brief. Surfaced in §future.
+
+### §5.3 Files touched
+
+| File | Change | Lines |
+| --- | --- | ---: |
+| `frontend/src/utils/stateMode.js` | Added `'auxiliary'` to `GAIN_ORDERS[MODES.ENVELOPE_GAINS]` and `GAIN_ORDERS[MODES.FULL]`. | ~6 |
+| `frontend/src/components/modules/balance/HeatBalance.jsx` | Loop array L309 extended to include `'auxiliary'`. | ~3 |
+| `frontend/src/components/modules/SystemsModule.jsx` | Added `{ key: 'auxiliary', ... }` entry to the right-strip rows array. | ~12 |
+
 ---
 
 ## §6 — Lighting + Small Power reconciliation (Part 6, pending)
@@ -262,5 +308,6 @@ Initial observation from §1.5: Lighting internal gain 56.28 MWh and Small Power
 
 ## §future — Tier-3 notes for next brief
 
+- **Systems "Energy flows" Sankey for v40 projects** — `_calculateState3` doesn't emit `systems_flow` (the inline-legacy and degree-day paths do). SystemSankey.jsx renders empty for v40 projects today, independent of Brief 73. Auxiliary integration here is gated on porting the systems_flow emission to State 3. Pre-existing gap dating from Brief 40 migration; Brief 73 P5 §5.2 surfaces it. Worth its own brief.
 - **EnergyFlowsTab on Results** (`frontend/src/components/modules/results/EnergyFlowsTab.jsx`) reads from a parallel `annualEnergy` aggregation (`ae.lighting_kWh` / `ae.equipment_kWh`) rather than `consumption.heat_balance.annual.gains.internal`. Wiring auxiliary here would need the upstream `annualEnergy` builder updated. Out of Brief 73 scope per "no Sankey redesign beyond adding the missing ribbon" — flag for a future brief if the Results tab's Energy Flows surface needs auxiliary parity.
 - **Per-row collapse-state persistence** (carried forward from Brief 47 Part 5c).

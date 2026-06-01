@@ -305,8 +305,15 @@ function flattenGains(data, unit, orientationDeg = 0, mode = DEFAULT_MODE) {
     })
   }
   // Internal gains — only at State 2+ (per state contract; State 1 is envelope-only)
+  //
+  // Brief 73 P5 (2026-05-29): auxiliary added between equipment and lighting.
+  // Mirrors balanceColours.js GAIN_ORDER ordering (Brief 72 P6). Auxiliary's
+  // ribbon size is `internal.auxiliary.kwh` (the HEAT side — gain to zone,
+  // = electricity_kwh × gain_fraction per Brief 72 P5). Anchor projects
+  // with no auxiliary profiles have `internal.auxiliary.kwh = 0` so the
+  // ribbon renders at zero width — no visual change.
   const internal = gains.internal ?? {}
-  for (const k of ['people', 'equipment', 'lighting']) {
+  for (const k of ['people', 'equipment', 'auxiliary', 'lighting']) {
     if (!allowed.has(k)) continue
     const node = internal[k]
     if (!node) continue
