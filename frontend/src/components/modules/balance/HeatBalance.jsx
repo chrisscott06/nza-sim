@@ -183,16 +183,21 @@ export function buildLossesMap(data, mode = DEFAULT_MODE, modules = null) {
   const appendPerSystemVent = () => {
     if (perSystemVentAppended) return
     perSystemVentAppended = true
-    // Brief 74 P5 (2026-06-01): if the aggregate `mech_ventilation`
-    // ribbon (new in Brief 74) is non-zero, skip per-system appending —
-    // the aggregate replaces the per-system ribbons to avoid double-
-    // counting. Per-system breakdown remains accessible via the
-    // Diagnostic panel (which reads losses_at_setpoint.ventilation
-    // directly). When the aggregate is 0 (e.g. Bridgewater with
-    // heating_demand = 0), the per-system entries are also 0 and the
-    // guard at L188 (heat_loss_kwh > 0.01) short-circuits anyway.
-    const aggregateMechVentKwh = Number(legacyLosses?.mech_ventilation?.kwh ?? 0)
-    if (aggregateMechVentKwh > 0.01) return
+    // Brief 77 P3 (2026-06-02): replace Brief 74 P5's strict
+    // "aggregate-wins-over-per-system" guard with mutual exclusion.
+    // The pre-Brief-77 guard checked `aggregateMechVentKwh > 0.01`
+    // and short-circuited, collapsing all per-system entries into the
+    // aggregate ribbon. That destroyed the per-system visibility Chris
+    // had in pre-Brief-74 client reports. The new rule: ALWAYS push
+    // per-system entries when the engine provides them; the legacy
+    // aggregate `mech_ventilation` key is then filtered out of the
+    // render order by the L255-area orderedKeys filter (extended in
+    // this commit to drop the aggregate alongside legacy `ventilation`
+    // when per-system entries exist). Mutual exclusion is preserved —
+    // never both rendered, never double-counted. The aggregate falls
+    // through unchanged for engine paths that don't emit per-system
+    // (e.g. inline-legacy 'full' or any project where ventSystems is
+    // empty at the State 2 builder).
     const ventSystems = setpoint?.ventilation ?? []
     for (const v of ventSystems) {
       if ((v.heat_loss_kwh ?? 0) > 0.01) {
@@ -252,7 +257,14 @@ export function buildLossesMap(data, mode = DEFAULT_MODE, modules = null) {
       if (k === 'cooling') return losses.cooling != null
       // Drop the legacy aggregate 'ventilation' line when we've already
       // expanded it into per-system entries — avoids double-counting.
-      if (k === 'ventilation' && orderWithNew.some(x => x.startsWith('ventilation_'))) return false
+      // Brief 77 P3 (2026-06-02): extended to also drop the Brief 74 P5
+      // aggregate `mech_ventilation` key under the same condition. This
+      // closes the mutual-exclusion contract introduced when the strict
+      // guard at appendPerSystemVent was removed: when per-system entries
+      // exist, the aggregate is filtered out here; when per-system is
+      // empty (no entries pushed), the aggregate renders unchanged.
+      if ((k === 'ventilation' || k === 'mech_ventilation')
+          && orderWithNew.some(x => x.startsWith('ventilation_'))) return false
       if (!moduleMatcher(k)) return false
       return losses[k] != null
     })

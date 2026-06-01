@@ -57,11 +57,77 @@ The Brief 74 P5 guard at `HeatBalance.jsx:194-195` (read in §2 diagnostic below
 
 ---
 
-## §2-diagnostic — Render-site sweep (Part 2)
+## §2-diagnostic — Render-site sweep (Part 2, 2026-06-02)
 
-Brief 74 P5's guard exact location + condition. Three render sites identified for Sankey / Rows / Stacked. ChartTotalsBadge Σ tally.
+### §2.1 Brief 74 P5's guard exact location
 
-To be filled at Part 2.
+`frontend/src/components/modules/balance/HeatBalance.jsx:194-195`:
+
+```js
+const aggregateMechVentKwh = Number(legacyLosses?.mech_ventilation?.kwh ?? 0)
+if (aggregateMechVentKwh > 0.01) return
+```
+
+Inside `appendPerSystemVent()` (L183-212). When aggregate > 0.01, the per-system iteration is skipped entirely. The guard's stated intent (per the comment at L186-193) was to prevent the per-system ribbons rendering alongside the aggregate ribbon. The brief is right that this needs to invert.
+
+### §2.2 Architecture — one source, all three views
+
+**This is much simpler than the brief assumed.** All three view modes consume the SAME shared function `buildLossesMap`, which lives in `HeatBalance.jsx:155-264`:
+
+- **Rows view** — `HeatBalance.jsx` itself imports `buildLossesMap` and calls it via `flattenLosses` (L277-297) for the Rows display.
+- **Stacked view** — same `HeatBalance.jsx` instance; the Stacked variant renders from the same `flattenLosses` output (separate render branch within the same component file).
+- **Sankey view** — `BalanceSankey.jsx:29` explicitly imports `buildLossesMap` from `HeatBalance.jsx`: `import { TooltipPill, buildLossesMap, colourKeyForLossElement } from './HeatBalance.jsx'`. At L144-145 BalanceSankey calls `const { orderedKeys, losses } = buildLossesMap(data, mode, modules)` — same function, same return shape.
+
+**Implication:** fixing `buildLossesMap` fixes ALL three view modes simultaneously. No per-view code changes needed. The brief's P3 spec (separate edits to HeatBalance.jsx Rows + BalanceSankey.jsx Sankey + HeatBalanceView.jsx Stacked + ChartTotalsBadge) anticipated a less-shared architecture than what's actually there.
+
+### §2.3 ChartTotalsBadge — no independent loss sum to update
+
+`HeatBalanceView.jsx` (in `gains/canvas/`) does NOT read `losses_at_setpoint.ventilation` or `mech_ventilation` directly — it imports `HeatBalance` as a child component and lets it render. ChartTotalsBadge sums whatever the `losses` object carries, so when `buildLossesMap` returns per-system entries instead of the aggregate, ChartTotalsBadge sums the per-system entries automatically (Σ is preserved by construction).
+
+Grep across `frontend/src/components/modules` for `aggregateMechVent` / `losses_at_setpoint?.ventilation` returns ZERO hits outside `HeatBalance.jsx` for the aggregate guard pattern. The aggregate guard exists ONCE.
+
+### §2.4 Existing mutual-exclusion pattern at L255
+
+The codebase already has a mutual-exclusion pattern for the LEGACY aggregate `ventilation` key:
+
+```js
+// L253-255
+// Drop the legacy aggregate 'ventilation' line when we've already
+// expanded it into per-system entries — avoids double-counting.
+if (k === 'ventilation' && orderWithNew.some(x => x.startsWith('ventilation_'))) return false
+```
+
+When `ventilation_*` per-system keys exist in the render order, the legacy `ventilation` aggregate is filtered out. **This is exactly the pattern Brief 77 needs to extend to `mech_ventilation`** (the Brief 74 P5 aggregate key, which post-Brief-74-P5 lives at the same level alongside `ventilation` in the load order).
+
+### §2.5 Per-system data shape
+
+Each `losses_at_setpoint.ventilation[i]` entry carries (per `_calculateState2:3987` engine emit):
+
+- `name` — Brief 76 P2 fallback chain resolves to v40 `label` ("mvhr_gf_public", "bedroom_extract", "public_toilet_extract" on Bridgewater) ✓ user-facing-friendly
+- `heat_loss_kwh` — magnitude for display
+- `cooling_gain_kwh`, `fan_kwh`, `daily_heat_loss_kwh`, `monthly_heating_loss_kwh` — additional fields not needed for the basic display
+
+The renderer at L196-211 already uses `_label: v.name` for the row label, so no label changes are needed in this brief — Brief 76 P2's name fallback chain delivered the right field shape.
+
+### §2.6 P3 scope summary
+
+Two edits to `HeatBalance.jsx`:
+
+1. **Remove the guard at L194-195** — delete the `aggregateMechVentKwh > 0.01 return` block. The per-system loop runs unconditionally (still guarded by `v.heat_loss_kwh > 0.01` per-entry).
+2. **Extend the filter at L255** to also drop `mech_ventilation` when per-system entries exist:
+
+```js
+if ((k === 'ventilation' || k === 'mech_ventilation')
+    && orderWithNew.some(x => x.startsWith('ventilation_'))) return false
+```
+
+That's the complete fix. One file, ~5 lines of code change net. The shared `buildLossesMap` architecture means this single edit fixes Sankey, Rows, and Stacked — and the right-strip Σ losses, and the legend, and any other consumer that calls `buildLossesMap`.
+
+### §2.7 What the brief got wrong about scope
+
+The brief's P2 spec called for diagnostic on "three render sites that need updating" — listing `HeatBalance.jsx`, `BalanceSankey.jsx`, and `HeatBalanceView.jsx` separately. Actual finding: those three components SHARE one `buildLossesMap` function. Only `HeatBalance.jsx` needs editing.
+
+This is good news — smaller fix, less risk, easier to verify (one source = all three views move together).
 
 ---
 
