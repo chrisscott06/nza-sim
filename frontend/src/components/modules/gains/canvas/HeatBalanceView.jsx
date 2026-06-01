@@ -58,14 +58,20 @@ export default function HeatBalanceView() {
           </div>
           {/* Brief 28-IM-Polish POL-M2 §4.1: chart totals badge in the
               header so the user can verify cross-view consistency with
-              Summary + Monthly. Σ shown is annual gain TOTAL (people +
-              lighting + equipment) since this is the gains-side hero. */}
+              Summary + Monthly. Σ shown is annual gain TOTAL across the
+              four internal-gain categories (people + lighting + equipment +
+              auxiliary). Auxiliary added Brief 73 P5-redux Part B
+              (2026-06-01) — matches HeatBalance.jsx flattenGains and
+              BalanceSankey.jsx iteration ordering (both updated in this
+              brief). Projects without auxiliary profiles → kwh = 0 → no
+              change to Σ; visible only when the user authors profiles. */}
           <ChartTotalsBadge
             label="Σ gains"
             value_kwh={
-              ((state2?.heat_balance?.annual?.gains?.internal?.people?.kwh ?? 0)
-              + (state2?.heat_balance?.annual?.gains?.internal?.lighting?.kwh ?? 0)
-              + (state2?.heat_balance?.annual?.gains?.internal?.equipment?.kwh ?? 0))
+              ((state2?.heat_balance?.annual?.gains?.internal?.people?.kwh    ?? 0)
+              + (state2?.heat_balance?.annual?.gains?.internal?.lighting?.kwh  ?? 0)
+              + (state2?.heat_balance?.annual?.gains?.internal?.equipment?.kwh ?? 0)
+              + (state2?.heat_balance?.annual?.gains?.internal?.auxiliary?.kwh ?? 0))
             }
             gia_m2={state2?.heat_balance?.metadata?.gia_m2 ?? 0}
           />

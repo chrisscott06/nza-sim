@@ -81,7 +81,19 @@ function buildGraph(data, unit, orientationDeg = 0, mode = DEFAULT_MODE, modules
       addLink(id, BUILDING_NODE_ID, v, colourForElement(id))
     }
   }
-  for (const k of ['people', 'equipment', 'lighting']) {
+  // Brief 73 P5 (2026-05-29) added 'auxiliary' to HeatBalance.jsx's
+  // flattenGains loop — but flattenGains only feeds the Rows + Stacked
+  // layouts. The SANKEY layout renders through BalanceSankey.jsx (this
+  // file) which has its own parallel loop, and the P5 edit missed it.
+  // P5-redux Part B (2026-06-01) closes the parity gap: auxiliary
+  // between equipment and lighting matches both the HeatBalance.jsx
+  // loop and balanceColours.js GAIN_ORDER (Brief 72 P6). Anchor projects
+  // with no auxiliary profiles → readValue returns 0 → addLink's
+  // value > 0.001 guard skips → no ribbon → byte-identical pre-Brief-73.
+  // Display parity discipline: when two render paths (Rows/Stacked vs
+  // Sankey) read the same gain block, both must iterate the same keys
+  // (CLAUDE.md Rule 9 spirit applied to UI surfaces).
+  for (const k of ['people', 'equipment', 'auxiliary', 'lighting']) {
     if (!gainAllowed.has(k)) continue
     const v = readValue(gains?.internal?.[k], unit)
     if (v > 0) {

@@ -174,6 +174,24 @@ P3 walkthrough surfaced ✗ items (Σ 0% chip + Normalise button still rendering
 
 Total UI surface count: **5 distinct render sites** (at the brief's hard-STOP threshold of "~5"). The hard-STOP would have fired had there been a sixth.
 
+### §3.8 P5-redux Part B — Heat Balance Sankey ribbon (2026-06-01)
+
+P5 walkthrough items 5/6/10: "No Auxiliary ribbon in Heat Balance Sankey" + "Σ gains 331.1 not risen vs 372.9 pre-Brief-73 baseline". P5 had edited `HeatBalance.jsx flattenGains` (the function that builds the gain items array). But `HeatBalance.jsx` has THREE layout modes:
+
+- **Rows** (`StackColumn` at L748–749) — reads `gains` from `flattenGains`. ✓ aux added in P5.
+- **Stacked** (`StackedColumns` at L754) — reads `gains` from `flattenGains`. ✓ aux added in P5.
+- **Sankey** (`<BalanceSankey>` at L757–766) — **DOES NOT use `flattenGains`**. BalanceSankey has its own parallel iteration at `BalanceSankey.jsx:84` that hardcoded `['people', 'equipment', 'lighting']` (no auxiliary). **P5 missed this entirely.**
+
+This is a textbook display-parity gap (CLAUDE.md Rule 9 spirit applied to UI surfaces — same gain block read by two render paths, both must iterate the same keys). P5 closed it for Rows + Stacked but not the Sankey, which is what the user defaults to on the Heat Balance page.
+
+Plus a second, related miss: `HeatBalanceView.jsx:63-71` ChartTotalsBadge (the "Σ gains" header label) hardcoded `people + lighting + equipment` (excluded auxiliary). The user-visible Σ figure would never rise with auxiliary regardless of any other fix.
+
+**Fix:**
+- `BalanceSankey.jsx:84`: iterate `['people', 'equipment', 'auxiliary', 'lighting']` to match HeatBalance.jsx flattenGains.
+- `HeatBalanceView.jsx:63-71`: add `auxiliary?.kwh` to the ChartTotalsBadge value_kwh sum.
+
+Both edits are no-op when no auxiliary profiles exist (engine emits zero, addLink's value > 0.001 guard skips, sum unchanged).
+
 ### §3.7 P5-redux Part A — right-strip auxiliary path correction (2026-06-01)
 
 P5 walkthrough item 9: "No Auxiliary entry on right-strip per-service breakdown." Root cause: the P5 edit at `SystemsModule.jsx:2210` reads `consumption?.heat_balance?.annual?.gains?.internal?.auxiliary` — but `heat_balance` is **not** under `consumption`. The engine result has `heat_balance` at the TOP level (`result.heat_balance`), as confirmed by:
