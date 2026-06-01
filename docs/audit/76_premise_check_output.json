@@ -1,0 +1,121 @@
+{
+  "brief": "Brief 76 premise check — read-only diagnostic",
+  "source": "node scripts/_brief76_premise_check.mjs",
+  "captured_at": "2026-06-01T19:48:09.406Z",
+  "Q1_dispatch_gate": {
+    "description": "Gate evaluation reproducing instantCalc.js:6666-6668 logic exactly.",
+    "matrix": {
+      "lib_A_no_engine_opt": {
+        "mode": "full",
+        "hasV25Config_value": null,
+        "hasV25Config_evaluated": false,
+        "hasV25Config_keys_length": 0,
+        "hasV25Library_array_check": true,
+        "hasV25Library_length": 7,
+        "hasV25Library_evaluated": true,
+        "options_engine": null,
+        "fires_state3_branch": null,
+        "will_dispatch_to": "inline-legacy `full` path (`_calculateInstantBaseline` body from L6675)"
+      },
+      "lib_A_with_engine_v2.5_opt": {
+        "mode": "full",
+        "hasV25Config_value": null,
+        "hasV25Config_evaluated": false,
+        "hasV25Config_keys_length": 0,
+        "hasV25Library_array_check": true,
+        "hasV25Library_length": 7,
+        "hasV25Library_evaluated": true,
+        "options_engine": "v2.5",
+        "fires_state3_branch": true,
+        "will_dispatch_to": "_calculateState3 (State 3)"
+      },
+      "lib_B_no_engine_opt": {
+        "mode": "full",
+        "hasV25Config_value": null,
+        "hasV25Config_evaluated": false,
+        "hasV25Config_keys_length": 0,
+        "hasV25Library_array_check": false,
+        "hasV25Library_length": 0,
+        "hasV25Library_evaluated": false,
+        "options_engine": null,
+        "fires_state3_branch": null,
+        "will_dispatch_to": "inline-legacy `full` path (`_calculateInstantBaseline` body from L6675)"
+      },
+      "lib_B_with_engine_v2.5_opt": {
+        "mode": "full",
+        "hasV25Config_value": null,
+        "hasV25Config_evaluated": false,
+        "hasV25Config_keys_length": 0,
+        "hasV25Library_array_check": false,
+        "hasV25Library_length": 0,
+        "hasV25Library_evaluated": false,
+        "options_engine": "v2.5",
+        "fires_state3_branch": true,
+        "will_dispatch_to": "_calculateState3 (State 3)"
+      }
+    }
+  },
+  "Q2_losses_at_setpoint": {
+    "description": "losses_at_setpoint.ventilation contents on Bridgewater today.",
+    "result_state": 3,
+    "result_mode": "full",
+    "heat_balance_top_level_keys": [
+      "annual",
+      "metadata",
+      "demand",
+      "free_running",
+      "comfort_band_used",
+      "losses_at_setpoint"
+    ],
+    "has_losses_at_setpoint": true,
+    "losses_at_setpoint_keys": [
+      "external_wall",
+      "roof",
+      "ground_floor",
+      "glazing",
+      "fabric_leakage",
+      "permanent_vents",
+      "thermal_bridging",
+      "ventilation",
+      "natural_ventilation",
+      "internal_gains_bucketed",
+      "internal_gains_monthly",
+      "totals",
+      "setpoints_used"
+    ],
+    "losses_at_setpoint_ventilation": [],
+    "losses_at_setpoint_ventilation_type": "array length 0",
+    "losses_annual_keys": [
+      "external_wall",
+      "roof",
+      "ground_floor",
+      "glazing",
+      "thermal_bridging",
+      "fabric_leakage",
+      "permanent_vents",
+      "mech_ventilation"
+    ],
+    "losses_annual_mech_ventilation": {
+      "kwh": 0,
+      "kwh_per_m2": 0
+    },
+    "has_brief40_ventilation": true,
+    "brief40_ventilation_systems_count": 3,
+    "brief40_ventilation_first_system_keys": [
+      "id",
+      "label",
+      "share_pct",
+      "sfp_w_per_lps",
+      "flow_rate",
+      "flow_rate_basis",
+      "fan_electrical_mwh",
+      "recovery_sensible_pct",
+      "recovery_latent_pct",
+      "recovered_heating_mwh",
+      "recovered_cooling_mwh",
+      "defrost_penalty_mwh",
+      "summer_bypass"
+    ]
+  },
+  "note": "Q3 (renderer iteration) covered separately in the diagnostic write-up."
+}
