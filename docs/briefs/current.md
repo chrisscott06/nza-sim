@@ -1,6 +1,12 @@
 # Current brief
 
-**Brief 75 — Full ventilation heat modelling + Bridgewater heating-demand-zero diagnostic.** Architect to author. Picks up the Tier-3 follow-on from Brief 74 P6 close ([`docs/audit/74_bridgewater_over_gained_followup.md`](../audit/74_bridgewater_over_gained_followup.md)) — Bridgewater (4,125 m² UK hotel) reports `heating_demand_mwh = 0` which is implausible. Three candidate root causes (CIBSE defaults, zone heat-balance gain saturation, vent losses not feeding back into demand). Door bug renumbers to Brief 76; interventions diagnostic harness to Brief 77; WWHR to Brief 78. Do not begin work until the brief lands.
+**Brief 75 — Full ventilation heat modelling + Bridgewater heating-demand-zero diagnostic.** Architect-authored at [`active/75_ventilation_heat_modelling.md`](active/75_ventilation_heat_modelling.md). Design note canonical at https://www.notion.so/372d645e05cc813caf57dd1f02d2a690.
+
+**Lineage:** Closes the two findings stacked at Brief 74 close — (i) mech vent ribbon emits 0 on over-gained buildings because the engine treats vent loss as heating-only; (ii) Bridgewater's heating_demand = 0 MWh/yr is suspect for a UK hotel. Likely linked. Tier-3 input: [`docs/audit/74_bridgewater_over_gained_followup.md`](../audit/74_bridgewater_over_gained_followup.md).
+
+**Sequencing:** P1 anchor → P2 read-only diagnostic (outcome a/b/c branch) → P3 engine refactor (split mech_vent_thermal_flow from heating compensation) → P4 MVHR recovery ribbon on Heat Balance IN-side → P5 reconciliation + new anchor → P6 walkthrough HARD STOP.
+
+**Door bug → Brief 76. Interventions diagnostic harness → Brief 77. WWHR → Brief 78.**
 
 ## Recently closed
 
