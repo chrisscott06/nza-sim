@@ -300,9 +300,62 @@ This is a pre-existing v25-vs-v40 wiring gap that:
 
 ---
 
-## §6 — Lighting + Small Power reconciliation (Part 6, pending)
+## §6 — Lighting + Small Power baseline reconciliation (Part 6, 2026-05-29)
 
-Initial observation from §1.5: Lighting internal gain 56.28 MWh and Small Power 172.10 MWh match the brief's "post-re-creation" expected numbers within 0.1%. They diverge from pre-loss Lighting 128.6 / Small Power 116.7 by the same magnitude observed at Brief 72 PB close — which means the divergence is NOT new, and the question Part 6 has to answer is whether the re-creation was an acceptable rebaseline (a) or whether a specific input value is wrong (b). Engine regression (c) is unlikely because Brief 72 P5 falsifiability already proved `gain_fraction = 1.0` defaults hold structurally.
+Read-only investigation. No engine code changed. **Outcome: (a) acceptable rebaseline.** The new post-re-creation Bridgewater anchor is the canonical lighting/small_power baseline going forward.
+
+### §6.1 Live Bridgewater profile values (API read)
+
+| Field | Lighting | Equipment |
+| --- | --- | --- |
+| magnitude (LPD / EPD) | `8 W/m²` | baseload `3 W/m²` + active `7 W/m²` |
+| daylight_factor | `0.6` | (n/a) |
+| standby_factor | (n/a) | `0.10` |
+| **gain_fraction** | **`1.0`** | **`1.0`** |
+| area_share | `1.0` | `1.0` |
+| relationship_to_occupancy | `proportional_with_spill` | `proportional` |
+| Geometry GIA | 4321.8 m² | 4321.8 m² |
+
+### §6.2 Outcome (c) ruled out — no Brief 72 P5 regression
+
+`gain_fraction = 1.0` on both lighting and equipment — the schema default per Brief 72 P4. No regression. Brief 72 P5 falsifiability already proved structurally that:
+- electricity_kwh and gain_kwh are equal when gain_fraction = 1.0
+- changing gain_fraction halves gain (correctly) while electricity holds (correctly)
+
+No code path collapses the two. Outcome (c) does not apply. Escalation not triggered.
+
+### §6.3 Outcome (a) reasoning — input arithmetic
+
+Lighting: 56.3 MWh / year delivered, with LPD 8 W/m² + daylight_factor 0.6 + area_share 1.0:
+- Effective continuous LPD = 8 × 0.6 = 4.8 W/m² (daylight-averaged)
+- Annual energy at full duty = 4.8 W/m² × 4321.8 m² × 8760 h = 181,720 kWh
+- Schedule fraction = 56,300 / 181,720 = **0.31** (occupancy-driven, plausible for hotel proportional+spill at 75% occupancy_rate)
+
+Equipment: 172.1 MWh / year:
+- baseload 3 W/m² × 4321.8 m² × 8760 h = 113,599 kWh (24/7)
+- residual for "active" = 172,100 − 113,599 = 58,501 kWh
+- active component: 7 W/m² × 4321.8 m² × hours × standby-adjusted fraction
+- Solving: hours × frac = 58,501 / (7 × 4321.8) = 1,934 effective hours
+- Plausible for hotel proportional schedule (~25% × 8760 = 2,190 hours).
+
+Both numbers are **internally consistent** with the seeded CIBSE-style hotel defaults. They differ from the pre-loss Lighting 128.6 / Small Power 116.7 because the pre-loss Bridgewater carried different LPD/EPD values that aren't captured in any audit doc input form (only as output anchors). Brief 72 PB re-creation used the seeded `DEFAULT_GAINS.lighting.profiles[0]` / `equipment.profiles[0]` values which match CIBSE hotel guidance.
+
+### §6.4 Why not Outcome (b)?
+
+Outcome (b) — fix Bridgewater inputs to match pre-loss within ~5% — would require knowing the pre-loss LPD/EPD values. Quickly back-solving:
+- Pre-loss Lighting 128.6 MWh ÷ (0.31 schedule fraction × 4321.8 m² × 8760 h × 0.6 daylight) = **18.2 W/m²** if all other inputs were the same.
+- Pre-loss Small Power 116.7 MWh = 113.6 (baseload) + 3.1 (active). Active 3.1 MWh ÷ (7 W/m² × 4321.8 × frac) → frac × hours = 102 hours/year — implausibly low for a hotel. Strongly suggests the EPD was lower than current (which would mean less baseload too — different arithmetic).
+
+The pre-loss inputs were likely higher LPD (~18 W/m²) and possibly lower EPD with a different schedule profile. **Restoring those values would not be a "fix" — it would be guessing at a pre-loss configuration we don't have authoritative records of.** The audit-trail-grounded posture is to accept the seeded CIBSE-default re-creation as the canonical anchor going forward.
+
+### §6.5 Decision: Outcome (a) accepted
+
+The new post-re-creation Bridgewater is the canonical Lighting + Small Power anchor:
+
+- **Lighting**: 56.3 MWh delivered / 13.0 kWh/m²·yr (LPD 8 W/m², daylight 0.6, proportional+spill, area_share 1.0)
+- **Small Power**: 172.1 MWh delivered / 39.8 kWh/m²·yr (baseload 3 + active 7 W/m², standby 0.1, proportional, area_share 1.0)
+
+Brief 73 P7 walkthrough item 11 ("Lighting + Small Power totals match the Part 6 outcome (a, b, or c)") resolves to (a) — no code change in this brief, anchor accepted.
 
 ---
 
