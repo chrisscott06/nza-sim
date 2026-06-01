@@ -2,6 +2,55 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
+## ✅ Brief 73 — CLOSED 2026-06-01
+
+**Ventilation share rule + auxiliary visualisation + lighting baseline check.** Architect-authored, seven parts + three post-walkthrough redux fixes. First brief after Brief 72 close. Bundled three findings from the post-Brief-72 walkthrough: ventilation share rule (engine refusing to compute fan electricity because three parallel vent systems each at 100% share trip the sum-to-100 guard), auxiliary loads not rendering on Heat Balance Sankey or right-strip despite Brief 72 P5 producing the rollups, and lighting + small power reconciliation against pre-loss numbers.
+
+Archive: [`archive/73_ventilation_auxiliary_lighting_COMPLETED.md`](docs/briefs/archive/73_ventilation_auxiliary_lighting_COMPLETED.md). Audit doc with §3.6–§3.8 redux + §6 outcome (a) + §7-walkthrough table: [`docs/audit/73_ventilation_auxiliary_lighting.md`](docs/audit/73_ventilation_auxiliary_lighting.md).
+
+| Part | SHA | Deliverable |
+|---|---|---|
+| Land | `6558ab2` | Brief + audit stub + Bridgewater anchor (EUI 185.2, electricity 403.5, gas 360.3, DHW 421.1, aux 41.1/78.3) |
+| P2 | `7b75e77` | Vent share rule diagnostic (read-only) — found engine guard at `systemsEngine.js:648` |
+| P3 | `a6bd9fd` | Engine guard removal + UI gates (2 surfaces) + ProjectContext loader strip |
+| P4 | `6ca9dec` | Auxiliary viz diagnostic — Brief 72 P5 rollups healthy, identified 4 insertion sites |
+| P5 | `51791fd` | Heat Balance Sankey aux ribbon + right-strip aux entry (initial — TWO bugs landed here, fixed in P5-redux) |
+| P6 | `3bad6af` | Lighting + Small Power outcome **(a) accepted rebaseline** — current CIBSE defaults internally consistent |
+| P7-prep | `490364e` | Code self-verification log → HARD STOP for walkthrough |
+| P3-redux | `ef2a2a7` | **Single-override fix** — extended `shareValidation` to return `valid:true` for vent → closes all 5 UI render sites (3 missed in P2: inline warning + Normalise, V40SectionHeader chip, SystemSummaryRow tint) |
+| P5-redux A | `9245405` | Right-strip aux path correction — `consumption.heat_balance` → `result.heat_balance` (the field is top-level, not nested) |
+| P5-redux B | `dab2891` | Heat Balance Sankey ribbon — `BalanceSankey.jsx` has its own iter array separate from `flattenGains`; also `HeatBalanceView.jsx` ChartTotalsBadge sum |
+| P9-stub | `8140509` | Brief 72 P9 DHW load-shape no-op follow-on stub (Tier-3, not Brief 73 scope) |
+| P7-walk | `9a77dee` | Fresh self-verification table post 3 fixes |
+
+**Walkthrough verdict (re-walkthrough at `:5176` post-redux):**
+
+| # | Item | Verdict |
+|---:|---|---|
+| 1 | Vent panel no share UI, no Σ chip, no Normalise | ✓ |
+| 2 | Vent fan per-system electricity non-zero | ✓ |
+| 3 | Heating share validation still fires | ✓ |
+| 4 | DHW share validation still fires | ✓ |
+| 5 | Heat Balance Sankey aux ribbon in `#4B5563` | ✓ |
+| 6 | Σ gains rises proportionally with aux | ✓ |
+| 7 | Systems Energy Flows Sankey aux row | ✗ DEFERRED — `_calculateState3` doesn't emit `systems_flow` (pre-existing v40 wiring gap from Brief 40 migration). Own brief required. |
+| 8 | Energy Flows Σ elec rises | n/a (contingent on 7) |
+| 9 | Right-strip Auxiliary entry with non-zero elec | ✓ |
+| 10 | Catering=0 collapses ribbon | ✓ |
+| 11 | Lighting + Small Power outcome (a) | ✓ accepted |
+
+In-scope items all green. Items 7/8 deferred-acknowledged.
+
+**Lessons banked:**
+
+- **Display-parity discipline for multi-renderer UI.** Three render paths (Rows / Stacked / Sankey) read the same gain block via different code; all must iterate the same keys. Future "find all surfaces" diagnostics must follow data flow from the validator/source OUT — not just enumerate component files. P5 originally only edited `flattenGains` (which feeds Rows + Stacked); the actual Sankey renderer (`BalanceSankey.jsx`) has its own parallel iteration that was missed.
+- **Engine result paths must be verified against the actual emit site, not by analogy.** P5's right-strip aux path was written by analogy to lighting/small_power (`consumption.lighting?.electricity_mwh`), but `heat_balance` is at the top level of the result, not under `consumption`. Path corrections via probe scripts catch this — the anchor + probe scripts had the right path all along.
+- **Single-source-of-truth gates outperform N separate gates.** P3-redux closed 5 vent share UI surfaces via a single override in `shareValidation` — versus the alternative of 5 separate `service !== 'ventilation'` gates that could drift apart. Pattern parity with the engine-side fix.
+
+**Tier-3 carried forward to next brief:**
+- **Systems Energy Flows Sankey aux row** (item 7 deferred) — needs `_calculateState3` to emit `systems_flow`.
+- **DHW load-shape toggle no-op** (Brief 72 P9 follow-on) — stub at `docs/audit/72_p9_dhw_load_shape_followup.md` with two candidate root causes + 30-min investigation plan.
+
 ## ✅ Brief 72 — CLOSED 2026-05-29
 
 **Auxiliary loads + gain_fraction + DHW load-shape UI** + headcount unification + Calc-trail discriminator + autonomous overnight DB recovery. Architect-authored OVERNIGHT brief — eleven parts including the unscheduled DB-loss recovery sub-sequence (PA/PB/PC) that the 2026-05-28 22:34 worktree-junction incident forced into scope. Post-Brief-72 anchor: **EUI 162.6 kWh/m²·yr / 670.6 MWh total** at HEAD `5a7222d` (post-Principle-7 unification — DHW doubled from 210.5 → 421.1 MWh because the phantom `people_per_room=1.5` was retired and headcount now reads `num_bedrooms × density.value × occupancy_rate` everywhere).

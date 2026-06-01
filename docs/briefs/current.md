@@ -1,30 +1,25 @@
 # Current brief
 
-**Brief 73 — Ventilation share rule + auxiliary visualisation + lighting baseline check.** Architect-authored at [`active/73_ventilation_auxiliary_lighting.md`](active/73_ventilation_auxiliary_lighting.md); 7 parts. First brief after Brief 72 close. Bundles three findings from the post-Brief-72 walkthrough — ventilation share rule (engine refuses fan electricity → 0 MWh), auxiliary not rendering on Heat Balance / Energy Flows Sankeys despite Brief 72 P5 rollups, lighting + small power post-recreation reconciliation. Build on Brief 72's auxiliary infrastructure (P5 rollups, P6 colour token) — consume, not modify.
+**Brief 74 — Energy Flows auxiliary + Heat Balance mech vent loss ribbon (Sankey topology gaps).** Architect-authored at [`active/74_sankey_topology_gaps.md`](active/74_sankey_topology_gaps.md). Closes the deferred items 7/8 from Brief 73 (Systems Energy Flows Sankey auxiliary on the v40 path) plus the mech-vent loss ribbon on Heat Balance. Design note canonical at https://www.notion.so/372d645e05cc814cb837dde20a22a161.
 
-**Anchor** (captured at Part 1, HEAD `3e21f3b`): Bridgewater clean = **EUI 185.2 kWh/m²·yr** (electricity 403.5 + gas 360.3 MWh). Diverges from brief's expected 163.5 because Chris's walkthrough authored 3 auxiliary profiles (External lighting 0% / Catering 6 W/m² @ 27% / Pumps 1 W/m² @ 100%); their +78.3 MWh electricity is the entire EUI shift. Heat demand 0 / Cool 330.6 / DHW 421.1 MWh. Per-system rollups returned empty — path-discovery is Part 2 territory. Full anchor table at [`docs/audit/73_ventilation_auxiliary_lighting.md`](../audit/73_ventilation_auxiliary_lighting.md) §1.
+**Anchor** (carried forward from Brief 73 close, HEAD `9a77dee`): Bridgewater clean = engine fully functional, vent fan electricity rolling up correctly, Heat Balance Sankey rendering auxiliary ribbon, right-strip per-service breakdown showing Auxiliary entry, all five previously-failing walkthrough items green. Re-capture as Brief 74 P1 against the post-fix tree.
 
-**Ventilation fan total**: null in the engine result (THE BUG — Part 2 diagnoses, Part 3 fixes).
-
-**Sequencing:** P1 land + anchor (this commit) → P2 ventilation share diagnostic (read-only) → P3 ventilation share fix → P4 auxiliary viz diagnostic (read-only) → P5 auxiliary ribbon in Heat Balance + Energy Flows Sankeys + per-service breakdown → P6 lighting + small power reconciliation (read-only, outcome a/b/c) → P7 walkthrough + close [HARD STOP for Chris's browser pass]. Each Part = one commit.
+**Sequencing:** Per the brief — see [`active/74_sankey_topology_gaps.md`](active/74_sankey_topology_gaps.md). P6 carries the HARD STOP for Chris's in-browser walkthrough.
 
 ## Recently closed
 
 | Brief | Closed | Title | Archive |
 |---|---|---|---|
+| 73 | 2026-06-01 | Ventilation share rule + auxiliary visualisation + lighting baseline check | [`archive/73_ventilation_auxiliary_lighting_COMPLETED.md`](archive/73_ventilation_auxiliary_lighting_COMPLETED.md) |
 | 72 | 2026-05-29 | Auxiliary loads, gain_fraction, DHW load-shape UI + DB recovery (OVERNIGHT) | [`archive/72_auxiliary_loads_dhw_shape_COMPLETED.md`](archive/72_auxiliary_loads_dhw_shape_COMPLETED.md) |
 | 71 | 2026-05-28 | Interventions: Isolated vs Combined evaluation + theme grouping | [`archive/71_interventions_isolated_vs_combined_COMPLETED.md`](archive/71_interventions_isolated_vs_combined_COMPLETED.md) |
 
 ## Queued (not yet started)
 
 - **Brief 70 Parts 2–4** — day-zoom + week-zoom + walkthrough close (Brief 70 Part 1 + adhoc polish landed; remainder pending).
-- **Brief 74 (drafted, awaiting Brief 73 close)** — interventions diagnostic harness + tab redesign.
-- **Brief 75 (renumber the door-bug placeholder)** — Operable door heat_loss=0 on Systems Heat Balance (engine-side natvent parity bug). Was queued as "Brief 73" in the door-bug placeholder; per Brief 73 brief text this renumbers to 75 on close.
+- **Brief 72 P9 follow-on** — DHW load-shape toggle no-op investigation. Stub at [`docs/audit/72_p9_dhw_load_shape_followup.md`](../audit/72_p9_dhw_load_shape_followup.md). Two candidate root causes + 30-min investigation plan documented.
+- **Brief 75 (renumber the door-bug placeholder)** — Operable door heat_loss=0 on Systems Heat Balance.
 - **Brief 76 (queued)** — WWHR (needs a DHW end-use split first).
-
-## Out of scope (per Brief 73 brief text)
-
-Door bug (→ Brief 75), interventions diagnostic harness + tab redesign (→ Brief 74), WWHR (→ Brief 76), lighting room-vs-communal split, Sankey redesign beyond adding the missing ribbon, any change to Brief 72's auxiliary engine layer.
 
 ## Pending housekeeping (catalogued, not picked up)
 
@@ -38,6 +33,7 @@ Carried forward from the pre-Brief-71 list:
 6. **PatchedInputBadge per-input coverage** in InternalGainsModule + OperationModule (Brief 47 Part 4 deferred).
 7. **Per-row collapse-state persistence** (Brief 47 Part 5c deferred).
 8. **Breakdown panel Level 3 leave-one-out** (Brief 48 Part 3 deferred).
+9. **EnergyFlowsTab on Results** — separate parallel `annualEnergy` aggregation, auxiliary parity TBD (Brief 73 P5 §future).
 
 ## Paused
 
