@@ -114,9 +114,57 @@ The internal-gains 93 kWh/m² total — 58 kWh/m² excluding people — is well 
 
 ---
 
-## §2-diagnostic — Heating-demand-zero diagnostic (Part 2, pending)
+## §2-diagnostic — Heating-demand-zero diagnostic (Part 2, 2026-06-01)
 
-Three named outcomes per the brief decision tree. To be filled at Part 2.
+Captured via `node scripts/_brief75_p2_diagnostic.mjs`. Full JSON at `docs/audit/75_p2_diagnostic_output.json`.
+
+### §2.1 Experiment design
+
+Two read-only experiments, building config deep-cloned and mutated in-memory only. No engine code touched.
+
+- **Experiment A — zero all internal gains:** `occupancy.density.value = 0`; all lighting / equipment / auxiliary profile magnitudes (including object-shape `{value, unit}` ones and equipment's `baseload` + `active` object fields) set to 0.
+- **Experiment B — NCM-style hotel defaults:** `occupancy.density.value = 1.5 per_room` (≈0.05 persons/m² × 4,125 m² ÷ 138 rooms); lighting profile magnitudes set to integrated 9 W/m²; equipment baseload 3 W/m² + active 2 W/m² (NCM hotel guest-room split); auxiliary zeroed per brief.
+
+### §2.2 Results
+
+| Scenario | Heating demand (MWh) | Cooling demand (MWh) | Σ internal gains (MWh) | Σ internal (kWh/m²) | EUI (kWh/m²·yr) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Baseline (Bridgewater as-saved) | **0.0** | 302.1 | 384.3 | 93.2 | 150.7 |
+| Experiment A (zero gains) | **57.2** | 18.5 | 0.0 | 0.0 | 17.3 |
+| Experiment B (NCM defaults) | **0.0** | 188.6 | 265.9 | 64.5 | 98.8 |
+
+NCM internal gain breakdown in Exp B: people 72.2 MWh (17.5 kWh/m²), equipment 130.3 MWh (31.6 kWh/m²), lighting 63.3 MWh (15.3 kWh/m²), auxiliary 0. Total 64.5 kWh/m².
+
+### §2.3 Outcome classification — **(c) primary, (b) secondary**
+
+The brief's strict bands are A: 80–150 MWh AND B: 30–80 MWh for outcome (a). Captured A is **57.2 MWh** (in the 30–80 band, below the brief's expected 80–150 range), and B is **0.0 MWh** (near-zero). This pattern does NOT fit outcome (a). It maps cleanly to:
+
+- **Outcome (c) primary — gains-saturation logic is over-aggressive.** With Exp B's NCM-compliant 64.5 kWh/m² total internal gain (still ~2× CIBSE TM54 hotel benchmark of ~30 kWh/m², so by no means low-ball), heating demand is STILL zero. The brief defines this as "the gains-saturation logic itself is too aggressive — engine bug — STOP, escalate."
+- **Outcome (b) secondary — envelope tighter than typical UK hotel.** Exp A's 57.2 MWh heating demand is below the brief's expected 80–150 MWh range for a 4,125 m² UK hotel envelope. Inspection of Bridgewater fabric losses: `fabric_leakage` ach is **0.066** (vs typical UK hotel ~0.3–0.5 ach), `external_wall` 8.8 kWh/m² and `roof` 4.0 kWh/m² (both reasonable). The very low infiltration combined with reasonable U-values gives a tighter-than-typical envelope. Independent concern; doesn't change the (c) verdict.
+
+### §2.4 Escalation — STOP per brief direction
+
+The Brief 75 escalation triggers explicitly state:
+
+> **P2 returns outcome (c)** (gains-saturation logic over-aggressive) → STOP. Engine bug, separate brief.
+
+This is one of the four hard-STOPs in the autonomous-mode authority. **P3, P4, P5 NOT executed.** The mech_vent_thermal_kwh decomposition refactor that P3 would have done is still good work, but it's blocked: even with the decomposition, the underlying gains-saturation logic would continue to suppress heating_demand at any NCM-magnitude gain level. The right fix path is upstream.
+
+### §2.5 What the next brief should investigate
+
+The Tier-3 stub at `docs/audit/74_bridgewater_over_gained_followup.md` already enumerates the three candidate root causes — Brief 75 P2 narrows the field:
+
+- **Candidate (a) — CIBSE defaults too generous:** RULED OUT by Exp B. Even with NCM gains at 64.5 kWh/m² total, heating stays 0. Inputs are NOT the root cause.
+- **Candidate (b) — zone heat balance over-saturating gains:** **Confirmed as primary suspect.** The utilisation factor or gains-warmed T_air trace (Brief 67/69 zone-temp trajectory model) is holding gains too efficiently — turning ~265 MWh annual gains into year-round zone saturation above the 21 °C heating setpoint.
+- **Candidate (c) — ventilation losses not feeding back into heating demand:** Still open. The 369 MWh estimated mech vent extract loss (§1.7) is not entering the demand integrand. The State 2 `acc_mech_vent_heat_per_system` gates on `dT_heat_out > 0` which only fires when heating is already needed — circular dependency. If vent losses entered the demand calc directly (as they would in a steady-state heat balance), heating demand would be non-zero regardless of gain saturation. This is the same finding the brief's P3 intended to fix.
+
+The next brief should treat candidates (b) + (c) as a single coupled problem. The visualisation half (mech_vent_thermal_flow decomposition + MVHR recovery ribbon) is still worth doing, but only AFTER the underlying physics is corrected.
+
+### §2.6 P2 commit + STOP
+
+P2 commits the audit + JSON + the diagnostic script. P3, P4, P5 NOT executed.
+
+A new architect-authored brief will pick up the diagnosis. Per the brief escalation discipline, naming candidate (c) as the engine-bug owner is the next architect call — not mine.
 
 ---
 

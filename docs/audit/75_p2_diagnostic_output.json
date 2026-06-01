@@ -1,0 +1,84 @@
+{
+  "brief": "Brief 75 P2 — Bridgewater heating-demand-zero diagnostic",
+  "source": "node scripts/_brief75_p2_diagnostic.mjs",
+  "captured_at": "2026-06-01T15:45:23.138Z",
+  "experiments": {
+    "baseline_as_captured": {
+      "state": 3,
+      "eui_kwh_m2": 150.7,
+      "heating_demand_mwh": 0,
+      "cooling_demand_mwh": 302.1,
+      "dhw_demand_mwh": 263.183,
+      "losses_kwh": 221398.2,
+      "gains_kwh": 488011.1,
+      "net_residual_kwh": 266612.89999999997,
+      "mech_vent_loss_kwh": 0,
+      "internal_gains_kwh": {
+        "people": 144490.9,
+        "equipment": 130297.9,
+        "lighting": 56281.8,
+        "auxiliary": 53251.3
+      },
+      "sum_internal_kwh": 384321.89999999997
+    },
+    "experiment_A_zero_gains": {
+      "modifications": "occupancy.density.value=0; lighting/equipment/auxiliary profile magnitudes (and baseload/active where present) → 0",
+      "result": {
+        "state": 3,
+        "eui_kwh_m2": 17.3,
+        "heating_demand_mwh": 57.2,
+        "cooling_demand_mwh": 18.5,
+        "dhw_demand_mwh": 0,
+        "losses_kwh": 193424.7,
+        "gains_kwh": 103689.3,
+        "net_residual_kwh": -89735.40000000001,
+        "mech_vent_loss_kwh": 0,
+        "internal_gains_kwh": {
+          "people": 0,
+          "equipment": 0,
+          "lighting": 0,
+          "auxiliary": 0
+        },
+        "sum_internal_kwh": 0
+      }
+    },
+    "experiment_B_ncm_defaults": {
+      "sources": {
+        "occupancy_density_target": "NCM hotel ~0.05 persons/m² ≈ 1.5 per_room at 138 rooms",
+        "lighting_LPD_target_w_per_m2": 9,
+        "equipment_EPD_target_w_per_m2": 5,
+        "auxiliary": "zero per brief"
+      },
+      "modifications": "occupancy.density.value → 1.5; lighting profiles rescaled to integrated 9 W/m²; equipment profiles rescaled to 5 W/m² (magnitude AND baseload/active scaled uniformly); auxiliary magnitudes → 0",
+      "result": {
+        "state": 3,
+        "eui_kwh_m2": 98.8,
+        "heating_demand_mwh": 0,
+        "cooling_demand_mwh": 188.6,
+        "dhw_demand_mwh": 131.592,
+        "losses_kwh": 221021.1,
+        "gains_kwh": 369549.7,
+        "net_residual_kwh": 148528.6,
+        "mech_vent_loss_kwh": 0,
+        "internal_gains_kwh": {
+          "people": 72245.4,
+          "equipment": 130297.9,
+          "lighting": 63317,
+          "auxiliary": 0
+        },
+        "sum_internal_kwh": 265860.3
+      }
+    }
+  },
+  "outcome": "(unclassified — needs interpretation)",
+  "outcome_explanation": "Experiment A: 57.2 MWh (in-band-30-80); Experiment B: 0.0 MWh (near-zero). Pattern doesn't match (a), (b), or (c) cleanly. Inspect raw numbers.",
+  "classification": {
+    "expA_class": "in-band-30-80",
+    "expB_class": "near-zero"
+  },
+  "next_step_per_outcome": {
+    "(a)": "Brief 75 P3 retunes Bridgewater inputs to NCM-style + does the engine refactor for mech_vent_thermal_kwh as standalone.",
+    "(b)": "Brief 75 P3 proceeds with engine refactor only (mech_vent_thermal_kwh); fabric tuning deferred to separate brief.",
+    "(c)": "STOP. Brief 75 closes here. Escalate gains-saturation as a separate engine brief."
+  }
+}
