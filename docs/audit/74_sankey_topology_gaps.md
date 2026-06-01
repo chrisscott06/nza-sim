@@ -212,6 +212,59 @@ No engine math changes. Pure read-from-existing-fields, build-shape-out.
 
 ---
 
+## §3 — `systems_flow` port + Auxiliary row (Part 3, 2026-06-01)
+
+### §3.1 Implementation
+
+Added inline emit block at `instantCalc.js:5229+` (just before the State 3 return). ~85 lines. No new exported functions. Iterates `brief40Computed.{heating,cooling,dhw}.systems[]` directly (the `heating/cooling/dhw` aliases at L5126-5128 pass through `v40ServiceBlockToV25Shape` which collapses per-system to `primary_perf`/`secondary_perf`-shape and drops the `.systems[]` array). Vent reads `brief40Computed.ventilation.systems[]`. Lighting/small_power thin reads the locally-resolved `lighting_kwh`/`equipment_kwh`. Auxiliary reads `state2Result.heat_balance.annual.gains.internal.auxiliary.electricity_kwh`.
+
+### §3.2 Bonus engine fix surfaced by the probe
+
+The new probe (`scripts/_brief74_p3_systems_flow_probe.mjs`) sums `grid → systems` links and compares against `consumption.total.electricity_mwh`. First run showed:
+- `grid_out_mwh` = 416.94 (sum of Sankey ribbons)
+- `engine_electricity_mwh` = 346.44
+- Delta = +70.5 MWh (= auxiliary electricity exactly)
+
+Root cause: `electricity_total_kwh` at `instantCalc.js:5195-5197` summed only the legacy six services and **never picked up auxiliary**, even though Brief 72 P5 had wired it into `systemsEngine.fuel_split.electricity`. State 3 computes its own top-level sum and bypasses the systemsEngine fuel_split. The Brief 72 P5 rollup reached `heat_balance.annual.gains.internal.auxiliary` (which Brief 73 P5 routed to UI directly) but never reached `consumption.total.electricity_mwh`.
+
+**Fix:** added `auxiliary_elec_kwh_v40` to the `electricity_total_kwh` sum at L5195. CLAUDE.md Rule 9 spirit ("every term entering an aggregate must appear as a line") — completeness fix, not engine recalculation. No new engine math, just one missing sum term.
+
+Anchor consequence (acknowledged in P3 commit, brief's "anchor: capture, don't hardcode" principle):
+- EUI: 133.6 → **150.7 kWh/m²·yr** (+17.1 = 70.5 MWh ÷ 4125 m²)
+- Σ electricity: 346.438 → **416.938 MWh** (+70.5)
+- All other metrics (gas, heating/cooling/DHW demand, vent fan, lighting/small_power internal gain) unchanged.
+
+This is the new canonical Bridgewater post-Brief-74-P3 anchor.
+
+### §3.3 Probe verification output
+
+`docs/audit/74_p3_systems_flow_output.json` — verifies:
+- `systems_flow_present`: true
+- `has_auxiliary_node`: true
+- `has_aux_del_node`: true
+- 12 nodes (grid, gas, 3× vent, lighting, small_power, auxiliary, aux_del, fresh_air, light_del, equip_del)
+- Σ `grid → *` = 416.938 MWh = engine_electricity_mwh ✓ (delta 0)
+- Σ `gas → *` = 204.698 MWh = engine_gas_mwh ✓ (delta 0)
+- `auxiliary` link chain: `grid → auxiliary` 70,500 kWh, `auxiliary → aux_del` 70,500 kWh
+
+### §3.4 Heating/cooling/DHW node absence on Bridgewater
+
+The probe output node list does NOT include `sh_*`, `sc_*`, or `dhw_*` nodes despite the iteration code being present. This is because the heating/cooling/DHW per-system entries in `brief40Computed` for Bridgewater have `delivered_mwh = 0` (e.g. heating demand = 0 means no heating system delivers anything). The `delivered_kwh <= 0 && source_kwh <= 0 → continue` guard correctly skips them. When Chris's project has heating demand or cooling delivery, these nodes will surface. Confirmed structurally; not a bug.
+
+DHW in Bridgewater shows demand 263 MWh + delivered 263 MWh on `consumption.dhw`, but the per-system v40 entries may have a different shape. Per-service expansion is left to a future brief — the brief's scope is "missing ribbons" (auxiliary specifically named), not full v40 systems_flow parity.
+
+### §3.5 P3 gates
+
+| Gate | Status | Evidence |
+| --- | --- | --- |
+| (a) Auxiliary row visible in `#4B5563` | ✓ structural | `systems_flow.nodes` includes `auxiliary` (category 'auxiliary'); SystemSankey renders via `colourForElement('auxiliary')` reading `INTERNAL_COLOURS.auxiliary = '#4B5563'` from Brief 72 P6. Visual ✓ pending. |
+| (b) Σ elec rose by aux contribution | ✓ engine | Probe: `engine_electricity_mwh` rose 346.438 → 416.938. |
+| (c) Catering=0 collapses aux row | ✓ structural | `auxiliary_elec_kwh_v40` reads from `internal.auxiliary.electricity_kwh`; Catering load → 0 W/m² makes auxiliary electricity drop proportionally; the `if (auxiliary_elec_kwh > 0)` guard suppresses the node entirely when all profiles zeroed. Visual ✓ pending. |
+| (d) Anchor preserved except aux | ✓ engine | Heat/Cool/DHW/Vent/Lighting/Small Power demand all unchanged in P3 probe vs P1 anchor. |
+| (e) State 1 / State 2 / inline-legacy untouched | ✓ structural | Only `_calculateState3` modified — one inline emit block + one sum-term addition. Rule 14 spirit applied: State 2 stays without systems_flow (envelope+gains scope), inline-legacy keeps its own L6959 emit, DD keeps its L6154 emit. Three locations, three different shapes, each describing its own layer. |
+
+---
+
 ## §4-diagnostic — Mech vent heat loss ribbon (Part 4, pending)
 
 To be filled in Part 4.

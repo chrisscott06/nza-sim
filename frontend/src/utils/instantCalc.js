@@ -5192,9 +5192,28 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
   const total_fan_kwh = ventResult.totalFanKwh
 
   // ── Top-level fuel sums ───────────────────────────────────────────────────
+  // Brief 74 P3 (2026-06-01): auxiliary electricity added to the top-level
+  // sum. Brief 72 P5 wired auxiliary into systemsEngine's `fuel_split`
+  // (`systemsEngine.js: fuel_split.electricity += auxiliaryElecMwh * 1000`)
+  // but State 3 computes its own `electricity_total_kwh` here from the
+  // legacy six services (heating/cooling/DHW/fans/lighting/equipment) and
+  // did NOT pick up auxiliary. Result: the Brief 72 P5 fuel-split rollup
+  // never reached `consumption.total.electricity_mwh` on the State 3 path
+  // — auxiliary was visible only on `heat_balance.annual.gains.internal.
+  // auxiliary` (which Brief 73 P5 routed to UI directly), but absent from
+  // the headline Σ electricity figure. P3 closes the gap as a
+  // completeness fix per CLAUDE.md Rule 9 ("every term entering an
+  // aggregate must appear as a line"). Discovered when the new
+  // systems_flow probe showed `Σ grid → systems` = 416.9 MWh vs
+  // `consumption.total.electricity_mwh` = 346.4 MWh — a 70.5 MWh
+  // discrepancy matching auxiliary electricity exactly.
+  const auxiliary_elec_kwh_v40 = Number(
+    state2Result?.heat_balance?.annual?.gains?.internal?.auxiliary?.electricity_kwh ?? 0
+  )
   const electricity_total_kwh =
       elec_heat_total + elec_cool_total + elec_dhw_total +
-      total_fan_kwh + lighting_kwh + equipment_kwh
+      total_fan_kwh + lighting_kwh + equipment_kwh +
+      auxiliary_elec_kwh_v40
   const gas_total_kwh         = gas_heat_total + gas_cool_total + gas_dhw_total
   const delivered_total_kwh   = electricity_total_kwh + gas_total_kwh
   // Brief 58 A3 (2026-05-26): `gia` here is the EUI denominator —
@@ -5226,6 +5245,149 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
     fuel:            p.fuel,
   })
 
+  // ── Brief 74 P3 (2026-06-01) ─────────────────────────────────────────────
+  //
+  // systems_flow for the v40 / v2.5 path. The data shape mirrors the
+  // inline-legacy emit at instantCalc.js:5998-6155 / 6850-6959 so
+  // SystemSankey.jsx's existing buildGraph + click-to-expand mapping
+  // continue to work unchanged. Differences from the legacy emit:
+  //
+  //   - Iterates `brief40Computed.{service}.systems[]` arrays instead of
+  //     resolving a single primary key. Each enabled system produces ONE
+  //     system node + ONE source→system link + ONE system→end_use link.
+  //   - Auxiliary node + link chain (Brief 73 P5 + Brief 74 P3):
+  //     `grid → auxiliary → aux_del` reading
+  //     `internal.auxiliary.electricity_kwh`. Colour stamped via
+  //     `gainColours.js auxiliary` (#4B5563).
+  //   - Defers MVHR recovery node, heating/dhw flue waste, heat rejection.
+  //     Brief 74 scope = "missing ribbons, not redesign". Recovery /
+  //     waste rendering on State 3 is its own brief.
+  //
+  // Rule 14 spirit on data-shape emissions: State 1 N/A (no systems),
+  // State 2 stays without systems_flow (consistent with envelope+gains
+  // scope), State 3 gains the emit here, inline-legacy + DD-fallback
+  // emits unchanged. Documented divergence: State 2 and State 3 emit
+  // different SHAPES because they describe different layers — State 2
+  // is "gains/losses in the envelope+gains heat balance", State 3 adds
+  // the "systems delivering energy to satisfy that demand".
+  const sf_nodes_v40 = []
+  const sf_links_v40 = []
+  const _addLinkV40 = (source, target, value_kWh, style) => {
+    if (value_kWh > 0) sf_links_v40.push({ source, target, value_kWh: Math.round(value_kWh), style })
+  }
+  const _fmtEff = (sys) => {
+    const e = Number(sys?.efficiency_metric ?? 0)
+    if (!isFinite(e) || e <= 0) return ''
+    return sys.source_fuel === 'electricity'
+      ? `SCOP ${e.toFixed(1)}`
+      : sys.source_fuel === 'renewable'
+        ? 'Solar'
+        : `${Math.round(e * 100)}% eff`
+  }
+  if (electricity_total_kwh > 0) sf_nodes_v40.push({ id: 'grid', label: 'Grid Electricity', type: 'source' })
+  if (gas_total_kwh > 0)          sf_nodes_v40.push({ id: 'gas',  label: 'Natural Gas',       type: 'source' })
+  // Heating / cooling / DHW systems — iterate `brief40Computed.{service}.
+  // systems[]` directly. The `heating` / `cooling` / `dhw` aliases above at
+  // L5126-5128 pass through `v40ServiceBlockToV25Shape`, which collapses
+  // the per-system array into `primary_perf` / `secondary_perf` and DROPS
+  // the original `.systems[]` field. The Sankey needs per-system nodes,
+  // so we read from `brief40Computed` directly. The brief40 service-block
+  // entries have `delivered_mwh`, `source_energy_mwh`, `source_fuel`,
+  // `efficiency`, `id`, `label`, `enabled`.
+  for (const sys of (brief40Computed?.heating?.systems ?? [])) {
+    if (sys?.enabled === false) continue
+    const delivered_kwh = Number(sys?.delivered_mwh ?? 0) * 1000
+    const source_kwh    = Number(sys?.source_energy_mwh ?? 0) * 1000
+    if (delivered_kwh <= 0 && source_kwh <= 0) continue
+    const id = `sh_${sys.id ?? sys.label ?? 'primary'}`
+    const eff = Number(sys?.efficiency ?? sys?.blended_efficiency ?? 0)
+    const metric = sys.source_fuel === 'electricity'
+      ? `SCOP ${eff.toFixed(1)}`
+      : sys.source_fuel === 'gas'
+        ? `${Math.round(eff * 100)}% eff`
+        : ''
+    sf_nodes_v40.push({ id, label: sys.label ?? sys.id ?? 'Heating', type: 'system', category: 'hvac', metric })
+    _addLinkV40(sys.source_fuel === 'gas' ? 'gas' : 'grid', id, source_kwh,    sys.source_fuel === 'gas' ? 'gas' : 'electricity')
+    _addLinkV40(id, 'space_heat', delivered_kwh, 'heating')
+  }
+  for (const sys of (brief40Computed?.cooling?.systems ?? [])) {
+    if (sys?.enabled === false) continue
+    const delivered_kwh = Number(sys?.delivered_mwh ?? 0) * 1000
+    const source_kwh    = Number(sys?.source_energy_mwh ?? 0) * 1000
+    if (delivered_kwh <= 0 && source_kwh <= 0) continue
+    const id = `sc_${sys.id ?? sys.label ?? 'primary'}`
+    const eff = Number(sys?.efficiency ?? sys?.blended_efficiency ?? 0)
+    const metric = sys.source_fuel === 'electricity'
+      ? `SEER ${eff.toFixed(1)}`
+      : `${Math.round(eff * 100)}% eff`
+    sf_nodes_v40.push({ id, label: sys.label ?? sys.id ?? 'Cooling', type: 'system', category: 'hvac', metric })
+    _addLinkV40(sys.source_fuel === 'gas' ? 'gas' : 'grid', id, source_kwh, sys.source_fuel === 'gas' ? 'gas' : 'electricity')
+    _addLinkV40(id, 'space_cool', delivered_kwh, 'cooling')
+  }
+  for (const sys of (brief40Computed?.dhw?.systems ?? [])) {
+    if (sys?.enabled === false) continue
+    const delivered_kwh = Number(sys?.delivered_mwh ?? 0) * 1000
+    const source_kwh    = Number(sys?.source_energy_mwh ?? 0) * 1000
+    if (delivered_kwh <= 0 && source_kwh <= 0) continue
+    const id = `dhw_${sys.id ?? sys.label ?? 'primary'}`
+    const eff = Number(sys?.efficiency ?? sys?.blended_efficiency ?? 0)
+    const metric = sys.source_fuel === 'electricity'
+      ? `COP ${eff.toFixed(1)}`
+      : `${Math.round(eff * 100)}% eff`
+    sf_nodes_v40.push({ id, label: sys.label ?? sys.id ?? 'DHW', type: 'system', category: 'dhw', metric })
+    _addLinkV40(sys.source_fuel === 'gas' ? 'gas' : 'grid', id, source_kwh, sys.source_fuel === 'gas' ? 'gas' : 'electricity')
+    _addLinkV40(id, 'dhw_del', delivered_kwh, 'dhw')
+  }
+  // Ventilation systems — ventilation result lives at brief40Computed.ventilation
+  // (the State 3 systemsEngine call writes there). The bare `ventilation`
+  // identifier isn't in scope here — heating/cooling/dhw are aliased at
+  // L5126-5128 but vent/lighting/small_power aren't.
+  const v40Vent = brief40Computed?.ventilation
+  for (const sys of (v40Vent?.systems ?? [])) {
+    if (sys?.enabled === false) continue
+    const fan_kwh = Number(sys?.fan_electrical_mwh ?? 0) * 1000
+    if (fan_kwh <= 0) continue
+    const id = `vent_${sys.id ?? sys.label ?? 'primary'}`
+    const sfp = Number(sys?.sfp_w_per_lps ?? 0)
+    const hre = Number(sys?.recovery_sensible_pct ?? 0)
+    const metric = hre > 0 ? `${hre.toFixed(0)}% HR` : `SFP ${sfp.toFixed(2)} W/L·s⁻¹`
+    sf_nodes_v40.push({ id, label: sys.label ?? sys.id ?? 'Ventilation', type: 'system', category: 'ventilation', metric })
+    _addLinkV40('grid', id, fan_kwh, 'electricity')
+    _addLinkV40(id, 'fresh_air', fan_kwh, 'air')
+  }
+  // Lighting + small_power (thin entries). lighting_kwh / equipment_kwh are
+  // already in scope from the thin compute resolution at L5190-5191.
+  if (lighting_kwh > 0) {
+    sf_nodes_v40.push({ id: 'lighting', label: 'Lighting', type: 'system', category: 'lighting' })
+    _addLinkV40('grid', 'lighting',    lighting_kwh,  'electricity')
+    _addLinkV40('lighting',    'light_del',  lighting_kwh,  'electricity')
+  }
+  if (equipment_kwh > 0) {
+    sf_nodes_v40.push({ id: 'small_power', label: 'Small Power', type: 'system', category: 'equipment' })
+    _addLinkV40('grid', 'small_power', equipment_kwh, 'electricity')
+    _addLinkV40('small_power', 'equip_del',  equipment_kwh, 'electricity')
+  }
+  // Brief 74 P3 (2026-06-01): auxiliary loads ribbon (Brief 73 items 7/8
+  // close-out). Reads the electricity-side carrier from State 2's
+  // internal-gain emit. Empty profile list → 0 → addLink skips.
+  const auxiliary_elec_kwh = Number(state2Result?.heat_balance?.annual?.gains?.internal?.auxiliary?.electricity_kwh ?? 0)
+  if (auxiliary_elec_kwh > 0) {
+    sf_nodes_v40.push({ id: 'auxiliary', label: 'Auxiliary', type: 'system', category: 'auxiliary' })
+    sf_nodes_v40.push({ id: 'aux_del',   label: 'Auxiliary use', type: 'end_use' })
+    _addLinkV40('grid', 'auxiliary', auxiliary_elec_kwh, 'electricity')
+    _addLinkV40('auxiliary', 'aux_del', auxiliary_elec_kwh, 'electricity')
+  }
+  // End-use / building nodes — guarded by presence of any incoming flow
+  // to keep the node list clean.
+  const _has = (id) => sf_links_v40.some(l => l.source === id || l.target === id)
+  if (_has('space_heat')) sf_nodes_v40.push({ id: 'space_heat', label: 'Space Heating', type: 'building' })
+  if (_has('space_cool')) sf_nodes_v40.push({ id: 'space_cool', label: 'Space Cooling', type: 'end_use' })
+  if (_has('dhw_del'))    sf_nodes_v40.push({ id: 'dhw_del',    label: 'Hot Water',     type: 'end_use' })
+  if (_has('fresh_air'))  sf_nodes_v40.push({ id: 'fresh_air',  label: 'Fresh Air',     type: 'end_use' })
+  if (_has('light_del'))  sf_nodes_v40.push({ id: 'light_del',  label: 'Light',         type: 'end_use' })
+  if (_has('equip_del'))  sf_nodes_v40.push({ id: 'equip_del',  label: 'Equipment',     type: 'end_use' })
+  const systems_flow_v40 = { nodes: sf_nodes_v40, links: sf_links_v40 }
+
   return {
     ...state2Result,
     state: 3,
@@ -5233,6 +5395,10 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
     // Brief 58 A3 (2026-05-26): top-level metadata surfaces both roles.
     // gia_m2 = reported_gia_m2 (back-compat for UI consumers).
     metadata: { gia_m2: gia, geometry_gia_m2, reported_gia_m2 },
+    // Brief 74 P3 (2026-06-01): systems_flow emit on the v40 path.
+    // SystemSankey.jsx + SystemsLiveResults.jsx + PopOutResults.jsx all
+    // read `result.systems_flow` at top level. Closes Brief 73 items 7/8.
+    systems_flow: systems_flow_v40,
     energy_use: {
       electricity: {
         heating:   { primary: r_kwh(elec_heat_prim), secondary: r_kwh(elec_heat_sec), total: r_kwh(elec_heat_total) },

@@ -1,0 +1,76 @@
+{
+  "brief": "Brief 74 P3 probe — systems_flow on v40 path",
+  "systems_flow_present": true,
+  "node_count": 17,
+  "link_count": 18,
+  "node_ids": [
+    "grid",
+    "gas",
+    "sc_sys_cool_vrf",
+    "dhw_sys_dhw_ashp",
+    "dhw_sys_dhw_gas",
+    "vent_vent_mvhr_gf_public",
+    "vent_vent_bedroom_extract",
+    "vent_vent_public_toilet_extract",
+    "lighting",
+    "small_power",
+    "auxiliary",
+    "aux_del",
+    "space_cool",
+    "dhw_del",
+    "fresh_air",
+    "light_del",
+    "equip_del"
+  ],
+  "has_auxiliary_node": true,
+  "has_aux_del_node": true,
+  "link_styles": [
+    "electricity",
+    "cooling",
+    "dhw",
+    "gas",
+    "air"
+  ],
+  "link_sum_kwh_by_style": {
+    "electricity": 674018,
+    "cooling": 302100,
+    "dhw": 263183,
+    "gas": 204698,
+    "air": 41962
+  },
+  "link_sum_kwh_by_source": {
+    "grid": 416938,
+    "sc_sys_cool_vrf": 302100,
+    "dhw_sys_dhw_ashp": 78955,
+    "gas": 204698,
+    "dhw_sys_dhw_gas": 184228,
+    "vent_vent_mvhr_gf_public": 22627,
+    "vent_vent_bedroom_extract": 15978,
+    "vent_vent_public_toilet_extract": 3357,
+    "lighting": 56282,
+    "small_power": 130298,
+    "auxiliary": 70500
+  },
+  "totals_check": {
+    "engine_electricity_mwh": 416.938,
+    "engine_gas_mwh": 204.698,
+    "grid_out_mwh": 416.938,
+    "gas_out_mwh": 204.698,
+    "delta_grid_vs_engine_mwh": 0,
+    "delta_gas_vs_engine_mwh": 0
+  },
+  "auxiliary_link_kwh": [
+    {
+      "source": "grid",
+      "target": "auxiliary",
+      "value_kWh": 70500,
+      "style": "electricity"
+    },
+    {
+      "source": "auxiliary",
+      "target": "aux_del",
+      "value_kWh": 70500,
+      "style": "electricity"
+    }
+  ]
+}
