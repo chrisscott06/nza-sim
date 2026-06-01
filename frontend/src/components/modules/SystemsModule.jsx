@@ -2226,16 +2226,21 @@ function SystemsSummary({ consumption }) {
     { key: 'fans',          label: 'Vent fans',     node: { delivered_mwh: (consumption.ventilation ?? []).reduce((s, v) => s + (v.fan_electricity_mwh ?? 0), 0), demand_mwh: (consumption.ventilation ?? []).reduce((s, v) => s + (v.fan_electricity_mwh ?? 0), 0), electricity_mwh: (consumption.ventilation ?? []).reduce((s, v) => s + (v.fan_electricity_mwh ?? 0), 0), gas_mwh: 0, enabled: (consumption.ventilation ?? []).some(v => v.enabled !== false) } },
     { key: 'lighting',      label: 'Lighting',      node: { delivered_mwh: consumption.lighting?.electricity_mwh ?? 0, demand_mwh: consumption.lighting?.electricity_mwh ?? 0, electricity_mwh: consumption.lighting?.electricity_mwh ?? 0, gas_mwh: 0, enabled: true } },
     { key: 'small_power',   label: 'Small power',   node: { delivered_mwh: consumption.small_power?.electricity_mwh ?? 0, demand_mwh: consumption.small_power?.electricity_mwh ?? 0, electricity_mwh: consumption.small_power?.electricity_mwh ?? 0, gas_mwh: 0, enabled: true } },
-    // Brief 73 P5 (2026-05-29): auxiliary loads. Reads
-    // consumption.heat_balance.annual.gains.internal.auxiliary — the
-    // accurate schedule-aware values produced by Brief 72 P5's State 2
-    // emit. `delivered_mwh` here is electricity (the row's headline
-    // number, matching lighting/small_power); the heat-gain side
-    // (.kwh) appears in the Heat Balance Sankey and not double-counted
-    // here. demand_mwh kept equal to electricity for visual parity
-    // with the lighting/small_power rows above.
+    // Brief 73 P5 + P5-redux Part A (2026-06-01): auxiliary loads.
+    // The accurate schedule-aware values produced by Brief 72 P5's State 2
+    // emit live at `result.heat_balance.annual.gains.internal.auxiliary`
+    // (TOP LEVEL of the engine result, NOT under `consumption`). The
+    // original P5 edit read `consumption.heat_balance…` which doesn't
+    // exist — `consumption` keys are `[space_heating, space_cooling,
+    // dhw, ventilation, lighting, small_power, total, daily_profiles,
+    // brief40, source_path]`. Wrong path → aux = {} → electricity_kwh
+    // = 0 → row auto-disabled → no Auxiliary entry rendered (walkthrough
+    // item 9 ✗). P5-redux corrects the path via `result?.heat_balance`
+    // which is in scope here from L174. `delivered_mwh` is electricity
+    // (matching lighting/small_power); heat-gain side (.kwh) appears
+    // in the Heat Balance Sankey and is not double-counted here.
     { key: 'auxiliary',     label: 'Auxiliary',     node: (() => {
-      const aux = consumption?.heat_balance?.annual?.gains?.internal?.auxiliary ?? {}
+      const aux = result?.heat_balance?.annual?.gains?.internal?.auxiliary ?? {}
       const elecMwh = (aux.electricity_kwh ?? 0) / 1000
       return {
         delivered_mwh:   elecMwh,
