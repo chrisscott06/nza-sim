@@ -265,9 +265,105 @@ DHW in Bridgewater shows demand 263 MWh + delivered 263 MWh on `consumption.dhw`
 
 ---
 
-## §4-diagnostic — Mech vent heat loss ribbon (Part 4, pending)
+## §4-diagnostic — Mech vent heat loss ribbon (Part 4, 2026-06-01)
 
-To be filled in Part 4.
+Source-read + first-principles reconciliation. No code changed.
+
+### §4.1 Where the engine computes mech vent heat loss
+
+`_calculateState2` accumulates per-system mech vent heat loss in the 8760-hour loop at `instantCalc.js:3412-3428`:
+
+```js
+for (let vi = 0; vi < ventSystems.length; vi++) {
+  if (ventSystems[vi]?.enabled === false) continue
+  const bypass_h = ventSystems[vi].summer_bypass && bypass_gate_h
+  const UA_eff = bypass_h ? ventUA_bypass[vi] : ventUA[vi]
+  const heat_h = UA_eff * dT_heat_out
+  ...
+  acc_mech_vent_heat_per_system[vi] += heat_h
+}
+```
+
+The accumulator fires only when `dT_heat_out > 0` (i.e. T_out < T_heating_setpoint). UA_eff already incorporates the HRE — `ventUA[vi] = flow × ρCp × (1 − hre)` so the "what reaches outside" is what gets counted. Bypass (summer free-cooling) suppresses HRE for the affected hours.
+
+### §4.2 Where the engine EXPOSES it
+
+The accumulator surfaces in two places:
+
+1. **`state2Result.losses_at_setpoint.ventilation[].heat_loss_kwh`** at `instantCalc.js:3987-3998` — array of per-system entries with `name`, `flow_l_s`, `hre`, `sfp_w_per_l_s`, `hours`, `heat_loss_kwh`, `cooling_gain_kwh`, `fan_kwh`, daily + monthly arrays.
+2. **`state2Result.heat_balance.annual.totals.total_heating_loss_kwh`** at `instantCalc.js:4054-4061` — SUM of (envelope losses + mech_vent + natvent). This is the headline loss total.
+
+But `state2Result.heat_balance.annual.losses` (the per-element block surfaced as Sankey ribbons) at `instantCalc.js:1722-1724` and `3901-3908` has **only envelope keys** (`external_wall`, `roof`, `ground_floor`, `glazing`, `thermal_bridging`, `fabric_leakage`, `permanent_vents`). **No mech_ventilation entry.** This is the gap.
+
+### §4.3 State 3 already reads the per-system value
+
+`_calculateState3` at `instantCalc.js:5560-5564` reads it for the right-strip:
+```js
+exhaust_loss_mwh: r_mwh(
+  (state2Result.losses_at_setpoint?.ventilation?.[vi]?.heat_loss_kwh ?? 0) / 1000
+),
+```
+
+So consumers can already get the per-system number via `consumption.ventilation[vi].exhaust_loss_mwh`. The Heat Balance Sankey just doesn't read from there — it reads from `heat_balance.annual.losses.<key>`.
+
+### §4.4 First-principles reconciliation on Bridgewater
+
+Bridgewater's vent systems (from P1 anchor):
+- vent_mvhr_gf_public: 1435 L/s flow × 75% HRE → effective loss factor 25%
+- vent_bedroom_extract: 2280 L/s × 0% HRE → 100%
+- vent_public_toilet_extract: 479 L/s × 0% HRE → 100%
+
+**Engine reports** `consumption.ventilation[*].exhaust_loss_mwh`:
+- vent_mvhr_gf_public: **0 MWh**
+- vent_bedroom_extract: **0 MWh**
+- vent_public_toilet_extract: **0 MWh**
+- Total: **0 MWh**
+
+**First-principles expected** for a heating-dominated building at heating setpoint 21°C and UK Yeovilton (~3500 heating-degree-hours base 21°C):
+- mvhr_gf_public: 1435 L/s × 1.2 kg/m³ × 1.0 kJ/kg·K × 25% × 3500 h × dT_avg ≈ tens of MWh
+- bedroom_extract: 2280 × 1.0 × 3500 × … ≈ tens of MWh more
+
+**Why the engine reports 0**: Bridgewater's `space_heating.demand_mwh = 0`. The auxiliary heat gains (Catering + Pumps), people, lighting, equipment, and solar gains together keep T_zone at or above the heating setpoint 21°C year-round. The engine's `dT_heat_out > 0` gate at L3414 (which guards the mech vent heat loss accumulator) never fires because there's never an hour when heating would be needed.
+
+This is **NOT a bug**. In the setpoint-loss convention (the same convention `heat_balance.annual.losses.fabric_leakage` uses), losses are counted only when the heating system is actually adding heat. If T_zone never drops below setpoint, no heat is being lost "out of the heating budget" — the heat is being absorbed by other free gains.
+
+For a project with non-zero heating demand, `dT_heat_out > 0` would fire on those hours and `acc_mech_vent_heat_per_system` would accumulate.
+
+**First-principles ↔ engine: AGREES for Bridgewater (both 0 — heating demand = 0 → no setpoint-convention mech vent loss).** Brief 74 P4 escalation trigger NOT fired.
+
+### §4.5 Implication for Bridgewater walkthrough gate (c)
+
+Brief P5 gate (c) says "Net residual: was +16 MWh; should now be substantially smaller if the mech vent loss was the missing term." For Bridgewater specifically, the mech vent ribbon will render at **zero width** because the engine value is 0. The +266 MWh residual (engine totals) won't shrink by mech vent — that's a separate issue: the Heat Balance Sankey's displayed residual is computed including a *synthesised* cooling loss (`data.demand.cooling_demand_mwh`) that doesn't live in `heat_balance.annual.losses` either. Brief's expected ~+16 MWh residual presumably included the cooling synthesis.
+
+The mech vent ribbon SHOULD still ship — for projects with heating demand, it'll show non-zero and the gate (c) reconciliation will work. For Bridgewater the ribbon renders at zero (correct under the setpoint convention), and the gate's "substantially smaller" claim simply doesn't apply because the term was already 0. P5 commit message documents this.
+
+### §4.6 Upstream consumers to update in P5
+
+Per Brief 73 P5-redux lesson (display parity discipline — multi-renderer UI):
+
+| File | Site | Action |
+| --- | --- | --- |
+| `frontend/src/utils/instantCalc.js` | State 2 `heat_balance.annual.losses` emit at L1722-1724 (envelope-only path) and L3901-3908 (State 2 with gains path) | Add `mech_ventilation: { kwh, kwh_per_m2 }` entry summing `acc_mech_vent_heat_per_system`. State 1 not affected — no vent systems exist there. |
+| `frontend/src/components/modules/balance/HeatBalance.jsx` | `flattenLosses` function | Add `'mech_ventilation'` to the loss iteration. Already iterates envelope + ventilation keys generically — just needs the key in the `data.annual.losses` block. |
+| `frontend/src/components/modules/balance/BalanceSankey.jsx` | Loss render loop (sibling of the gain loop fixed in Brief 73 P5-redux) | Add `'mech_ventilation'` to the loss iteration. |
+| `frontend/src/utils/stateMode.js` | `LOSS_ORDERS[MODES.FULL]` and `LOSS_ORDERS[MODES.ENVELOPE_GAINS]` | Add `'mech_ventilation'` between `permanent_vents` and `ventilation`/`cooling` (group adjacent to other air-movement losses per the brief). |
+| `frontend/src/components/modules/gains/canvas/HeatBalanceView.jsx` | ChartTotalsBadge Σ-losses tally | The badge there is "Σ gains" only (no Σ-losses badge). If a Σ-losses badge exists elsewhere, surface mech vent there too. Need to grep. |
+| `frontend/src/data/balanceColours.js` | `INTERNAL_COLOURS` / `FABRIC_COLOURS` / `LABELS` | Add `mech_ventilation: <vent teal hex>` + label "Mech ventilation". Reuse the existing `ventilation` token if present, or import from `SERVICE_COLOURS.ventilation` (`#14B8A6`). |
+
+### §4.7 Colour token to reuse
+
+`balanceColours.js` `SERVICE_COLOURS.ventilation = '#14B8A6'` (teal-500) is the existing vent colour used in Energy Flows Sankey. Use the same hex for Mech ventilation loss ribbon — display-parity discipline (same service = same colour everywhere).
+
+### §4.8 Diff size estimate for P5
+
+- **Engine**: ~3 lines per emit site × 2 sites = 6 lines added (one new `mech_ventilation` key per emit).
+- **stateMode.js LOSS_ORDERS**: 2 entries added (1 per mode).
+- **HeatBalance.jsx flattenLosses**: 1 entry to iteration array.
+- **BalanceSankey.jsx loss loop**: 1 entry to iteration array.
+- **balanceColours.js**: 1 colour token + 1 label.
+- **HeatBalanceView.jsx**: 0 (no Σ-losses badge to update; if one exists, +1 line).
+
+Total: ~12-15 line additions across 5 files. No deletions.
 
 ---
 
