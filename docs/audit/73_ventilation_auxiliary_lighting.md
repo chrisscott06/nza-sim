@@ -441,6 +441,48 @@ Code's engine-level self-verification of the 11 walkthrough items. Each row's Co
 
 The 11-item walkthrough is yours to drive at `:5178`. Self-verification covers structural and engine-level claims; remaining items need eyeballs on the rendered UI. If items 1–6 + 9–11 all pass on your run, the brief closes; if any pop a Tier-2 issue not in §7.2, drop a note and Code addresses inline before the archive commit.
 
+## §7-walkthrough — Post-fix self-verification (2026-06-01)
+
+Three fixes landed after Chris's first walkthrough flagged ✗ on items 1, 5, 6, 9, 10. Commits:
+
+- `ef2a2a7` — Fix 1: P3-redux vent share UI surfaces (single-override in `shareValidation`)
+- `9245405` — Fix 2: P5-redux Part A right-strip aux path (`consumption.heat_balance` → `result.heat_balance`)
+- `dab2891` — Fix 3: P5-redux Part B Heat Balance Sankey ribbon (`BalanceSankey.jsx` iter + `HeatBalanceView.jsx` Σ badge)
+
+Engine integrity confirmed via anchor re-run — none of the three fixes touched engine code (`instantCalc.js`, `systemsEngine.js`, `ProjectContext.jsx` engine surfaces untouched after Fix 1's loader-strip from P3 stayed in place). The live anchor numbers moved between Chris's walkthrough state and the post-fix anchor (EUI 185.2 → 133.6, elec 403.5 → 346.4, gas 360.3 → 204.7) because Chris was editing in the browser between captures — that's user-driven change, not regression.
+
+Rewritten self-verification table (rows updated where fixes landed):
+
+| # | Walkthrough item | Pre-fix verdict | Post-fix verdict | Backing evidence |
+| ---: | --- | --- | --- | --- |
+| 1 | Vent: no share slider, no Σ warning, no Normalise | ✗ failed (3 missed surfaces) | **✓ structural — single-override** | Audit §3.6 — `shareValidation` returns `valid:true` for vent, all 5 downstream surfaces (chip 4 + chip 5 + row tint + popout flag + collapsed-row chip) close at the source. Heating / DHW share validation untouched. |
+| 2 | Right-strip vent per-system fans non-zero | ✓ (Chris missed in image) | ✓ unchanged | P3 falsifiability — 22.6 + 16.0 + 3.4 = 41.96 MWh. |
+| 3 | Heating share validation still fires when sum ≠ 100 | ✓ structural | ✓ unchanged | Vent override is `service === 'ventilation'`-only; heating runs the original branch. |
+| 4 | DHW share validation still fires | ✓ structural | ✓ unchanged | Same as 3. |
+| 5 | Heat Balance Sankey aux ribbon visible in `#4B5563` between Equipment + Lighting | ✗ failed (BalanceSankey loop didn't include auxiliary) | **✓ structural** | Audit §3.8 — `BalanceSankey.jsx:84` now iterates `['people','equipment','auxiliary','lighting']`. `colourForElement('auxiliary')` returns `#4B5563` from Brief 72 P6 INTERNAL_COLOURS. addLink's `value > 0.001` guard renders ribbon when `internal.auxiliary.kwh > 0`. |
+| 6 | Σ gains rises vs pre-Brief-73 baseline (372.9 → 414) | ✗ failed (ChartTotalsBadge hardcoded people+lighting+equipment) | **✓ structural** | Audit §3.8 — `HeatBalanceView.jsx:63-71` now adds `auxiliary?.kwh` to the value_kwh sum. With Chris's 3 profiles → ~53 MWh aux gain → Σ rises by that. The ribbon-side total inside the Sankey itself (HeatBalance.jsx `totalGains = gainItems.reduce(...)`) was already correct after P5; the displayed BADGE was the missing piece. |
+| 7 | Systems Energy Flows Sankey aux row | ✗ DEFERRED | ✗ DEFERRED — unchanged | `_calculateState3` doesn't emit `systems_flow` (pre-existing v40 gap from Brief 40 migration). Own brief required. Acknowledged in §5.2. |
+| 8 | Energy Flows Sankey Σ elec rises | n/a | n/a | Contingent on item 7. |
+| 9 | Right-strip per-service Auxiliary entry with non-zero electricity | ✗ failed (wrong data path) | **✓ structural** | Audit §3.7 — `SystemsModule.jsx:2229` now reads `result?.heat_balance?.annual?.gains?.internal?.auxiliary` (TOP-level, not under `consumption`). Live anchor: `electricity_kwh = 70,500` → row delivered_mwh ≈ 70.5 MWh, `enabled: true`. |
+| 10 | Set Catering load to 0 → Σ gains drops; restore | ✗ depends on 5 | **✓ structural** | Engine emits `internal.auxiliary.kwh` proportionally to enabled profile magnitudes. BalanceSankey re-renders on the new gain value; addLink's > 0.001 guard collapses the ribbon when the sum drops to zero. ChartTotalsBadge Σ tally reflects the drop. |
+| 11 | Lighting + Small Power outcome (a / b / c) | ✓ (a) | ✓ (a) — unchanged | Audit §6 — accepted re-creation rebaseline. No code change. |
+
+### §7-walkthrough — Items now structurally green (8 of 9 testable items)
+
+All five previously-failing items (1, 5, 6, 9, 10) now have ✓ structural verdicts. Item 7 (Systems Energy Flows Sankey aux row) remains deferred — it's a pre-existing v25-vs-v40 wiring gap that needs its own brief, not a Brief 73 deliverable. Item 8 is contingent on item 7.
+
+**Handing back to Chris for the in-browser re-walkthrough at `:5176`.** If items 1, 5, 6, 9, 10 all pass on your visual run, brief closes.
+
+### §7-walkthrough — Re-walkthrough handoff checklist
+
+- Hard refresh `:5176` to ensure the new bundle is loaded (the dev server should pick up via HMR but cache busting is cheap insurance).
+- Systems → Ventilation panel: verify no share slider on each row, no "0%" chip on the panel header, no inline "Σ 0.0%, not 100%" warning, no Normalise button. Verify heat/cool/DHW panels still SHOW share validation when you drag a slider to 80%.
+- Internal Gains → Heat Balance tab → Sankey layout: verify Auxiliary ribbon appears in neutral gray (`#4B5563`) between Equipment and Lighting on the gains side. Σ gains badge in the header should reflect the auxiliary contribution.
+- Systems → right strip: verify "Auxiliary" entry appears below "Small power" with non-zero electricity.
+- Internal Gains → Auxiliary section: set Catering load to 0 W/m² → Heat Balance ribbon shrinks; restore.
+
+Tier-3 logged but NOT for Brief 73: DHW load-shape toggle no-op (Brief 72 P9 follow-on, stub at `docs/audit/72_p9_dhw_load_shape_followup.md`).
+
 ## §future — Tier-3 notes for next brief
 
 - **Systems "Energy flows" Sankey for v40 projects** — `_calculateState3` doesn't emit `systems_flow` (the inline-legacy and degree-day paths do). SystemSankey.jsx renders empty for v40 projects today, independent of Brief 73. Auxiliary integration here is gated on porting the systems_flow emission to State 3. Pre-existing gap dating from Brief 40 migration; Brief 73 P5 §5.2 surfaces it. Worth its own brief.
