@@ -1,0 +1,188 @@
+{
+  "brief": "Brief 75 P1 — Bridgewater anchor (post-Brief-74 close)",
+  "source": "node scripts/_brief75_p1_anchor.mjs",
+  "tip_sha": "a209dc2",
+  "project_id": "3561c5a6-9a3f-4b5c-9e3d-72b449658d9a",
+  "project_name": "HIX Bridgewater",
+  "captured_at": "2026-06-01T20:07:19.524Z",
+  "engine_dispatch": {
+    "state_numeric": 3,
+    "mode": "full",
+    "note": "state=3 means _calculateState3 ran; state=2 means _calculateState2; otherwise inline-legacy or DD-fallback"
+  },
+  "building": {
+    "num_bedrooms": 138,
+    "occupancy_density": {
+      "value": 3,
+      "basis": "per_room"
+    },
+    "occupancy_rate": 1,
+    "geometry_gia_m2": 4125,
+    "reported_gia_m2": 4125,
+    "weather_file": "GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw",
+    "comfort_band_c": {
+      "lower_c": 21,
+      "upper_c": 24
+    }
+  },
+  "totals": {
+    "eui_kwh_per_m2": 143.5,
+    "electricity_mwh": 387.221,
+    "gas_mwh": 204.698
+  },
+  "heat_balance_annual": {
+    "losses_kwh": 522556.3,
+    "gains_kwh": 488011.1,
+    "net_residual_kwh": -34545.20000000001,
+    "total_heating_loss_kwh": null,
+    "losses_per_element": {
+      "external_wall": {
+        "kwh": 33119.7,
+        "kwh_per_m2": 7.66,
+        "area_m2": 1882
+      },
+      "roof": {
+        "kwh": 15214.4,
+        "kwh_per_m2": 3.52,
+        "area_m2": 864
+      },
+      "ground_floor": {
+        "kwh": 18530,
+        "kwh_per_m2": 4.29,
+        "area_m2": 864
+      },
+      "glazing": {
+        "kwh": 64399.4,
+        "kwh_per_m2": 14.9,
+        "area_m2": 470
+      },
+      "thermal_bridging": {
+        "kwh": 24279.8,
+        "kwh_per_m2": 5.62
+      },
+      "fabric_leakage": {
+        "kwh": 29629.2,
+        "kwh_per_m2": 6.86,
+        "ach": 0.06639030612244898
+      },
+      "permanent_vents": {
+        "kwh": 11208.2,
+        "kwh_per_m2": 2.59
+      },
+      "mech_ventilation": {
+        "kwh": 326175.5,
+        "kwh_per_m2": 75.47
+      },
+      "ventilation": null,
+      "all_loss_keys": [
+        "external_wall",
+        "roof",
+        "ground_floor",
+        "glazing",
+        "thermal_bridging",
+        "fabric_leakage",
+        "permanent_vents",
+        "mech_ventilation"
+      ]
+    },
+    "gains_per_element": {
+      "solar_south": {
+        "kwh": 55184.8,
+        "kwh_per_m2": 12.77,
+        "area_m2": 188
+      },
+      "solar_east": {
+        "kwh": 12589.3,
+        "kwh_per_m2": 2.91,
+        "area_m2": 47
+      },
+      "solar_west": {
+        "kwh": 8151.9,
+        "kwh_per_m2": 1.89,
+        "area_m2": 47
+      },
+      "solar_north": {
+        "kwh": 27763.3,
+        "kwh_per_m2": 6.42,
+        "area_m2": 188
+      },
+      "people": {
+        "kwh": 144490.9,
+        "kwh_per_m2": 33.43
+      },
+      "equipment": {
+        "kwh": 130297.9,
+        "electricity_kwh": 130297.9,
+        "kwh_per_m2": 30.15
+      },
+      "lighting": {
+        "kwh": 56281.8,
+        "electricity_kwh": 56281.8,
+        "kwh_per_m2": 13.02
+      },
+      "auxiliary": {
+        "kwh": 53251.3,
+        "electricity_kwh": 70500,
+        "kwh_per_m2": 12.32
+      },
+      "all_internal_keys": [
+        "people",
+        "lighting",
+        "equipment",
+        "auxiliary"
+      ]
+    }
+  },
+  "per_service": {
+    "heat_demand_mwh": 98.3,
+    "heat_delivered_mwh": 98.3,
+    "cool_demand_mwh": 53.1,
+    "cool_delivered_mwh": 53.1,
+    "dhw_demand_mwh": 263.183,
+    "dhw_delivered_mwh": 263.183,
+    "vent_fan_total_mwh": 41.962,
+    "vent_per_system": [
+      {
+        "id": "vent_mvhr_gf_public",
+        "label": "mvhr_gf_public",
+        "fan_electrical_mwh": 22.627,
+        "sfp_w_per_lps": 1.8,
+        "flow_rate": 1435,
+        "flow_rate_basis": "constant",
+        "recovery_sensible_pct": 75,
+        "summer_bypass": true
+      },
+      {
+        "id": "vent_bedroom_extract",
+        "label": "bedroom_extract",
+        "fan_electrical_mwh": 15.978,
+        "sfp_w_per_lps": 0.8,
+        "flow_rate": 2280,
+        "flow_rate_basis": "constant",
+        "recovery_sensible_pct": 0,
+        "summer_bypass": false
+      },
+      {
+        "id": "vent_public_toilet_extract",
+        "label": "public_toilet_extract",
+        "fan_electrical_mwh": 3.357,
+        "sfp_w_per_lps": 0.8,
+        "flow_rate": 479,
+        "flow_rate_basis": "constant",
+        "recovery_sensible_pct": 0,
+        "summer_bypass": false
+      }
+    ]
+  },
+  "internal_gains_breakdown_kwh": {
+    "people_kwh": 144490.9,
+    "equipment_kwh": 130297.9,
+    "lighting_kwh": 56281.8,
+    "auxiliary_kwh": 53251.3,
+    "auxiliary_electricity_kwh": 70500,
+    "sum_internal_kwh": 384321.89999999997,
+    "gia_m2": 4125,
+    "sum_internal_kwh_per_m2": 93.2
+  },
+  "first_principles_mech_vent_gross_estimate_mwh": 1269.715
+}

@@ -2867,39 +2867,43 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   let acc_cool_gain_thermal_bridging = 0
 
   // Brief 28k Gate 3+: per-system mechanical ventilation. Each entry in
-  // building.systems_config_v25.ventilation contributes its own heat loss
-  // line: flow × ρCp × (1 − HRE) × max(0, T_heat − T_out). No netting
-  // across systems; transparent per-system reporting. Fan electricity
-  // computed alongside for State 3 / Energy display use.
+  // `sourceList` (see L2920 — v40 with v25-only legacy fallback) contributes
+  // its own heat loss line: flow × ρCp × (1 − HRE) × max(0, T_heat − T_out).
+  // No netting across systems; transparent per-system reporting. Fan
+  // electricity computed alongside for State 3 / Energy display use.
   //
-  // Brief 50 Part 6 (2026-05-25) — HRE + enabled now read from v40 when
-  // a matching entry exists. The v40 system config is the user-facing
-  // source of truth; pre-Brief-50 State 2 read v25's HRE directly, which
-  // drifted from v40 (Bridgewater: v25 HRE = 0.80, v40 HRE = 0.75). Now:
-  //  - HRE: v40.efficiency_metric.recovery_sensible_pct / 100 when v40
-  //    has a matching id and is enabled; else fall back to v25's v.hre.
-  //  - enabled: v25.enabled !== false AND (no v40 match OR v40 entry
-  //    enabled). Disabling MVHR in v40 propagates to State 2 — the
-  //    `(1 − HRE)` factor stops applying and State 2 raw demand jumps
-  //    to "no recovery" levels, matching what State 3 (via the v40
-  //    adapter) already does.
+  // Brief 50 Part 6 (2026-05-25) — HRE + enabled read from v40 when a
+  // matching entry exists. Brief 59 Part 1 (2026-05-27) — flow_l_s reads
+  // from v40 too. Brief 53 Part 2 (2026-05-26) — summer_bypass from v40.
+  // Brief 60 A reconcile (2026-05-27) — SFP from v40. Each of these
+  // refinements ENRICHED v25 entries with v40-supplied values.
   //
-  // Brief 59 Part 1 (2026-05-27): flow_l_s NOW reads from v40 too,
-  // closing the demand-decoupling bug where v40.flow_rate intervention
-  // edits never reached the State 2 demand integrand (audit:
-  // docs/audit/59_vent_flow.md). Same v40-wins-with-v25-fallback pattern
-  // Brief 50 Part 6 used for HRE. v40 carries `flow_rate` +
-  // `flow_rate_basis ∈ {'constant', 'per_m2', 'per_person'}`; project
-  // to absolute L/s at this entry point. Bridgewater is `basis='constant'`
-  // for all three vent systems so the projection is the identity there.
-  // Other fields (sfp_w_per_l_s, hours, schedule_ref) continue to read
-  // from v25 — they have no v40 equivalent yet.
-  const v40VentMap = new Map(
-    (Array.isArray(building?.systems_config_v40?.ventilation)
-      ? building.systems_config_v40.ventilation
-      : []
-    ).map(v40 => [v40?.id, v40])
-  )
+  // Brief 76 P2 (2026-06-01) — closes the regression introduced by
+  // Brief 72 PB (commit b9ae15b, 2026-05-28). Until Brief 76 the BASE
+  // iteration here was still `systems_config_v25.ventilation`; the v40
+  // overlay block enriched each v25 entry by id-lookup. When the Brief
+  // 72 PB recovery seed left Bridgewater with `systems_config_v25 = null`
+  // (v40-only), the base array was [] and all the v40 overlay work was
+  // a no-op — `losses_at_setpoint.ventilation = []`, Brief 74 P5's
+  // `losses.mech_ventilation` aggregate = 0, Heat Balance Sankey showed
+  // no per-system vent ribbons. Diagnostic at docs/audit/76_premise_check.md.
+  //
+  // Post-Brief-76 the SOURCE of iteration is v40 when present (the
+  // canonical case from Brief 40 onwards); v25 stays as a fallback list
+  // ONLY for projects that never got a v40 (no such projects exist in
+  // the live DB, but the path is preserved to avoid silent breakage if
+  // any are imported). Field-level reads continue the v40-wins-with-v25-
+  // fallback pattern Briefs 50/53/59/60 established. Fields v40 doesn't
+  // carry (hours, schedule_ref, library_id) read from v25Match when
+  // available, else defaults.
+  const v40VentList = Array.isArray(building?.systems_config_v40?.ventilation)
+    ? building.systems_config_v40.ventilation
+    : []
+  const v25VentList = Array.isArray(building?.systems_config_v25?.ventilation)
+    ? building.systems_config_v25.ventilation
+    : []
+  const v40VentMap = new Map(v40VentList.map(v40 => [v40?.id, v40]))
+  const v25VentMap = new Map(v25VentList.map(v25 => [v25?.id, v25]))
   // Design occupancy for the 'per_person' flow-rate basis projection —
   // the headcount the ventilation system is sized to serve. Uses the
   // same per-room/per-m²/total resolution as computeHourlyGains so the
@@ -2918,67 +2922,58 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     if (basis === 'per_person') return rate * designOccupants
     return rate   // 'constant' — already L/s
   }
-  const ventSystems = (building?.systems_config_v25?.ventilation ?? []).map(v => {
-    const v40Match = v40VentMap.get(v?.id)
+  // Brief 76 P2: v40 is the source of iteration when present (canonical
+  // post-Brief-40); v25 is used as the iteration source ONLY if v40 is
+  // empty AND v25 isn't (true-legacy fallback for projects that never
+  // got migrated — none in the live DB, but the path is preserved).
+  const sourceList = v40VentList.length > 0 ? v40VentList : v25VentList
+  const ventSystems = sourceList.map(entry => {
+    const isV40Base = v40VentList.length > 0
+    const v40Match  = isV40Base ? entry : v40VentMap.get(entry?.id)
+    const v25Match  = isV40Base ? v25VentMap.get(entry?.id) : entry
     // HRE: v40 wins when v40 entry exists; else v25 fallback.
     const hreFromV40 = v40Match
       ? Number(v40Match?.efficiency_metric?.recovery_sensible_pct ?? 0) / 100
       : null
-    const hre = (hreFromV40 != null) ? hreFromV40 : Number(v.hre ?? 0)
-    // Enabled: both v25 and v40 must agree the system is enabled.
+    const hre = (hreFromV40 != null) ? hreFromV40 : Number(v25Match?.hre ?? 0)
+    // Enabled: both v25 and v40 must agree the system is enabled (legacy
+    // semantics preserved). Missing-side defaults to "enabled" so a v40-
+    // only system isn't unintentionally disabled by absence of a v25 row.
     const v40EnabledOk = !v40Match || v40Match?.enabled !== false
-    const enabled = v.enabled !== false && v40EnabledOk
-    // Brief 53 Part 2 (2026-05-26): summer bypass flag. Free-cooling damper —
-    // when active, the HRE is bypassed in hours where the zone wants cooling
-    // AND outside air is cooler than the extract (so bypassing physically
-    // helps). v40 wins when present; v25 fallback. Default false → 128.20
-    // anchor holds for projects that haven't opted in. Brief 50 Part 6
-    // pattern for v40-wins-with-v25-fallback.
+    const v25EnabledOk = !v25Match || v25Match?.enabled !== false
+    const enabled = v25EnabledOk && v40EnabledOk
+    // Brief 53 Part 2 (2026-05-26): summer bypass flag. v40 wins; v25 fallback.
     const summer_bypass = (v40Match?.summer_bypass != null)
       ? (v40Match.summer_bypass === true)
-      : (v?.summer_bypass === true)
+      : (v25Match?.summer_bypass === true)
     // Brief 59 Part 1 (2026-05-27): flow_l_s v40-wins-with-v25-fallback.
     const flowFromV40 = projectV40FlowToLps(v40Match)
     const flow_l_s = (flowFromV40 != null)
       ? flowFromV40
-      : Number(v.flow_l_s ?? v.flow_L_s ?? 0)
-    // Brief 60 Part A reconcile fix (2026-05-27, Chris-authorised):
-    // route SFP from v40, mirror of the Brief 59 P1 flow routing above.
-    // State 3's consumption.ventilation already reads v40 SFP via
-    // v40VentilationToV25List; this closes the State 2 internal drift
-    // so losses_at_setpoint.ventilation[].fan_kwh (and any other State 2
-    // diagnostic that reads `vs.sfp`) matches the State 3 path. The
-    // Brief 59 audit doc §4.1 noted SFP routing "had no v40 equivalent
-    // yet" — that was wrong (v40.efficiency_metric.sfp_w_per_lps exists);
-    // closing the omission now.
+      : Number(v25Match?.flow_l_s ?? v25Match?.flow_L_s ?? 0)
+    // Brief 60 Part A reconcile fix (2026-05-27): SFP from v40 too.
     const sfpFromV40 = (v40Match?.efficiency_metric?.sfp_w_per_lps != null)
       ? Number(v40Match.efficiency_metric.sfp_w_per_lps)
       : null
     const sfp = (sfpFromV40 != null)
       ? sfpFromV40
-      : Number(v.sfp_w_per_l_s ?? v.sfp ?? 0)
+      : Number(v25Match?.sfp_w_per_l_s ?? v25Match?.sfp ?? 0)
     return {
       // 2026-05-28 (Chris-flag): v40_label wins over v25 name. The user
       // edits ventilation system labels in the Systems editor, which
-      // writes to systems_config_v40.ventilation[].label. The v25 mirror's
-      // `name` field is the engine seed (often the original library name)
-      // and is NOT updated when the user renames the system. Reading v40's
-      // `label` first means the Heat Balance / Sankey labels match what
-      // the user just typed. Same v40-wins-with-v25-fallback pattern as
-      // SFP / flow / HRE elsewhere in this builder.
-      name:       v40Match?.label ?? v.name ?? v.id ?? v.library_id ?? '?',
-      library_id: v.library_id,
+      // writes to systems_config_v40.ventilation[].label. Brief 76 extends
+      // this — when v25 is absent entirely (v40-only projects), still
+      // resolve a sensible name from v40 id / v40 label / fallback.
+      name:       v40Match?.label ?? v25Match?.name ?? v25Match?.id ?? v25Match?.library_id ?? v40Match?.id ?? '?',
+      library_id: v25Match?.library_id ?? v40Match?.library_id ?? null,
       flow_l_s,
       hre,
       sfp,
-      hours:      Number(v.hours ?? 8760),
-      schedule_ref: v.schedule_ref ?? 'always_on',
+      hours:        Number(v25Match?.hours ?? 8760),
+      schedule_ref: v25Match?.schedule_ref ?? 'always_on',
       // Brief 28-IM IM-M4.5 Phase 2: carry `enabled` through so the State 2
-      // mech vent loss loop (line ~2566) AND computeVentilationEnergy (called
-      // from State 3 with the same projected ventSystems shape) can both
-      // honour the per-system disable flag. Pre-fix this was projected out
-      // and the engine saw `undefined`, defeating every `if (vs.enabled ===
-      // false) continue` guard downstream.
+      // mech vent loss loop AND computeVentilationEnergy honour the per-
+      // system disable flag.
       enabled,
       summer_bypass,   // Brief 53 Part 2
     }
