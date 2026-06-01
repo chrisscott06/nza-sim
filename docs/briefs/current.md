@@ -1,15 +1,12 @@
 # Current brief
 
-**Brief 74 — Energy Flows auxiliary + Heat Balance mech vent loss ribbon (Sankey topology gaps).** Architect-authored at [`active/74_sankey_topology_gaps.md`](active/74_sankey_topology_gaps.md). Closes the deferred items 7/8 from Brief 73 (Systems Energy Flows Sankey auxiliary on the v40 path) plus the mech-vent loss ribbon on Heat Balance. Design note canonical at https://www.notion.so/372d645e05cc814cb837dde20a22a161.
-
-**Anchor** (carried forward from Brief 73 close, HEAD `9a77dee`): Bridgewater clean = engine fully functional, vent fan electricity rolling up correctly, Heat Balance Sankey rendering auxiliary ribbon, right-strip per-service breakdown showing Auxiliary entry, all five previously-failing walkthrough items green. Re-capture as Brief 74 P1 against the post-fix tree.
-
-**Sequencing:** Per the brief — see [`active/74_sankey_topology_gaps.md`](active/74_sankey_topology_gaps.md). P6 carries the HARD STOP for Chris's in-browser walkthrough.
+**Brief 75 — Full ventilation heat modelling + Bridgewater heating-demand-zero diagnostic.** Architect to author. Picks up the Tier-3 follow-on from Brief 74 P6 close ([`docs/audit/74_bridgewater_over_gained_followup.md`](../audit/74_bridgewater_over_gained_followup.md)) — Bridgewater (4,125 m² UK hotel) reports `heating_demand_mwh = 0` which is implausible. Three candidate root causes (CIBSE defaults, zone heat-balance gain saturation, vent losses not feeding back into demand). Door bug renumbers to Brief 76; interventions diagnostic harness to Brief 77; WWHR to Brief 78. Do not begin work until the brief lands.
 
 ## Recently closed
 
 | Brief | Closed | Title | Archive |
 |---|---|---|---|
+| 74 | 2026-06-01 | Energy Flows auxiliary + Heat Balance mech vent loss ribbon (Sankey topology gaps) | [`archive/74_sankey_topology_gaps_COMPLETED.md`](archive/74_sankey_topology_gaps_COMPLETED.md) |
 | 73 | 2026-06-01 | Ventilation share rule + auxiliary visualisation + lighting baseline check | [`archive/73_ventilation_auxiliary_lighting_COMPLETED.md`](archive/73_ventilation_auxiliary_lighting_COMPLETED.md) |
 | 72 | 2026-05-29 | Auxiliary loads, gain_fraction, DHW load-shape UI + DB recovery (OVERNIGHT) | [`archive/72_auxiliary_loads_dhw_shape_COMPLETED.md`](archive/72_auxiliary_loads_dhw_shape_COMPLETED.md) |
 | 71 | 2026-05-28 | Interventions: Isolated vs Combined evaluation + theme grouping | [`archive/71_interventions_isolated_vs_combined_COMPLETED.md`](archive/71_interventions_isolated_vs_combined_COMPLETED.md) |

@@ -120,6 +120,9 @@ const FUEL_COLOURS = {
   district:    '#8B5CF6',
 }
 // Brief 37 Part 1: aligned to SYSTEMS_SERVICE_COLOURS in balanceColours.js.
+// Brief 74 P6 (2026-06-01): auxiliary added in #4B5563 (gray-600), same hex
+// as INTERNAL_COLOURS.auxiliary (gainColours / balanceColours) — the heat-
+// balance gain colour token, single source of truth across views.
 const DEMAND_COLOURS = {
   space_heating: '#DC2626',
   space_cooling: '#00AEEF',
@@ -127,6 +130,7 @@ const DEMAND_COLOURS = {
   fans:          '#14B8A6',
   lighting:      '#F59E0B',
   small_power:   '#8B5CF6',
+  auxiliary:     '#4B5563',
 }
 
 /* ── Library data fetch ─────────────────────────────────────────────────── */
@@ -381,6 +385,14 @@ export default function SystemsModule() {
                 sysCfg={sysCfg}
                 sysCfgV40={params?.systems_config_v40}
                 giaM2={result?.metadata?.gia_m2 ?? result?.heat_balance?.metadata?.gia_m2 ?? 0}
+                // Brief 74 P6 (2026-06-01): auxiliary loads electricity from
+                // State 2 emit, in MWh. Threaded explicitly because the
+                // Energy Flows Sankey items[] reads from `consumption` only,
+                // and `consumption` doesn't carry an `auxiliary` rollup —
+                // the auxiliary numbers live at
+                // result.heat_balance.annual.gains.internal.auxiliary.
+                // Falls back to 0 when the engine reports no aux profiles.
+                auxElecMwh={(result?.heat_balance?.annual?.gains?.internal?.auxiliary?.electricity_kwh ?? 0) / 1000}
               />
             )}
             {/* Brief 70 Part 1: zone-temperature heatmap + KPI strip.
@@ -1094,7 +1106,7 @@ function fmtFlow(mwh, unit, giaM2) {
   return `${mwh.toFixed(1)} MWh`
 }
 
-function SystemsSankey({ consumption, sysCfg, sysCfgV40, giaM2 = 0 }) {
+function SystemsSankey({ consumption, sysCfg, sysCfgV40, giaM2 = 0, auxElecMwh = 0 }) {
   const { unit } = useUISettings()
   // Three-column Sankey per Chris's walkthrough call (2026-05-19, second
   // iteration):
@@ -1271,6 +1283,18 @@ function SystemsSankey({ consumption, sysCfg, sysCfgV40, giaM2 = 0 }) {
       demand:    c.small_power?.electricity_mwh ?? 0,
       delivered: c.small_power?.electricity_mwh ?? 0,
       branches:  branchesElectricOneToOne(c.small_power?.electricity_mwh ?? 0),
+    },
+    // Brief 74 P6 (2026-06-01): auxiliary loads on the Energy Flows Sankey.
+    // 1:1 electricity (no system inflation — auxiliary is direct plug load),
+    // value sourced from State 2 emit via the auxElecMwh prop. P3's port to
+    // `result.systems_flow` (engine side) turned out not to feed this view —
+    // SystemsSankey reads `consumption` + items[] and never touches
+    // `result.systems_flow`. The render-layer fix lives here. Audit §6.
+    {
+      key: 'auxiliary', label: 'Auxiliary',
+      demand:    auxElecMwh,
+      delivered: auxElecMwh,
+      branches:  branchesElectricOneToOne(auxElecMwh),
     },
   ].filter(it => it.demand > 0.01)
 

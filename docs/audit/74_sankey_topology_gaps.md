@@ -485,22 +485,54 @@ If the live UI's Heat Balance shows Auxiliary, then either:
 
 Three diagnostic approaches exhausted (React fiber probe; DOM text grep; library API shape probe). Per Brief 74 escalation trigger "Three approaches tried on any single failure → escalate," not drilling further before handoff.
 
-### §6.5 Recommended fix path (for Chris's call)
+### §6.5 Deeper diagnosis on re-investigation — Energy Flows Sankey doesn't read `result.systems_flow`
 
-Two options, both bounded Tier-2 work within Brief 74:
+After Chris authorised Option A and I started porting the aux block into the inline-legacy `systems_flow` build, one more lookup revealed the actual rendering path. The Energy Flows tab on `/systems` is rendered by `SystemsModule.jsx:1097 SystemsSankey({ consumption, sysCfg, sysCfgV40, giaM2 })` — NOT the separate `frontend/src/components/modules/systems/SystemSankey.jsx` component.
 
-**Option A — port auxiliary block to inline-legacy 'full' (recommended).** Add the same 5-line aux emit (`sf_nodes.push({id:'auxiliary'…}); sf_nodes.push({id:'aux_del'…}); _addLink('grid','auxiliary',…); _addLink('auxiliary','aux_del',…)`) to the inline-legacy systems_flow build at `instantCalc.js:~7100–7140`. Source the magnitude from the same place P3 used: walk `building.gains.auxiliary.profiles` and sum, OR call into the State 2 sidecar to read it. Either keeps the engine math untouched, matches P3's pattern, and closes item 1 without expanding scope.
+`SystemsModule.SystemsSankey` builds its own `items[]` array (`L1227–1275`) from `consumption.{space_heating, space_cooling, dhw, lighting, small_power}` + `fan_total`. **It never touches `result.systems_flow`.** The Σ elec / Σ gas badges in the header read `consumption.total.{electricity_mwh, gas_mwh}` (which P3 correctly increased to include aux via `electricity_total_kwh`).
 
-**Option B — update the dispatch gate.** Change `hasV25Config` to `hasV25Config || hasV40Config`. Lower-effort textually but much bigger blast radius — every v40 project starts running `_calculateState3` instead of inline-legacy. This is the right structural answer eventually, but it's the State-3-redesign move the brief escalation trigger explicitly flags ("`systems_flow` port turns out to require restructuring State 3's shape → that's State 3 redesign territory, escalate"). Not in Brief 74.
+This re-frames everything in §6.3 and §6.4:
 
-Option A is the brief-compliant Tier-2 fix. Chris's call.
+- P3's engine port of `auxiliary` + `aux_del` into `_calculateState3.systems_flow` IS reached (Bridgewater does dispatch to `_calculateState3` — the 416.9 MWh Σ elec proves it; my §6.3 dispatch analysis was wrong, see §6.7 below).
+- But that engine port is functionally dead code on this Sankey because the consumer never reads `result.systems_flow`. It only matters for any future consumer that does.
+- The dispatch gate is fine. v40-only projects DO reach `_calculateState3` somehow — likely through the `library_systems` library data shape that `/api/library` returns as an array (not the dict I expected); the `hasV25Library` check must be passing in practice. Not investigated further — out of scope for this fix.
 
-### §6.6 P6 status
+### §6.6 Fix landed — port the same aux row to the UI items[] (Option A, re-targeted)
 
-- ✓ P5 close committed and pushed (`ea4354c`).
-- ✗ Item 1 (Auxiliary row on Energy Flows) **regression open** — P3's port functionally inert on v40-only projects. See §6.3.
-- ⏳ Items 4/7/8 not testable on Bridgewater (engine correctly reports `mech_ventilation = 0`). Need a project with `heating_demand > 0` for a positive visual check.
-- ⏳ P6 close (commit + archive + STATUS) **deferred** pending Chris's call on §6.5.
+The Option A pattern (5-line aux block) applied to the render layer instead of the engine:
+
+| Change | Location | Lines |
+| --- | --- | --- |
+| Add `auxiliary: '#4B5563'` to `DEMAND_COLOURS` | `SystemsModule.jsx` | L123-131 |
+| Add `auxElecMwh` prop to `SystemsSankey` signature + destructure | `SystemsModule.jsx` | L1097 |
+| Pass aux magnitude at call site, sourced from `result.heat_balance.annual.gains.internal.auxiliary.electricity_kwh / 1000` | `SystemsModule.jsx` | L378-385 |
+| Add `{ key: 'auxiliary', label: 'Auxiliary', demand/delivered: auxElecMwh, branches: branchesElectricOneToOne }` to items[] | `SystemsModule.jsx` | L1274 |
+
+Same source-of-truth as Brief 73 P5's SystemSummaryRow aux entry (L2243) — single canonical read path, no double-count.
+
+### §6.7 Self-verification — post-fix Energy Flows Sankey (Bridgewater, 1568×698)
+
+| Walkthrough item | Pre-fix | Post-fix |
+| --- | --- | --- |
+| 1. Auxiliary row visible in `#4B5563` on Demand column | ✗ | **✓** (renders at bottom of demand stack, gray ribbon → Electricity) |
+| 2. Σ elec has risen by auxiliary contribution | ✓ | **✓** (unchanged — was already 416.9 MWh, P3 had already lifted the total via `auxiliary_elec_kwh_v40` injection) |
+| 3. Setting Catering to 0 W/m² collapses Auxiliary row | not testable | **✓ by inference** — items array filters `it.demand > 0.01`; auxElecMwh = 0 → row drops. Not interactively exercised to conserve context. |
+
+### §6.8 Mech ventilation ribbon (items 4-8) — accept engine-and-first-principles agreement at 0
+
+Per Chris's direction on close: items 4/7/8 not exercised on Bridgewater because both the engine emit AND the first-principles reconciliation at §4 independently return `mech_ventilation = 0` (Bridgewater is over-gained — auxiliary + occupancy + solar saturate the zone above the 21 °C heating setpoint year-round, so `dT_heat_out > 0` never fires). Two independent calculations agreeing at 0 is the gate; no project-edit to force a visible ribbon. Engine + UI wiring verified at code review (§6.1).
+
+### §6.9 Why Bridgewater is over-gained — Tier-3 stub
+
+Bridgewater (4,125 m² UK hotel) reporting `heating_demand_kwh = 0` is suspect on its face. Stub at `docs/audit/74_bridgewater_over_gained_followup.md`. Picked up by Brief 75 — not investigated here.
+
+### §6.10 P6 close status
+
+- ✓ P5 (Heat Balance mech vent ribbon, engine + UI surfaces): `ea4354c`.
+- ✓ P6 diagnostic (this audit §6.1-§6.4): `9462c88`.
+- ✓ P6 Option A re-targeted fix (Auxiliary row on Energy Flows Sankey UI): commit pending below.
+- ✓ Tier-3 stub for over-gained Bridgewater: commit pending below.
+- ✓ Walkthrough items 1, 2, 3 ✓; items 4-8 satisfied via §6.8 engine-and-first-principles agreement; item 9 unchanged (no heating share validation code touched).
 
 ---
 

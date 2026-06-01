@@ -2,6 +2,41 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
+## ✅ Brief 74 — CLOSED 2026-06-01
+
+**Energy Flows auxiliary + Heat Balance mech vent loss ribbon (Sankey topology gaps).** Architect-authored, six parts. Closed the deferred items 7/8 from Brief 73 (Energy Flows Sankey auxiliary row on the v40 path) plus the freshly-surfaced mech-vent heat-loss ribbon on the Heat Balance Sankey.
+
+Archive: [`archive/74_sankey_topology_gaps_COMPLETED.md`](docs/briefs/archive/74_sankey_topology_gaps_COMPLETED.md). Audit with §1–§6 (anchor, diagnostics, fix, self-verify): [`docs/audit/74_sankey_topology_gaps.md`](docs/audit/74_sankey_topology_gaps.md). Tier-3 follow-on stub for Brief 75: [`docs/audit/74_bridgewater_over_gained_followup.md`](docs/audit/74_bridgewater_over_gained_followup.md).
+
+| Part | SHA | Deliverable |
+|---|---|---|
+| P1 | `40be0d1` | STATUS reconcile + Bridgewater anchor capture (EUI 133.6 → ultimately 150.7 post-P3) + brief land |
+| P2 | `c6f87ea` | systems_flow port diagnostic (read-only) |
+| P3 | `cf970e3` | systems_flow port to `_calculateState3` + `auxiliary` + `aux_del` nodes + `electricity_total_kwh` injection at L5232 |
+| P4 | `c2b9606` | Mech vent loss diagnostic — engine + first-principles agreement at 0 for Bridgewater (heating_demand = 0) |
+| P5 | `ea4354c` | Heat Balance mech vent loss ribbon: engine `losses.mech_ventilation` emit + 4 UI surfaces + double-count guard + emerald-700 palette |
+| P6-diag | `9462c88` | P6 self-verification diagnostic — Auxiliary row regression on `/systems` Energy Flows |
+| P6-fix | (this commit) | Render-layer fix: auxiliary item added to `SystemsModule.SystemsSankey items[]` + `auxElecMwh` prop wiring + `DEMAND_COLOURS.auxiliary = '#4B5563'` |
+
+**Walkthrough verdict** (Bridgewater, browser at `:5176`, 1568 × 698):
+
+| # | Item | Verdict |
+|---:|---|---|
+| 1 | Energy Flows Sankey: Auxiliary row visible in `#4B5563` on Demand column | ✓ (post-P6-fix) |
+| 2 | Σ elec rose by auxiliary contribution (416.9 vs P1 346.4) | ✓ (P3) |
+| 3 | Setting Catering 0 collapses Auxiliary row | ✓ by inference (items[] filter on `demand > 0.01`); not interactively exercised |
+| 4 | Heat Balance: Mech vent ribbon visible | ✓ via engine + first-principles agreement at 0; ribbon correctly invisible because `mech_ventilation = 0` |
+| 5 | Σ losses on Heat Balance has risen | ✓ trivially (delta = 0 for this project) |
+| 6 | Net residual approximately balanced | ✓ +16 MWh, unchanged from P1 |
+| 7 | Disabling vent systems collapses ribbon | n/a — engine reports 0; project-edit theatre not run per Chris's direction |
+| 8 | Toggling bedroom_extract HRE proportional | same as 7 |
+| 9 | Heating share validation regression | ✓ (no code touched in that path) |
+
+**Lessons banked:**
+- **The Energy Flows Sankey on `/systems` is `SystemsModule.SystemsSankey`, not the separate `SystemSankey.jsx`.** The former builds its `items[]` from `consumption` + props and never reads `result.systems_flow`. P3's engine port of `auxiliary` + `aux_del` into `_calculateState3.systems_flow` was internally correct (the node IS emitted; the probe at `docs/audit/74_p3_systems_flow_output.json` confirmed) but doesn't reach this view. Future Sankey-on-`/systems` work edits items[] + props directly. P3's engine emit is preserved as ground-truth for any future consumer that wants it.
+- **Display-parity rule extension:** Brief 73 banked "multi-renderer UI must iterate same keys at all render sites" — Brief 74 P6 extends it to "and don't assume the render site uses the engine path you think it does. The four Brief-73-listed `systems_flow` consumers (SystemSankey, SystemsLiveResults, PopOutResults, Systems Sankey-on-Systems) read from at least two different data paths."
+- **Two-independent-calcs-at-0 is a valid walkthrough gate.** Bridgewater's `heating_demand = 0` makes items 4 / 7 / 8 untestable visually. Engine + first-principles independently returning 0 is the sign-off; do not theatre-edit the project to force a visible ribbon. (The underlying physics result is itself suspect — Tier-3 follow-on stub.)
+
 ## ✅ Brief 73 — CLOSED 2026-06-01
 
 **Ventilation share rule + auxiliary visualisation + lighting baseline check.** Architect-authored, seven parts + three post-walkthrough redux fixes. First brief after Brief 72 close. Bundled three findings from the post-Brief-72 walkthrough: ventilation share rule (engine refusing to compute fan electricity because three parallel vent systems each at 100% share trip the sum-to-100 guard), auxiliary loads not rendering on Heat Balance Sankey or right-strip despite Brief 72 P5 producing the rollups, and lighting + small power reconciliation against pre-loss numbers.
