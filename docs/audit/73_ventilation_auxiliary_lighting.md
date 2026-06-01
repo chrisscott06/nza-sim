@@ -167,9 +167,90 @@ All three produce the SAME 41.962 MWh total — fan electricity now depends only
 
 ---
 
-## §4-diagnostic — Auxiliary visualisation (Part 4, pending)
+## §4-diagnostic — Auxiliary visualisation (Part 4, 2026-05-29)
 
-To be filled in Part 4.
+Source-read. No code changed. Three insertion sites + one upstream allowlist to update.
+
+### §4.1 Confirmation: auxiliary engine rollups are healthy
+
+P1 anchor (and §1.5) recorded:
+- `consumption.heat_balance.annual.gains.internal.auxiliary.kwh = 41,117 kWh`
+- `consumption.heat_balance.annual.gains.internal.auxiliary.electricity_kwh = 78,320 kWh`
+- `consumption.heat_balance.annual.gains.internal.auxiliary.kwh_per_m2 = 9.51 kWh/m²`
+
+Both numbers non-zero, gain/electricity ratio 0.525 (matches the area-weighted average of External lighting 0% + Catering 27% + Pumps 100%). **Brief 72 P5 auxiliary rollups are NOT regressed.** No escalation triggered. Proceed.
+
+### §4.2 Heat Balance Sankey insertion (gates a, d)
+
+`frontend/src/components/modules/balance/HeatBalance.jsx` is the live Heat Balance Sankey. (Two other look-alikes — `BalanceSankey.jsx` and `gains/canvas/HeatBalanceView.jsx` — are wrappers / hosts; HeatBalance.jsx is the data-binding component.)
+
+**Current ribbon construction (L308–322):**
+```jsx
+const internal = gains.internal ?? {}
+for (const k of ['people', 'equipment', 'lighting']) {
+  if (!allowed.has(k)) continue
+  const node = internal[k]
+  if (!node) continue
+  out.push({
+    key:   k,
+    label: LABELS[k],
+    value: readValue(node, unit),
+    raw_kwh: node.kwh ?? 0,
+    raw_kwh_per_m2: node.kwh_per_m2 ?? 0,
+    colour: INTERNAL_COLOURS[k],
+    meta:   node,
+  })
+}
+```
+
+**P5 surgical insertion:** add `'auxiliary'` to the iteration array. The loop already pulls `internal[k]` → `internal.auxiliary` exists at the same shape (`{ kwh, electricity_kwh, kwh_per_m2 }`). `INTERNAL_COLOURS.auxiliary = '#4B5563'` and `LABELS.auxiliary = 'Auxiliary'` were both registered in Brief 72 P6 — no new tokens needed.
+
+**Brief says "positioned between Equipment and Lighting"** → put `'auxiliary'` between `'equipment'` and `'lighting'` in the array. The same order is mirrored in `balanceColours.js GAIN_ORDER` per Brief 72 P6.
+
+**One upstream:** `frontend/src/utils/stateMode.js` `GAIN_ORDERS` (L250–287) has per-state allowlists — `MODES.ENVELOPE_GAINS` and `MODES.FULL` both list `['solar_*', 'people', 'equipment', 'lighting' (+ 'heating' for FULL)]` but lack `'auxiliary'`. Without this addition the HeatBalance.jsx `allowed.has(k)` filter at L310 will drop the auxiliary ribbon even after the loop knows about it. **Add `'auxiliary'` to both `MODES.ENVELOPE_GAINS` and `MODES.FULL` between `equipment` and `lighting`.** This was the same oversight pattern as Brief 72 P6 (palette registered in `balanceColours.js GAIN_ORDER` but `stateMode.js GAIN_ORDERS` not updated — the two arrays are intentionally separate per the state contract).
+
+### §4.3 Systems "Energy Flows" Sankey (gate b)
+
+The "Energy flows" tab on the Systems page (`SystemsModule.jsx:103`) renders `SystemSankey.jsx` which consumes `systems_flow` from the engine (`instantCalc.js` constructs `sf_nodes` + `sf_links` arrays starting at L5998 in the inline-legacy 'full' path; State 3 v25 has its own equivalent block).
+
+Insertion sites in `instantCalc.js`:
+- L6049–6051 (inline-legacy): adds `lighting` and `small_power` system nodes when those loads are present. **Add an `auxiliary` system node** with `id: 'auxiliary'`, `label: 'Auxiliary'`, `category: 'auxiliary'`, `metric` showing total W/m² (sum of auxiliary profiles' magnitudes).
+- L6074–6075 (inline-legacy): adds `light_del` and `equip_del` end-use nodes. **Add an `aux_del` end-use node** when auxiliary electricity > 0.
+- L6081+ (links): adds `electricity → lighting → light_del` chain (and same for small_power). **Add the parallel `electricity → auxiliary → aux_del` chain** with `value_kWh = auxiliary_electricity_kWh`.
+
+State 3 v25 path: needs the same node/link triplet at its equivalent sf_nodes/sf_links construction site. Reading source confirms — `_calculateState3` doesn't currently construct sf_nodes for State 3 itself; SystemSankey.jsx falls back to the inline-legacy construction. **Inline-legacy only is sufficient for P5.** (If a future brief breaks this fallback, that's the place to fix.)
+
+Colour: `LINK_COLORS.electricity = '#ECB01F'` already handles the upstream link. The auxiliary node's own colour is set by `NODE_COLORS.system` (cyan-on-blue) — to render in `#4B5563`, P5 should add a `NODE_COLORS.auxiliary` entry OR use a per-node `colour` field. The brief explicitly says "use `#4B5563` from balanceColours.js INTERNAL_COLOURS" so the cleanest play is to import INTERNAL_COLOURS in SystemSankey.jsx and override the auxiliary node's render colour. Alternative: read `INTERNAL_COLOURS.auxiliary` at engine emit time and stamp it onto the sf_node so SystemSankey doesn't have to know about colour palettes — that's the same pattern already used for `solar_*` nodes elsewhere.
+
+### §4.4 Right-strip per-service breakdown (gate c)
+
+`SystemsModule.jsx` L2208–2209:
+```jsx
+{ key: 'lighting',      label: 'Lighting',      node: { delivered_mwh: consumption.lighting?.electricity_mwh ?? 0, ... } },
+{ key: 'small_power',   label: 'Small power',   node: { delivered_mwh: consumption.small_power?.electricity_mwh ?? 0, ... } },
+```
+
+**P5 insertion:** add an entry below `small_power`:
+```jsx
+{ key: 'auxiliary',     label: 'Auxiliary',     node: { delivered_mwh: <aux electricity>, demand_mwh: <aux gain>, electricity_mwh: <aux electricity>, gas_mwh: 0, enabled: true } },
+```
+
+Source values: `consumption.heat_balance.annual.gains.internal.auxiliary.electricity_kwh / 1000` for electricity, `…auxiliary.kwh / 1000` for the heat-gain side. (Note: the right-strip's `demand_mwh` field is more naturally "heat gain to zone" for auxiliary — the only consumer here is the visual; downstream `_systemPerf` accounting isn't routed through this strip.)
+
+### §4.5 Summary of P5 edits
+
+| File | Change |
+| --- | --- |
+| `frontend/src/utils/stateMode.js` GAIN_ORDERS | Add `'auxiliary'` between `equipment` and `lighting` in both `MODES.ENVELOPE_GAINS` and `MODES.FULL`. |
+| `frontend/src/components/modules/balance/HeatBalance.jsx` L309 | Loop array: `['people', 'equipment', 'auxiliary', 'lighting']`. |
+| `frontend/src/utils/instantCalc.js` sf_nodes + sf_links (~L6049, ~L6075, ~L6081) | Add `auxiliary` system node + `aux_del` end-use node + electricity → auxiliary → aux_del link chain. Stamp `colour: '#4B5563'` on the node. |
+| `frontend/src/components/modules/SystemsModule.jsx` L2208–2209 | Add `{ key: 'auxiliary', label: 'Auxiliary', ... }` entry to the right-strip per-service list. |
+
+No engine-physics changes — all surfaces are display-only readers of `consumption.heat_balance.annual.gains.internal.auxiliary` (already populated by Brief 72 P5).
+
+### §4.6 EnergyFlowsTab on Results (out of scope but adjacent)
+
+`frontend/src/components/modules/results/EnergyFlowsTab.jsx` is the Results module's own Energy Flows Sankey (different from the Systems Sankey). It currently reads `ae.lighting_kWh` and `ae.equipment_kWh` from a parallel `annualEnergy` aggregation (L41–47) — NOT from `consumption.heat_balance.annual.gains.internal`. Wiring auxiliary here would require adding `ae.auxiliary_kWh` to the upstream `annualEnergy` builder, which is a different code path. **The brief's "Energy Flows Sankey" mention is consistent with the Systems-page tab (SystemSankey.jsx), and the brief excludes "any Sankey redesign beyond adding the missing ribbon."** Leaving Results EnergyFlowsTab for a future brief — flagged in §future.
 
 ---
 
@@ -181,4 +262,5 @@ Initial observation from §1.5: Lighting internal gain 56.28 MWh and Small Power
 
 ## §future — Tier-3 notes for next brief
 
-(Empty at brief land.)
+- **EnergyFlowsTab on Results** (`frontend/src/components/modules/results/EnergyFlowsTab.jsx`) reads from a parallel `annualEnergy` aggregation (`ae.lighting_kWh` / `ae.equipment_kWh`) rather than `consumption.heat_balance.annual.gains.internal`. Wiring auxiliary here would need the upstream `annualEnergy` builder updated. Out of Brief 73 scope per "no Sankey redesign beyond adding the missing ribbon" — flag for a future brief if the Results tab's Energy Flows surface needs auxiliary parity.
+- **Per-row collapse-state persistence** (carried forward from Brief 47 Part 5c).
