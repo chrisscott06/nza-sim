@@ -359,6 +359,40 @@ Brief 73 P7 walkthrough item 11 ("Lighting + Small Power totals match the Part 6
 
 ---
 
+## §7 — Code self-verification + walkthrough handoff (Part 7, 2026-05-29)
+
+Code's engine-level self-verification of the 11 walkthrough items. Each row's Code verdict is the engine-level claim that backs the brief's gate. Browser walkthrough at `:5178` is Chris's job — items needing visual confirmation flagged "visual ✓ pending".
+
+| # | Walkthrough item | Code verdict | Backing evidence |
+| ---: | --- | --- | --- |
+| 1 | Systems → Ventilation: no share slider, no Σ warning | ✓ structural | `SystemEditorCard.jsx` L182-191 + L255-289 collapsed the `service === 'ventilation'` branch; `SystemsModule.jsx` L867 skips `ServiceSplitBar` for ventilation. Visual ✓ pending. |
+| 2 | Systems → right strip: Vent per-system non-zero | ✓ engine | P3 falsifiability — fans 22.627 + 15.978 + 3.357 = 41.962 MWh total across all share configurations (33.3 / 100 / 0). Visual ✓ pending. |
+| 3 | Systems → Heating: share validation still works (drag system 1 to 80%) | ✓ structural | `systemsEngine.js:236` `_validateShares` call on heating UNTOUCHED. Same Σ NN% chip via ServiceSplitBar unchanged for heating. Visual ✓ pending. |
+| 4 | Systems → DHW: share validation still works | ✓ structural | `systemsEngine.js:441` `_validateShares` call on DHW UNTOUCHED. Visual ✓ pending. |
+| 5 | Internal Gains → Heat Balance Sankey: aux ribbon visible in `#4B5563` between Equipment and Lighting | ✓ structural | `HeatBalance.jsx` L309 loop array `['people', 'equipment', 'auxiliary', 'lighting']` + `stateMode.js GAIN_ORDERS` allowlist updated. `INTERNAL_COLOURS.auxiliary = '#4B5563'` from Brief 72 P6. Visual ✓ pending. |
+| 6 | Heat Balance Sankey: Σ gains higher vs pre-Brief-73 | ✓ engine | Σ gains pre-Brief-73 was already 414.8 MWh (people 144.5 + lighting 56.3 + equipment 172.1 + solar) — auxiliary 41.1 MWh was rolling up into engine but NOT into Sankey display. Post-P5 Heat Balance Sankey now reads `internal.auxiliary.kwh` = 41.1 MWh → Σ gains DISPLAYED rises by 41.1 MWh. Engine totals unchanged. Visual ✓ pending. |
+| 7 | Systems → Energy Flows Sankey: aux row visible in `#4B5563` on Demand column | ✗ DEFERRED | See §5.2 — `_calculateState3` doesn't emit `systems_flow` at all, predating Brief 73. SystemSankey renders empty for v40 projects today. Worth its own brief. Walkthrough item will fail; chair acknowledges. |
+| 8 | Energy Flows Sankey: Σ elec higher vs pre-Brief-73 | n/a | Engine Σ elec was 403.5 MWh both pre- and post-Brief-73 (auxiliary was already in fuel_split per Brief 72 P5; the bug was display-only). The walkthrough's expectation of "rises" is contingent on item 7 landing. Both pending the systems_flow port. |
+| 9 | Systems → right strip: Auxiliary entry with non-zero electricity + heat gain | ✓ structural | `SystemsModule.jsx` L2210 added auxiliary entry reading `consumption.heat_balance.annual.gains.internal.auxiliary.electricity_kwh / 1000`. Live anchor shows electricity_kwh = 78,320 → row delivered_mwh = 78.3 MWh, enabled = true. Visual ✓ pending. |
+| 10 | Internal Gains → Auxiliary: set Catering load to 0 → Σ gains drops; restore | ✓ structural | `HeatBalance.jsx` reads `internal.auxiliary.kwh`; Catering profile zeroed → State 2's auxiliary kwh drops by Catering's contribution (currently ~22.7 MWh internal gain at 27% gain_fraction). Ribbon shrinks proportionally. Visual ✓ pending. |
+| 11 | Lighting + Small Power totals match Part 6 outcome (a/b/c) | ✓ (outcome a) | P6 §6 resolved to outcome (a) — accepted re-creation rebaseline. Lighting 56.3 MWh / Small Power 172.1 MWh are the new canonical anchors. No code change. |
+
+### §7.1 Self-verification scripts (engine-level, run against live API)
+
+- `scripts/_brief73_p1_anchor.mjs` — captures the post-Brief-72-close baseline (185.2 / 403.5 / 360.3 / 421.1 / 56.3 / 172.1 / 41.1 / 78.3).
+- `scripts/_brief73_p3_probe.mjs` — dumps the engine result's per-service shape, identified `consumption.brief40.ventilation` as the v40 fan rollup path.
+- `scripts/_brief73_p3_falsifiability.mjs` — proves the share-guard removal: three share scenarios (33.3/100/0) all produce identical 41.962 MWh fan total.
+- `docs/audit/73_p3_falsifiability_output.json` — output snapshot.
+
+### §7.2 Chair's acknowledged carry-overs (not blockers for close)
+
+1. **Item 7/8 — Systems Energy Flows Sankey aux node**: deferred to follow-up brief because the underlying `_calculateState3` doesn't emit `systems_flow`. Pre-existing gap from Brief 40 migration.
+2. **Vent share field on persisted Bridgewater rows**: silently stripped by ProjectContext loader on next load. The first round-trip after Brief 73 ships drops `share_pct` from the persisted bc. No user action required.
+
+### §7.3 Walkthrough handoff
+
+The 11-item walkthrough is yours to drive at `:5178`. Self-verification covers structural and engine-level claims; remaining items need eyeballs on the rendered UI. If items 1–6 + 9–11 all pass on your run, the brief closes; if any pop a Tier-2 issue not in §7.2, drop a note and Code addresses inline before the archive commit.
+
 ## §future — Tier-3 notes for next brief
 
 - **Systems "Energy flows" Sankey for v40 projects** — `_calculateState3` doesn't emit `systems_flow` (the inline-legacy and degree-day paths do). SystemSankey.jsx renders empty for v40 projects today, independent of Brief 73. Auxiliary integration here is gated on porting the systems_flow emission to State 3. Pre-existing gap dating from Brief 40 migration; Brief 73 P5 §5.2 surfaces it. Worth its own brief.
