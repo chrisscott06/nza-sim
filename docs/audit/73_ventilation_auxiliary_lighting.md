@@ -72,9 +72,57 @@ Auxiliary's gain ÷ electricity ratio = 0.525 is consistent with the three profi
 
 ---
 
-## §2-diagnostic — Ventilation share rule (Part 2, pending)
+## §2-diagnostic — Ventilation share rule (Part 2, 2026-05-29)
 
-To be filled in Part 2.
+Source-read only. No code changed. Three live surfaces + one shared validator account for the bug.
+
+### §2.1 The bug, in one sentence
+
+`systemsEngine.js _computeVentilation` calls `_validateShares` (L648) and returns an early-exit `error` result with `total_fan_electrical_mwh: 0` whenever the sum of enabled ventilation `share_pct` values ≠ 100%. Bridgewater has three parallel ventilation systems each carrying `share_pct: 100` (the per-system default — each fan runs at its OWN flow, they don't split a shared demand), so the sum is 300% and the guard fires. Fan electricity comes back as 0 / null even though every other surface (SFP, flow, recovery effectiveness) is computed correctly.
+
+This is the literal residual from Brief 60 Part A's incomplete fix. Brief 60 Part A (2026-05-27) recognised that `share_pct × flow` made no physical sense for parallel fans and **removed the `× share` multiplier from the fan calc** at L657-720. But the guard at L648 — which is the gatekeeper that decides whether the fan calc runs at all — was left in place. The fix achieved the right per-system math but kept the wrong gate.
+
+### §2.2 The four surfaces
+
+| Component | File | Line(s) | Behaviour | Action in P3 |
+| --- | --- | ---: | --- | --- |
+| Engine compute-guard | `frontend/src/utils/systemsEngine.js` | 648–655 | Early-exit `{ systems: [], total_fan_electrical_mwh: 0, error: '… sums to X%, not 100%' }` when ventilation shares ≠ 100% | Remove the `_validateShares` call for ventilation. Heating/cooling/DHW/thin guards stay. |
+| `_validateShares` helper | `frontend/src/utils/systemsEngine.js` | 90–94 | Generic sum-to-100 check, called from heating/DHW/ventilation/thin | Keep — it's correct for the services that genuinely split one demand. Only the ventilation call site is wrong. |
+| Per-system share input | `frontend/src/components/modules/systems/SystemEditorCard.jsx` | 255–274 | "Share (% of service)" number input on every ventilation system row + "⚠ service shares ≠ 100%" inline warning. Brief 53 Part 5 / Brief 60 Part A added explanatory tooltips but left the input in place. | Remove the entire `service === 'ventilation'` number-input branch. Leave the slider branch for the other services unchanged. |
+| Σ NN% chip + amber styling | `frontend/src/components/modules/systems/ServiceSplitBar.jsx` | 35–112 | `enabledSum` validation + amber-coloured chip when `Math.abs(enabledSum - 100) >= 0.5`. ServiceSplitBar is rendered for ALL services uniformly. | Caller must skip ServiceSplitBar for ventilation (the simplest hand-off) OR the bar takes a `service` prop and bypasses the validation when `service === 'ventilation'` while still showing the visual segments. Decision in P3 — preference for the simpler caller-side skip. |
+
+### §2.3 Per-service share rule matrix
+
+| Service | Rule | Reasoning | Engine guard | Action |
+| --- | --- | --- | --- | --- |
+| Heating | Σ share_pct = 100% across enabled | Multiple systems splitting ONE zone demand (e.g. 80% VRF + 20% radiator backup). | `_validateShares` at `systemsEngine.js:236` | Keep |
+| Cooling | Σ share_pct = 100% | Same — split one demand. | Same — folds into `_computeHeatingOrCooling` at L236 | Keep |
+| DHW | Σ share_pct = 100% | Same — split one annual L/day demand across HP + boiler trim. | `_validateShares` at `systemsEngine.js:441` | Keep |
+| **Ventilation** | **No rule** | Each fan runs at its OWN configured `flow_rate × flow_rate_basis`. There's no shared demand to allocate. Brief 60 Part A removed `share` from the per-fan math; the only remaining purpose of `share_pct` on a ventilation system is **display**. | `_validateShares` at `systemsEngine.js:648` (the bug) | **Remove the call** |
+| Lighting / Small Power (thin) | Σ share_pct = 100% | Brief 58 Part C couples the upstream gain to a v40 service split — share weights the per-system pro-rata of the SAME upstream electrical demand. | `_validateShares` at `systemsEngine.js:776` | Keep |
+
+### §2.4 What about `share_pct` on persisted ventilation rows?
+
+Bridgewater's 3 vent systems all have `share_pct: 100` saved. Per the brief's P3 spec: "Migration: existing projects with `share` saved on ventilation entries — drop the field; no warning needed (it was meaningless)." Two implementation options:
+
+- **(a) Loader migration** — strip `share_pct` from any `building.systems_config_v40.ventilation[]` entry on load, similar to the Brief 72 P3 `people_per_room` migration pattern. One-shot.
+- **(b) Engine-side silent ignore** — leave the field on disk untouched; engine doesn't read it for ventilation post-P3 anyway (only `share_pct: sys.share_pct ?? 0` at L719 is preserved on the per-system result for downstream display). The field becomes vestigial-but-harmless.
+
+Brief P3 says "drop the field; no warning needed". Preference for (a) — loader migration, no warning. Adds ~5 lines to `_brief42LoaderMigration` or equivalent. Aligns with the Brief 72 P3 pattern (silent-but-recorded removal in the loader).
+
+### §2.5 Why Brief 60 Part A didn't see this
+
+Brief 60 Part A's audit doc (`docs/audit/60_share_pct_audit.md`) was specifically about the fan-calc multiplication site, not the gate. The fix was scoped to "remove `× share_pct` from L657-720" and verified against Calc Trail panel reconciliation (the row sum stopped missing ~17 MWh). The gate fired silently on the path where shares ≠ 100; the post-fix anchor at the time had Bridgewater with two extract fans summing 100/0/0 = 100% (the gate passed). The regression surfaced only after Brief 72 PB re-created Bridgewater with three vent systems all at 100% — the natural per-system default when each fan is a standalone — pushing the sum to 300%. Brief 73 P3 closes the loop.
+
+### §2.6 Per-system rollup paths (deferred discovery from P1)
+
+Anchor script `_brief73_p1_anchor.mjs` read `consumption.{service}.systems` and got empty arrays. The actual engine result structure (read from `instantCalc.js` L5318–5400 and L5542) splits per-system data across two locations:
+
+- `consumption.ventilation` — **an array** of per-system v25-shape rollups: `{ id, name, enabled, fan_electricity_mwh, hre_recovery_mwh, ... }`. Anchor script's `c?.ventilation?.systems` was wrong — should iterate `c?.ventilation` directly. When `_validateShares` blocks, this array is also empty (cascading from the guard).
+- `consumption.brief40` — top-level field carrying the full v40 brief40Computed output (heating / cooling / dhw / ventilation / lighting / small_power blocks each with per-system arrays). Used by `SystemEditorCard` + `SystemsDiagnosticPanel` for the right-strip per-system detail.
+- `consumption.{space_heating,space_cooling,dhw}.{primary,secondary}` — per-system pair (primary + secondary) v25-shape blocks for heating/cooling/DHW. Brief 38 (2026-05-19).
+
+P3 verification script will use `consumption.brief40.ventilation` for the fan electricity rollup (matches what the right-strip UI reads). The P1 anchor narrative remains valid — totals and internal gains were read correctly; only per-system breakdowns came back empty under the wrong path key.
 
 ---
 
