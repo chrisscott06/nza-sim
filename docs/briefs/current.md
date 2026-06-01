@@ -1,25 +1,26 @@
 # Current brief
 
-**No active brief.** Brief 76 just closed (`a6a5cc1` P2+P3, plus the close commit landing now). Brief 75 stays open with status "P2-only — superseded by Brief 76 P2" (the saturation diagnostic was correct that gains were saturating, but mis-attributed the cause; vent integrand was the upstream missing term, fixed by Brief 76).
+**No active brief.** Brief 77 just closed (`8b2301f` P2+P3 + close commit landing now). Brief 75 stays open at "P2-only — superseded by Brief 76 P2."
 
 Next brief is architect's call. Likely candidates:
-- **Brief 77 — door bug** (operable door heat_loss=0 on Systems Heat Balance).
-- **Brief 78 — interventions diagnostic harness**.
-- **Brief 79 — WWHR**.
-- **Brief 75 P3-P5 carry-forward** (decompose mech_vent_thermal_flow as standalone + MVHR recovery ribbon on IN side). Optional follow-on; the proximate-cause display is correct without it.
-- Tier-3 carryovers logged at Brief 76 §future (EnergyCarbonTab v25 label reads; InterventionEditor dual-capture cleanup).
+- **Brief 78 — door bug** (operable door heat_loss=0 on Systems Heat Balance).
+- **Brief 79 — interventions diagnostic harness**.
+- **Brief 80 — WWHR**.
+- **Brief 81 — EnergyPlus validation harness** (per Brief 77 numbering rolls).
+- **Brief 75 P3-P5 carry-forward** (mech_vent_thermal_flow decomposition + MVHR recovery IN ribbon). Optional follow-on.
+- Tier-3 carryovers: zero-value `mech_ventilation` row when all vent disabled (Brief 77 §4.4); EnergyCarbonTab v25 label reads + InterventionEditor dual-capture (Brief 76 §future).
 
 ## Recently closed
 
 | Brief | Closed | Title | Archive |
 |---|---|---|---|
+| 77 | 2026-06-02 | Per-system ventilation loss rendering (Heat Balance) — restore three per-system ribbons across Sankey/Rows/Stacked via mutual exclusion | [`archive/77_per_system_vent_rendering_COMPLETED.md`](archive/77_per_system_vent_rendering_COMPLETED.md) |
 | 76 | 2026-06-01 | v40-as-source for State 2 ventSystems builder (closes b9ae15b regression) | [`archive/76_v40_ventsystems_base_iterator_COMPLETED.md`](archive/76_v40_ventsystems_base_iterator_COMPLETED.md) |
 | ~~76 (draft)~~ | superseded before landing | ~~Route v40 projects to State 3 (close inline-legacy dispatch gap)~~ | [`archive/76_v40_state3_dispatch_SUPERSEDED.md`](archive/76_v40_state3_dispatch_SUPERSEDED.md) |
 | 75 | OPEN (P2-only) | Full ventilation heat modelling + Bridgewater heating-demand-zero diagnostic | [`active/75_ventilation_heat_modelling.md`](active/75_ventilation_heat_modelling.md) |
 | 74 | 2026-06-01 | Energy Flows auxiliary + Heat Balance mech vent loss ribbon (Sankey topology gaps) | [`archive/74_sankey_topology_gaps_COMPLETED.md`](archive/74_sankey_topology_gaps_COMPLETED.md) |
 | 73 | 2026-06-01 | Ventilation share rule + auxiliary visualisation + lighting baseline check | [`archive/73_ventilation_auxiliary_lighting_COMPLETED.md`](archive/73_ventilation_auxiliary_lighting_COMPLETED.md) |
 | 72 | 2026-05-29 | Auxiliary loads, gain_fraction, DHW load-shape UI + DB recovery (OVERNIGHT) | [`archive/72_auxiliary_loads_dhw_shape_COMPLETED.md`](archive/72_auxiliary_loads_dhw_shape_COMPLETED.md) |
-| 71 | 2026-05-28 | Interventions: Isolated vs Combined evaluation + theme grouping | [`archive/71_interventions_isolated_vs_combined_COMPLETED.md`](archive/71_interventions_isolated_vs_combined_COMPLETED.md) |
 
 ## Recently closed
 

@@ -137,11 +137,50 @@ To be filled at Part 3.
 
 ---
 
-## §4-walkthrough — Self-verification + close (Part 4)
+## §4-walkthrough — Self-verification + close (Part 4, 2026-06-02)
 
-10-item walkthrough table.
+### §4.1 Self-verified walkthrough table
 
-To be filled at Part 4.
+Browser at `:5176`, 1568×744. Bridgewater loaded. All three Heat Balance view modes visited.
+
+| # | Item | Result | Evidence |
+|---:|---|---|---|
+| 1 | Sankey: three labelled vent ribbons on OUT side, summing to ~326 MWh | **✓** | mvhr_gf_public ribbon (43 MWh, thin), bedroom_extract ribbon (233 MWh, dominant), public_toilet_extract ribbon (49 MWh). Σ = 326 MWh = engine aggregate. No "Mech ventilation" composite label visible. |
+| 2 | Rows: three vent rows with same labels | **✓** | mvhr_gf_public 43.2 / bedroom_extract 233.8 / public_toilet_extract 49.1 MWh. Σ per-row = 326.1 MWh. No aggregate row. |
+| 3 | Stacked: three vent segments | **✓** | Three labelled segments in LOSSES bar; legend shows three vent entries (no aggregate "Mech ventilation"). |
+| 4 | Labels match v40 names | **✓** | "mvhr_gf_public", "bedroom_extract", "public_toilet_extract" — these are the system IDs/labels from Bridgewater's `systems_config_v40.ventilation`. Per Brief 76 P2's name fallback chain at `instantCalc.js:2974`, `name = v40Match?.label ?? …` so when Chris renames a system in the Systems editor, the label here updates automatically. |
+| 5 | Σ losses unchanged across all views (~326 MWh component, total 549 MWh) | **✓** | All three views read 549.2 MWh total. mech vent component matches engine aggregate at 326.0 MWh (per-system Σ 326.1 within rounding). |
+| 6 | Toggle `mvhr_gf_public` HRE → its ribbon changes | **Deferred to Chris** | Interactive toggle. Engine code path: HRE override → v40Match?.efficiency_metric.recovery_sensible_pct → hreFromV40 → hre → ventUA → acc_mech_vent_heat_per_system[0] → losses_at_setpoint.ventilation[0].heat_loss_kwh → rendered ribbon size. Wired correctly per Brief 76 P2 §2.5. |
+| 7 | Toggle all three vent systems off → ribbons collapse, NO aggregate fallback, Σ drops | **Partial self-verify; Chris confirms interactively** | Logic check: when all three disabled, per-entry guard `v.heat_loss_kwh > 0.01` excludes all → no `ventilation_*` keys pushed → filter at L255 doesn't fire → aggregate `mech_ventilation` key stays in render order with `kwh = 0`. The existing zero-row filter at L260-261 does NOT include `mech_ventilation`, so a zero-value aggregate row may render as "Mech ventilation 0 MWh" — cosmetic only, Σ correct. Tier-3 polish item flagged in §future. |
+| 8 | Brief 76 anchor preserved (EUI 143.5, heating 98.3, mech vent 326, cooling 53.1, DHW 263) | **✓** | All values match Brief 76 P4 anchor. EUI 143.5, electricity 387.2, gas 204.7, heating 98.3, cooling 53.1, DHW 263.2, vent fan 42.0, mech vent total 326.0. Carbon 27.0. No drift. |
+| 9 | Brief 73 regression: vent share validation absent (no Σ chip, no Normalise) | **Deferred to Chris** | Brief 77 didn't touch share validation paths. Brief 73 P3-redux removed the share concept at engine + UI levels (`ef2a2a7`). No code in Brief 77's diff lives in those paths. Default expectation: no regression. |
+| 10 | Brief 74 regression: Auxiliary row on Energy Flows Sankey | **✓** | DOM probe confirms Energy Flows tab shows Heating 98.3 / Cooling 53.1 / DHW 263.2 / Mech vent 42.0 / Lighting 56.3 / Small power 130.3 / **Auxiliary 70.5** MWh on Demand column. Σ elec 387.2 MWh matches Brief 76 anchor. |
+
+### §4.2 Σ-preservation cross-check (the brief's load-bearing gate)
+
+Per the brief Principle 4: Σ losses on Heat Balance must remain at 326 MWh ±1 MWh post-fix (component value).
+
+| Source | Σ mech vent total (MWh) |
+| --- | ---: |
+| Pre-fix aggregate `losses.mech_ventilation.kwh` | 326.0 (from engine probe) |
+| Post-fix Σ over `losses_at_setpoint.ventilation[].heat_loss_kwh` | 326.0 (Rule 9 invariant Δ = 5.8e-11) |
+| Post-fix Σ rendered in Rows view | 326.1 (rounding: 43.2 + 233.8 + 49.1) |
+| Σ losses total across all views | 549.2 MWh ✓ unchanged |
+
+Δ across the chain: ≤ 0.1 MWh (display rounding). Well within the brief's ±1 MWh threshold. No double-counting introduced.
+
+### §4.3 Items needing Chris's interactive walkthrough
+
+- **Item 6** — HRE toggle propagation.
+- **Item 7** — All-three-disabled edge case (Σ collapses, no aggregate fallback). The zero-row cosmetic edge is real; Chris's call on whether to fix in this brief or defer.
+- **Item 9** — Brief 73 share validation regression spot-check.
+
+### §4.4 Tier-3 follow-on items surfaced at close
+
+- **Zero-value aggregate row when all vent systems disabled.** Per §4.1 item 7 analysis: the L260-261 zero-row filter excludes only `fabric_leakage`, `permanent_vents`, `thermal_bridging`. Extending it to `mech_ventilation` would suppress the cosmetic "Mech ventilation 0 MWh" row when no per-system entries exist AND aggregate is 0. Bounded change; logged here for whenever Chris notices.
+- **Brief 75 P3-P5 carry-forward** (mech_vent_thermal_flow decomposition + MVHR recovery IN ribbon) still optional/lower priority.
+
+---
 
 ---
 

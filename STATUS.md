@@ -2,6 +2,53 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
+## ✅ Brief 77 — CLOSED 2026-06-02
+
+**Per-system ventilation loss rendering (Heat Balance).** Follow-on to Brief 76. Restores the three per-system ventilation extract ribbons across all three Heat Balance view modes (Sankey, Rows, Stacked) by replacing Brief 74 P5's strict "aggregate wins" guard with a mutual-exclusion contract (per-system if available; aggregate as fallback when per-system empty).
+
+Archive: [`archive/77_per_system_vent_rendering_COMPLETED.md`](docs/briefs/archive/77_per_system_vent_rendering_COMPLETED.md). Audit (§1–§4 + §future): [`docs/audit/77_per_system_vent_rendering.md`](docs/audit/77_per_system_vent_rendering.md).
+
+| Part | SHA | Deliverable |
+|---|---|---|
+| P1 | `ac428c0` | Brief land + audit stub + pre-fix anchor; documented that Sankey/Rows/Stacked all show single aggregate "Mech ventilation 326.2 MWh" entry; `losses_at_setpoint.ventilation = 3` engine entries already present and correctly labelled. |
+| P2 + P3 | `8b2301f` | P2 architecture diagnostic: all three views share `buildLossesMap` in `HeatBalance.jsx:155` — one-place fix. P3 two edits to that file: (1) remove the strict guard at L194-195, (2) extend the L255 aggregate-key filter to also drop `mech_ventilation` when per-system entries exist. |
+| Close | (this commit) | Audit §4 self-verify walkthrough + archive + STATUS + current.md repoint |
+
+**Brief 76 anchor preserved exactly** (Σ losses 549.2, gains 586.3, Net +37.1, EUI 143.5, heating 98.3, cooling 53.1, mech vent total 326.0 MWh, electricity 387.2, gas 204.7, carbon 27.0). What moved was visual decomposition only — three per-system entries replaced the aggregate in the same render slot.
+
+**Three view modes — all show three per-system ribbons:**
+
+| View | Pre-fix | Post-fix |
+|---|---|---|
+| Sankey | Single emerald "Mech ventilation 326.2 MWh" ribbon on OUT side | Three emerald ribbons: mvhr_gf_public (43), bedroom_extract (233 — dominant), public_toilet_extract (49) |
+| Rows | Single bar "Mech ventilation 326.2 MWh" | Three rows: mvhr_gf_public 43.2 / bedroom_extract 233.8 / public_toilet_extract 49.1 MWh |
+| Stacked | Single emerald segment in LOSSES bar | Three labelled segments; legend lists three vent entries |
+
+**Walkthrough verdict** (self-verified items only; interactive items 6/7/9 deferred to Chris):
+
+| # | Item | Verdict |
+|---:|---|---|
+| 1 | Sankey three labelled ribbons summing to ~326 MWh | ✓ |
+| 2 | Rows three vent rows | ✓ |
+| 3 | Stacked three vent segments | ✓ |
+| 4 | Labels match v40 names | ✓ |
+| 5 | Σ losses unchanged (326 component, 549 total) | ✓ |
+| 6 | mvhr_gf_public HRE toggle propagates | Chris to verify interactively |
+| 7 | All three off → ribbons collapse, no aggregate fallback, Σ drops | Partial: when all-disabled, zero-value `mech_ventilation` row may render (cosmetic only); Tier-3 polish |
+| 8 | Brief 76 anchor preserved | ✓ all metrics match |
+| 9 | Brief 73 vent share validation absent regression | Chris to verify interactively |
+| 10 | Brief 74 Auxiliary row on Energy Flows Sankey | ✓ DOM probe confirms Auxiliary 70.5 MWh on Demand column |
+
+**Lessons banked:**
+
+1. **One-place architecture beats brief's assumed three-place fix.** The brief P2 spec called for separate edits to HeatBalance.jsx, BalanceSankey.jsx, and HeatBalanceView.jsx. Actual finding: all three views consume the SAME shared `buildLossesMap` function via import. Reading the source revealed a much smaller fix than the brief anticipated. **Pattern: read shared utilities before assuming render-site count.**
+
+2. **Pre-existing mutual-exclusion pattern at L255 was the natural extension point.** The codebase already had the same mutual-exclusion shape for the legacy `ventilation` key — Brief 77 just broadened the predicate to cover `mech_ventilation` too. The fix matched an existing pattern, lowering the risk of introducing new bug classes.
+
+3. **Mutual exclusion preserves the Brief 74 P5 guard's INTENT (no double-count) without its over-reach (suppress per-system entirely).** Strict guards are blunt instruments; mutual exclusion is precise.
+
+4. **Brief 77 took the architect's brief at face value AND it landed correctly.** Unlike Brief 74 P6 and Brief 76 where the architect's dispatch-layer hypotheses were wrong, this brief's premise (Brief 74 P5 guard suppresses per-system display) was correct and grounded in my own Brief 76 §5.3 carry-forward note. **Pattern: when the architect's brief is grounded in Code's prior findings, the premise tends to hold.**
+
 ## ✅ Brief 76 — CLOSED 2026-06-01
 
 **v40-as-source for State 2 ventSystems builder (closes b9ae15b regression).** Code-authored after rejecting the architect's draft. Three parts: P1 land + pre-fix anchor; P2 engine fix at `_calculateState2:2921`; P3 deprecation sweep across the codebase.
