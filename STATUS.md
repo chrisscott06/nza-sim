@@ -2,6 +2,67 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
+## ✅ Brief 76 — CLOSED 2026-06-01
+
+**v40-as-source for State 2 ventSystems builder (closes b9ae15b regression).** Code-authored after rejecting the architect's draft. Three parts: P1 land + pre-fix anchor; P2 engine fix at `_calculateState2:2921`; P3 deprecation sweep across the codebase.
+
+Archive: [`archive/76_v40_ventsystems_base_iterator_COMPLETED.md`](docs/briefs/archive/76_v40_ventsystems_base_iterator_COMPLETED.md). Audit (§1–§5): [`docs/audit/76_v40_ventsystems_base_iterator.md`](docs/audit/76_v40_ventsystems_base_iterator.md). Premise check (the diagnostic that disagreed with the architect's draft and re-scoped the brief): [`docs/audit/76_premise_check.md`](docs/audit/76_premise_check.md). Superseded architect draft: [`archive/76_v40_state3_dispatch_SUPERSEDED.md`](docs/briefs/archive/76_v40_state3_dispatch_SUPERSEDED.md).
+
+| Part | SHA | Deliverable |
+|---|---|---|
+| Premise check | `27dff4b` | Read-only diagnostic disagreeing with architect's draft; placed actual bug at `_calculateState2:2921` not the L6668 dispatch gate |
+| P1 | `a6c3a1f` | Brief land + audit stub + pre-fix anchor (`docs/audit/76_p1_anchor_before.json`) + architect draft archived as SUPERSEDED |
+| P2 + P3 | `a6a5cc1` | Engine fix: ventSystems base iteration → v40 with v25 fallback (Briefs 50/53/59/60 pattern extended to base level). Deprecation sweep: `systemsEngine.js:915` OK as-is (already v40-base); `EnergyCarbonTab.jsx:450-505` + `InterventionEditorBuildingView.jsx:545,555` Tier-3 carry-forward. Post-fix anchor (`docs/audit/76_p4_anchor_after.json`). |
+| Close | (this commit) | Audit §5 walkthrough + archive + STATUS + current.md repoint + Brief 75 status update |
+
+**Headline anchor delta (Bridgewater):**
+
+| Metric | Pre | Post | Δ |
+|---|---:|---:|---:|
+| EUI (kWh/m²·yr) | 150.7 | 143.5 | −7.2 |
+| Σ electricity (MWh) | 416.94 | 387.22 | −29.7 |
+| Σ gas (MWh) | 204.70 | 204.70 | 0 |
+| heating_demand (MWh) | **0.0** | **98.3** | **+98.3** |
+| cooling_demand (MWh) | 302.1 | 53.1 | −249.0 |
+| losses.mech_ventilation (MWh) | 0 | **326.0** | +326.0 |
+| Carbon (kgCO₂/m²·yr) | 28.3 | 27.0 | −1.3 |
+
+**Walkthrough verdict** (self-verified items only; interactive items 5/7/8/12 deferred to Chris's walkthrough):
+
+| # | Item | Verdict |
+|---:|---|---|
+| 1 | Mech ventilation ribbon visible on Heat Balance Sankey OUT side | ✓ |
+| 2 | Σ losses risen | ✓ |
+| 3 | Per-system ventilation entries on Rows view | ✗ vs brief expected; ✓ vs Brief 74 P5 design (aggregate-only display by guard); see §5.3 for the design call |
+| 4 | Net residual (gains − losses) balanced | ✓ +37.1 MWh |
+| 5 | Diagnostic panel shows 3 per-system entries | Chris to verify interactively |
+| 6 | Rule 9 invariant: Σ per-system = aggregate within rounding | ✓ Δ = 5.8 × 10⁻¹¹ kWh |
+| 7 | HRE toggle changes per-system heat_loss_kwh | Chris to verify interactively |
+| 8 | Disabling vent systems collapses ribbons | Chris to verify interactively |
+| 9 | Cooling demand "unchanged" | ✗ vs brief wording; ✓ as correct physics (vent extract removes heat cooling previously handled — drops 302 → 53 MWh) |
+| 10 | DHW demand unchanged | ✓ |
+| 11 | Vent fan total unchanged | ✓ |
+| 12 | Heating share validation regression | Chris to verify interactively |
+
+**Lessons banked:**
+
+1. **Architect's hypothesis was wrong; Code's diagnostic was right.** The architect proposed Brief 76 to extend the State 3 dispatch gate at `instantCalc.js:6668`. The premise check (commit `27dff4b`) showed that Bridgewater already reaches State 3 via `engine: 'v2.5'` opt-in at `SystemsModule.jsx:187`. The actual bug was at `_calculateState2:2921` — the base iteration of the per-system ventilation builder was still reading v25. Same shape of mistake as Brief 74 P6 (architect wrong about dispatch; fix was at the render/build layer). **Pattern: when the architect places a bug at the dispatch layer, Code should verify by reading the source — the dispatch isn't usually the load-bearing piece.**
+
+2. **Brief 75 P2 outcome-(c) was a misdiagnosis.** The "gains-saturation logic over-aggressive" verdict was wrong. The saturation worked correctly all along. The actual missing term was vent extract not entering the demand integrand, because `ventSystems = []`. With vent restored, Bridgewater demands 98.3 MWh heating — sensible for a UK hotel. **Pattern: a Rule-9 violation can hide behind a display-A = display-B agreement.** Brief 74 P5's aggregate matched the per-system sum, both reading 0; both wrong; neither caught the real bug.
+
+3. **CLAUDE.md Rule 13 in action.** Each "real root cause" turned out to be one layer deeper than the previous diagnosis:
+   - Brief 74 P5: "heating_demand = 0 explains mech_ventilation = 0" — partial truth at best.
+   - Brief 75 P2: "saturation logic over-aggressive" — wrong diagnosis.
+   - Brief 76: "ventSystems base iteration reads v25" — the actual cause.
+
+4. **Brief 72 PB seeder backstop.** The 2026-05-28 recovery script left v25 empty and logged "vent still 0. Iterations exhausted" as acceptable. Future re-seeds can now safely omit v25 entirely; the engine doesn't depend on it for the vent path. The lesson is captured in the engine's L2869-2900 commentary so it can't drift.
+
+## 🟡 Brief 75 — OPEN, P2-only, superseded by Brief 76
+
+**Full ventilation heat modelling + Bridgewater heating-demand-zero diagnostic.** P2 diagnostic was right that gains-saturation produced heating_demand = 0; mis-attributed the proximate cause. Brief 76 P2 fixed the actual root cause (v25-base iteration in ventSystems builder). Bridgewater now demands 98.3 MWh heating; the saturation logic was correct all along.
+
+P3-P5 carry-forward (optional follow-on, not blocked): decompose mech_vent_thermal_flow as a standalone engine quantity; add MVHR recovery ribbon on Heat Balance IN side. Lower priority now that the headline display is correct.
+
 ## ✅ Brief 74 — CLOSED 2026-06-01
 
 **Energy Flows auxiliary + Heat Balance mech vent loss ribbon (Sankey topology gaps).** Architect-authored, six parts. Closed the deferred items 7/8 from Brief 73 (Energy Flows Sankey auxiliary row on the v40 path) plus the freshly-surfaced mech-vent heat-loss ribbon on the Heat Balance Sankey.

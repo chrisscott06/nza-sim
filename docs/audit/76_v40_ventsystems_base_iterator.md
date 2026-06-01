@@ -186,11 +186,51 @@ The Brief 75 P3-P5 work (mech_vent_thermal_flow decomposition, MVHR recovery rib
 
 ---
 
-## §5 — Walkthrough + close (Part 5)
+## §5 — Self-verification + walkthrough (Part 5, 2026-06-01)
 
-12-item walkthrough table.
+Browser at `:5176` (1568×744). Bridgewater loaded. Both Energy Flows and Heat Balance tabs visited; screenshots captured (not committed; reproducible from the engine state at this SHA).
 
-To be filled at Part 5.
+### §5.1 Self-verified walkthrough
+
+| # | Item | Result |
+| ---: | --- | --- |
+| 1 | Heat Balance Sankey OUT-Losses side: Mech ventilation ribbon visible in vent emerald | **✓** Largest loss ribbon (326.2 MWh) |
+| 2 | Σ losses on the badge has risen | **✓** Browser-displayed 472 → 549 MWh = +77; engine raw 221 → 523 MWh = +301. Both consistent with the vent extract magnitude (browser displays use cooling-aware aggregation). |
+| 3 | Rows view: per-system ventilation entries appear ("mvhr_gf_public", "vent_bedroom_extract", "vent_public_toilet_extract") | **✗ as written; ✓ as designed.** Rows view shows AGGREGATE "Mech ventilation 326.2 MWh" bar, not 3 per-system bars. This is the Brief 74 P5 guard at `HeatBalance.jsx:194-195` operating correctly: when the aggregate is > 0.01, the `appendPerSystemVent` loop is skipped to prevent double-rendering. The old "report Sankey image" Chris recalled (showing per-system ribbons) predated Brief 74 P5. If per-system visibility on the Rows view is wanted ALONGSIDE the aggregate, that's a separate brief — would need to relax Brief 74 P5's guard. The brief's Principle 4 reality-check noted this trade-off. Per-system data IS in `losses_at_setpoint.ventilation` (3 entries) and accessible via the Diagnostic panel (item 5 below). |
+| 4 | Net residual on Heat Balance | **✓** +37.1 MWh ✓ balanced (was +16 pre-fix in the same browser view; engine raw moved +267 → −35) |
+| 5 | Diagnostic panel: `losses_at_setpoint.ventilation` shows 3 entries with non-zero `heat_loss_kwh` | **Deferred to Chris's walkthrough.** Diagnostic panel route not exercised in self-verify; engine probe via direct Node call confirms the underlying data is present and well-shaped (audit §2.4). |
+| 6 | `losses.mech_ventilation.kwh` matches Σ over per-system `heat_loss_kwh` within rounding tolerance | **✓** Δ = 5.8 × 10⁻¹¹ kWh — floating-point noise (audit §2.4 + commit message) |
+| 7 | Disabling mvhr_gf_public's HRE (set to 0%) increases that system's heat_loss_kwh | **Deferred to Chris.** Interactive toggle; requires Systems editor manipulation. The engine code path is wired correctly (HRE override propagates through v40Match → hreFromV40 → hre → ventUA → acc_mech_vent_heat_per_system), so behaviour should follow physics. |
+| 8 | Disabling all three vent systems collapses both aggregate ribbon AND per-system entries to zero | **Deferred to Chris.** Interactive toggle. `enabled` flag honoured through ventSystems builder per §2.5. |
+| 9 | Cooling demand UNCHANGED at 302.1 MWh | **✗ as written; correct physics observed.** Cooling DROPPED 302.1 → 53.1 MWh. This is the CORRECT outcome — vent extract removes 326 MWh of heat that previously had to be removed by cooling. The "unchanged" wording in the brief's walkthrough was wrong; cooling MUST drop when a real heat-out path is added. Item revised: "Cooling demand drops in proportion to vent extract magnitude." ✓ |
+| 10 | DHW demand UNCHANGED at 263.183 MWh | **✓** Unchanged (DHW is not coupled to space heat balance) |
+| 11 | Vent fan total UNCHANGED at 41.962 MWh | **✓** Unchanged (fan electricity is a separate calculation from heat-loss extract) |
+| 12 | Heating share validation regression check (drag a heating share, warning fires) | **Deferred to Chris.** Interactive; no code touched in that path so no regression expected. |
+
+### §5.2 Items needing Chris's interactive walkthrough
+
+- **Item 5** — Diagnostic panel view.
+- **Items 7 & 8** — HRE / enabled toggles.
+- **Item 12** — Heating share validation regression.
+
+If any of items 5/7/8/12 fail, treat as Tier-2 within the brief: short diagnostic, bounded fix, re-verify. Don't expand scope.
+
+### §5.3 Items that need a brief-text correction post-walkthrough
+
+- **Item 3** — Brief expected "per-system ventilation entries appear in Rows view". Actual: aggregate-only display per Brief 74 P5 guard. Either accept aggregate-as-canonical (closes item 3 as ✓ designed) OR raise a follow-on to relax the guard for Rows view (item 3 stays open, separate brief).
+- **Item 9** — Brief expected "Cooling demand UNCHANGED". Actual: Cooling drops 302 → 53 MWh, which is the correct physics. Brief-text was wrong; item 9 is ✓ in corrected form.
+
+These are documentation refinements, not engine bugs.
+
+### §5.4 The Brief 75 status update at this close
+
+Brief 75 stays open with the new status entry:
+
+> **P2-only — superseded by Brief 76. The Brief 75 P2 diagnostic was right that gains saturation was producing heating_demand = 0, but mis-attributed the proximate cause. The actual root cause was upstream: vent loss wasn't entering the State 2 heat balance integrand because the ventSystems builder at `_calculateState2:2921` iterated `systems_config_v25.ventilation` as its base, and Bridgewater's v25 mirror was null post-Brief-72-PB recovery. Brief 76 P2 switched the base iteration to v40; ventSystems now populates, mech vent extract enters the demand integrand, and Bridgewater's heating demand of 98.3 MWh (23.8 kWh/m²·yr) is sensible for a UK hotel. The saturation logic was correct all along.**
+>
+> **Carry-forward (optional follow-on, not blocked):** Brief 75 P3 (mech_vent_thermal_flow as a STANDALONE engine quantity, decoupled from heating compensation) + P4 (MVHR recovery ribbon on IN side) are still valuable visualisation work — they'd surface MVHR's contribution as a positive heat gain alongside the gross extract loss. Lower priority now that the headline display is correct. Schedule whenever.
+
+---
 
 ---
 
