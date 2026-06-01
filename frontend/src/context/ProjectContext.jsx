@@ -976,12 +976,40 @@ export function ProjectProvider({ children }) {
     // migratePatch v1→v2. Idempotent: skipped when bc.schema_version
     // >= 2 already.
     const _v2Migration = _brief42LoaderMigration(bcRaw)
-    const bc = _v2Migration
+    let bc = _v2Migration
       ? { ...bcRaw,
           systems_config_v40: _v2Migration.systems_config_v40 ?? bcRaw.systems_config_v40,
           interventions:      _v2Migration.interventions      ?? bcRaw.interventions,
           schema_version:     _v2Migration.schema_version }
       : bcRaw
+    // Brief 73 P3 (2026-05-29): strip `share_pct` from any persisted
+    // ventilation entry on load. Vent fans don't split a shared demand
+    // (each runs at its own flow_rate × flow_rate_basis), so the field
+    // had no engine read site post Brief 60 Part A and no UI as of this
+    // brief. The strip is unconditional (idempotent — no schema_version
+    // bump needed; projects that never had it are no-op). The field
+    // naturally drops out of the persisted bc on the next save because
+    // it's gone from the in-memory params. Mirrors Brief 72 P3's
+    // people_per_room retirement pattern: silent loader-side removal,
+    // no UI alarm.
+    if (Array.isArray(bc?.systems_config_v40?.ventilation)) {
+      const ventBefore = bc.systems_config_v40.ventilation
+      const hadShare = ventBefore.some(v => v != null && Object.prototype.hasOwnProperty.call(v, 'share_pct'))
+      if (hadShare) {
+        const ventStripped = ventBefore.map(v => {
+          if (!v || typeof v !== 'object') return v
+          const { share_pct: _drop, ...rest } = v
+          return rest
+        })
+        bc = {
+          ...bc,
+          systems_config_v40: {
+            ...bc.systems_config_v40,
+            ventilation: ventStripped,
+          },
+        }
+      }
+    }
     // Brief 72 P3 (2026-05-29): schema migration warning for the retired
     // `people_per_room` phantom field. When a persisted project still
     // carries the field, log a one-shot console.warn explaining what

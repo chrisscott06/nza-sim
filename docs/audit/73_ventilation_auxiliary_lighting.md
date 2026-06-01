@@ -114,15 +114,56 @@ Brief P3 says "drop the field; no warning needed". Preference for (a) — loader
 
 Brief 60 Part A's audit doc (`docs/audit/60_share_pct_audit.md`) was specifically about the fan-calc multiplication site, not the gate. The fix was scoped to "remove `× share_pct` from L657-720" and verified against Calc Trail panel reconciliation (the row sum stopped missing ~17 MWh). The gate fired silently on the path where shares ≠ 100; the post-fix anchor at the time had Bridgewater with two extract fans summing 100/0/0 = 100% (the gate passed). The regression surfaced only after Brief 72 PB re-created Bridgewater with three vent systems all at 100% — the natural per-system default when each fan is a standalone — pushing the sum to 300%. Brief 73 P3 closes the loop.
 
-### §2.6 Per-system rollup paths (deferred discovery from P1)
+## §3 — Ventilation share fix (Part 3, 2026-05-29)
 
-Anchor script `_brief73_p1_anchor.mjs` read `consumption.{service}.systems` and got empty arrays. The actual engine result structure (read from `instantCalc.js` L5318–5400 and L5542) splits per-system data across two locations:
+### §3.1 Bug surface — wider than the brief expected
 
-- `consumption.ventilation` — **an array** of per-system v25-shape rollups: `{ id, name, enabled, fan_electricity_mwh, hre_recovery_mwh, ... }`. Anchor script's `c?.ventilation?.systems` was wrong — should iterate `c?.ventilation` directly. When `_validateShares` blocks, this array is also empty (cascading from the guard).
-- `consumption.brief40` — top-level field carrying the full v40 brief40Computed output (heating / cooling / dhw / ventilation / lighting / small_power blocks each with per-system arrays). Used by `SystemEditorCard` + `SystemsDiagnosticPanel` for the right-strip per-system detail.
-- `consumption.{space_heating,space_cooling,dhw}.{primary,secondary}` — per-system pair (primary + secondary) v25-shape blocks for heating/cooling/DHW. Brief 38 (2026-05-19).
+The P1 anchor reported `c.ventilation.fan_total_mwh = null` which read as "the bug is firing on the live state." Investigation in P3 (probe script `scripts/_brief73_p3_probe.mjs`) revealed two distinct issues:
 
-P3 verification script will use `consumption.brief40.ventilation` for the fan electricity rollup (matches what the right-strip UI reads). The P1 anchor narrative remains valid — totals and internal gains were read correctly; only per-system breakdowns came back empty under the wrong path key.
+1. **Anchor script wrong-path bug**: `consumption.ventilation` is an ARRAY of per-system rollups, NOT an object with `.total_fan_electrical_mwh`. The v40 rollup lives at `consumption.brief40.ventilation.total_fan_electrical_mwh`. The anchor script's read pattern returned `null` even when the engine was producing the right number. P1 narrative is corrected in this audit; the anchor table's "fan_total_mwh: null" was a path read mistake, not the bug firing.
+
+2. **The bug Chris saw at walkthrough** was real but transient: at walkthrough start Bridgewater's saved ventilation shares were 100/100/100 (the natural default each time a fan is added), summing to 300%, tripping `_validateShares` (`systemsEngine.js:648`), early-exiting with fan total = 0. Chris must have hand-adjusted to 33.3/33.3/33.3 (summing to 99.9%, within tolerance) before saving the post-walkthrough state — which is what the P1 anchor and the P3 probe both read. The fix here closes the loop so the next time anyone authors three vent systems they don't have to manually rebalance.
+
+### §3.2 What landed
+
+| Surface | File | Change |
+| --- | --- | --- |
+| Engine guard | `frontend/src/utils/systemsEngine.js` | Removed `_validateShares` call from `_computeVentilation` (was at L648–655). Comment block left in place describing the brief's reasoning. |
+| Collapsed-row chip | `frontend/src/components/modules/systems/SystemEditorCard.jsx` L182-191 | Per-row "share %" chip hidden when `service === 'ventilation'`. |
+| Expanded-row share editor | `frontend/src/components/modules/systems/SystemEditorCard.jsx` L255-289 | Entire `service === 'ventilation' ? <number-input> : <slider>` branch collapsed to "slider only when service ≠ ventilation". Brief 53 Part 5's fixed-numeric input is gone. |
+| Σ N% chip | `frontend/src/components/modules/SystemsModule.jsx` L867 | Wrapped `<ServiceSplitBar>` in `service !== 'ventilation' && (…)`. ServiceSplitBar itself unchanged (caller-side skip is cleaner — the bar's amber-when-not-100 logic IS correct for the four services that genuinely split a demand). |
+| Loader migration | `frontend/src/context/ProjectContext.jsx` after `_brief42LoaderMigration` invocation | Unconditional strip of `share_pct` from every `systems_config_v40.ventilation[]` entry on load. No schema_version bump (the strip is idempotent — projects that never had the field are no-op). Mirrors Brief 72 P3's `people_per_room` retirement: silent loader-side removal, no UI alarm. |
+
+### §3.3 Gates
+
+| Gate | Source | Method | Result |
+| --- | --- | --- | --- |
+| (a) Vent systems no longer show share slider / Σ warning | brief P3 | source-read SystemEditorCard + SystemsModule | ✓ branch collapsed; ServiceSplitBar skipped for ventilation. Will verify visually in P7. |
+| (b) Fan electricity non-zero (~42 MWh) | brief P3 | `_brief73_p3_falsifiability.mjs` | **PASS** — 41.962 MWh total across the three Bridgewater fans (22.627 + 15.978 + 3.357), identical across all three share scenarios (33.3, 100, 0). |
+| (c) Heating share validation still works | brief P3 | source-read — `_validateShares` call at `systemsEngine.js:236` untouched | ✓ structural — verify in P7 walkthrough by dragging heating system 1 to 80%. |
+| (d) DHW share validation still works | brief P3 | source-read — `_validateShares` call at `systemsEngine.js:441` untouched | ✓ structural — verify in P7 walkthrough. |
+| (e) Anchor preserved for everything except ventilation | brief P3 | falsifiability A/B/C all show EUI 185.2, electricity 403.543 — identical | **PASS** — Heat / Cool / DHW / Lighting / Small Power unaffected. (The fan electricity has been in the rollup all along because Bridgewater's saved shares happen to sum to 99.9%; this fix only matters for the case where shares ≠ 100%, which is now ALL ventilation editing post-this-commit.) |
+
+### §3.4 Falsifiability artefact
+
+`docs/audit/73_p3_falsifiability_output.json` — three scenarios run against the engine:
+
+| Scenario | Σ shares | Pre-fix expected fan total | Post-fix observed | Pass |
+| --- | ---: | ---: | ---: | --- |
+| A baseline (33.3/33.3/33.3) | 99.9% | 41.962 (guard tolerance) | 41.962 | ✓ |
+| B (100/100/100) | 300% | 0 (guard fires) | 41.962 | ✓ guard removed |
+| C (0/0/0) | 0% | 0 (guard fires) | 41.962 | ✓ guard removed |
+
+All three produce the SAME 41.962 MWh total — fan electricity now depends only on per-system `SFP × flow × hours_active`, regardless of `share_pct`. The invariant is the closure of Brief 60 Part A's incomplete fix.
+
+### Per-system rollup paths (verified via probe `scripts/_brief73_p3_probe.mjs`)
+
+`consumption` keys at the top level: `['space_heating','space_cooling','dhw','ventilation','lighting','small_power','total','daily_profiles','brief40','source_path']`.
+
+- `consumption.ventilation` — **array** of per-system v25-shape rollups: `{ id, name, enabled, fan_electricity_mwh, hre_recovery_mwh, exhaust_loss_mwh }`. P1 anchor's `c?.ventilation?.fan_total_mwh` was always going to return `null` against an array.
+- `consumption.brief40.ventilation` — `{ systems: [...], total_fan_electrical_mwh, total_recovered_heating_mwh, total_recovered_cooling_mwh }`. The v40 rollup with per-system detail (`share_pct`, `sfp_w_per_lps`, `flow_rate`, `flow_rate_basis`, `fan_electrical_mwh`, recovery / defrost / bypass). This is what the right-strip UI reads.
+- `consumption.{space_heating,space_cooling,dhw}.{primary,secondary}` — Brief 38 (2026-05-19) per-system pair blocks.
+- `consumption.lighting` / `consumption.small_power` — present but UNKNOWN shape; not probed (out of scope for ventilation fix).
 
 ---
 

@@ -645,14 +645,19 @@ function _computeVentilation(systems, gia, peakOccupants, hoursActive = 8760, v2
       all_disabled: true,
     }
   }
-  if (!_validateShares(enabledSystems)) {
-    const sum = enabledSystems.reduce((s, x) => s + Number(x?.share_pct ?? 0), 0)
-    return {
-      systems: [], total_fan_electrical_mwh: 0,
-      total_recovered_heating_mwh: 0, total_recovered_cooling_mwh: 0,
-      error: `share_pct of enabled ventilation systems sums to ${sum.toFixed(1)}%, not 100%`,
-    }
-  }
+  // Brief 73 P3 (2026-05-29): share-sum guard REMOVED for ventilation.
+  // Ventilation systems don't split a single demand — each fan runs at
+  // its OWN configured `flow_rate × flow_rate_basis` continuously. The
+  // share-sum rule that's correct for heating / cooling / DHW (split
+  // ONE zone demand, must sum to 100%) is physically meaningless here.
+  // Brief 60 Part A removed `× share_pct` from the per-fan math in
+  // 2026-05-27 but left this guard, so a project with three parallel
+  // vent systems each at share_pct=100 (the natural per-system default)
+  // saw sum = 300%, the guard fired, and fan total dropped to 0 MWh
+  // despite the per-system math being correct. The guard fires on the
+  // call sites for the four services that DO genuinely split a demand;
+  // see _computeHeatingOrCooling (L236), _computeDhw (L441), _computeThin
+  // (L776). Brief 73 §2 audit + brief P2/P3.
 
   const out_systems = enabledSystems.map(sys => {
     // Brief 60 Part A reconcile fix (2026-05-27): share_pct removed

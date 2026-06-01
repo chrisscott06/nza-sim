@@ -864,7 +864,14 @@ export function InputsColumn({ params, updateParam, consumption, comfortBand, op
                     shown hatched) as a single horizontal bar so the
                     user can read the split at a glance without summing
                     individual rows mentally. */}
-                <ServiceSplitBar service={service} systems={list} />
+                {/* Brief 73 P3 (2026-05-29): ServiceSplitBar skipped for
+                    ventilation — see Brief 73 §2. Vent systems don't
+                    split a shared demand (each fan runs at its own flow),
+                    so the Σ NN% chip's amber-when-not-100% logic is
+                    physically meaningless here. */}
+                {service !== 'ventilation' && (
+                  <ServiceSplitBar service={service} systems={list} />
+                )}
 
                 {/* Brief 47 Part 3 (2026-05-24): share-rebalance flow
                     clarity — surface the Brief 45 Part 3b auto-rebalance

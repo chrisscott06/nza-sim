@@ -179,9 +179,16 @@ export default function SystemEditorCard({
             <span className={`flex-1 min-w-0 truncate text-xxs font-medium ${isEnabled ? 'text-navy' : 'text-mid-grey line-through'}`}>
               {system?.label ?? '(unnamed)'}
             </span>
-            <span className={`text-xxs tabular-nums ${shareInvalid && isEnabled ? 'text-amber-600' : 'text-mid-grey'}`}>
-              {Number(system?.share_pct ?? 0)}%
-            </span>
+            {/* Brief 73 P3 (2026-05-29): the collapsed-row share % chip
+                is also hidden for ventilation — each fan runs at its own
+                flow, the share number has no physical meaning. Heating /
+                cooling / DHW / lighting / small_power still show it
+                because they genuinely split a single demand. */}
+            {service !== 'ventilation' && (
+              <span className={`text-xxs tabular-nums ${shareInvalid && isEnabled ? 'text-amber-600' : 'text-mid-grey'}`}>
+                {Number(system?.share_pct ?? 0)}%
+              </span>
+            )}
             {service !== 'lighting' && service !== 'small_power' && service !== 'ventilation' && (
               <span className="text-xxs text-mid-grey/70 truncate max-w-[80px]">
                 {system?.source ?? '—'}
@@ -252,27 +259,19 @@ export default function SystemEditorCard({
             value={system?.label ?? ''}
             onChange={v => onUpdate({ label: v })}
           />
-          {/* Brief 53 Part 5 (2026-05-26): ventilation share is a fixed
-              numeric input, not a slider. Fixed-flow ventilation systems
-              have a constant flow per the schema (flow_rate × flow_basis);
-              a 0-100 % slider implied continuous variation that doesn't
-              match the underlying physics. Heating / cooling / DHW retain
-              the slider — those are genuinely continuous duty splits. */}
-          {service === 'ventilation' ? (
-            <div>
-              <label className="block text-xxs text-mid-grey mb-0.5">
-                Share (% of service)
-                {shareInvalid && <span className="text-amber-600 ml-2">⚠ service shares ≠ 100%</span>}
-              </label>
-              <input
-                type="number" min={0} max={100} step={1}
-                value={Number(system?.share_pct ?? 0)}
-                onChange={e => onUpdate({ share_pct: Number(e.target.value) })}
-                className="w-full px-1.5 py-1 text-xxs text-navy border border-light-grey rounded bg-white focus:outline-none focus:border-cyan-700 tabular-nums"
-                title="Fixed-flow ventilation: each system contributes its full flow regardless of this share; share scales fan electrical accounting only."
-              />
-            </div>
-          ) : (
+          {/* Brief 73 P3 (2026-05-29): share field removed from ventilation
+              system rows entirely. Each ventilation fan runs at its OWN
+              configured flow_rate continuously — there's no shared demand
+              to allocate, and the field served no purpose post Brief 60
+              Part A (which removed `× share` from the per-fan math).
+              Heating / cooling / DHW retain the slider — those split ONE
+              zone demand and the share rule is physically meaningful
+              (e.g. 80% VRF + 20% radiator backup). Brief 53 Part 5's
+              fixed-numeric branch is gone; the bug that motivated this
+              brief (Σ 300% blocks fan compute → fan electricity = 0 MWh)
+              is closed by removing both the field AND the engine guard
+              (systemsEngine.js:648). */}
+          {service !== 'ventilation' && (
             <div>
               <label className="block text-xxs text-mid-grey mb-0.5">
                 Share <span className="tabular-nums text-navy">{Number(system?.share_pct ?? 0)}%</span>

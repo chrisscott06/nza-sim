@@ -1,0 +1,66 @@
+{
+  "brief": "Brief 73 P3 falsifiability — share-guard removal on ventilation",
+  "scenarios": {
+    "A": {
+      "label": "A baseline (shares 33.3/33.3/33.3 — Σ=99.9%)",
+      "shares_input": [
+        33.3,
+        33.3,
+        33.3
+      ],
+      "v25_per_system_fan_mwh": [
+        22.627,
+        15.978,
+        3.357
+      ],
+      "v25_sum_fan_mwh": 41.961999999999996,
+      "v40_total_fan_electrical_mwh": 41.962,
+      "v40_error": null,
+      "eui_kwh_per_m2": 185.2,
+      "electricity_mwh": 403.543
+    },
+    "B": {
+      "label": "B shares 100/100/100 — Σ=300% (old guard would trip)",
+      "shares_input": [
+        100,
+        100,
+        100
+      ],
+      "v25_per_system_fan_mwh": [
+        22.627,
+        15.978,
+        3.357
+      ],
+      "v25_sum_fan_mwh": 41.961999999999996,
+      "v40_total_fan_electrical_mwh": 41.962,
+      "v40_error": null,
+      "eui_kwh_per_m2": 185.2,
+      "electricity_mwh": 403.543
+    },
+    "C": {
+      "label": "C shares 0/0/0     — Σ=0%   (old guard would trip)",
+      "shares_input": [
+        0,
+        0,
+        0
+      ],
+      "v25_per_system_fan_mwh": [
+        22.627,
+        15.978,
+        3.357
+      ],
+      "v25_sum_fan_mwh": 41.961999999999996,
+      "v40_total_fan_electrical_mwh": 41.962,
+      "v40_error": null,
+      "eui_kwh_per_m2": 185.2,
+      "electricity_mwh": 403.543
+    }
+  },
+  "invariant_fan_total_independent_of_share": {
+    "A_total_fan_mwh": 41.962,
+    "B_total_fan_mwh": 41.962,
+    "C_total_fan_mwh": 41.962,
+    "pass": true,
+    "note": "All three should be equal — fan electricity = SFP × flow × hours, share_pct ignored per Brief 60 Part A."
+  }
+}
