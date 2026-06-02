@@ -1,0 +1,29 @@
+{
+  "_comment": [
+    "Brief 81 P4 — EnergyPlus locator config for the validation harness.",
+    "The runner (P7, validation/energyplus/run.py) resolves the EnergyPlus install in this order:",
+    "  1. ENERGYPLUS_DIR environment variable, if set (overrides this file — keeps the harness portable).",
+    "  2. install_dir below.",
+    "This file is the 'config file, not global install' the brief requires: EnergyPlus is NOT on PATH and",
+    "no system environment was modified (divergence D1 — we use the pre-existing C:\\EnergyPlusV26-1-0",
+    "install rather than a fresh contained one). The install dir itself is outside the repo, so nothing",
+    "binary is committed. Paths use forward slashes; both Python and Node accept them on Windows.",
+    "Verified 2026-06-02: bundled ExampleFiles/1ZoneEvapCooler.idf ran clean (0 severe, 1 warning) and",
+    "produced a 3.1 MB eplusout.eso — see audit docs/audit/81_energyplus_validation_box.md §4."
+  ],
+  "version": "26.1.0-6f2e40d102",
+  "install_dir": "C:/EnergyPlusV26-1-0",
+  "energyplus_exe": "C:/EnergyPlusV26-1-0/energyplus.exe",
+  "idd": "C:/EnergyPlusV26-1-0/Energy+.idd",
+  "weather_data_dir": "C:/EnergyPlusV26-1-0/WeatherData",
+  "example_files_dir": "C:/EnergyPlusV26-1-0/ExampleFiles",
+  "env_override_var": "ENERGYPLUS_DIR",
+  "verified": {
+    "at": "2026-06-02",
+    "example_idf": "ExampleFiles/1ZoneEvapCooler.idf",
+    "weather": "WeatherData/USA_CO_Golden-NREL.724666_TMY3.epw",
+    "result": "Completed Successfully — 1 Warning, 0 Severe Errors",
+    "eso_bytes": 3136719,
+    "eso_lines": 176192
+  }
+}

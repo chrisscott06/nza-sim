@@ -298,7 +298,62 @@ starting anchor.
 
 
 
-## §4 — EnergyPlus install verification + bundled example  *(P4 — pending)*
+## §4 — EnergyPlus install verification + bundled example
+
+Per divergence **D1** (§1), this brief uses the EnergyPlus install that is **already present** on this PC
+rather than doing a fresh contained install. P4 therefore *verifies* that install satisfies the brief's
+hard requirements and wires the harness to find it via config, not global PATH.
+
+### §4.1 — Install verified
+
+| Property | Value |
+|---|---|
+| Version | **EnergyPlus 26.1.0-6f2e40d102** (≥ the brief's "23.2.0 or newer LTS" target) |
+| Location | `C:\EnergyPlusV26-1-0\` (outside the repo) |
+| Executable | `C:\EnergyPlusV26-1-0\energyplus.exe` ✓ |
+| IDD | `C:\EnergyPlusV26-1-0\Energy+.idd` ✓ |
+| On global PATH? | **No** — confirmed not on PATH; `ENERGYPLUS_DIR` unset. No system env modified. |
+| Committed to repo? | **No** — install dir is external; nothing binary is staged. |
+
+All three brief hard requirements are met: (a) no global PATH / system-env modification, (b) nothing
+binary committed (the install lives outside the repo entirely), (c) the runner locates EnergyPlus via a
+config file — see §4.3.
+
+### §4.2 — Bundled-example validation (`1ZoneEvapCooler`)
+
+Ran the bundled `ExampleFiles/1ZoneEvapCooler.idf` against `WeatherData/USA_CO_Golden-NREL.724666_TMY3.epw`
+into a gitignored scratch dir (`/validation/energyplus/runs/_p4_1zone_verify/`):
+
+```
+energyplus.exe -w <Golden NREL TMY3 epw> -d validation/energyplus/runs/_p4_1zone_verify -r 1ZoneEvapCooler.idf
+```
+
+**Result — `EnergyPlus Completed Successfully — 1 Warning; 0 Severe Errors`** (exit 0). Outputs produced:
+
+| File | Size | Note |
+|---|---|---|
+| `eplusout.eso` | 3,136,719 B (176,192 lines) | the valid `.eso` the brief requires ✓ |
+| `eplusout.csv` | 2,194,273 B | `-r` post-processed ReadVarsESO output |
+| `eplusout.err` | 984 B | 0 severe, 1 warning — within the brief's acceptable bar |
+
+This satisfies the P4 falsifiability: the install runs a real annual simulation and emits a valid `.eso`.
+The run dir is gitignored (`.gitignore:39`), so the scratch outputs are not committed.
+
+### §4.3 — How the harness locates EnergyPlus (config, not PATH)
+
+Committed `validation/energyplus/ep_config.json` is the locator the P7 runner reads. Resolution order:
+
+1. **`ENERGYPLUS_DIR` environment variable** if set — keeps the harness portable to other machines/CI.
+2. **`install_dir` in `ep_config.json`** — `C:/EnergyPlusV26-1-0` on this PC.
+
+The config also records the verified exe, IDD, weather-data dir, example-files dir, and the §4.2
+verification receipt. This is the brief's "environment variable or config file, not a global install"
+requirement, realised as *both* (env var takes precedence over the committed default).
+
+> **Reproduce:** `energyplus.exe --version` (expect 26.1.0) and the `-w … -d … -r 1ZoneEvapCooler.idf`
+> command above; confirm `eplusout.eso` is non-empty and `eplusout.err` ends with `0 Severe Errors`.
+
+
 
 ## §5 — Hand-authored Bridgewater-Box IDF + first run  *(P5 — pending)*
 
