@@ -1,0 +1,188 @@
+{
+  "brief": "Brief 81 P2 — Bridgewater-Box NZA-Sim anchor",
+  "source": "node validation/nza_sim/run_box_anchor.mjs",
+  "fixture": "bridgewater_box_v1",
+  "fixture_schema_version": 1,
+  "captured_at": "2026-06-02T19:47:26.712Z",
+  "engine_dispatch": {
+    "state_numeric": 3,
+    "mode": "full",
+    "note": "state=3 → _calculateState3 ran (systems overlay applied), as forced by engine:v2.5"
+  },
+  "geometry": {
+    "gia_m2": 100,
+    "reported_gia_m2": 100,
+    "volume_m3": 300,
+    "weather_file": "GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw",
+    "comfort_band_c": {
+      "lower_c": 21,
+      "upper_c": 24
+    }
+  },
+  "headline": {
+    "eui_kwh_per_m2_yr": 160.4,
+    "heating_demand_mwh": 2.5,
+    "cooling_demand_mwh": 1.4,
+    "dhw_demand_mwh": 4.747,
+    "mech_vent_loss_kwh": 1282,
+    "sum_losses_kwh": 12943.1,
+    "sum_gains_kwh": 10721.4,
+    "net_residual_gains_minus_losses_kwh": -2221.7,
+    "balance_closure_residual_kwh": 1121.7
+  },
+  "totals": {
+    "eui_kwh_per_m2_yr": 160.4,
+    "electricity_mwh": 7.329,
+    "gas_mwh": 8.711,
+    "district_heat_mwh": 0
+  },
+  "per_service": {
+    "heating": {
+      "demand_mwh": 2.5,
+      "delivered_mwh": 2.5,
+      "fuel": "gas",
+      "fuel_mwh": 2.778,
+      "efficiency": 0.9,
+      "recovery_offset_mwh": 1.531
+    },
+    "cooling": {
+      "demand_mwh": 1.4,
+      "delivered_mwh": 1.4,
+      "fuel": "electricity",
+      "fuel_mwh": 0.467,
+      "efficiency": 3
+    },
+    "dhw": {
+      "demand_mwh": 4.747,
+      "delivered_mwh": 4.747,
+      "fuel_mwh": 5.933,
+      "electricity_mwh": 0,
+      "gas_mwh": 5.933
+    },
+    "ventilation": {
+      "total_fan_electrical_mwh": 0.657,
+      "systems": [
+        {
+          "id": "box_mvhr",
+          "label": "MVHR",
+          "fan_electrical_mwh": 0.657,
+          "sfp_w_per_lps": 1.5,
+          "flow_rate": 50,
+          "flow_rate_basis": "constant",
+          "recovery_sensible_pct": 75,
+          "summer_bypass": false
+        }
+      ]
+    }
+  },
+  "heat_balance_annual": {
+    "losses_kwh": 12943.1,
+    "losses_kwh_per_m2": 129.43,
+    "gains_kwh": 10721.4,
+    "gains_kwh_per_m2": 107.21,
+    "losses_per_element": {
+      "external_wall": 1888.4,
+      "roof": 1457.1,
+      "ground_floor": 1935.9,
+      "glazing": 1398.8,
+      "thermal_bridging": 172.7,
+      "fabric_leakage": 4808.3,
+      "permanent_vents": 0,
+      "mech_ventilation": 1282,
+      "_sum_check_kwh": 12943.2,
+      "all_loss_keys": [
+        "external_wall",
+        "roof",
+        "ground_floor",
+        "glazing",
+        "thermal_bridging",
+        "fabric_leakage",
+        "permanent_vents",
+        "mech_ventilation"
+      ]
+    },
+    "gains_per_element": {
+      "solar_north": 500.1,
+      "solar_south": 1173.6,
+      "solar_east": 831,
+      "solar_west": 938.6,
+      "solar_total": 3443.3,
+      "people": 1073.1,
+      "lighting": 2555,
+      "equipment": 3650,
+      "auxiliary": 0,
+      "internal_total": 7278.1,
+      "_sum_check_kwh": 10721.4,
+      "all_internal_keys": [
+        "people",
+        "lighting",
+        "equipment",
+        "auxiliary"
+      ],
+      "all_gain_keys": [
+        "solar",
+        "internal"
+      ]
+    }
+  },
+  "reconciliation": {
+    "expected": {
+      "lighting_mwh": 2.555,
+      "equipment_mwh": 3.65,
+      "fan_mwh": 0.657,
+      "cooling_elec_mwh": 0.467,
+      "people_kwh": 1073.1,
+      "dhw_demand_mwh": 4.747,
+      "gas_mwh": 8.712
+    },
+    "element_loss_sum_vs_total_kwh": {
+      "sum": 12943.2,
+      "total": 12943.1
+    },
+    "gain_sum_vs_total_kwh": {
+      "sum": 10721.4,
+      "total": 10721.4
+    }
+  },
+  "_result_keys": [
+    "state",
+    "mode",
+    "inputs_used",
+    "comfort_band_used",
+    "gains",
+    "losses",
+    "losses_at_setpoint",
+    "daily_profiles",
+    "free_running",
+    "demand",
+    "bypass_reconciliation_s2",
+    "state1_delta",
+    "occupancy_summary",
+    "heat_balance",
+    "metadata",
+    "systems_flow",
+    "energy_use",
+    "system_performance",
+    "consumption",
+    "results",
+    "carbon_kg_co2_per_m2"
+  ],
+  "_consumption_keys": [
+    "space_heating",
+    "space_cooling",
+    "dhw",
+    "ventilation",
+    "lighting",
+    "small_power",
+    "total",
+    "daily_profiles",
+    "brief40",
+    "source_path"
+  ],
+  "_totals_keys": [
+    "losses_kwh",
+    "losses_kwh_per_m2",
+    "gains_kwh",
+    "gains_kwh_per_m2"
+  ]
+}

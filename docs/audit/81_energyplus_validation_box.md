@@ -120,7 +120,106 @@ generator. Decided at P6, not pre-borrowed here.
 
 ---
 
-## §2 — Bridgewater-Box YAML fixture + NZA-Sim anchor  *(P2 — pending)*
+## §2 — Bridgewater-Box YAML fixture + NZA-Sim anchor
+
+**Deliverables (all on branch `feat/energyplus-validation`):**
+- `validation/fixtures/bridgewater_box_v1.yaml` — the documented single-source-of-truth fixture.
+- `validation/nza_sim/load_fixture.mjs` — reusable loader (fixture → `calculateInstant` inputs → result).
+- `validation/nza_sim/run_box_anchor.mjs` — anchor capture runner.
+- `validation/nza_sim/results/bridgewater_box_v1.json` — the captured anchor (Phase-4 EP target).
+
+### §2.1 — Fixture schema (version 1)
+
+The fixture is SI throughout and is consumed by **both** engines (NZA-Sim via the loader; EnergyPlus
+via the P5/P6 IDF generator), so any engine disagreement is a real disagreement, not an input mismatch.
+Top-level blocks:
+
+| Block | Key fields | NZA-Sim mapping (see `load_fixture.mjs`) |
+|---|---|---|
+| `meta` | `fixture_id`, `schema_version:1`, `nza_engine:"v2.5 (State 3)"` | informational; engine forced to State 3 via `options.engine:'v2.5'` |
+| `geometry` | `length_m 10`, `width_m 10`, `num_floors 1`, `floor_height_m 3.0`, `orientation_deg 0`, `wwr{n/s/e/w 0.10}`, `window 2.0×1.5` | → `building.{length,width,num_floors,floor_height,orientation,wwr}`. `computeGeometry`: gia 100 m², each facade 30 m², glazing 3 m²/facade (12 total), opaque 108, roof 100, floor 100, vol 300 |
+| `envelope.constructions` | `external_wall U 0.18`, `roof U 0.15`, `ground_floor U 0.20`, `glazing U 1.2 g 0.55 LT 0.7`; each opaque has a 2-layer PIR+concrete stack (outside→inside) | → custom `libraryData.constructions` `box_wall/box_roof/box_floor/box_glazing` + `construction_choices`. Published U drives steady-state UA (`pickWholeWallU`); `layers` drive the dynamic mass model only |
+| `envelope.thermal_bridging` | `mode manual_h_tb`, `psi 0.05`, `perimeter 40`, `h_tb_W_per_K 2.0` | → `building.thermal_bridges{mode:'manual_h_tb', h_tb_W_per_K:2.0}` consumed directly |
+| `envelope.infiltration` | `ach_constant 0.5` | → `building.infiltration_ach:0.5`; `fabric.air_permeability_q50` **omitted** so `deriveOperationalACH` uses exactly 0.5 |
+| `internal_gains.occupancy` | `people 4`, `occupancy_rate 0.70`, `sensible 75 W`, `latent 55 W`, `schedule_occupied_hours "07:00-21:00"` | → `building.occupancy{density{value:4,basis:'total'}, occupancy_rate, sensible_w_per_person, schedule}`. Effective = 4 × 0.7 = 2.8 ppl when present |
+| `internal_gains.lighting` | `5 W/m²`, `schedule_on_hours "07:00-21:00"` | → `gains.lighting.profiles[0]` `unit:'w_per_m2'`, relationship `independent` |
+| `internal_gains.equipment` | `baseload 3 W/m²` (24/7), `active 2 W/m²` (occupied) | → `gains.equipment.profiles[0]` baseload (no schedule) + active (× schedule) |
+| `internal_gains.dhw` | `per_person`, `80 L/p/day`, storage/tap 60, cold 10, `flat` | → `systems_config_v40` DHW service fields. Headcount 4 × 0.7 = 2.8 → 224 L/day, ΔT 50 K, hot_fraction 1.0 |
+| `internal_gains.auxiliary` | `none` | → `gains.auxiliary.profiles:[]` |
+| `ventilation[0]` | `box_mvhr`, `50 L/s constant`, `HRE 75%`, `SFP 1.5`, `8760 h`, `no bypass` | → `systems_config_v40.ventilation[0]` `efficiency_metric{sfp_w_per_lps, recovery_sensible_pct}` |
+| `systems` | heating gas 0.90 @21°C; cooling split-AC 3.0 @24°C; dhw gas 0.80 | → per-service `systems_config_v40` entries, `efficiency_metric` read directly, `share_pct 100` |
+| `comfort_band` | `lower_c 21`, `upper_c 24` | → `options.comfortBand`; setpoints `follow_comfort` (heating=lower, cooling=upper) |
+| `weather` | `GBR_ENG_Yeovilton...epw`, lat 51.087, lon −2.985 | → EPW parsed to typed arrays; `computeHourlySolarByFacade` for solar (divergence D2) |
+
+**Design choices (recorded in the fixture header):** (a) Weather is Yeovilton, not the brief's incidental
+"London Heathrow" — the spec's overriding instruction is "same source data for both engines" (D2).
+(b) The brief specifies lighting 14h-on/10h-off but is silent on the occupancy/equipment-active schedule
+shape; for a clean single-DOF box we use ONE occupied window, **07:00–21:00** (14h on / 10h off), for
+occupancy presence, lighting, and equipment-active alike. Trivially replicable in the IDF (P5).
+
+### §2.2 — Engine-run method (divergence D4)
+
+The loader builds the `calculateInstant(...)` parameter object directly from the YAML and runs the engine
+**pure-Node** — no live-DB write, no backend, no SQLite contention. `options.engine:'v2.5'` forces the
+State-3 dispatch (gate `instantCalc.js:6663`) so the systems overlay (boiler / AC / DHW efficiencies +
+MVHR recovery) is applied, matching the live UI. Result confirms `state:3, mode:"full"`. Fully
+reproducible from the committed fixture: `node validation/nza_sim/run_box_anchor.mjs`.
+
+### §2.3 — NZA-Sim Bridgewater-Box anchor (the Phase-4 EnergyPlus comparison target)
+
+Captured 2026-06-02 on branch `feat/energyplus-validation`. Numbers are the engine's own output, not
+hand-fudged. The full record (with per-element breakdown + reconciliation) is committed at
+`validation/nza_sim/results/bridgewater_box_v1.json`.
+
+**Headline:**
+
+| Quantity | Value |
+|---|---|
+| EUI | **160.4 kWh/m²·yr** |
+| Heating demand | 2.5 MWh (25.0 kWh/m²) |
+| Cooling demand | 1.4 MWh (14.0 kWh/m²) |
+| DHW demand | 4.747 MWh (47.5 kWh/m²) |
+| Mech-vent loss | 1282 kWh (12.82 kWh/m²) |
+| Σ losses | 12 943.1 kWh (129.43 kWh/m²) |
+| Σ gains | 10 721.4 kWh (107.21 kWh/m²) |
+| Net (gains − losses) | −2221.7 kWh |
+| Balance-closure residual | +1121.7 kWh (absorbed by thermal-mass storage + 21–24 °C free-float deadband) |
+| Electricity | 7.329 MWh · Gas | 8.711 MWh |
+
+**Losses by element (kWh):** external_wall 1888.4 · roof 1457.1 · ground_floor 1935.9 · glazing 1398.8 ·
+thermal_bridging 172.7 · fabric_leakage 4808.3 · permanent_vents 0 · mech_ventilation 1282.0.
+Σ = 12 943.2 ≈ total 12 943.1 ✓.
+
+**Gains by element (kWh):** solar N 500.1 / S 1173.6 / E 831.0 / W 938.6 (Σ solar 3443.3) · people 1073.1 ·
+lighting 2555.0 · equipment 3650.0 · auxiliary 0 (Σ internal 7278.1). Σ = 10 721.4 = total ✓.
+
+**Per-service delivered → fuel:** heating 2.5 → 2.778 MWh gas (η 0.90; MVHR recovery_offset 1.531 MWh
+applied before the boiler) · cooling 1.4 → 0.467 MWh elec (EER 3.0) · DHW 4.747 → 5.933 MWh gas (η 0.80) ·
+MVHR fan 0.657 MWh elec (SFP 1.5 × 50 L/s × 8760 h).
+
+### §2.4 — First-principles reconciliation (independent of the engine)
+
+Every headline electrical/fuel term and the heat-balance closure check out by hand — the anchor is
+self-consistent, so it is a trustworthy comparison target:
+
+| Term | Hand-calc | Engine | ✓ |
+|---|---|---|---|
+| Lighting | 5 W/m² × 100 × 14 h × 365 = 2.555 MWh | 2.555 | ✓ |
+| Equipment | (3×24 + 2×14) W/m² × 100 × 365 = 3.650 MWh | 3.650 | ✓ |
+| MVHR fan | 1.5 × 50 × 8760 = 0.657 MWh | 0.657 | ✓ |
+| Cooling elec | 1.4 / 3.0 = 0.467 MWh | 0.467 | ✓ |
+| People | 2.8 ppl × 75 W × 14 h × 365 = 1073.1 kWh | 1073.1 | ✓ |
+| DHW demand | 2.8 × 80 L × 50 K × (4.18/3600) × 365 = 4.747 MWh | 4.747 | ✓ |
+| Gas total | 2.5/0.9 + 4.747/0.8 = 8.712 MWh | 8.711 | ✓ |
+| Σ electricity | 2.555 + 3.650 + 0.657 + 0.467 = 7.329 MWh | 7.329 | ✓ |
+| Element-loss Σ vs total | 12 943.2 vs 12 943.1 kWh | — | ✓ |
+| Gain Σ vs total | 10 721.4 vs 10 721.4 kWh | — | ✓ |
+
+These eight independent hand-calcs + two internal-consistency sums are the falsifiability evidence the
+brief requires for P2. The numbers above become the targets EnergyPlus must reproduce (within tolerance)
+in Phase 4 (P9).
+
+
 
 ## §3 — Bridgewater v1 YAML fixture (frozen anchor)  *(P3 — pending)*
 

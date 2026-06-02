@@ -1,0 +1,240 @@
+# ============================================================================
+# Bridgewater-Box v1 — NZA-Sim ⇄ EnergyPlus validation fixture
+# ============================================================================
+#
+# Brief 81 (EnergyPlus validation harness). This file is the SINGLE SOURCE OF
+# TRUTH for the "Bridgewater-Box" reference building. It is consumed by two
+# independent engines so we can compare them at the OUTPUT level:
+#
+#   1. NZA-Sim's JS engine   — via validation/nza_sim/load_fixture.mjs, which
+#                              maps this fixture onto a v40 building_config and
+#                              calls calculateInstant() pure-Node (no live DB).
+#   2. EnergyPlus (V26.1.0)  — via validation/energyplus/generate_idf.py (P6),
+#                              which maps this fixture onto a hand-authored IDF
+#                              shape (P5).
+#
+# Bridgewater-Box is a DELIBERATELY-SIMPLIFIED reference: a single 100 m² zone,
+# one ventilation system, no auxiliary loads. The intent (per the brief) is the
+# smallest-possible degrees-of-freedom comparison so any engine disagreement is
+# easy to localise.
+#
+# DESIGN NOTES / DIVERGENCES (see docs/audit/81_energyplus_validation_box.md):
+#   - Weather: Yeovilton (the EPW the live Bridgewater project actually reads),
+#     NOT the brief's incidental "London Heathrow" placeholder. The brief's own
+#     overriding instruction is "both engines read the same source data". (D2)
+#   - Schedules: the brief specifies a lighting "14h-on / 10h-off" cycle but is
+#     silent on the occupancy/equipment schedule SHAPE. The brief grants us the
+#     schema design. For a clean single-DOF box we use ONE occupied window —
+#     07:00–21:00 (14h on / 10h off) — for occupancy presence, lighting, and
+#     equipment-active alike. This is trivially replicable in the IDF.
+#
+# UNITS: SI throughout. Temperatures °C, power W, energy kWh unless noted.
+#        "W_per_m2" = watts per m² of GIA. U-values W/(m²·K). ψ in W/(m·K).
+#
+# Schema version 1. Future fixtures (e.g. bridgewater_v1.yaml, P3) follow this
+# same shape; the schema is documented in audit §2.
+# ============================================================================
+
+meta:
+  fixture_id: bridgewater_box_v1
+  schema_version: 1
+  title: "Bridgewater-Box (100 m² single-zone reference)"
+  brief: "Brief 81 — EnergyPlus validation harness (first rung)"
+  # The NZA-Sim engine is forced onto the State-3 (v2.5) dispatch path so the
+  # systems overlay (boiler / AC / DHW efficiencies) is applied — matching the
+  # live UI. See load_fixture.mjs (engine: 'v2.5').
+  nza_engine: "v2.5 (State 3)"
+
+# ----------------------------------------------------------------------------
+# GEOMETRY
+# ----------------------------------------------------------------------------
+# NZA-Sim computeGeometry(): gia = length × width × num_floors;
+#   facade_area(N/S) = length × floor_height × num_floors;
+#   facade_area(E/W) = width  × floor_height × num_floors;
+#   glazing(face) = facade_area × wwr(face); opaque = facade_area × (1 − wwr).
+# With a 10×10×1 box at 3.0 m height every facade is 30 m²; wwr 0.10 → 3 m²
+# glazing + 27 m² opaque per facade. Totals: glazing 12 m², opaque wall 108 m²,
+# roof 100 m², ground floor 100 m², volume 300 m³.
+geometry:
+  length_m: 10.0          # X dimension (N & S facades are 10 m wide)
+  width_m: 10.0           # Y dimension (E & W facades are 10 m wide)
+  num_floors: 1           # single storey
+  floor_height_m: 3.0     # floor-to-ceiling → volume 300 m³
+  orientation_deg: 0      # 0 = north-facing primary entry; south gets primary solar
+  gia_m2: 100.0           # derived (10×10×1) — recorded for cross-check only
+  volume_m3: 300.0        # derived (gia × height) — cross-check only
+  # Window-to-wall ratio per facade. 3 m² window on a 30 m² facade = 0.10.
+  wwr:
+    north: 0.10
+    south: 0.10
+    east: 0.10
+    west: 0.10
+  # One 2.0 m × 1.5 m window per facade (= 3 m²). Recorded for the IDF (P5),
+  # which places explicit Window objects; NZA-Sim only needs wwr.
+  window:
+    width_m: 2.0
+    height_m: 1.5
+    count_per_facade: 1
+
+# ----------------------------------------------------------------------------
+# ENVELOPE — constructions, thermal bridging, infiltration
+# ----------------------------------------------------------------------------
+# Construction U-values match Bridgewater's library defaults (brief spec).
+# NZA-Sim resolves steady-state conduction losses from `u_value_W_per_m2K`
+# (pickWholeWallU precedence: override → published U → 1/ΣR layers). The
+# `layers` stack drives ONLY the dynamic thermal-mass response (wallModel.js).
+# Both engines read the SAME layers so the mass response and the IDF agree.
+#
+# Layer order is OUTSIDE → INSIDE (EnergyPlus `outside_layer` first). The dense
+# concrete leaf is placed on the INSIDE so its mass couples to the zone air.
+# Insulation thickness is sized to hit the target U within rounding given
+# standard BS EN ISO 6946 surface films (Rse 0.04; Rsi wall 0.13 / roof 0.10 /
+# floor 0.17). P5 tunes thickness to EnergyPlus's exact effective U if needed.
+envelope:
+  constructions:
+    external_wall:
+      u_value_W_per_m2K: 0.18      # brief spec
+      y_factor: 1.0                # no bridging uplift baked into centre-U (TB handled below)
+      thermal_mass: medium
+      layers:
+        - { name: PIR_wall,      thickness: 0.117, conductivity: 0.022, density: 30,   specific_heat: 1400 }  # ≈R 5.32
+        - { name: Concrete_wall, thickness: 0.100, conductivity: 1.13,  density: 2000, specific_heat: 1000 }  # inner mass
+    roof:
+      u_value_W_per_m2K: 0.15      # brief spec
+      y_factor: 1.0
+      thermal_mass: high
+      layers:
+        - { name: PIR_roof,      thickness: 0.141, conductivity: 0.022, density: 30,   specific_heat: 1400 }  # ≈R 6.41
+        - { name: Concrete_roof, thickness: 0.150, conductivity: 1.13,  density: 2000, specific_heat: 1000 }  # inner mass
+    ground_floor:
+      u_value_W_per_m2K: 0.20      # brief spec
+      y_factor: 1.0
+      thermal_mass: high
+      layers:
+        - { name: PIR_floor,      thickness: 0.102, conductivity: 0.022, density: 30,   specific_heat: 1400 } # ≈R 4.64
+        - { name: Concrete_floor, thickness: 0.150, conductivity: 1.13,  density: 2000, specific_heat: 1000 } # slab mass
+    glazing:
+      u_value_W_per_m2K: 1.2       # brief spec
+      g_value: 0.55                # solar heat gain coefficient (SHGC)
+      light_transmission: 0.7      # visible transmittance (for IDF SimpleGlazingSystem; NZA-Sim uses g only)
+      thermal_mass: none
+      # Massless in NZA-Sim's wallModel (steady-state UA × ΔT). IDF (P5) uses
+      # WindowMaterial:SimpleGlazingSystem { U=1.2, SHGC=0.55, VT=0.7 }.
+      layers: []
+  thermal_bridging:
+    # Brief: ψ 0.05 W/(m·K) × 40 m perimeter = 2.0 W/K total. NZA-Sim
+    # computeThermalBridges() 'manual_h_tb' mode consumes h_tb_W_per_K directly.
+    mode: manual_h_tb
+    psi_W_per_mK: 0.05             # documentation (the source of the 2.0)
+    perimeter_m: 40.0              # 4 × 10 m
+    h_tb_W_per_K: 2.0              # engine input (0.05 × 40)
+  infiltration:
+    # Brief: 0.5 ACH constant. NZA-Sim deriveOperationalACH() precedence is
+    # q50 → infiltration_ach → default. We set infiltration_ach and OMIT
+    # fabric.air_permeability_q50 so the engine uses exactly 0.5 ACH.
+    ach_constant: 0.5
+  permanent_vents: none            # brief: none
+
+# ----------------------------------------------------------------------------
+# INTERNAL GAINS — occupancy, lighting, equipment, DHW. No auxiliary.
+# ----------------------------------------------------------------------------
+internal_gains:
+  occupancy:
+    # 4 people, 70% occupancy rate. NZA-Sim: effective = peopleAt100 × rate ×
+    # presence(schedule). density.basis 'total' → peopleAt100 = 4 exactly.
+    people: 4
+    occupancy_rate: 0.70
+    sensible_W_per_person: 75      # CIBSE Guide A standard
+    latent_W_per_person: 55        # latent — for IDF People; NZA-Sim is sensible-only
+    # Occupied window 07:00–21:00 (14h). 1.0 = present, 0.0 = absent.
+    # Same weekday/saturday/sunday (a single clean daily pattern), no seasonal
+    # variation. See header design note on schedule choice.
+    schedule_occupied_hours: "07:00-21:00"
+  lighting:
+    # 5 W/m². Brief: CIBSE 14h-on / 10h-off. Decoupled from occupancy
+    # (relationship 'independent') → schedule drives it directly.
+    w_per_m2: 5.0
+    gain_fraction: 1.0             # all electricity → zone heat
+    schedule_on_hours: "07:00-21:00"   # 14h on / 10h off
+  equipment:
+    # 3 W/m² baseload (24/7) + 2 W/m² active during occupied hours.
+    # NZA-Sim: baseload is occupancy-independent; active × schedule fraction.
+    baseload_w_per_m2: 3.0
+    active_w_per_m2: 2.0
+    gain_fraction: 1.0
+    schedule_active_hours: "07:00-21:00"
+  dhw:
+    # 80 L/person/day at 60°C delivery. NZA-Sim systemsEngine _computeDhw:
+    # headcount = peopleAt100 × occupancy_rate (per-head, 24/7, no schedule)
+    # = 4 × 0.7 = 2.8 → 224 L/day. tap_outlet = storage = 60 → hot_fraction 1.0
+    # (no mixing; delivered AT storage temp). ΔT = 60 − 10 = 50 K.
+    basis: per_person
+    litres_per_person_per_day: 80
+    storage_setpoint_c: 60
+    tap_outlet_temp_c: 60          # = storage → delivery at 60°C (brief), no mix
+    cold_supply_temp_c: 10
+    load_shape: flat
+  auxiliary: none                  # brief: no auxiliary loads
+
+# ----------------------------------------------------------------------------
+# VENTILATION — one MVHR
+# ----------------------------------------------------------------------------
+# Brief: one MVHR, balanced, 50 L/s, 75% sensible HRE, SFP 1.5 W/(L/s),
+# continuous 8760 h, no summer bypass.
+# NZA-Sim ventSystems: flow_rate_basis 'constant' → flow_l_s = 50 directly;
+# UA = 0.33 (kWh/m³K) × (50 × 3.6 m³/h) × (1 − 0.75) × (8760/8760).
+# Fan electrical = SFP × flow × hours.
+ventilation:
+  - id: box_mvhr
+    type: mvhr
+    flow_l_s: 50.0
+    flow_rate_basis: constant
+    hre_sensible_pct: 75
+    sfp_w_per_lps: 1.5
+    summer_bypass: false
+    hours_per_year: 8760
+    fuel: electricity
+
+# ----------------------------------------------------------------------------
+# SYSTEMS — heating / cooling / DHW. Setpoints follow the comfort band.
+# ----------------------------------------------------------------------------
+# NZA-Sim systemsEngine reads efficiency_metric + source directly per service
+# (no library lookup needed). share_pct must sum to 100 per enabled service.
+systems:
+  heating:
+    # Gas boiler 90% seasonal efficiency, setpoint 21°C (from comfort band).
+    type: gas_boiler
+    efficiency: 0.90              # efficiency_metric
+    fuel: gas
+    setpoint_c: 21               # = comfort_band.lower_c (follow_comfort)
+  cooling:
+    # Split AC, EER 3.0, setpoint 24°C (from comfort band).
+    type: split_ac
+    efficiency: 3.0              # EER → efficiency_metric (W/W)
+    fuel: electricity
+    setpoint_c: 24               # = comfort_band.upper_c (follow_comfort)
+  dhw:
+    # Gas-fired water heater, 80% efficiency, no MVHR contribution.
+    type: gas_water_heater
+    efficiency: 0.80
+    fuel: gas
+
+# ----------------------------------------------------------------------------
+# COMFORT BAND — drives heating/cooling setpoints (follow_comfort mode)
+# ----------------------------------------------------------------------------
+comfort_band:
+  lower_c: 21                    # heating setpoint
+  upper_c: 24                    # cooling setpoint
+
+# ----------------------------------------------------------------------------
+# WEATHER — same EPW for both engines (divergence D2)
+# ----------------------------------------------------------------------------
+weather:
+  # The EPW the live Bridgewater project reads. RNAS Yeovilton (~25 km from
+  # Bridgwater) is the nearest long-record TMYx station. Resolved by the loader
+  # under data/weather/current/.
+  epw_file: GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw
+  station: "Yeovilton (RNAS), Somerset"
+  latitude: 51.087               # from project location block / EPW header
+  longitude: -2.985
+  location_name: "Bridgwater, Somerset"
