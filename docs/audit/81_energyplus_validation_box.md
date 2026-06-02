@@ -487,7 +487,100 @@ sensible 3.6882, heat recovery 3.0286, enclosure solar 3.3955 MWh).
 
 
 
-## §6 — Python IDF generator (eppy) + byte-stability  *(P6 — pending)*
+## §6 — Python IDF generator (eppy) + byte-stability
+
+**Deliverable:** `validation/energyplus/generate_idf.py` — reads the single source of
+truth (`validation/fixtures/bridgewater_box_v1.yaml`) and programmatically emits an
+EnergyPlus IDF (`validation/energyplus/generated/bridgewater_box_v1.idf`) that is
+**semantically equivalent** to the P5 hand-authored reference and **byte-stable** across
+re-runs. Both the script and its generated IDF are committed (neither `generated/` nor
+the script is gitignored); the EnergyPlus binary and run artefacts stay out of the repo
+(`runs/`, `.venv/` are gitignored).
+
+### §6.1 — Design: "the EnergyPlus way", parametric from the fixture
+
+Every object is built through **eppy** (`eppy-0.5.69`) against the V26.1 IDD
+(`C:/EnergyPlusV26-1-0/Energy+.idd`), located via `ENERGYPLUS_DIR` (override) or
+`ep_config.json` — the same locator the P7 runner uses, so the harness stays portable
+and no system PATH/env is touched. Because eppy validates field names/positions against
+the IDD, the generator does not *guess* IDF syntax (per the brief); the ultimate IDD
+check is that the generated IDF runs clean on EnergyPlus (§6.4).
+
+The generator is **parametric**, not a literal transcription:
+
+- **Geometry** — wall / roof / floor / window / thermal-bridge vertices are computed
+  from the fixture dimensions (`length_m`, `width_m`, `floor_height_m`, `window.*`) in
+  World coords, CCW-from-outside, upper-left start, reproducing the P5 windings exactly
+  (+Y North, -Y South, +X East, -X West).
+- **Loads** — lights 500 W (= `w_per_m2` × GIA), equipment 300 W baseload + 200 W active,
+  People SHF = `sensible/(sensible+latent)` = 0.5769 with activity 130 W, OA flow
+  0.050 m³/s (= `flow_l_s`/1000), sensible HRE 0.75 (= `hre_sensible_pct`/100), etc. —
+  all derived from the YAML.
+- **Schedules** — the `07:00-21:00` occupied window is parsed from the fixture strings
+  and rendered into the `Schedule:Compact` blocks (occupancy carries the 0.70 rate).
+
+### §6.2 — Calibrated constants reproduced from P5 (decisions D6a–D6c)
+
+A few P5 modelling choices are not parametrised by the fixture; they are reproduced as
+documented generator constants so the generated geometry matches the reference exactly:
+
+- **D6a — window sill** `WINDOW_SILL_M = 0.75` (head = sill + window height). The fixture
+  fixes window size and count but not vertical placement; 0.75 m matches P5.
+- **D6b — thermal bridge (D5e carried forward)** a detached 1 m² NoMass patch at (20,20)
+  with thermal resistance **0.33 m²K/W**, which with EnergyPlus's TARP/DOE-2 surface
+  films yields the ~2.0 W/K as-run conductance the fixture specifies
+  (`h_tb_W_per_K: 2.0`). Reproduced verbatim, not re-derived, so the bridge conduction
+  matches P5 to the digit.
+- **D6c — IdealLoads supply-air limits** (max heating supply T 50 °C, min cooling 13 °C,
+  humidity-ratio caps) stated explicitly — these equal EnergyPlus's own defaults but are
+  written out for a self-documenting IDF that matches the P5 reference field-for-field.
+
+### §6.3 — Byte-stability
+
+The build is a **pure function of the YAML** — no timestamps, no run-order/dict drift,
+`\n` line endings, deterministic numeric formatting. `generate_idf.py --check-determinism`
+builds twice in-memory and asserts byte-equality:
+
+```
+DETERMINISM OK: two builds byte-identical (40043 bytes).
+```
+
+### §6.4 — Semantic equivalence to the P5 hand-authored IDF
+
+The generated IDF is **not** byte-identical to the hand-authored one — eppy uses its own
+canonical field-comment style and group ordering, and expands a handful of fields to
+their IDD defaults (e.g. material absorptances 0.9/0.7/0.7; `RunPeriod` "Treat Weather as
+Actual"; IdealLoads V26.1 fuel-type fields `DistrictHeatingWater`/`DistrictCooling`).
+Every one of these is the value EnergyPlus already applies to the hand-authored blanks,
+so behaviour is unchanged. (The one cosmetic tidy: the `DesignSpecification:OutdoorAir`
+per-person field is set to 0 rather than carrying eppy's `0.00944` IDD default, which is
+ignored under `Flow/Zone` anyway, so the generated IDF reads honestly.)
+
+Equivalence was proven by running **both** IDFs fresh on EnergyPlus V26.1 with the same
+Yeovilton EPW and diffing the SQLite outputs:
+
+- **Annual (RunPeriod): all 41 variables match, 0 missing, MAX relative Δ = 0.00000 %.**
+  Headline numbers identical to P5: heating (Supply Air Sensible) **3.27752**, cooling
+  **0.67684**, OA sensible heating **3.68817**, heat recovery sensible **3.02858**,
+  enclosure transmitted solar **3.39547** MWh; zone mean air temp **21.814 °C**;
+  per-surface conduction (floor −1.884, roof −1.271, walls Σ ≈ −1.567, thermal bridge
+  −0.188 MWh) all 0.000 %.
+- **Hourly: all 8760 values bit-identical** for ideal-loads heating, ideal-loads cooling,
+  zone mean air temp, and site outdoor dry-bulb (`maxabsdiff = 0.000e+00`, `identical=True`).
+
+Both runs complete with **1 Warning, 0 Severe** — the single warning being the expected,
+harmless "Zone BOX_ZONE not fully enclosed" from the detached D5e thermal-bridge patch
+(§5.5). The generator therefore reproduces the hand-authored reference exactly, at every
+hour, while remaining a clean parametric function of the fixture.
+
+### §6.5 — Environment note
+
+eppy + pyyaml are installed into a contained venv (`validation/.venv/`, gitignored) via
+`pip` — this required network access for the one-time install (no EnergyPlus binary or
+weather data is fetched). The venv is reproducible (`pip install eppy pyyaml`); the
+generator imports eppy lazily so the rest of the harness does not depend on it at run time.
+
+## §7 — EnergyPlus runner + output normaliser  *(P7 — pending)*
 
 ## §7 — EnergyPlus runner + output normaliser  *(P7 — pending)*
 
