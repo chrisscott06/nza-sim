@@ -729,6 +729,73 @@ treat the zone heat balance and are exactly what the P9 report is meant to quant
 > `results/bridgewater_box_v1.json`; the P2 anchor script now writes the richer human-readable
 > breakdown to `results/bridgewater_box_v1.anchor.json` so the two never collide.
 
-## §9 — Comparison report (first-pass results)  *(P9 — pending)*
+## §9 — Comparison report (first-pass results)
+
+**Deliverable:** `validation/compare.py` → `validation/reports/{fixture}_{ts}.md`. Stdlib-only
+(json, math, argparse, datetime, pathlib — Pearson correlation hand-rolled, no numpy). Reads the P7
+EnergyPlus JSON and the P8 NZA-Sim JSON, diffs them field-by-field, and writes a timestamped
+markdown report. It never tunes or fudges — a FAIL verdict is a finding, not a harness defect, and
+exits 0 either way (a FAIL is a valid result, not a crash).
+
+### §9.1 — Gates and mapping
+
+Six gated metrics drive the overall verdict (per brief). Δ = (NZA − EnergyPlus) / EnergyPlus;
+fabric/infiltration are compared as magnitudes (EnergyPlus reports conduction negative).
+
+| Gated metric | NZA source | EnergyPlus source | Tolerance |
+|---|---|---|---|
+| EUI | `totals.eui` | `totals.eui` | ±10 % |
+| Heating demand | `demand_mwh.heating` | `demand_mwh.heating_supply_air_sensible` | ±15 % |
+| Cooling demand | `demand_mwh.cooling` | `demand_mwh.cooling_supply_air_sensible` | ±15 % |
+| Fabric conduction (aggregate) | Σ\|walls+roof+floor+TB\| | Σ\|walls+roof+floor+TB\| | ±20 % |
+| Mech-vent loss (net) | `mech_ventilation_mwh.loss` | `oa_sensible − heat_recovery` (heat+cool) | ±15 % |
+| Monthly heating / cooling | hourly→12-month profile | hourly→12-month profile | Pearson r ≥ 0.85 |
+
+Fabric is gated on the **aggregate** (the brief lists one "fabric ±20 %" metric); per-element walls/
+roof/floor/TB are shown as info. Mech-vent has no clean cross-engine analogue (NZA carries a single
+net loss; EnergyPlus splits OA load vs recovery), so the gated row uses the net framing and the
+gross framing (loss + recovery offset vs gross OA) is reported as info. Infiltration, solar, internal
+gains, glazing, per-element fabric and zone temp are **informational** (reported with deltas, not
+part of the verdict).
+
+### §9.2 — First-pass result (Bridgewater-Box v1)
+
+**Verdict: FAIL — 4/7 gated metrics within tolerance.**
+
+| Gated metric | NZA | EnergyPlus | Δ | Result |
+|---|---|---|---|---|
+| EUI (kWh/m²) | 160.4 | 166.6 | −3.7 % | **PASS** |
+| Heating demand (MWh) | 2.492 | 3.278 | −24.0 % | FAIL |
+| Cooling demand (MWh) | 1.407 | 0.677 | +107.9 % | FAIL |
+| Fabric conduction total (MWh) | 5.454 | 4.909 | +11.1 % | **PASS** |
+| Mech-vent loss net (MWh) | 1.282 | 0.665 | +92.9 % | FAIL |
+| Monthly heating profile | — | — | r = 0.993 | **PASS** |
+| Monthly cooling profile | — | — | r = 0.945 | **PASS** |
+
+Informational rows that agree closely: internal gains people/lighting/equipment ≈ 0 % (shared
+inputs), infiltration −1.4 %, transmitted solar +1.4 %, roof +14.7 %, ground floor +2.8 %, thermal
+bridge −8.3 %, zone mean air temp +0.49 °C. External walls +20.6 % (just over the per-element band,
+but the aggregate fabric gate passes). Glazing conduction +58.9 % (info).
+
+### §9.3 — Reading the result
+
+This is a legitimate, useful first rung — the harness is **built and working**, and it cleanly
+separates "agrees" from "diverges":
+
+- **Envelope physics agree.** Internal gains, infiltration, solar and aggregate fabric land within
+  ~1–11 %, and the headline EUI within ~4 %. The shared closed-form loads (lighting, equipment, DHW,
+  fan) and the envelope conduction are well-matched.
+- **Demand split and ventilation diverge.** EnergyPlus needs ~24 % more heating and ~half the
+  cooling; NZA free-floats ~0.5 °C warmer (driving the higher cooling), and the two engines book
+  ventilation/recovery very differently (net 0.665 vs 1.282 MWh). These are real differences between
+  NZA's quasi-dynamic deadband model and EnergyPlus's full hourly zone balance.
+- **Monthly shape is right.** Heating r = 0.993, cooling r = 0.945 — the seasonal dynamics line up
+  even where absolute magnitudes differ, which is the most reassuring signal that the divergences are
+  calibration, not structural.
+
+These divergences are the deliverable hand-off to Brief 82 (next rung), not something to tune away.
+
+> **Reproduce:** `python validation/compare.py` (writes the timestamped report) or
+> `python validation/compare.py --stdout` (print only). `--fixture <name>` selects the fixture.
 
 ## §10 — Close summary + handoff  *(P10 — pending)*
