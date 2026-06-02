@@ -2,6 +2,37 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
+## ✅ Brief 81 — CLOSED 2026-06-02 *(branch only — NOT on main)*
+
+**EnergyPlus validation harness (Bridgewater-Box first rung) — OVERNIGHT.** Built an *independent* EnergyPlus reference for NZA-Sim's custom JS engine, the EnergyPlus way (single integrated `ZoneHVAC:IdealLoadsAirSystem` sim, compared at the OUTPUT level only). All work on `feat/energyplus-validation` (cut from `main` tip `d8a6207`); **never merged or pushed to `main`** — branch verified before every commit. Audit: [`docs/audit/81_energyplus_validation_box.md`](docs/audit/81_energyplus_validation_box.md) (§0–§10).
+
+| Part | SHA | Deliverable |
+|---|---|---|
+| P1 | `277ea1b` | Branch cut + brief landing + audit stub + premise-check (D1–D5: use existing `C:\EnergyPlusV26-1-0\`, off-PATH via `ENERGYPLUS_DIR`). |
+| P2 | `ed8c20b` | Bridgewater-Box YAML fixture + NZA-Sim anchor capture (`run_box_anchor.mjs`). |
+| P3 | `b65ad6e` | Frozen v1 fixture (stable anchor for Brief 82). |
+| P4 | `bb607a8` | EnergyPlus install verify + bundled-example validation. |
+| P5 | `6079329` | Hand-authored Bridgewater-Box IDF + first EnergyPlus run. |
+| P6 | `9faf88a` | Python IDF generator + byte-stability verification. |
+| P7 | `996802e` | `validation/energyplus/run.py` runner + normalised output JSON. |
+| P8 | `c9a942d` | `validation/nza_sim/extract.mjs` — NZA-Sim extractor in matching schema. |
+| P9 | `310ce96` | `validation/compare.py` comparator + first-pass markdown report. |
+| P10 | (this commit) | Audit §10 close + STATUS. |
+
+**First-rung comparator verdict: FAIL — 4/7 gated metrics within tolerance** (a *finding*, not a defect; nothing was tuned). Reproduce: `python validation/energyplus/run.py` → `node validation/nza_sim/extract.mjs` → `python validation/compare.py`.
+
+| Gated metric | NZA | EnergyPlus | Δ | Result |
+|---|---|---|---|---|
+| EUI (kWh/m²) | 160.4 | 166.6 | −3.7 % | ✅ ±10 |
+| Heating demand (MWh) | 2.492 | 3.278 | −24.0 % | ❌ ±15 |
+| Cooling demand (MWh) | 1.407 | 0.677 | +107.9 % | ❌ ±15 |
+| Fabric conduction total (MWh) | 5.454 | 4.909 | +11.1 % | ✅ ±20 |
+| Mech-vent net loss (MWh) | 1.282 | 0.665 | +92.9 % | ❌ ±15 |
+| Monthly heating profile | — | — | r = 0.993 | ✅ ≥0.85 |
+| Monthly cooling profile | — | — | r = 0.945 | ✅ ≥0.85 |
+
+**Reading:** envelope physics and EUI agree (infiltration −1.4 %, solar +1.4 %, internal gains ~0 %, zone temp +0.49 °C), and monthly *shape* correlates strongly — but the per-service demand split and ventilation/recovery booking diverge. **Handoff to Brief 82:** investigate mech-vent/heat-recovery booking → cooling free-float (warmer NZA zone) → heating demand. Out of scope (deferred per brief): more fixtures, envelope-only EP mode, CI, any NZA engine change (none made).
+
 ## ✅ Brief 77 — CLOSED 2026-06-02
 
 **Per-system ventilation loss rendering (Heat Balance).** Follow-on to Brief 76. Restores the three per-system ventilation extract ribbons across all three Heat Balance view modes (Sankey, Rows, Stacked) by replacing Brief 74 P5's strict "aggregate wins" guard with a mutual-exclusion contract (per-system if available; aggregate as fallback when per-system empty).

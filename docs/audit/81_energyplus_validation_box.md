@@ -798,4 +798,69 @@ These divergences are the deliverable hand-off to Brief 82 (next rung), not some
 > **Reproduce:** `python validation/compare.py` (writes the timestamped report) or
 > `python validation/compare.py --stdout` (print only). `--fixture <name>` selects the fixture.
 
-## §10 — Close summary + handoff  *(P10 — pending)*
+## §10 — Close summary + handoff
+
+**Status: Brief 81 CLOSED 2026-06-02.** Phases 1–4 delivered for Bridgewater-Box on branch
+`feat/energyplus-validation` (cut from `main` tip `d8a6207`). The branch was **never merged or
+pushed to `main`**; `git branch --show-current` was verified `feat/energyplus-validation` before
+every commit.
+
+### §10.1 — What was built
+
+An **independent** EnergyPlus validation reference for NZA-Sim's custom JS engine — built "the
+EnergyPlus way" (single integrated `ZoneHVAC:IdealLoadsAirSystem` sim, compared at the output level
+only; no workarounds to mirror NZA's internal state model).
+
+| Part | Deliverable | Commit |
+|---|---|---|
+| P1 | Branch cut + brief landing + audit stub + premise-check (D1–D5) | `277ea1b` |
+| P2 | Bridgewater-Box YAML fixture + NZA-Sim anchor capture | `ed8c20b` |
+| P3 | Frozen v1 fixture (anchor for Brief 82) | `b65ad6e` |
+| P4 | EnergyPlus install/verify + bundled-example validation | `bb607a8` |
+| P5 | Hand-authored Bridgewater-Box IDF + first EnergyPlus run | `6079329` |
+| P6 | Python IDF generator + byte-stability verification | `9faf88a` |
+| P7 | `run.py` EnergyPlus runner + normalised output JSON | `996802e` |
+| P8 | `extract.mjs` NZA-Sim extractor in matching schema | `c9a942d` |
+| P9 | `compare.py` comparator + first-pass markdown report | `310ce96` |
+| P10 | This close + STATUS update | _(this commit)_ |
+
+The harness is reproducible end-to-end from the repo + the gitignored EnergyPlus install:
+`python validation/energyplus/run.py` → `node validation/nza_sim/extract.mjs` →
+`python validation/compare.py`.
+
+### §10.2 — Headline finding (first rung)
+
+**Comparator verdict: FAIL — 4/7 gated metrics within tolerance** (this is a *finding*, not a
+harness defect; nothing was tuned to pass). The harness cleanly separates agreement from divergence:
+
+- **Agrees** — EUI −3.7 % (✓ ±10), aggregate fabric +11.1 % (✓ ±20), and informationally
+  infiltration −1.4 %, transmitted solar +1.4 %, internal gains ~0 %, zone mean temp +0.49 °C.
+  Monthly *shape* correlates strongly: heating r = 0.993, cooling r = 0.945 (both ✓ ≥ 0.85).
+- **Diverges** — heating demand −24.0 % (✗ ±15), cooling demand +107.9 % (✗ ±15), mech-vent net
+  loss +92.9 % (✗ ±15). Root themes: NZA free-floats ~0.5 °C warmer (lifting cooling), the two
+  engines book ventilation/recovery differently (NZA single net loss vs EnergyPlus OA−recovery
+  split), and the per-service heating/cooling split differs even though the EUI rolls up close.
+
+### §10.3 — Handoff to Brief 82 (next rung)
+
+The frozen v1 fixture (P3) and the two normalised result JSONs are the stable inputs for the next
+rung. Recommended investigation order, highest-signal first:
+
+1. **Mech-vent / heat-recovery booking** — reconcile NZA's single net loss + recovery offset against
+   EnergyPlus's OA-load-minus-recovery split (the +93 % gated miss and the −50 % recovery info row
+   point at a definitional, possibly resolvable, difference).
+2. **Cooling free-float** — the +0.5 °C warmer NZA zone drives the +108 % cooling miss; investigate
+   the deadband / thermal-mass treatment vs EnergyPlus hourly.
+3. **Heating demand −24 %** — likely coupled to the same ventilation booking + free-float once (1)
+   and (2) are understood.
+4. **External-wall conduction +20.6 %** (per-element; aggregate fabric still passes) — lower priority.
+
+Explicitly **out of scope** and deferred per brief: additional fixtures beyond Bridgewater-Box, an
+"envelope-only / no-systems" EnergyPlus mode, CI integration, and any change to NZA-Sim engine code
+(none was made during this brief).
+
+### §10.4 — Premise-check divergences (recap)
+
+Four conservative divergences were logged at P1 (§1) and stand: D1 use the existing
+`C:\EnergyPlusV26-1-0\` install (gitignored, off-PATH, found via `ENERGYPLUS_DIR`/config) rather than
+a fresh contained install; D2–D5 documented in §1. None altered the comparison methodology.
