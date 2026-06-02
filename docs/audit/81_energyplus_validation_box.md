@@ -221,7 +221,82 @@ in Phase 4 (P9).
 
 
 
-## §3 — Bridgewater v1 YAML fixture (frozen anchor)  *(P3 — pending)*
+## §3 — Bridgewater v1 YAML fixture (frozen anchor)
+
+P3 freezes the **real** HIX Bridgewater project (4,125 m² hotel) into a versioned fixture
+`validation/fixtures/bridgewater_v1.yaml`, so Brief 82 (full-Bridgewater EnergyPlus validation) has a
+trusted anchor captured *now*, while the post-Brief-77 numbers are defensible.
+
+### §3.1 — Why a verbatim project-dump, not the box's hand-authored schema
+
+The Bridgewater-Box fixture (§2) uses a clean hand-authored schema because the box is a *designed*
+reference. Bridgewater proper is a real building with 2 heating / 1 cooling / 2 DHW / 3 ventilation
+systems, a full occupancy schedule, and 11 library constructions. Re-authoring that by hand would risk
+silent drift from the live inputs. So the faithful freeze is the live `building_config` object
+**verbatim** (it *is* the engine's `building` param on the live path) + `construction_choices` + comfort
+band + the library constructions the project references — each resolved into the **same shape**
+`GET /api/library/constructions` returns, including `layers` derived from `config_json.epjson` by the
+identical logic as `api/routers/library.py::get_constructions()` (Brief 26.1 P5). The Node loader then
+reproduces exactly what the live UI fed the engine.
+
+Fixture distinguishes itself with `meta.kind: project_dump` (vs the box's hand-authored kind).
+
+### §3.2 — Exporter (read-only) and run method
+
+- **`validation/nza_sim/export_bridgewater_fixture.py`** — opens `data/nza_sim.db` with `mode=ro` (writes
+  impossible; CLAUDE.md data-safety + Brief 72 PA), reads the project row + all `construction`-type
+  library items, derives layers from each item's `config_json.epjson`, and emits the YAML. Never mutates
+  the live DB.
+- **`validation/nza_sim/run_bridgewater_anchor.mjs`** — loads the YAML and runs the engine **pure-Node**
+  (divergence D4): `building = building_config` 1:1, `constructions = construction_choices`,
+  `library.constructions → libraryData.constructions` using the **same mapping** as
+  `scripts/_brief75_p1_anchor.mjs` (the live-API anchor probe). `options.engine:'v2.5'` forces State-3
+  dispatch. Confirms `state:3, mode:"full"`. Output committed at
+  `validation/nza_sim/results/bridgewater_v1.json`.
+
+### §3.3 — Falsifiability: fixture run vs committed Brief 77 anchor
+
+**Test:** hand-load the frozen YAML, run the engine pure-Node (no live DB), and compare every headline
+metric to the committed live anchor `docs/audit/77_p1_anchor_before.json` (the post-Brief-77,
+most-defensible state — identical to `76_p4_anchor_after.json`, since Brief 77 was a per-system vent
+*rendering* change, not a physics change). Brief requires agreement within **±1%**.
+
+**Result — all 11 metrics match to Δ0.00 %:**
+
+| Metric | Brief 77 anchor | Fixture run | Δ% | |
+|---|---|---|---|---|
+| EUI | 143.5 kWh/m²·yr | 143.5 | 0 | ✓ |
+| Heating demand | 98.3 MWh | 98.3 | 0 | ✓ |
+| Cooling demand | 53.1 MWh | 53.1 | 0 | ✓ |
+| DHW demand | 263.18 MWh | 263.18 | 0 | ✓ |
+| Vent fan elec | 41.96 MWh | 41.96 | 0 | ✓ |
+| Electricity | 387.22 MWh | 387.22 | 0 | ✓ |
+| Gas | 204.70 MWh | 204.70 | 0 | ✓ |
+| Σ losses | 522.56 MWh | 522.56 | 0 | ✓ |
+| Σ gains | 488.01 MWh | 488.01 | 0 | ✓ |
+| Net (gains − losses) | −34.55 MWh | −34.55 | 0 | ✓ |
+| Mech-vent loss | 326.18 MWh | 326.18 | 0 | ✓ |
+
+The freeze reproduces the live anchor **to the last digit on every metric** — it lost zero information.
+This is the strongest possible P3 outcome: the YAML *is* the live engine input, so the pure-Node run is
+bit-faithful to the live UI run. (The carbon figure is reported in `headline` for information but is *not*
+pass/fail-tested — no carbon value exists in the committed Brief 77 anchor to test against, so claiming a
+target would be fabrication.)
+
+> **Reproduce:** `python validation/nza_sim/export_bridgewater_fixture.py` then
+> `node validation/nza_sim/run_bridgewater_anchor.mjs` (exits non-zero if any metric drifts >±1%).
+
+### §3.4 — What the fixture captures (1,241 lines)
+
+`meta` (kind `project_dump`, source project id, capture timestamp) · `project.comfort_band` (21–24 °C) ·
+`weather.epw_file` (Yeovilton, per D2) · `construction_choices` (cavity_wall_enhanced / flat_roof_standard
+/ ground_floor_slab / double_low_e) · `building_config` **verbatim** (geometry 58.8 × 14.7 m × 5 floors,
+WWR 0.2 all facades, orientation 42°, occupancy 138 bedrooms @ 3/room, `systems_config_v40` with 2 heating
++ 1 cooling + 2 DHW + 3 ventilation + lighting + small-power systems, schema_version 3) · `library`
+(11 constructions, each with derived `layers` for the dynamic thermal-mass model). This is the Brief 82
+starting anchor.
+
+
 
 ## §4 — EnergyPlus install verification + bundled example  *(P4 — pending)*
 
