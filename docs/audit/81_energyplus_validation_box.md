@@ -580,9 +580,82 @@ eppy + pyyaml are installed into a contained venv (`validation/.venv/`, gitignor
 weather data is fetched). The venv is reproducible (`pip install eppy pyyaml`); the
 generator imports eppy lazily so the rest of the harness does not depend on it at run time.
 
-## §7 — EnergyPlus runner + output normaliser  *(P7 — pending)*
+## §7 — EnergyPlus runner + output normaliser
 
-## §7 — EnergyPlus runner + output normaliser  *(P7 — pending)*
+**Deliverable:** `validation/energyplus/run.py` — runs the committed, byte-stable P6 IDF
+(`validation/energyplus/generated/bridgewater_box_v1.idf`) on the local EnergyPlus, parses
+`eplusout.sql`, and emits the normalised **EnergyPlus side** of the Phase-4 comparison at
+`validation/energyplus/results/bridgewater_box_v1.json` (committed). The raw EnergyPlus run
+artefacts land in `validation/energyplus/runs/bridgewater_box_v1_ep/` (gitignored, `.gitignore:39`).
+
+### §7.1 — How it locates EnergyPlus (config, not PATH)
+
+Same resolution order as the brief requires and §4.3 documents: `ENERGYPLUS_DIR` env var first
+(portable to other machines/CI), then `ep_config.json`'s `energyplus_exe` / `idd`. No global
+PATH assumption; the install stays outside the repo. The EPW (`weather.epw_file` from the
+fixture) is resolved under `data/weather/current/` (gitignored). The runner is **stdlib-only**
+(subprocess + sqlite3 + json + hashlib) except for reading the YAML fixture — it imports PyYAML,
+and if PyYAML is absent it auto-re-execs under the contained venv (`validation/.venv/`) that P6's
+generator already uses, so `python validation/energyplus/run.py` works under either interpreter.
+`eplusout.sql` is opened **read-only** (`file:…?mode=ro`); the runner never touches the live DB.
+
+### §7.2 — Normalised schema (parallel to the NZA-Sim anchor)
+
+The JSON is shaped to mirror the P2 anchor (`validation/nza_sim/results/bridgewater_box_v1.json`)
+so P9 can compare field-by-field. Blocks:
+
+| Block | Contents | Source |
+|---|---|---|
+| `engine` | EP version, IDF path + **SHA-256**, EPW, run dir, severe/warning counts, success flag | `eplusout.err` + file hash |
+| `demand_mwh` | ideal-loads supply-air / zone / OA / heat-recovery sensible+total heating & cooling | `Run Period` SQL |
+| `fabric_conduction_mwh` | per-surface Average Face Conduction (signed: −ve = heat out), incl. `external_wall_sum` (Σ4 walls), roof, ground_floor, thermal_bridge | `Run Period` SQL |
+| `windows_mwh` | per-facade transmitted solar / heat loss / heat gain + enclosure solar total | `Run Period` SQL |
+| `infiltration_mwh` | sensible & total infiltration loss + gain | `Run Period` SQL |
+| `internal_gains_mwh` | people sensible/total, lights, equipment (as EP reports the zone gain) | `Run Period` SQL |
+| `meters_mwh` | InteriorLights / InteriorEquipment electricity meters | `Output:Meter` SQL |
+| `zone_temperature` | annual mean air temp | mean of 8 760 hourly |
+| `monthly` | heating / cooling (monthly kWh sums) + zone-temp / outdoor-drybulb (monthly means), 12-element arrays | hourly → `Time` join |
+| `derived_delivered` / `headline` / `totals` | EUI + fuel split (see §7.3) | EP demand + fixture system layer |
+
+### §7.3 — The one transform: `derived_delivered` (EUI / fuel comparison)
+
+EnergyPlus uses `IdealLoads` (no boiler/EER, by design — §5.3 D5b), so the **only** way to obtain
+a delivered-energy EUI from the EP side is to pass EP's zone **demand** through the fixture's
+*documented* system layer — the same η/EER/SFP NZA-Sim uses. This is a deterministic, labelled
+transform, not a reshaping of EP physics:
+
+- heating fuel = EP heating demand / **0.90** (gas); cooling elec = EP cooling demand / **3.0** (EER);
+- DHW (4.747 MWh) + fan (0.657 MWh) are **closed-form analytical loads with no zone coupling**
+  (§5.3 D5c/D5d) — recomputed here *independently from the fixture* (`2.8 head × 80 L × ΔT 50 K ×
+  cp/3600 × 365`; `SFP 1.5 × 50 L/s × 8 760 h`), not copied from the NZA anchor;
+- lighting (2.555) + equipment (3.650) come from the EP electricity meters.
+
+→ electricity **7.088 MWh**, gas **9.575 MWh**, **EUI 166.6 kWh/m²·yr** (NZA anchor 160.4 → Δ +3.9 %,
+within the P9 ±10 % EUI tolerance — *previewed here, formally tested in P9*). The **demand-level**
+comparison (heating ±15 %, cooling ±15 %) uses the raw `demand_mwh` block, *not* this rollup.
+
+### §7.4 — Verified outputs (EP's own numbers, faithfully normalised)
+
+Every value reproduces the P5/P6 run exactly (`idf_sha256 e2e4f855…`):
+
+| Quantity | Value | | Quantity | Value |
+|---|---|---|---|---|
+| Heating (supply-air sensible) | **3.2775 MWh** | | Infiltration sensible loss | 4.8771 MWh |
+| Cooling (supply-air sensible) | **0.6768 MWh** | | People sensible / total | 1.0731 / 1.8600 MWh |
+| OA sensible heating | 3.6882 MWh | | Lights / equipment (meters) | 2.5550 / 3.6500 MWh |
+| Heat-recovery sensible heating | 3.0286 MWh | | Enclosure transmitted solar | 3.3955 MWh |
+| Floor / roof / TB conduction | −1.8835 / −1.2705 / −0.1884 MWh | | Walls Σ (S/N/E/W) | −1.5664 MWh |
+| Zone mean air temp (annual) | 21.814 °C | | EUI (derived) | 166.6 kWh/m² |
+
+Monthly arrays are physically correct and reconcile to the annual totals to the kWh: heating is
+winter-dominant (Jan 816 → Jul/Aug 0 kWh), cooling summer-dominant (Jul 385 → Nov–Apr 0 kWh), zone
+temp tracks 21.0 °C in winter up to 23.7 °C in summer (inside the 21/24 band), outdoor dry-bulb
+shows the expected UK swing (Jan 5.2 → Jul 18.1 °C). Σmonthly heating = 3 277.5 kWh = annual ✓;
+Σmonthly cooling = 676.8 kWh = annual ✓.
+
+> **Reproduce:** `python validation/energyplus/run.py` (runs EP, writes the JSON) or
+> `python validation/energyplus/run.py --reuse validation/energyplus/runs/bridgewater_box_v1_ep`
+> (re-parse an existing run). `--stdout` prints without writing.
 
 ## §8 — NZA-Sim result extractor (matching schema)  *(P8 — pending)*
 
