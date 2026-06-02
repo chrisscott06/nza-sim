@@ -10,6 +10,11 @@
  * Σ gains, Net residual. We also capture per-element losses/gains + per-service
  * delivered/source energy + fuel split so the P9 comparison has full breakdown.
  *
+ * NOTE (P8): the canonical P9 comparison input is now produced by extract.mjs in
+ * the EnergyPlus-parallel schema → results/bridgewater_box_v1.json. This P2 script
+ * is retained for its richer human-readable breakdown and writes to a distinct
+ * file (results/bridgewater_box_v1.anchor.json) so the two never collide.
+ *
  * Run:
  *   cd C:\Users\ChrisScott\Dev\nza-sim
  *   node validation/nza_sim/run_box_anchor.mjs
@@ -22,7 +27,7 @@ import { loadAndRun, REPO_ROOT } from './load_fixture.mjs'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.join(REPO_ROOT, 'validation', 'fixtures', 'bridgewater_box_v1.yaml')
 const OUT_DIR = path.join(__dirname, 'results')
-const OUT_FILE = path.join(OUT_DIR, 'bridgewater_box_v1.json')
+const OUT_FILE = path.join(OUT_DIR, 'bridgewater_box_v1.anchor.json')
 
 const round = (x, dp = 3) =>
   x == null || Number.isNaN(Number(x)) ? null : Math.round(Number(x) * 10 ** dp) / 10 ** dp

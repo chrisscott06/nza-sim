@@ -657,7 +657,77 @@ shows the expected UK swing (Jan 5.2 → Jul 18.1 °C). Σmonthly heating = 3 27
 > `python validation/energyplus/run.py --reuse validation/energyplus/runs/bridgewater_box_v1_ep`
 > (re-parse an existing run). `--stdout` prints without writing.
 
-## §8 — NZA-Sim result extractor (matching schema)  *(P8 — pending)*
+## §8 — NZA-Sim result extractor (matching schema)
+
+**Deliverable:** `validation/nza_sim/extract.mjs` → `validation/nza_sim/results/bridgewater_box_v1.json`,
+in the **same normalised schema** as the P7 EnergyPlus reference so P9 can diff the two files
+field-by-field.
+
+### §8.1 — Approach
+
+`extract.mjs` reuses `load_fixture.mjs` (`loadAndRun()`) to run the NZA-Sim JS engine pure-Node in
+State 3 / mode `full` (engine `v2.5`, no live DB) — the identical run path as the P2 anchor, against
+the identical fixture and EPW as the EnergyPlus side. It then re-shapes the engine `result` into the
+P7 block layout.
+
+Two extractor design rules, both following the brief's *"compare at the output level"* / *"do not
+invent custom workarounds to mirror the other engine's internal state"* mandate — applied
+symmetrically to the NZA side this time:
+
+1. **Native outputs only.** Every value is read straight from the engine `result` (consumption,
+   `heat_balance.annual`, hourly demand integrands). Nothing is recomputed to chase the EnergyPlus
+   numbers. Where NZA-Sim has **no analogue** for an EnergyPlus field, the field is `null` with a
+   `_note` — it is never back-filled. The two null cases:
+   - **Per-facade wall conduction** (`wall_south/north/east/west`): NZA reports a *single* combined
+     `external_wall` loss, so only `external_wall_sum` is populated.
+   - **OA / heat-recovery demand split**: NZA folds ventilation into a loss offset, not a separate
+     supply-air OA term, so `demand_mwh` carries net heating/cooling only; the ventilation physics
+     surface under `mech_ventilation_mwh` instead.
+2. **Unit + sign parity.** NZA reports kWh; the extract expresses energy in **MWh** to match P7.
+   Fabric losses are kept as NZA-native **positive magnitudes** (EnergyPlus reports them negative) —
+   P9 compares `|x|`. Each block's `_note` states the convention.
+
+### §8.2 — Schema mapping (NZA → EnergyPlus parallel)
+
+| Block | NZA source | Maps to EnergyPlus block |
+|---|---|---|
+| `demand_mwh.heating/cooling` | Σ `demand.{heating,cooling}_demand_hourly_kwh` /1000 | `demand_mwh.{heating,cooling}_supply_air_sensible` |
+| `fabric_conduction_mwh` | `heat_balance.annual.losses.{external_wall,roof,ground_floor,thermal_bridging}` | `fabric_conduction_mwh` (compare \|x\|) |
+| `windows_mwh.transmitted_solar` | `…gains.solar.{n,s,e,w}` | `windows_mwh.transmitted_solar` |
+| `windows_mwh.conduction_loss` | `…losses.glazing` | `windows_mwh.heat_loss` |
+| `infiltration_mwh.sensible_loss` | `…losses.fabric_leakage` | `infiltration_mwh.sensible_loss` |
+| `mech_ventilation_mwh` | `…losses.mech_ventilation` + `recovery_offset_mwh` + fan | EP `oa_sensible_heating − heat_recovery_sensible_heating` |
+| `internal_gains_mwh` | `…gains.internal.{people,lighting,equipment,auxiliary}` | `internal_gains_mwh` (people ↔ `people_sensible`) |
+| `monthly.*` | hourly demand/zone-T aggregated to 12 months; outdoor from daily EPW profile | `monthly.*` |
+| `derived_delivered` / `headline` / `totals` | `consumption.*` | same |
+
+### §8.3 — Verified output (extract vs EnergyPlus, eyeball)
+
+`node validation/nza_sim/extract.mjs` → EUI 160.4, heating 2.492 MWh, cooling 1.407 MWh, gas 8.711,
+electricity 7.329. Monthly arrays reconcile to annual to the kWh (Σheating 2 491.7, Σcooling
+1 407.0). First-look parallels against the P7 reference (formal tolerance test is P9):
+
+| Metric (MWh unless noted) | NZA | EnergyPlus | Δ |
+|---|---|---|---|
+| Internal gains people / lighting / equipment | 1.073 / 2.555 / 3.65 | 1.073 / 2.555 / 3.65 | ~0 % |
+| Infiltration sensible loss | 4.808 | 4.877 | −1.4 % |
+| Transmitted solar (enclosure) | 3.443 | 3.395 | +1.4 % |
+| Fabric: roof / ground floor | 1.457 / 1.936 | 1.271 / 1.884 | +15 % / +3 % |
+| Fabric: external walls (sum) | 1.888 | 1.566 | +21 % |
+| Heating demand | 2.492 | 3.278 | −24 % |
+| Cooling demand | 1.407 | 0.677 | +108 % |
+| Zone mean air temp (°C) | 22.31 | 21.81 | +0.5 °C |
+| EUI (kWh/m²) | 160.4 | 166.6 | −3.7 % |
+
+Internal gains, infiltration and solar agree to within ~1–2 % (shared closed-form inputs). The
+headline EUI lands within ~4 %. The genuine engine divergences — heating/cooling demand and the
+warmer NZA free-float (which drives the higher cooling) — are real differences in how the two models
+treat the zone heat balance and are exactly what the P9 report is meant to quantify, not hide.
+
+> **Reproduce:** `node validation/nza_sim/extract.mjs` (writes the comparison-schema JSON).
+> `extract.mjs` supersedes `run_box_anchor.mjs` as the producer of
+> `results/bridgewater_box_v1.json`; the P2 anchor script now writes the richer human-readable
+> breakdown to `results/bridgewater_box_v1.anchor.json` so the two never collide.
 
 ## §9 — Comparison report (first-pass results)  *(P9 — pending)*
 

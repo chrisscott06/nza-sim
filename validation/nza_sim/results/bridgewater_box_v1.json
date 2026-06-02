@@ -1,17 +1,19 @@
 {
-  "brief": "Brief 81 P2 — Bridgewater-Box NZA-Sim anchor",
-  "source": "node validation/nza_sim/run_box_anchor.mjs",
+  "brief": "Brief 81 P8 - Bridgewater-Box NZA-Sim extract",
+  "source": "node validation/nza_sim/extract.mjs",
   "fixture": "bridgewater_box_v1",
   "fixture_schema_version": 1,
-  "captured_at": "2026-06-02T19:47:26.712Z",
-  "engine_dispatch": {
-    "state_numeric": 3,
+  "captured_at": "2026-06-02T21:11:06.996Z",
+  "engine": {
+    "name": "NZA-Sim",
+    "version": "v2.5 (instantCalc dynamic engine)",
+    "state": 3,
     "mode": "full",
-    "note": "state=3 → _calculateState3 ran (systems overlay applied), as forced by engine:v2.5"
+    "weather_epw": "GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw",
+    "note": "Pure-Node run via validation/nza_sim/load_fixture.mjs (no live DB). engine:v2.5 forces State 3 (_calculateState3 — systems overlay applied). Same fixture and EPW as the EnergyPlus reference."
   },
   "geometry": {
     "gia_m2": 100,
-    "reported_gia_m2": 100,
     "volume_m3": 300,
     "weather_file": "GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw",
     "comfort_band_c": {
@@ -19,170 +21,171 @@
       "upper_c": 24
     }
   },
+  "demand_mwh": {
+    "heating": 2.49171,
+    "cooling": 1.407039,
+    "consumption_heating": 2.5,
+    "consumption_cooling": 1.4,
+    "_note": "NZA-Sim net space heating/cooling demand (MWh), integrated from the hourly demand profile. NZA models a single net zone demand AFTER MVHR recovery — the analogue of EnergyPlus heating/cooling_supply_air_sensible. NZA has no separate OA / heat-recovery demand decomposition (recovery is applied as a loss offset; see mech_ventilation_mwh). consumption_* are the engine consumption-block values (rounded to 0.1 MWh internally) and equal the hourly integral within rounding."
+  },
+  "fabric_conduction_mwh": {
+    "wall_south": null,
+    "wall_north": null,
+    "wall_east": null,
+    "wall_west": null,
+    "external_wall_sum": 1.8884,
+    "roof": 1.4571,
+    "ground_floor": 1.9359,
+    "thermal_bridge": 0.1727,
+    "_note": "NZA-Sim losses_per_element (POSITIVE loss magnitudes; EnergyPlus reports these negative — P9 compares |x|). NZA reports a single combined external_wall loss (no per-facade split), so the four wall_* facades are null. Glazing conduction is reported under windows_mwh.conduction_loss to parallel EnergyPlus, which keeps windows out of this fabric set."
+  },
+  "windows_mwh": {
+    "transmitted_solar": {
+      "south": 1.1736,
+      "north": 0.5001,
+      "east": 0.831,
+      "west": 0.9386,
+      "sum_facades": 3.4433,
+      "enclosure_total": 3.4433
+    },
+    "conduction_loss": {
+      "sum": 1.3988,
+      "_per_facade_note": "NZA reports a single combined glazing conduction loss (no per-facade split)."
+    },
+    "_note": "transmitted_solar = NZA solar gain through glazing per facade (the direct analogue of EnergyPlus Surface Window Transmitted Solar). conduction_loss = NZA glazing U-value loss; maps to EnergyPlus windows_mwh.heat_loss. NZA does not separate window convective heat-gain the way EnergyPlus does."
+  },
+  "infiltration_mwh": {
+    "sensible_loss": 4.8083,
+    "_note": "NZA-Sim 'fabric_leakage' loss (infiltration via ach_constant 0.5). Maps to EnergyPlus Zone Infiltration sensible loss. NZA does not report an infiltration sensible-gain or latent term separately."
+  },
+  "mech_ventilation_mwh": {
+    "loss": 1.282,
+    "recovery_offset": 1.531,
+    "fan_electrical": 0.657,
+    "_note": "NZA mechanical-ventilation sensible loss AFTER MVHR recovery, plus the recovery offset removed before the boiler sees demand, plus fan electrical energy. EnergyPlus models the same physics inside the ideal-loads demand as oa_sensible_heating minus heat_recovery_sensible_heating; P9 maps this block to that EnergyPlus net OA term."
+  },
+  "internal_gains_mwh": {
+    "people": 1.0731,
+    "lighting": 2.555,
+    "equipment": 3.65,
+    "auxiliary": 0,
+    "_note": "NZA internal heat gains. NZA people gain is sensible-equivalent (no separate latent split) — compare against EnergyPlus people_sensible. lighting/equipment are 100% convective gains and equal their electricity meters."
+  },
+  "zone_temperature": {
+    "mean_air_temp_annual_c": 22.308,
+    "_note": "Annual = mean of 8760 hourly zone-air values; monthly array under \"monthly\"."
+  },
+  "monthly": {
+    "month_labels": [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec"
+    ],
+    "heating_supply_air_sensible_kwh": [
+      678.721,
+      469.994,
+      354.193,
+      53.784,
+      0,
+      0,
+      0,
+      0,
+      0,
+      3.547,
+      361.342,
+      570.13
+    ],
+    "cooling_supply_air_sensible_kwh": [
+      0,
+      0,
+      0,
+      0,
+      75.464,
+      351.124,
+      544.112,
+      309.968,
+      126.372,
+      0,
+      0,
+      0
+    ],
+    "zone_mean_air_temp_c": [
+      21.014,
+      21.042,
+      21.161,
+      21.986,
+      23.218,
+      23.811,
+      23.909,
+      23.841,
+      23.588,
+      21.943,
+      21.086,
+      21.013
+    ],
+    "outdoor_drybulb_c": [
+      5.243,
+      6.33,
+      7.391,
+      9.416,
+      12.658,
+      15.679,
+      18.139,
+      16.603,
+      14.687,
+      12.844,
+      8.646,
+      7.097
+    ],
+    "_note": "Heating/cooling = monthly sums of NZA hourly demand; temps = monthly means of NZA hourly zone air; outdoor = monthly mean of the EPW daily drybulb profile. Field names mirror the EnergyPlus reference for P9 monthly-correlation (>=0.85)."
+  },
+  "derived_delivered": {
+    "_note": "NZA-Sim consumption per-service rollup through the fixture system layer. Parallel to the EnergyPlus derived_delivered block. These ARE NZA native outputs (not recomputed), unlike the EnergyPlus side where DHW/fan are closed-form.",
+    "heating": {
+      "demand_mwh": 2.5,
+      "efficiency": 0.9,
+      "fuel": "gas",
+      "fuel_mwh": 2.778,
+      "recovery_offset_mwh": 1.531
+    },
+    "cooling": {
+      "demand_mwh": 1.4,
+      "eer": 3,
+      "fuel": "electricity",
+      "fuel_mwh": 0.467
+    },
+    "dhw": {
+      "demand_mwh": 4.747,
+      "fuel_mwh": 5.933,
+      "fuel": "gas"
+    },
+    "ventilation": {
+      "fan_electrical_mwh": 0.657
+    },
+    "lighting_mwh": 2.555,
+    "equipment_mwh": 3.65
+  },
   "headline": {
     "eui_kwh_per_m2_yr": 160.4,
-    "heating_demand_mwh": 2.5,
-    "cooling_demand_mwh": 1.4,
+    "heating_demand_mwh": 2.49171,
+    "cooling_demand_mwh": 1.407039,
     "dhw_demand_mwh": 4.747,
-    "mech_vent_loss_kwh": 1282,
-    "sum_losses_kwh": 12943.1,
-    "sum_gains_kwh": 10721.4,
-    "net_residual_gains_minus_losses_kwh": -2221.7,
-    "balance_closure_residual_kwh": 1121.7
+    "electricity_mwh": 7.329,
+    "gas_mwh": 8.711
   },
   "totals": {
     "eui_kwh_per_m2_yr": 160.4,
     "electricity_mwh": 7.329,
     "gas_mwh": 8.711,
     "district_heat_mwh": 0
-  },
-  "per_service": {
-    "heating": {
-      "demand_mwh": 2.5,
-      "delivered_mwh": 2.5,
-      "fuel": "gas",
-      "fuel_mwh": 2.778,
-      "efficiency": 0.9,
-      "recovery_offset_mwh": 1.531
-    },
-    "cooling": {
-      "demand_mwh": 1.4,
-      "delivered_mwh": 1.4,
-      "fuel": "electricity",
-      "fuel_mwh": 0.467,
-      "efficiency": 3
-    },
-    "dhw": {
-      "demand_mwh": 4.747,
-      "delivered_mwh": 4.747,
-      "fuel_mwh": 5.933,
-      "electricity_mwh": 0,
-      "gas_mwh": 5.933
-    },
-    "ventilation": {
-      "total_fan_electrical_mwh": 0.657,
-      "systems": [
-        {
-          "id": "box_mvhr",
-          "label": "MVHR",
-          "fan_electrical_mwh": 0.657,
-          "sfp_w_per_lps": 1.5,
-          "flow_rate": 50,
-          "flow_rate_basis": "constant",
-          "recovery_sensible_pct": 75,
-          "summer_bypass": false
-        }
-      ]
-    }
-  },
-  "heat_balance_annual": {
-    "losses_kwh": 12943.1,
-    "losses_kwh_per_m2": 129.43,
-    "gains_kwh": 10721.4,
-    "gains_kwh_per_m2": 107.21,
-    "losses_per_element": {
-      "external_wall": 1888.4,
-      "roof": 1457.1,
-      "ground_floor": 1935.9,
-      "glazing": 1398.8,
-      "thermal_bridging": 172.7,
-      "fabric_leakage": 4808.3,
-      "permanent_vents": 0,
-      "mech_ventilation": 1282,
-      "_sum_check_kwh": 12943.2,
-      "all_loss_keys": [
-        "external_wall",
-        "roof",
-        "ground_floor",
-        "glazing",
-        "thermal_bridging",
-        "fabric_leakage",
-        "permanent_vents",
-        "mech_ventilation"
-      ]
-    },
-    "gains_per_element": {
-      "solar_north": 500.1,
-      "solar_south": 1173.6,
-      "solar_east": 831,
-      "solar_west": 938.6,
-      "solar_total": 3443.3,
-      "people": 1073.1,
-      "lighting": 2555,
-      "equipment": 3650,
-      "auxiliary": 0,
-      "internal_total": 7278.1,
-      "_sum_check_kwh": 10721.4,
-      "all_internal_keys": [
-        "people",
-        "lighting",
-        "equipment",
-        "auxiliary"
-      ],
-      "all_gain_keys": [
-        "solar",
-        "internal"
-      ]
-    }
-  },
-  "reconciliation": {
-    "expected": {
-      "lighting_mwh": 2.555,
-      "equipment_mwh": 3.65,
-      "fan_mwh": 0.657,
-      "cooling_elec_mwh": 0.467,
-      "people_kwh": 1073.1,
-      "dhw_demand_mwh": 4.747,
-      "gas_mwh": 8.712
-    },
-    "element_loss_sum_vs_total_kwh": {
-      "sum": 12943.2,
-      "total": 12943.1
-    },
-    "gain_sum_vs_total_kwh": {
-      "sum": 10721.4,
-      "total": 10721.4
-    }
-  },
-  "_result_keys": [
-    "state",
-    "mode",
-    "inputs_used",
-    "comfort_band_used",
-    "gains",
-    "losses",
-    "losses_at_setpoint",
-    "daily_profiles",
-    "free_running",
-    "demand",
-    "bypass_reconciliation_s2",
-    "state1_delta",
-    "occupancy_summary",
-    "heat_balance",
-    "metadata",
-    "systems_flow",
-    "energy_use",
-    "system_performance",
-    "consumption",
-    "results",
-    "carbon_kg_co2_per_m2"
-  ],
-  "_consumption_keys": [
-    "space_heating",
-    "space_cooling",
-    "dhw",
-    "ventilation",
-    "lighting",
-    "small_power",
-    "total",
-    "daily_profiles",
-    "brief40",
-    "source_path"
-  ],
-  "_totals_keys": [
-    "losses_kwh",
-    "losses_kwh_per_m2",
-    "gains_kwh",
-    "gains_kwh_per_m2"
-  ]
+  }
 }
