@@ -1,0 +1,742 @@
+!-============================================================================
+!- Bridgewater-Box v1 — hand-authored EnergyPlus model (Brief 81 P5)
+!-============================================================================
+!-
+!- INDEPENDENT EnergyPlus reference for the NZA-Sim custom JS engine. This IDF
+!- is authored "the EnergyPlus way" from the single source of truth
+!- validation/fixtures/bridgewater_box_v1.yaml — NOT reverse-engineered from
+!- NZA-Sim's internal state model. The two engines are compared at the OUTPUT
+!- level only (annual demand, fabric losses, mech-vent loss, hourly profiles).
+!-
+!- Building: 10 m x 10 m x 3.0 m single zone, GIA 100 m2, volume 300 m3.
+!-   - Walls U 0.18, roof U 0.15, ground floor U 0.20 (layer-resolved, see below)
+!-   - Glazing U 1.2 / SHGC 0.55 / VT 0.7, one 2.0x1.5 m window per facade (WWR 0.10)
+!-   - Orientation 0 deg (axis-aligned: +Y North, -Y South, +X East, -X West)
+!-   - Thermal bridge 2.0 W/K (psi 0.05 x 40 m perimeter)
+!-   - Infiltration 0.5 ACH constant; no permanent vents
+!-   - Occupancy 4 people x 0.70 presence 07:00-21:00; 75 W sensible / 55 latent
+!-   - Lighting 5 W/m2 (500 W) 07:00-21:00
+!-   - Equipment 3 W/m2 baseload 24/7 (300 W) + 2 W/m2 active 07:00-21:00 (200 W)
+!-   - One MVHR: 50 L/s, 75% sensible heat recovery, continuous, no bypass
+!-   - HVAC: ideal loads, heating setpoint 21 C, cooling setpoint 24 C
+!-
+!- MODELLING DECISIONS (documented in docs/audit/81_energyplus_validation_box.md §5):
+!-   D5a Ground floor: Outside BC = Outdoors, NoSun/NoWind. Matches NZA-Sim's
+!-       "all fabric loses to outdoor air" model (UA x (T_in - T_out)); avoids
+!-       ground-temperature assumptions NZA-Sim does not make.
+!-   D5b HVAC: ZoneHVAC:IdealLoadsAirSystem (NoLimit). Clean demand reporting,
+!-       no equipment sizing, sensible-only comparison (dehumid/humid off).
+!-   D5c MVHR: modelled inside ideal loads via DesignSpecification:OutdoorAir
+!-       (0.050 m3/s) + Sensible Heat Recovery 0.75, NoEconomizer (no bypass).
+!-       Fan electrical (SFP 1.5 x 50 L/s) is computed analytically downstream —
+!-       ideal loads has no fan energy. Documented, not in P5 falsifiability.
+!-   D5d DHW: NOT modelled in the IDF. In both engines DHW is a closed-form
+!-       analytical load (litres x rho x cp x dT / eta) with no zone coupling.
+!-       EnergyPlus's WaterHeater:Mixed would add tank/standby/recovery dynamics
+!-       NZA-Sim does not model, manufacturing divergence rather than agreement.
+!-       DHW is compared analytically-to-analytically (see §5). Not in the zone
+!-       heat balance, so its absence here does not affect heating/cooling.
+!-   D5e Thermal bridge: a dedicated small NoMass conductance surface
+!-       (THERMAL_BRIDGE, NoSun/NoWind) sized to ~2.0 W/K. EnergyPlus has no
+!-       first-class linear-psi object in the CTF heat balance; this represents
+!-       the same extra conductance-to-ambient path in EnergyPlus's own surface
+!-       machinery. As-run UA reported from surface conduction output.
+!-   D2  Weather: Yeovilton EPW (the EPW the live project reads), supplied to
+!-       the runner via -w. No Site:Location object — the weather file is
+!-       authoritative for location, matching NZA-Sim's EPW-driven solar.
+!-============================================================================
+
+Version,
+    26.1;                    !- Version Identifier
+
+SimulationControl,
+    No,                      !- Do Zone Sizing Calculation
+    No,                      !- Do System Sizing Calculation
+    No,                      !- Do Plant Sizing Calculation
+    No,                      !- Run Simulation for Sizing Periods
+    Yes,                     !- Run Simulation for Weather File Run Periods
+    No,                      !- Do HVAC Sizing Simulation for Sizing Periods
+    1;                       !- Maximum Number of HVAC Sizing Simulation Passes
+
+Building,
+    Bridgewater-Box,         !- Name
+    0,                       !- North Axis {deg}
+    Suburbs,                 !- Terrain
+    0.04,                    !- Loads Convergence Tolerance Value {W}
+    0.4,                     !- Temperature Convergence Tolerance Value {deltaC}
+    FullExterior,            !- Solar Distribution
+    25,                      !- Maximum Number of Warmup Days
+    6;                       !- Minimum Number of Warmup Days
+
+Timestep,
+    6;                       !- Number of Timesteps per Hour
+
+HeatBalanceAlgorithm,
+    ConductionTransferFunction;  !- Algorithm
+
+SurfaceConvectionAlgorithm:Inside,
+    TARP;                    !- Algorithm
+
+SurfaceConvectionAlgorithm:Outside,
+    DOE-2;                   !- Algorithm
+
+RunPeriod,
+    Full Year,               !- Name
+    1,                       !- Begin Month
+    1,                       !- Begin Day of Month
+    ,                        !- Begin Year
+    12,                      !- End Month
+    31,                      !- End Day of Month
+    ,                        !- End Year
+    ,                        !- Day of Week for Start Day
+    Yes,                     !- Use Weather File Holidays and Special Days
+    Yes,                     !- Use Weather File Daylight Saving Period
+    No,                      !- Apply Weekend Holiday Rule
+    Yes,                     !- Use Weather File Rain Indicators
+    Yes;                     !- Use Weather File Snow Indicators
+
+Output:Diagnostics,
+    DisplayExtraWarnings;    !- Key 1
+
+!-============================================================================
+!- SCHEDULE TYPE LIMITS
+!-============================================================================
+
+ScheduleTypeLimits,
+    Fraction,                !- Name
+    0.0,                     !- Lower Limit Value
+    1.0,                     !- Upper Limit Value
+    Continuous,              !- Numeric Type
+    Dimensionless;           !- Unit Type
+
+ScheduleTypeLimits,
+    Temperature,             !- Name
+    -60,                     !- Lower Limit Value
+    200,                     !- Upper Limit Value
+    Continuous,              !- Numeric Type
+    Temperature;             !- Unit Type
+
+ScheduleTypeLimits,
+    ControlType,             !- Name
+    0,                       !- Lower Limit Value
+    4,                       !- Upper Limit Value
+    Discrete,                !- Numeric Type
+    Dimensionless;           !- Unit Type
+
+ScheduleTypeLimits,
+    ActivityLevel,           !- Name
+    0,                       !- Lower Limit Value
+    1000,                    !- Upper Limit Value
+    Continuous,              !- Numeric Type
+    ActivityLevel;           !- Unit Type
+
+!-============================================================================
+!- SCHEDULES
+!- Single occupied window 07:00-21:00 (14 h on / 10 h off), every day, no
+!- seasonal variation (fixture header design note). Occupancy presence schedule
+!- carries the 0.70 occupancy rate (People Number = 4 x 0.70 = 2.8 effective).
+!-============================================================================
+
+Schedule:Compact,
+    ALWAYS_ON,               !- Name
+    Fraction,                !- Schedule Type Limits Name
+    Through: 12/31,          !- Field 1
+    For: AllDays,            !- Field 2
+    Until: 24:00,            !- Field 3
+    1.0;                     !- Field 4
+
+Schedule:Compact,
+    OCC_PRESENCE,            !- Name (fraction present, includes 0.70 rate)
+    Fraction,                !- Schedule Type Limits Name
+    Through: 12/31,          !- Field 1
+    For: AllDays,            !- Field 2
+    Until: 07:00,            !- Field 3
+    0.0,                     !- Field 4
+    Until: 21:00,            !- Field 5
+    0.70,                    !- Field 6
+    Until: 24:00,            !- Field 7
+    0.0;                     !- Field 8
+
+Schedule:Compact,
+    ACTIVITY_LEVEL,          !- Name (W/person — total metabolic 130 W)
+    ActivityLevel,           !- Schedule Type Limits Name
+    Through: 12/31,          !- Field 1
+    For: AllDays,            !- Field 2
+    Until: 24:00,            !- Field 3
+    130.0;                   !- Field 4
+
+Schedule:Compact,
+    LIGHTS_SCHED,            !- Name
+    Fraction,                !- Schedule Type Limits Name
+    Through: 12/31,          !- Field 1
+    For: AllDays,            !- Field 2
+    Until: 07:00,            !- Field 3
+    0.0,                     !- Field 4
+    Until: 21:00,            !- Field 5
+    1.0,                     !- Field 6
+    Until: 24:00,            !- Field 7
+    0.0;                     !- Field 8
+
+Schedule:Compact,
+    EQUIP_ACTIVE_SCHED,      !- Name (200 W active component, occupied hours)
+    Fraction,                !- Schedule Type Limits Name
+    Through: 12/31,          !- Field 1
+    For: AllDays,            !- Field 2
+    Until: 07:00,            !- Field 3
+    0.0,                     !- Field 4
+    Until: 21:00,            !- Field 5
+    1.0,                     !- Field 6
+    Until: 24:00,            !- Field 7
+    0.0;                     !- Field 8
+
+Schedule:Compact,
+    HEATING_SETPOINT,        !- Name (comfort band lower 21 C)
+    Temperature,             !- Schedule Type Limits Name
+    Through: 12/31,          !- Field 1
+    For: AllDays,            !- Field 2
+    Until: 24:00,            !- Field 3
+    21.0;                    !- Field 4
+
+Schedule:Compact,
+    COOLING_SETPOINT,        !- Name (comfort band upper 24 C)
+    Temperature,             !- Schedule Type Limits Name
+    Through: 12/31,          !- Field 1
+    For: AllDays,            !- Field 2
+    Until: 24:00,            !- Field 3
+    24.0;                    !- Field 4
+
+Schedule:Compact,
+    DUAL_CONTROL_TYPE,       !- Name (4 = DualSetpoint thermostat control)
+    ControlType,             !- Schedule Type Limits Name
+    Through: 12/31,          !- Field 1
+    For: AllDays,            !- Field 2
+    Until: 24:00,            !- Field 3
+    4;                       !- Field 4
+
+!-============================================================================
+!- MATERIALS — exact fixture layers (outside -> inside). Dense concrete leaf is
+!- the inner layer so its mass couples to the zone air. Both engines read these
+!- same layers (NZA-Sim wallModel.js uses them for the dynamic mass response).
+!-
+!- Layer-resolved effective U (with BS EN ISO 6946 films Rse 0.04):
+!-   Wall : R = 0.117/0.022 + 0.100/1.13 + Rsi 0.13 + 0.04 = 5.577 -> U 0.179
+!-   Roof : R = 0.141/0.022 + 0.150/1.13 + Rsi 0.10 + 0.04 = 6.682 -> U 0.150
+!-   Floor: R = 0.102/0.022 + 0.150/1.13 + Rsi 0.17 + 0.04 = 4.979 -> U 0.201
+!- NZA-Sim drives steady-state conduction from the published U (0.18/0.15/0.20);
+!- EnergyPlus derives U from these layers. The small difference is the expected
+!- U-model vs layer-resolved divergence (P9 fabric tolerance +/-20% absorbs it).
+!-============================================================================
+
+Material,
+    PIR_wall,                !- Name
+    MediumSmooth,            !- Roughness
+    0.117,                   !- Thickness {m}
+    0.022,                   !- Conductivity {W/m-K}
+    30,                      !- Density {kg/m3}
+    1400;                    !- Specific Heat {J/kg-K}
+
+Material,
+    Concrete_wall,           !- Name
+    MediumRough,             !- Roughness
+    0.100,                   !- Thickness {m}
+    1.13,                    !- Conductivity {W/m-K}
+    2000,                    !- Density {kg/m3}
+    1000;                    !- Specific Heat {J/kg-K}
+
+Material,
+    PIR_roof,                !- Name
+    MediumSmooth,            !- Roughness
+    0.141,                   !- Thickness {m}
+    0.022,                   !- Conductivity {W/m-K}
+    30,                      !- Density {kg/m3}
+    1400;                    !- Specific Heat {J/kg-K}
+
+Material,
+    Concrete_roof,           !- Name
+    MediumRough,             !- Roughness
+    0.150,                   !- Thickness {m}
+    1.13,                    !- Conductivity {W/m-K}
+    2000,                    !- Density {kg/m3}
+    1000;                    !- Specific Heat {J/kg-K}
+
+Material,
+    PIR_floor,               !- Name
+    MediumSmooth,            !- Roughness
+    0.102,                   !- Thickness {m}
+    0.022,                   !- Conductivity {W/m-K}
+    30,                      !- Density {kg/m3}
+    1400;                    !- Specific Heat {J/kg-K}
+
+Material,
+    Concrete_floor,          !- Name
+    MediumRough,             !- Roughness
+    0.150,                   !- Thickness {m}
+    1.13,                    !- Conductivity {W/m-K}
+    2000,                    !- Density {kg/m3}
+    1000;                    !- Specific Heat {J/kg-K}
+
+Material:NoMass,
+    TB_MAT,                  !- Name (thermal-bridge conductance, see D5e)
+    Smooth,                  !- Roughness
+    0.33,                    !- Thermal Resistance {m2-K/W}
+    0.9,                     !- Thermal Absorptance
+    0.7,                     !- Solar Absorptance
+    0.7;                     !- Visible Absorptance
+
+WindowMaterial:SimpleGlazingSystem,
+    GLAZING_MAT,             !- Name
+    1.2,                     !- U-Factor {W/m2-K}
+    0.55,                    !- Solar Heat Gain Coefficient
+    0.7;                     !- Visible Transmittance
+
+!-============================================================================
+!- CONSTRUCTIONS (outside layer first)
+!-============================================================================
+
+Construction,
+    EXT_WALL,                !- Name
+    PIR_wall,                !- Outside Layer
+    Concrete_wall;           !- Layer 2 (inside)
+
+Construction,
+    ROOF,                    !- Name
+    PIR_roof,                !- Outside Layer
+    Concrete_roof;           !- Layer 2 (inside)
+
+Construction,
+    GROUND_FLOOR,            !- Name
+    PIR_floor,               !- Outside Layer
+    Concrete_floor;          !- Layer 2 (inside)
+
+Construction,
+    GLAZING,                 !- Name
+    GLAZING_MAT;             !- Outside Layer
+
+Construction,
+    TB_CONSTRUCTION,         !- Name (thermal-bridge conductance path)
+    TB_MAT;                  !- Outside Layer
+
+!-============================================================================
+!- GEOMETRY
+!- World coordinates, counterclockwise (viewed from outside), upper-left start.
+!- Box: x 0..10, y 0..10, z 0..3. +Y = North, -Y = South, +X = East, -X = West.
+!-============================================================================
+
+GlobalGeometryRules,
+    UpperLeftCorner,         !- Starting Vertex Position
+    Counterclockwise,        !- Vertex Entry Direction
+    World;                   !- Coordinate System
+
+Zone,
+    Box_Zone,                !- Name
+    0,                       !- Direction of Relative North {deg}
+    0, 0, 0,                 !- X,Y,Z Origin {m}
+    1,                       !- Type
+    1,                       !- Multiplier
+    3.0,                     !- Ceiling Height {m}
+    300.0,                   !- Volume {m3}
+    100.0;                   !- Floor Area {m2}
+
+!- South wall (y=0, outward normal -Y) — receives primary solar
+BuildingSurface:Detailed,
+    Wall_South,              !- Name
+    Wall,                    !- Surface Type
+    EXT_WALL,                !- Construction Name
+    Box_Zone,                !- Zone Name
+    ,                        !- Space Name
+    Outdoors,                !- Outside Boundary Condition
+    ,                        !- Outside Boundary Condition Object
+    SunExposed,              !- Sun Exposure
+    WindExposed,             !- Wind Exposure
+    autocalculate,           !- View Factor to Ground
+    4,                       !- Number of Vertices
+    0.0, 0.0, 3.0,           !- Vertex 1 (upper-left)
+    0.0, 0.0, 0.0,           !- Vertex 2 (lower-left)
+    10.0, 0.0, 0.0,          !- Vertex 3 (lower-right)
+    10.0, 0.0, 3.0;          !- Vertex 4 (upper-right)
+
+!- North wall (y=10, outward normal +Y)
+BuildingSurface:Detailed,
+    Wall_North,              !- Name
+    Wall,                    !- Surface Type
+    EXT_WALL,                !- Construction Name
+    Box_Zone,                !- Zone Name
+    ,                        !- Space Name
+    Outdoors,                !- Outside Boundary Condition
+    ,                        !- Outside Boundary Condition Object
+    SunExposed,              !- Sun Exposure
+    WindExposed,             !- Wind Exposure
+    autocalculate,           !- View Factor to Ground
+    4,                       !- Number of Vertices
+    10.0, 10.0, 3.0,         !- Vertex 1 (upper-left)
+    10.0, 10.0, 0.0,         !- Vertex 2 (lower-left)
+    0.0, 10.0, 0.0,          !- Vertex 3 (lower-right)
+    0.0, 10.0, 3.0;          !- Vertex 4 (upper-right)
+
+!- East wall (x=10, outward normal +X)
+BuildingSurface:Detailed,
+    Wall_East,               !- Name
+    Wall,                    !- Surface Type
+    EXT_WALL,                !- Construction Name
+    Box_Zone,                !- Zone Name
+    ,                        !- Space Name
+    Outdoors,                !- Outside Boundary Condition
+    ,                        !- Outside Boundary Condition Object
+    SunExposed,              !- Sun Exposure
+    WindExposed,             !- Wind Exposure
+    autocalculate,           !- View Factor to Ground
+    4,                       !- Number of Vertices
+    10.0, 0.0, 3.0,          !- Vertex 1 (upper-left)
+    10.0, 0.0, 0.0,          !- Vertex 2 (lower-left)
+    10.0, 10.0, 0.0,         !- Vertex 3 (lower-right)
+    10.0, 10.0, 3.0;         !- Vertex 4 (upper-right)
+
+!- West wall (x=0, outward normal -X)
+BuildingSurface:Detailed,
+    Wall_West,               !- Name
+    Wall,                    !- Surface Type
+    EXT_WALL,                !- Construction Name
+    Box_Zone,                !- Zone Name
+    ,                        !- Space Name
+    Outdoors,                !- Outside Boundary Condition
+    ,                        !- Outside Boundary Condition Object
+    SunExposed,              !- Sun Exposure
+    WindExposed,             !- Wind Exposure
+    autocalculate,           !- View Factor to Ground
+    4,                       !- Number of Vertices
+    0.0, 10.0, 3.0,          !- Vertex 1 (upper-left)
+    0.0, 10.0, 0.0,          !- Vertex 2 (lower-left)
+    0.0, 0.0, 0.0,           !- Vertex 3 (lower-right)
+    0.0, 0.0, 3.0;           !- Vertex 4 (upper-right)
+
+!- Roof (z=3, outward normal +Z)
+BuildingSurface:Detailed,
+    Roof,                    !- Name
+    Roof,                    !- Surface Type
+    ROOF,                    !- Construction Name
+    Box_Zone,                !- Zone Name
+    ,                        !- Space Name
+    Outdoors,                !- Outside Boundary Condition
+    ,                        !- Outside Boundary Condition Object
+    SunExposed,              !- Sun Exposure
+    WindExposed,             !- Wind Exposure
+    autocalculate,           !- View Factor to Ground
+    4,                       !- Number of Vertices
+    0.0, 0.0, 3.0,           !- Vertex 1
+    10.0, 0.0, 3.0,          !- Vertex 2
+    10.0, 10.0, 3.0,         !- Vertex 3
+    0.0, 10.0, 3.0;          !- Vertex 4
+
+!- Ground floor (z=0, outward normal -Z). Outdoors/NoSun/NoWind — see D5a.
+BuildingSurface:Detailed,
+    Floor,                   !- Name
+    Floor,                   !- Surface Type
+    GROUND_FLOOR,            !- Construction Name
+    Box_Zone,                !- Zone Name
+    ,                        !- Space Name
+    Outdoors,                !- Outside Boundary Condition
+    ,                        !- Outside Boundary Condition Object
+    NoSun,                   !- Sun Exposure
+    NoWind,                  !- Wind Exposure
+    autocalculate,           !- View Factor to Ground
+    4,                       !- Number of Vertices
+    0.0, 0.0, 0.0,           !- Vertex 1
+    0.0, 10.0, 0.0,          !- Vertex 2
+    10.0, 10.0, 0.0,         !- Vertex 3
+    10.0, 0.0, 0.0;          !- Vertex 4
+
+!- Thermal bridge conductance surface (~2.0 W/K). NoSun/NoWind detached patch;
+!- represents psi 0.05 x 40 m. As-run UA reported via surface conduction. (D5e)
+BuildingSurface:Detailed,
+    Thermal_Bridge,          !- Name
+    Wall,                    !- Surface Type
+    TB_CONSTRUCTION,         !- Construction Name
+    Box_Zone,                !- Zone Name
+    ,                        !- Space Name
+    Outdoors,                !- Outside Boundary Condition
+    ,                        !- Outside Boundary Condition Object
+    NoSun,                   !- Sun Exposure
+    NoWind,                  !- Wind Exposure
+    autocalculate,           !- View Factor to Ground
+    4,                       !- Number of Vertices
+    20.0, 20.0, 1.0,         !- Vertex 1
+    20.0, 20.0, 0.0,         !- Vertex 2
+    21.0, 20.0, 0.0,         !- Vertex 3
+    21.0, 20.0, 1.0;         !- Vertex 4
+
+!-============================================================================
+!- WINDOWS — one 2.0 x 1.5 m (3 m2) per facade, centred, sill 0.75 m.
+!-============================================================================
+
+FenestrationSurface:Detailed,
+    Window_South,            !- Name
+    Window,                  !- Surface Type
+    GLAZING,                 !- Construction Name
+    Wall_South,              !- Building Surface Name
+    ,                        !- Outside Boundary Condition Object
+    autocalculate,           !- View Factor to Ground
+    ,                        !- Frame and Divider Name
+    1,                       !- Multiplier
+    4,                       !- Number of Vertices
+    4.0, 0.0, 2.25,          !- Vertex 1 (upper-left)
+    4.0, 0.0, 0.75,          !- Vertex 2 (lower-left)
+    6.0, 0.0, 0.75,          !- Vertex 3 (lower-right)
+    6.0, 0.0, 2.25;          !- Vertex 4 (upper-right)
+
+FenestrationSurface:Detailed,
+    Window_North,            !- Name
+    Window,                  !- Surface Type
+    GLAZING,                 !- Construction Name
+    Wall_North,              !- Building Surface Name
+    ,                        !- Outside Boundary Condition Object
+    autocalculate,           !- View Factor to Ground
+    ,                        !- Frame and Divider Name
+    1,                       !- Multiplier
+    4,                       !- Number of Vertices
+    6.0, 10.0, 2.25,         !- Vertex 1 (upper-left)
+    6.0, 10.0, 0.75,         !- Vertex 2 (lower-left)
+    4.0, 10.0, 0.75,         !- Vertex 3 (lower-right)
+    4.0, 10.0, 2.25;         !- Vertex 4 (upper-right)
+
+FenestrationSurface:Detailed,
+    Window_East,             !- Name
+    Window,                  !- Surface Type
+    GLAZING,                 !- Construction Name
+    Wall_East,               !- Building Surface Name
+    ,                        !- Outside Boundary Condition Object
+    autocalculate,           !- View Factor to Ground
+    ,                        !- Frame and Divider Name
+    1,                       !- Multiplier
+    4,                       !- Number of Vertices
+    10.0, 4.0, 2.25,         !- Vertex 1 (upper-left)
+    10.0, 4.0, 0.75,         !- Vertex 2 (lower-left)
+    10.0, 6.0, 0.75,         !- Vertex 3 (lower-right)
+    10.0, 6.0, 2.25;         !- Vertex 4 (upper-right)
+
+FenestrationSurface:Detailed,
+    Window_West,             !- Name
+    Window,                  !- Surface Type
+    GLAZING,                 !- Construction Name
+    Wall_West,               !- Building Surface Name
+    ,                        !- Outside Boundary Condition Object
+    autocalculate,           !- View Factor to Ground
+    ,                        !- Frame and Divider Name
+    1,                       !- Multiplier
+    4,                       !- Number of Vertices
+    0.0, 6.0, 2.25,          !- Vertex 1 (upper-left)
+    0.0, 6.0, 0.75,          !- Vertex 2 (lower-left)
+    0.0, 4.0, 0.75,          !- Vertex 3 (lower-right)
+    0.0, 4.0, 2.25;          !- Vertex 4 (upper-right)
+
+!-============================================================================
+!- INTERNAL GAINS
+!-============================================================================
+
+!- 4 people at 0.70 presence -> 2.8 effective during occupied hours.
+!- Sensible Heat Fraction 0.5769 x 130 W = 75 W sensible, 55 W latent.
+People,
+    Box_People,              !- Name
+    Box_Zone,                !- Zone or ZoneList or Space or SpaceList Name
+    OCC_PRESENCE,            !- Number of People Schedule Name
+    People,                  !- Number of People Calculation Method
+    4,                       !- Number of People
+    ,                        !- People per Floor Area {person/m2}
+    ,                        !- Floor Area per Person {m2/person}
+    0.3,                     !- Fraction Radiant
+    0.5769,                  !- Sensible Heat Fraction
+    ACTIVITY_LEVEL;          !- Activity Level Schedule Name
+
+!- 5 W/m2 x 100 m2 = 500 W. Return Air Fraction 0 -> all heat stays in zone.
+Lights,
+    Box_Lights,              !- Name
+    Box_Zone,                !- Zone or ZoneList or Space or SpaceList Name
+    LIGHTS_SCHED,            !- Schedule Name
+    LightingLevel,           !- Design Level Calculation Method
+    500,                     !- Lighting Level {W}
+    ,                        !- Watts per Zone Floor Area {W/m2}
+    ,                        !- Watts per Person {W/person}
+    0,                       !- Return Air Fraction
+    0.7,                     !- Fraction Radiant
+    0.2,                     !- Fraction Visible
+    1.0;                     !- Fraction Replaceable
+
+!- Equipment baseload: 3 W/m2 x 100 = 300 W, 24/7.
+ElectricEquipment,
+    Box_Equip_Base,          !- Name
+    Box_Zone,                !- Zone or ZoneList or Space or SpaceList Name
+    ALWAYS_ON,               !- Schedule Name
+    EquipmentLevel,          !- Design Level Calculation Method
+    300,                     !- Design Level {W}
+    ,                        !- Watts per Zone Floor Area {W/m2}
+    ,                        !- Watts per Person {W/person}
+    0,                       !- Fraction Latent
+    0,                       !- Fraction Radiant
+    0;                       !- Fraction Lost
+
+!- Equipment active: 2 W/m2 x 100 = 200 W, occupied hours.
+ElectricEquipment,
+    Box_Equip_Active,        !- Name
+    Box_Zone,                !- Zone or ZoneList or Space or SpaceList Name
+    EQUIP_ACTIVE_SCHED,      !- Schedule Name
+    EquipmentLevel,          !- Design Level Calculation Method
+    200,                     !- Design Level {W}
+    ,                        !- Watts per Zone Floor Area {W/m2}
+    ,                        !- Watts per Person {W/person}
+    0,                       !- Fraction Latent
+    0,                       !- Fraction Radiant
+    0;                       !- Fraction Lost
+
+!-============================================================================
+!- INFILTRATION — 0.5 ACH constant (coefficients 1,0,0,0 = no wind/temp term).
+!- Separate from MVHR (no double-count): matches NZA-Sim's separate
+!- fabric_leakage and mech_ventilation loss lines.
+!-============================================================================
+
+ZoneInfiltration:DesignFlowRate,
+    Box_Infiltration,        !- Name
+    Box_Zone,                !- Zone or ZoneList or Space or SpaceList Name
+    ALWAYS_ON,               !- Schedule Name
+    AirChanges/Hour,         !- Design Flow Rate Calculation Method
+    ,                        !- Design Flow Rate {m3/s}
+    ,                        !- Flow Rate per Floor Area {m3/s-m2}
+    ,                        !- Flow Rate per Exterior Surface Area {m3/s-m2}
+    0.5,                     !- Air Changes per Hour {1/hr}
+    1.0,                     !- Constant Term Coefficient
+    0.0,                     !- Temperature Term Coefficient
+    0.0,                     !- Velocity Term Coefficient
+    0.0;                     !- Velocity Squared Term Coefficient
+
+!-============================================================================
+!- HVAC — ideal loads with MVHR modelled as outdoor air + sensible heat recovery
+!-============================================================================
+
+!- MVHR: 50 L/s = 0.050 m3/s balanced supply, delivered via the ideal loads OA.
+DesignSpecification:OutdoorAir,
+    Box_MVHR_OA,             !- Name
+    Flow/Zone,               !- Outdoor Air Method
+    ,                        !- Outdoor Air Flow per Person {m3/s-person}
+    ,                        !- Outdoor Air Flow per Zone Floor Area {m3/s-m2}
+    0.050;                   !- Outdoor Air Flow per Zone {m3/s}
+
+!- Explicit OA inlet node so EnergyPlus reads ambient conditions at the OA
+!- intake (silences the auto-created-node informational warning).
+OutdoorAir:Node,
+    Box_OA_Inlet_Node;       !- Name
+
+ZoneControl:Thermostat,
+    Box_Thermostat,          !- Name
+    Box_Zone,                !- Zone or ZoneList Name
+    DUAL_CONTROL_TYPE,       !- Control Type Schedule Name
+    ThermostatSetpoint:DualSetpoint,  !- Control 1 Object Type
+    Box_DualSetpoint;        !- Control 1 Name
+
+ThermostatSetpoint:DualSetpoint,
+    Box_DualSetpoint,        !- Name
+    HEATING_SETPOINT,        !- Heating Setpoint Temperature Schedule Name
+    COOLING_SETPOINT;        !- Cooling Setpoint Temperature Schedule Name
+
+ZoneHVAC:EquipmentConnections,
+    Box_Zone,                !- Zone Name
+    Box_EquipList,           !- Zone Conditioning Equipment List Name
+    Box_Supply_Inlet,        !- Zone Air Inlet Node or NodeList Name
+    ,                        !- Zone Air Exhaust Node or NodeList Name
+    Box_Zone_Air_Node,       !- Zone Air Node Name
+    Box_Return_Node;         !- Zone Return Air Node or NodeList Name
+
+ZoneHVAC:EquipmentList,
+    Box_EquipList,           !- Name
+    SequentialLoad,          !- Load Distribution Scheme
+    ZoneHVAC:IdealLoadsAirSystem,  !- Zone Equipment 1 Object Type
+    Box_IdealLoads,          !- Zone Equipment 1 Name
+    1,                       !- Zone Equipment 1 Cooling Sequence
+    1,                       !- Zone Equipment 1 Heating or No-Load Sequence
+    ,                        !- Zone Equipment 1 Sequential Cooling Fraction Schedule Name
+    ;                        !- Zone Equipment 1 Sequential Heating Fraction Schedule Name
+
+ZoneHVAC:IdealLoadsAirSystem,
+    Box_IdealLoads,          !- Name
+    ,                        !- Availability Schedule Name
+    Box_Supply_Inlet,        !- Zone Supply Air Node Name
+    ,                        !- Zone Exhaust Air Node Name
+    ,                        !- System Inlet Air Node Name
+    50,                      !- Maximum Heating Supply Air Temperature {C}
+    13,                      !- Minimum Cooling Supply Air Temperature {C}
+    0.0156,                  !- Maximum Heating Supply Air Humidity Ratio {kgWater/kgDryAir}
+    0.0077,                  !- Minimum Cooling Supply Air Humidity Ratio {kgWater/kgDryAir}
+    NoLimit,                 !- Heating Limit
+    ,                        !- Maximum Heating Air Flow Rate {m3/s}
+    ,                        !- Maximum Sensible Heating Capacity {W}
+    NoLimit,                 !- Cooling Limit
+    ,                        !- Maximum Cooling Air Flow Rate {m3/s}
+    ,                        !- Maximum Total Cooling Capacity {W}
+    ,                        !- Heating Availability Schedule Name
+    ,                        !- Cooling Availability Schedule Name
+    None,                    !- Dehumidification Control Type
+    ,                        !- Cooling Sensible Heat Ratio {dimensionless}
+    None,                    !- Humidification Control Type
+    Box_MVHR_OA,             !- Design Specification Outdoor Air Object Name
+    Box_OA_Inlet_Node,       !- Outdoor Air Inlet Node Name
+    None,                    !- Demand Controlled Ventilation Type
+    NoEconomizer,            !- Outdoor Air Economizer Type
+    Sensible,                !- Heat Recovery Type
+    0.75,                    !- Sensible Heat Recovery Effectiveness {dimensionless}
+    0.0;                     !- Latent Heat Recovery Effectiveness {dimensionless}
+
+!-============================================================================
+!- OUTPUT
+!-============================================================================
+
+Output:VariableDictionary,
+    IDF;                     !- Key Field (RDD lists exact available variable names)
+
+Output:SQLite,
+    SimpleAndTabular;        !- Option Type
+
+OutputControl:Table:Style,
+    CommaAndHTML;            !- Column Separator
+
+Output:Table:SummaryReports,
+    AllSummary;              !- Report 1 Name
+
+!- ---- Annual (RunPeriod) totals for the comparison harness ----
+!- Ideal-loads demand (heating/cooling).
+Output:Variable, *, Zone Ideal Loads Supply Air Sensible Heating Energy, RunPeriod;
+Output:Variable, *, Zone Ideal Loads Supply Air Sensible Cooling Energy, RunPeriod;
+Output:Variable, *, Zone Ideal Loads Supply Air Total Heating Energy, RunPeriod;
+Output:Variable, *, Zone Ideal Loads Supply Air Total Cooling Energy, RunPeriod;
+Output:Variable, *, Zone Ideal Loads Zone Sensible Heating Energy, RunPeriod;
+Output:Variable, *, Zone Ideal Loads Zone Sensible Cooling Energy, RunPeriod;
+!- Outdoor-air (MVHR) load after heat recovery = mech-vent loss equivalent.
+Output:Variable, *, Zone Ideal Loads Outdoor Air Sensible Heating Energy, RunPeriod;
+Output:Variable, *, Zone Ideal Loads Outdoor Air Sensible Cooling Energy, RunPeriod;
+Output:Variable, *, Zone Ideal Loads Outdoor Air Total Heating Energy, RunPeriod;
+Output:Variable, *, Zone Ideal Loads Heat Recovery Sensible Heating Energy, RunPeriod;
+Output:Variable, *, Zone Ideal Loads Heat Recovery Sensible Cooling Energy, RunPeriod;
+!- Per-surface conduction (fabric breakdown: walls / roof / floor / bridge).
+Output:Variable, *, Surface Average Face Conduction Heat Transfer Energy, RunPeriod;
+!- Windows: conduction loss/gain and transmitted solar.
+Output:Variable, *, Surface Window Heat Loss Energy, RunPeriod;
+Output:Variable, *, Surface Window Heat Gain Energy, RunPeriod;
+Output:Variable, *, Surface Window Transmitted Solar Radiation Energy, RunPeriod;
+Output:Variable, *, Enclosure Windows Total Transmitted Solar Radiation Energy, RunPeriod;
+!- Infiltration.
+Output:Variable, *, Zone Infiltration Sensible Heat Loss Energy, RunPeriod;
+Output:Variable, *, Zone Infiltration Sensible Heat Gain Energy, RunPeriod;
+Output:Variable, *, Zone Infiltration Total Heat Loss Energy, RunPeriod;
+!- Internal gains.
+Output:Variable, *, Zone People Sensible Heating Energy, RunPeriod;
+Output:Variable, *, Zone People Total Heating Energy, RunPeriod;
+Output:Variable, *, Zone Lights Total Heating Energy, RunPeriod;
+Output:Variable, *, Zone Electric Equipment Total Heating Energy, RunPeriod;
+!- Zone mean air temperature (annual mean — sanity).
+Output:Variable, *, Zone Mean Air Temperature, RunPeriod;
+
+!- ---- Hourly profiles for the sample-week falsifiability check ----
+Output:Variable, *, Site Outdoor Air Drybulb Temperature, Hourly;
+Output:Variable, *, Zone Mean Air Temperature, Hourly;
+Output:Variable, *, Zone Ideal Loads Supply Air Sensible Heating Energy, Hourly;
+Output:Variable, *, Zone Ideal Loads Supply Air Sensible Cooling Energy, Hourly;
+
+!- ---- End-use meters (cross-check internal-gain energy) ----
+Output:Meter, InteriorLights:Electricity, RunPeriod;
+Output:Meter, InteriorEquipment:Electricity, RunPeriod;

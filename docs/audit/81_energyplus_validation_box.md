@@ -355,7 +355,137 @@ requirement, realised as *both* (env var takes precedence over the committed def
 
 
 
-## §5 — Hand-authored Bridgewater-Box IDF + first run  *(P5 — pending)*
+## §5 — Hand-authored Bridgewater-Box IDF + first run
+
+**Deliverable:** `validation/energyplus/bridgewater_box_v1.idf` — a hand-authored
+EnergyPlus model of the Bridgewater-Box, built "the EnergyPlus way" directly from
+the fixture (`validation/fixtures/bridgewater_box_v1.yaml`), **not** reverse-engineered
+from NZA-Sim's internal state model. First run completed on EnergyPlus V26.1.0:
+**Completed Successfully — 1 Warning, 0 Severe Errors** (run dir
+`validation/energyplus/runs/box_v1/`, gitignored).
+
+### §5.1 — IDF references consulted (no syntax guessing)
+
+Per the brief ("read the EnergyPlus Input/Output Reference and example files — do
+NOT guess IDF syntax"), every non-trivial object's field order was confirmed against
+the bundled V26.1.0 example files before authoring:
+
+| Object | Reference example file | What was confirmed |
+|---|---|---|
+| `ZoneHVAC:IdealLoadsAirSystem` (+`EquipmentList`/`EquipmentConnections`) | `ExampleFiles/ZoneCoupledKivaSlab.idf`, `MovableExtInsulationSimple.idf` | 27-field order; OA object name / heat-recovery-type / sensible-HRE field positions |
+| `WindowMaterial:SimpleGlazingSystem` | `ExampleFiles/WindowTestsSimple.idf` | Name / U-Factor / SHGC / Visible Transmittance |
+| `DesignSpecification:OutdoorAir` | `ExampleFiles/5ZoneAirCooled.idf` | Method / per-person / per-area / per-zone flow fields → used `Flow/Zone 0.050 m³/s` |
+| `BuildingSurface:Detailed` | `ExampleFiles/ZoneCoupledKivaSlab.idf` | V26.1 Space-Name field (position 5); wall vertex winding matches our computed order |
+| `FenestrationSurface:Detailed` | `ExampleFiles/5ZoneAirCooled.idf` | Window field order + UL→LL→LR→UR winding (matches our south-wall window) |
+
+The example wall/window windings (e.g. Kiva slab's `0,0,h / 0,0,0 / 10,0,0 / 10,0,h`
+south wall) matched the vertices computed for the box exactly, independently
+confirming the geometry.
+
+### §5.2 — How each fixture term maps into the IDF
+
+- **Geometry:** `GlobalGeometryRules` UpperLeftCorner / Counterclockwise / World; six
+  `BuildingSurface:Detailed` (4 walls, roof, floor) on a 10×10×3 box; four
+  `FenestrationSurface:Detailed` 2.0×1.5 m windows (one per facade, sill 0.75 m).
+  Orientation 0 → axis-aligned (+Y North, −Y South, +X East, −X West). Zone `Volume`
+  and `Floor Area` set explicitly (300 m³ / 100 m²).
+- **Constructions:** exact fixture `Material` layers (outside→inside, dense concrete
+  inner leaf for mass) + `WindowMaterial:SimpleGlazingSystem {U 1.2, SHGC 0.55, VT 0.7}`.
+  Layer-resolved effective U with ISO films: wall **0.179**, roof **0.150**, floor
+  **0.201** — within rounding of the published 0.18/0.15/0.20.
+- **Internal gains:** `People` (4 @ 0.70 presence → 2.8 effective, Sensible Heat
+  Fraction 0.5769×130 W = 75 W sens / 55 W lat), `Lights` (500 W, Return Air Fraction 0),
+  two `ElectricEquipment` (300 W base 24/7 + 200 W active occupied). Single occupied
+  window 07:00–21:00 via `Schedule:Compact`.
+- **Infiltration:** `ZoneInfiltration:DesignFlowRate`, AirChanges/Hour 0.5, coefficients
+  (1,0,0,0) → constant, no wind/temp term. Separate object from the MVHR (no double-count).
+- **MVHR:** modelled inside the ideal-loads system via `DesignSpecification:OutdoorAir`
+  (0.050 m³/s) + `Heat Recovery Type = Sensible`, `Sensible HRE = 0.75`,
+  `NoEconomizer` (no summer bypass). See D5c.
+- **HVAC:** `ZoneHVAC:IdealLoadsAirSystem` (NoLimit heating/cooling, dehumid/humid
+  control None → sensible-only) driven by a `ThermostatSetpoint:DualSetpoint` 21/24 °C.
+
+### §5.3 — Modelling decisions / divergences (added to the brief's D-list)
+
+- **D5a — Ground floor → Outdoors, NoSun/NoWind.** NZA-Sim loses *all* fabric
+  (including the ground floor) to outdoor dry-bulb (UA·ΔT, no ground model). Modelling
+  the EP floor as `Ground` would inject a ground-temperature assumption NZA-Sim does
+  not make, manufacturing a divergence. `Outdoors`/NoSun/NoWind reproduces NZA-Sim's
+  treatment and is legitimate EnergyPlus. The remaining film-coefficient difference is
+  the expected U-model-vs-layer-resolved gap (P9 fabric tolerance ±20% absorbs it).
+- **D5b — HVAC = IdealLoads (NoLimit).** Clean demand reporting, no sizing/equipment
+  dynamics; sensible-only (dehumid/humid off) matches NZA-Sim's sensible heat balance.
+- **D5c — MVHR via OA + sensible heat recovery (not a fan/AHU object).** IdealLoads has
+  no fan, so the **SFP 1.5 W/(L/s) fan electricity is computed analytically downstream**
+  (P8) — out of the zone heat balance, as it is in NZA-Sim. Heat recovery is real EP
+  physics, not a workaround.
+- **D5d — DHW NOT in the IDF.** In *both* engines DHW is a closed-form analytical load
+  (litres·ρ·cp·ΔT/η) with zero zone coupling. EnergyPlus's `WaterHeater:Mixed` would add
+  tank/standby/recovery dynamics NZA-Sim does not model — manufacturing divergence. DHW
+  is therefore compared analytically-to-analytically (P8/P9) and is **not** in the P5
+  zone-heat-balance falsifiability set. Its absence here does not affect heating/cooling.
+- **D5e — Thermal bridge = dedicated NoMass conductance surface.** EnergyPlus has no
+  first-class linear-ψ object in the CTF heat balance. The 2.0 W/K bridge (ψ 0.05 × 40 m)
+  is represented by a small detached `Material:NoMass` surface (`THERMAL_BRIDGE`,
+  NoSun/NoWind, R 0.33 so target U·A ≈ 2.0 W/K incl. films). This is the *same* extra
+  conductance-to-ambient path expressed in EP's own surface machinery, not a mirror of
+  NZA-Sim internals. The detached patch is the source of the single benign warning (see
+  §5.5); as-run conduction is **−0.188 MWh/yr**, compared in P9.
+
+### §5.4 — First-run results & falsifiability (the brief's five P5 checks)
+
+Run: `energyplus.exe -w data/weather/current/GBR_ENG_Yeovilton…epw -d …/runs/box_v1 -r bridgewater_box_v1.idf`.
+Annual values read from `eplusout.sql` (RunPeriod frequency):
+
+| Brief P5 falsifiability check | Result | Pass |
+|---|---|---|
+| IDF runs successfully on EnergyPlus | Completed Successfully, 0 Severe | ✅ |
+| Annual heating in sensible range (2–6 MWh for a 100 m² box) | **3.278 MWh** (Supply Air Sensible Heating) | ✅ |
+| Cooling demand small | **0.677 MWh** (Supply Air Sensible Cooling) | ✅ |
+| Mech-vent heat loss non-zero (50 L/s, 25% un-recovered) | OA sensible heating **3.688 MWh**, heat recovery **3.029 MWh** | ✅ |
+| Sample-week hourly outputs vary hour-by-hour | Jan-15 heating 1.339→0.560→1.317 kWh/h; annual hourly range 0–2.69 kWh/h, 4 425 distinct values | ✅ |
+
+**Independent hand-calc cross-checks (internal gains — exact to 4 s.f.):**
+
+| Term | EnergyPlus | Hand calc | 
+|---|---|---|
+| People sensible | 1.0731 MWh | 2.8 × 75 W × 5 110 h = 1.073 |
+| People total | 1.8600 MWh | 2.8 × 130 W × 5 110 h = 1.860 |
+| Lights | 2.5550 MWh | 500 W × 14 h × 365 = 2.555 |
+| Equipment | 3.6500 MWh | 300 W × 8 760 + 200 W × 5 110 = 3.650 |
+| Infiltration loss | 4.8771 MWh | 0.5 ACH, UA ≈ 50.3 W/K (dominant loss, as expected) |
+
+Solar is correctly south-dominant (transmitted: S 1.216 > W 0.943 > E 0.833 > N 0.404 MWh;
+enclosure total 3.396 MWh = Σ windows). Per-surface opaque conduction (all heat-out):
+floor −1.884, roof −1.271, walls −1.567 (Σ4), thermal bridge −0.188 MWh. Zone mean air
+temperature **21.81 °C** sits between the 21/24 setpoints (winter hours pinned at 21.0,
+summer capped at 24.0) — physically sensible, no round-number or impossible values.
+
+> Note on the OA/heat-recovery decomposition: EnergyPlus reports OA sensible heating,
+> zone sensible heating, supply-air sensible heating and heat-recovery sensible heating
+> as separate variables whose partition is subtle. Identifying which one maps to
+> NZA-Sim's single `mech_ventilation` loss line is deferred to P8/P9 (the extractor /
+> comparison), where the I/O-Reference definitions will be read carefully. For P5 the
+> requirement is only that the mech-vent terms are present, sensible, and non-zero — met.
+
+### §5.5 — Output declarations & the one remaining warning
+
+The IDF requests RunPeriod totals (ideal-loads demand, per-surface conduction, window
+loss/gain/transmitted-solar, infiltration, internal gains, zone mean temp), Hourly
+profiles (outdoor dry-bulb, zone mean air temp, ideal-loads heating/cooling) for the
+sample-week check, end-use meters (lights/equipment electricity), plus
+`Output:VariableDictionary` (RDD), `Output:SQLite` and `Output:Table:SummaryReports`
+to feed the P7 runner/normaliser. Two first-pass warnings were resolved by tidying the
+IDF (explicit `OutdoorAir:Node`; V26.1 `Enclosure Windows Total Transmitted Solar…`
+variable name). The **single remaining warning** is the expected, harmless
+"Zone BOX_ZONE is not fully enclosed" — a direct consequence of the detached D5e
+thermal-bridge patch; EnergyPlus correctly falls back to floor-area × ceiling-height for
+the zone volume (= 300 m³, our explicit value), so it has no effect on results.
+
+Numbers were re-confirmed stable after the tidy (heating 3.2775, cooling 0.6768, OA
+sensible 3.6882, heat recovery 3.0286, enclosure solar 3.3955 MWh).
+
+
 
 ## §6 — Python IDF generator (eppy) + byte-stability  *(P6 — pending)*
 
