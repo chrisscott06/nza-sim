@@ -1,6 +1,14 @@
 # Current brief
 
-**No active brief.** Brief 77 just closed (`8b2301f` P2+P3 + close commit landing now). Brief 75 stays open at "P2-only — superseded by Brief 76 P2."
+**Brief 81 — EnergyPlus validation harness (Bridgewater-Box first rung) — OVERNIGHT.**
+Active on branch `feat/energyplus-validation` (cut from `main` tip `d8a6207`). **Never merges to `main`
+during this brief.** Build an independent EnergyPlus reference for the JS engine and compare at the
+OUTPUT level on Bridgewater-Box. Brief: [`active/81_energyplus_validation_box.md`](active/81_energyplus_validation_box.md).
+Audit: [`docs/audit/81_energyplus_validation_box.md`](../audit/81_energyplus_validation_box.md).
+
+Brief 75 stays open at "P2-only — superseded by Brief 76 P2."
+
+Earlier candidate list (Brief 78 door bug / 79 interventions harness / 80 WWHR) deferred behind Brief 81.
 
 Next brief is architect's call. Likely candidates:
 - **Brief 78 — door bug** (operable door heat_loss=0 on Systems Heat Balance).
