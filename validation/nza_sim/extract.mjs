@@ -20,9 +20,18 @@
  * results/bridgewater_box_v1.json — the anchor script now writes
  * results/bridgewater_box_v1.anchor.json (richer human-readable breakdown).
  *
+ * Brief 82 P2 (additive, opt-in): pass --hourly-temps to ALSO write an 8760-row
+ * hourly trace CSV (validation/nza_sim/results/bridgewater_box_v1_hourly_temps.csv)
+ * with the same schema as the EnergyPlus side (validation/energyplus/
+ * extract_hourly_temps.py). The default invocation (no flag) is unchanged — it
+ * still writes only the P8 comparison JSON. The hourly zone-air trace already
+ * exists on the standard result payload (result.demand.hourly_zone_air_c, set in
+ * instantCalc.js State 2 at L3282) — NO engine code change is needed.
+ *
  * Run:
  *   cd C:\Users\ChrisScott\Dev\nza-sim
- *   node validation/nza_sim/extract.mjs
+ *   node validation/nza_sim/extract.mjs                 # P8 JSON only (unchanged)
+ *   node validation/nza_sim/extract.mjs --hourly-temps  # also write P2 hourly CSV
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -33,6 +42,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.join(REPO_ROOT, 'validation', 'fixtures', 'bridgewater_box_v1.yaml')
 const OUT_DIR = path.join(__dirname, 'results')
 const OUT_FILE = path.join(OUT_DIR, 'bridgewater_box_v1.json')
+const HOURLY_OUT_FILE = path.join(OUT_DIR, 'bridgewater_box_v1_hourly_temps.csv')
+const WANT_HOURLY = process.argv.includes('--hourly-temps')
 
 // Match P7's rounding: 6 dp for MWh fields, 3 dp for monthly kWh / temps.
 const r6 = x => (x == null || Number.isNaN(Number(x)) ? null : Math.round(Number(x) * 1e6) / 1e6)
@@ -68,7 +79,7 @@ function monthlyMeanFromDailySum(dailySum) {
   return out
 }
 
-const { fixture, result } = loadAndRun(FIXTURE, REPO_ROOT)
+const { fixture, inputs, result } = loadAndRun(FIXTURE, REPO_ROOT)
 
 const c = result?.consumption ?? {}
 const d = result?.demand ?? {}
@@ -298,3 +309,40 @@ console.log(` monthly heating : sum ${r3(sum(monthlyHeatingKwh))} kWh`)
 console.log(` monthly cooling : sum ${r3(sum(monthlyCoolingKwh))} kWh`)
 console.log('=================================================================')
 console.log(`\nwrote ${path.relative(REPO_ROOT, OUT_FILE)}`)
+
+// ── Brief 82 P2: opt-in 8760-row hourly trace CSV ──────────────────────────
+// Schema-identical to validation/energyplus/extract_hourly_temps.py:
+//   hour_index, month, day, hour, zone_mean_air_temp_c, outdoor_drybulb_c,
+//   heating_demand_kwh, cooling_demand_kwh
+// hour_index is the 0-based ordinal hour of the year (0 = first hour). NZA index
+// h maps to EPW row h -> the (h+1)-th hour of the year, aligning index-for-index
+// with the EnergyPlus hour-ending TimeIndex (h+1). zone_mean_air_temp_c is the
+// post-solve conditioned zone air temperature (result.demand.hourly_zone_air_c,
+// instantCalc.js L3282) — the analogue of EnergyPlus 'Zone Mean Air Temperature'.
+if (WANT_HOURLY) {
+  const wd = inputs?.weatherData ?? {}
+  const temp = wd.temperature ?? []
+  const mon = wd.month ?? []
+  const day = wd.day ?? []
+  const hr = wd.hour ?? []
+  const N = hZoneT.length
+  const rr4 = x => (x == null || Number.isNaN(Number(x)) ? '' : Math.round(Number(x) * 1e4) / 1e4)
+  const rr6 = x => (x == null || Number.isNaN(Number(x)) ? '' : Math.round(Number(x) * 1e6) / 1e6)
+  const lines = ['hour_index,month,day,hour,zone_mean_air_temp_c,outdoor_drybulb_c,heating_demand_kwh,cooling_demand_kwh']
+  for (let h = 0; h < N; h++) {
+    lines.push([
+      h,
+      mon[h] ?? '',
+      day[h] ?? '',
+      hr[h] ?? '',
+      rr4(hZoneT[h]),
+      rr4(temp[h]),
+      rr6(hHeat[h]),
+      rr6(hCool[h]),
+    ].join(','))
+  }
+  fs.writeFileSync(HOURLY_OUT_FILE, lines.join('\n') + '\n', 'utf-8')
+  const meanT = sum(hZoneT) / N
+  console.log(`wrote ${path.relative(REPO_ROOT, HOURLY_OUT_FILE)} (${N} rows)`)
+  console.log(`NZA zone mean air temp = ${rr4(meanT)} C`)
+}
