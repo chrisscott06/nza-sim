@@ -252,12 +252,83 @@ Commit: `Brief 82 P2: hourly zone temperature extraction (both engines)`.
 
 ## §3 — P3: Temperature trace comparison + divergence regime analysis
 
-_(to be written at P3)_
+**Tool:** `validation/zone_temp_diagnostic.py` (stdlib only; read-only; no engine/IDF/DB touch).
+Loads the two P2 CSVs, re-asserts alignment (8760 rows, 0 calendar mismatches), computes the
+hour-by-hour delta (T_NZA − T_EP), annual + monthly stats, five regime breakdowns, the demand-gap
+decomposition, and answers the brief's five evidence questions. **Report:**
+`validation/reports/zone_temp_diagnostic_2026-06-03T09-30-40Z.md`.
 
-`validation/zone_temp_diagnostic.py`: hour-by-hour delta (T_NZA − T_EP), annual + monthly stats,
-divergence-regime classification, and the five evidence questions (constant vs conditional; vent
-correlation; gains correlation; heating/cooling/free-float mode asymmetry; setpoint-transition
-exaggeration). Report → `validation/reports/zone_temp_diagnostic_{ts}.md`.
+### §3.1 — Headline finding: the delta is a *free-float phenomenon*
+
+| EP mode | Hours | Mean delta (°C) | Contribution to annual mean (°C) |
+|---|---|---|---|
+| heating | 4426 | +0.223 | +0.112 |
+| cooling | 1173 | −0.002 | −0.000 |
+| **free-float** | **3161** | **+1.057** | **+0.382** |
+
+The +0.4938 °C annual mean (median only +0.103; 45.1 % of hours have |delta| < 0.05) is carried
+almost entirely by free-float hours. When either setpoint binds, **both engines pin to the same
+value and the delta collapses to ~0** (cooling mode delta is −0.002 °C). So the divergence is not a
+flat calibration offset — it is "NZA's *unconditioned* zone settles warmer than EnergyPlus's."
+
+### §3.2 — Where the Brief 81 demand gaps actually come from (decomposition)
+
+**Heating −24.0 % (NZA 2491.7 vs EP 3277.5 kWh; shortfall 785.8 kWh):**
+- **624.8 kWh** (≈80 %) is hours where EP still heats but NZA has floated above 21 °C and books
+  nothing (cross-tab EP-heating × NZA-free = 1912 h).
+- 161.0 kWh is NZA heating less while both are in heating mode (2514 h).
+
+**Cooling +107.9 % (NZA 1407.0 vs EP 676.8 kWh; excess 730.2 kWh):**
+- only **100.3 kWh** is hours where NZA has floated above 24 °C and cools while EP free-floats below
+  it (212 h).
+- **654.4 kWh** (≈90 %) is NZA **cooling harder while both engines cool** (1022 h, both pinned at
+  24 °C). This is a same-setpoint *load* difference, **not** a temperature-offset effect — a key
+  caveat the P4 counterfactual must respect (shifting the conditioned trace down cannot explain
+  extra cooling booked while the zone is already held at 24 °C).
+
+### §3.3 — Regime signatures (point at *loss-side*, not gains)
+
+- **Seasonal:** delta concentrates in shoulder months — May +1.39, Sep +1.14, Jun +0.90, Oct +0.70,
+  Apr +0.69 °C; deep winter (Dec/Jan/Feb ≈ 0) and high summer are conditioned-dominated so the delta
+  collapses.
+- **Outdoor band:** peaks at mild outdoor temps ([10,15) °C → +0.90 °C), ~0 at both extremes.
+- **Indoor−outdoor ΔT (loss proxy):** free-float delta correlates **positively** with ΔT
+  (r = +0.52) and **negatively** with outdoor drybulb (r = −0.60). The bigger the driving
+  temperature difference, the more NZA over-warms — the fingerprint of NZA shedding *less* heat than
+  EP for the same ΔT.
+- **Hour-of-day:** delta is **larger at night** (hours 22–05 ≈ +0.68..+0.71) and **smaller midday**
+  (hours 12–16 ≈ +0.28..+0.32); free-float delta is +1.28 °C unoccupied vs +0.77 °C occupied. A
+  gains-*retention* fault would do the opposite (peak during solar/occupied hours). Night-heavy,
+  ΔT-driven warmth is a **ventilation/fabric loss** signature.
+
+### §3.4 — The five evidence questions (answers)
+
+1. **Constant or conditional?** **Conditional.** Std 0.675 °C, range −0.86..+2.67; near-zero when
+   conditioned, large in free-float. r(delta, outdoor) = +0.095 overall but −0.598 within free-float.
+2. **Correlate with ventilation activity?** Bridgewater-Box vent is constant 50 L/s (no schedule),
+   so there are no scheduled-off hours to contrast from the temperature trace — **deferred to P4's
+   mech-vent re-booking.** Proxy: free-float delta vs indoor−outdoor ΔT r = +0.517 (loss-consistent).
+3. **Correlate with internal gains?** Hour-of-day proxy: free-float delta is *lower* in occupied
+   hours (+0.767) than unoccupied (+1.281) — **gains retention is not the driver.**
+4. **Correlate with heating/cooling mode?** **Yes — the headline (see §3.1).** Strongly
+   mode-asymmetric; free-float carries the offset.
+5. **Exaggerated at setpoint transitions?** Mode-change hours (478): mean |delta| 0.654 vs 0.491 °C
+   elsewhere — modestly larger, but the warmth is broad-spectrum across *all* free-float hours, not a
+   narrow hysteresis-at-transition spike. EP free-float zone mean 22.14 °C (21.01–24.00), mostly
+   hugging the 21 °C heating boundary.
+
+### §3.5 — Preliminary read (NOT the verdict — P4 is decisive)
+
+Evidence leans toward **candidate 1 (loss-side / MVHR coupling):** the free-float warmth is
+ΔT-driven and night-heavy (loss-side, not gains), and roughly-constant solver convention
+(candidate 2) is contradicted by the delta vanishing under conditioning. Candidate 3 (deadband
+hysteresis) is weakly supported at best. **Caveat that complicates a clean candidate-1 story:** the
+cooling gap is ~90 % "cools harder at the same 24 °C setpoint" (§3.2), which a downward temperature
+shift cannot book away — so even if candidate 1 is upstream of the *free-float* warmth, the cooling
+divergence may be partly an independent heat-balance/load difference. **Prediction for P4: outcome
+(b) — partial.** Re-booking a shifted trace should largely close the *heating* gap (mostly
+free-float-crossing driven) but is unlikely to close the *cooling* gap (mostly same-setpoint load).
+No hard-STOP triggered: patterns are physically coherent and fit the candidate set.
 
 ---
 
