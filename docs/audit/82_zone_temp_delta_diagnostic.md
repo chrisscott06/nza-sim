@@ -332,13 +332,122 @@ No hard-STOP triggered: patterns are physically coherent and fit the candidate s
 
 ---
 
-## §4 — P4: Counterfactual re-booking test
+## §4 — P4: Counterfactual re-booking test (the load-bearing test)
 
-_(to be written at P4 — the load-bearing test)_
+**Script:** `validation/nza_sim/counterfactual_rebook.mjs` (pure-Node, read-only).
+**Report:** `validation/reports/zone_temp_counterfactual_2026-06-03T09-48-35Z.md`.
+**Prediction (locked in §3.5 before measuring):** outcome **(b) — partial** (heating gap largely
+closes; cooling gap does not).
 
-Shift NZA trace by the mean offset, re-book heating/cooling against EnergyPlus setpoint logic (heat <
-21, cool > 24, deadband between) and mech-vent loss against shifted heating-mode hours; compare to
-EnergyPlus totals. Predict before measuring. Classify outcome (a)/(b)/(c).
+### §4.0 — Method correction (and why the brief's literal recipe is unusable here)
+
+The brief's literal recipe — "subtract 0.49 °C from every hour and re-book heating/cooling against
+EnergyPlus setpoint logic" — needs a demand model to turn a shifted temperature into kWh. The
+obvious choice is NZA's *own* law (instantCalc.js L3679/3694):
+
+```
+heating_Wh = max(0, −C_coef · (21 − T_air_free))
+cooling_Wh = max(0, −C_coef · (T_air_free − 24))
+```
+
+I built this first. It **explodes**: shifting the free-float trace down by just 0.25 °C drives
+heating from 2491.7 → 9307.9 kWh (**+184 %**); at 0.49 °C it reaches 17 147 kWh (**+423 %**). The
+δ=0 round-trip still passes exactly (it is an algebraic identity), so the round-trip sanity check is
+*necessary but not sufficient* — it cannot catch the extrapolation error.
+
+Root cause of the explosion (CLAUDE.md Rule 10 — diagnose, don't hand-wave): the recovered slope is
+constant at **−C_coef = 8.793 kWh/°C ≈ 8793 W/K** (std 0.0007 across all conditioned hours). That is
+~100× any physical UA for a box this size. The engine's own comment (L3659) names it: `C_coef` is the
+implicit-Euler one-step coefficient `C_thermal/Δt + Σ(UA)`, **dominated by thermal capacitance**
+(C_thermal/Δt ≈ 8793 W/K ⇒ C_thermal ≈ 31.7 MJ/K). The gap `(21 − T_air_free)` in a conditioned hour
+is therefore *tiny* (median ≈ 0.11 °C — the zone barely moves from its previous temperature in one
+hour because of its mass), and demand = huge coefficient × tiny gap. Multiplying a **persistent**
+0.49 °C offset by a **capacitance** coefficient fabricates a perpetual thermal-mass recharge *every
+hour* — physically a zone being re-chilled and re-heated 8760 times. The per-hour `−C_coef` cannot be
+used to extrapolate a standing offset. (This is preserved as Appendix A in the report — it is itself
+a finding: NZA's per-hour demand is a one-step implicit solve, not a steady-state degree-hour.)
+
+**Deviation from the literal recipe, justified.** Because the engine exposes no steady-state
+conductance and engine changes are forbidden, the only honest post-hoc test is a **mode-crossing
+reconciliation**: shift NZA's free-float trace down by δ, re-classify each hour against EP's setpoint
+logic, and reconcile demand using *EnergyPlus's own hourly demand* for recoverable heating (Rule 1:
+EP is the source of truth) and *NZA's own booked cooling* for removable cooling. No magnitude is ever
+extrapolated through `−C_coef`. This answers the brief's actual question — "does correcting the
+temperature delta close the demand gaps?" — without the artifact.
+
+### §4.1 — Baseline decomposition (per-hour join cross-check)
+
+The hourly join reproduces Brief 81 exactly (heating −24.0 %, cooling +107.9 %) and the P3
+decomposition exactly — confirming calendar alignment and correct mode classification:
+
+| Gap | Total | Mode-divergence portion | Same-setpoint magnitude portion |
+|---|---|---|---|
+| Heating shortfall (EP−NZA) | 785.8 kWh | **624.8 kWh** (1912 h: EP heats, NZA floats >21) — 80 % | 161.0 kWh (2514 h: both heat, NZA books less) — 20 % |
+| Cooling excess (NZA−EP) | 730.2 kWh | 100.3 kWh (212 h: NZA cools, EP floats <24) — 14 % | **654.4 kWh** (1022 h: both cool, NZA cools harder) — 86 % |
+
+The asymmetry *is* the answer: cooling the float can only address the **mode-divergence** portion of
+each gap. That portion is **80 %** of the heating shortfall but only **14 %** of the cooling excess.
+
+### §4.2 — Mode-crossing reconciliation sweep
+
+Shifting NZA's free-float down by δ, recoverable heating = EP demand in hours that flip
+EP-heat/NZA-free → agree; removable cooling = NZA demand in hours that flip NZA-cool/EP-free → agree:
+
+| δ (°C) | Reconciled heating | vs EP | Reconciled cooling | vs EP |
+|---|---|---|---|---|
+| 0.00 (baseline) | 2491.7 | −24.0 % | 1407.0 | +107.9 % |
+| 0.49 (Brief nominal) | 2941.5 | **−10.3 % ✓** | 1306.8 | +93.1 % |
+| 1.057 (P3 free-float mean) | 3037.8 | **−7.3 % ✓** | 1306.8 | +93.1 % |
+| 3.00 (ceiling) | 3116.5 | **−4.9 % ✓** | 1306.8 | +93.1 % |
+
+The free-float of the 1912 mode-divergent heating hours clusters just above 21 °C (min 21.00, median
+**21.26**, mean 21.52, max 23.46). That tight clustering is *why* a modest downshift recovers so much:
+δ=0.49 recovers 449.8 of the 624.8 kWh (72 %), δ=1.057 recovers 546.0 (87 %).
+
+**Ceilings (every mode-divergent hour flipped):**
+
+- **Heating → 3116.5 kWh = −4.9 % of EP → WITHIN ±15 %.** Residual is the 161.0 kWh same-setpoint
+  gap (NZA books slightly less while both heat) — directionally also helped by a downshift but a
+  magnitude effect, not quantified here. Heating is **closeable** by correcting the float.
+- **Cooling → 1306.8 kWh = +93.1 % of EP → OUTSIDE ±15 %.** All 100.3 kWh of mode-divergent cooling is
+  removed by δ=0.25 (those hours sit within 0.25 °C of 24), but the dominant 654.4 kWh — NZA cooling
+  **~2× harder than EP at the same 24 °C setpoint** — is structurally immune to any temperature shift.
+  Cooling is **not closeable** by correcting the float.
+
+### §4.3 — Mech-vent (directional only)
+
+The mech-vent net-loss gap (EP 665 vs NZA 1282 kWh, +92.9 %) behaves like cooling, not heating: a
+directional proxy (net vent UA 14.85 W/K over shifted heating-mode hours) is 576 kWh at δ=0 and
+**rises** to 811 kWh at δ=0.49 — cooling the float *adds* heating hours, moving the proxy *away* from
+the lower EP value. The mech-vent over-loss is the same-setpoint-magnitude family, consistent with the
+MVHR effective-recovery discrepancy flagged in P3 (NZA net/gross ≈ 54 % vs EP ≈ 82 %, both nominally
+75 %). Read the trend; the absolute does not reconcile because the engine bundles recovery inside
+`C_coef`.
+
+### §4.4 — Outcome and prediction assessment
+
+**OUTCOME (b) — hypothesis PARTIALLY confirmed.** Correcting the zone-temperature delta closes the
+**heating** gap (a free-float-crossing phenomenon: 80 % of the shortfall is hours NZA floats just
+above 21 °C while EP heats — reconciled to −5..−10 % of EP) but does **not** close the **cooling** gap
+(86 % of the excess is NZA cooling ~2× harder at the same setpoint — a magnitude difference no
+temperature shift can re-book). Mech-vent tracks cooling, not heating.
+
+- **Demand-prediction: CORRECT.** §3.5 predicted (b) — heating closes, cooling does not. Confirmed.
+- **Methodology-error: ACKNOWLEDGED.** My *first* re-booking method (NZA's own `−C_coef` law) was
+  wrong and produced a non-physical +423 % explosion. I caught it on the physical smell test
+  (CLAUDE.md Rule 3), diagnosed it as a capacitance-coefficient artifact (Rule 10), and replaced it
+  with the mode-crossing method. The explosion is documented as Appendix A, not buried.
+
+**Hard-STOP check:** Brief 82 says STOP if re-booking makes the gaps *worse*. Under the **correct**
+(mode-crossing) method, re-booking moves both gaps *toward* EP (heating −24 %→−10 %; cooling
++108 %→+93 %) — neither is made worse, so no STOP. (The discarded naive method *appeared* to worsen
+heating, but that was the documented artifact, not a real divergence.)
+
+**What P4 hands to P5:** the divergence is **two findings, not one.** (i) A free-float warmth that
+makes NZA settle ~1 °C above EP in unconditioned hours — loss-side/ΔT-driven per §3.3, and the sole
+driver of the heating gap and the small cooling-mode-flip portion. (ii) A same-setpoint cooling (and
+mech-vent) *magnitude* difference — NZA removes/loses ~2× the energy EP does at an agreed 24 °C — that
+is independent of zone temperature. Brief 83 cannot be a single fix.
 
 ---
 
