@@ -546,7 +546,65 @@ cooling magnitude is the genuinely open question. Brief 83 cannot be a single fi
 
 ## §6 — P6: Close summary + Brief 83 recommendation
 
-_(to be written at P6)_
+**Status: Brief 82 CLOSED 2026-06-03.** Diagnostic-only; no engine / IDF / DB change. All work on
+`feat/energyplus-validation` (cut from `main` tip `d8a6207`); the branch was **never merged or pushed
+to `main`** — `git branch --show-current` was verified before every commit, and `main` stayed at
+`d8a6207` throughout.
 
-P2/P3/P4/P5 recap, recommended Brief 83 scope (one fix / multiple / deeper review), confidence
-assessment. STATUS.md updated on the branch. Final push to origin. **No merge to `main`.**
+### §6.1 — What Brief 82 delivered
+
+| Part | Deliverable | Commit |
+|---|---|---|
+| P1 | Brief landing + branch verify + premise-check + audit §0/§1 | `89668d0` |
+| P2 | Hourly zone-temp extraction, both engines (CSV ×2, opt-in extractor flag) | `a788be6` |
+| P3 | Zone-temp trace comparison + divergence-regime analysis + report | `6a5992f` |
+| P4 | Counterfactual re-booking test (mode-crossing reconciliation) + report | `9f2dace` |
+| P5 | Candidate root-cause verdict + evidence | `090e832` |
+| P6 | This close + STATUS update + Brief 83 recommendation | _(this commit)_ |
+
+Reproduce: `node validation/nza_sim/extract.mjs --hourly-temps` (NZA trace),
+`python validation/energyplus/extract_hourly_temps.py` (EP trace),
+`python validation/zone_temp_diagnostic.py` (P3 regimes),
+`node validation/nza_sim/counterfactual_rebook.mjs` (P4 load-bearing test).
+
+### §6.2 — The finding in one paragraph
+
+Brief 81's four divergences are **not one finding.** They are at least two. **(A)** NZA free-floats
+~+1 °C warmer than EnergyPlus in unconditioned hours (loss-side, night-heavy, ΔT-driven, not
+gains-driven). This *fully* explains the heating gap: 80 % of the −24.0 % shortfall is hours NZA
+floats just above 21 °C (median float 21.26 °C) while EP heats; cooling that float reconciles heating
+to −10.3 % at the nominal 0.49 °C shift (−4.9 % ceiling). **(B)** A same-setpoint *magnitude*
+difference: NZA removes ~2× the cooling and loses ~2× the ventilation heat that EP does at an agreed
+24 °C setpoint. This is 86 % of the +107.9 % cooling excess and all of the +92.9 % mech-vent gap, and
+**no temperature shift can re-book it** (P4 §4.2). The counterfactual test is therefore **outcome (b)
+— partial**, matching the P3 prediction.
+
+### §6.3 — Recommended Brief 83 scope: MULTIPLE threads, not one fix
+
+The single-fix framing is rejected by the evidence. Brief 83 should be **staged**, highest-signal
+first:
+
+1. **Thread 1 — Mech-vent / heat-recovery booking (Finding B-vent).** Reconcile NZA's single net loss
+   + recovery offset (54.4 % effective) against EnergyPlus's OA-load-minus-recovery split (82.1 %
+   effective), both nominally 75 %. Highest signal, most likely a genuine accounting/definitional bug,
+   and may cascade into the cooling magnitude. Echoes Brief 81 §10.3 item 1.
+2. **Thread 2 — Free-float warmth (Finding A).** Quantitative side-by-side of NZA's lumped
+   implicit-Euler node (`C_thermal ≈ 31.7 MJ/K`, `−C_coef ≈ 8793 W/K`) vs EnergyPlus's CTF /
+   distributed-mass treatment at matched timesteps. Confirm or reject candidate 2 (solver/mass
+   convention) as the cause of the +1 °C float. This is the heating-gap driver.
+3. **Thread 3 — Same-setpoint cooling magnitude.** Re-measure *after* threads 1–2; likely partly
+   resolved by the summer recovery-against-you mechanism (Thread 1) and the float (Thread 2). If a
+   residual 2× remains, investigate the cooling-side gain attribution in the zone balance.
+
+Confidence: candidate 3 (deadband) rejected; candidate 1 high-confidence for the vent booking but in
+*tension* for the warmth (NZA loses more vent heat, which should cool it); candidate 2 the best-fit
+but *contingent* hypothesis for the warmth, needing Thread 2 to confirm. The evidence is honestly
+**coupled / partly ambiguous** — not forced.
+
+### §6.4 — Brief discipline / safety
+
+No hard-STOP triggered under the corrected method (re-booking moved both gaps *toward* EP, never
+worse; the discarded naive `−C_coef` method's apparent worsening was a documented capacitance
+artifact, P4 §4.0 / Appendix A). No engine, IDF, or DB changes. Only Brief-82 files were staged at
+each commit (pre-existing dirty working-tree files were left untouched). `main` remained `d8a6207`;
+branch pushed to origin without merge.

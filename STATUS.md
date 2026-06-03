@@ -2,6 +2,28 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
+## ✅ Brief 82 — CLOSED 2026-06-03 *(branch only — NOT on main; diagnostic only)*
+
+**Zone-temperature delta diagnostic (Bridgewater-Box root cause) — SAME-DAY.** Tested whether Brief 81's four divergences (heating −24.0 %, cooling +107.9 %, mech-vent +92.9 %, zone air +0.49 °C) are *one* finding — a zone floating ~0.5 °C warmer in NZA. **Diagnostic-only: no engine / IDF / DB change.** All work on `feat/energyplus-validation` (cut from `main` tip `d8a6207`); **never merged or pushed to `main`** — branch verified before every commit, `main` stayed `d8a6207`. Audit: [`docs/audit/82_zone_temp_delta_diagnostic.md`](docs/audit/82_zone_temp_delta_diagnostic.md) (§0–§6).
+
+| Part | SHA | Deliverable |
+|---|---|---|
+| P1 | `89668d0` | Brief landing + branch verify + premise-check + audit §0/§1. |
+| P2 | `a788be6` | Hourly zone-temp extraction both engines (`extract_hourly_temps.py`; `extract.mjs --hourly-temps`; 2× 8760-row CSV). Hourly sums = Brief 81 annual totals exactly. |
+| P3 | `6a5992f` | `validation/zone_temp_diagnostic.py` trace comparison + divergence regimes + report. Headline: delta is a **free-float phenomenon** (+1.06 °C free-float, ≈0 conditioned). |
+| P4 | `9f2dace` | Counterfactual re-booking (mode-crossing reconciliation) + report. **Outcome (b) — partial** (matched prediction). |
+| P5 | `090e832` | Candidate root-cause verdict + evidence (§5). |
+| P6 | (this commit) | Audit §6 close + STATUS + Brief 83 recommendation + push. |
+
+**Verdict: the single-root-cause hypothesis is REJECTED — it is (at least) TWO findings.**
+- **(A) Free-float warmth (~+1 °C, unconditioned).** Loss-side, night-heavy, ΔT-driven, *not* gains. Explains *all* the heating gap: 80 % of the −24.0 % shortfall is hours NZA floats just above 21 °C (median 21.26 °C) while EP heats — cooling the float reconciles heating to −10.3 % at δ=0.49 (−4.9 % ceiling). Best fit **candidate 2 (solver/mass convention)**: P4 found NZA's per-hour demand is an implicit-Euler one-step solve, `−C_coef ≈ 8793 W/K` dominated by lumped `C_thermal ≈ 31.7 MJ/K`. Moderate, contingent confidence.
+- **(B) Same-setpoint magnitude (cooling + mech-vent).** NZA removes ~2× cooling and loses ~2× vent heat at an agreed 24 °C — 86 % of the cooling excess + all the mech-vent gap, immune to any temperature shift. Best fit **candidate 1 (recovery booking)**: NZA 54.4 % vs EP 82.1 % effective recovery, both nominally 75 %. High confidence for the vent gap; the 2× cooling magnitude is genuinely ambiguous.
+- **Candidate 3 (deadband): rejected** (setpoints match; warmth is broad-spectrum, not a transition spike).
+
+**Method note:** the naive "subtract δ, re-book via NZA's own `−C_coef` law" recipe *explodes* (+423 % heating at δ=0.49) because `−C_coef` is a capacitance-dominated one-step coefficient, not a steady-state conductance — multiplying a standing offset by it fabricates a perpetual thermal-mass recharge. Caught on the smell test, diagnosed, replaced with mode-crossing reconciliation; preserved as report Appendix A.
+
+**Recommended Brief 83: MULTIPLE staged threads, not one fix** — (1) mech-vent/heat-recovery booking (highest signal, likely a real accounting bug, may cascade); (2) free-float warmth via a quantitative NZA-lumped-mass vs EP-CTF/timestep comparison; (3) re-measure same-setpoint cooling after (1)+(2). No hard-STOP triggered.
+
 ## ✅ Brief 81 — CLOSED 2026-06-02 *(branch only — NOT on main)*
 
 **EnergyPlus validation harness (Bridgewater-Box first rung) — OVERNIGHT.** Built an *independent* EnergyPlus reference for NZA-Sim's custom JS engine, the EnergyPlus way (single integrated `ZoneHVAC:IdealLoadsAirSystem` sim, compared at the OUTPUT level only). All work on `feat/energyplus-validation` (cut from `main` tip `d8a6207`); **never merged or pushed to `main`** — branch verified before every commit. Audit: [`docs/audit/81_energyplus_validation_box.md`](docs/audit/81_energyplus_validation_box.md) (§0–§10).
