@@ -453,10 +453,94 @@ is independent of zone temperature. Brief 83 cannot be a single fix.
 
 ## §5 — P5: Candidate root cause verdict + evidence
 
-_(to be written at P5)_
+### §5.0 — The hypothesis under test
 
-Map P3 + P4 evidence onto the three candidates (1 MVHR coupling / 2 solver convention / 3 setpoint
-deadband). State confidence honestly; permit "coupled / ambiguous" if that's what the evidence shows.
+Brief 82 opened with the hypothesis that the four Brief-81 divergences (heating −24.0 %, cooling
++107.9 %, mech-vent net loss +92.9 %, zone air +0.49 °C) are **one finding**: a zone free-floating
+~0.5 °C warmer in NZA than EnergyPlus. P3 + P4 settle this.
+
+**The strong-form hypothesis is REJECTED.** P4 proves the divergence is (at least) **two findings**:
+
+- **Finding A — free-float warmth (~+1 °C in unconditioned hours).** Accounts for *all* of the heating
+  gap and the small (14 %) cooling-mode-flip portion. Signature (P3): loss-side (free-float delta vs
+  indoor−outdoor ΔT r = +0.52), night-heavy (+1.28 unoccupied vs +0.77 occupied), anti-correlated with
+  outdoor temp (r = −0.60), **not** gains-driven. Closeable by cooling the float (P4 §4.2).
+- **Finding B — same-setpoint magnitude difference (cooling + mech-vent).** NZA removes ~2× the
+  cooling energy and loses ~2× the ventilation heat that EP does *at an agreed 24 °C setpoint*. 86 % of
+  the cooling excess and all of the mech-vent gap. **Not** closeable by any temperature shift (P4
+  §4.2–4.3).
+
+This also refines Brief 81's guessed investigation order (§10.3): Brief 81 expected heating to be
+"coupled, understood last." The opposite is true — **heating is the simplest** (a pure float-crossing
+effect) and **cooling + mech-vent are the hard problem** (a same-setpoint magnitude difference).
+
+### §5.1 — Candidate 3 (setpoint deadband handling) — REJECTED as a primary driver
+
+Both engines use 21/24 °C; the IDF was authored to match the fixture (P1 premise-check D-series), so
+this is not a config mismatch. The warmth is broad-spectrum across *all* free-float hours, not a
+transition spike: transition |delta| 0.654 vs 0.491 °C elsewhere (P3 §3.4 Q5) — a minor boundary
+effect, not the mechanism. **Confidence it is a material driver: low.**
+
+### §5.2 — Candidate 2 (zone heat-balance solver convention) — best fit for Finding A
+
+P4 surfaced new, quantified evidence: NZA's per-hour demand is an **implicit-Euler one-step solve**
+whose coefficient `−C_coef = C_thermal/Δt + Σ(UA) ≈ 8793 W/K` is **dominated by thermal capacitance**
+(lumped `C_thermal ≈ 31.7 MJ/K`; engine comment instantCalc.js L3659; P4 §4.0 / Appendix A). A
+heavily mass-damped single-node implicit scheme anchors the free-float near its running mean and
+resists nighttime cooling (the lumped mass releases stored heat overnight). That is *precisely* the
+night-heavy, ΔT-driven, broad-spectrum warmth of Finding A — and it changes nothing in conditioned
+hours (both engines pin to setpoint), matching the observed mode-asymmetry (delta ≈ 0 when
+conditioned, ≈ +1 °C in free-float). EnergyPlus solves the zone balance with conduction transfer
+functions and sub-hourly timesteps against *distributed* surface mass; a lumped-vs-distributed mass +
+timestep-convention difference is the strongest single explanation for the free-float warmth.
+
+**Discipline note (CLAUDE.md Rule 10 — no unquantified mass-artefact hand-waving).** This is offered
+as the **best-fitting hypothesis**, not a proven cause. I have one quantified anchor (`C_thermal ≈
+31.7 MJ/K` from the recovered `−C_coef`) but have **not** measured EnergyPlus's effective thermal mass
+to confirm a mismatch, nor shown the +1 °C magnitude follows quantitatively from a mass/timestep
+difference. Confirming or rejecting this requires a Brief 83 side-by-side mass/timestep comparison.
+**Confidence: moderate, and explicitly contingent.**
+
+### §5.3 — Candidate 1 (MVHR recovery coupling) — implicated for Finding B, but in tension for Finding A
+
+The mech-vent accounting differs structurally and materially. Net vent loss: NZA 1.282 vs EP
+0.665 MWh (+92.9 %). Effective sensible recovery: **EP 82.1 %** (heat-recovery sensible 3.0286 / OA
+sensible heating 3.6882 MWh) vs **NZA 54.4 %** (recovery offset 1.531 / gross 2.813 MWh) — *both
+nominally 75 %* (Brief 81 §6/§8). That is a real divergence in how each engine books
+ventilation + recovery (NZA: single net loss + recovery offset; EP: OA-load-minus-recovery split),
+and it sits squarely in Finding B (the magnitude/accounting family). It is the highest-signal Brief
+83 target, echoing Brief 81 §10.3 item 1.
+
+**But the sign is in tension for Finding A.** A naive "NZA over-recovers ⇒ retains more heat ⇒ floats
+warmer" story is *contradicted by the numbers*: NZA's net vent **loss is higher** (1.282 > 0.665 MWh),
+i.e. NZA loses *more* ventilation heat, which should make it **colder**, not warmer. So MVHR coupling
+does not straightforwardly produce the free-float warmth — it is the leading explanation for the
+mech-vent *magnitude* gap, not (on its face) for Finding A. **Confidence: high for the mech-vent
+booking divergence; low that it directly causes the free-float warmth.**
+
+### §5.4 — The same-setpoint cooling magnitude — partly unattributed (honest ambiguity)
+
+The dominant 654.4 kWh (86 %) of the cooling excess is NZA cooling ~2× harder than EP while *both*
+agree the zone is at 24 °C. No candidate cleanly explains this. Two non-exclusive possibilities: (i) a
+cooling-side manifestation of the same vent-recovery accounting (with `summer_bypass: false`, sensible
+recovery warms incoming supply air in summer — a recovery-*against*-you penalty whose magnitude
+depends on the 54 % vs 82 % recovery difference), or (ii) a heat-balance gain term NZA books into the
+cooling load that EP distributes differently. **This is genuinely ambiguous** and is flagged for Brief
+83 rather than forced into a candidate.
+
+### §5.5 — Verdict (confidence stated honestly)
+
+| Finding | Best-fit candidate | Confidence | Note |
+|---|---|---|---|
+| A — free-float warmth (→ heating gap) | **2 (solver/mass convention)** | Moderate, contingent | Needs Brief 83 mass/timestep comparison; candidate 1 contradicted by loss sign |
+| B-vent — mech-vent net loss +92.9 % | **1 (recovery booking)** | High | NZA 54 % vs EP 82 % effective recovery; structural booking difference |
+| B-cool — same-setpoint cooling 2× | 1 or heat-balance gain term | Low / ambiguous | Summer recovery-against-you or gain attribution; unresolved |
+| (deadband config) | 3 — **rejected** | n/a | Setpoints match; warmth is broad-spectrum, not a transition spike |
+
+**The single-root-cause framing is wrong.** The evidence is *coupled and partly ambiguous* — exactly
+the case Brief 82 said to report rather than manufacture certainty around. Candidate 2 best explains
+the float warmth (heating gap); candidate 1 best explains the mech-vent booking; the same-setpoint
+cooling magnitude is the genuinely open question. Brief 83 cannot be a single fix.
 
 ---
 
