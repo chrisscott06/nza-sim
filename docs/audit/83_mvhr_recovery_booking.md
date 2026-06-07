@@ -325,10 +325,84 @@ solver/float convention. The P5 verdict carries this to its conclusion.
 
 ## §5 — P5: MVHR booking discrepancy verdict + proposed fix
 
-_(to be written at P5 — diagnostic + design only, NO code)_
+### §5.1 — Verdict: the premise is refuted — there is no recovery-fraction bug
 
-Operative mechanism (which candidate) · single or coupled · minimum fix (54 %→75 %) · before/after
-pseudocode.
+> **PREMISE-CHECK ESCALATION (Brief 76 authority).** The brief and design note frame Brief 83 as
+> "NZA shows ~54 % effective recovery vs EP's ~82 %, both nominally 75 % — fix the recovery integration
+> so effective recovery reaches 75 %." **The P2-P4 evidence refutes this.** NZA's per-hour MVHR
+> recovery is **~75 %**: in the 4426 hours where EnergyPlus's heating coil actually runs, NZA's net
+> mech-vent loss agrees with EnergyPlus's to **3.7 %** (0.9139 vs 0.8816 MWh, ratio 1.037). The "54 %"
+> was never an engine recovery fraction — it is the Brief-82 artifact
+> `recovery_offset/(loss+recovery_offset)`, which divides the State-3 demand-capped *display* offset by
+> a denominator built from the State-2 all-hours net loss (P2 §2.6). Two different formulas over two
+> different hour domains; their ratio is not an effectiveness.
+
+### §5.2 — Which candidate mechanism is operative? — none of the four
+
+| Brief candidate | Operative? | Evidence |
+|---|---|---|
+| 1. Recovery as zone gain vs supply preheat | No | NZA uses `(1−HRE)` loss-UA reduction (net-equivalent to supply preheat) — P2 §2.2 |
+| 2. Recovery applied to extract vs supply | No | Net `(1−HRE)` formulation; per-hour net matches EP to 3.7 % in coil-run hours |
+| 3. Wrong ΔT (T_zone vs T_supply) | Marginal | Setpoint-vs-actual-zone ΔT explains only the 0.032 MWh (5 %) shared-hour difference |
+| 4. Missing zone-temperature feedback | Marginal | Same setpoint-vs-actual issue; small |
+
+**The operative mechanism is a fifth one the brief did not predict: an accounting-domain mismatch.**
+NZA's `losses.mech_ventilation` is a **zone-balance "loss at setpoint"** term accrued in *every* hour
+`T_out < 21` (the same convention used for fabric/glazing/leakage losses); EnergyPlus's
+`oa_sensible − heat_recovery` is a **coil OA load** accrued only when the heating coil runs. The +94 %
+gap decomposes (P4 §4.3) as 59 % "NZA books vent loss in free-float hours EP's coil is off" + 36 %
+"EP's HX warms incoming OA in cooling-season hours (negative net) which NZA has no analogue for" + 5 %
+shared-hour ΔT-reference. **100 % of NZA's excess is in free-float hours — the Finding A hours.**
+
+### §5.3 — Is it single or coupled? — coupled to Finding A, by construction
+
+The excess is not an independent ventilation error. It lives entirely in the hours where NZA's zone
+free-floats (Finding A). The mech-vent "loss at setpoint" booking and the free-float warmth are **two
+views of the same phenomenon**: NZA books a setpoint-referenced vent loss in hours the zone is actually
+floating above the setpoint with no system running. You cannot move this number without engaging how
+the float is treated.
+
+### §5.4 — What is the minimum fix? — there is no in-scope fix; all paths hit a hard-STOP
+
+Three candidate "fixes" were considered against the brief's hard-STOPs:
+
+1. **Gate the reported loss to heating-mode hours.** Would drop ~free-float hours from
+   `losses.mech_ventilation`. **Rejected:** (a) violates CLAUDE.md Rule 9 — the vent loss in free-float
+   hours genuinely enters the zone energy balance (it sets `T_air_free` via `C_coef`), so it must
+   appear in the breakdown; (b) it is tuning the report to match EP's domain, which the brief forbids.
+2. **Re-reference the loss ΔT from setpoint (21) to the actual zone temp `T_air`.** **Rejected:** (a)
+   reads the air-node solver's `T_air` — Finding A / Brief 84 territory (explicit hard-STOP); (b) in
+   free-float hours `T_air > 21`, so the loss would grow — it makes the gap **worse** (hard-STOP "P7
+   makes gap worse"); (c) it would break the "loss at setpoint" convention shared by all envelope-loss
+   lines (a cross-cutting architectural change, >30 lines).
+3. **Add an EP-style negative heat-recovery term in cooling/shoulder hours.** **Rejected:** new
+   ventilation physics entangled with summer behaviour, not a "booking" fix, and again couples to the
+   float.
+
+**Every gap-closing change either touches the solver (Finding A), violates Rule 9, makes the gap
+worse, or tunes the report to pass — all forbidden.** This is precisely the brief's hard-STOP: *"P5
+verdict requires touching the air-node solver to fix MVHR booking. STOP. The two are coupled in ways
+Brief 82 didn't anticipate."*
+
+### §5.5 — Recommendation (no engine fix in Brief 83; options for Chris)
+
+**Land NO engine fix.** Brief 83 resolves as a **diagnostic-only outcome** (the brief explicitly
+sanctions this: *"A diagnostic-only outcome … is still valuable — Brief 83 becomes 'Finding B
+diagnosis'."*). The recovery booking is correct; the gated metric was comparing non-analogous
+quantities. Options, for Chris to decide (none are Brief 83 engine changes):
+
+- **(A) Harness fix (recommended).** Make `compare.py` compare like-for-like for mech-vent: restrict
+  NZA's loss to EP-coil-run hours (or compare NZA's *coil-domain* loss). The per-hour data shows this
+  agrees with EP to ~4 %. A validation-harness change, not an engine change — clean and honest.
+- **(B) Re-frame the metric.** Document that NZA's `losses.mech_ventilation` is a complete
+  zone-balance loss (Rule 9) and EP's is a coil load; the +94 % is a definitional difference, not a
+  defect. Keep both numbers, stop gating on their direct difference.
+- **(C) Fold into Brief 84.** Since 100 % of the excess is in free-float hours, the mech-vent
+  "loss at setpoint" convention and the free-float warmth are the same phenomenon; address the
+  reporting convention alongside the solver characterisation.
+
+The diagnostic instrumentation added in P4 (per-hour arrays + EP hourly outputs + extractors) stays —
+it is the evidence base and will serve Brief 84.
 
 ---
 
