@@ -406,19 +406,86 @@ it is the evidence base and will serve Brief 84.
 
 ---
 
-## §6 — P6: Implement the fix
+## §6 — P6: Implement the fix — NO ENGINE FIX LANDED (premise corrected)
 
-_(to be written at P6 — ≤ 30 lines; same file/region as P2; v25/v40 fallback preserved; air-node
-solver untouched)_
+Per the P5 verdict, **no engine fix is landed in Brief 83.** The brief explicitly sanctions this:
+*"A diagnostic-only outcome (Parts 1-5 complete, Part 6 fix not landed) is still valuable — Brief 83
+becomes 'Finding B diagnosis'."*
+
+**Why no fix is the correct outcome, not a failure to find one:**
+
+1. **There is nothing to fix in the recovery booking.** The recovery fraction is ~75 % in both engines;
+   per-hour net mech-vent loss agrees with EnergyPlus to 3.7 % in coil-run hours (P4 §4.3). The "54 %
+   effective recovery" was a Brief-82 artifact, not an engine value (P2 §2.6, P5 §5.1).
+2. **The +94 % gated gap is a comparison-of-different-objects artifact**, coupled to Finding A — 100 %
+   of the excess is in free-float hours. Closing it would require one of the changes ruled out in P5
+   §5.4, each of which trips a brief hard-STOP (touch the air-node solver / violate Rule 9 / make the
+   gap worse / tune the report to pass).
+3. **Landing a wrong fix is worse than landing none.** The brief is explicit: *"If the harness doesn't
+   pass after the fix, the fix is wrong — diagnose, don't tune."* The diagnosis says the harness
+   metric is mis-paired; the disciplined response is to correct the premise, not the engine.
+
+**What did change (P4, diagnostic instrumentation — retained):** the opt-in per-hour mech-vent arrays
+in `instantCalc.js`, the hourly OA/recovery `Output:Variable` lines in `generate_idf.py` + regenerated
+IDF, and the two extractors. These are additive, off the critical path, change no demand/physics value
+(verified: heating 2.4917 / cooling 1.4070 MWh, EP EUI 166.6 unchanged), and form the evidence base
+Brief 84 will reuse. They are **not** a fix; they are the diagnosis's instruments.
+
+**No commit for P6** beyond this audit note (folded into the P7/P8 commits) — there is no code fix to
+commit. Branch unchanged in engine behaviour; `main` untouched at `d8a6207`.
 
 ---
 
 ## §7 — P7: Post-fix Bridgewater-Box re-validation
 
-_(to be written at P7)_
+Re-ran the full harness (`run.py` → `extract.mjs` → `compare.py`). **Because no engine fix was landed
+(P5/P6), the gated comparison is byte-for-byte the Brief 81 verdict — this is the expected and correct
+outcome, not a failed fix.**
 
-Re-run harness; row-by-row delta table Brief 81 vs Brief 83 post-fix vs EP. Mech-vent within ±15 %;
-cooling reduces; heating may widen (expected); effective recovery ~75 %; EUI/fabric/monthly unchanged.
+| Gated metric | Brief 81 | Brief 83 (no fix) | EnergyPlus | Result |
+|---|---|---|---|---|
+| EUI (kWh/m²) | 160.4 | 160.4 | 166.6 | PASS (−3.7 %) |
+| Heating demand (MWh) | 2.492 | 2.492 | 3.278 | FAIL (−24.0 %) |
+| Cooling demand (MWh) | 1.407 | 1.407 | 0.677 | FAIL (+107.9 %) |
+| Fabric conduction (MWh) | 5.454 | 5.454 | 4.909 | PASS (+11.1 %) |
+| **Mech-vent net loss (MWh)** | **1.282** | **1.282** | **0.665** | **FAIL (+92.9 %)** |
+| Monthly heating r | 0.993 | 0.993 | — | PASS |
+| Monthly cooling r | 0.945 | 0.945 | — | PASS |
+
+### §7.1 — The brief's expected post-fix outcomes vs reality
+
+| Brief P7 expectation | Outcome | Honest reading |
+|---|---|---|
+| Mech-vent closes to ±15 % | **NOT closed** (+92.9 %) | Correct — there was no recovery bug to fix; the gap is a comparison-of-objects artifact (P5) |
+| Cooling reduces substantially | Unchanged (+107.9 %) | Cooling is Finding A (free-float), untouched here |
+| Heating widens slightly | Unchanged (−24.0 %) | No fix, so no Finding-A coupling movement to observe |
+| Effective recovery ~75 % | **Confirmed ~75 %** (per-hour, P4 §4.3) | The one expectation the data meets — and it was already true |
+| EUI / fabric / monthly unchanged | **Confirmed unchanged** | No envelope/physics touched |
+
+The brief's guard *"if mech vent doesn't close, the fix is wrong — go back to Part 5"* does **not**
+apply: there is no fix. P5's re-diagnostic established that the mech-vent gap is not a fixable
+recovery-booking defect. Re-running P5 would re-derive the same verdict.
+
+### §7.2 — Like-for-like comparison (the metric that should have been gated)
+
+When the mech-vent loss is compared *on the same domain* (EnergyPlus's coil-run hours), the engines
+agree:
+
+| Comparison | NZA-Sim | EnergyPlus | Delta |
+|---|---|---|---|
+| Net mech-vent loss, **all hours** (the current gated metric) | 1.282 | 0.660 | +94 % |
+| Net mech-vent loss, **EP coil-run hours only** (like-for-like) | 0.914 | 0.882 | **+3.7 %** |
+| Per-hour recovery fraction | ~0.75 | ~0.75 (0.82 mode-mixed annual) | ~match |
+
+This is the evidence for P5 recommendation (A): a one-line harness change (restrict the mech-vent
+comparison to coil-run hours) would move this metric from FAIL (+94 %) to PASS (+3.7 %) **without any
+engine change** — because the engine was already right.
+
+### §7.3 — Engine-behaviour invariants confirmed
+
+`heating_demand 2.4917`, `cooling_demand 1.4070`, `losses.mech_ventilation 1.2820` (hourly sum ==
+aggregate), EP RunPeriod heating 3.2775 / cooling 0.6768 / EUI 166.6 — all identical to Brief 81. The
+P4 diagnostic instrumentation changed no physical value.
 
 ---
 

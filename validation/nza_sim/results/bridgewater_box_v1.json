@@ -3,7 +3,7 @@
   "source": "node validation/nza_sim/extract.mjs",
   "fixture": "bridgewater_box_v1",
   "fixture_schema_version": 1,
-  "captured_at": "2026-06-02T21:11:06.996Z",
+  "captured_at": "2026-06-07T19:31:00.421Z",
   "engine": {
     "name": "NZA-Sim",
     "version": "v2.5 (instantCalc dynamic engine)",
