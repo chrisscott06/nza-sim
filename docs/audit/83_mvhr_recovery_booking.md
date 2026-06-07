@@ -164,10 +164,78 @@ that evidence rather than escalating on a P2 hypothesis alone.
 
 ## §3 — P3: Source read of EnergyPlus's MVHR recovery (reference)
 
-_(to be written at P3)_
+Refs `validation/energyplus/bridgewater_box_v1.idf` and `validation/energyplus/run.py`.
 
-EP object handling MVHR · how recovery integrates into the zone heat balance · how effective recovery
-is computed in EP outputs · what NZA should match (or why it can't).
+### §3.1 — Which object handles MVHR
+
+There is **no** standalone ERV/HX object. MVHR is modelled *inside* the ideal-loads system (IDF
+L656-683):
+
+```
+ZoneHVAC:IdealLoadsAirSystem, Box_IdealLoads,
+    … NoLimit heating / NoLimit cooling …
+    Box_MVHR_OA,   !- Design Specification Outdoor Air Object Name   (50 L/s, Flow/Zone)
+    NoEconomizer,  !- Outdoor Air Economizer Type   (no summer bypass — matches fixture)
+    Sensible,      !- Heat Recovery Type
+    0.75,          !- Sensible Heat Recovery Effectiveness
+    0.0;           !- Latent Heat Recovery Effectiveness
+```
+
+`DesignSpecification:OutdoorAir Box_MVHR_OA` = Flow/Zone 0.050 m³/s (IDF L614-620). So the MVHR is the
+ideal-loads system's mandatory outdoor-air stream, with a sensible HX at ε = 0.75 and no economizer
+(no bypass).
+
+### §3.2 — How recovery integrates into the zone heat balance
+
+The OA is drawn at `T_out` continuously (50 L/s). The sensible HX pre-conditions it against the
+exhaust (zone) air: `T_oa_post_hx = T_out + 0.75·(T_zone − T_out)`. The ideal-loads coil then conditions
+the air the rest of the way to meet whatever zone load remains. Recovery is a **supply-side preheat**
+(winter) / pre-cool (summer): it reduces the coil's OA load. The OA exchange happens every hour the
+system is available, but the **coil OA load is only the residual after recovery, and is only non-zero
+when the coil actually conditions the zone.**
+
+### §3.3 — How effective recovery is computed in EP outputs
+
+`run.py` (L276-280) reads, per the RunPeriod (and Brief 82 added Hourly for some):
+
+- `Zone Ideal Loads Outdoor Air Sensible Heating Energy` → `oa_sensible_heating` (3.688 MWh)
+- `Zone Ideal Loads Heat Recovery Sensible Heating Energy` → `heat_recovery_sensible_heating` (3.029 MWh)
+- cooling counterparts (`oa_sensible_cooling`, `heat_recovery_sensible_cooling`)
+
+Brief 81 net mech-vent loss = `oa_sensible_heating − heat_recovery_sensible` (+ cooling side) =
+**0.665 MWh**; the annual ratio `heat_recovery / oa_sensible ≈ 82 %`. The 82 % exceeds the nominal 75 %
+ε because it is an annual mode-mixed ratio of two coil-domain integrals, **not** a per-hour
+effectiveness (per-hour ε is exactly 0.75 by construction). The `run.py _note` is explicit:
+`supply_air_sensible` is "the net zone+OA sensible demand the system meets (after heat recovery) — the
+direct analogue of NZA-Sim heating/cooling demand," with "OA + heat-recovery terms reported separately
+for the … mech-ventilation mapping."
+
+### §3.4 — What NZA should match (or why it can't) — the structural difference
+
+| | NZA-Sim `losses.mech_ventilation` | EP `oa_sensible_heating − heat_recovery` |
+|---|---|---|
+| Domain | **Zone-balance** loss term | **Coil** OA load (residual after recovery) |
+| ΔT reference | `(T_setpoint 21 − T_out)` | `(T_supply≈T_zone − T_out)`, recovery vs `(T_zone − T_out)` |
+| Hours booked | **every** hour `T_out < 21` (incl. free-float) | only hours the ideal-loads coil runs |
+| Recovery fraction | 75 % (via `1−HRE`) | 75 % per-hour ε (82 % mode-mixed annual) |
+| Brief 81 value | 1.282 MWh | 0.665 MWh |
+
+The two numbers are **different accounting objects** (Brief 81 §10.3 already flagged "no clean
+cross-engine analogue"). Both apply 75 % recovery per hour; the gap is the **hour domain** (NZA: all
+heating-degree hours; EP: coil-run hours) and, secondarily, the **ΔT reference** (NZA: fixed setpoint
+21; EP: the actual, warmer zone/extract temp). This is the EP-side confirmation of the P2 premise-check
+hypothesis. **P4 quantifies the per-hour relationship to adjudicate decisively.**
+
+### §3.5 — P4 wiring note (what the IDF still needs)
+
+The IDF currently emits OA + heat-recovery sensible energies at **RunPeriod** frequency only (IDF
+L710-714); hourly emits only Supply Air Sensible Heating/Cooling (L737-738) + zone mean air temp +
+outdoor drybulb (Brief 82). **P4 must add `Hourly` `Output:Variable` for** `Zone Ideal Loads Outdoor
+Air Sensible Heating Energy`, `… Sensible Cooling Energy`, `Zone Ideal Loads Heat Recovery Sensible
+Heating Energy`, `… Sensible Cooling Energy`, and (for the supply/extract temp comparison the brief
+asks for) `System Node Temperature` on the supply node `Box_Supply_Inlet` and OA node `Box_OA_Inlet_Node`
+— then re-run EP. This is an additive output change to the IDF (the one narrow IDF edit P4 permits);
+no model physics change.
 
 ---
 
