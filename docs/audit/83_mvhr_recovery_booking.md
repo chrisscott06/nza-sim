@@ -491,7 +491,63 @@ P4 diagnostic instrumentation changed no physical value.
 
 ## §8 — P8: Close summary + Brief 84 handoff
 
-_(to be written at P8)_
+**Status: Brief 83 CLOSED 2026-06-07 — diagnostic-only outcome (no engine fix; premise corrected).**
+All work on `feat/energyplus-validation` (branch tip `d6f964c` at start). `main` never touched
+(`d8a6207` throughout); branch verified before every commit.
 
-Finding B status (closed / partial / open) · Finding A movement (unchanged / widened / surprising) ·
-Brief 84 scope. STATUS.md updated. Push to origin. **No merge to `main`.**
+### §8.1 — What Brief 83 delivered
+
+| Part | Deliverable | Commit |
+|---|---|---|
+| P1 | Brief landing + branch verify + audit stub | `a25eb70` |
+| P2 | Source read — NZA MVHR integration (+ premise-check flag) | `73da3c4` |
+| P3 | Source read — EnergyPlus MVHR reference | `931bf2d` |
+| P4 | Per-hour MVHR extraction both engines (engine diag arrays + EP hourly outputs + extractors + CSVs) | `b5129f8` |
+| P5 | Discrepancy verdict — premise refuted, escalation | `9ee127e` |
+| P6 | (No engine fix — diagnostic-only; folded into audit) | — |
+| P7 | Re-validation — harness unchanged (correct); like-for-like agreement | `abea317` |
+| P8 | This close + STATUS + Brief 84 handoff | _(this commit)_ |
+
+### §8.2 — The finding in one paragraph
+
+**Brief 83's premise is refuted: there is no MVHR recovery-booking bug.** Source reads (P2/P3) and the
+per-hour heat-flow comparison (P4) show NZA-Sim applies ~75 % sensible recovery per hour, agreeing with
+EnergyPlus to **3.7 %** in the hours EnergyPlus's heating coil actually runs. The "+92.9 % mech-vent
+loss" gated failure and the "~54 % effective recovery" framing are artifacts of comparing two different
+accounting objects: NZA's `losses.mech_ventilation` is a zone-balance **loss-at-setpoint** integrated
+over *every* heating-degree hour (the same convention as all envelope-loss lines), while EnergyPlus's
+`oa_sensible − heat_recovery` is a **coil OA load** that only accrues when the coil runs. **100 % of
+NZA's excess sits in free-float hours** — making this divergence one face of Finding A, not an
+independent ventilation defect.
+
+### §8.3 — Status of the findings
+
+- **Finding B (MVHR recovery booking): REFRAMED, not closed.** It is not a recovery-fraction bug. The
+  recovery booking is correct. The gated metric is mis-paired (different domains). No engine change was
+  warranted; landing one would have tripped a hard-STOP (solver touch / Rule 9 / gap-worse / tune).
+- **Finding A (free-float warmth): unchanged.** The brief anticipated Finding A's delta *widening* as
+  Finding B closed. **That did not happen** — because Finding B was not a bug and nothing closed. The
+  two findings are even more tightly coupled than Brief 82 framed: the mech-vent "excess" *is* the
+  free-float behaviour measured through the ventilation-loss line. Zone temp delta stays +0.49 °C; the
+  Brief 82 numbers are unchanged.
+
+### §8.4 — Recommended Brief 84 scope
+
+1. **Harness like-for-like fix (small, separate, do first).** Restrict `compare.py`'s mech-vent
+   comparison to EnergyPlus coil-run hours (or compare NZA's coil-domain loss). Moves the metric from
+   +94 % FAIL to +3.7 % PASS **with no engine change** (P7 §7.2). This is the honest correction of the
+   Brief-81 metric mis-pairing. Could ship as a tiny "Brief 83a" or Brief 84 Part 1.
+2. **Finding A characterisation (the real remaining work).** Brief 84 as originally scoped: the
+   free-float warmth (~+1 °C) from the implicit-Euler lumped-mass solver convention (Brief 82 §5.2).
+   Quantitative NZA-lumped-mass (`C_thermal ≈ 31.7 MJ/K`) vs EnergyPlus CTF/timestep comparison.
+   **Fold the mech-vent "loss at setpoint" reporting convention into this work** — since the excess is
+   entirely free-float hours, the two are the same phenomenon viewed through two outputs.
+3. **Do NOT** pursue an MVHR recovery-fraction "fix" — there is no such bug (this brief's evidence).
+
+### §8.5 — Brief discipline / safety
+
+No engine fix landed (diagnostic-only, brief-sanctioned). P4 added only additive, off-critical-path
+diagnostic instrumentation (verified: no demand/physics/EUI change). No air-node solver change. No
+tolerance re-tuning. No tuning to pass. Premise-check escalation documented per Brief 76 authority and
+the brief's own hard-STOP. Only Brief-83 files staged each commit; pre-existing dirty working-tree
+files left untouched. `main` stayed `d8a6207`; branch pushed to origin without merge.

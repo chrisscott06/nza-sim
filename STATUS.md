@@ -2,6 +2,27 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
+## ✅ Brief 83 — CLOSED 2026-06-07 *(branch only — NOT on main; diagnostic only, NO engine fix)*
+
+**MVHR recovery booking (Finding B fix) — SAME-DAY.** Brief 83 set out to fix Finding B (NZA "~54 % effective recovery vs EP ~82 %, both nominally 75 %"). **The premise is REFUTED by the evidence — there is no recovery-booking bug.** Diagnostic-only; **no engine fix landed** (brief explicitly sanctions this). All work on `feat/energyplus-validation`; **never merged/pushed to `main`** (`d8a6207` throughout). Audit: [`docs/audit/83_mvhr_recovery_booking.md`](docs/audit/83_mvhr_recovery_booking.md) (§0–§8).
+
+| Part | SHA | Deliverable |
+|---|---|---|
+| P1 | `a25eb70` | Brief landing + branch verify + audit stub. |
+| P2 | `73da3c4` | Source read — NZA MVHR (recovery folded into `ventUA = flow·ρCp·(1−HRE)`; loss booked over all heating-degree hours; `recovery_offset` is display-only) + **premise-check flag**. |
+| P3 | `931bf2d` | Source read — EP MVHR (IdealLoads OA + Sensible HX ε=0.75; `oa_sensible − heat_recovery`; coil-domain). |
+| P4 | `b5129f8` | Per-hour MVHR extraction both engines (opt-in engine arrays + EP hourly outputs + 2 extractors + CSVs). **Decisive.** |
+| P5 | `9ee127e` | Verdict — premise refuted; accounting-domain mismatch coupled to Finding A; no in-scope fix. |
+| P6 | — | No engine fix (diagnostic-only). |
+| P7 | `abea317` | Re-validation — harness unchanged (correct, no fix); like-for-like agreement +3.7 %. |
+| P8 | (this commit) | Close + STATUS + Brief 84 handoff + push. |
+
+**Decisive evidence (P4):** in the 4426 hours EnergyPlus's heating coil runs, NZA's net mech-vent loss agrees with EP to **3.7 %** (0.914 vs 0.882 MWh) — **per-hour recovery is ~75 % in BOTH engines.** The "+92.9 % mech-vent" and "54 % effective recovery" are artifacts of comparing different accounting objects: NZA's `losses.mech_ventilation` is a zone-balance **loss-at-setpoint over all heating-degree hours**; EP's `oa_sensible − recovery` is a **coil OA load over coil-run hours**. The gap (0.622 MWh) is 59 % "NZA books vent loss in free-float hours EP's coil is off" + 36 % "EP HX-warming in cooling-season hours" + 5 % shared-hour ΔT-reference. **100 % of NZA's excess is in free-float hours → this is one face of Finding A, not an independent bug.**
+
+**Why no fix:** every gap-closing change trips a brief hard-STOP — touch the air-node solver (Finding A / Brief 84), violate Rule 9 (free-float vent loss is a real heat-balance term), make the gap worse, or tune the report to pass. The recovery booking is correct; the harness metric is mis-paired.
+
+**Recommended Brief 84:** (1) small harness like-for-like fix (compare mech-vent on coil-run hours → +3.7 % PASS, no engine change); (2) Finding A free-float solver characterisation as originally scoped, folding in the mech-vent "loss at setpoint" reporting convention (same phenomenon); (3) do NOT pursue an MVHR recovery-fraction fix — no such bug.
+
 ## ✅ Brief 82 — CLOSED 2026-06-03 *(branch only — NOT on main; diagnostic only)*
 
 **Zone-temperature delta diagnostic (Bridgewater-Box root cause) — SAME-DAY.** Tested whether Brief 81's four divergences (heating −24.0 %, cooling +107.9 %, mech-vent +92.9 %, zone air +0.49 °C) are *one* finding — a zone floating ~0.5 °C warmer in NZA. **Diagnostic-only: no engine / IDF / DB change.** All work on `feat/energyplus-validation` (cut from `main` tip `d8a6207`); **never merged or pushed to `main`** — branch verified before every commit, `main` stayed `d8a6207`. Audit: [`docs/audit/82_zone_temp_delta_diagnostic.md`](docs/audit/82_zone_temp_delta_diagnostic.md) (§0–§6).
