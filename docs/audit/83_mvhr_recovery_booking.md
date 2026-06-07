@@ -241,11 +241,85 @@ no model physics change.
 
 ## §4 — P4: Per-hour MVHR heat flow comparison
 
-_(to be written at P4)_
+### §4.1 — What was instrumented
 
-Opt-in per-hour MVHR outputs both engines (supply/extract/outdoor temp, recovery W, zone temp) → two
-8760-row CSVs. Falsifiability: per-hour effective recovery ≈ (T_supply − T_outdoor)/(T_extract −
-T_outdoor), averaging ~0.75 EP / ~0.54 NZA (matching Brief 82). STOP if it doesn't.
+- **Engine (additive, diagnostic-only):** `instantCalc.js` now emits
+  `result.demand.mech_vent_loss_hourly_w` / `mech_vent_gain_hourly_w` — the per-hour post-recovery net
+  mech-vent loss/gain (W), the same values summed into `losses.mech_ventilation`. Verified the hourly
+  loss sums **exactly** to `losses.mech_ventilation` (1.2820 MWh) and heating/cooling demand are
+  unchanged (2.4917 / 1.4070 MWh). No physics/demand change.
+- **EnergyPlus (output-only IDF edit):** added Hourly `Output:Variable` for OA Sensible
+  Heating/Cooling + Heat Recovery Sensible Heating/Cooling (`generate_idf.py` → regenerated IDF →
+  re-ran EP). Annual totals unchanged (heating 3.2775, cooling 0.6768 MWh, EUI 166.6) — confirms
+  output-only.
+- **Extractors:** `validation/energyplus/extract_mvhr_hourly.py` and `extract.mjs --mvhr-hourly` →
+  two parallel 8760-row CSVs at `validation/{engine}/results/bridgewater_box_v1_mvhr_hourly.csv`.
+
+### §4.2 — Headline totals
+
+| Net mech-vent (MWh/yr) | EnergyPlus | NZA-Sim |
+|---|---|---|
+| Heating side | 0.6596 | 1.2820 (+94.4 %) |
+| Cooling side | 0.0052 | 0.0051 |
+
+The cooling side is **identical** — the entire mech-vent divergence is the heating side. (EP annual
+`oa_sensible 3.6882 − heat_recovery 3.0286`; recovery ratio 0.821.)
+
+### §4.3 — The decisive decomposition (gap = 0.6224 MWh)
+
+Classifying every hour by whether EnergyPlus's heating coil actually ran
+(`supply_air_heating > 0`):
+
+| Bucket | NZA net heat | EP net heat |
+|---|---|---|
+| **Shared EP-coil-heating hours (4426 h)** | 0.9139 | 0.8816 |
+| EP coil OFF (free-float / cooling hours) | **0.3681** (100 % NZA free-float) | **−0.2220** |
+| **Total** | **1.2820** | **0.6596** |
+
+`gap 0.6224 = shared-hour diff 0.0323 + NZA-books-in-EP-off-hours 0.3681 + EP-negative-in-off-hours 0.2220`
+
+- **Shared coil-heating hours: NZA and EP agree to 3.7 %** (ratio 1.037). **The per-hour recovery
+  fraction is ~75 % in both** — there is no 54 %-recovery shortfall.
+- **+0.3681 MWh (59 % of the gap):** NZA books a heating-side vent loss in hours EP's coil is off — and
+  **100 % of those are NZA free-float hours** (`heating_demand = 0`). NZA accrues
+  `ventUA·(21 − T_out)` in *every* hour `T_out < 21`; EP only books an OA coil load when the coil runs.
+- **−0.2220 MWh (36 % of the gap):** in cooling/shoulder hours EP's sensible HX *warms* incoming OA
+  (T_zone 24 > T_out), reported as `Heat Recovery Sensible Heating` with zero OA coil load → EP's net
+  heating goes *negative*. NZA does not carry an equivalent negative term.
+- Hour counts: NZA books a vent loss in **8409 h** (≈ all hours `T_out < 21`); EP net-heating > 0 in
+  only **4282 h**.
+
+### §4.4 — Spot check (10 hours)
+
+| h | T_out | EP T_z | NZA T_z | EP net | NZA net | EP coil-heat | NZA demand |
+|---|---|---|---|---|---|---|---|
+| 10 | 10.7 | 21.0 | 21.1 | 0.158 | 0.149 | 0.314 | 0 |
+| 11 | 10.7 | 21.0 | 21.1 | 0.158 | 0.156 | 0.294 | 0 |
+| 12 | 10.8 | 21.0 | 21.1 | 0.156 | 0.147 | 0.270 | 0 |
+| 4001 | 20.5 | 24.0 | 24.0 | 0.000 | 0.013 | 0.000 | 0 |
+| 4002 | 19.2 | 24.0 | 24.0 | 0.000 | 0.036 | 0.000 | 0 |
+| 5000 | 17.2 | 24.0 | 24.0 | 0.000 | 0.049 | 0.000 | 0 |
+| 5001 | 18.5 | 24.0 | 24.0 | 0.000 | 0.030 | 0.000 | 0 |
+
+Hours 10-12: EP coil heats, both zones ≈ 21, **NZA demand = 0 (floats at 21.1)** yet NZA's vent loss
+≈ EP's (per-hour recovery agrees). Hours 4001-5001: EP zone pinned at 24 (cooling), EP net = 0, but
+NZA still books a heating-side vent loss because `T_out < 21`.
+
+### §4.5 — Falsifiability outcome (premise-check CONFIRMED)
+
+The brief's P4 falsifiability expected NZA per-hour effective recovery ≈ **0.54**. **That expectation is
+REFUTED.** NZA's per-hour recovery fraction is **~0.75** (by construction `recovery/(net+recovery) =
+3/(1+3) = 0.75`, and the shared-coil-hour net agrees with EP to 3.7 %). The "0.54" was never a
+per-hour recovery fraction — it was the Brief-82 ratio `recovery_offset/(loss+recovery_offset)`, which
+mixes the State-2 all-hours net loss with the State-3 demand-capped display offset (P2 §2.6). **The
+data confirms the P2/P3 premise-check: there is no recovery-fraction bug.**
+
+**No hard-STOP on "gap worse" (no fix yet) — but this triggers the brief's premise hard-STOP:** the
+operative mechanism is *not* any of the four predicted recovery-booking candidates. It is an
+**accounting-domain mismatch** (NZA reports vent loss as a zone-balance "loss at setpoint" over all
+heating-degree hours; EP reports a coil OA load over coil-run hours), and it is **coupled to Finding
+A** — 100 % of NZA's excess sits in free-float hours, the very hours Brief 82 attributed to the
+solver/float convention. The P5 verdict carries this to its conclusion.
 
 ---
 

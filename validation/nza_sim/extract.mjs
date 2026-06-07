@@ -44,6 +44,8 @@ const OUT_DIR = path.join(__dirname, 'results')
 const OUT_FILE = path.join(OUT_DIR, 'bridgewater_box_v1.json')
 const HOURLY_OUT_FILE = path.join(OUT_DIR, 'bridgewater_box_v1_hourly_temps.csv')
 const WANT_HOURLY = process.argv.includes('--hourly-temps')
+const MVHR_OUT_FILE = path.join(OUT_DIR, 'bridgewater_box_v1_mvhr_hourly.csv')
+const WANT_MVHR = process.argv.includes('--mvhr-hourly')
 
 // Match P7's rounding: 6 dp for MWh fields, 3 dp for monthly kWh / temps.
 const r6 = x => (x == null || Number.isNaN(Number(x)) ? null : Math.round(Number(x) * 1e6) / 1e6)
@@ -345,4 +347,46 @@ if (WANT_HOURLY) {
   const meanT = sum(hZoneT) / N
   console.log(`wrote ${path.relative(REPO_ROOT, HOURLY_OUT_FILE)} (${N} rows)`)
   console.log(`NZA zone mean air temp = ${rr4(meanT)} C`)
+}
+
+// ── Brief 83 P4: opt-in 8760-row MVHR heat-flow CSV ────────────────────────
+// Schema parallel to validation/energyplus/extract_mvhr_hourly.py:
+//   hour_index, month, day, hour, outdoor_drybulb_c, zone_mean_air_temp_c,
+//   net_mech_vent_heating_kwh, net_mech_vent_cooling_kwh, recovery_heating_kwh,
+//   heating_demand_kwh, cooling_demand_kwh
+// net_mech_vent_* read directly from the engine's per-hour arrays added in P4
+// (result.demand.mech_vent_loss_hourly_w / mech_vent_gain_hourly_w, W -> kWh) —
+// the SAME post-recovery values summed into losses.mech_ventilation.
+// recovery_heating_kwh = net_loss x HRE/(1-HRE) (the heat the (1-HRE) factor
+// removed from the gross airstream loss), HRE from the fixture (75%).
+if (WANT_MVHR) {
+  const wd = inputs?.weatherData ?? {}
+  const temp = wd.temperature ?? []
+  const mon = wd.month ?? []
+  const day = wd.day ?? []
+  const hr = wd.hour ?? []
+  const lossW = d?.mech_vent_loss_hourly_w ?? []
+  const gainW = d?.mech_vent_gain_hourly_w ?? []
+  const N = lossW.length
+  const rr4 = x => (x == null || Number.isNaN(Number(x)) ? '' : Math.round(Number(x) * 1e4) / 1e4)
+  const rr6 = x => (x == null || Number.isNaN(Number(x)) ? '' : Math.round(Number(x) * 1e6) / 1e6)
+  const hrePct = Number(fixture?.ventilation?.[0]?.hre_sensible_pct ?? 75)
+  const hre = hrePct / 100
+  const recFactor = hre / (1 - hre)   // 0.75 -> 3.0
+  const lines = ['hour_index,month,day,hour,outdoor_drybulb_c,zone_mean_air_temp_c,net_mech_vent_heating_kwh,net_mech_vent_cooling_kwh,recovery_heating_kwh,heating_demand_kwh,cooling_demand_kwh']
+  let netHkWh = 0, netCkWh = 0
+  for (let h = 0; h < N; h++) {
+    const lossKwh = (lossW[h] ?? 0) / 1000
+    const gainKwh = (gainW[h] ?? 0) / 1000
+    netHkWh += lossKwh; netCkWh += gainKwh
+    lines.push([
+      h, mon[h] ?? '', day[h] ?? '', hr[h] ?? '',
+      rr4(temp[h]), rr4(hZoneT[h]),
+      rr6(lossKwh), rr6(gainKwh), rr6(lossKwh * recFactor),
+      rr6(hHeat[h]), rr6(hCool[h]),
+    ].join(','))
+  }
+  fs.writeFileSync(MVHR_OUT_FILE, lines.join('\n') + '\n', 'utf-8')
+  console.log(`wrote ${path.relative(REPO_ROOT, MVHR_OUT_FILE)} (${N} rows)`)
+  console.log(`NZA net mech-vent heating = ${(netHkWh / 1000).toFixed(4)} MWh, cooling = ${(netCkWh / 1000).toFixed(4)} MWh (HRE ${hrePct}%)`)
 }

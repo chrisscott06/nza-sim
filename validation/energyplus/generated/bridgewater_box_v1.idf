@@ -885,6 +885,26 @@ OUTPUT:VARIABLE,
     Zone Ideal Loads Supply Air Sensible Cooling Energy,    !- Variable Name
     Hourly;                   !- Reporting Frequency
 
+OUTPUT:VARIABLE,
+    *,                        !- Key Value
+    Zone Ideal Loads Outdoor Air Sensible Heating Energy,    !- Variable Name
+    Hourly;                   !- Reporting Frequency
+
+OUTPUT:VARIABLE,
+    *,                        !- Key Value
+    Zone Ideal Loads Outdoor Air Sensible Cooling Energy,    !- Variable Name
+    Hourly;                   !- Reporting Frequency
+
+OUTPUT:VARIABLE,
+    *,                        !- Key Value
+    Zone Ideal Loads Heat Recovery Sensible Heating Energy,    !- Variable Name
+    Hourly;                   !- Reporting Frequency
+
+OUTPUT:VARIABLE,
+    *,                        !- Key Value
+    Zone Ideal Loads Heat Recovery Sensible Cooling Energy,    !- Variable Name
+    Hourly;                   !- Reporting Frequency
+
 OUTPUT:METER,
     InteriorLights:Electricity,    !- Key Name
     RunPeriod;                !- Reporting Frequency

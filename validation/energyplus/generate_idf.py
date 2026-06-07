@@ -581,6 +581,14 @@ def build_idf(fix, idd_path):
         "Zone Mean Air Temperature",
         "Zone Ideal Loads Supply Air Sensible Heating Energy",
         "Zone Ideal Loads Supply Air Sensible Cooling Energy",
+        # Brief 83 P4 (2026-06-07): per-hour MVHR recovery-booking diagnostic.
+        # OA coil load + heat-recovery contribution, hourly, so the NZA-vs-EP
+        # mech-vent comparison can be decomposed by hour (free-float vs heating).
+        # Output-only addition; no model physics change.
+        "Zone Ideal Loads Outdoor Air Sensible Heating Energy",
+        "Zone Ideal Loads Outdoor Air Sensible Cooling Energy",
+        "Zone Ideal Loads Heat Recovery Sensible Heating Energy",
+        "Zone Ideal Loads Heat Recovery Sensible Cooling Energy",
     ]
     for v in hourly_vars:
         idf.newidfobject("OUTPUT:VARIABLE", Key_Value="*",
