@@ -47,10 +47,118 @@ Commit: `Brief 83 P1: brief landing on feat/energyplus-validation`.
 
 ## §2 — P2: Source read of NZA-Sim's MVHR recovery integration
 
-_(to be written at P2 — read-only; file + line refs; premise-check)_
+Read-only. All refs `frontend/src/utils/instantCalc.js` (the custom JS engine). Constant
+`AIR_HEAT_CAPACITY = 0.33` kWh/(m³·K) (L168).
 
-Where recovery is applied · what form (extract-loss reduction / supply preheat / zone gain) · what ΔT
-· per-hour vs annualised · how it maps to the 54 % effective-recovery observation.
+### §2.1 — Where recovery is applied (State 2)
+
+The MVHR sensible recovery is folded into the **ventilation conductance** at build time (L2983-2987):
+
+```js
+const ventUA = ventSystems.map(v => {
+  const Q_m3_h = v.flow_l_s * 3.6            // L/s -> m³/h  (50 -> 180)
+  const sched_factor = v.hours / 8760
+  return AIR_HEAT_CAPACITY * Q_m3_h * (1 - v.hre) * sched_factor   // W/K — recovery active
+})
+```
+
+With `hre = 0.75`, `ventUA = 0.33 × 180 × 0.25 = 14.85 W/K`. This UA enters **two** places:
+
+1. **The heat-balance solver** — `UA_mech_vent_h` accumulated into `C_coef` (L3188-3207), which sets
+   `T_air_free` and hence the demand. **This is the air-node solver — Finding A / Brief 84 territory.
+   DO NOT TOUCH.**
+2. **The reported per-hour mech-vent loss** (L3407-3447):
+   ```js
+   const UA_eff = bypass_h ? ventUA_bypass[vi] : ventUA[vi]
+   const heat_h = UA_eff * dT_heat_out
+   acc_mech_vent_heat_per_system[vi] += heat_h
+   ```
+   `acc_mech_vent_heat_per_system` is summed into `losses.mech_ventilation` (L4210-4231) — **the gated
+   metric** (`mech_ventilation_mwh.loss` in `extract.mjs` L203; Brief 81 = 1.282 MWh).
+
+### §2.2 — What form does recovery take?
+
+**Extract/supply-loss reduction**, not a separate zone gain. The `(1 − HRE)` factor scales the
+ventilation loss UA down to its post-recovery value. This is net-equivalent to EnergyPlus's
+supply-side preheat (recovered heat reduces the load), so **brief candidate 1 ("recovery as a separate
+zone gain") is NOT what NZA does**, and **candidate 2 ("applied to extract loss")** is the right
+description in net terms.
+
+### §2.3 — What ΔT is used?
+
+`dT_heat_out = max(0, T_heat − T_out)` (L3321) where **`T_heat` is the heating setpoint (21 °C)** — not
+the actual (warmer, free-floating) zone temperature, and not the extract temperature. So the loss is
+booked against `(21 − T_out)`, the **setpoint-to-outdoor** ΔT. (Brief candidate 3 "wrong ΔT" and
+candidate 4 "missing zone-temp feedback" both touch this: NZA uses setpoint, not actual extract temp.)
+
+### §2.4 — Per-hour vs annualised, and the critical gating point
+
+The reported mech-vent loss is accumulated **per hour, over EVERY hour with `T_out < 21`** — the
+accumulation at L3422 is inside the main hourly loop and is **NOT gated by `conditioning_mode`**. It
+fires in heating hours, cooling hours, AND free-float hours alike. (The *demand*
+`heating_demand_hourly_kwh` IS mode-gated at L3675-3729; the *reported vent loss* is not.) So on a
+gain-dominated box that free-floats above 21 °C for ~1900 of its heating-degree hours (Brief 82:
+EP-heats/NZA-free = 1912 h), NZA books a ventilation loss in those free-float hours too.
+
+### §2.5 — The second (display-only) recovery path
+
+`computeVentilationEnergy` (L4711-4878, State 3) separately computes an **effective recovery offset**:
+theoretical `flow·ρCp·HRE·Σ(21−T_out)₊·sched`, then **capped per hour** at the building's heating
+demand (`min(theoretical_h, demand_h)`, L4833). This yields `effectiveRecoveryMwh` →
+`consumption.space_heating.recovery_offset_mwh` (1.531 MWh; `extract.mjs` L204).
+
+**Crucially, this offset is DISPLAY-ONLY.** The engine comment is explicit (L5097-5104): *"AFTER
+Brief 50: State 2 owns recovery exclusively via its (1 − HRE) factor… recovery_offset_mwh is still
+surfaced on consumption.space_heating for the BreakdownPanel… its semantic role shifts from 'amount
+subtracted at this boundary' to 'amount State 2 baked in', but the magnitude is unchanged."* It is
+**not** subtracted from demand a second time (the Brief-18b double-subtraction bug is already fixed).
+
+### §2.6 — How this maps to the "54 % effective recovery" observation
+
+Brief 82 computed effective recovery as `recovery_offset / (loss + recovery_offset) = 1.531 / (1.282 +
+1.531) = 54.4 %`. **This ratio is a definitional artifact, not the engine's recovery fraction:**
+
+- The numerator (`recovery_offset`, 1.531) is the State-3 **demand-capped** integral using
+  `HRE·Σ(21−T_out)₊`.
+- The denominator term (`loss`, 1.282) is the State-2 **all-heating-degree-hours** integral using
+  `(1−HRE)·Σ(21−T_out)₊`.
+- They use different formulas over (effectively) different hour domains, so their sum is **not** a
+  physical "gross", and their ratio is **not** the recovery effectiveness.
+
+The recovery fraction the engine actually applies to the demand is the clean **75 %** baked into
+`(1 − HRE)`. There is no 54 %-recovery bug in the demand path.
+
+### §2.7 — Premise-check flag (Brief 76 authority) — provisional, P4 adjudicates
+
+> **The architect's framing — "NZA shows ~54 % effective recovery, fix the recovery integration to
+> reach 75 %" — appears to target a derived artifact, not the operative mechanism.** The source shows
+> the recovery fraction is already 75 %. The gated-metric failure (net loss 1.282 vs EP 0.665, +92.9 %)
+> is most plausibly an **hour-domain + ΔT-reference mismatch**, not a recovery-fraction error:
+>
+> 1. **Hour domain (leading hypothesis).** NZA reports the vent loss over *all* heating-degree hours
+>    (incl. ~1900 free-float hours where the zone sits above 21 and no heating runs); EnergyPlus's
+>    `oa_sensible_heating` only accrues when the ideal-loads heating coil actually runs. Magnitude
+>    check: net UA 14.85 W/K ⇒ NZA's `Σ(21−T_out)₊ = 1.282 MWh / 14.85 W/K ≈ 86 300 K·h`; EP's implied
+>    integral `0.665 MWh / 14.85 ≈ 44 800 K·h` — about half, consistent with EP booking over roughly
+>    half the hours (actual-heating vs all-heating-degree).
+> 2. **ΔT reference (secondary).** NZA books against the setpoint `(21 − T_out)`; EP nets recovery
+>    against the extract/zone temperature. Likely small relative to (1).
+>
+> **This must be confirmed by P4's per-hour data before any fix.** The decisive test: in
+> actual-heating hours, does NZA's per-hour net vent loss ≈ EP's? (If yes → recovery fraction is fine,
+> gap is hour-domain.) In free-float hours, does NZA book a vent loss while EP books ~0? (If yes →
+> hour-domain confirmed.)
+>
+> **Scope consequence (flagged early).** If the operative mechanism is hour-domain/reporting, the fix
+> must change only the *reported* `acc_mech_vent_heat_per_system` accounting (e.g. align its domain to
+> EP's heating-coil convention) and must **NOT** alter `UA_mech_vent_h`/`C_coef` — that is the air-node
+> solver (Finding A / Brief 84). It must also respect CLAUDE.md Rule 9 (every heat-balance term still
+> appears in the breakdown). P5 designs this against the P4 evidence; if the only correct fix turns out
+> to require touching the solver, that is a hard-STOP per the brief.
+
+**Not a hard-STOP at P2.** The hypothesis is strong but unconfirmed; the brief's flow routes the
+adjudication through P3 (EP reference) + P4 (per-hour data) before the P5 verdict. Proceeding to gather
+that evidence rather than escalating on a P2 hypothesis alone.
 
 ---
 
