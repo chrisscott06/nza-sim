@@ -320,7 +320,83 @@ Commit: `Brief 84b P4: EnergyPlus solver convention source read`.
 
 ## §5 — P5: Solver-convention localisation + ranked candidates
 
-_(to be written at P5)_
+### §5.1 — The decisive experiment is blocked (a finding in itself)
+
+The clean way to localise the internal-mass contribution is to vary it and re-measure. The engine has a
+hook for exactly this — `opts.tuning.internal_mass_J_per_K_per_m2` (`_calculateState2` L2602, used by
+unit tests). I built a read-only probe (`validation/nza_sim/internal_mass_probe.mjs`) sweeping
+{250 000, 100 000, 50 000, 25 000, 0} J/(K·m²) and measuring the free-float delta over the fixed
+EP-unconditioned reference set. **Result: ZERO change** — delta 1.061 °C and heating/cooling 2492/1407
+kWh identical at every value, including 0.
+
+Cause (source-confirmed): **`calculateInstant` does not forward `opts.tuning` to `_calculateState2`.**
+At L4959-4962 it calls `_calculateState2(..., { setpointOverride: {...} })` — a fresh opts object with
+no `tuning` key. So the internal-mass hook is **live only when `_calculateState2` is called directly
+(unit tests); it is dead through the production entry point** the harness and app use. `_calculateState2`
+is not exported, so it cannot be driven directly without an engine change either.
+
+> **Premise-check note (Brief 76/83 authority).** This is a **real, minor defect** (a wired-but-not-
+> forwarded parameter), distinct from — and not the cause of — the free-float delta. It is flagged
+> because it **blocks both this brief's empirical sensitivity test and any Brief 85 calibration via the
+> hook.** Wiring `opts.tuning` through the L4961 call (≈1 line) is the prerequisite for an
+> evidence-based calibration. I did **not** make that change (84b is no-engine-change); it is a Brief 85
+> step.
+
+### §5.2 — What the physics says about the mass contribution (mean vs amplitude)
+
+For the linear free-float air-node ODE `C·dT/dt = ΣUA·(T_drive − T) + Q_gains`, the equilibrium
+`T_eq = [ΣUA·T_drive + Q_gains]/ΣUA` is **independent of the capacitance C**. C sets only the time
+constant `τ = C/ΣUA` — it damps the diurnal **amplitude** (bigger C → warmer nights, cooler days) and
+adds phase lag. So:
+
+- The **night-heavy variation** in the delta (night +1.39 vs midday +0.72, a ~0.67 °C swing; §2.2) is
+  **consistent with NZA's larger capacitance** (25 MJ/K internal mass vs EP's 0) over-damping the
+  diurnal swing — the clearest mass fingerprint.
+- The **mean offset** (~+1.06 °C) is **not** what capacitance produces in periodic steady state
+  (mean-preserving). **However**, the real system is not periodic-steady: free-float segments are finite
+  windows seeded by the carry-forward temperature from the preceding (clamped) hours, and a larger C
+  relaxes more slowly from a warm clamp-seeded start — so C **can** lift the free-float-subset mean too.
+  How much is exactly the quantity the blocked probe would have measured.
+
+**Honest consequence:** the night-day *variation* is confidently mass/damping; the *mean* is partly mass
+(finite-window, clamp-seeded relaxation) and partly a separate free-float-regime offset (ΣUA coupling
+via the surface RC `b_inside_node` terms, the sol-air drive on opaque walls, the 70 %-to-air gains
+split, and/or the 1st-order integration bias). I **cannot cleanly partition** the +1.06 °C mean within
+scope, because the one decisive experiment is blocked (§5.1) and isolating the rest would require engine
+instrumentation 84b forbids. Stating this rather than manufacturing a single-cause number (CLAUDE.md
+Rule 10).
+
+### §5.3 — Ranked candidates (against P2 signature + P3/P4 source)
+
+| Rank | Mechanism | Evidence | Confidence |
+|---|---|---|---|
+| 1 | **Lumped internal-mass mismatch** — NZA 25.0 MJ/K (98.6 % of air capacitance) vs EP 0 (no `InternalMass`) | Dominant structural capacitance difference (P3/P4); over-damping explains the night-heavy amplitude (P2 §2.2); contributes to the mean via clamp-seeded slow relaxation (§5.2) | **High** that it is the primary driver of the diurnal/night-heavy component; **moderate/unquantified** for its share of the mean (probe blocked) |
+| 2 | **Integration order + timestep** — NZA 1-step/hr 1st-order implicit Euler vs EP 6/hr 3rd-order backward difference | Coarse low-order implicit step adds numerical damping; compounds the mass effect (P4 §4.3) | **Plausible secondary**; cannot isolate without an engine change |
+| 3 | **Free-float ΣUA / drive coupling** — surface RC `b_inside_node` terms, sol-air drive, 70 %-to-air gains split | A genuine ΣUA or drive difference is the only thing that can move the *mean* in steady state; ΔT-driven sign (P2 r=+0.50) is consistent | **Possible** contributor to the mean; not isolated this brief |
+| 4 | Surface convection (`R_si` vs TARP/DOE-2) | Tuning sweep: "no measurable response at Bridgewater's R_total" (§3.4) | **Weak** here |
+| 5 | Air-node closure (mixing/stratification) | Both engines single-zone, well-mixed | **Not a differentiator** |
+
+### §5.4 — Verdict
+
+The brief's working hypothesis — **"the +1 °C free-float offset is a structural solver-convention
+difference, defensible on both sides, not a bug in either engine"** — is **SUPPORTED for the delta
+itself.** The difference is dominated by a thermal-storage/transient-response mismatch: NZA carries a
+large lumped internal mass (25 MJ/K, a *tuned* default of 250 kJ/(K·m²) calibrated to EP's *summer
+max*, 2.5× its own documented best-match value) and integrates the air node once per hour at 1st order,
+while the EP reference box models **no** internal mass and integrates 6×/hour at 3rd order. Both
+conventions are individually defensible (real buildings have internal mass; the EP reference box
+deliberately omits it). It is **not** a gains-handling bug (P2: delta falls under solar/occupancy) and
+**not** a flat solver offset (CV 0.61).
+
+**Two caveats kept honest:** (i) the dominant single knob's quantitative contribution is **not
+measured** because the tuning hook is dead via the production path (§5.1) — a real, separate, ≈1-line
+defect; (ii) the **mean** component is only partly attributable to mass and is **not cleanly
+partitioned** within scope (§5.2). This is therefore **not** a clean outcome (a); it sits between
+**(b) calibration** (reduce/derive the internal mass, after wiring the hook, and re-measure) and
+**(d) coupled/ambiguous** (a residual mean offset may remain after the mass knob is exercised). P6
+recommends the Brief 85 scope accordingly.
+
+Commit: `Brief 84b P5: solver-convention localisation + ranked candidates`.
 
 ---
 
