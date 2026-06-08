@@ -471,4 +471,81 @@ Commit: `Brief 84b P6: Brief 85 recommendation`.
 
 ## §7 — P7: Close summary + STATUS update + Brief 85 handoff
 
-_(to be written at P7)_
+**Status: Brief 84b CLOSED 2026-06-08 — diagnostic-only characterisation.** All work on
+`feat/energyplus-validation` (branch tip `359f079` at start). `main` never touched (`d8a6207`
+throughout); branch verified before every commit. **No engine change, no IDF change, no tolerance
+change.**
+
+### §7.1 — What Brief 84b delivered
+
+| Part | Deliverable | Commit |
+|---|---|---|
+| P1 | Brief + design note landing + evidence inventory | `1e4b087` |
+| P2 | Free-float delta characterisation (`freefloat_diagnostic.py` + report) | `023de72` |
+| P3 | NZA-Sim air-node solver source read | `06b278c` |
+| P4 | EnergyPlus solver convention source read | `776183d` |
+| P5 | Solver-convention localisation + ranked candidates (`internal_mass_probe.mjs`) | `9401910` |
+| P6 | Brief 85 recommendation | `dfddb6d` |
+| P7 | This close + STATUS + handoff | _(this commit)_ |
+
+### §7.2 — Evidence chain (P2→P5)
+
+- **P2 — the delta is conditional, loss-side.** Free-float (both engines unconditioned, 2949 h) delta
+  **+1.10 °C** (97.5 % of hours NZA warmer). It **grows as outdoor falls** (r = −0.57) and with
+  indoor−outdoor ΔT (r = +0.50), is **night-heavy** (1.41 night vs 0.66 midday), and is **lower under
+  solar/occupancy** (r = −0.27; 0.82 occupied vs 1.34). Fingerprint of a thermal-storage / transient-
+  response difference; **not** a gains-handling bug, **not** a flat offset (CV 0.61).
+- **P3 — NZA.** Implicit-Euler air node, **single hourly step**. Zone capacitance 25.36 MJ/K is
+  **98.6 % a tuned lumped "internal mass"** (`TUNE_INTERNAL_MASS_J_M2` = 250 kJ/(K·m²)), calibrated to
+  EP's **summer max** (its own note cites 100 kJ as best, and records mean ~1.7 K / winter-min ~4 K
+  cooler as a known open gap). Convection via `R_si` (insensitive here).
+- **P4 — EnergyPlus.** CTF, **6 steps/hour**, default 3rd-order air node, TARP/DOE-2 convection,
+  **zero `InternalMass`**, zone-air multiplier 1.0. So EP carries **0 MJ/K** internal mass vs NZA's
+  25 MJ/K — the single large capacitance term with no EP counterpart.
+- **P5 — localisation.** The decisive sweep is **blocked**: `calculateInstant` drops `opts.tuning`
+  (L4961), so the internal-mass hook is dead via the production path (probe shows zero sensitivity) and
+  `_calculateState2` isn't exported. Physics: capacitance is mean-preserving in periodic steady state,
+  so the **night-heavy variation** is confidently the mass over-damping, but the **+1.06 °C mean** is
+  only partly mass (finite-window, clamp-seeded relaxation) and partly a separate free-float ΣUA /
+  sol-air / gains-split / integration offset — **not cleanly partitioned** within scope.
+
+### §7.3 — Verdict + confidence
+
+**The brief's hypothesis is SUPPORTED:** the free-float offset is a **structural solver-convention
+difference, defensible on both sides, not a bug** in either engine. It is dominated by a thermal-storage
+mismatch — NZA's 25 MJ/K tuned lumped internal mass (vs EP's 0) plus its coarse 1-hour 1st-order
+integration (vs EP's 6/hr 3rd-order). **Confidence:** high on the *mechanism class* (thermal storage /
+transient response) and on the *structural facts* (25 vs 0 MJ/K; 1×1st vs 6×3rd); **moderate and
+explicitly unquantified** on the single-knob magnitude attribution, because the decisive experiment is
+blocked by the dead tuning hook and the mean component is partly a separate, un-isolated offset. Outcome
+sits between **(b) calibration** and **(d) coupled/ambiguous** (not a clean (a); not a (c) bug — with
+the one exception below).
+
+### §7.4 — Recommended Brief 85 scope
+
+Staged, evidence-gated (full detail §6): **Step 0** wire the dropped `opts.tuning` (≈1–2 line bug fix,
+prerequisite); **Step 1** run the now-live internal-mass sweep to partition the delta (selects (b) vs
+(d)); **Step 2** if (b), make both models agree on the internal-mass assumption (derive from
+constructions [most defensible] / lower the flat default / add EP `InternalMass`) — physics-grounded,
+not fitted; **(a)** branch (document + widen free-float tolerance) stays legitimate if the residual mean
+dominates. Brief 85 must not tune-to-pass, must not change solver architecture, and must treat the
+float delta as **one finding** with the heating/cooling/mech-vent gaps (Brief 83).
+
+### §7.5 — Open questions for Chris
+
+1. **Internal-mass philosophy:** should NZA model generic furniture/partition mass by default (realistic
+   for furnished buildings, the current 250 kJ), or derive it from the construction stack (matches a
+   bare reference, generalises)? This decides Step 2's option.
+2. **Validation-target philosophy:** is the Bridgewater-Box reference meant to be a *bare envelope*
+   (then NZA's internal mass is the artefact) or a *furnished building* (then add EP `InternalMass`)?
+3. **Tolerance vs engine change:** if Step 1 leaves an irreducible mean residual, prefer documenting a
+   defensible difference + a widened free-float tolerance (a), or a deeper free-float-ΣUA diagnostic (d)?
+
+### §7.6 — Brief discipline / safety
+
+Diagnostic-only: no engine code, no IDF, no tolerance change. New artifacts are read-only diagnostics
+(`freefloat_diagnostic.py`, `internal_mass_probe.mjs`) + their report; the existing per-hour CSVs were
+sufficient (no new instrumentation). The dead `opts.tuning` forward was **flagged, not fixed** (Brief 85
+Step 0). Premise-check honoured: the brief's framing held; the one new defect (dropped tuning) is a
+separate minor bug, not the delta's cause. Only Brief-84b files staged each commit. `main` stayed
+`d8a6207`; branch pushed to origin without merge.

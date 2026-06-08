@@ -2,6 +2,24 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
+## ✅ Brief 84b — CLOSED 2026-06-08 *(branch only — NOT on main; diagnostic only, NO engine change)*
+
+**Finding A free-float characterisation (zone air-node solver convention) — SAME-DAY.** Characterises the ~+1 °C free-float zone-temp delta that Brief 83 showed is the single structural finding behind Brief 81's heating −24 % / cooling +108 % / mech-vent +93 %. **Diagnostic-only; no engine/IDF/tolerance change.** All work on `feat/energyplus-validation`; **never merged to `main`** (`d8a6207` throughout). Audit: [`docs/audit/84b_finding_a_freefloat.md`](docs/audit/84b_finding_a_freefloat.md) (§0–§7); design note [`docs/design-notes/84b_finding_a_freefloat.md`](docs/design-notes/84b_finding_a_freefloat.md).
+
+| Part | SHA | Deliverable |
+|---|---|---|
+| P1 | `1e4b087` | Brief + design note + audit stub; evidence inventory (existing B82/B83 per-hour CSVs + EPW suffice; no new instrumentation). |
+| P2 | `023de72` | `freefloat_diagnostic.py`: free-float (both unconditioned, 2949 h) delta **+1.10 °C**, 97.5 % NZA warmer. CONDITIONAL/loss-side — grows as outdoor falls (r −0.57) + with ΔT (r +0.50), night-heavy (1.41 vs 0.66), lower under solar/occupancy. Not gains-driven, not flat. |
+| P3 | `06b278c` | NZA source: implicit-Euler air node, 1 step/hr; zone capacitance 25.36 MJ/K is **98.6 % a tuned lumped internal mass** (250 kJ/K/m², calibrated to EP summer-max). |
+| P4 | `776183d` | EP source: CTF, 6 steps/hr, 3rd-order air node; **zero `InternalMass`** (0 MJ/K). Differentiator = NZA's 25 MJ/K internal mass with no EP counterpart. |
+| P5 | `9401910` | Localisation. Decisive sweep **blocked**: `calculateInstant` drops `opts.tuning` (L4961) → internal-mass hook dead via production path (real minor defect, flagged not fixed). Physics: night-heavy variation = mass over-damping; +1.06 °C mean only partly mass + partly a separate free-float offset — not cleanly partitioned. |
+| P6 | `dfddb6d` | Brief 85 recommendation (staged, evidence-gated). |
+| P7 | (this commit) | Audit §7 close + STATUS + push. |
+
+**Verdict:** the brief's hypothesis is **SUPPORTED** — the +1 °C free-float offset is a **structural solver-convention difference (thermal storage / transient response), defensible on both sides, not a bug.** Dominated by NZA's tuned 25 MJ/K lumped internal mass (vs EP's 0) + its 1-hour 1st-order integration (vs EP's 6/hr 3rd-order). Confidence high on mechanism class + structural facts; moderate/unquantified on the single-knob magnitude (decisive experiment blocked by the dead hook; mean partly a separate offset). Outcome between **(b) calibration** and **(d) coupled/ambiguous**.
+
+**Recommended Brief 85 (staged):** Step 0 — wire the dropped `opts.tuning` (≈1–2 line bug fix, prerequisite); Step 1 — run the now-live internal-mass sweep to partition the delta; Step 2 if (b) — make both models agree on internal mass (derive from constructions [most defensible] / lower the flat default / add EP `InternalMass`), physics-grounded not fitted; (a) document + widen free-float tolerance stays legitimate. Must treat the float delta as one finding with the heating/cooling/mech-vent gaps. **Open questions for Chris:** internal-mass philosophy (generic default vs construction-derived); validation-target philosophy (bare envelope vs furnished); tolerance-vs-engine-change preference.
+
 ## ✅ Brief 84a — CLOSED 2026-06-08 *(branch only — NOT on main; harness-only, NO engine change)*
 
 **Harness like-for-like comparison fix (mech-vent on coil-run hours) — SAME-DAY.** Implements the correction Brief 83's evidence named: the Brief-81 "mech-vent +92.9 % FAIL" was a **comparison-framework domain mismatch**, not an engine bug. `validation/compare.py` now pairs the mech-vent metric **like-for-like over EnergyPlus coil-run hours** (from the Brief 83 P4 per-hour CSVs): **NZA 0.919 vs EP 0.887 = +3.6 % PASS** (was 1.282 vs 0.665 = +92.9 % FAIL). **No engine/IDF/tolerance change.** All work on `feat/energyplus-validation`; **never merged to `main`** (`d8a6207` throughout). Audit: [`docs/audit/84a_harness_likeforlike_fix.md`](docs/audit/84a_harness_likeforlike_fix.md) (§0–§5); design note [`docs/design-notes/84a_harness_likeforlike_fix.md`](docs/design-notes/84a_harness_likeforlike_fix.md).
