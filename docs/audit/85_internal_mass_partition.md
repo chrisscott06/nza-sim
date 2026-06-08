@@ -113,7 +113,42 @@ Commit: `Brief 85 P0.2: source read of opts.tuning drop point`.
 
 ## §0.3 — P0.3: opts.tuning plumbing fix (the diff)
 
-_(to be written at P0.3)_
+Four edits in `frontend/src/utils/instantCalc.js`, threading the one optional `tuning` param down the
+chain identified in §0.2. No physics change; behaviour byte-identical when `opts.tuning` is absent
+(each new key resolves to `undefined` → `_calculateState2` falls back to its 250 000 default at L2602).
+
+1. **`_calculateState3` signature (L4928):** `(…, comfortBand)` → `(…, comfortBand, opts = {})`.
+2. **`_calculateState3` call site in `_calculateInstantBaseline` (L6683):** added `options,` after
+   `options.comfortBand` so the opts carrier reaches `_calculateState3`.
+3. **Main `_calculateState2` call (L4959):** added `tuning: opts.tuning` to the opts object.
+4. **`state2Recompute` closure `_calculateState2` call (L4972):** added `tuning: opts.tuning` (same
+   tuning as the main call, for per-system setpoint-diagnostic consistency).
+
+The State-1 baseline call inside `_calculateState2` (L2578, `tuning: null`) is deliberately unchanged
+(§0.2.3 — it feeds the heat-balance solar baseline, not the free-float trace the sweep measures).
+
+### §0.3.1 — Smoke-test (full verification is P0.4)
+
+`node validation/nza_sim/internal_mass_probe.mjs` (calls `calculateInstant` with `opts.tuning` swept):
+
+| internal_mass (J/K/m²) | free-float delta all / night / midday (°C) | NZA free hrs | heat/cool kWh |
+|---|---|---|---|
+| 250 000 (default) | 1.061 / 1.393 / 0.720 | 5012 | 2492 / 1407 |
+| 100 000 | 1.060 / 1.242 / 0.882 | 4786 | 2509 / 1438 |
+| 50 000 | 1.064 / 1.161 / 0.971 | 4654 | 2517 / 1450 |
+| 25 000 | 1.069 / 1.114 / 1.023 | 4575 | 2520 / 1457 |
+| 0 | 1.077 / 1.062 / 1.080 | 4471 | 2524 / 1463 |
+
+- **Hook is LIVE:** values now respond to mass (pre-fix every row was identical — Brief 84b §5.1).
+- **Default (250 000) row is byte-identical** to the pre-fix probe (1.061 / 2492 / 1407) — default
+  preserved at the param default.
+- **Clean physics:** the **night-midday spread collapses** as mass drops (0.67 °C at 250k → ~0 at 0) —
+  mass governs the diurnal **amplitude**, exactly as predicted (Brief 84b §5.2). But the **mean delta
+  is ~flat (1.06–1.08 °C) at every mass, including 0** — the mean offset is **not** mass-driven. This
+  already foreshadows outcome (c); Step 1 confirms rigorously with the full metric set + construction-
+  derived point.
+
+Commit: `Brief 85 P0.3: opts.tuning plumbing fix`.
 
 ---
 

@@ -4925,7 +4925,11 @@ function computeVentilationEnergy(ventSystems, weatherData, T_setpoint_c, buildi
  * Library refs validated upfront via resolveAndValidateSystems; throws
  * MissingLibraryField on any missing template / required field.
  */
-function _calculateState3(building, constructions, libraryData, weatherData, hourlySolar, comfortBand) {
+function _calculateState3(building, constructions, libraryData, weatherData, hourlySolar, comfortBand, opts = {}) {
+  // Brief 85 P0.3: accept `opts` so the calibration hook (opts.tuning) can reach
+  // _calculateState2. Pre-fix this signature took no opts, so opts.tuning passed to
+  // calculateInstant was silently dropped here (audit 85 §0.2). Default {} preserves
+  // byte-identical behaviour when no tuning is supplied.
   // Brief 62 Part 2 (2026-05-27) — single-source setpoint resolution.
   // Closes Brief 61 Root Cause A: pre-fix, this main _calculateState2
   // call passed NO setpointOverride, so the demand integrand always
@@ -4958,7 +4962,8 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
   const resolvedCoolingSetpoint = _resolveSetpointForState2(building, 'cooling', comfortBand)
   const state2Result = _calculateState2(
     building, constructions, libraryData, weatherData, hourlySolar, comfortBand,
-    { setpointOverride: { heating: resolvedHeatingSetpoint, cooling: resolvedCoolingSetpoint } },
+    { setpointOverride: { heating: resolvedHeatingSetpoint, cooling: resolvedCoolingSetpoint },
+      tuning: opts.tuning },   // Brief 85 P0.3: forward calibration hook (undefined when absent)
   )
   if (state2Result.state !== 2) return state2Result   // bailout: _empty()
 
@@ -4971,7 +4976,7 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
   // produces a directly comparable demand integral.
   const state2Recompute = (override) => _calculateState2(
     building, constructions, libraryData, weatherData, hourlySolar, comfortBand,
-    { setpointOverride: override },
+    { setpointOverride: override, tuning: opts.tuning },   // Brief 85 P0.3: same tuning as main call
   )
 
   // Brief 28f Part 5.6/5.7: prefer the v2.5-shaped field (`systems_config_v25`)
@@ -6684,6 +6689,7 @@ function _calculateInstantBaseline(building = {}, constructions = {}, systems = 
       withMode(building, mode),
       constructions, libraryData, weatherData, hourlySolar,
       options.comfortBand,   // Brief 58 A2: required, validated at entry
+      options,               // Brief 85 P0.3: forward opts (carries opts.tuning calibration hook)
     )
   }
 
