@@ -142,7 +142,115 @@ Commit: `Brief 84b P2: free-float delta characterisation + conditional analysis`
 
 ## §3 — P3: NZA-Sim air-node solver source read
 
-_(to be written at P3)_
+All refs `frontend/src/utils/instantCalc.js`. The validation harness runs `engine:'v2.5'` → the State 2
+path (`_calculateState2`, ~L2600–3300); the free-float trace Brief 82 used is `T_air_free_hourly`
+(L2698). Read-only.
+
+### §3.1 — Where the zone air-node temperature is integrated
+
+State 2 hourly loop, **L3205–3222** — a one-step **implicit-Euler** solve of the single well-mixed air
+node:
+
+```js
+const C_air_per_dt = C_air_total_J / dt          // dt = 3600 s (L3206)
+const C_coef =
+    UA_wall_eff*(stepWall.b_inside_node-1) + UA_roof_eff*(...) + UA_floor_eff*(...)   // surface RC coupling
+  - UA_glaz - UA_leakage - UA_permanent - UA_mech_vent_h                              // direct air losses
+  - C_air_per_dt                                                                      // capacitance
+const D_coef =
+    UA_wall_eff*stepWall.a_inside_node + ... (roof, floor)                            // surface RC drive
+  + (UA_glaz + UA_leakage + UA_permanent + UA_mech_vent_h)*T_out                      // ambient drive
+  + C_air_per_dt*T_air                                                                // PREVIOUS hour temp
+  + Q_to_zone_air                                                                     // solar+internal gains
+const T_air_free = -D_coef / C_coef               // L3222 (Brief 67's T_zone_free)
+```
+
+This is the implicit-Euler solution of `C_air·dT/dt = Σ surface + air-loss + gain terms`, solved for
+`T^{n+1}` with the capacitance term `C_air_per_dt·T_air` carrying the **previous** hour's temperature.
+**Single hourly step; no sub-stepping.** When conditioning fires the zone is clamped to setpoint and
+that clamped value carries forward as `T_air` (L3234–3248); in free-float `T_air = T_air_free` carries
+forward. All balance terms are present with correct signs (losses negative in `C_coef`, ambient + gains
+positive in `D_coef`). Hard-STOP check (P3): **the source is exactly where Brief 82 Appendix A located
+it** (the implicit-Euler `C_coef`) — no relocation, no STOP.
+
+### §3.2 — The thermal capacitance `C_air_total_J` (the dominant term) — and how it is derived
+
+State 2, **L2672–2674**:
+
+```js
+const C_air_air_J      = volume * 1.2 * 1005          // pure zone air: 300·1.2·1005 = 0.362 MJ/K
+const C_air_internal_J = TUNE_INTERNAL_MASS_J_M2 * gia // 250_000 · 100 = 25.0 MJ/K
+const C_air_total_J    = C_air_air_J + C_air_internal_J // 25.36 MJ/K  ⇒  C_air_per_dt = 7045 W/K
+```
+
+| Component | Value (box) | Share of `C_air_total` |
+|---|---|---|
+| Pure zone-air heat capacity (`volume·1.2·1005`) | 0.362 MJ/K | **1.4 %** |
+| Lumped "internal mass" (`TUNE_INTERNAL_MASS_J_M2 · gia`) | **25.0 MJ/K** | **98.6 %** |
+| **Total `C_air_total`** | **25.36 MJ/K** | (7045 W/K at dt=3600) |
+
+So the zone-air capacitance is **almost entirely a single tuned parameter**,
+`TUNE_INTERNAL_MASS_J_M2` (default **250 000 J/(K·m²)**, L2604; State 1 mirror L887). `C_air_per_dt`
+(7045 W/K) is the dominant term in `−C_coef` (Brief 82 recovered ≈ 8793 W/K; the other ~1748 W/K is the
+surface-RC + direct-loss UA). **Refinement of Brief 82 Appendix A:** it reported `C_thermal ≈
+31.7 MJ/K` by treating the whole `−C_coef` as capacitance; the accurate figure is `C_air_total ≈
+25.4 MJ/K`, of which 25.0 MJ/K is the tuned internal mass.
+
+### §3.3 — Provenance of the tuning value (the load-bearing point)
+
+The tuning block comment (**L869–883**) is explicit about how the internal-mass value was chosen:
+
+> "internal_mass = 100 kJ/(K·m²) gives **EXACT summer max match** to EnergyPlus (35.5 °C vs EP 35.4 °C
+> on Bridgewater) … Structural gaps remain (**mean T ~1.7 K cooler than EP, winter min 4 K cooler**) —
+> these don't close with these knobs."
+
+Two things matter for Finding A:
+
+1. **The parameter was calibrated to a different target than Finding A measures.** It was swept to match
+   EnergyPlus's *summer peak temperature* (overheating), **not** free-float winter/shoulder/night
+   behaviour. A capacitance that nails the summer max can simultaneously be wrong for the night-time
+   free-float relaxation rate — which is exactly the regime where Finding A's +1 °C lives (P2: ΔT-driven,
+   night-heavy).
+2. **The code default (250 000) does not match the comment's cited best value (100 000).** The comment
+   block says 100 kJ matched summer max; the live default is **250 kJ** (L887, L2604). A 2.5× larger
+   lumped mass over-damps the air node further — more heat retention overnight, warmer free-float. This
+   discrepancy is itself a candidate contributor and a P5/P6 item (it is *not* an obviously
+   physics-derived value — it is a tuning knob whose documented justification points at a smaller
+   number).
+
+### §3.4 — Surface convection, timestep, closure
+
+- **Surface convection coefficients:** NZA does **not** use explicit `h_c` correlations in the air-node
+  balance. Inside-surface coupling is via `R_si` (BS EN ISO 6946 constants `R_SI_WALL/ROOF/FLOOR`,
+  L888–893 / 940–951) baked into each construction's RC model (`stepWallLinearized` → `U_eff`,
+  `a_inside_node`, `b_inside_node`). The tuning comment (L879–880) found **"R_si has no measurable
+  response at Bridgewater's R_total (insulation dominates)"** — so convection is a weak lever here
+  (consistent with P2's signature not being convection-specific).
+- **Construction mass:** separately from the lumped zone mass, opaque walls/roof/floor carry a
+  **multi-node implicit RC** per stack (Brief 28b Part 3; `TS_wall/TS_roof/TS_floor`, `stepWallLinearized`)
+  — distributed construction thermal mass that DOES respond dynamically. So NZA is *not* purely lumped:
+  it is (distributed construction RC) + (lumped zone-air/internal-mass capacitance). The lumped internal
+  mass is the larger, tuned, and less physically-grounded of the two.
+- **Timestep:** single hourly implicit-Euler step (`dt = 3600`, one solve/hour). Implicit Euler at a
+  coarse 1-hour step adds numerical damping to the transient response — a second mechanism that slows
+  the modelled night-time cool-down relative to a finely sub-stepped scheme. (EnergyPlus default is 6
+  steps/hour — confirmed in P4.)
+- **Air-node closure:** one perfectly-mixed air node, no stratification. EnergyPlus is also single-zone
+  well-mixed here, so closure is not a differentiator (candidate 4 weak).
+
+### §3.5 — P3 summary (feeds P5)
+
+NZA's free-float zone temperature is set by an implicit-Euler air-node solve whose capacitance is
+**98.6 % a tuned lumped "internal mass"** (`TUNE_INTERNAL_MASS_J_M2` = 250 kJ/(K·m²), 25 MJ/K for the
+box), stepped **once per hour**. The parameter was calibrated to EnergyPlus's **summer peak**, the
+documented best value (100 kJ) is 2.5× below the live default (250 kJ), and the same tuning note already
+recorded the engine running **mean ~1.7 K and winter-min ~4 K cooler than EP** — i.e. the free-float
+*level* was a known open structural gap. Candidates entering P5, ranked by P2/P3 evidence: **(1)
+lumped-internal-mass magnitude** [strong], **(3) 1-hour implicit-Euler numerical damping** [plausible
+secondary], (2) convection [weak — R_si insensitive here], (4) closure [weak — both single-zone]. P4
+quantifies EnergyPlus's effective mass + timestep to localise the dominant contributor.
+
+Commit: `Brief 84b P3: NZA-Sim air-node solver source read`.
 
 ---
 
