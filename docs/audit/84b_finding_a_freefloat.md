@@ -256,7 +256,65 @@ Commit: `Brief 84b P3: NZA-Sim air-node solver source read`.
 
 ## §4 — P4: EnergyPlus solver convention source read
 
-_(to be written at P4)_
+Refs `validation/energyplus/generated/bridgewater_box_v1.idf` (the Brief 81 P6 generated IDF, re-run in
+84a P4). Read-only.
+
+### §4.1 — EnergyPlus configuration (as authored)
+
+| Object | Value (IDF line) |
+|---|---|
+| `HeatBalanceAlgorithm` | **ConductionTransferFunction** (CTF) (L38) |
+| `Timestep` | **6 per hour** (L44) |
+| `ZoneAirHeatBalanceAlgorithm` | **not specified → EnergyPlus default `ThirdOrderBackwardDifference`** |
+| `SurfaceConvectionAlgorithm:Inside` | **TARP** (L32) |
+| `SurfaceConvectionAlgorithm:Outside` | **DOE-2** (L35) |
+| `InternalMass` | **0 objects** — EP models NO furniture/partition/content mass |
+| `ZoneCapacitanceMultiplier:ResearchSpecial` | **0 objects** → zone-air capacitance multiplier = 1.0 |
+| `Material` (construction layers) | 7 — distributed thermal mass via CTF |
+
+### §4.2 — EnergyPlus's effective thermal mass vs NZA's
+
+| Mass term | NZA-Sim | EnergyPlus (this IDF) |
+|---|---|---|
+| Pure zone air | 0.36 MJ/K (`volume·1.2·1005`) | 0.36 MJ/K (multiplier 1.0) |
+| Construction mass (walls/roof/floor) | distributed implicit RC (`stepWallLinearized`, per stack) | distributed CTF (7 materials) |
+| **Lumped internal mass (furniture/partitions)** | **25.0 MJ/K** (`TUNE_INTERNAL_MASS_J_M2` 250 kJ/K/m² × 100 m²) | **0** (no `InternalMass` object) |
+
+**The differentiator is unambiguous.** Both engines model the zone air (identically, 0.36 MJ/K) and the
+construction layers' mass (NZA via implicit RC, EP via CTF — different schemes, comparable physical
+mass). The single large term NZA has that **EnergyPlus's reference box does not** is the **25.0 MJ/K
+lumped internal mass** — 98.6 % of NZA's air-node capacitance (§3.2), with no EP counterpart. EP's box
+is deliberately bare (constructions only); NZA's default bakes in 250 kJ/(K·m²) of furniture/partition
+mass the box does not contain.
+
+### §4.3 — The two structural differences, sized
+
+1. **Internal-mass capacitance (dominant).** NZA's air node carries +25 MJ/K that EP's does not. A
+   larger capacitance relaxes more slowly toward the (colder) night-time ambient, holding the zone
+   warmer overnight and at high loss rates — **exactly the P2 signature** (ΔT-driven, night-heavy, gap
+   shrinks under solar/occupancy when fresh gains dominate the transient).
+2. **Integration order + timestep (secondary).** NZA: 1st-order implicit Euler, **1 step/hour**. EP:
+   3rd-order backward difference, **6 steps/hour**. NZA's coarse, low-order step adds numerical damping
+   to the transient, slowing the modelled cool-down on top of the mass effect. NZA cannot change its
+   timestep without an engine-architecture change (out of 84b/85 calibration scope); it is noted as a
+   contributor, not a knob.
+3. **Convection (weak).** EP TARP(in)/DOE-2(out) dynamic correlations vs NZA's fixed `R_si`/`h_out`. The
+   NZA tuning sweep already found R_si "no measurable response at Bridgewater's R_total" (§3.4); at this
+   insulation level convection is not the lever.
+4. **Closure (not a differentiator).** Both are single-zone, well-mixed.
+
+### §4.4 — Is EnergyPlus's omission "right"? (framing for P5/P6)
+
+Neither convention is universally correct. EP models exactly what the bare reference box specifies
+(no internal mass). NZA bakes in a generic 250 kJ/(K·m²) internal mass — more realistic for a *furnished*
+building, but an **over-modelling relative to this deliberately-bare EP reference**, and a flat tuned
+default rather than a construction-derived value. So the free-float offset is, at root, a **modelling /
+calibration difference in the lumped internal-mass term**, not a bug in either solver. P5 quantifies how
+much of the +1.1 °C the internal-mass knob actually accounts for (read-only sensitivity probe via the
+engine's existing `tuning.internal_mass_J_per_K_per_m2` hook — no engine change), and how much residual
+is left to the integration-order/timestep difference.
+
+Commit: `Brief 84b P4: EnergyPlus solver convention source read`.
 
 ---
 
