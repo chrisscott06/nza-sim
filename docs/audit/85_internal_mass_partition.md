@@ -295,7 +295,69 @@ Commit: `Brief 85 P1.2: internal mass sweep execution`.
 
 ## §1.3 — P1.3: Sweep analysis + delta partition
 
-_(to be written at P1.3)_
+### §1.3.1 — mass_min and delta_residual
+
+- **`mass_min` = 10 MJ/K** (param 100 000) — the shallow minimum of the mean free-float delta.
+- **`delta_residual` = 1.060 °C** at `mass_min`.
+- Mean delta across the **entire** 0–100 MJ/K sweep spans only **1.060–1.093 °C**; at mass 0 it is
+  1.077. So the most mass can move the mean is **0.018 °C** (from 0 → mass_min).
+
+**Partition of the +1.10 °C free-float delta (the brief's deliverable):**
+
+| Component | Value | |
+|---|---|---|
+| Mass-explained (of the mean) | **≈ 0.02 °C** | ~2 % |
+| Residual (solver convention) | **≈ 1.06 °C** | ~98 % |
+
+The free-float **mean** offset is **almost entirely residual** — internal mass explains essentially none
+of it.
+
+### §1.3.2 — Mass governs the diurnal SHAPE, not the mean (clean evidence)
+
+The mean is flat because mass redistributes the delta across the day in a mean-preserving way:
+
+- **Night delta climbs** 1.062 → 1.563 °C (mass 0 → 100); **midday delta falls** 1.080 → 0.612 °C.
+- The **night−midday spread** opens from ~0 (mass 0) to ~0.95 °C (mass 100): higher mass holds daytime
+  warmth into the night and is cooler at midday — textbook capacitance damping.
+- **Peak-to-peak free-float range shrinks** 3.52 → 3.04 °C: higher mass clips the extremes.
+- The night-rise and midday-fall **cancel in the mean** — exactly the mean-preserving property of a
+  linear capacitance in (quasi-)periodic forcing predicted in Brief 84b §5.2.
+
+So the Brief 84b "night-heavy" conditional pattern is **created by the current high mass (25 MJ/K)** —
+it is the *amplitude* signature of the lumped mass, not the cause of the *mean* offset. At `mass_min`
+(10 MJ/K) the night-heaviness is milder yet the mean is unchanged; at mass 0 the delta is *flat across
+the day* (no night-heaviness) and the mean is still +1.077 °C.
+
+### §1.3.3 — The conditional (loss-side) correlation is a property of the residual, not the mass
+
+`r(Δ, outdoor)` ≈ −0.55 and `r(Δ, ΔT)` ≈ +0.48 **persist at every mass, including mass_min and 0**.
+So the residual mean offset is itself **ΔT-driven** (it grows when it is colder / the loss-driving ΔT
+is larger). For a free-float air node `T_eq = [ΣUA·T_drive + Q_gains] / ΣUA`, a ΔT-scaled mean offset
+points to a **free-float ΣUA / surface-drive difference** (e.g. NZA's sol-air drive on opaque walls, the
+70 %-to-air gains split, or the 1st-order-vs-3rd-order integration bias), **not** capacitance. Isolating
+which of these owns the 1.06 °C is a *separate* diagnostic — out of Brief 85's mass scope — and is the
+substance of the Brief 86 recommendation (§2.1).
+
+### §1.3.4 — Demand and mech-vent across the sweep
+
+- **No mass satisfies the ±15 % gates.** Heating drifts slightly *worse* with mass (−23 % at 0 → −25 %
+  at 100); cooling improves with mass (+116 % → +97 %, as damping cuts summer peaks) but never reaches
+  +15 %. They **trade off** — mass cannot close both, and closes neither. (Consistent with §1.3.1: the
+  demand gaps are downstream of the mean free-float offset, which mass doesn't move.)
+- **mech-vent like-for-like stays +3.7 %** at every mass — the Brief 84a metric is correctly
+  mass-independent (a coil-run-hours quantity); regression check passes.
+
+### §1.3.5 — Honest finding (prediction assessment)
+
+**The mass hypothesis is REFUTED for the mean free-float delta.** The architect's design-note hypothesis
+— "when internal mass is set to a defensible/construction-derived value, the +1.10 °C delta drops
+substantially" — does **not** hold: the mean is mass-independent (mass-explained ≈ 0.02 °C). Internal
+mass is purely a *diurnal-amplitude* knob. **My P1.1 prediction (outcome (c); mean ~mass-independent at
+~1.06 °C; mass_min near the low end; residual ≫ 0.8 °C) is confirmed.** The relationship is clean and
+monotonic in every amplitude metric, so this is a supported result, not a sweep artefact. The verdict
+follows in §2.1.
+
+Commit: `Brief 85 P1.3: sweep analysis + delta partition`.
 
 ---
 
