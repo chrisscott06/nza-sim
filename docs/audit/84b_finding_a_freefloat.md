@@ -402,7 +402,70 @@ Commit: `Brief 84b P5: solver-convention localisation + ranked candidates`.
 
 ## §6 — P6: Brief 85 recommendation
 
-_(to be written at P6)_
+**Recommended Brief 85 shape: a staged, evidence-gated calibration investigation — primarily outcome
+(b), with (a) and (d) as live branches the Step-1 measurement selects between.** Not a single action,
+and not pre-committed to a value.
+
+### §6.0 — Step 0 (prerequisite, tiny engine fix): wire the dead tuning hook
+
+Before anything can be measured or calibrated, forward `opts.tuning` from `calculateInstant` into the
+`_calculateState2` call (instantCalc.js L4961: add `tuning: options.tuning` to the opts object — and to
+the `state2Recompute` closure at L4972 for parity). ≈1–2 lines. This is a legitimate **bug fix** (a
+wired-but-dropped parameter, §5.1), independent of the calibration decision, and is the prerequisite for
+every later step. It must land under CLAUDE.md Rule 14 (State 1 / State 2 / inline-legacy parity if the
+forward touches a shared path) and change **no** number at the default value (250 000) — verify the
+harness is byte-identical with the hook wired but unchanged, then proceed.
+
+### §6.1 — Step 1 (decisive measurement, read-only after Step 0)
+
+Re-run `validation/nza_sim/internal_mass_probe.mjs` (now live) and measure how much of the **+1.10 °C
+free-float delta** — and downstream, the **−24 % heating / +108 % cooling** gaps — closes as the
+internal mass moves from 250 kJ/(K·m²) toward EP-box-like values (100 k / 50 k / 0). This is the single
+experiment P5 was blocked from running. It partitions the delta into "mass-knob-addressable" vs
+"residual mean offset" and tells Brief 85 which outcome it is in:
+
+- **Most of the delta closes** → outcome **(b)**: calibrate the internal mass (§6.2).
+- **A substantial mean residual remains at low mass** → outcome **(d)**: the residual is a separate
+  free-float-regime ΣUA / sol-air / gains-split / integration offset; open a focused diagnostic for it
+  (and consider (a) tolerance-widening for the irreducible convention component).
+
+### §6.2 — Step 2 (the calibration decision, if Step 1 confirms (b))
+
+The comparison is a **deliberately bare box**: EP models no internal mass; NZA bakes in a generic
+250 kJ/(K·m²) of furniture/partition mass the box does not contain. The honest reconciliation is to make
+the two models **agree on the internal-mass assumption**, not to tune NZA to pass. Options for Chris
+(architect's call — I do not pre-pick):
+
+1. **Derive NZA's internal mass from the construction stack** instead of a flat default — the in-code
+   Brief 28b Part 5 candidate already noted at L1045. Most physically defensible; for a bare box this
+   yields a small internal mass, aligning with EP. Generalises beyond Bridgewater-Box.
+2. **Lower the NZA default toward its own documented best-match value** (the tuning comment cites 100 kJ
+   for the summer-max match vs the live 250 kJ; §3.3) — smaller, faster, but still a flat default.
+3. **Add an `InternalMass` object to the EP reference IDF** representing the same furniture/partition
+   assumption NZA makes — makes EP match NZA rather than vice-versa. Defensible if the validation target
+   is "a furnished building," less so for a clean envelope reference.
+
+Any choice must be **physics-grounded, not fitted to the tolerance** (brief constraint). Re-run the
+harness after, expecting the free-float delta and the heating/cooling gaps to narrow together (they are
+one finding — Brief 83).
+
+### §6.3 — The (a) branch (defensible-difference) stays legitimate
+
+Because the difference is defensible on both sides, Brief 85 may instead **document it and widen the
+free-float-related comparison tolerance** with cited reasoning — appropriate if Step 1 shows the
+residual mean offset dominates (mass can't close it) or if Chris decides NZA's internal-mass convention
+is correct-as-is for real (furnished) buildings and the bare-box reference is the artefact. This keeps
+the engine unchanged.
+
+### §6.4 — What Brief 85 must NOT do
+
+Tune any parameter to make the comparison pass (calibration must be physics-grounded); change the
+air-node solver architecture (the convention difference is defensible, not a bug); or treat the
+free-float delta as independent of the heating/cooling/mech-vent gaps (Brief 83 proved they are one
+finding — closing the float narrows all of them together, and per Brief 83 the heating/cooling gaps will
+move when the float moves).
+
+Commit: `Brief 84b P6: Brief 85 recommendation`.
 
 ---
 
