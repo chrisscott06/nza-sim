@@ -205,7 +205,65 @@ Commit: `Brief 85 P0.4: opts.tuning hook verification`.
 
 ## §1.1 — P1.1: Sweep design + construction-derived mass computation
 
-_(to be written at P1.1)_
+### §1.1.1 — Construction-derived mass (brief's formula)
+
+Σ (thickness × density × specific_heat × area) over opaque surfaces, from the fixture layer specs
+(`validation/fixtures/bridgewater_box_v1.yaml`). Areas (box 10×10×1, 3 m): opaque wall 108 m² (120
+gross − 12 glazing), roof 100 m², floor 100 m².
+
+| Surface | Layer heat capacity (J/K·m²) | Area (m²) | MJ/K |
+|---|---|---|---|
+| External wall | PIR 4 914 + Concrete 200 000 = 204 914 | 108 | 22.13 |
+| Roof | PIR 5 922 + Concrete 300 000 = 305 922 | 100 | 30.59 |
+| Ground floor | PIR 4 284 + Concrete 300 000 = 304 284 | 100 | 30.43 |
+| **Total construction mass** | | | **83.15** |
+
+As the engine param: `83.15 MJ/K ÷ 100 m² GIA = 831 513 J/(K·m²)`.
+
+### §1.1.2 — Caveat on "construction-derived" as the lumped param (factual, flagged for Brief 86)
+
+The brief's formula sums the **envelope** opaque layers. But NZA already models that envelope mass
+**dynamically** via its per-construction implicit RC (`stepWallLinearized`, `TS_wall/roof/floor`; Brief
+84b §3.4). The lumped `internal_mass` param is a **separate** term representing furniture / partitions /
+internal floors. So setting the lumped param to the envelope-derived 83 MJ/K would **double-count the
+envelope mass** (once in the RC, once lumped). The physically-correct *internal* mass for a deliberately
+bare box (no internal partitions/furniture) is ≈ 0. This does not change the sweep — construction-derived
+is run as an instructed labelled point — but it is the key interpretation note for Brief 86 (the
+architectural decision "construction-derived is the long-term answer" needs to mean "derive the *internal*
+mass" or "replace the lumped term with the RC's mass," not "add the envelope mass twice"). Not
+re-litigating the philosophy; recording the implementation reality the verdict must respect.
+
+### §1.1.3 — Sweep values
+
+| Param `internal_mass_J_per_K_per_m2` | MJ/K (box) | Note |
+|---|---|---|
+| 0 | 0 | bare envelope (matches EP reference's zero internal mass) |
+| 100 000 | 10 | |
+| 250 000 | 25 | current tuned default |
+| 500 000 | 50 | |
+| 831 513 | 83.15 | construction-derived (brief formula; see §1.1.2 caveat) |
+| 1 000 000 | 100 | high-mass bound |
+
+### §1.1.4 — Metrics captured per mass (P1.2)
+
+Free-float delta mean (over EP-unconditioned hours, fixed reference set); conditional r(delta, outdoor)
+and r(delta, ΔT); night vs midday delta; heating total + Δ vs EP (3.2775 MWh); cooling total + Δ vs EP
+(0.6768 MWh); NZA free-float zone-temp std + peak-to-peak range; mech-vent like-for-like over EP coil-run
+hours (the 84a metric, expected ~+3.6 % throughout).
+
+### §1.1.5 — Prediction (before measuring)
+
+Per the P0.3 smoke-test + the linear-system physics in Brief 84b §5.2 (capacitance is mean-preserving in
+periodic steady state; it sets diurnal amplitude/phase, not the mean): I predict **outcome (c)**.
+Specifically: the free-float delta **mean stays ~1.06–1.08 °C at every mass including 0** (mass does NOT
+close it); `mass_min` ≈ the current default (the mean is flat with a shallow minimum near 250k);
+`delta_residual` ≈ 1.06 °C ≫ 0.8 °C. The **conditional/night-heavy patterns will collapse at low mass and
+strengthen at high mass** (confirming mass governs the *amplitude*, not the mean). Demand: lower mass →
+slightly more heating (toward EP) and more cooling (away from EP); no single mass fixes both. If the data
+contradicts this (e.g. some mass drops the mean below 0.8 °C), I will report (a)/(b) honestly per the
+brief's prediction-error discipline.
+
+Commit: `Brief 85 P1.1: sweep design + construction-derived mass computation`.
 
 ---
 
