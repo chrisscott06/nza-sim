@@ -154,7 +154,52 @@ Commit: `Brief 85 P0.3: opts.tuning plumbing fix`.
 
 ## §0.4 — P0.4: Hook verification [HARD CHECKPOINT]
 
-_(to be written at P0.4)_
+### Test 1 — Default path byte-identity (no `opts.tuning`)
+
+`node validation/nza_sim/extract.mjs` → `python validation/compare.py`. Gated metrics vs the Brief
+84a/84b anchor:
+
+| Metric | Brief 84b anchor | Brief 85 post-fix (default) | Match |
+|---|---|---|---|
+| EUI (kWh/m²) | 160.4 (−3.7 %) | 160.4 (−3.7 %) | ✓ |
+| Heating demand (MWh) | 2.492 (−24.0 %) | 2.492 (−24.0 %) | ✓ |
+| Cooling demand (MWh) | 1.407 (+107.9 %) | 1.407 (+107.9 %) | ✓ |
+| Fabric conduction (MWh) | 5.454 (+11.1 %) | 5.454 (+11.1 %) | ✓ |
+| Mech-vent (EP coil-run hrs) | 0.919 (+3.6 %) | 0.919 (+3.6 %) | ✓ |
+| Gated | 5/7 | 5/7 | ✓ |
+
+`monthly cooling sum 1407.04 kWh` identical. **Test 1 PASS — default behaviour byte-identical** (only
+the benign `captured_at` timestamp differs in the JSON). The plumbing fix did not leak into the default
+path.
+
+### Test 2 — Hook activation (mass varies the result, in the damping direction)
+
+The internal-mass hook now responds (pre-fix every mass produced identical output — Brief 84b §5.1):
+
+- **Sensitivity (probe sweep):** free-float hours 5012 → 4471, heating 2492 → 2524 kWh, cooling
+  1407 → 1463 kWh as mass 250k → 0 J/(K·m²). The result clearly differs with mass — the hook is live.
+- **Damping direction, night-vs-midday delta spread** (the clean diurnal proxy): at 250 000 J/(K·m²)
+  the free-float delta is +1.393 °C at night vs +0.720 °C midday (spread **0.67 °C** — NZA holds daytime
+  warmth into the night = mass damping); at 0 the spread collapses to ~0 (+1.062 night ≈ +1.080 midday,
+  NZA tracks EP's diurnal shape). **Higher mass → more overnight heat retention = expected damping.** ✓
+- **Damping direction, peak-to-peak free-float range** (0 vs 100 MJ/K, NZA free-float zone temp): range
+  **3.52 °C → 3.04 °C** as mass rises (extremes clipped; max 24.69 → 24.05). Higher mass → smaller
+  temperature excursions = expected damping. ✓
+- (The std of NZA's free-float temp over the EP-unconditioned subset rose 0.730 → 0.893 with mass — but
+  that subset-std is a **confounded** proxy, mixing seasonal and diurnal variation across non-contiguous
+  selected hours; it is not a clean swing measure. The diurnal-spread and peak-to-peak-range metrics
+  above are the correct damping indicators, and both confirm the expected direction.)
+
+**Test 2 PASS — the hook is live and responds in the physically expected (damping) direction.**
+
+### HARD CHECKPOINT — CLEARED
+
+Both tests pass: default behaviour preserved (Test 1), hook live and directionally correct (Test 2).
+**Proceeding to Step 1.** (Foreshadowing already visible: the *mean* free-float delta barely moves with
+mass — §0.3.1 — so Step 1 is likely to land outcome (c); but Step 1 measures it rigorously with the
+full metric set and the construction-derived point before any verdict.)
+
+Commit: `Brief 85 P0.4: opts.tuning hook verification`.
 
 ---
 
