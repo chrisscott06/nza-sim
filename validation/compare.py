@@ -26,6 +26,7 @@ Run:
   python validation/compare.py --stdout    # print report, don't write file
 """
 import argparse
+import csv
 import json
 import math
 from datetime import datetime, timezone
@@ -97,6 +98,54 @@ def fmt(v, nd=3):
     return f"{v:.{nd}f}"
 
 
+def mech_vent_like_for_like(fixture):
+    """Brief 84a: pair the mech-vent metric LIKE-FOR-LIKE over EnergyPlus coil-run hours.
+
+    NZA-Sim's `losses.mech_ventilation` is a zone-balance loss-at-setpoint accrued over EVERY
+    heating-degree hour; EnergyPlus's `oa_sensible - heat_recovery` is a coil OA load accrued
+    only when the ideal-loads coil runs (Brief 83 audit §3.4 / §5.2). The Brief-81 gated metric
+    compared those two all-hours scalars (different accounting objects, different hour sets) and
+    read +93 %. Brief 83 P4 proved that over EP's coil-run hours the two engines agree to ~3.7 %
+    (per-hour recovery ~75 % both sides) -- there is no recovery-fraction bug. This helper sums
+    each engine's net mech-vent over EP's coil-run hours, per side, reproducing that agreement.
+    See docs/design-notes/84a_harness_likeforlike_fix.md.
+
+    Reads the opt-in Brief 83 P4 per-hour CSVs (off by default; regenerate with
+    `node validation/nza_sim/extract.mjs --mvhr-hourly` and
+    `python validation/energyplus/extract_mvhr_hourly.py`).
+
+    Returns (nza_mwh, ep_mwh, n_heat_hours, n_cool_hours), or (None, None, 0, 0) if the CSVs
+    are absent (caller falls back to the all-hours metric with a visible note).
+    """
+    ep_csv = EP_RESULTS / f"{fixture}_mvhr_hourly.csv"
+    nza_csv = NZA_RESULTS / f"{fixture}_mvhr_hourly.csv"
+    if not (ep_csv.exists() and nza_csv.exists()):
+        return None, None, 0, 0
+
+    def rows_by_hour(path):
+        with path.open(newline="", encoding="utf-8") as f:
+            return {int(r["hour_index"]): r for r in csv.DictReader(f)}
+
+    ep = rows_by_hour(ep_csv)
+    nza = rows_by_hour(nza_csv)
+    hours = sorted(set(ep) & set(nza))
+    ep_kwh = nza_kwh = 0.0
+    n_heat = n_cool = 0
+    for h in hours:
+        e, n = ep[h], nza[h]
+        # heating side: EP heating coil active
+        if float(e["supply_air_heating_kwh"]) > 0:
+            ep_kwh += float(e["net_mech_vent_heating_kwh"])
+            nza_kwh += float(n["net_mech_vent_heating_kwh"])
+            n_heat += 1
+        # cooling side: EP cooling coil active
+        if float(e["supply_air_cooling_kwh"]) > 0:
+            ep_kwh += float(e["net_mech_vent_cooling_kwh"])
+            nza_kwh += float(n["net_mech_vent_cooling_kwh"])
+            n_cool += 1
+    return nza_kwh / 1000.0, ep_kwh / 1000.0, n_heat, n_cool
+
+
 def verdict(ok):
     return "PASS" if ok else "FAIL"
 
@@ -104,7 +153,7 @@ def verdict(ok):
 # ---------------------------------------------------------------------------
 # comparison build
 # ---------------------------------------------------------------------------
-def build_rows(ep, nza):
+def build_rows(ep, nza, fixture=DEFAULT_FIXTURE):
     """Return (gated_rows, info_rows, corr_rows, notes).
 
     Each value row: dict(label, nza, ep, delta_pct, tol, passed, gated, unit).
@@ -144,22 +193,52 @@ def build_rows(ep, nza):
                       tol=TOL["fabric"], passed=(d is not None and abs(d) <= TOL["fabric"]),
                       unit="MWh"))
 
-    # --- Mech ventilation (gated +/-15%): NZA net loss vs EP net OA (gross - recovery) ---
-    nza_mv = g(nza, "mech_ventilation_mwh", "loss")
+    # --- Mech ventilation (gated +/-15%) ---
+    # Brief 84a: compare LIKE-FOR-LIKE over EnergyPlus coil-run hours. NZA's
+    # losses.mech_ventilation is a zone-balance loss-at-setpoint over ALL heating-degree hours;
+    # EP's (oa_sensible - heat_recovery) is a coil OA load over coil-run hours only (Brief 83
+    # §3.4/§5.2). Comparing the all-hours scalars (the Brief-81 metric) mis-pairs domains and
+    # reads +93%; over EP's coil-run hours the engines agree to ~3.7% (Brief 83 §7.2 / P4 -
+    # per-hour recovery ~75% both sides, no recovery-fraction bug). See
+    # docs/design-notes/84a_harness_likeforlike_fix.md.
+    nza_mv_all = g(nza, "mech_ventilation_mwh", "loss")          # all heating-degree hours
     ep_oa_h = g(ep, "demand_mwh", "oa_sensible_heating", default=0) or 0
     ep_oa_c = g(ep, "demand_mwh", "oa_sensible_cooling", default=0) or 0
     ep_hr_h = g(ep, "demand_mwh", "heat_recovery_sensible_heating", default=0) or 0
     ep_hr_c = g(ep, "demand_mwh", "heat_recovery_sensible_cooling", default=0) or 0
-    ep_mv_net = (ep_oa_h - ep_hr_h) + (ep_oa_c - ep_hr_c)
+    ep_mv_all = (ep_oa_h - ep_hr_h) + (ep_oa_c - ep_hr_c)       # coil-domain, all hours
+
+    llf_nza, llf_ep, n_heat_h, n_cool_h = mech_vent_like_for_like(fixture)
+    if llf_nza is not None:
+        nza_mv, ep_mv_net = llf_nza, llf_ep
+        mv_label = "Mech-vent loss (net, EP coil-run hours)"
+        notes.append(f"Mech-vent (Brief 84a) compared like-for-like over EnergyPlus coil-run hours "
+                     f"({n_heat_h} heating, {n_cool_h} cooling); the Brief-81 all-hours framing "
+                     f"(NZA {fmt(nza_mv_all)} vs EP {fmt(ep_mv_all)} MWh) is retained as an info row.")
+    else:
+        nza_mv, ep_mv_net = nza_mv_all, ep_mv_all
+        mv_label = "Mech-vent loss (net of recovery) [all-hours; like-for-like CSVs missing]"
+        notes.append("Brief 84a like-for-like CSVs not found; mech-vent shown on the Brief-81 "
+                     "all-hours (domain-mismatched) basis. Regenerate with "
+                     "`extract.mjs --mvhr-hourly` + `extract_mvhr_hourly.py` to enable the "
+                     "coil-run-hours comparison.")
     d = pct_delta(nza_mv, ep_mv_net)
-    gated.append(dict(label="Mech-vent loss (net of recovery)", nza=nza_mv, ep=ep_mv_net, delta_pct=d,
+    gated.append(dict(label=mv_label, nza=nza_mv, ep=ep_mv_net, delta_pct=d,
                       tol=TOL["mech_vent"], passed=(d is not None and abs(d) <= TOL["mech_vent"]),
                       unit="MWh"))
-    # Gross framing for context (info only).
+
+    # Info: the all-hours heat-balance-domain framing (the Brief-81 metric) - kept for honesty
+    # (CLAUDE.md Rule 9: the all-hours vent loss is a real zone-balance term) when the gated row
+    # has switched to the like-for-like basis.
+    if llf_nza is not None:
+        info.append(dict(label="Mech-vent loss (all heating-degree hours, heat-balance domain) [info]",
+                         nza=nza_mv_all, ep=ep_mv_all, delta_pct=pct_delta(nza_mv_all, ep_mv_all),
+                         tol=None, passed=None, unit="MWh"))
+    # Gross framing for context (info only). Uses the all-hours NZA loss + recovery offset.
     nza_mv_gross = None
     ro = g(nza, "mech_ventilation_mwh", "recovery_offset")
-    if nza_mv is not None and ro is not None:
-        nza_mv_gross = nza_mv + ro
+    if nza_mv_all is not None and ro is not None:
+        nza_mv_gross = nza_mv_all + ro
     ep_mv_gross = ep_oa_h + ep_oa_c
     info.append(dict(label="Mech-vent loss (gross, pre-recovery) [info]",
                      nza=nza_mv_gross, ep=ep_mv_gross,
@@ -266,7 +345,7 @@ def corr_table(rows):
     return "\n".join(out)
 
 
-def render(fixture, ep, nza, gated, info, corr_rows, ts):
+def render(fixture, ep, nza, gated, info, corr_rows, notes, ts):
     gated_fail = [r for r in gated if not r["passed"]]
     corr_gated = [r for r in corr_rows if r["gated"]]
     corr_fail = [r for r in corr_gated if not r["passed"]]
@@ -304,6 +383,12 @@ def render(fixture, ep, nza, gated, info, corr_rows, ts):
                  "the unmodified engine outputs. Divergences feed the next validation rung "
                  "(Brief 82), they are never tuned away.")
     lines.append("")
+    if notes:
+        lines.append("**Notes:**")
+        lines.append("")
+        for note in notes:
+            lines.append(f"- {note}")
+        lines.append("")
 
     lines.append("## Gated metrics")
     lines.append("")
@@ -323,10 +408,13 @@ def render(fixture, ep, nza, gated, info, corr_rows, ts):
     lines.append("")
     lines.append("- **Convention:** Delta = (NZA - EnergyPlus) / EnergyPlus. Fabric and infiltration "
                  "losses are compared as magnitudes (EnergyPlus reports conduction negative = heat out).")
-    lines.append("- **Mech-vent mapping:** NZA reports a single net ventilation loss after MVHR; "
-                 "EnergyPlus splits it into outdoor-air load minus heat recovery inside the ideal-loads "
-                 "system. The gated row compares NZA net loss vs EnergyPlus (OA - recovery); the gross "
-                 "framing is shown for context in the info table.")
+    lines.append("- **Mech-vent mapping (Brief 84a like-for-like):** NZA's `losses.mech_ventilation` "
+                 "is a zone-balance loss-at-setpoint over ALL heating-degree hours; EnergyPlus's "
+                 "(OA sensible - heat recovery) is a coil OA load over coil-run hours only. These are "
+                 "different accounting objects (Brief 83 §3.4/§5.2), so the gated row now compares them "
+                 "LIKE-FOR-LIKE over EnergyPlus's coil-run hours (where both engines agree to ~3.7%, "
+                 "per-hour recovery ~75% each - no recovery-fraction bug). The Brief-81 all-hours "
+                 "framing is retained as an info row; the gross framing is shown for context.")
     lines.append("- **Demand vs EUI:** the per-service heating/cooling demand split can diverge while "
                  "the headline EUI still agrees, because fuel conversion, DHW and plug/lighting loads "
                  "(which dominate this all-electric-plus-gas box) are shared closed-form inputs.")
@@ -356,9 +444,9 @@ def main(argv=None):
     ep = json.loads(ep_path.read_text(encoding="utf-8"))
     nza = json.loads(nza_path.read_text(encoding="utf-8"))
 
-    gated, info, corr_rows, _ = build_rows(ep, nza)
+    gated, info, corr_rows, notes = build_rows(ep, nza, args.fixture)
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
-    report, overall_pass, n_pass, n_gated = render(args.fixture, ep, nza, gated, info, corr_rows, ts)
+    report, overall_pass, n_pass, n_gated = render(args.fixture, ep, nza, gated, info, corr_rows, notes, ts)
 
     if args.stdout:
         print(report)

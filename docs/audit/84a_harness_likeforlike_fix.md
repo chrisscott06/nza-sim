@@ -141,7 +141,48 @@ Commit: `Brief 84a P2: like-for-like definition choice + impl plan`.
 
 ## §3 — P3: Like-for-like mech-vent comparison (the diff)
 
-_(to be written at P3)_
+**File:** `validation/compare.py` only. **No engine/IDF/tolerance change.** The diff has four parts:
+
+1. **`import csv`** (stdlib) added.
+2. **New helper `mech_vent_like_for_like(fixture)`** — reads the two Brief 83 P4 `*_mvhr_hourly.csv`
+   files, joins by `hour_index`, and sums each engine's net mech-vent over EP coil-run hours per side
+   (heating where EP `supply_air_heating_kwh > 0`; cooling where `supply_air_cooling_kwh > 0`). Returns
+   `(nza_mwh, ep_mwh, n_heat_hours, n_cool_hours)`, or `(None, None, 0, 0)` if the CSVs are absent. A
+   docstring + the gated-row comment cite Brief 83 §3.4/§5.2/§7.2 and the design note.
+3. **Mech-vent gated row rewritten.** It still computes the all-hours scalars (`nza_mv_all` 1.282,
+   `ep_mv_all` 0.665) but the **gated** value now uses the like-for-like sums when the CSVs are present
+   (label "Mech-vent loss (net, EP coil-run hours)"), appending a Note with the coil-hour counts. If
+   the CSVs are absent it falls back to the all-hours scalars (label flags this) with a Note telling the
+   user how to regenerate them. The old all-hours number is **retained as an INFO row** ("all
+   heating-degree hours, heat-balance domain") — CLAUDE.md Rule 9: the all-hours vent loss is a real
+   zone-balance term, so it stays visible. The gross/recovery info rows are unchanged (gross still uses
+   the all-hours NZA loss + recovery offset).
+4. **`notes` threaded through** `build_rows(ep, nza, fixture)` → `render(..., notes, ts)` → a "**Notes**"
+   block under the verdict. The mech-vent interpretation bullet was updated to describe the like-for-like
+   pairing.
+
+No other gated/info row, no tolerance, and no engine/IDF code was touched.
+
+### §3.1 — Smoke-test (read-only, existing JSON + committed P4 CSVs)
+
+`python validation/compare.py --stdout` (P4 does the full fresh re-run):
+
+| Gated metric | NZA | EP | Delta | Result | vs Brief 81 |
+|---|---|---|---|---|---|
+| EUI | 160.4 | 166.6 | −3.7 % | PASS | unchanged |
+| Heating demand | 2.492 | 3.278 | −24.0 % | FAIL | unchanged (Finding A) |
+| Cooling demand | 1.407 | 0.677 | +107.9 % | FAIL | unchanged (Finding A) |
+| Fabric conduction (total) | 5.454 | 4.909 | +11.1 % | PASS | unchanged |
+| **Mech-vent (net, EP coil-run hours)** | **0.919** | **0.887** | **+3.6 %** | **PASS** | **was +92.9 % FAIL** |
+| Monthly heating r | — | — | 0.9933 | PASS | unchanged |
+| Monthly cooling r | — | — | 0.9446 | PASS | unchanged |
+
+**Verdict 5/7 gated (was 4/7).** Mech-vent flipped FAIL→PASS; every other metric byte-identical. The
+all-hours framing shows as an info row (1.282 vs 0.665, +92.9 %); the Note records 4426 heating / 1173
+cooling coil hours. The remaining heating/cooling FAILs are Finding A — correctly out of 84a scope
+(Brief 84b).
+
+Commit: `Brief 84a P3: like-for-like mech-vent comparison`.
 
 ---
 
