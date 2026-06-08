@@ -2,6 +2,20 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
+## ✅ Brief 84a — CLOSED 2026-06-08 *(branch only — NOT on main; harness-only, NO engine change)*
+
+**Harness like-for-like comparison fix (mech-vent on coil-run hours) — SAME-DAY.** Implements the correction Brief 83's evidence named: the Brief-81 "mech-vent +92.9 % FAIL" was a **comparison-framework domain mismatch**, not an engine bug. `validation/compare.py` now pairs the mech-vent metric **like-for-like over EnergyPlus coil-run hours** (from the Brief 83 P4 per-hour CSVs): **NZA 0.919 vs EP 0.887 = +3.6 % PASS** (was 1.282 vs 0.665 = +92.9 % FAIL). **No engine/IDF/tolerance change.** All work on `feat/energyplus-validation`; **never merged to `main`** (`d8a6207` throughout). Audit: [`docs/audit/84a_harness_likeforlike_fix.md`](docs/audit/84a_harness_likeforlike_fix.md) (§0–§5); design note [`docs/design-notes/84a_harness_likeforlike_fix.md`](docs/design-notes/84a_harness_likeforlike_fix.md).
+
+| Part | SHA | Deliverable |
+|---|---|---|
+| P1 | `4436f01` | Brief + design note + audit stub landing. |
+| P2 | `646cdad` | Like-for-like definition: option 1 (coil-run hours) over option 2 (no clean NZA scalar; would pair NZA-hours vs EP-hours). Verified read-only: all-hours +93.6 % → coil-run +3.6 % (4426 heating-coil hours). |
+| P3 | `be8ea12` | `compare.py` helper `mech_vent_like_for_like()` (joins the two P4 CSVs over EP coil-run hours, per side). Gated row swaps to LLF basis; all-hours kept as INFO row (Rule 9); graceful fallback + Note if CSVs absent. Only mech-vent logic touched. |
+| P4 | `ce0b823` | Full fresh re-run (run.py → extract_mvhr_hourly.py → extract.mjs [+`--mvhr-hourly`] → compare.py). Mech-vent +92.9 % FAIL → +3.6 % PASS; every other gated/info metric byte-identical. |
+| P5 | (this commit) | Audit §5 close + STATUS + push. |
+
+**Bridgewater-Box validation state: 5/7 gated tolerances pass** (was 4/7). Remaining FAILs — heating −24.0 %, cooling +107.9 % — are **Finding A** (free-float warmth), the subject of **Brief 84b** (parallel). Overall verdict stays FAIL until Finding A is addressed; that is correct, not a regression. Design-note back-port to `main` waits until Brief 84b closes.
+
 ## ✅ Brief 83 — CLOSED 2026-06-07 *(branch only — NOT on main; diagnostic only, NO engine fix)*
 
 **MVHR recovery booking (Finding B fix) — SAME-DAY.** Brief 83 set out to fix Finding B (NZA "~54 % effective recovery vs EP ~82 %, both nominally 75 %"). **The premise is REFUTED by the evidence — there is no recovery-booking bug.** Diagnostic-only; **no engine fix landed** (brief explicitly sanctions this). All work on `feat/energyplus-validation`; **never merged/pushed to `main`** (`d8a6207` throughout). Audit: [`docs/audit/83_mvhr_recovery_booking.md`](docs/audit/83_mvhr_recovery_booking.md) (§0–§8).

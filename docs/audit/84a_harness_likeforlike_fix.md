@@ -236,4 +236,53 @@ Commit: `Brief 84a P4: post-fix harness re-run + verification`.
 
 ## §5 — P5: Close summary + STATUS update
 
-_(to be written at P5)_
+**Status: Brief 84a CLOSED 2026-06-08 — harness-only like-for-like fix landed.** All work on
+`feat/energyplus-validation` (branch tip `b955d22` at start). `main` never touched (`d8a6207`
+throughout); branch verified before every commit.
+
+### §5.1 — What Brief 84a delivered
+
+| Part | Deliverable | Commit |
+|---|---|---|
+| P1 | Brief + design note + audit stub landing | `4436f01` |
+| P2 | Like-for-like definition choice (option 1, coil-run hours) + impl plan | `646cdad` |
+| P3 | `compare.py` like-for-like mech-vent comparison (the diff) | `be8ea12` |
+| P4 | Full fresh harness re-run + verification | `ce0b823` |
+| P5 | This close + STATUS update | _(this commit)_ |
+
+### §5.2 — The change in one paragraph
+
+The Brief-81 mech-vent gated metric compared two different accounting objects — NZA's all-hours
+zone-balance loss-at-setpoint (1.282 MWh) against EnergyPlus's coil-run-hours OA-minus-recovery load
+(0.665 MWh) — and read **+92.9 % FAIL**. Brief 83 P4 proved the engines agree to ~3.7 % over the hours
+EnergyPlus's coil actually runs (per-hour recovery ~75 % both sides; no recovery-fraction bug). Brief
+84a adds one helper to `validation/compare.py` that sums each engine's net mech-vent over EnergyPlus
+coil-run hours (per side, from the Brief 83 P4 CSVs) and gates on that like-for-like basis: **NZA 0.919
+vs EP 0.887 = +3.6 % PASS.** The Brief-81 all-hours framing is retained as an info row (Rule 9); the
+old number is reframed, not hidden.
+
+### §5.3 — Bridgewater-Box validation state
+
+**5 of 7 gated tolerances now pass** (was 4/7):
+
+- PASS: EUI (−3.7 %), fabric conduction total (+11.1 %), **mech-vent net loss (+3.6 %)**, monthly
+  heating r (0.993), monthly cooling r (0.945).
+- FAIL: heating demand (−24.0 %), cooling demand (+107.9 %) — **both Finding A** (free-float warmth),
+  the subject of Brief 84b. Out of 84a scope.
+
+The overall verdict stays FAIL because the two Finding-A demand metrics remain out of tolerance — that
+is correct and expected; 84a only corrects the mis-paired mech-vent bookkeeping.
+
+### §5.4 — Brief discipline / safety
+
+- **No engine code touched** (`instantCalc.js` / `frontend/src/utils/` untouched). **No IDF touched.**
+  The only code change is `validation/compare.py` (the comparison framework).
+- **No tolerance re-tuning** — the Brief 81 tolerances are unchanged; the metric was made honest, not
+  the gate lenient.
+- **Only the mech-vent comparison changed** — every other gated/info row and all correlations are
+  byte-identical to Brief 81/83 (P4 §4.1).
+- **Honesty:** the all-hours framing is preserved as an info row; a Note records the coil-hour counts;
+  graceful fallback if the CSVs are absent.
+- `main` stayed `d8a6207`; only Brief-84a files staged each commit (the benign `captured_at`-only
+  result-JSON regeneration left unstaged). Branch pushed to origin without merge (the design note's
+  back-port to `main` waits until Brief 84b closes).
