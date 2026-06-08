@@ -2,6 +2,27 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
+## ✅ Brief 85 — CLOSED 2026-06-08 *(branch only — NOT on main; outcome (c); one bounded engine plumbing fix)*
+
+**Internal mass partition (Finding A resolution) — SAME-DAY, staged.** Tested whether the +1.10 °C free-float delta (Brief 84b) is thermal mass or solver convention. **Verdict: OUTCOME (c) — the mass hypothesis is REFUTED; the delta is ~98 % a solver-convention residual, not mass.** All work on `feat/energyplus-validation`; **never merged to `main`** (`d8a6207` throughout). Audit: [`docs/audit/85_internal_mass_partition.md`](docs/audit/85_internal_mass_partition.md) (§0–§2.3); design note [`docs/design-notes/85_internal_mass_partition.md`](docs/design-notes/85_internal_mass_partition.md).
+
+| Part | SHA | Deliverable |
+|---|---|---|
+| P0.1 | `17a4eba` | Brief + design note + audit stub. |
+| P0.2 | `5e7a8cd` | Source read of the dropped `opts.tuning` (premise-check: it's a 3-function gap `_calculateInstantBaseline`→`_calculateState3`→`_calculateState2`, ~4 lines, not the single L4961 Brief 84b cited). |
+| P0.3 | `da484db` | **Engine plumbing fix** — wire `opts.tuning` through `_calculateState3` (sig + call site + both `_calculateState2` calls). Default byte-identical when absent. |
+| P0.4 | `d8ce26c` | **HARD CHECKPOINT cleared** — Test 1 default byte-identical (5/7, EUI 160.4, heating 2.492, cooling 1.407); Test 2 hook live + damping direction (night-day spread 0.67→0, range 3.52→3.04). |
+| P1.1 | `ff7be66` | Sweep design + construction-derived mass 83.15 MJ/K (+ double-count caveat) + prediction (outcome c). |
+| P1.2 | `e855ce2` | Sweep execution (`internal_mass_sweep.mjs` + `validation/sweeps/85_internal_mass_sweep.csv`). |
+| P1.3 | `4edf58f` | Analysis + partition: mass-explained ≈ 0.02 °C, residual ≈ 1.06 °C. |
+| P2.1 | `93743a1` | Verdict (c) + Rule-10 refinement (isolate the residual before declaring it defensible). |
+| P2.2 | `2b190d1` | Validation state at mass_min = 5/7 (no change — demand FAILs are mass-independent). |
+| P2.3 | (this commit) | Close + STATUS + Brief 86 handoff + push. |
+
+**Key result:** the `opts.tuning` hook is now live (Step 0, default-preserving). The sweep (0–100 MJ/K internal mass) shows the **mean** free-float delta is flat at ~1.06–1.09 °C (`mass_min` 10 MJ/K, `delta_residual` 1.060 °C; mass explains ~2 %). Mass cleanly governs the **diurnal amplitude** (night Δ 1.06→1.56, midday 1.08→0.61; range 3.52→3.04) but the rise/fall cancel in the mean (mean-preserving capacitance, Brief 84b §5.2 confirmed). So the +1.10 °C is a **solver-convention residual**, ΔT-driven, persisting at all masses — a free-float **ΣUA / surface-drive / integration** difference, *identified as a class but not isolated*. Validation state unchanged at **5/7** (mass tuning doesn't advance it; the binding FAILs are the demand metrics).
+
+**Recommended Brief 86 (reframed from design note):** mass is refuted, so there's nothing to calibrate and widening tolerance blind would violate Rule 10. Brief 86 = a **residual-isolation diagnostic** — isolate the ~1.06 °C among {free-float loss ΣUA [leading suspect per 84b's Δ-lower-under-sun], sol-air drive, 70 %-to-air gains split, 1st-vs-3rd-order integration}, *then* decide tolerance-widen (if defensible convention) vs targeted fix (if defect). Separate optional cleanup: resolve the construction-derived-mass **double-count** if pursuing that philosophy. **Back-port candidates** (Chris's call): 84a harness fix + 85 Step-0 plumbing fix (both non-architectural). **Open questions for Chris:** accept the diagnostic reframe? tolerance vs integration-scheme change if residual is defensible? back-port now or hold?
+
 ## ✅ Brief 84b — CLOSED 2026-06-08 *(branch only — NOT on main; diagnostic only, NO engine change)*
 
 **Finding A free-float characterisation (zone air-node solver convention) — SAME-DAY.** Characterises the ~+1 °C free-float zone-temp delta that Brief 83 showed is the single structural finding behind Brief 81's heating −24 % / cooling +108 % / mech-vent +93 %. **Diagnostic-only; no engine/IDF/tolerance change.** All work on `feat/energyplus-validation`; **never merged to `main`** (`d8a6207` throughout). Audit: [`docs/audit/84b_finding_a_freefloat.md`](docs/audit/84b_finding_a_freefloat.md) (§0–§7); design note [`docs/design-notes/84b_finding_a_freefloat.md`](docs/design-notes/84b_finding_a_freefloat.md).

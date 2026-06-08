@@ -444,4 +444,86 @@ Commit: `Brief 85 P2.2: validation state summary at mass_min`.
 
 ## §2.3 — P2.3: Close summary + Brief 86 handoff
 
-_(to be written at P2.3)_
+**Status: Brief 85 CLOSED 2026-06-08 — outcome (c). One engine change landed (the Step-0 plumbing fix);
+the mass hypothesis was tested and refuted; no calibration committed.** All work on
+`feat/energyplus-validation` (tip `85d47c9` at start). `main` never touched (`d8a6207` throughout);
+branch verified before every commit.
+
+### §2.3.1 — What Brief 85 delivered
+
+| Part | Deliverable | Commit |
+|---|---|---|
+| P0.1 | Brief + design note + audit stub | `17a4eba` |
+| P0.2 | Source read — the `opts.tuning` drop (premise-check: 3-function gap, ~4 lines) | `5e7a8cd` |
+| P0.3 | Plumbing fix — wire `opts.tuning` through `_calculateState3` → `_calculateState2` | `da484db` |
+| P0.4 | Hook verification [HARD CHECKPOINT cleared] | `d8ce26c` |
+| P1.1 | Sweep design + construction-derived mass (83.15 MJ/K) + prediction | `ff7be66` |
+| P1.2 | Internal-mass sweep execution (`internal_mass_sweep.mjs` + CSV) | `e855ce2` |
+| P1.3 | Sweep analysis + delta partition | `4edf58f` |
+| P2.1 | Outcome verdict (c) + Rule-10 refinement | `93743a1` |
+| P2.2 | Validation state at mass_min (5/7, no change) | `2b190d1` |
+| P2.3 | This close + STATUS + Brief 86 handoff | _(this commit)_ |
+
+### §2.3.2 — The finding in one paragraph
+
+The Step-0 plumbing fix made the dead `opts.tuning` hook live (default behaviour byte-identical;
+checkpoint passed). The Step-1 sweep then **refutes the mass hypothesis**: the +1.10 °C free-float mean
+delta is **mass-independent** — it stays ~1.06–1.09 °C across internal mass 0 → 100 MJ/K (mass-explained
+≈ 0.02 °C; `delta_residual` ≈ 1.06 °C at `mass_min` 10 MJ/K). Internal mass cleanly governs the
+**diurnal amplitude** (night Δ 1.06 → 1.56, midday Δ 1.08 → 0.61; range 3.52 → 3.04) but the night-rise
+and midday-fall cancel in the mean — exactly the mean-preserving capacitance physics Brief 84b §5.2
+predicted. So **outcome (c)**: the residual is a solver-convention difference, not thermal mass. The
+residual persists at all masses and is ΔT-driven, pointing to a free-float **ΣUA / surface-drive /
+integration** difference — identified as a *class* but **not isolated to one cause** within Brief 85's
+mass scope.
+
+### §2.3.3 — Recommended Brief 86 scope (reframed from the design note)
+
+The design note expected Brief 86 to "implement the verdict" (land construction-derived mass / calibrate
+/ widen tolerance). **Brief 85's evidence reframes this:** mass is refuted, so there is nothing to
+calibrate, and **widening tolerance blind would violate CLAUDE.md Rule 10** (don't wave a ΔT-driven
+~1 °C offset away as "convention" without isolating it). Recommended Brief 86 = a **residual-isolation
+diagnostic**, then a verdict:
+
+1. **Isolate the ~1.06 °C free-float mean offset** among the identified candidates (read-only, the
+   `opts.tuning` hook + other existing inputs now make this tractable): (i) free-float effective loss
+   ΣUA NZA-vs-EP per °C; (ii) opaque-wall sol-air drive `T_sa`; (iii) the 70 %-to-air gains/solar split
+   (`TUNE_SOLAR_RAD_FRAC`, `TUNE_GLAZ_INSIDE_ABS` — also now reachable via the wired hook); (iv) the
+   1st-order-vs-3rd-order / 1-hr-vs-6/hr integration bias. The 84b signature (Δ lower under sun, higher
+   when cold) points first at a **loss-side ΣUA** difference (i).
+2. **Then decide, evidence-gated:** if the residual is a defensible convention (e.g. integration order) →
+   document + widen the free-float-related tolerance with cited reasoning; if it is a specific defect
+   (e.g. a wrong free-float UA term or sol-air over-warming) → targeted fix. Do **not** pre-commit.
+3. **Lumped-mass cleanup (separate, optional):** if the team still wants "construction-derived mass" as
+   the long-term internal-mass philosophy, Brief 86 (or a sibling) should resolve the **double-count**
+   (§1.1.2) — derive the *internal* mass or replace the lumped term with the RC's mass, not add the
+   envelope mass twice. This is independent of the residual (it won't move the mean) and is a
+   model-realism improvement, not a validation fix.
+
+### §2.3.4 — Back-port candidates (for Chris, after review)
+
+Two non-architectural changes on the branch are clean `main` back-port candidates once Chris signs off
+the validated state: **(a)** Brief 84a's harness like-for-like mech-vent comparison (`compare.py`,
+harness-only); **(b)** Brief 85 Step-0's `opts.tuning` plumbing fix (default-preserving bug fix that
+unblocks all future calibration via the hook). Neither is an engine-architecture change. The brief
+defers the back-port decision to Chris — flagged, not actioned.
+
+### §2.3.5 — Open questions for Chris
+
+1. **Brief 86 shape:** accept the reframe to a residual-isolation diagnostic (vs the design note's
+   "implement" framing)? The mass premise is refuted, so there's no mass calibration to implement.
+2. **Tolerance philosophy:** if the residual turns out to be a defensible integration-order convention,
+   is a widened free-float tolerance acceptable to close the arc, or do you want an engine change to
+   the integration scheme (much larger scope)?
+3. **Back-port:** approve back-porting 84a (harness) and 85 Step-0 (plumbing) to `main` now, or hold the
+   whole branch until the residual is resolved?
+
+### §2.3.6 — Brief discipline / safety
+
+One bounded engine change (Step-0 plumbing, default byte-identical, verified at the hard checkpoint); no
+other engine change; no IDF change; no fixture change; **no tolerance re-tune** (tolerance change is a
+*possible Brief 86 outcome*, not landed here); no tuning-to-pass (the sweep is diagnostic — mass was
+tested, not fitted). Premise-checks raised and documented: the 3-function hook gap (§0.2.2) and the
+Rule-10 refinement of outcome (c) (§2.1.1). Prediction stated before measuring and **confirmed**
+(§1.1.5 → §1.3.5). Only Brief-85 files staged each commit (the benign `captured_at`-only result-JSON
+regeneration left unstaged). `main` stayed `d8a6207`; branch pushed to origin without merge.
