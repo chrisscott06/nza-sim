@@ -411,7 +411,34 @@ Commit: `Brief 85 P2.1: outcome verdict + reasoning`.
 
 ## §2.2 — P2.2: Bridgewater-Box validation state at mass_min
 
-_(to be written at P2.2)_
+Informational (mass_min is **not** a production commitment — outcome (c) means it doesn't become the
+default). Gated state at `mass_min` = 10 MJ/K:
+
+| Gated metric | At default (25 MJ/K) | At mass_min (10 MJ/K) | Result |
+|---|---|---|---|
+| EUI | 160.4, −3.7 % | ~160 (demand shifts <1 %; well inside ±10 %) | PASS |
+| Heating demand | −24.0 % | **−23 %** (sweep) | **FAIL** |
+| Cooling demand | +107.9 % | **+112 %** (sweep) | **FAIL** |
+| Fabric conduction | +11.1 % | +11.1 % (envelope-only; identical) | PASS |
+| Mech-vent (EP coil-run hrs) | +3.6 % | +3.7 % (sweep; mass-independent) | PASS |
+| Monthly heating r | 0.993 | ~0.99 (amplitude shifts, shape preserved) | PASS |
+| Monthly cooling r | 0.945 | ~0.94 | PASS |
+
+| Milestone | Gated pass |
+|---|---|
+| Brief 81 baseline | 4/7 |
+| Brief 84a + 84b close | 5/7 |
+| **Brief 85 at mass_min** | **5/7 (no change)** |
+
+**Tuning internal mass does not advance the validation state.** The binding constraint is the two
+**demand** FAILs (heating, cooling), which mass does not fix — at mass_min both remain outside ±15 %
+(the sweep measured them directly: −23 % / +112 %), so the gated count cannot exceed 5/7 regardless of
+the other rows. (The other five metrics pass at default and are not degraded by a small mass change:
+fabric and mech-vent are identical, EUI moves <1 %, monthly-r shape is preserved.) This is the
+quantitative confirmation that the remaining gap is the free-float **mean** offset (§2.1) — a
+solver-convention residual — not a tunable mass.
+
+Commit: `Brief 85 P2.2: validation state summary at mass_min`.
 
 ---
 
