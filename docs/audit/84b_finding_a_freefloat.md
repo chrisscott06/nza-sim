@@ -74,7 +74,69 @@ Commit: `Brief 84b P1: brief + design note landing + evidence inventory`.
 
 ## §2 — P2: Free-float delta characterisation + conditional analysis
 
-_(to be written at P2)_
+**Script:** `validation/freefloat_diagnostic.py` (stdlib-only, read-only).
+**Report:** `validation/reports/freefloat_diagnostic_2026-06-08T09-56-40Z.md`.
+**Free-float definition (stricter than Brief 82's EP-mode classification):** EP heating+cooling
+demand = 0 **AND** NZA heating+cooling demand = 0 — both engines genuinely unconditioned.
+
+### §2.1 — The free-float subset and the delta
+
+| Quantity | Value |
+|---|---|
+| EP unconditioned hours | 3161 (36.1 %) |
+| NZA unconditioned hours | **5012 (57.2 %)** |
+| Both unconditioned (the subset) | **2949 (33.7 %)** |
+| Mean delta (T_NZA − T_EP) | **+1.099 °C** |
+| Median / std / range | +1.052 / 0.673 / −0.86..+2.67 °C |
+| Hours NZA warmer (delta > 0) | **97.5 %** |
+| Hours |delta| < 0.1 | 3.6 % |
+
+NZA free-floats in **1851 more hours** than EP (5012 vs 3161) — the direct consequence of settling
+warmer (it crosses the 21 °C heating setpoint far less often). The 2949-hour both-unconditioned subset
+matches Brief 82 §4b's EP-free∩NZA-free cell exactly. **Hard-STOP check (P2): the delta IS concentrated
+in free-float hours** (97.5 % warmer, mean +1.10 °C; conditioned-hour delta ≈ 0 per Brief 82) — Brief
+83's Finding-A framing is confirmed, no reframe needed.
+
+### §2.2 — The delta is CONDITIONAL, and the conditionality is diagnostic
+
+It is not a flat offset (CV = std/mean = 0.61). The conditional structure is the key evidence:
+
+| Driver | Pattern | Pearson r |
+|---|---|---|
+| Outdoor drybulb | delta **grows as it gets colder**: 1.62 °C at [5,10) → 0.59 at [15,20) → −0.52 at ≥20 | **−0.568** |
+| Indoor−outdoor ΔT | delta **grows with the loss-driving ΔT**: 0.21 at <5 → 1.03 at [5,10) → 1.55 at [10,15) → 1.81 at [15,20) | **+0.502** |
+| Global horizontal solar | delta **larger at night** (1.36) than in sun (0.87 at ≥300 Wh/m²) | **−0.269** |
+| Hour-of-day | **U-shaped, night-heavy**: ~1.41 at 00–06h and 22–24h, ~0.67 at 13–16h | — |
+| Occupied (08–18h) vs not | **0.82 occupied vs 1.34 unoccupied** | — |
+| Season | larger in shoulder months with many moderate-ΔT free-float hours (May 1.55, Jun 1.43, Sep 1.40); smaller deep-winter/high-summer | — |
+
+### §2.3 — What the conditional signature means (and rules out)
+
+The warmth **scales with the building's heat-loss rate** (ΔT-driven, colder-outdoor-driven) and is
+**night-heavy and anti-correlated with solar/occupancy**. That is a **loss-side / thermal-storage**
+signature: NZA sheds the building's stored heat *more slowly* than EnergyPlus during free-float, so the
+zone settles warmer, and the gap is widest exactly when the loss rate is highest (cold nights) and
+narrowest when fresh gains dominate (sunny occupied middays — both engines track the forcing).
+
+This pattern **discriminates** between the four candidate mechanisms before the source read:
+
+- **Consistent with thermal-mass / capacitance + timestep convention** (candidates 1 & 3): a
+  mass-damped, single-hourly implicit-Euler zone relaxes toward the forcing more slowly than a
+  distributed-CTF zone sub-stepped 6×/hour — producing exactly a ΔT-scaled, night-heavy warmth.
+- **Inconsistent with a gains/solar-handling bug:** that would make the delta *grow* with solar and in
+  occupied hours; the data shows the **opposite** (solar r = −0.27; occupied 0.82 < unoccupied 1.34).
+- **Inconsistent with a flat solver offset** (a constant convention difference): CV 0.61, not ~0.
+- **Convection-coefficient differences** (candidate 2) remain possible but would have to act through the
+  same loss-rate channel; P3/P4 test whether NZA even uses surface convection explicitly.
+
+### §2.4 — P2 answer to subordinate question 1
+
+**The offset is conditional, not constant — and its conditionality is loss-rate-driven (ΔT, cold,
+night), not gains-driven.** This is the fingerprint of a thermal-mass/timestep transient-response
+difference between the two solvers. P3 (NZA source) and P4 (EP reference) localise the mechanism; P5
+ranks the candidates against this signature.
+
+Commit: `Brief 84b P2: free-float delta characterisation + conditional analysis`.
 
 ---
 
