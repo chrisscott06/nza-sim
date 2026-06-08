@@ -363,7 +363,49 @@ Commit: `Brief 85 P1.3: sweep analysis + delta partition`.
 
 ## §2.1 — P2.1: Outcome verdict + reasoning
 
-_(to be written at P2.1)_
+**Verdict: OUTCOME (c) — no internal-mass value brings the residual below ~0.8 °C.** `delta_residual` =
+1.060 °C at `mass_min` (10 MJ/K); the mean free-float delta never drops below ~1.06 °C anywhere in
+0–100 MJ/K (§1.3). Mass explains ≈ 0.02 °C (~2 %) of the +1.10 °C; the remaining ~1.06 °C (~98 %) is a
+**solver-convention difference independent of thermal mass.** The mass hypothesis (the design note's
+central premise) is refuted for the mean; mass is a diurnal-amplitude knob only.
+
+### §2.1.1 — Refinement of outcome (c)'s prescription (premise-check, CLAUDE.md Rule 10)
+
+The brief's outcome (c) prescribes "solver convention is structural → document + widen tolerance." The
+**magnitude** test lands (c) cleanly (1.06 > 0.8). But the evidence does **not yet establish that the
+residual is a *defensible* convention rather than a *bug*** — and CLAUDE.md Rule 10 forbids waving a
+number away as "engine convention" without isolating it. What we know about the residual:
+
+- It is ~1.06 °C, **persists at every mass including 0**, and is **ΔT-driven** (r(Δ,ΔT) ≈ +0.48,
+  r(Δ,outdoor) ≈ −0.55 at all masses) — i.e. NZA's free-float zone sits proportionally further above
+  outdoor than EP's as it gets colder.
+- For `T_eq = [ΣUA·T_drive + Q_gains]/ΣUA`, a ΔT-scaled mean offset is a **ΣUA / surface-drive**
+  effect, not capacitance. Candidate mechanisms (not isolated this brief — out of mass scope):
+  **(i)** NZA's effective free-float loss UA slightly below EP's (NZA loses less per °C); **(ii)** the
+  opaque-wall **sol-air drive** `T_sa` running the surface warmer than EP's CTF surface balance;
+  **(iii)** the **70 %-to-air gains split** depositing more gain in the air node than EP's radiant/
+  convective partition; **(iv)** a **1st-order vs 3rd-order integration** mean bias.
+- The Brief 84b P2 signature (delta *lower* under sun, r(Δ,solar) −0.27) argues **against** sol-air (ii)
+  being dominant and **toward** a loss-side ΣUA difference (i) — but this is suggestive, not isolated.
+
+So: **mass is decisively ruled out; the residual's mechanism is identified as a free-float ΣUA/drive/
+integration difference but not yet isolated to one cause.** Whether it is "defensible convention"
+(→ widen tolerance) or a specific defect (→ targeted fix) cannot be honestly declared without one more
+diagnostic. This shapes the Brief 86 recommendation (§2.3): **isolate the residual first**, then choose
+tolerance vs fix — rather than widening tolerance blind.
+
+### §2.1.2 — Hard-STOP check
+
+- **Non-monotonic/chaotic sweep?** No — every amplitude metric is monotonic; the mean is flat with a
+  shallow minimum. Clean result.
+- **Construction-derived mass obviously wrong?** No — 83.15 MJ/K is physically sane for the box's
+  concrete-cored constructions (sanity: ~0.83 MJ/K·m² GIA), and it sits on the smooth sweep curve.
+- **Step 2 points to a real engine bug?** **Possibly, but not established.** The residual *could* be a
+  bug (a free-float ΣUA/drive error) or a defensible convention. Per the hard-STOP's intent, I am
+  **not** forcing a "defensible convention" conclusion; I flag the residual as needing isolation
+  (§2.1.1) and route that to Brief 86. This is the honest middle, not a manufactured clean answer.
+
+Commit: `Brief 85 P2.1: outcome verdict + reasoning`.
 
 ---
 
