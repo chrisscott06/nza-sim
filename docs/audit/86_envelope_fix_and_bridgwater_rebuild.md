@@ -111,3 +111,51 @@ Verified: v40 produced with correct sources/shares/efficiencies (table above).
 **Fuel-split note:** ~70% elec / 30% gas only emerges *after* Part 5 adds small power (~186 MWh elec).
 Systems-only, gas (40% of DHW) dominates a small denominator — the 70/30 is a Part-5 verification.
 Config is DB-only (Part 6 persists it).
+
+### v40 schema-drift bug (resolved)
+First calibration run returned **0 delivered energy for heating/cooling/DHW** (demand computed fine:
+heating 91.5, cooling 121.6 MWh). Cause: the Python `40_bridgewater_systems_migration.py` (Brief 40)
+produces a v40 whose DHW-demand + setpoint fields sit on the **per-system** entries, but the current
+(Brief 85) `systemsEngine.js` reads them at **service-level** (`dhw_demand_litres_per_person_per_day`,
+`heating_setpoint_c`, …) — Brief 42's reorg. The Python `42_systems_ux` chain wouldn't lift them
+headlessly (schema_version stamping inconsistent — 3 attempts). **Fix:** built the v40 service-level
+fields directly (DHW per-person 80 L/day, store 60, mains 10; setpoints follow-comfort 21/24;
+schema_version 2) and stripped the stale per-system fields. Engine then computes all services.
+
+## Part 5 — Loads + calibration — DONE (gap reported, NOT forced)
+
+Loads written to `building_config.gains`: LED lighting **LPD 2 W/m²** (daylight 0.7); small
+power/equipment baseload **5.04 W/m²** → **186.1 MWh** (brief's ~186 ✓); occupancy 138×2 @ 75 W/p.
+
+### Bottom-up result (static engine, full mode)
+| End use | Delivered MWh |
+|---|---|
+| Heating (VRF 5.12 + panel) | 21.5 |
+| Cooling (VRF 3.51 + DX) | 34.0 |
+| Fans (MVHR + 2 extracts) | 25.9 |
+| DHW | 57.2 elec + **124.8 gas** |
+| Lighting (LED) | 14.0 |
+| Small power | 186.1 |
+| **Total** | **463.6** → **EUI 110 kWh/m²** |
+
+Targets met: **fuel split elec 73% / gas 27%** (≈70/30 ✓); **gas 124.8 MWh** (≈ brief anchor 134.8 ✓);
+small power 186 MWh ✓.
+
+### The 110 → 180 gap — reported from first principles, not forced (Chris, 2026-06-25)
+Closing to metered 180 needs **~295 MWh (70 kWh/m²) of inferred base load — larger than every modelled
+end-use combined.** Two first-principles reasons forcing it is wrong (brief escalation clause):
+1. **It would break the validated fuel split.** The inferred base load is electricity (auxiliary). The
+   model *already* reproduces 73/27 and the 125 MWh gas DHW at EUI 110. Adding 295 MWh elec drives the
+   split to ~84/16 — distorting exactly what's currently correct. So EUI-180 and 70/30 are mutually
+   inconsistent under a pure-electricity base load: the metered 180 is not explained by more auxiliary.
+2. **Heating looks under-counted.** Heating is only 21.5 MWh, yet the bedroom extract (2208 l/s, no HR,
+   8760 h ≈ 230 MWh loss) is meant to *drive* heating (the report's headline finding). The 186 MWh of
+   internal gains offsets most of it. If real internal gains are lower / extract-heating higher, heating
+   (and the gap) shift. **Candidate gap sources to confirm against sub-metering:** extract-driven
+   heating; DHW demand (280 MWh modelled vs static 336); unmodelled hotel loads (kitchen, lifts,
+   external lighting, IT, laundry). **Recommendation:** confirm the metered elec/gas split and the
+   extract-heating against measured data before any base-load addition.
+
+**Verification status vs brief:** fuel split ✓, gas anchor ✓, small power ✓; **EUI ±2% of 180 NOT met
+by design** — gap reported per the escalation clause. Calibration harness: `scripts/_brief86_calibrate.mjs`.
+Config is DB-only (Part 6 persists it).
