@@ -2,6 +2,12 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
+## 🔵 Brief 86 — OPENED 2026-06-25 *(branch `feat/envelope-fix-bridgwater-rebuild`, cut from `feat/energyplus-validation` tip `7b9b252` — NOT on main)*
+
+**Envelope-Only Heat-Balance Fix + HIEX Bridgwater Model Rebuild + Input Persistence.** Architect-directed (supersedes the Brief-85 handoff's residual-isolation recommendation). Brief: [`active/86_envelope_fix_and_bridgwater_rebuild.md`](docs/briefs/active/86_envelope_fix_and_bridgwater_rebuild.md). Goal: restore the envelope-only heat balance (currently 500-erroring — epJSON assembler not requesting Zone Mean Air Temperature), rebuild the HIEX Bridgwater inputs (UUID `12cf7cc4…`, "Bridgewater Hotel" in DB; populated inputs lost in a machine migration), then add project input export/snapshot persistence.
+
+**Part 1 (this commit) — landed brief + reconciliation.** Archived six closed briefs (81 EnergyPlus validation box, 82 zone-temp delta, 83 MVHR recovery booking, 84a harness like-for-like, 84b free-float, 85 internal-mass partition) from `active/` → `archive/…_COMPLETED.md`; `current.md` repointed; `active/` now holds only 70, 75, 86. Parts 2–7 pending.
+
 ## ✅ Brief 85 — CLOSED 2026-06-08 *(branch only — NOT on main; outcome (c); one bounded engine plumbing fix)*
 
 **Internal mass partition (Finding A resolution) — SAME-DAY, staged.** Tested whether the +1.10 °C free-float delta (Brief 84b) is thermal mass or solver convention. **Verdict: OUTCOME (c) — the mass hypothesis is REFUTED; the delta is ~98 % a solver-convention residual, not mass.** All work on `feat/energyplus-validation`; **never merged to `main`** (`d8a6207` throughout). Audit: [`docs/audit/85_internal_mass_partition.md`](docs/audit/85_internal_mass_partition.md) (§0–§2.3); design note [`docs/design-notes/85_internal_mass_partition.md`](docs/design-notes/85_internal_mass_partition.md).
