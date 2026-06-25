@@ -42,7 +42,10 @@ import { confirm } from '../../shared/ConfirmDialog.jsx'
 // edit-pencil click.
 import InterventionEditorPopout from './InterventionEditorPopout.jsx'
 import { computeFieldConflicts } from './InterventionStackView.jsx'
-import VisualiserHost from './visualiser/VisualiserHost.jsx'
+// Brief 87 Part 5/6 — VisualiserHost retired: the Strategy page now uses
+// StrategyView and the Library page uses PerInterventionView. VisualiserHost +
+// its IsolatedView/BeforeAfterBars/BreakdownPanel/ComparisonView children are no
+// longer mounted; full file deletion deferred to Part 6 close (post-walkthrough).
 // Brief 87 Part 4 — Library/Strategy split + two-section per-intervention view.
 import PerInterventionView from './PerInterventionView.jsx'
 import StrategyView from './StrategyView.jsx'
