@@ -27,6 +27,7 @@
  */
 
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { Pencil, Trash2 } from 'lucide-react'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { WeatherContext } from '../../../context/WeatherContext.jsx'
 import { useHourlySolar } from '../../../hooks/useHourlySolar.js'
@@ -478,26 +479,46 @@ export default function InterventionsModule() {
                     const euiD = row?.cumulativeDelta?.eui_kwh_per_m2?.delta
                     const isSel = iv.id === selectedLibId
                     return (
-                      <button
+                      <div
                         key={iv.id}
-                        type="button"
+                        role="button"
+                        tabIndex={0}
                         onClick={() => setSelectedLibraryId(iv.id)}
-                        className={`w-full text-left rounded-lg px-3 py-2 transition-colors ${
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedLibraryId(iv.id) }}
+                        className={`group cursor-pointer rounded-lg px-3 py-2 transition-colors ${
                           isSel ? 'border-2' : 'border border-light-grey/70 hover:border-light-grey'
                         }`}
                         style={isSel ? { borderColor: INTERVENTIONS_ACCENT } : undefined}
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-sm font-medium text-navy truncate">{iv.label || '(untitled)'}</span>
-                          <span
-                            className="text-xs tabular-nums flex-shrink-0"
-                            style={{ color: Number.isFinite(euiD) && euiD < -0.05 ? '#16A34A' : '#6B7280' }}
-                          >
-                            {!Number.isFinite(euiD) ? '—' : `${euiD < 0 ? '−' : '+'}${Math.abs(euiD).toFixed(1)} kWh/m²`}
-                          </span>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span
+                              className="text-xs tabular-nums"
+                              style={{ color: Number.isFinite(euiD) && euiD < -0.05 ? '#16A34A' : '#6B7280' }}
+                            >
+                              {!Number.isFinite(euiD) ? '—' : `${euiD < 0 ? '−' : '+'}${Math.abs(euiD).toFixed(1)} kWh/m²`}
+                            </span>
+                            <button
+                              type="button"
+                              title="Edit intervention"
+                              onClick={(e) => { e.stopPropagation(); handleEdit(iv.id) }}
+                              className="p-1 rounded text-mid-grey/40 hover:text-navy hover:bg-light-grey/50 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              title="Delete intervention"
+                              onClick={(e) => { e.stopPropagation(); handleListDelete(iv.id) }}
+                              className="p-1 rounded text-mid-grey/40 hover:text-red-600 hover:bg-light-grey/50 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
                         </div>
                         {iv.theme ? <span className="text-xxs text-mid-grey/60">{iv.theme}</span> : null}
-                      </button>
+                      </div>
                     )
                   })
                 )}

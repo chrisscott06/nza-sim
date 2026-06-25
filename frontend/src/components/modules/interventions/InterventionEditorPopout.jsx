@@ -360,6 +360,9 @@ export default function InterventionEditorPopout({
             setActive={setActive}
             localLabel={localLabel}
             setLocalLabel={setLocalLabel}
+            localTheme={localTheme}
+            setLocalTheme={setLocalTheme}
+            themeSuggestions={themeSuggestions}
             localPatches={localPatches}
             baselineConfig={baselineConfig}
             baselineEui={baselineEui}
@@ -393,6 +396,12 @@ export default function InterventionEditorPopout({
 function EditorBody({
   active, setActive,
   localLabel, setLocalLabel,
+  // Brief 87 Part 4 (2026-06-25): same missed-middle-hop bug as patchConflicts
+  // below — localTheme/setLocalTheme are defined in the outer
+  // InterventionEditorPopout and used by EditorFooter here, but were never
+  // threaded through EditorBody's props → ReferenceError on editor open. Add
+  // them to the prop list and the invocation above.
+  localTheme, setLocalTheme, themeSuggestions,
   localPatches,
   baselineConfig,
   baselineEui, baselineCarbon, previewEui, previewCarbon,

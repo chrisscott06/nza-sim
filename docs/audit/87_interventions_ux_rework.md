@@ -89,7 +89,9 @@ Build clean (`npm run build`, 4.02s). Colours/format follow the existing Isolate
 - Per-intervention view shows **only two sections**: Isolated impact (4 cards — kWh/EUI Δ LIVE −4.8 / −20 MWh; lifetime-carbon + £/tonne + payback = "TBD — Brief B/C") + demand-by-service deltas (heating +7.7 MWh +12% / cooling −10.0 −6% / total −20 −3% / elec −5% / carbon −4%) and **Calc Trail** (the one changed field `lighting…magnitude.value SET → 1` → resulting headline). No Heat-Balance/Before-After/Waterfall in the per-intervention view.
 - Strategy tab switches to the ordered-stack view. **No engine drift:** baseline stays **138.3** (the rebuilt-Bridgewater working anchor; brief's 143.5 is pre-rebuild/stale). No console errors; production build clean.
 
-**Remaining Part 4 polish (minor):** per-row edit/delete affordances in the Library list (currently select + "+ Add"; the pop-out editor opens on Add). The conceptual core (two-section view) is done.
+**Part 4 polish added (2026-06-25 overnight):** Library rows now have hover **edit (pencil) + delete (trash)** affordances (wired to the existing `handleEdit` / `handleListDelete`; click-to-select preserved).
+
+**Pre-existing editor bug fixed (surfaced by the edit button):** `InterventionEditorPopout.jsx` crashed on open — `ReferenceError: localTheme is not defined`, then `themeSuggestions is not defined`. The theme-footer feature added `localTheme`/`setLocalTheme`/`themeSuggestions` to the outer `InterventionEditorPopout` + the `EditorFooter` JSX but never threaded them through the middle `EditorBody` component's props (the exact bug the existing `patchConflicts` comment at L401 documents). Threaded all three through `EditorBody`'s prop list + invocation. The editor now opens for any intervention (verified: DHW intervention shows its 3 patches + the Systems theme footer). This affected the Strategy tab's pencil too — it was fully broken before.
 - (Old six-tab `VisualiserHost` removal is Part 6, after the Strategy page (Part 5) takes over its remaining views.)
 
 ## §5 — Part 5: Strategy page + reorder + waterfall + final-state views — DONE (core)
