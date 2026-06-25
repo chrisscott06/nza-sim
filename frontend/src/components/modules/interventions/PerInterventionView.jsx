@@ -68,8 +68,9 @@ function DeltaRow({ label, delta, pct, unit = 'MWh/yr', savingIsNegative = true 
       <span className="text-xs text-mid-grey">{label}</span>
       <span className="text-xs tabular-nums" style={{ color: colour }}>
         {fmtSigned(delta, 1)} {unit}
-        {Number.isFinite(pct) && Math.abs(pct) >= 0.001 ? (
-          <span className="text-mid-grey/60"> ({fmtSigned(pct * 100, 0, '%')})</span>
+        {/* engine delta_pct is already a percentage — interventionsEngine.js:417 */}
+        {Number.isFinite(pct) && Math.abs(pct) >= 0.1 ? (
+          <span className="text-mid-grey/60"> ({fmtSigned(pct, 0, '%')})</span>
         ) : null}
       </span>
     </div>

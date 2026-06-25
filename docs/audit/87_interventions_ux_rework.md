@@ -79,11 +79,18 @@ These are the wiring points Part 3/5 retarget from "the full list" to "the activ
 
 Build clean (`npm run build`, 4.02s). Colours/format follow the existing IsolatedView conventions (save-green / increase-red, signed deltas).
 
-**Remaining Part 4 (needs live browser iteration — paused for Chris):**
-- Library page layout (intervention list left + `PerInterventionView` right; Brief 47 inputs-left/visualiser-right pattern).
-- Mount/route `PerInterventionView` and wire the selected intervention's `useIsolatedResults` row into it.
-- Browser walkthrough verification (two sections only; cards live/placeholder; calc trail focused) — needs a project that actually has interventions, and the backend+frontend running on this branch.
-- (Old six-tab removal is Part 6, after the new view renders.)
+**Integrated + browser-verified (2026-06-25, live with Chris):**
+- `InterventionsModule.jsx` now has a **Library | Strategy page toggle** (header tabs). Library = catalogue (left: selectable intervention list with per-row isolated EUI Δ + theme) + `PerInterventionView` (right). Strategy = the existing stack + `VisualiserHost` (Part 5 will refine to waterfall / final Sankey / heat-balance-compare / CRREM).
+- Wired `useIsolatedResults` at module level; the selected intervention's row feeds `PerInterventionView`. No engine change (reuses Brief 71 singleton hook).
+- **Fixed a display bug:** engine `delta_pct` is already a percentage (`interventionsEngine.js:417`) — removed a `×100` double-scaling so demand-Δ percentages read correctly (e.g. Total −3%, not −343%).
+
+**Browser verification (serverId, seeded 2 test interventions on Bridgewater — airtightness via `air_permeability_q50`, LED via lighting magnitude):**
+- Library page renders by default; catalogue lists both with isolated deltas (−0.1, −4.8 kWh/m²) + themes.
+- Per-intervention view shows **only two sections**: Isolated impact (4 cards — kWh/EUI Δ LIVE −4.8 / −20 MWh; lifetime-carbon + £/tonne + payback = "TBD — Brief B/C") + demand-by-service deltas (heating +7.7 MWh +12% / cooling −10.0 −6% / total −20 −3% / elec −5% / carbon −4%) and **Calc Trail** (the one changed field `lighting…magnitude.value SET → 1` → resulting headline). No Heat-Balance/Before-After/Waterfall in the per-intervention view.
+- Strategy tab switches to the ordered-stack view. **No engine drift:** baseline stays **138.3** (the rebuilt-Bridgewater working anchor; brief's 143.5 is pre-rebuild/stale). No console errors; production build clean.
+
+**Remaining Part 4 polish (minor):** per-row edit/delete affordances in the Library list (currently select + "+ Add"; the pop-out editor opens on Add). The conceptual core (two-section view) is done.
+- (Old six-tab `VisualiserHost` removal is Part 6, after the Strategy page (Part 5) takes over its remaining views.)
 
 ## §5 — Part 5: Strategy page + reorder + waterfall + final-state views
 _(to fill)_

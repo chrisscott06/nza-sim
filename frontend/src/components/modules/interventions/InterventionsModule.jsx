@@ -42,6 +42,9 @@ import { confirm } from '../../shared/ConfirmDialog.jsx'
 import InterventionEditorPopout from './InterventionEditorPopout.jsx'
 import { computeFieldConflicts } from './InterventionStackView.jsx'
 import VisualiserHost from './visualiser/VisualiserHost.jsx'
+// Brief 87 Part 4 — Library/Strategy split + two-section per-intervention view.
+import PerInterventionView from './PerInterventionView.jsx'
+import { useIsolatedResults } from './useIsolatedResults.js'
 // Brief 47 Part 1 (2026-05-24): Library feature cut entirely per design
 // note. InterventionLibrary.jsx no longer imported.
 // Brief 47 Part 3 (2026-05-24): ComparisonView no longer mounted — the
@@ -76,6 +79,12 @@ export default function InterventionsModule() {
   // Brief 47 Part 3 (2026-05-24): `tab` state retired — Stack | Comparison
   // switcher gone, replaced by inputs-left / visualiser-right split.
   const [editingId, setEditingId] = useState(null)
+  // Brief 87 Part 4 — Library/Strategy page split. Library = author + the
+  // per-intervention two-section view; Strategy = ordered composition (Part 5,
+  // still the existing stack + visualiser for now). `selectedLibraryId` is the
+  // intervention shown in the Library's right pane.
+  const [page, setPage] = useState('library')
+  const [selectedLibraryId, setSelectedLibraryId] = useState(null)
   // Brief 47 Part 1: library state (saveLibId / libraryPickerOpen) removed.
   // Brief 47 Part 4 (2026-05-24): livePatches mirrors the editor's
   // in-progress currentPatches so the right-pane visualiser updates
@@ -396,6 +405,14 @@ export default function InterventionsModule() {
     )
   }, [params, constructions, systems, libraryData, weatherData, hourlySolar, comfortBand])
 
+  // Brief 87 Part 4 — per-intervention isolated deltas for the Library view.
+  // Reuses the existing Brief 71 hook (singleton stack per intervention), so no
+  // new engine work. The selected intervention's row feeds PerInterventionView.
+  const isolatedRows = useIsolatedResults(interventions, baselineConfig, runEngine, libraryData, stackResult)
+  const selectedLibId = selectedLibraryId ?? interventions[0]?.id ?? null
+  const selectedIntervention = interventions.find((i) => i.id === selectedLibId) ?? null
+  const selectedIsolatedRow = isolatedRows.find((r) => r.id === selectedLibId) ?? null
+
   // ── Render ──────────────────────────────────────────────────────────
 
   return (
@@ -413,9 +430,26 @@ export default function InterventionsModule() {
           <h1 className="text-heading font-semibold text-navy">Interventions</h1>
         </div>
         <p className="text-caption text-mid-grey mt-1 max-w-3xl">
-          Stack interventions against the baseline. Each intervention compounds on top of the ones above it.
-          Toggle, reorder, or click to edit. Baseline stays untouched.
+          {page === 'library'
+            ? 'A catalogue of interventions. Select one to see its isolated impact and calc trail. Order has no meaning here — sequencing lives in the Strategy.'
+            : 'Compose an ordered strategy from the Library. Order matters — each intervention compounds on top of the ones above it.'}
         </p>
+        {/* Brief 87 Part 4 — Library | Strategy page tabs */}
+        <div className="flex gap-1 mt-3">
+          {[['library', 'Library'], ['strategy', 'Strategy']].map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setPage(id)}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                page === id ? 'text-white' : 'text-mid-grey hover:text-navy bg-light-grey/40'
+              }`}
+              style={page === id ? { backgroundColor: INTERVENTIONS_ACCENT } : undefined}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Body — Brief 47 Part 3: split into stack-left + visualiser-right.
@@ -424,44 +458,95 @@ export default function InterventionsModule() {
           (lands as part of Part 4). The library button never existed
           post-Brief-47 Part 1. */}
       <div className="flex-1 min-h-0 flex">
-        {/* Left pane — intervention stack */}
-        <aside className="flex-shrink-0 w-[560px] border-r border-light-grey bg-white overflow-auto">
-          <div className="p-4">
-            <InterventionStackView
-              interventions={interventions}
-              baselineSummary={baselineSummary}
-              stackResult={stackResult}
-              baselineConfig={baselineConfig}
-              onToggleEnabled={handleToggleEnabled}
-              onReorder={handleReorder}
-              onEdit={handleEdit}
-              onAdd={handleAdd}
-              onDuplicate={handleDuplicate}
-              onDelete={handleListDelete}
-            />
-          </div>
-        </aside>
-
-        {/* Right pane — Brief 47 Part 4 visualiser surface. View switcher
-            with Waterfall (reuse EUIWaterfall) / Before-after (new
-            BeforeAfterBars) / Heat balance (reuse HeatBalance via
-            PhysicsView). Live-update: engineResult re-runs with the
-            editor's in-progress patches substituted into the editing
-            intervention (see paramsForEngine useMemo); all three views
-            consume the recomputed stackResult so the visualiser stays
-            in sync with edits in the (potentially off-screen) pop-out. */}
-        <main className="flex-1 min-w-0 bg-off-white overflow-hidden">
-          <VisualiserHost
-            interventions={interventions}
-            stackResult={stackResult}
-            orientationDeg={Number(params?.orientation ?? 0)}
-            baselineConfig={baselineConfig}
-            runEngine={runEngine}
-            libraryData={libraryData}
-            onToggleEnabled={handleToggleEnabled}
-            onEdit={handleEdit}
-          />
-        </main>
+        {page === 'library' ? (
+          <>
+            {/* ── Library page — catalogue (left) + two-section per-intervention view (right) ── */}
+            <aside className="flex-shrink-0 w-[420px] border-r border-light-grey bg-white overflow-auto">
+              <div className="p-4 space-y-2">
+                <div className="flex items-center justify-between mb-1">
+                  <h2 className="text-xs uppercase tracking-wider font-semibold text-navy">Library</h2>
+                  <button type="button" onClick={handleAdd} className="text-xs font-semibold" style={{ color: INTERVENTIONS_ACCENT }}>
+                    + Add
+                  </button>
+                </div>
+                {interventions.length === 0 ? (
+                  <p className="text-xs text-mid-grey/60 italic">No interventions yet. Add one to start the catalogue.</p>
+                ) : (
+                  interventions.map((iv) => {
+                    const row = isolatedRows.find((r) => r.id === iv.id)
+                    const euiD = row?.cumulativeDelta?.eui_kwh_per_m2?.delta
+                    const isSel = iv.id === selectedLibId
+                    return (
+                      <button
+                        key={iv.id}
+                        type="button"
+                        onClick={() => setSelectedLibraryId(iv.id)}
+                        className={`w-full text-left rounded-lg px-3 py-2 transition-colors ${
+                          isSel ? 'border-2' : 'border border-light-grey/70 hover:border-light-grey'
+                        }`}
+                        style={isSel ? { borderColor: INTERVENTIONS_ACCENT } : undefined}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium text-navy truncate">{iv.label || '(untitled)'}</span>
+                          <span
+                            className="text-xs tabular-nums flex-shrink-0"
+                            style={{ color: Number.isFinite(euiD) && euiD < -0.05 ? '#16A34A' : '#6B7280' }}
+                          >
+                            {!Number.isFinite(euiD) ? '—' : `${euiD < 0 ? '−' : '+'}${Math.abs(euiD).toFixed(1)} kWh/m²`}
+                          </span>
+                        </div>
+                        {iv.theme ? <span className="text-xxs text-mid-grey/60">{iv.theme}</span> : null}
+                      </button>
+                    )
+                  })
+                )}
+              </div>
+            </aside>
+            <main className="flex-1 min-w-0 bg-off-white overflow-auto">
+              {selectedIntervention ? (
+                <PerInterventionView intervention={selectedIntervention} isolatedRow={selectedIsolatedRow} />
+              ) : (
+                <div className="p-8 text-sm text-mid-grey/60">
+                  Select an intervention from the Library to see its isolated impact and calc trail.
+                </div>
+              )}
+            </main>
+          </>
+        ) : (
+          <>
+            {/* ── Strategy page — ordered stack (left) + composed visualiser (right).
+                Part 5 refines this (waterfall + final-state Sankey + heat balance
+                compare + CRREM); for now it is the existing stack + visualiser. ── */}
+            <aside className="flex-shrink-0 w-[560px] border-r border-light-grey bg-white overflow-auto">
+              <div className="p-4">
+                <InterventionStackView
+                  interventions={interventions}
+                  baselineSummary={baselineSummary}
+                  stackResult={stackResult}
+                  baselineConfig={baselineConfig}
+                  onToggleEnabled={handleToggleEnabled}
+                  onReorder={handleReorder}
+                  onEdit={handleEdit}
+                  onAdd={handleAdd}
+                  onDuplicate={handleDuplicate}
+                  onDelete={handleListDelete}
+                />
+              </div>
+            </aside>
+            <main className="flex-1 min-w-0 bg-off-white overflow-hidden">
+              <VisualiserHost
+                interventions={interventions}
+                stackResult={stackResult}
+                orientationDeg={Number(params?.orientation ?? 0)}
+                baselineConfig={baselineConfig}
+                runEngine={runEngine}
+                libraryData={libraryData}
+                onToggleEnabled={handleToggleEnabled}
+                onEdit={handleEdit}
+              />
+            </main>
+          </>
+        )}
       </div>
 
       {/* Brief 46 Part 5 (2026-05-22): the rebuilt InterventionEditorPopout
