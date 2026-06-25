@@ -6,7 +6,11 @@
 
 **Envelope-Only Heat-Balance Fix + HIEX Bridgwater Model Rebuild + Input Persistence.** Architect-directed (supersedes the Brief-85 handoff's residual-isolation recommendation). Brief: [`active/86_envelope_fix_and_bridgwater_rebuild.md`](docs/briefs/active/86_envelope_fix_and_bridgwater_rebuild.md). Goal: restore the envelope-only heat balance (currently 500-erroring — epJSON assembler not requesting Zone Mean Air Temperature), rebuild the HIEX Bridgwater inputs (UUID `12cf7cc4…`, "Bridgewater Hotel" in DB; populated inputs lost in a machine migration), then add project input export/snapshot persistence.
 
-**Part 1 (this commit) — landed brief + reconciliation.** Archived six closed briefs (81 EnergyPlus validation box, 82 zone-temp delta, 83 MVHR recovery booking, 84a harness like-for-like, 84b free-float, 85 internal-mass partition) from `active/` → `archive/…_COMPLETED.md`; `current.md` repointed; `active/` now holds only 70, 75, 86. Parts 2–7 pending.
+**Part 1 — landed brief + reconciliation.** Archived six closed briefs (81 EnergyPlus validation box, 82 zone-temp delta, 83 MVHR recovery booking, 84a harness like-for-like, 84b free-float, 85 internal-mass partition) from `active/` → `archive/…_COMPLETED.md`; `current.md` repointed; `active/` now holds only 70, 75, 86. (`b272c74`)
+
+**Part 2 — envelope-only 500 DIAGNOSED; no assembler change needed.** The brief's premise (assembler not requesting `Zone Mean Air Temperature`) is false for this codebase: `epjson_assembler.py:1719` emits the temp request unconditionally for all modes (added Brief 26, `a5f16ef`); `assemble_epjson` is the only builder. The 500 is **stale SQL** — the only completed Bridgwater run (`683c1509`, 2026-04-04, full-mode VRF) predates the temp feature and has zero temperature vars; the GET balance endpoint reads that old SQL and the parser correctly raises. A fresh envelope-only run will return 200 but needs the rebuilt project → **re-sequenced (Chris): rebuild first, verify 200 after.** JSX half: `npm run build` clean, no stray `>`. Audit: [`docs/audit/86_envelope_fix_and_bridgwater_rebuild.md`](docs/audit/86_envelope_fix_and_bridgwater_rebuild.md).
+
+**Part 3 — BLOCKED:** awaiting confirmed BRUKL fabric figures (opaque wall/roof/floor U-values, glazing proportions, footprint L×W). Not in the brief or repo; no synthetic values per CLAUDE.md. Parts 4–7 pending.
 
 ## ✅ Brief 85 — CLOSED 2026-06-08 *(branch only — NOT on main; outcome (c); one bounded engine plumbing fix)*
 
