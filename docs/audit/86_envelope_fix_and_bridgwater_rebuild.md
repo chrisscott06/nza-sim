@@ -36,10 +36,47 @@ No stray `>` found on this branch; the file already contains escaped `&gt;` occu
 `npm run build` is **clean** (exit 0, no JSX warnings). Considered already-resolved; line numbers
 have drifted since the brief was authored.
 
-## Part 3 — BLOCKED pending fabric inputs
-The brief supplies glazing (U1.1/G0.55 bedroom; U1.0/G0.27 curtain wall), permeability
-4.64 m³/(h·m²)@50Pa, GIA 4,215 m², 5 storeys, Yeovilton EPW — but **not** the opaque
-wall/roof/floor U-values, glazing proportions, or footprint dimensions (they live in external
-BRUKL/schedule docs `26002-NZA-XX-XX-SH-X-0010 v2`). Neither the DB nor the April-4 epJSON snapshot
-holds the real BRUKL fabric (both are stock-library defaults). Awaiting confirmed figures from Chris
-before writing — no synthetic U-values (CLAUDE.md: library is the single source of truth).
+## Part 3 — Rebuild geometry + fabric — DONE; also closes Part 2 verification
+
+Source of truth: Chris's **HIX Static Model** (`26002-…-5000_P02`) — the canonical first-principles
+validation spreadsheet — plus the BRUKL Apr-2019 fabric schedule. Decisions confirmed with Chris
+(2026-06-25): area-weighted single glazing; GIA 4,215; geometry chosen to honour GIA under NZA-Sim's
+hard `GIA = L×W×num_floors` rule (no manual-GIA override exists — `sql_parser.py:563,580`).
+
+### Inputs written (DB — project `12cf7cc4…`)
+| Field | Value | Source |
+|---|---|---|
+| Geometry | L 58.8 × W 14.34 × **5 floors** × h 3.2 → **GIA 4,216 m²** | static model footprint; 5 floors to hit GIA 4,215 |
+| Orientation | 42° CW from N | static model |
+| WWR N/E/S/W | 0.55 / 0.10 / 0.38 / 0.11 | static model |
+| U-values | wall 0.14, roof 0.15, ground 0.13, glazing 1.4 (g 0.55) | BRUKL Apr-2019 area-weighted |
+| Infiltration | permeability 4.64 ÷20 → **0.232 ACH** | CIBSE n50/20 (static model) |
+| Comfort band | 21 / 24 °C | static model |
+| Shading | overhang 0.5 m, fins 0.5 m all façades | static model |
+| Openings | `{}` (sealed) | brief — capability left intact |
+| Weather | Yeovilton TMYx (on disk) | brief/static model |
+
+Note: real building is **4 storeys** (BRUKL/static model); NZA-Sim uses **5** purely so
+`L×W×num_floors` yields the real GIA (~4,215) with the measured ~58×14 footprint. Trade-off: ~16 m
+envelope height (more wall/leakage area than the 4-floor static model). Flagged to Chris; accepted.
+
+### Fabric build-ups (new library constructions)
+Added `bridgwater_ext_wall` / `_roof` / `_ground_floor` / `_glazing` to **both**
+`nza_engine/library/constructions.py` (EnergyPlus build-ups — the assembler reads this module, and
+**ignores `u_value_override`** per `epjson_assembler.py:130`) **and** the DB `library_items` (parser
+`_u_value` + frontend). Opaque build-ups = precast-concrete mass layer INSIDE a tuned NoMass
+insulation layer, so thermal mass couples to the zone (relevant to the Brief 84b/85 mass work).
+Nominal U (incl. ISO 6946 films) verified exact: 0.140 / 0.150 / 0.130; glazing U1.4/SHGC0.55.
+
+### Verification (falsifiable)
+- Fresh **envelope-only** EnergyPlus run succeeds; SQL now contains `Zone Mean Air Temperature`
+  (5 zone entries) → **Part 2's 500 cause removed**.
+- **Live HTTP**: `GET …/balance?mode=envelope-only` → **200** (run `2e9d639f`); full-mode → 200 (no
+  regression). state=1, heating 113.0 MWh / cooling 141.7 MWh.
+- Per-element losses (MWh): wall 20, roof 13, ground 11, glazing 128, fabric-leakage 102 — right
+  order of magnitude and scale correctly vs the static model's 4-floor engine column
+  (16.5 / 11.1 / 15.3 / 83 / 59) given the larger 5-floor envelope. Cooling > heating with
+  free-running summer max 38.9 °C reproduces the "envelope runs hot" finding.
+
+**Not yet version-controlled:** the geometry/fabric assignment lives only in the DB (gitignored).
+The committable artifact is `constructions.py`. Persisting the full input set is Part 6.

@@ -10,7 +10,9 @@
 
 **Part 2 — envelope-only 500 DIAGNOSED; no assembler change needed.** The brief's premise (assembler not requesting `Zone Mean Air Temperature`) is false for this codebase: `epjson_assembler.py:1719` emits the temp request unconditionally for all modes (added Brief 26, `a5f16ef`); `assemble_epjson` is the only builder. The 500 is **stale SQL** — the only completed Bridgwater run (`683c1509`, 2026-04-04, full-mode VRF) predates the temp feature and has zero temperature vars; the GET balance endpoint reads that old SQL and the parser correctly raises. A fresh envelope-only run will return 200 but needs the rebuilt project → **re-sequenced (Chris): rebuild first, verify 200 after.** JSX half: `npm run build` clean, no stray `>`. Audit: [`docs/audit/86_envelope_fix_and_bridgwater_rebuild.md`](docs/audit/86_envelope_fix_and_bridgwater_rebuild.md).
 
-**Part 3 — BLOCKED:** awaiting confirmed BRUKL fabric figures (opaque wall/roof/floor U-values, glazing proportions, footprint L×W). Not in the brief or repo; no synthetic values per CLAUDE.md. Parts 4–7 pending.
+**Part 2 VERIFIED (via Part 3):** live `GET …/balance?mode=envelope-only` now returns **HTTP 200** (run `2e9d639f`) — the 500 was stale SQL, fixed by the rebuild giving a runnable project, no assembler change.
+
+**Part 3 — geometry + fabric DONE.** Source: Chris's HIX Static Model + BRUKL Apr-2019. Geometry L58.8×W14.34×**5fl**×3.2 → GIA 4,216; orient 42°; WWR 0.55/0.10/0.38/0.11; infiltration 0.232 ACH (perm 4.64÷20); comfort 21/24; shading 0.5; sealed openings; Yeovilton EPW. Four BRUKL constructions (wall 0.14 / roof 0.15 / ground 0.13 / glazing 1.4·g0.55) minted in `constructions.py` **and** DB (nominal U verified exact). Envelope-only sim renders sensible losses (wall 20 / roof 13 / ground 11 / glazing 128 / leakage 102 MWh), heating 113 / cooling 142 MWh. NB: real building is 4 storeys; using 5 only to hit GIA under NZA-Sim's `GIA=L×W×floors` rule (no manual-GIA override). **DB-only — not in git yet (Part 6 persists it).** Audit §Part 3. Parts 4–7 pending.
 
 ## ✅ Brief 85 — CLOSED 2026-06-08 *(branch only — NOT on main; outcome (c); one bounded engine plumbing fix)*
 
