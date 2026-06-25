@@ -56,9 +56,10 @@ hard `GIA = L×W×num_floors` rule (no manual-GIA override exists — `sql_parse
 | Openings | `{}` (sealed) | brief — capability left intact |
 | Weather | Yeovilton TMYx (on disk) | brief/static model |
 
-Note: real building is **4 storeys** (BRUKL/static model); NZA-Sim uses **5** purely so
-`L×W×num_floors` yields the real GIA (~4,215) with the measured ~58×14 footprint. Trade-off: ~16 m
-envelope height (more wall/leakage area than the 4-floor static model). Flagged to Chris; accepted.
+Note: building is genuinely **5 storeys** — 4 floors of bedrooms over an all-communal ground floor
+(confirmed by Chris with site photo, 2026-06-25). So 5 floors is the real geometry and GIA 4,216 is
+legitimate; the static model's "4 floors" counted only the room floors. The GF being communal (not
+bedrooms) is a Part-5 loads nuance, not a geometry one.
 
 ### Fabric build-ups (new library constructions)
 Added `bridgwater_ext_wall` / `_roof` / `_ground_floor` / `_glazing` to **both**
