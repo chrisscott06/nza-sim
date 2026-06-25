@@ -92,8 +92,34 @@ Build clean (`npm run build`, 4.02s). Colours/format follow the existing Isolate
 **Remaining Part 4 polish (minor):** per-row edit/delete affordances in the Library list (currently select + "+ Add"; the pop-out editor opens on Add). The conceptual core (two-section view) is done.
 - (Old six-tab `VisualiserHost` removal is Part 6, after the Strategy page (Part 5) takes over its remaining views.)
 
-## §5 — Part 5: Strategy page + reorder + waterfall + final-state views
-_(to fill)_
+## §5 — Part 5: Strategy page + reorder + waterfall + final-state views — DONE (core)
+
+**Built `StrategyView.jsx`** (right pane of the Strategy page), wired in place of `VisualiserHost`;
+narrowed the Strategy list to 440px so the composed view has room. Pure consumer (reuses `EUIWaterfall`
++ `PhysicsView`); no engine work.
+
+Sections:
+1. **Strategy headline** — final EUI, energy saved (kWh/m² + MWh/yr), carbon saved (yr 1), + Lifetime
+   carbon / Total capex / £-per-tonne placeholders (Brief B/C). Reads the last enabled intervention's
+   `cumulative_delta`.
+2. **Waterfall** — `EUIWaterfall` (cumulative marginal attribution).
+3. **Heat balance — final state** — `PhysicsView`/`HeatBalance` with the "−X vs baseline" badge and the
+   Rows/Stacked/**Sankey** modes (the Sankey mode covers the "final energy flows" view).
+4. **CRREM trajectory** — placeholder frame (Brief C).
+
+Strategy name from `params.strategies?.[0]?.name` (the Part 3 model); for v1 the active strategy = all
+interventions in order. Reorder via the existing `InterventionStackView` drag handles (`onReorder` →
+`handleReorder`); the waterfall reads order-dependent `marginal_delta` so a reorder recomputes it.
+
+**Browser-verified (1440×900):** Strategy 1 · 6 measures → **final EUI 76.2** (baseline 138.3, energy
+−62.1 kWh/m² / −261.6 MWh/yr, carbon −11.8). Waterfall shows order-dependent marginals (DHW −41.9 …
+bedroom-extract/MVHR **+3.6 (red increase)** … plug-load −16.2 → 76.2). Heat balance final state renders
+(−62.1 vs baseline; cooling 43.8 — cooling-leaning, consistent with the MVHR-increase finding). CRREM
+placeholder renders. No console errors; production build clean.
+
+**Pending refinements (noted, not blocking):** heat-balance side-by-side *compare* button (currently
+final-state + delta badge); a distinct Library-vs-Strategy subset (v1 strategy = all interventions);
+literal drag-reorder needs a manual click-test (handles render; mechanism wired).
 
 ## §6 — Part 6: wiring + cleanup
 _(to fill)_

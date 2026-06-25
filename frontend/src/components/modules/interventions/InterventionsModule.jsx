@@ -44,6 +44,7 @@ import { computeFieldConflicts } from './InterventionStackView.jsx'
 import VisualiserHost from './visualiser/VisualiserHost.jsx'
 // Brief 87 Part 4 — Library/Strategy split + two-section per-intervention view.
 import PerInterventionView from './PerInterventionView.jsx'
+import StrategyView from './StrategyView.jsx'
 import { useIsolatedResults } from './useIsolatedResults.js'
 // Brief 47 Part 1 (2026-05-24): Library feature cut entirely per design
 // note. InterventionLibrary.jsx no longer imported.
@@ -514,10 +515,9 @@ export default function InterventionsModule() {
           </>
         ) : (
           <>
-            {/* ── Strategy page — ordered stack (left) + composed visualiser (right).
-                Part 5 refines this (waterfall + final-state Sankey + heat balance
-                compare + CRREM); for now it is the existing stack + visualiser. ── */}
-            <aside className="flex-shrink-0 w-[560px] border-r border-light-grey bg-white overflow-auto">
+            {/* ── Strategy page — ordered stack (left) + composed StrategyView
+                (right: headline + waterfall + final-state heat balance + CRREM). ── */}
+            <aside className="flex-shrink-0 w-[440px] border-r border-light-grey bg-white overflow-auto">
               <div className="p-4">
                 <InterventionStackView
                   interventions={interventions}
@@ -534,15 +534,11 @@ export default function InterventionsModule() {
               </div>
             </aside>
             <main className="flex-1 min-w-0 bg-off-white overflow-hidden">
-              <VisualiserHost
+              <StrategyView
+                strategyName={params?.strategies?.[0]?.name ?? 'Strategy 1'}
                 interventions={interventions}
                 stackResult={stackResult}
                 orientationDeg={Number(params?.orientation ?? 0)}
-                baselineConfig={baselineConfig}
-                runEngine={runEngine}
-                libraryData={libraryData}
-                onToggleEnabled={handleToggleEnabled}
-                onEdit={handleEdit}
               />
             </main>
           </>
