@@ -1,0 +1,1076 @@
+{
+  "schema": "nza-sim-project-inputs/v1",
+  "exported_at": "unset",
+  "project": {
+    "id": "12cf7cc4-9bdc-41bc-ab4e-24e044fbad9d",
+    "name": "Bridgewater Hotel",
+    "description": null,
+    "building_config": {
+      "name": "Bridgewater Hotel",
+      "length": 58.8,
+      "width": 14.34,
+      "num_floors": 5,
+      "floor_height": 3.2,
+      "orientation": 42,
+      "wwr": {
+        "north": 0.55,
+        "east": 0.1,
+        "south": 0.38,
+        "west": 0.11
+      },
+      "infiltration_ach": 0.0692,
+      "window_count": {
+        "south": 3,
+        "north": 2,
+        "east": 6,
+        "west": 6
+      },
+      "location": {
+        "latitude": 51.127,
+        "longitude": -2.992,
+        "name": "Bridgewater, Somerset"
+      },
+      "num_bedrooms": 138,
+      "occupancy_rate": 1,
+      "people_per_room": 2,
+      "weather_file": "GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw",
+      "occupancy": {
+        "occupancy_rate": 1.0,
+        "density": {
+          "value": 2.0,
+          "basis": "per_room"
+        },
+        "sensible_w_per_person": 75,
+        "latent_w_per_person": 55,
+        "schedule": {
+          "weekday": [
+            0.9,
+            0.9,
+            0.9,
+            0.9,
+            0.9,
+            0.9,
+            0.7,
+            0.4,
+            0.3,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.3,
+            0.4,
+            0.5,
+            0.6,
+            0.7,
+            0.8,
+            0.9,
+            0.9,
+            0.9
+          ],
+          "saturday": [
+            0.9,
+            0.9,
+            0.9,
+            0.9,
+            0.9,
+            0.9,
+            0.8,
+            0.5,
+            0.4,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.4,
+            0.5,
+            0.6,
+            0.7,
+            0.8,
+            0.9,
+            0.9,
+            0.9,
+            0.9
+          ],
+          "sunday": [
+            0.9,
+            0.9,
+            0.9,
+            0.9,
+            0.9,
+            0.9,
+            0.8,
+            0.6,
+            0.5,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.4,
+            0.5,
+            0.5,
+            0.6,
+            0.7,
+            0.8,
+            0.9,
+            0.9,
+            0.9,
+            0.9
+          ],
+          "monthly_multipliers": [
+            0.7,
+            0.7,
+            0.8,
+            0.9,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            0.9,
+            0.8,
+            0.7
+          ],
+          "exceptions": []
+        },
+        "_provenance": {
+          "source": "migrated_from_legacy",
+          "confidence": "medium"
+        }
+      },
+      "gains": {
+        "lighting": {
+          "profiles": [
+            {
+              "id": "default_lighting",
+              "label": "Lighting",
+              "magnitude": {
+                "value": 2,
+                "unit": "w_per_m2"
+              },
+              "relationship_to_occupancy": "proportional_with_spill",
+              "spill_minutes": 15,
+              "daylight_factor": 0.7,
+              "area_share": 1.0,
+              "schedule": {
+                "weekday": [
+                  0.05,
+                  0.05,
+                  0.05,
+                  0.05,
+                  0.05,
+                  0.05,
+                  0.4,
+                  0.7,
+                  0.2,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.2,
+                  0.5,
+                  0.8,
+                  0.8,
+                  0.6,
+                  0.2,
+                  0.05
+                ],
+                "saturday": [
+                  0.05,
+                  0.05,
+                  0.05,
+                  0.05,
+                  0.05,
+                  0.05,
+                  0.2,
+                  0.6,
+                  0.4,
+                  0.2,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.2,
+                  0.3,
+                  0.5,
+                  0.8,
+                  0.8,
+                  0.6,
+                  0.2,
+                  0.05
+                ],
+                "sunday": [
+                  0.05,
+                  0.05,
+                  0.05,
+                  0.05,
+                  0.05,
+                  0.05,
+                  0.2,
+                  0.5,
+                  0.5,
+                  0.3,
+                  0.2,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.2,
+                  0.3,
+                  0.5,
+                  0.8,
+                  0.7,
+                  0.5,
+                  0.2,
+                  0.05
+                ],
+                "monthly_multipliers": [
+                  1.0,
+                  1.0,
+                  0.9,
+                  0.8,
+                  0.7,
+                  0.7,
+                  0.7,
+                  0.7,
+                  0.8,
+                  0.9,
+                  1.0,
+                  1.0
+                ],
+                "exceptions": []
+              },
+              "_provenance": {
+                "source": "migrated_from_legacy",
+                "confidence": "low"
+              }
+            }
+          ]
+        },
+        "equipment": {
+          "profiles": [
+            {
+              "id": "default_equipment",
+              "label": "Equipment",
+              "baseload": {
+                "value": 5.04,
+                "unit": "w_per_m2"
+              },
+              "active": {
+                "value": 0,
+                "unit": "w_per_m2"
+              },
+              "relationship_to_occupancy": "proportional",
+              "standby_factor": 0.1,
+              "area_share": 1.0,
+              "schedule": {
+                "weekday": [
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.3,
+                  0.6,
+                  0.1,
+                  0.05,
+                  0.05,
+                  0.05,
+                  0.05,
+                  0.05,
+                  0.05,
+                  0.05,
+                  0.1,
+                  0.3,
+                  0.6,
+                  0.7,
+                  0.6,
+                  0.4,
+                  0.2,
+                  0.1
+                ],
+                "saturday": [
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.2,
+                  0.5,
+                  0.3,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.2,
+                  0.4,
+                  0.6,
+                  0.7,
+                  0.6,
+                  0.4,
+                  0.2,
+                  0.1
+                ],
+                "sunday": [
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.2,
+                  0.4,
+                  0.4,
+                  0.2,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.1,
+                  0.2,
+                  0.3,
+                  0.5,
+                  0.6,
+                  0.5,
+                  0.3,
+                  0.2,
+                  0.1
+                ],
+                "monthly_multipliers": [
+                  1,
+                  1,
+                  1,
+                  1,
+                  1,
+                  1,
+                  1,
+                  1,
+                  1,
+                  1,
+                  1,
+                  1
+                ],
+                "exceptions": []
+              },
+              "_provenance": {
+                "source": "migrated_from_legacy",
+                "confidence": "low"
+              }
+            }
+          ]
+        }
+      },
+      "openings": {},
+      "schema_version": 2,
+      "shading_overhang": {
+        "north": {
+          "depth_m": 0.5
+        },
+        "south": {
+          "depth_m": 0.5
+        },
+        "east": {
+          "depth_m": 0.5
+        },
+        "west": {
+          "depth_m": 0.5
+        }
+      },
+      "shading_fin": {
+        "north": {
+          "left_depth_m": 0.5,
+          "right_depth_m": 0.5
+        },
+        "south": {
+          "left_depth_m": 0.5,
+          "right_depth_m": 0.5
+        },
+        "east": {
+          "left_depth_m": 0.5,
+          "right_depth_m": 0.5
+        },
+        "west": {
+          "left_depth_m": 0.5,
+          "right_depth_m": 0.5
+        }
+      },
+      "systems_config_v25": {
+        "heating": {
+          "enabled": true,
+          "primary": {
+            "library_id": "vrf_heat_recovery_dual_function"
+          },
+          "secondary": {
+            "library_id": "electric_panel_heater"
+          },
+          "primary_pct": 95,
+          "setpoint_c": 21,
+          "schedule_ref": "business_hours_09_18_weekdays"
+        },
+        "cooling": {
+          "enabled": true,
+          "primary": {
+            "library_id": "vrf_heat_recovery_dual_function"
+          },
+          "secondary": {
+            "library_id": "dx_split_cooling"
+          },
+          "primary_pct": 95,
+          "setpoint_c": 25,
+          "schedule_ref": "business_hours_09_18_weekdays"
+        },
+        "dhw": {
+          "enabled": true,
+          "primary": {
+            "library_id": "ashp_dhw_preheat"
+          },
+          "secondary": {
+            "library_id": "gas_boiler_calorifier"
+          },
+          "primary_pct": 60,
+          "fuel_mix": {
+            "gas": 0.4,
+            "electric_resistance": 0.0,
+            "heat_pump": 0.6
+          },
+          "circulation_pump_w": 120,
+          "litres_per_person_per_day": 80,
+          "store_temperature_c": 60,
+          "cold_mains_temperature_c": 10,
+          "schedule_ref": "always_on"
+        },
+        "ventilation": [
+          {
+            "id": "vent_mvhr_gf_public",
+            "name": "mvhr_gf_public",
+            "enabled": true,
+            "hre_enabled": true,
+            "library_id": "mvhr_with_hr",
+            "flow_l_s": 1425,
+            "sfp_w_per_l_s": 1.4,
+            "hre": 0.8,
+            "hours": 8760,
+            "schedule_ref": "always_on"
+          },
+          {
+            "id": "vent_bedroom_extract",
+            "name": "bedroom_extract",
+            "enabled": true,
+            "hre_enabled": false,
+            "library_id": "wc_extract_no_hr",
+            "flow_l_s": 2208,
+            "sfp_w_per_l_s": 0.4,
+            "hre": 0.0,
+            "hours": 8760,
+            "schedule_ref": "always_on"
+          },
+          {
+            "id": "vent_public_toilet_extract",
+            "name": "public_toilet_extract",
+            "enabled": true,
+            "hre_enabled": false,
+            "library_id": "wc_extract_no_hr",
+            "flow_l_s": 210,
+            "sfp_w_per_l_s": 0.4,
+            "hre": 0.0,
+            "hours": 8760,
+            "schedule_ref": "always_on"
+          }
+        ]
+      },
+      "schedules": [
+        {
+          "id": "business_hours_09_18_weekdays",
+          "name": "business_hours_09_18_weekdays",
+          "day_types": {
+            "weekday": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "saturday": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "sunday": [
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        },
+        {
+          "id": "hotel_systems_24x7",
+          "name": "hotel_systems_24x7",
+          "day_types": {
+            "weekday": [
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            "saturday": [
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            "sunday": [
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ]
+          }
+        }
+      ],
+      "fabric": {
+        "air_permeability_q50": 4.64
+      },
+      "systems_config_v40": {
+        "heating": [
+          {
+            "id": "sys_heating_1782394791339_15293",
+            "label": "Primary heating (vrf_heat_recovery_dual_function)",
+            "service": "heating",
+            "source": "ambient_air",
+            "efficiency_metric": 5.12,
+            "control_mechanism": "scheduled",
+            "control_schedule_id": "business_hours_09_18_weekdays",
+            "share_pct": 95.0,
+            "capacity_kw": null,
+            "enabled": true,
+            "notes": "Migrated from systems_config_v25 (library_id=vrf_heat_recovery_dual_function)"
+          },
+          {
+            "id": "sys_heating_1782394791339_18072",
+            "label": "Secondary heating (electric_panel_heater)",
+            "service": "heating",
+            "source": "electricity",
+            "efficiency_metric": 1.0,
+            "control_mechanism": "scheduled",
+            "control_schedule_id": "business_hours_09_18_weekdays",
+            "share_pct": 5.0,
+            "capacity_kw": null,
+            "enabled": true,
+            "notes": "Migrated from systems_config_v25 (library_id=electric_panel_heater)"
+          }
+        ],
+        "cooling": [
+          {
+            "id": "sys_cooling_1782394791339_17069",
+            "label": "Primary cooling (vrf_heat_recovery_dual_function)",
+            "service": "cooling",
+            "source": "electricity",
+            "efficiency_metric": 3.51,
+            "control_mechanism": "scheduled",
+            "control_schedule_id": "business_hours_09_18_weekdays",
+            "share_pct": 95.0,
+            "capacity_kw": null,
+            "enabled": true,
+            "notes": "Migrated from systems_config_v25 (library_id=vrf_heat_recovery_dual_function)"
+          },
+          {
+            "id": "sys_cooling_1782394791339_15552",
+            "label": "Secondary cooling (dx_split_cooling)",
+            "service": "cooling",
+            "source": "electricity",
+            "efficiency_metric": 5.62,
+            "control_mechanism": "scheduled",
+            "control_schedule_id": "business_hours_09_18_weekdays",
+            "share_pct": 5.0,
+            "capacity_kw": null,
+            "enabled": true,
+            "notes": "Migrated from systems_config_v25 (library_id=dx_split_cooling)"
+          }
+        ],
+        "dhw": [
+          {
+            "id": "sys_dhw_1782394791339_60753",
+            "label": "DHW gas (gas_boiler_calorifier)",
+            "service": "dhw",
+            "source": "gas",
+            "efficiency_metric": 0.9,
+            "control_mechanism": "scheduled",
+            "control_schedule_id": "always_on",
+            "share_pct": 40.0,
+            "capacity_kw": null,
+            "enabled": true,
+            "notes": "Migrated from systems_config_v25 fuel_mix[gas=0.40]; tap-mix correction applies (hot_fraction = (40 - 10.0) / (60.0 - 10.0))"
+          },
+          {
+            "id": "sys_dhw_1782394791339_41585",
+            "label": "DHW heat pump (ashp_dhw_preheat)",
+            "service": "dhw",
+            "source": "ambient_air",
+            "efficiency_metric": 3.0,
+            "control_mechanism": "scheduled",
+            "control_schedule_id": "always_on",
+            "share_pct": 60.0,
+            "capacity_kw": null,
+            "enabled": true,
+            "notes": "Migrated from systems_config_v25 fuel_mix[heat_pump=0.60]; tap-mix correction applies (hot_fraction = (40 - 10.0) / (60.0 - 10.0))"
+          }
+        ],
+        "ventilation": [
+          {
+            "id": "vent_mvhr_gf_public",
+            "label": "mvhr_gf_public",
+            "service": "ventilation",
+            "source": "electricity",
+            "efficiency_metric": {
+              "sfp_w_per_lps": 1.4,
+              "recovery_sensible_pct": 80.0,
+              "recovery_latent_pct": 0
+            },
+            "flow_rate": 1425.0,
+            "flow_rate_basis": "constant",
+            "setpoint": null,
+            "control_mechanism": "scheduled",
+            "control_schedule_id": "always_on",
+            "share_pct": 37.1,
+            "capacity_kw": null,
+            "enabled": true,
+            "defrost_penalty_kwh": null,
+            "notes": "Migrated from systems_config_v25.ventilation[mvhr_with_hr]"
+          },
+          {
+            "id": "vent_bedroom_extract",
+            "label": "bedroom_extract",
+            "service": "ventilation",
+            "source": "electricity",
+            "efficiency_metric": {
+              "sfp_w_per_lps": 0.4,
+              "recovery_sensible_pct": 0.0,
+              "recovery_latent_pct": 0
+            },
+            "flow_rate": 2208.0,
+            "flow_rate_basis": "constant",
+            "setpoint": null,
+            "control_mechanism": "scheduled",
+            "control_schedule_id": "always_on",
+            "share_pct": 57.4,
+            "capacity_kw": null,
+            "enabled": true,
+            "defrost_penalty_kwh": null,
+            "notes": "Migrated from systems_config_v25.ventilation[wc_extract_no_hr]"
+          },
+          {
+            "id": "vent_public_toilet_extract",
+            "label": "public_toilet_extract",
+            "service": "ventilation",
+            "source": "electricity",
+            "efficiency_metric": {
+              "sfp_w_per_lps": 0.4,
+              "recovery_sensible_pct": 0.0,
+              "recovery_latent_pct": 0
+            },
+            "flow_rate": 210.0,
+            "flow_rate_basis": "constant",
+            "setpoint": null,
+            "control_mechanism": "scheduled",
+            "control_schedule_id": "always_on",
+            "share_pct": 5.5,
+            "capacity_kw": null,
+            "enabled": true,
+            "defrost_penalty_kwh": null,
+            "notes": "Migrated from systems_config_v25.ventilation[wc_extract_no_hr]"
+          }
+        ],
+        "lighting": [],
+        "small_power": [],
+        "schema_version": 2,
+        "heating_setpoint_mode": "follow_comfort",
+        "heating_setpoint_c": null,
+        "cooling_setpoint_mode": "follow_comfort",
+        "cooling_setpoint_c": null,
+        "dhw_storage_setpoint_c": 60,
+        "dhw_tap_outlet_temp_c": 40,
+        "dhw_cold_supply_temp_c": 10,
+        "dhw_demand_basis": "per_person",
+        "dhw_demand_litres_per_person_per_day": 80,
+        "dhw_demand_litres_per_m2_per_day": 1.1,
+        "dhw_load_shape": "flat"
+      }
+    },
+    "systems_config": {
+      "mode": "detailed",
+      "hvac_type": "gas_boiler_heating",
+      "ventilation_type": "mev_standard",
+      "natural_ventilation": true,
+      "natural_vent_threshold": 22,
+      "dhw_primary": "gas_boiler_dhw",
+      "dhw_preheat": "none",
+      "dhw_setpoint": 60,
+      "dhw_preheat_setpoint": 50,
+      "lighting_power_density": 2,
+      "lighting_control": "occupancy_sensing",
+      "pump_type": "variable_speed",
+      "sfp_override": 2.8,
+      "cop_heating": 3.6,
+      "cop_cooling": 3.1,
+      "space_heating": {
+        "primary": {
+          "system": "gas_boiler_heating",
+          "share": 1,
+          "efficiency_override": 1
+        },
+        "secondary": null,
+        "tertiary": null
+      },
+      "space_cooling": {
+        "primary": {
+          "system": "none_cooling",
+          "share": 1,
+          "efficiency_override": 4.6
+        },
+        "secondary": null,
+        "tertiary": null
+      },
+      "dhw": {
+        "primary": {
+          "system": "gas_boiler_dhw",
+          "share": 1,
+          "efficiency_override": 0.8
+        },
+        "secondary": null,
+        "tertiary": null
+      },
+      "ventilation": {
+        "primary": {
+          "system": "mev_standard",
+          "share": 1,
+          "efficiency_override": 74
+        },
+        "secondary": null,
+        "tertiary": null
+      },
+      "equipment_power_density": 4.5,
+      "window_opening_threshold": 22,
+      "hre_override": 85,
+      "ventilation_control": "continuous"
+    },
+    "construction_choices": {
+      "external_wall": "bridgwater_ext_wall",
+      "roof": "bridgwater_roof",
+      "ground_floor": "bridgwater_ground_floor",
+      "glazing": "bridgwater_glazing"
+    },
+    "schedule_assignments": null,
+    "weather_file": "GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw",
+    "metadata": null,
+    "comfort_band_lower_c": 21.0,
+    "comfort_band_upper_c": 24.0
+  },
+  "constructions": [
+    {
+      "name": "bridgwater_ext_wall",
+      "library_type": "construction",
+      "display_name": "HIEX Bridgwater external wall — precast insulated panel, BRUKL U=0.14",
+      "description": "HIEX Bridgwater external wall — precast insulated panel, BRUKL U=0.14",
+      "config_json": {
+        "name": "bridgwater_ext_wall",
+        "type": "wall",
+        "u_value_W_per_m2K": 0.14,
+        "g_value": null,
+        "thermal_mass": "high",
+        "description": "HIEX Bridgwater external wall — precast insulated panel, BRUKL U=0.14",
+        "epjson": {
+          "Material": {
+            "Brdg_Wall_Concrete150": {
+              "roughness": "MediumRough",
+              "thickness": 0.15,
+              "conductivity": 1.13,
+              "density": 2300,
+              "specific_heat": 1000
+            },
+            "Brdg_Wall_Plasterboard": {
+              "roughness": "Smooth",
+              "thickness": 0.013,
+              "conductivity": 0.16,
+              "density": 950,
+              "specific_heat": 840
+            }
+          },
+          "Material:NoMass": {
+            "Brdg_Wall_Insul": {
+              "roughness": "MediumRough",
+              "thermal_resistance": 6.759
+            }
+          },
+          "WindowMaterial:SimpleGlazingSystem": {},
+          "Construction": {
+            "bridgwater_ext_wall": {
+              "outside_layer": "Brdg_Wall_Insul",
+              "layer_2": "Brdg_Wall_Concrete150",
+              "layer_3": "Brdg_Wall_Plasterboard"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "bridgwater_roof",
+      "library_type": "construction",
+      "display_name": "HIEX Bridgwater roof — precast concrete deck + insulation, BRUKL U=0.15",
+      "description": "HIEX Bridgwater roof — precast concrete deck + insulation, BRUKL U=0.15",
+      "config_json": {
+        "name": "bridgwater_roof",
+        "type": "roof",
+        "u_value_W_per_m2K": 0.15,
+        "g_value": null,
+        "thermal_mass": "high",
+        "description": "HIEX Bridgwater roof — precast concrete deck + insulation, BRUKL U=0.15",
+        "epjson": {
+          "Material": {
+            "Brdg_Roof_Waterproof": {
+              "roughness": "Smooth",
+              "thickness": 0.005,
+              "conductivity": 0.2,
+              "density": 1100,
+              "specific_heat": 1000
+            },
+            "Brdg_Roof_Concrete150": {
+              "roughness": "MediumRough",
+              "thickness": 0.15,
+              "conductivity": 1.13,
+              "density": 2300,
+              "specific_heat": 1000
+            }
+          },
+          "Material:NoMass": {
+            "Brdg_Roof_Insul": {
+              "roughness": "MediumRough",
+              "thermal_resistance": 6.369
+            }
+          },
+          "WindowMaterial:SimpleGlazingSystem": {},
+          "Construction": {
+            "bridgwater_roof": {
+              "outside_layer": "Brdg_Roof_Waterproof",
+              "layer_2": "Brdg_Roof_Insul",
+              "layer_3": "Brdg_Roof_Concrete150"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "bridgwater_ground_floor",
+      "library_type": "construction",
+      "display_name": "HIEX Bridgwater ground floor — insulated precast slab + screed, BRUKL U=0.13",
+      "description": "HIEX Bridgwater ground floor — insulated precast slab + screed, BRUKL U=0.13",
+      "config_json": {
+        "name": "bridgwater_ground_floor",
+        "type": "floor",
+        "u_value_W_per_m2K": 0.13,
+        "g_value": null,
+        "thermal_mass": "high",
+        "description": "HIEX Bridgwater ground floor — insulated precast slab + screed, BRUKL U=0.13",
+        "epjson": {
+          "Material": {
+            "Brdg_GF_Concrete150": {
+              "roughness": "MediumRough",
+              "thickness": 0.15,
+              "conductivity": 1.13,
+              "density": 2300,
+              "specific_heat": 1000
+            },
+            "Brdg_GF_Screed": {
+              "roughness": "MediumRough",
+              "thickness": 0.065,
+              "conductivity": 0.41,
+              "density": 1200,
+              "specific_heat": 840
+            }
+          },
+          "Material:NoMass": {
+            "Brdg_GF_Insul": {
+              "roughness": "MediumRough",
+              "thermal_resistance": 7.191
+            }
+          },
+          "WindowMaterial:SimpleGlazingSystem": {},
+          "Construction": {
+            "bridgwater_ground_floor": {
+              "outside_layer": "Brdg_GF_Insul",
+              "layer_2": "Brdg_GF_Concrete150",
+              "layer_3": "Brdg_GF_Screed"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "bridgwater_glazing",
+      "library_type": "construction",
+      "display_name": "HIEX Bridgwater glazing — area-weighted G1/G2 bedroom DGU dominant, BRUKL U=1.4 / g=0.55",
+      "description": "HIEX Bridgwater glazing — area-weighted G1/G2 bedroom DGU dominant, BRUKL U=1.4 / g=0.55",
+      "config_json": {
+        "name": "bridgwater_glazing",
+        "type": "glazing",
+        "u_value_W_per_m2K": 1.4,
+        "g_value": 0.55,
+        "thermal_mass": null,
+        "description": "HIEX Bridgwater glazing — area-weighted G1/G2 bedroom DGU dominant, BRUKL U=1.4 / g=0.55",
+        "epjson": {
+          "Material": {},
+          "Material:NoMass": {},
+          "WindowMaterial:SimpleGlazingSystem": {
+            "bridgwater_glazing_pane": {
+              "u_factor": 1.4,
+              "solar_heat_gain_coefficient": 0.55,
+              "visible_transmittance": 0.7
+            }
+          },
+          "Construction": {
+            "bridgwater_glazing": {
+              "outside_layer": "bridgwater_glazing_pane"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

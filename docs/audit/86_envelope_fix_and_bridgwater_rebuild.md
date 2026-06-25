@@ -159,3 +159,21 @@ end-use combined.** Two first-principles reasons forcing it is wrong (brief esca
 **Verification status vs brief:** fuel split ✓, gas anchor ✓, small power ✓; **EUI ±2% of 180 NOT met
 by design** — gap reported per the escalation clause. Calibration harness: `scripts/_brief86_calibrate.mjs`.
 Config is DB-only (Part 6 persists it).
+
+## Part 6 — Input persistence — DONE (closes the failure this brief exists for)
+
+The whole rebuild lived only in the gitignored DB. Part 6 makes it recoverable from one committed file
+so a machine migration can never lose it again.
+
+- `scripts/export_project_inputs.py <id>` → a single JSON capturing the full input set: all project
+  columns (building_config incl. geometry/fabric/`systems_config_v25`+`v40`/loads/schedules,
+  construction_choices, comfort band, weather) **plus the per-project custom constructions** (so the
+  snapshot is self-contained — parser U-values + frontend resolve without relying on DB seed state).
+- `scripts/import_project_inputs.py <snapshot> [--id --name]` → recreates the project + constructions
+  (upsert). The recovery path: empty DB + one committed file → fully-configured project.
+- Committed snapshot: **`projects/snapshots/bridgewater_hotel.json`** (tracked dir, not gitignored).
+
+**Round-trip verified (falsifiable):** imported the snapshot to a throwaway id, re-exported, and the
+`building_config`, `systems_config_v40`, constructions, and comfort/weather are **byte-identical**;
+running the engine on the restored project gives **EUI 110 — identical to the original**. Throwaway
+project deleted.

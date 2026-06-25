@@ -3,7 +3,7 @@ import { calculateInstant } from '../frontend/src/utils/instantCalc.js'
 import { computeHourlySolarByFacade } from '../frontend/src/utils/solarCalc.js'
 import { SYSTEM_TEMPLATES_LIBRARY } from '../frontend/src/data/systemTemplatesLibrary.js'
 const __dirname = path.dirname(fileURLToPath(import.meta.url)); const REPO_ROOT = path.resolve(__dirname,'..')
-const API='http://127.0.0.1:8002'; const PID='12cf7cc4-9bdc-41bc-ab4e-24e044fbad9d'
+const API='http://127.0.0.1:8002'; const PID=process.env.PID || '12cf7cc4-9bdc-41bc-ab4e-24e044fbad9d'
 const fj=async u=>{const r=await fetch(u); if(!r.ok) throw new Error(u+' '+r.status); return r.json()}
 const project=await fj(`${API}/api/projects/${PID}`)
 const lib=await fj(`${API}/api/library/constructions`); const libArr=lib.constructions??[]
