@@ -12,8 +12,10 @@
  * Consumes the existing stacked engine result (the active strategy = the
  * ordered intervention list for v1). No engine work — pure consumer view.
  */
+import { useState } from 'react'
 import EUIWaterfall from './EUIWaterfall.jsx'
 import PhysicsView from './visualiser/PhysicsView.jsx'
+import HeatBalance from '../balance/HeatBalance.jsx'
 
 const SAVE_GREEN = '#16A34A'
 const INCREASE_RED = '#DC2626'
@@ -48,6 +50,7 @@ function Stat({ label, value, sub, accent, placeholder }) {
 }
 
 export default function StrategyView({ strategyName = 'Strategy 1', interventions = [], stackResult, orientationDeg = 0 }) {
+  const [compareOpen, setCompareOpen] = useState(false)
   const rows = stackResult?.interventions ?? []
   const lastEnabled = [...rows].reverse().find((r) => r?.enabled)
   const cumEUI = lastEnabled?.cumulative_delta?.eui_kwh_per_m2
@@ -85,15 +88,42 @@ export default function StrategyView({ strategyName = 'Strategy 1', intervention
         <EUIWaterfall interventions={interventions} stackResult={stackResult} />
       </div>
 
-      {/* 3 — Heat balance, strategy final state */}
+      {/* 3 — Heat balance, strategy final state (with expand-to-compare) */}
       <div className="rounded-lg border border-light-grey/70 bg-white p-3">
-        <h3 className="text-xs uppercase tracking-wider font-semibold text-navy mb-2">
-          Heat balance — strategy final state
-        </h3>
-        {finalResult ? (
-          <PhysicsView baselineResult={stackResult?.baseline} cumulativeResult={finalResult} orientationDeg={orientationDeg} />
-        ) : (
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xs uppercase tracking-wider font-semibold text-navy">
+            Heat balance — strategy {compareOpen ? 'baseline vs final' : 'final state'}
+          </h3>
+          {finalResult ? (
+            <button
+              type="button"
+              onClick={() => setCompareOpen((v) => !v)}
+              className="text-xs font-semibold"
+              style={{ color: ACCENT }}
+            >
+              {compareOpen ? '× Hide compare' : 'Compare ↔'}
+            </button>
+          ) : null}
+        </div>
+        {!finalResult ? (
           <p className="text-xs text-mid-grey/60 italic">Add interventions to the strategy to see the composed heat balance.</p>
+        ) : compareOpen ? (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <div className="text-xxs uppercase tracking-wider text-mid-grey/60 font-semibold mb-1 text-center">Baseline</div>
+              <div className="h-[440px] border border-light-grey/50 rounded">
+                <HeatBalance liveData={stackResult?.baseline?.heat_balance} simulationData={null} simulationInfo={null} orientationDeg={orientationDeg} onElementClick={() => {}} mode="full" />
+              </div>
+            </div>
+            <div>
+              <div className="text-xxs uppercase tracking-wider text-mid-grey/60 font-semibold mb-1 text-center" style={{ color: ACCENT }}>Strategy final</div>
+              <div className="h-[440px] border border-light-grey/50 rounded">
+                <HeatBalance liveData={finalResult?.heat_balance} simulationData={null} simulationInfo={null} orientationDeg={orientationDeg} onElementClick={() => {}} mode="full" />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <PhysicsView baselineResult={stackResult?.baseline} cumulativeResult={finalResult} orientationDeg={orientationDeg} />
         )}
       </div>
 

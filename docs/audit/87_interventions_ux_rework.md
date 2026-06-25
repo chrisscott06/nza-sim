@@ -119,9 +119,14 @@ bedroom-extract/MVHR **+3.6 (red increase)** … plug-load −16.2 → 76.2). He
 (−62.1 vs baseline; cooling 43.8 — cooling-leaning, consistent with the MVHR-increase finding). CRREM
 placeholder renders. No console errors; production build clean.
 
-**Pending refinements (noted, not blocking):** heat-balance side-by-side *compare* button (currently
-final-state + delta badge); a distinct Library-vs-Strategy subset (v1 strategy = all interventions);
-literal drag-reorder needs a manual click-test (handles render; mechanism wired).
+**Heat-balance Compare button added + verified:** the heat balance section now has a "Compare ↔"
+toggle that expands to a **side-by-side baseline-vs-final** view (two `HeatBalance` instances, same
+chart type) — exactly the brief's Part 5 spec. Verified live: "Heat balance — strategy baseline vs
+final", Baseline | Strategy final panels render; toggle closes back to the single final-state view.
+
+**Pending refinements (noted, not blocking):** a distinct Library-vs-Strategy subset (v1 strategy =
+all interventions); literal drag-reorder needs a manual click-test (handles render; mechanism wired);
+the compare panels are a touch cramped at 440px list width.
 
 ## §6 — Part 6: wiring + cleanup
 _(to fill)_
