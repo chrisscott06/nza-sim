@@ -70,8 +70,20 @@ These are the wiring points Part 3/5 retarget from "the full list" to "the activ
 
 **Verified:** migration logic test — 3-intervention legacy project → Strategy 1 = `[a,b,c]` in order; existing strategies preserved; empty project → empty default (lossless). `npm run build` clean (4.23s).
 
-## §4 — Part 4: Library page + two-section per-intervention view
-_(to fill)_
+## §4 — Part 4: Library page + two-section per-intervention view — IN PROGRESS
+
+**Built (additive — nothing removed yet, per "don't remove before replacement"):**
+`frontend/src/components/modules/interventions/PerInterventionView.jsx` — the new two-section view:
+- **Section 1 — Isolated impact:** four headline cards (Lifetime carbon → "TBD — Brief C"; £/tonne → "TBD — Brief B"; **kWh saved / EUI Δ → LIVE** from `cumulativeDelta.eui_kwh_per_m2`/`total_delivered_mwh`; Simple payback → "TBD — Brief B") + demand-by-service delta rows (heating / cooling / DHW / total / electricity / gas / year-1 carbon) from the existing isolated `cumulative_delta`. No engine work.
+- **Section 2 — Calc Trail:** UI-side diff (the brief's preferred, engine-change-free path) — lists the intervention's patches (inputs changed: path · op · value) → resulting headline deltas. "Shows only fields that changed." No engine trace mode.
+
+Build clean (`npm run build`, 4.02s). Colours/format follow the existing IsolatedView conventions (save-green / increase-red, signed deltas).
+
+**Remaining Part 4 (needs live browser iteration — paused for Chris):**
+- Library page layout (intervention list left + `PerInterventionView` right; Brief 47 inputs-left/visualiser-right pattern).
+- Mount/route `PerInterventionView` and wire the selected intervention's `useIsolatedResults` row into it.
+- Browser walkthrough verification (two sections only; cards live/placeholder; calc trail focused) — needs a project that actually has interventions, and the backend+frontend running on this branch.
+- (Old six-tab removal is Part 6, after the new view renders.)
 
 ## §5 — Part 5: Strategy page + reorder + waterfall + final-state views
 _(to fill)_
