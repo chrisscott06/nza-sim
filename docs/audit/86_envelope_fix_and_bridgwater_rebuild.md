@@ -81,3 +81,33 @@ Nominal U (incl. ISO 6946 films) verified exact: 0.140 / 0.150 / 0.130; glazing 
 
 **Not yet version-controlled:** the geometry/fabric assignment lives only in the DB (gitignored).
 The committable artifact is `constructions.py`. Persisting the full input set is Part 6.
+
+### Infiltration correction (during Part 4)
+Part 3 first used the static model's **0.232 ACH** (= q50 ÷ 20). The canonical seed + current engine
+(`deriveOperationalACH`, `instantCalc.js:386`) derive it correctly from q50: `n50 = q50 × A_env/V`,
+then ÷20 — the static model's q50÷20 treats a per-area number as per-volume. Chris's call
+(2026-06-25): use the engine-derived value. Set `building.fabric.air_permeability_q50 = 4.64`; for
+this geometry A_env 4,026.9 m² / V 13,491 m³ → n50 1.385 → **operational 0.0692 ACH**. Also wrote
+`infiltration_ach = 0.0692` so the EP State-1 parser (reads ACH directly) stays consistent with the
+static engine. Re-verified envelope-only: fabric-leakage 102 → **42 MWh**, heating 69 / cooling 162 MWh.
+
+## Part 4 — Rebuild systems — DONE (schema); fuel split verified in Part 5
+
+Restored the canonical Bridgewater systems (lost in migration — the v25→v40 migration had found "no
+systems_config_v25"). Source: `scripts/seed_bridgewater_v25_systems.mjs` (BRIDGEWATER_V25) +
+`systemTemplatesLibrary.js`. Wrote `building.systems_config_v25` (verbatim from the seed), then ran the
+tested `40_bridgewater_systems_migration.py` + `42_systems_ux_migration.py` to produce
+`systems_config_v40` (schema_version 2). Kept Part 3's real constructions — NOT the seed's
+`u_value_override` fabric (the EP assembler ignores overrides; Part 3's build-ups are strictly better).
+
+| Service | Systems (v40) |
+|---|---|
+| Heating | VRF heat-recovery **SCOP 5.12** (95%) + electric panel 1.0 (5%); setpoint 21 |
+| Cooling | VRF **SEER 3.51** (95%) + DX split 5.62 (5%); setpoint 25 |
+| DHW | 60% ASHP (SCOP 3.0) + 40% gas (0.90); 80 L/p/day, store 60 °C, mains 10 °C |
+| Ventilation | MVHR 1425 l/s 80% HR SFP 1.4; bedroom extract 2208 l/s no-HR SFP 0.4; public-WC extract 210 l/s SFP 0.4 — all 8760 h |
+
+Verified: v40 produced with correct sources/shares/efficiencies (table above).
+**Fuel-split note:** ~70% elec / 30% gas only emerges *after* Part 5 adds small power (~186 MWh elec).
+Systems-only, gas (40% of DHW) dominates a small denominator — the 70/30 is a Part-5 verification.
+Config is DB-only (Part 6 persists it).
