@@ -56,7 +56,19 @@ These are the wiring points Part 3/5 retarget from "the full list" to "the activ
 `ProjectContext` DEFAULT_PARAMS already declares **both** `interventions: []` (L419 — the current stack) **and** `library_interventions: []` (L428). So a "library" slot may already exist (possibly unused / from an earlier brief). Part 3 must check what `library_interventions` is wired to before adding `strategies[]` — the cleanest model may be: `library_interventions` (or the existing `interventions`) = the Library catalogue, and the new `strategies[]` holds ordered id-subsets. Decide in Part 3 to avoid a redundant third list. Verified shapes (this commit): six view ids confirmed at `VisualiserHost.jsx:62–67`; `runInterventionStack`→`{baseline, interventions[]}` at `interventionsEngine.js:25`; `instantCalc.js:23,6582` consumes `building.interventions`.
 
 ## §3 — Part 3: Strategy data model + migration
-_(to fill)_
+
+**Reconciled `library_interventions` first:** it's the Brief 41 P5 save/load-templates store (entries with `lib_intervention_*` ids), currently not actively wired (InterventionsModule L101/L349 note it's "left in DEFAULT_PARAMS… not used anywhere"). It is NOT the catalogue. So: `interventions[]` stays the **Library catalogue**; `library_interventions[]` left untouched; new `strategies[]` holds the ordered selections.
+
+**Added (`frontend/src/context/ProjectContext.jsx`):**
+- `strategies: []` in DEFAULT_PARAMS. `Strategy = { id, name, ordered_intervention_ids: string[] }`.
+- `makeDefaultStrategy(interventions)` + `migrateStrategies(bc)` helpers.
+- Wired `strategies: migrateStrategies(bc)` into the load normalizer (beside `library_interventions`).
+
+**Migration (lossless):** a project without `strategies` gets one default `{ id:'strategy_default', name:'Strategy 1', ordered_intervention_ids: [all current interventions' ids, current order] }`. Existing strategies preserved untouched.
+
+**No engine drift — by construction:** the engine (`instantCalc.js`) consumes `building.interventions`, not `strategies` (confirmed §2). `strategies` is inert data until the Strategy view wires it in Part 5, so engine output is byte-identical pre/post-migration. (The brief's "load Bridgewater → same output" check is satisfied structurally; a live browser confirm lands with Part 5 when the Strategy view actually reads `strategies`.)
+
+**Verified:** migration logic test — 3-intervention legacy project → Strategy 1 = `[a,b,c]` in order; existing strategies preserved; empty project → empty default (lossless). `npm run build` clean (4.23s).
 
 ## §4 — Part 4: Library page + two-section per-intervention view
 _(to fill)_

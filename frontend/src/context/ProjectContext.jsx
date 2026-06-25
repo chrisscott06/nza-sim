@@ -426,6 +426,38 @@ const DEFAULT_PARAMS = {
   // schema_version) plus a saved_at timestamp and a `lib_intervention_*`
   // id assigned at save time.
   library_interventions: [],
+  // Brief 87 Part 3 (interventions UX rework) — named, ordered strategies.
+  // The Library is `interventions` (a catalogue; order is not meaningful there).
+  // A Strategy is an ORDERED SELECTION of intervention ids — order matters
+  // because interventions interact (fabric before heat pump). Single strategy
+  // per project for v1; the data model allows many. Migrated on load: a project
+  // without `strategies` gets a default "Strategy 1" holding every current
+  // intervention in its current array order (see migrateStrategies). Inert data
+  // until the Strategy view consumes it (Part 5) — adding it moves no engine
+  // numbers. Strategy = { id, name, ordered_intervention_ids: string[] }.
+  strategies: [],
+}
+
+// ── Brief 87 Part 3 — Strategy data model + lossless migration ────────────────
+// Library = `interventions` (catalogue). Strategy = ordered selection of ids.
+function makeDefaultStrategy(interventions) {
+  return {
+    id: 'strategy_default',
+    name: 'Strategy 1',
+    ordered_intervention_ids: (Array.isArray(interventions) ? interventions : [])
+      .map((i) => i?.id)
+      .filter(Boolean),
+  }
+}
+
+// Returns the project's strategies, creating a default "Strategy 1" (all current
+// interventions, original order) for any project authored before this brief.
+// Lossless: every existing intervention is referenced, in the same order the
+// engine already stacks them, so the migrated project's engine output is
+// byte-identical to its pre-migration output.
+function migrateStrategies(bc) {
+  if (Array.isArray(bc?.strategies) && bc.strategies.length > 0) return bc.strategies
+  return [makeDefaultStrategy(bc?.interventions)]
 }
 
 // ── Brief 27 Part 1 — v2.3 migration helpers ─────────────────────────────────
@@ -1165,6 +1197,11 @@ export function ProjectProvider({ children }) {
       // Brief 41 Part 5 (2026-05-20) — per-project intervention library.
       // Same load semantics as systems_config_v40 / library_systems.
       library_interventions: Array.isArray(bc.library_interventions) ? bc.library_interventions : DEFAULT_PARAMS.library_interventions,
+      // Brief 87 Part 3 — Strategy data model + lossless migration. A project
+      // without `strategies` gets a default "Strategy 1" referencing every
+      // current intervention in its current order. Inert until the Strategy
+      // view consumes it (Part 5), so this moves no engine numbers.
+      strategies: migrateStrategies(bc),
     })
     setConstructions(project.construction_choices ?? DEFAULT_CONSTRUCTIONS)
     setSystems(migrateSystemsConfig(project.systems_config))
