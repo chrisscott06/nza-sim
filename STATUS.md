@@ -2,6 +2,10 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
+## 🔵 Brief 87 — OPENED 2026-06-25 *(branch `chris/interventions-rework-ux`, cut from `main` `d8a6207`)*
+
+**Interventions UX rework — Library/Strategy split + two-section per-intervention view.** Architect: Claude Chat; authorised by Chris. Brief: [`active/87_interventions_ux_rework.md`](docs/briefs/active/87_interventions_ux_rework.md); design note (canonical): [`design-notes/interventions_rework.md`](docs/design-notes/interventions_rework.md). UX restructure only — engine (Brief 41 patches, Brief 71 attribution, Brief 76 vent fix) unchanged. Splits the module into **Library** (author + isolated per-intervention view) and **Strategy** (ordered composition + waterfall + final-state). Replaces six tabs with two sections (Isolated impact + Calc Trail). Heat Balance → Strategy view only (with compare). Cost (Brief B) + CRREM (Brief C) cards are placeholders. Part 1 (this commit): brief + design note landed, audit stub opened. Parts 2–7 pending.
+
 ## ✅ Brief 77 — CLOSED 2026-06-02
 
 **Per-system ventilation loss rendering (Heat Balance).** Follow-on to Brief 76. Restores the three per-system ventilation extract ribbons across all three Heat Balance view modes (Sankey, Rows, Stacked) by replacing Brief 74 P5's strict "aggregate wins" guard with a mutual-exclusion contract (per-system if available; aggregate as fallback when per-system empty).

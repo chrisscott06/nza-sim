@@ -1,14 +1,14 @@
 # Current brief
 
-**No active brief.** Brief 77 just closed (`8b2301f` P2+P3 + close commit landing now). Brief 75 stays open at "P2-only — superseded by Brief 76 P2."
+**Brief 87 — Interventions UX rework (Library/Strategy split + two-section per-intervention view).**
+Active on branch `chris/interventions-rework-ux` (cut from `main` `d8a6207`). UX restructure only — no
+engine changes. Brief: [`active/87_interventions_ux_rework.md`](active/87_interventions_ux_rework.md);
+design note (canonical): [`../design-notes/interventions_rework.md`](../design-notes/interventions_rework.md).
+First of three: A (UX, this) → C (CRREM lifetime carbon) → B (NRM2 cost). Brief 75 stays open
+(P2-only — superseded by Brief 76 P2).
 
-Next brief is architect's call. Likely candidates:
-- **Brief 78 — door bug** (operable door heat_loss=0 on Systems Heat Balance).
-- **Brief 79 — interventions diagnostic harness**.
-- **Brief 80 — WWHR**.
-- **Brief 81 — EnergyPlus validation harness** (per Brief 77 numbering rolls).
-- **Brief 75 P3-P5 carry-forward** (mech_vent_thermal_flow decomposition + MVHR recovery IN ribbon). Optional follow-on.
-- Tier-3 carryovers: zero-value `mech_ventilation` row when all vent disabled (Brief 77 §4.4); EnergyCarbonTab v25 label reads + InterventionEditor dual-capture (Brief 76 §future).
+NB: Brief numbers 78–86 exist on other branches (`feat/energyplus-validation` 78–85; calibration branch
+86); this rework is numbered 87 to avoid collision, per the brief.
 
 ## Recently closed
 
