@@ -21,6 +21,14 @@ import CrremPicker from './crrem/CrremPicker.jsx'
 import { computeLifetimeCarbon, perFuelFromDeltaRecord, defaultLifetimeYears } from '../../../utils/lifetimeCarbon.js'
 import { readModelledEui } from '../../../utils/engineReads.js'
 import { getGia } from './visualiser/unitFmt.js'
+import { computeCostTotal } from '../../../utils/costModel.js'
+
+const gbpShort = (n) => {
+  const v = Number(n) || 0
+  if (v >= 1e6) return `£${(v / 1e6).toFixed(2)}M`
+  if (v >= 1e3) return `£${Math.round(v / 1e3)}k`
+  return `£${Math.round(v)}`
+}
 
 /** { electricity, gas } annual delivered kWh from an engine result. */
 function fuelsKwhFromResult(res) {
@@ -146,6 +154,15 @@ export default function StrategyView({ strategyName = 'Strategy 1', intervention
     return sum + (computeLifetimeCarbon(pf, { lifetimeYears: years }).lifetime_carbon_saved_tco2e || 0)
   }, 0)
 
+  // Brief 90 (Brief B): strategy capex = Σ enabled interventions' cost totals
+  // (order-independent — unlike cumulative carbon). £/tonne = capex ÷ lifetime tCO₂e.
+  const enabledCostTotal = rows.filter(r => r?.enabled).reduce((sum, row) => {
+    const iv = interventions.find(i => i.id === row.id)
+    return sum + (iv ? computeCostTotal(iv.cost) : 0)
+  }, 0)
+  const strategyPerTonne = enabledCostTotal > 0 && strategyLifetimeTco2e > 0
+    ? enabledCostTotal / strategyLifetimeTco2e : null
+
   // Never let both panels be hidden.
   const toggleBaseline = () => setShowBaseline((v) => (v && !showFinal ? v : !v))
   const toggleFinal = () => setShowFinal((v) => (v && !showBaseline ? v : !v))
@@ -170,8 +187,12 @@ export default function StrategyView({ strategyName = 'Strategy 1', intervention
             value={Number.isFinite(strategyLifetimeTco2e) ? `${signed(strategyLifetimeTco2e, 0)} tCO₂e` : '—'}
             sub="by 2050"
           />
-          <Stat label="Total capex" placeholder="TBD — Brief B" />
-          <Stat label="£ / tonne CO₂" placeholder="TBD — Brief B" />
+          {enabledCostTotal > 0
+            ? <Stat label="Total capex" value={gbpShort(enabledCostTotal)} sub="enabled measures" />
+            : <Stat label="Total capex" placeholder="add costs in Library" />}
+          {strategyPerTonne != null
+            ? <Stat label="£ / tonne CO₂" value={gbpShort(strategyPerTonne)} sub="capex ÷ lifetime tCO₂e" />
+            : <Stat label="£ / tonne CO₂" placeholder="add costs in Library" />}
         </div>
       </div>
 

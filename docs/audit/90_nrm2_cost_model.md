@@ -89,4 +89,20 @@ Must mirror the Applemore elemental structure exactly; building it blind risks r
 when the Applemore spreadsheet arrives.
 
 ## §6 — Strategy capex (Part 6)
-_(to fill)_
+
+`StrategyView` headline: **Total Capex** = Σ enabled interventions' `computeCostTotal(cost)`
+(order-independent, unlike cumulative carbon); **£/tonne CO₂** = capex ÷ strategy lifetime tCO₂e. Both show
+"add costs in Library" until a cost exists. Verified Bridgewater (DHW costed at £215k): headline shows
+**Total Capex £215k** + **£/tonne £270** (215,040 ÷ 797). Build clean.
+
+## §7 — Project cost settings (Part 7) — DEFERRED (override convenience)
+The cost layer runs on the design-note project defaults (fees/prelims/OHP/contingency/inflation, energy
+prices £0.30/£0.08). A settings UI to *override* them per project is a convenience follow-on — deferred
+with Part 5. `readProjectDefault` already reads `params.cost_defaults` first, so the override path is
+wired; only the editing UI is pending.
+
+## §8 — Status
+Brief B delivered (rate-free): cost model + canonical helpers + Headline mode UI + per-intervention
+£/tonne & payback cards + strategy capex. **Pending the Applemore spreadsheet:** the seeded rate library
+(Part 2) + Detailed NRM2 mode (Part 5). Settings-override UI (Part 7) is a small follow-on. No engine
+changes; all cost reads via `costReads` (Rule 11).
