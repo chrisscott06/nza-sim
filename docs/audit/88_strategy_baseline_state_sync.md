@@ -89,4 +89,15 @@ Triggered a real save (building length 58.8 → 59.8 via the Building page); it 
 with no failure** (`length: 59.8` confirmed in `building_config`), the indicator read "SAVED", and the
 network `failed` filter showed **no failed requests** across the session. Restored to 58.8. So Thread C
 also doesn't reproduce in the current state — consistent with H4 (the walkthrough-session save failures
-were transient/state-specific, and likely the same root as the baseline divergence).
+were transient/state-specific, and likely the same root as the baseline divergence). **Root cause
+unconfirmed** — stays as an open Thread C.
+
+### Next-occurrence capture procedure (when "Save failed" returns)
+The save path is a debounced `PUT /api/projects/{id}/{endpoint}` (`ProjectContext.jsx:1254 _scheduleSave`);
+on a rejected/transport-failed PUT it sets `saveStatus='error'` and logs `[ProjectContext] Save failed: <err>`.
+To diagnose the *next* occurrence:
+1. Dev tools → **Network**, filter `projects`, reproduce the triggering action (any input edit; saves fire ~1 s after the last change).
+2. Capture the failing `PUT /api/projects/…`: **HTTP status** (4xx = client/validation/payload-shape; 5xx = server), the **request payload** (which sub-resource: `…/building`, `…/systems`, or root), and the **response body**.
+3. Also grab the **Console** `[ProjectContext] Save failed:` line.
+4. Likely candidates post-Brief-87: a payload-shape mismatch on `…/building` (e.g. the new `strategies[]` field or a large `systems_config_v40`) rejected by request validation, or a transient backend restart. Backend handlers: `api/routers/projects.py:252` (root), `:404` (`/building`), `:465` (`/systems`).
+Fix here only if it's a small payload/field issue; escalate if it's an API-contract change.
