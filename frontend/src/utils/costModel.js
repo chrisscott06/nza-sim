@@ -1,102 +1,195 @@
 /**
- * costModel.js — Brief 90 (Brief B): NRM2 cost computations + the per-intervention
- * cost data shape + migration. Pure functions; project defaults + energy prices
- * via costReads (Bible Rule 11). No engine changes.
+ * costModel.js — Brief 91 (Cost Plan Builder): line-item cost plan computation +
+ * the per-intervention cost data shape + lossless migration from Brief 90.
  *
- * Boundaries kept explicit (Bible): "annual delivered electricity/gas kWh saved"
- * (from the engine per-fuel delta) → "annual operational £ saved" (× energy price)
- * → "simple payback years" (total cost ÷ annual £ saved).
+ * Cost shape (design note):
+ *   cost = {
+ *     groups: [{ id, name, nrm2_category, collapsed, lines: [{ id, name, quantity, unit, rate, notes }] }],
+ *     on_costs: { design_fees_pct, prelims_pct, ohp_pct, contingency_pct, inflation_pct },  // null = inherit project default
+ *     template_origin: null | string,
+ *     notes: '',
+ *   }
+ *
+ * On-costs follow the NRM2 application sequence: fees/prelims/OHP on the works
+ * (lines total), then contingency/inflation on the subtotal-with-works. Project
+ * default %s via costReads (Bible Rule 11). No engine changes.
+ *
+ * Boundaries kept explicit (Bible): lines_total ≠ subtotal_with_works ≠ total.
  */
 import { readProjectDefault, readEnergyPrice } from './costReads.js'
 
 export const PAYBACK_CLAMP_YEARS = 999
 
-/** The six Headline line keys (kept in sync with costLibrary HEADLINE_LINES). */
-const HEADLINE_KEYS = [
-  'design_engineering', 'equipment', 'installation_commissioning',
-  'additional_measures', 'project_delivery', 'contingency',
-]
+/** UI unit list per line; rate label adapts ("£/nr", "£/kW", …). */
+export const UNITS = ['nr', 'm', 'm²', 'm³', 'kW', 'kg', 'hr', 'item', 'sum', '%']
 
 const num = v => (v == null || v === '' || !Number.isFinite(Number(v))) ? 0 : Number(v)
+const newId = (p) => `${p}_${(globalThis.crypto?.randomUUID?.() || `${p}${Math.round(performance.now())}x`).slice(0, 12)}`
 
-/** Default empty cost object for a new/migrated intervention (Headline mode, £0). */
+export function newLine(partial = {}) {
+  return { id: newId('l'), name: '', quantity: null, unit: 'nr', rate: null, notes: '', ...partial }
+}
+export function newGroup(partial = {}) {
+  return { id: newId('g'), name: '', nrm2_category: null, collapsed: false, lines: [], ...partial }
+}
+
+/** Empty cost plan for a new intervention. on_costs null → inherit project defaults. */
 export function emptyCost() {
   return {
-    mode: 'headline',
-    headline: Object.fromEntries(HEADLINE_KEYS.map(k => [k, null])),
-    detailed: null,            // NRM2 elemental tree — Detailed mode (future / Applemore)
-    computed_total: 0,
+    groups: [],
+    on_costs: { design_fees_pct: null, prelims_pct: null, ohp_pct: null, contingency_pct: null, inflation_pct: null },
+    template_origin: null,
+    notes: '',
   }
 }
 
-/** Ensure an intervention carries a valid `.cost` (lossless migration). */
-export function migrateInterventionCost(intervention) {
-  if (intervention?.cost?.mode) return intervention
-  return { ...intervention, cost: emptyCost() }
-}
+// ── Brief 90 → Brief 91 migration (one-way, lossless) ────────────────────────
 
-/** Sum of the six Headline lines (missing → £0). */
-export function computeHeadlineTotal(headline) {
-  return HEADLINE_KEYS.reduce((s, k) => s + num(headline?.[k]), 0)
+const B90_HEADLINE_LABELS = {
+  design_engineering: 'Design & engineering',
+  equipment: 'Main equipment',
+  installation_commissioning: 'Installation & commissioning',
+  additional_measures: 'Additional measures',
+  project_delivery: 'Project delivery',
+  contingency: 'Contingency (migrated)',
 }
 
 /**
- * Derive the three % lines (design, delivery, contingency) from the works lines
- * (equipment + installation + additional) and project defaults. Used by the
- * "use defaults" affordance; the user can then override any line.
+ * Convert a Brief 90-shape cost (`cost.mode` / `cost.headline`) to the new
+ * line-item shape, LOSSLESSLY. Idempotent: new-shape or absent costs pass through.
+ *
+ * Every non-zero headline entry — including Brief 90's derived design/delivery/
+ * contingency — becomes an explicit line (qty 1, unit 'sum'); on_costs are set to
+ * 0 so the new NRM2 formula does NOT re-apply on-costs on top. Result:
+ * computeCostPlanTotal == the exact Brief 90 total (audit §2).
  */
+export function migrateCostShape(intervention) {
+  const cost = intervention?.cost
+  if (!cost) return intervention                       // no cost — nothing to migrate
+  if (Array.isArray(cost.groups)) return intervention  // already new shape
+  const headline = cost.headline ?? {}
+  const lines = Object.keys(B90_HEADLINE_LABELS)
+    .map(key => ({ key, value: num(headline[key]) }))
+    .filter(e => e.value !== 0)
+    .map(e => newLine({ name: B90_HEADLINE_LABELS[e.key], quantity: 1, unit: 'sum', rate: e.value }))
+  const migrated = {
+    groups: lines.length ? [newGroup({ name: 'Cost plan (migrated)', lines })] : [],
+    on_costs: { design_fees_pct: 0, prelims_pct: 0, ohp_pct: 0, contingency_pct: 0, inflation_pct: 0 },
+    template_origin: null,
+    notes: 'Migrated from Brief 90 headline cost.',
+  }
+  return { ...intervention, cost: migrated }
+}
+
+/** Back-compat alias (Brief 90 name) — same lossless migration. */
+export const migrateInterventionCost = migrateCostShape
+
+/** Deep-clone groups with FRESH ids (so two interventions from one template edit
+ *  independently and React keys never collide). */
+export function cloneGroupsWithNewIds(groups) {
+  return (groups ?? []).map(g => newGroup({
+    name: g.name, nrm2_category: g.nrm2_category ?? null, collapsed: false,
+    lines: (g.lines ?? []).map(l => newLine({ name: l.name, quantity: l.quantity, unit: l.unit, rate: l.rate, notes: l.notes ?? '' })),
+  }))
+}
+
+/** Build a fresh cost plan from a saved template (fresh ids, records origin). */
+export function instantiateTemplate(template) {
+  return {
+    groups: cloneGroupsWithNewIds(template?.groups),
+    on_costs: { ...(template?.on_costs ?? emptyCost().on_costs) },
+    template_origin: template?.id ?? null,
+    notes: '',
+  }
+}
+
+// ── Computation ──────────────────────────────────────────────────────────────
+
+/** Σ (line.quantity × line.rate) for a group. */
+export function computeGroupSubtotal(group) {
+  return (group?.lines ?? []).reduce((s, l) => s + num(l.quantity) * num(l.rate), 0)
+}
+
+/** Σ group subtotals across the plan. */
+export function computeLinesTotal(cost) {
+  return (cost?.groups ?? []).reduce((s, g) => s + computeGroupSubtotal(g), 0)
+}
+
+/** Resolve an on-cost % — per-intervention override (number) or project default (null). */
+function onCostPct(cost, key, projectDefaults) {
+  const v = cost?.on_costs?.[key]
+  return (v == null || v === '') ? readProjectDefault(key, projectDefaults) : Number(v)
+}
+
+/**
+ * Full on-costs breakdown in NRM2 sequence. Each component rounded to whole £
+ * (QS convention; matches the design note's £95,941 worked example).
+ */
+export function computeOnCostsBreakdown(cost, projectDefaults = null) {
+  const lines_total = computeLinesTotal(cost)
+  const design_fees = Math.round(lines_total * onCostPct(cost, 'design_fees_pct', projectDefaults) / 100)
+  const prelims     = Math.round(lines_total * onCostPct(cost, 'prelims_pct', projectDefaults) / 100)
+  const ohp         = Math.round(lines_total * onCostPct(cost, 'ohp_pct', projectDefaults) / 100)
+  const subtotal_with_works = lines_total + design_fees + prelims + ohp
+  const contingency = Math.round(subtotal_with_works * onCostPct(cost, 'contingency_pct', projectDefaults) / 100)
+  const inflation   = Math.round(subtotal_with_works * onCostPct(cost, 'inflation_pct', projectDefaults) / 100)
+  const total = subtotal_with_works + contingency + inflation
+  return { lines_total, design_fees, prelims, ohp, subtotal_with_works, contingency, inflation, total }
+}
+
+/** Total cost of a plan (lines + on-costs, NRM2 sequence). */
+export function computeCostPlanTotal(cost, projectDefaults = null) {
+  if (!cost) return 0
+  if (!Array.isArray(cost.groups)) {
+    // TRANSITIONAL (removed in P4 once migrate-on-read is wired): a not-yet-
+    // migrated Brief 90 cost — sum its 6 headline lines so the DHW demo total
+    // stays correct between P2 and P4. No new code should rely on this branch.
+    if (cost.headline) return Object.values(cost.headline).reduce((s, v) => s + num(v), 0)
+    return 0
+  }
+  return computeOnCostsBreakdown(cost, projectDefaults).total
+}
+
+/** Public API (Brief 90 name) — delegates to the plan total. */
+export function computeCostTotal(cost, projectDefaults = null) {
+  return computeCostPlanTotal(cost, projectDefaults)
+}
+
+// ── TRANSITIONAL (removed in P4 together with HeadlineCostEditor.jsx) ─────────
+// Brief 90's headline math, kept only so the not-yet-replaced HeadlineCostEditor
+// still builds during P2/P3. No new code should import these.
+export function computeHeadlineTotal(headline) {
+  return Object.values(headline ?? {}).reduce((s, v) => s + num(v), 0)
+}
 export function deriveHeadlineLines(headline, projectDefaults = null) {
   const works = num(headline?.equipment) + num(headline?.installation_commissioning) + num(headline?.additional_measures)
-  const feePct      = readProjectDefault('design_fees_pct', projectDefaults) / 100
-  const designShare = readProjectDefault('design_share_of_fee', projectDefaults)
-  const deliveryShare = readProjectDefault('delivery_share_of_fee', projectDefaults)
-  const contingencyPct = readProjectDefault('contingency_pct', projectDefaults) / 100
-  const inflationPct   = readProjectDefault('inflation_pct', projectDefaults) / 100
-
+  const feePct = readProjectDefault('design_fees_pct', projectDefaults) / 100
   const feeBudget = works * feePct
-  const design_engineering = Math.round(feeBudget * designShare)
-  const project_delivery   = Math.round(feeBudget * deliveryShare)
+  const design_engineering = Math.round(feeBudget * readProjectDefault('design_share_of_fee', projectDefaults))
+  const project_delivery   = Math.round(feeBudget * readProjectDefault('delivery_share_of_fee', projectDefaults))
   const subtotal = works + design_engineering + project_delivery
-  const contingency = Math.round(subtotal * (contingencyPct + inflationPct))
+  const contingency = Math.round(subtotal * (readProjectDefault('contingency_pct', projectDefaults) + readProjectDefault('inflation_pct', projectDefaults)) / 100)
   return { design_engineering, project_delivery, contingency }
 }
 
-/** Total cost for an intervention's `.cost`, whichever mode is active. */
-export function computeCostTotal(cost) {
-  if (!cost) return 0
-  if (cost.mode === 'detailed' && cost.detailed) return computeDetailedTotal(cost.detailed)
-  return computeHeadlineTotal(cost.headline)
-}
-
-/** Detailed NRM2 elemental total (Σ 0–8 Building Works + on-costs 9–14). v1 shell. */
-export function computeDetailedTotal(detailed, projectDefaults = null) {
-  if (!detailed) return 0
-  const buildingWorks = (detailed.categories ?? []).reduce((catSum, cat) =>
-    catSum + (cat.lines ?? []).reduce((s, l) => s + num(l.quantity) * num(l.rate), 0), 0)
-  // On-costs as % of Building Works (prelims + OHP + fees + risks + inflation).
-  const pct = k => readProjectDefault(k, projectDefaults) / 100
-  const onCosts = buildingWorks * (pct('prelims_pct') + pct('ohp_pct') + pct('design_fees_pct') + pct('contingency_pct') + pct('inflation_pct'))
-  return Math.round(buildingWorks + onCosts)
-}
+// ── Operational saving / payback / £-per-tonne (unchanged from Brief 90) ──────
 
 /**
  * Annual operational £ saved from an intervention's per-fuel delta record
  * (interventionsEngine `per_fuel.{electricity,gas}_mwh.delta`, MWh; delta =
- * post − baseline, so a saving is negative). Returns £/yr (can be negative for a
- * measure that costs more to run, e.g. a fuel switch to pricier electricity).
+ * post − baseline, so a saving is negative). £/yr (can be negative for a fuel
+ * switch to pricier electricity).
  */
 export function computeAnnualOperationalSaving(perFuelDelta, projectDefaults = null) {
-  const savedKwh = (key) => -num(perFuelDelta?.[key]?.delta) * 1000   // baseline − post
-  const elecSaved = savedKwh('electricity_mwh')
-  const gasSaved  = savedKwh('gas_mwh')
-  return elecSaved * readEnergyPrice('electricity', projectDefaults)
-       + gasSaved  * readEnergyPrice('gas', projectDefaults)
+  const savedKwh = (key) => -num(perFuelDelta?.[key]?.delta) * 1000
+  return savedKwh('electricity_mwh') * readEnergyPrice('electricity', projectDefaults)
+       + savedKwh('gas_mwh')         * readEnergyPrice('gas', projectDefaults)
 }
 
 /** Simple payback (years), clamped; null when there's no positive annual saving. */
 export function computeSimplePayback(totalCost, annualSavingGbp) {
   if (!(totalCost > 0)) return 0
-  if (!(annualSavingGbp > 0)) return null            // never pays back
+  if (!(annualSavingGbp > 0)) return null
   return Math.min(PAYBACK_CLAMP_YEARS, totalCost / annualSavingGbp)
 }
 

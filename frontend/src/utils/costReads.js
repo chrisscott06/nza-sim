@@ -39,3 +39,47 @@ export function readRateForIntervention(typeOrTheme) {
 export function hasSeededRates() {
   return Object.keys(INTERVENTION_TYPES).length > 0
 }
+
+// ── Per-project template library (Brief 91) ──────────────────────────────────
+// Templates live on `project.cost_template_library`. The save/delete helpers are
+// PURE: they return the new library array; the caller persists it via
+// `updateParam('cost_template_library', library)`. Cross-project sharing is a
+// future migration — the shape is designed to move storage tier cleanly.
+
+/** Saved cost-plan templates on the project (metadata + structure). */
+export function listTemplates(project) {
+  return Array.isArray(project?.cost_template_library) ? project.cost_template_library : []
+}
+
+/** Full template structure by id, or null. */
+export function readTemplate(templateId, project) {
+  return listTemplates(project).find(t => t.id === templateId) ?? null
+}
+
+/**
+ * Build a new template from a cost plan + return `{ id, library }` (the caller
+ * persists `library`). Deep-clones the plan structure so later edits to the
+ * source intervention don't mutate the stored template.
+ */
+export function saveTemplate(name, costPlan, project) {
+  const lib = listTemplates(project)
+  const now = new Date().toISOString()
+  const id = `tpl_${(globalThis.crypto?.randomUUID?.() || String(Math.round(performance.now()))).slice(0, 12)}`
+  const groups = structuredClone(costPlan?.groups ?? [])
+  const entry = {
+    id,
+    name: (name || 'Untitled template').trim(),
+    groups,
+    on_costs: { ...(costPlan?.on_costs ?? {}) },
+    created_at: now,
+    updated_at: now,
+    group_count: groups.length,
+    line_count: groups.reduce((s, g) => s + (g.lines?.length ?? 0), 0),
+  }
+  return { id, library: [...lib, entry] }
+}
+
+/** Remove a template by id → new library array (caller persists). */
+export function deleteTemplate(templateId, project) {
+  return listTemplates(project).filter(t => t.id !== templateId)
+}

@@ -30,10 +30,30 @@ Brief 90 total`. Every Brief 90 value is preserved as a visible line; the user c
 into on-cost %s) afterwards. This is documented as an intentional divergence from the design-note prose,
 justified by the explicit lossless verification gate.
 
-_DHW £215k migration result to verify in Part 2._
+**Verified (node):** Brief 90 DHW cost (`mode:'headline'` + 6 headline values) →
+`migrateCostShape` → one group "Cost plan (migrated)" with **6 lines**, on_costs all 0 →
+`computeCostPlanTotal` = **£215,040** (exact). Idempotent: re-migrating gives £215,040 again.
+
+`migrateCostShape` lives in `costModel.js`; it's idempotent (new-shape / absent costs pass through). It is
+WIRED at project load in P4 (alongside the new editor + HeadlineCostEditor removal) so the data shape and
+the editor change in lockstep. Until then, `computeCostPlanTotal` carries a transitional old-shape fallback
+(removed in P4) so the DHW card stays £215k.
 
 ## §3 — Cost computation + template helpers (Part 3)
-_(to fill — ASHP worked example £95,941)_
+
+`costModel.js`: `computeGroupSubtotal` (Σ qty×rate), `computeLinesTotal` (Σ subtotals),
+`computeOnCostsBreakdown` (NRM2 sequence, each on-cost rounded to whole £), `computeCostPlanTotal`,
+`computeCostTotal` (Brief 90 public name → wrapper). `cloneGroupsWithNewIds` + `instantiateTemplate` for
+templates. `computeAnnualOperationalSaving` / `computeSimplePayback` / `computePoundsPerTonne` unchanged.
+
+`costReads.js`: `listTemplates` / `readTemplate` / `saveTemplate` (pure → returns `{id, library}`) /
+`deleteTemplate`. `readProjectDefault` / `readEnergyPrice` unchanged. `readRateForIntervention` kept
+(returns the empty `INTERVENTION_TYPES` seed; becomes the Applemore template source in P8).
+
+**Verified (node) — design-note ASHP worked example:** subtotals Enabling £3,200 / Equipment £38,200 /
+Installation £15,900 / BWIC £4,200 → **lines £61,500**; on-costs (12/10/8/15/5): design_fees £7,380,
+prelims £6,150, ohp £4,920, subtotal-with-works £79,950, contingency £11,993, inflation £3,998 →
+**TOTAL £95,941**. Every number matches the design note.
 
 ## §4 — CostPlanEditor (Part 4)
 _(to fill)_
