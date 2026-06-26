@@ -54,7 +54,29 @@ and `per_fuel.gas_mwh.{from,to,delta}` (interventionsEngine.js:590+). `.from` = 
 `.to` = post-intervention annual MWh. **This is the fuel-switching input** — no engine change needed.
 
 ## §3 — Lifetime carbon math worked examples (Part 3)
-_(to fill in Part 3 — LED shrinks / heat pump grows / fabric-on-gas constant)_
+
+`utils/lifetimeCarbon.js` — `computeLifetimeCarbon(perFuel, {lifetimeYears, startYear, endYear})`.
+General formula, year-by-year: `Δ_y = Σ_fuel (from_kwh − to_kwh) × factor_y_fuel`, summed
+`[2025, min(2050, 2025+lifetime−1)]`. Factors via `carbonReads` only. Canonical factors used:
+electricity **0.17 → 0.01** kgCO₂/kWh (2025→2050, UK grid trajectory), gas **0.184** flat.
+
+Verified the three regimes (the proof the math handles each correctly):
+
+| Intervention | per-fuel kWh | lifetime | yr1 → yrN saved | lifetime tCO₂e | regime |
+|---|---|---|---|---|---|
+| **LED** | −50,000 elec | 12y → 2025–2036 | 8,500 → **680** kg | **41.4** | **shrinks** (grid decarbonises the saved kWh) |
+| **Heat pump** (fuel switch) | −100,000 gas, +30,000 elec | 18y → 2025–2042 | 13,300 → **18,178** kg | **304.7** | **grows** (electricity added decarbonises) |
+| **Fabric on gas** | −40,000 gas | 45y → clamps 2025–2050 | 7,360 → **7,360** kg | **191.4** | **constant** (gas does not decarbonise) |
+
+All three behave exactly as the design note predicts. The heat-pump yr1 (13,300 kg) matches the design
+note's worked example (~12,600 kg; small delta because the codebase grid curve is 0.17/0.005 vs the note's
+illustrative 0.190/0.025). **Heat pumps look better over lifetime than year-1** — the saving grows 37% from
+2025 to 2042. This is the long-game insight the tool surfaces. Rank order can flip vs the year-1 EUI delta:
+that's the feature.
+
+Helpers: `defaultLifetimeYears(category)` (systems 18 / lighting 12 / ventilation 20 / solar 30 / operation
+25 / small_power 25), `perFuelFromDeltaRecord()` (MWh→kWh from `per_fuel.{electricity,gas}_mwh.{from,to}`),
+`carbonIntensityForYear(fuelsKwh, gia, year)` (for the chart's asset-performance line).
 
 ## §4 — Per-intervention card (Part 4)
 _(to fill)_
