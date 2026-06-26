@@ -1,15 +1,16 @@
 # Current brief
 
-**Brief 88 — Strategy baseline state-sync (diagnostic + targeted fix).** Active on branch
-`chris/interventions-rework-ux` alongside Brief 87. Diagnose + fix the Systems-vs-Strategy baseline EUI
-divergence (live baseline everywhere); audit the "Save failed" indicator. Brief:
-[`active/88_strategy_baseline_state_sync.md`](active/88_strategy_baseline_state_sync.md); design note:
-[`../design-notes/88_strategy_baseline_state_sync.md`](../design-notes/88_strategy_baseline_state_sync.md).
-Both Brief 87 + 88 close before the single PR to `main`.
+**Brief 88 — Strategy baseline state-sync — CLOSED 2026-06-26.** Diagnostic refuted the brief's
+hypothesis (no option-passthrough bug; divergence didn't reproduce); the real root cause was two
+independently-computed EUI exposures. Fix: canonical `consumption.total.kwh_per_m2_yr` read via
+`utils/engineReads.readModelledEui`, alias deprecated + purged from all consumers, Bible Rule 11 added.
+Independent review (Claude Chat) passed; tidy-up checks done (grep clean, Rule 11 banked). Archived:
+[`archive/88_strategy_baseline_state_sync_COMPLETED.md`](archive/88_strategy_baseline_state_sync_COMPLETED.md).
 
 **Brief 87 — Interventions UX rework (Library/Strategy split + two-section per-intervention view).**
 Active on branch `chris/interventions-rework-ux` (cut from `main` `d8a6207`). UX restructure only — no
-engine changes. Part 6 cleanup / Part 7 walkthrough pending. Brief: [`active/87_interventions_ux_rework.md`](active/87_interventions_ux_rework.md);
+engine changes. **Part 6 cleanup DONE** (old visualiser subgraph deleted); **Part 7 walkthrough = Chris's
+final sign-off pending**, then archive + single PR to `main`. Brief: [`active/87_interventions_ux_rework.md`](active/87_interventions_ux_rework.md);
 design note (canonical): [`../design-notes/interventions_rework.md`](../design-notes/interventions_rework.md).
 First of three: A (UX, this) → C (CRREM lifetime carbon) → B (NRM2 cost). Brief 75 stays open
 (P2-only — superseded by Brief 76 P2).
@@ -21,6 +22,7 @@ NB: Brief numbers 78–86 exist on other branches (`feat/energyplus-validation` 
 
 | Brief | Closed | Title | Archive |
 |---|---|---|---|
+| 88 | 2026-06-26 | Strategy baseline state-sync — canonical EUI read path (`engineReads.readModelledEui`), alias deprecated, Bible Rule 11 | [`archive/88_strategy_baseline_state_sync_COMPLETED.md`](archive/88_strategy_baseline_state_sync_COMPLETED.md) |
 | 77 | 2026-06-02 | Per-system ventilation loss rendering (Heat Balance) — restore three per-system ribbons across Sankey/Rows/Stacked via mutual exclusion | [`archive/77_per_system_vent_rendering_COMPLETED.md`](archive/77_per_system_vent_rendering_COMPLETED.md) |
 | 76 | 2026-06-01 | v40-as-source for State 2 ventSystems builder (closes b9ae15b regression) | [`archive/76_v40_ventsystems_base_iterator_COMPLETED.md`](archive/76_v40_ventsystems_base_iterator_COMPLETED.md) |
 | ~~76 (draft)~~ | superseded before landing | ~~Route v40 projects to State 3 (close inline-legacy dispatch gap)~~ | [`archive/76_v40_state3_dispatch_SUPERSEDED.md`](archive/76_v40_state3_dispatch_SUPERSEDED.md) |
