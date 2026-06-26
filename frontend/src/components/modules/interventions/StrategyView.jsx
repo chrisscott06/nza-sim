@@ -17,6 +17,7 @@ import { useState } from 'react'
 import EUIWaterfall from './EUIWaterfall.jsx'
 import HeatBalance, { LayoutToggle } from '../balance/HeatBalance.jsx'
 import CrremStrandingDiagram from './crrem/CrremStrandingDiagram.jsx'
+import CrremPicker from './crrem/CrremPicker.jsx'
 import { computeLifetimeCarbon, perFuelFromDeltaRecord, defaultLifetimeYears } from '../../../utils/lifetimeCarbon.js'
 import { readModelledEui } from '../../../utils/engineReads.js'
 import { getGia } from './visualiser/unitFmt.js'
@@ -108,7 +109,7 @@ function HBPanel({ label, accent, result, orientationDeg, layout }) {
   )
 }
 
-export default function StrategyView({ strategyName = 'Strategy 1', interventions = [], stackResult, orientationDeg = 0 }) {
+export default function StrategyView({ strategyName = 'Strategy 1', interventions = [], stackResult, orientationDeg = 0, crremPick, onCrremPathwayChange }) {
   const [tab, setTab] = useState('waterfall')
   const [showBaseline, setShowBaseline] = useState(true)
   const [showFinal, setShowFinal] = useState(true)
@@ -225,11 +226,14 @@ export default function StrategyView({ strategyName = 'Strategy 1', intervention
 
         {tab === 'carbon' && (
           <div className="flex flex-col gap-2 h-full">
-            <div className="flex-shrink-0 flex items-center justify-end gap-2">
-              <span className="text-xxs uppercase tracking-wider text-mid-grey/60 font-semibold">Compare</span>
-              <PanelToggle active={crremCompare} onClick={() => setCrremCompare((v) => !v)}>
-                Baseline (no measures)
-              </PanelToggle>
+            <div className="flex-shrink-0 flex items-center justify-between gap-3 flex-wrap">
+              {crremPick ? <CrremPicker pick={crremPick} onPathwayChange={onCrremPathwayChange} /> : <span />}
+              <div className="flex items-center gap-2">
+                <span className="text-xxs uppercase tracking-wider text-mid-grey/60 font-semibold">Compare</span>
+                <PanelToggle active={crremCompare} onClick={() => setCrremCompare((v) => !v)}>
+                  Baseline (no measures)
+                </PanelToggle>
+              </div>
             </div>
             <div className="flex-1 min-h-0 overflow-auto">
               <CrremStrandingDiagram
@@ -240,6 +244,7 @@ export default function StrategyView({ strategyName = 'Strategy 1', intervention
                 baselineEUI={crremBaseEUI}
                 lifetimeCarbonSaved={strategyLifetimeTco2e}
                 showBaseline={crremCompare}
+                pick={crremPick}
               />
             </div>
           </div>

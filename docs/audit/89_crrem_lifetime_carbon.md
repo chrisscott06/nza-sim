@@ -133,7 +133,21 @@ carbon, while the strategy (71.4) stays compliant — the gap between the two li
 improvement. Matches the design note's two-line comparison.
 
 ## §7 — Project CRREM picker (Part 7)
-_(to fill)_
+
+`crrem/CrremPicker.jsx` in the Strategy Carbon tab header: country (UK, fixed v1), property type
+(derived from `params.building_type`, single source of truth — not duplicated), pathway dropdown.
+`InterventionsModule` builds `crremPick = {country:'UK', property_type: building_type, pathway}` and
+threads it to both Library (`PerInterventionView` → `MiniCrremChart`) and Strategy (`CrremStrandingDiagram`).
+Both charts guard via `hasCrremPathway(pick)` — a non-Hotel building shows "no curve yet (v1: UK Hotel
+1.5°C only)" instead of silently borrowing the Hotel curve.
+
+Verified Bridgewater: picker shows **UK · Hotel · 1.5°C**, charts render with the pick threaded.
+
+**v1 honesty / falsifiability note:** the brief's Part 7 gate ("change property type to Office → target
+curve changes") is **not demonstrable in v1** — only the UK Hotel 1.5°C curve exists (2°C/4°C disabled
+"future" in the dropdown; other property types render the no-curve guard). The plumbing is correct and
+future-proof; the pathway pick is local state (not yet persisted) since with one valid curve there's
+nothing to persist. Persisting the pick + adding more curves is a future brief.
 
 ## §8 — Cleanup + grep verification (Part 8)
 _(to fill)_

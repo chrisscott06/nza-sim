@@ -111,6 +111,17 @@ export default function InterventionsModule() {
   }, [])
 
   const interventions = Array.isArray(params?.interventions) ? params.interventions : []
+
+  // Brief 89 (Brief C) Part 7: project-level CRREM pathway pick. v1 is single-
+  // pathway — property type derives from the project building_type (single source
+  // of truth), country fixed UK, pathway local (1.5°C; persistence + more curves
+  // are a future brief). Applies to both Library + Strategy CRREM charts.
+  const [crremPathway, setCrremPathway] = useState('1.5C')
+  const crremPick = useMemo(() => ({
+    country: 'UK',
+    property_type: (params?.building_type || 'hotel').toLowerCase(),
+    pathway: crremPathway,
+  }), [params?.building_type, crremPathway])
   // Brief 47 Part 1: libraryInterventions reads removed — library cut.
   // The params.library_interventions field is left in DEFAULT_PARAMS for
   // backwards compatibility (existing projects may carry library entries
@@ -529,7 +540,7 @@ export default function InterventionsModule() {
             </aside>
             <main className="flex-1 min-w-0 bg-off-white overflow-auto">
               {selectedIntervention ? (
-                <PerInterventionView intervention={selectedIntervention} isolatedRow={selectedIsolatedRow} />
+                <PerInterventionView intervention={selectedIntervention} isolatedRow={selectedIsolatedRow} crremPick={crremPick} />
               ) : (
                 <div className="p-8 text-sm text-mid-grey/60">
                   Select an intervention from the Library to see its isolated impact and calc trail.
@@ -563,6 +574,8 @@ export default function InterventionsModule() {
                 interventions={interventions}
                 stackResult={stackResult}
                 orientationDeg={Number(params?.orientation ?? 0)}
+                crremPick={crremPick}
+                onCrremPathwayChange={setCrremPathway}
               />
             </main>
           </>

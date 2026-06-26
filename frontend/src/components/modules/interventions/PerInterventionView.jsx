@@ -100,7 +100,7 @@ function DemandRow({ label, rec, kind = KIND.MWH, gia }) {
   )
 }
 
-export default function PerInterventionView({ intervention, isolatedRow }) {
+export default function PerInterventionView({ intervention, isolatedRow, crremPick }) {
   const d = isolatedRow?.cumulativeDelta ?? null
   const gia = getGia(isolatedRow?.isolatedResult?.baseline)
   const patches = Array.isArray(intervention?.patches) ? intervention.patches : []
@@ -156,7 +156,7 @@ export default function PerInterventionView({ intervention, isolatedRow }) {
         {/* Brief 89: per-intervention CRREM carbon trajectory — saving vs baseline */}
         {hasFuel && (
           <div className="mb-3">
-            <MiniCrremChart baseFuels={baseFuels} postFuels={postFuels} gia={gia} />
+            <MiniCrremChart baseFuels={baseFuels} postFuels={postFuels} gia={gia} pick={crremPick} />
           </div>
         )}
 

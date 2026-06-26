@@ -15,7 +15,7 @@ import {
 import {
   carbonIntensityForYear, CRREM_ANALYSIS_START, CRREM_ANALYSIS_END,
 } from '../../../../utils/lifetimeCarbon.js'
-import { readCrremTarget } from '../../../../utils/carbonReads.js'
+import { readCrremTarget, hasCrremPathway } from '../../../../utils/carbonReads.js'
 
 const TARGET = '#2B2A4C'   // CRREM target — dark navy (report palette)
 const BASE   = '#94A3B8'   // baseline trajectory — grey
@@ -30,6 +30,13 @@ const r1 = n => (n == null || !Number.isFinite(n)) ? null : Math.round(n * 10) /
  */
 export default function MiniCrremChart({ baseFuels, postFuels, gia, pick }) {
   if (!(gia > 0)) return null
+  if (pick && !hasCrremPathway(pick)) {
+    return (
+      <div className="rounded-lg border border-light-grey/70 bg-white px-3 py-2 text-xxs text-mid-grey/60">
+        No CRREM curve for {pick.property_type} yet — v1 carries UK Hotel 1.5°C only.
+      </div>
+    )
+  }
   const data = []
   for (let y = CRREM_ANALYSIS_START; y <= CRREM_ANALYSIS_END; y++) {
     const baseC = r1(carbonIntensityForYear(baseFuels, gia, y))

@@ -20,7 +20,7 @@ import {
   ComposedChart, Area, Line, XAxis, YAxis, Tooltip, ReferenceDot, Legend, ResponsiveContainer,
 } from 'recharts'
 import { carbonIntensityForYear } from '../../../../utils/lifetimeCarbon.js'
-import { readCrremTarget } from '../../../../utils/carbonReads.js'
+import { readCrremTarget, hasCrremPathway } from '../../../../utils/carbonReads.js'
 
 const TARGET = '#2B2A4C'  // dark navy
 const ASSET  = '#2563EB'  // blue
@@ -133,6 +133,9 @@ export default function CrremStrandingDiagram({
     return rows
   }, [finalFuels, baseFuels, gia, finalEUI, baselineEUI, pick])
 
+  if (pick && !hasCrremPathway(pick)) {
+    return <p className="text-xs text-mid-grey/60 italic">No CRREM curve for {pick.property_type} yet — v1 carries UK Hotel 1.5°C only. Set the project building type to Hotel, or wait for more pathways in a future brief.</p>
+  }
   if (!(gia > 0) || data.length === 0) {
     return <p className="text-xs text-mid-grey/60 italic">Add interventions to the strategy to see the CRREM trajectory.</p>
   }
