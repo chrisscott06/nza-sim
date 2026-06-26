@@ -1,5 +1,12 @@
 # Current brief
 
+**Brief 90 (Brief B) — NRM2 cost model.** Landed on `chris/interventions-rework-ux` (Part 1 docs only).
+**BLOCKED at Part 2** — the Applemore Feasibility Cost Plan spreadsheet (the rate-library source) is not
+in the repo. Needs Chris to provide it at `docs/reference/applemore_cost_plan.xlsm`. Last of three:
+A (UX, done) → C (CRREM, done bar sign-off) → **B (cost, blocked)**. Brief:
+[`active/90_nrm2_cost_model.md`](active/90_nrm2_cost_model.md); audit:
+[`../audit/90_nrm2_cost_model.md`](../audit/90_nrm2_cost_model.md).
+
 **Brief 89 (Brief C) — CRREM lifetime carbon.** Active on branch `chris/interventions-rework-ux`.
 Populates Brief A's placeholder Lifetime Carbon card (per-intervention) + CRREM stranding diagram
 (Strategy view) with fuel-switching-aware operational carbon math vs the UK CRREM trajectory. No engine
