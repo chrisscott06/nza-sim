@@ -123,5 +123,17 @@ GHG-intensity asset line declines as the electricity portion follows the grid tr
 71.4, below the 2050 target (75), so it never strands. The misalignment circle + excess area therefore
 show on the BASELINE (139.5 EUI) via the Part 6 compare toggle, where stranding is visible.
 
-## §6 — Comparison toggle / §7 picker / §8 cleanup
+## §6 — Comparison toggle (Part 6)
+
+`StrategyView` Carbon tab: "Compare · Baseline (no measures)" toggle (default ON), drives
+`showBaseline` on the diagram. When on, each chart adds the baseline trajectory (grey dotted), a baseline
+misalignment circle, and the baseline excess-emissions area. Verified Bridgewater: baseline (139.5 EUI)
+**strands ~2036 on energy** (grey circle + shaded excess where target drops below 139.5) and ~2049 on
+carbon, while the strategy (71.4) stays compliant — the gap between the two lines is the strategy's
+improvement. Matches the design note's two-line comparison.
+
+## §7 — Project CRREM picker (Part 7)
+_(to fill)_
+
+## §8 — Cleanup + grep verification (Part 8)
 _(to fill)_

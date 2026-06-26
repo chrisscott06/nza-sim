@@ -113,6 +113,7 @@ export default function StrategyView({ strategyName = 'Strategy 1', intervention
   const [showBaseline, setShowBaseline] = useState(true)
   const [showFinal, setShowFinal] = useState(true)
   const [hbLayout, setHbLayout] = useState('rows')
+  const [crremCompare, setCrremCompare] = useState(true)   // CRREM baseline-vs-strategy overlay
 
   const rows = stackResult?.interventions ?? []
   const lastEnabled = [...rows].reverse().find((r) => r?.enabled)
@@ -223,14 +224,25 @@ export default function StrategyView({ strategyName = 'Strategy 1', intervention
         )}
 
         {tab === 'carbon' && (
-          <CrremStrandingDiagram
-            finalFuels={crremFinalFuels}
-            baseFuels={crremBaseFuels}
-            gia={crremGia}
-            finalEUI={crremFinalEUI}
-            baselineEUI={crremBaseEUI}
-            lifetimeCarbonSaved={strategyLifetimeTco2e}
-          />
+          <div className="flex flex-col gap-2 h-full">
+            <div className="flex-shrink-0 flex items-center justify-end gap-2">
+              <span className="text-xxs uppercase tracking-wider text-mid-grey/60 font-semibold">Compare</span>
+              <PanelToggle active={crremCompare} onClick={() => setCrremCompare((v) => !v)}>
+                Baseline (no measures)
+              </PanelToggle>
+            </div>
+            <div className="flex-1 min-h-0 overflow-auto">
+              <CrremStrandingDiagram
+                finalFuels={crremFinalFuels}
+                baseFuels={crremBaseFuels}
+                gia={crremGia}
+                finalEUI={crremFinalEUI}
+                baselineEUI={crremBaseEUI}
+                lifetimeCarbonSaved={strategyLifetimeTco2e}
+                showBaseline={crremCompare}
+              />
+            </div>
+          </div>
         )}
       </div>
     </div>
