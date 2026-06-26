@@ -23,7 +23,14 @@
  *
  * Engine: UNCHANGED. This is a pure consumer view (Brief 41 patches + Brief 71
  * isolated outputs rearranged).
+ *
+ * Demand-by-service deltas honour the global Per m² / Total toggle
+ * (UISettingsContext) via the shared unitFmt helper — MWh in "Total" mode,
+ * kWh/m²·yr in "Per m²" mode (carbon: tCO₂ ↔ kgCO₂/m²·yr).
  */
+import { useUISettings } from '../../../context/UISettingsContext.jsx'
+import { toDisplay, KIND, getGia } from './visualiser/unitFmt.js'
+
 const SAVE_GREEN = '#16A34A'
 const INCREASE_RED = '#DC2626'
 
@@ -60,14 +67,20 @@ function HeadlineCard({ title, value, sub, placeholder, accent }) {
   )
 }
 
-/** One demand-by-service delta row. */
-function DeltaRow({ label, delta, pct, unit = 'MWh/yr', savingIsNegative = true }) {
-  const colour = deltaColour(delta, { savingIsNegative })
+/**
+ * One demand-by-service delta row. The value + unit follow the global Per m² /
+ * Total toggle: `kind` (KIND.MWH energy / KIND.KG_M2 carbon) + `displayUnit` +
+ * `gia` are passed to `toDisplay`, which converts MWh↔kWh/m² (and kg↔t). The
+ * percentage is a ratio so it never converts.
+ */
+function DeltaRow({ label, delta, pct, kind = KIND.MWH, displayUnit, gia, savingIsNegative = true }) {
+  const conv = toDisplay(delta, kind, displayUnit, gia)
+  const colour = deltaColour(conv.value, { savingIsNegative })
   return (
     <div className="flex items-center justify-between py-1 border-b border-light-grey/40 last:border-0">
       <span className="text-xs text-mid-grey">{label}</span>
       <span className="text-xs tabular-nums" style={{ color: colour }}>
-        {fmtSigned(delta, 1)} {unit}
+        {fmtSigned(conv.value, 1)} {conv.label}
         {/* engine delta_pct is already a percentage — interventionsEngine.js:417 */}
         {Number.isFinite(pct) && Math.abs(pct) >= 0.1 ? (
           <span className="text-mid-grey/60"> ({fmtSigned(pct, 0, '%')})</span>
@@ -78,7 +91,9 @@ function DeltaRow({ label, delta, pct, unit = 'MWh/yr', savingIsNegative = true 
 }
 
 export default function PerInterventionView({ intervention, isolatedRow }) {
+  const { unit } = useUISettings()
   const d = isolatedRow?.cumulativeDelta ?? null
+  const gia = getGia(isolatedRow?.isolatedResult?.baseline)
   const patches = Array.isArray(intervention?.patches) ? intervention.patches : []
 
   const euiDelta = d?.eui_kwh_per_m2?.delta
@@ -112,13 +127,13 @@ export default function PerInterventionView({ intervention, isolatedRow }) {
           <div className="text-xxs uppercase tracking-wider text-mid-grey/70 font-semibold py-1">
             Demand by service (Δ vs baseline)
           </div>
-          <DeltaRow label="Heating demand" delta={d?.heating_demand_mwh?.delta} pct={d?.heating_demand_mwh?.delta_pct} />
-          <DeltaRow label="Cooling demand" delta={d?.cooling_demand_mwh?.delta} pct={d?.cooling_demand_mwh?.delta_pct} />
-          <DeltaRow label="DHW demand" delta={d?.per_service?.dhw?.delta ?? d?.dhw_demand_mwh?.delta} pct={d?.per_service?.dhw?.delta_pct} />
-          <DeltaRow label="Total annual energy" delta={totalDelta} pct={d?.total_delivered_mwh?.delta_pct} />
-          <DeltaRow label="Electricity" delta={d?.per_fuel?.electricity_mwh?.delta} pct={d?.per_fuel?.electricity_mwh?.delta_pct} />
-          <DeltaRow label="Gas" delta={d?.per_fuel?.gas_mwh?.delta} pct={d?.per_fuel?.gas_mwh?.delta_pct} />
-          <DeltaRow label="Operational carbon (year 1)" delta={carbonDelta} pct={d?.carbon_kgco2_per_m2?.delta_pct} unit="kgCO₂/m²·yr" />
+          <DeltaRow label="Heating demand" delta={d?.heating_demand_mwh?.delta} pct={d?.heating_demand_mwh?.delta_pct} displayUnit={unit} gia={gia} />
+          <DeltaRow label="Cooling demand" delta={d?.cooling_demand_mwh?.delta} pct={d?.cooling_demand_mwh?.delta_pct} displayUnit={unit} gia={gia} />
+          <DeltaRow label="DHW demand" delta={d?.per_service?.dhw?.delta ?? d?.dhw_demand_mwh?.delta} pct={d?.per_service?.dhw?.delta_pct} displayUnit={unit} gia={gia} />
+          <DeltaRow label="Total annual energy" delta={totalDelta} pct={d?.total_delivered_mwh?.delta_pct} displayUnit={unit} gia={gia} />
+          <DeltaRow label="Electricity" delta={d?.per_fuel?.electricity_mwh?.delta} pct={d?.per_fuel?.electricity_mwh?.delta_pct} displayUnit={unit} gia={gia} />
+          <DeltaRow label="Gas" delta={d?.per_fuel?.gas_mwh?.delta} pct={d?.per_fuel?.gas_mwh?.delta_pct} displayUnit={unit} gia={gia} />
+          <DeltaRow label="Operational carbon (year 1)" delta={carbonDelta} pct={d?.carbon_kgco2_per_m2?.delta_pct} kind={KIND.KG_M2} displayUnit={unit} gia={gia} />
         </div>
       </section>
 
