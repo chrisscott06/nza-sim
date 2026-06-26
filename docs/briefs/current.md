@@ -1,5 +1,14 @@
 # Current brief
 
+**Brief 89 (Brief C) — CRREM lifetime carbon.** Active on branch `chris/interventions-rework-ux`.
+Populates Brief A's placeholder Lifetime Carbon card (per-intervention) + CRREM stranding diagram
+(Strategy view) with fuel-switching-aware operational carbon math vs the UK CRREM trajectory. No engine
+changes; canonical carbon/CRREM read helpers per Bible Rule 11. Brief:
+[`active/89_crrem_lifetime_carbon.md`](active/89_crrem_lifetime_carbon.md); design note:
+[`../design-notes/brief_C_crrem_lifetime_carbon.md`](../design-notes/brief_C_crrem_lifetime_carbon.md);
+audit: [`../audit/89_crrem_lifetime_carbon.md`](../audit/89_crrem_lifetime_carbon.md). Closes into the
+combined PR with Brief 87 + 88. Second of three: A (UX, done) → **C (CRREM, this)** → B (NRM2 cost).
+
 **Brief 88 — Strategy baseline state-sync — CLOSED 2026-06-26.** Diagnostic refuted the brief's
 hypothesis (no option-passthrough bug; divergence didn't reproduce); the real root cause was two
 independently-computed EUI exposures. Fix: canonical `consumption.total.kwh_per_m2_yr` read via
