@@ -47,3 +47,28 @@ require the rate library → still gated on Applemore. So the honest stopping po
 
 ## §2 — Applemore source-read + rate library
 _BLOCKED — pending the spreadsheet (see above)._
+
+## §3 — Cost data model + canonical helpers + math (Parts 2/3, rate-free)
+
+Per Chris's "carry on" (2026-06-26), built the rate-free framework — everything except the
+Applemore-seeded type rates + the Detailed NRM2 mode (deferred, must mirror Applemore):
+
+- `data/costLibrary.js` — `HEADLINE_LINES` (6 NRM2 lines), `PROJECT_COST_DEFAULTS` (design-note values:
+  fees 12% / prelims 10% / OHP 8% / contingency 15% / inflation 5% / elec £0.30 / gas £0.08),
+  `NRM2_BUILDING_WORKS` (0–8) + `NRM2_ONCOSTS` (9–14) for the future Detailed tree. `INTERVENTION_TYPES`
+  is **EMPTY** — no fabricated rates (Rule 2); seed from Applemore when it lands.
+- `utils/costReads.js` — canonical: `readProjectDefault` (project override > library floor),
+  `readEnergyPrice`, `readRateForIntervention` (null until seeded), `hasSeededRates`.
+- `utils/costModel.js` — `computeHeadlineTotal`, `deriveHeadlineLines` (design/delivery/contingency from
+  works + project %s), `computeCostTotal`, `computeDetailedTotal` (shell), `computeAnnualOperationalSaving`
+  (engine per-fuel kWh saved × energy price), `computeSimplePayback` (clamp 999, null when no saving),
+  `computePoundsPerTonne` (total ÷ Brief C lifetime tCO₂e), `migrateInterventionCost` (lossless).
+
+**Worked example (verified by node):** DHW heat pump, user enters equipment £120k + install £30k +
+additional £10k → works £160k. Derived: design £13,440 (160k·12%·70%), delivery £5,760 (·30%),
+contingency £35,840 ((works+design+delivery)·(15%+5%)). **Total £215,040.** Annual saving £11,392/yr
+(gas 188.9 MWh·£0.08 = £15,112 saved − elec 12.4 MWh·£0.30 = £3,720 added). **Payback 18.9 y.**
+**£/tonne £350** (£215k ÷ 614.8 tCO₂e). No-saving case → payback null. All sensible.
+
+## §4 — Headline mode UI + cards (Part 4)
+_(to fill)_
