@@ -19,13 +19,33 @@
  * your first intervention" CTA.
  */
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { Plus } from 'lucide-react'
 import InterventionRow from './InterventionRow.jsx'
 import { useUISettings } from '../../../context/UISettingsContext.jsx'
 import { toDisplay, KIND, getGia } from './visualiser/unitFmt.js'
 
 const INTERVENTIONS_ACCENT = '#E84393'
+
+/**
+ * Brief 87 (drag UX rework) — the pink insertion indicator that shows exactly
+ * where a dragged intervention will land. A glowing accent line with a dot on
+ * the left; its height opens a small gap so the rows below "make room".
+ */
+function DropIndicator() {
+  return (
+    <div className="relative h-2.5 my-0.5 pointer-events-none" aria-hidden="true">
+      <div
+        className="absolute left-1 right-1 top-1/2 -translate-y-1/2 h-[3px] rounded-full"
+        style={{ backgroundColor: INTERVENTIONS_ACCENT, boxShadow: `0 0 8px ${INTERVENTIONS_ACCENT}` }}
+      />
+      <div
+        className="absolute left-0 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full ring-2 ring-white"
+        style={{ backgroundColor: INTERVENTIONS_ACCENT }}
+      />
+    </div>
+  )
+}
 
 /**
  * Brief 55 Part 5 (2026-05-26) — Same-field conflict signal.
@@ -213,8 +233,16 @@ export default function InterventionStackView({
   onDuplicate,           // Brief 45 Part 2
   onDelete,              // Brief 47 Part 1.3
 }) {
+  // Brief 87 drag UX: track the grabbed item + the insertion GAP (0..N) the
+  // pink indicator points at, computed from the cursor's position within the
+  // hovered row (top half → before it, bottom half → after it). `landedId`
+  // drives a brief pink flash on the row once it settles into its new slot so
+  // the reorder is obvious.
   const [draggingId, setDraggingId] = useState(null)
-  const [hoverId,    setHoverId]    = useState(null)
+  const [dropGap,    setDropGap]    = useState(null)
+  const [landedId,   setLandedId]   = useState(null)
+
+  const resetDrag = () => { setDraggingId(null); setDropGap(null) }
 
   const handleDragStart = (e, id) => {
     setDraggingId(id)
@@ -225,33 +253,32 @@ export default function InterventionStackView({
   const handleDragOver = (e, id) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
-    if (id !== hoverId) setHoverId(id)
+    if (!draggingId) return
+    const idx = interventions.findIndex(i => i.id === id)
+    if (idx === -1) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const before = e.clientY < rect.top + rect.height / 2
+    const gap = before ? idx : idx + 1
+    // Hide the indicator when the gap is adjacent to the item's own slot —
+    // dropping there wouldn't move it, so don't promise a move.
+    const d = interventions.findIndex(i => i.id === draggingId)
+    setDropGap(gap === d || gap === d + 1 ? null : gap)
   }
-  const handleDrop = (e, targetId) => {
+  const handleDrop = (e) => {
     e.preventDefault()
-    if (!draggingId || draggingId === targetId) {
-      setDraggingId(null)
-      setHoverId(null)
-      return
-    }
-    const fromIdx = interventions.findIndex(i => i.id === draggingId)
-    const toIdx   = interventions.findIndex(i => i.id === targetId)
-    if (fromIdx === -1 || toIdx === -1) {
-      setDraggingId(null)
-      setHoverId(null)
-      return
-    }
+    const d = interventions.findIndex(i => i.id === draggingId)
+    if (d === -1 || dropGap == null) { resetDrag(); return }
+    const insertAt = dropGap > d ? dropGap - 1 : dropGap
+    if (insertAt === d) { resetDrag(); return }
     const reordered = [...interventions]
-    const [moved] = reordered.splice(fromIdx, 1)
-    reordered.splice(toIdx, 0, moved)
+    const [moved] = reordered.splice(d, 1)
+    reordered.splice(insertAt, 0, moved)
     onReorder?.(reordered)
-    setDraggingId(null)
-    setHoverId(null)
+    setLandedId(draggingId)
+    setTimeout(() => setLandedId(null), 850)
+    resetDrag()
   }
-  const handleDragEnd = () => {
-    setDraggingId(null)
-    setHoverId(null)
-  }
+  const handleDragEnd = () => resetDrag()
 
   // 2026-05-26: GIA from the baseline result so child rows can honour
   // the global unit toggle (kWh/m²·yr ↔ MWh) on their EUI numbers.
@@ -282,32 +309,37 @@ export default function InterventionStackView({
       {/* Baseline card */}
       <BaselineRow baselineSummary={baselineSummary} gia_m2={gia_m2} />
 
-      {/* Intervention rows */}
+      {/* Intervention rows — with the pink insertion indicator at the live
+          drop gap (Brief 87 drag UX rework). */}
       {interventions.map((intervention, i) => {
         // Engine result rows align 1:1 with interventions (one row per
         // intervention, including disabled ones — see audit §8.2).
         const row = stackRows[i]
         return (
-          <InterventionRow
-            key={intervention.id}
-            intervention={intervention}
-            marginalDeltaFull={row?.marginal_delta ?? null}
-            cumulativeDeltaFull={row?.cumulative_delta ?? null}
-            overridden={overridden.has(intervention.id)}
-            baselineConfig={baselineConfig}
-            gia_m2={gia_m2}
-            onToggleEnabled={() => onToggleEnabled?.(intervention.id)}
-            onEdit={() => onEdit?.(intervention.id)}
-            onDuplicate={() => onDuplicate?.(intervention.id)}
-            onDelete={() => onDelete?.(intervention.id)}
-            onDragStart={handleDragStart}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            onDragEnd={handleDragEnd}
-            draggingId={draggingId}
-          />
+          <Fragment key={intervention.id}>
+            {draggingId && dropGap === i ? <DropIndicator /> : null}
+            <InterventionRow
+              intervention={intervention}
+              marginalDeltaFull={row?.marginal_delta ?? null}
+              cumulativeDeltaFull={row?.cumulative_delta ?? null}
+              overridden={overridden.has(intervention.id)}
+              baselineConfig={baselineConfig}
+              gia_m2={gia_m2}
+              onToggleEnabled={() => onToggleEnabled?.(intervention.id)}
+              onEdit={() => onEdit?.(intervention.id)}
+              onDuplicate={() => onDuplicate?.(intervention.id)}
+              onDelete={() => onDelete?.(intervention.id)}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              onDragEnd={handleDragEnd}
+              draggingId={draggingId}
+              landed={landedId === intervention.id}
+            />
+          </Fragment>
         )
       })}
+      {draggingId && dropGap === interventions.length ? <DropIndicator /> : null}
 
       {/* + Add intervention */}
       <button

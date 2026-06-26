@@ -106,6 +106,7 @@ export default function InterventionRow({
   onDrop,
   onDragEnd,
   draggingId,
+  landed,           // Brief 87 drag UX — brief pink flash after the row settles
 }) {
   const { unit } = useUISettings()
   // Brief 47 Part 5c (2026-05-24): collapse/expand state per row.
@@ -117,12 +118,20 @@ export default function InterventionRow({
   const [expanded, setExpanded] = useState(false)
   const isEnabled = intervention?.enabled !== false
   const isDragging = draggingId === intervention?.id
-  const wrapperBase = 'rounded-lg border bg-white hover:border-mid-grey/40 transition-colors'
+  // Brief 87 drag UX: animate drag/land state changes (ring, opacity, shadow).
+  const wrapperBase = 'rounded-lg border bg-white transition-all duration-200'
   // When collapsed: tighter vertical padding so the row reads as a
   // single line. When expanded: full p-3 padding for breathing room.
   const wrapperPadding = expanded ? 'p-3' : 'px-3 py-2'
   const wrapperState = !isEnabled ? 'opacity-60' : ''
-  const wrapperDrag  = isDragging ? 'ring-2 ring-offset-1' : ''
+  // Grabbed: dim + lift (shadow) + pink ring so it clearly reads as "moving".
+  // Landed: a brief pink ring/tint flash so the new position is unmissable.
+  // Otherwise: the usual hover border.
+  const wrapperDrag = isDragging
+    ? 'opacity-40 ring-2 ring-offset-1 shadow-lg cursor-grabbing'
+    : landed
+      ? 'ring-2 ring-offset-2'
+      : 'hover:border-mid-grey/40'
 
   const patchCount = Array.isArray(intervention?.patches) ? intervention.patches.length : 0
   const patchSummary = patchCount > 0 ? summarizePatchListShort(intervention.patches, baselineConfig, { maxItems: 3 }) : null
@@ -159,8 +168,14 @@ export default function InterventionRow({
       onDragOver={(e) => onDragOver?.(e, intervention?.id)}
       onDrop={(e) => onDrop?.(e, intervention?.id)}
       onDragEnd={onDragEnd}
-      className={`${wrapperBase} ${wrapperPadding} ${wrapperState} ${wrapperDrag} border-light-grey`}
-      style={isDragging ? { borderColor: INTERVENTIONS_ACCENT } : undefined}
+      className={`${wrapperBase} ${wrapperPadding} ${wrapperState} ${wrapperDrag} ${isDragging || landed ? '' : 'border-light-grey'}`}
+      style={
+        isDragging
+          ? { borderColor: INTERVENTIONS_ACCENT, '--tw-ring-color': INTERVENTIONS_ACCENT }
+          : landed
+            ? { borderColor: INTERVENTIONS_ACCENT, '--tw-ring-color': INTERVENTIONS_ACCENT, backgroundColor: `${INTERVENTIONS_ACCENT}0D` }
+            : undefined
+      }
     >
       {/* Header row: drag handle · enable dot · label · chevron · actions */}
       <div className="flex items-center gap-2">

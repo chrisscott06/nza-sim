@@ -124,9 +124,21 @@ toggle that expands to a **side-by-side baseline-vs-final** view (two `HeatBalan
 chart type) — exactly the brief's Part 5 spec. Verified live: "Heat balance — strategy baseline vs
 final", Baseline | Strategy final panels render; toggle closes back to the single final-state view.
 
+**Drag-reorder UX reworked (Chris feedback, 2026-06-26):** the old native-HTML5 drag gave no feedback
+(the hovered row was tracked but never shown). Rebuilt in `InterventionStackView` + `InterventionRow`
+(no library — npm changes are out of scope):
+- a glowing **pink insertion indicator** (`DropIndicator`) at the exact drop gap, computed from the
+  cursor's position within the hovered row (top half → before, bottom half → after); its height opens
+  a make-room gap;
+- the **grabbed row** dims + lifts (shadow) + gets a pink ring;
+- a **pink landing flash** on the row once it settles (`landedId`, 850 ms) so the reorder is obvious;
+- reorder now fires on **drop** at the indicated gap (not live churn on dragOver).
+Verified by simulated drag events: indicator appears at the right gap, drop reorders to the indicated
+position, the moved row flashes pink, and the **waterfall recomputes** to the new order.
+
 **Pending refinements (noted, not blocking):** a distinct Library-vs-Strategy subset (v1 strategy =
-all interventions); literal drag-reorder needs a manual click-test (handles render; mechanism wired);
-the compare panels are a touch cramped at 440px list width.
+all interventions); the compare panels are a touch cramped at 440px list width; truly animated
+make-room "shuffle" during drag would need a drag library (dnd-kit) — out of scope here.
 
 ## §6 — Part 6: wiring + cleanup
 _(to fill)_
