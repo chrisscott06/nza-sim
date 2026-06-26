@@ -46,8 +46,43 @@ The systems config was regenerated to main's defaults mid-Brief-87 (EUI ~139.5);
 ### A5 — Recommended fix shape
 **No option-passthrough fix is warranted** (H1/H2 refuted; the closure is correct). The brief's leading hypothesis is wrong — flagging per the premise-check authority (same as Briefs 76/83/84). The only principled, *available* change is **H3 harmonisation**: make the Systems page read `consumption.total.kwh_per_m2_yr` (the same boundary the Strategy + the design note specify) instead of `eui_kWh_m2`, so the two can never diverge even if those engine fields differ in some state. That's a ~1-line read change in `SystemsLiveResults.jsx`, defensive and boundary-aligned. **But it is not proven to be the 245.6 cause** (they're equal now), so it's a guard, not a confirmed fix. **STOP + escalate to Chris** before Part 3 (brief rule: hypothesis refuted → ask before continuing).
 
-## §B — Part 3/4: fix + falsifiable visual verification
-_Pending Chris's decision (Part 2 refuted the brief's hypothesis; bug not reproducing)._
+## §A6 — REVISED SCOPE (Chris, 2026-06-26): canonicalise the EUI read path
+Chris reframed after the A4 escalation: H3 is the real issue and *not* a one-line guard. Two
+independently-computed EUI exposures is a structural smell — "boundary-mismatch in waiting." Revised
+scope = audit every EUI reader → make `consumption.total.kwh_per_m2_yr` the canonical exposure + read
+path → migrate non-canonical readers → deprecate the alias → add a Bible Engine-Discipline rule. Verify
+the Bridgewater gate (Systems EUI = Strategy baseline) **by construction**, not by guard.
+
+### Reader catalog (instant engine)
+- **Canonical** (`consumption.total.kwh_per_m2_yr`): InterventionsModule baselineSummary (L221) + Strategy;
+  SystemsModule charts (L2281/2414/2501); intervention delta records (`computeDelta` → `eui_kwh_per_m2`).
+- **Non-canonical alias `eui_kWh_m2`** (independently computed `total_kWh/gia`, instantCalc.js:6144/7011):
+  `SystemsLiveResults:400` (← the actual 139.5), `building/LiveResultsPanel:279`, `PopOutResults:271/324/360`,
+  `ProjectDashboard:212` (`instantResult?.eui`). **→ migrated.**
+- **Canonical-first multi-path readers** (`pickFirst([...])` preferring `consumption.total.kwh_per_m2_yr`
+  then legacy fallbacks): EUIWaterfall, ComparisonView, BeforeAfterBars, PhysicsView, InterventionEditor*.
+  Not a divergence risk (canonical wins); fallback strings retained — simplifiable in a follow-on.
+- **Out of scope (different boundary):** `results.summary.eui_kWh_per_m2` = the EnergyPlus *simulation*
+  EUI (OverviewTab, CRREMTab, EnergyFlowsTab, ResultsDashboard, ProjectDashboard, Information/CRREM modules).
+  Left as-is; the Bible rule + `engineReads.js` docstring keep the two boundaries distinct.
+
+## §B — Part 3/4: fix + falsifiable verification — DONE
+
+**Fix (caller-side only; engine numbers untouched):**
+- New `frontend/src/utils/engineReads.js` → `readModelledEui(result)` = the ONE canonical read path
+  (`consumption.total.kwh_per_m2_yr`).
+- Migrated the non-canonical `eui_kWh_m2`/`.eui` readers to it: `SystemsLiveResults.jsx:400`,
+  `building/LiveResultsPanel.jsx:279`, `pages/PopOutResults.jsx` (×3), `pages/ProjectDashboard.jsx:212`.
+- Deprecated the `eui_kWh_m2` alias at both engine assignment sites (`instantCalc.js:6349/7164`) with a
+  "do not subscribe; remove in an engine-cleanup brief" comment.
+- Added Bible/Engine-Discipline rule 11 to `CLAUDE.md` (one canonical quantity / exposure / read path).
+
+**Verification (falsifiable visual gate, browser):**
+- Systems EUI **139.5** = Strategy baseline **139.5** (match). Both read `consumption.total.kwh_per_m2_yr`.
+- Live tracking: changed building length 58.8 → 65; Systems EUI **and** Strategy baseline both moved to
+  **132.7** together (match). Restored length to 58.8.
+- By construction the two can no longer diverge (same field, same helper). `npm run build` clean; no
+  console errors. `interventionsEngine.js` untouched. No `main` changes.
 
 ## §C — Part 5: "Save failed" — does NOT reproduce
 Triggered a real save (building length 58.8 → 59.8 via the Building page); it **persisted to the DB

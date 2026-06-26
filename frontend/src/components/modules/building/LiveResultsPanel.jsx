@@ -11,6 +11,7 @@ import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { useWeather } from '../../../context/WeatherContext.jsx'
 import { useHourlySolar } from '../../../hooks/useHourlySolar.js'
 import { calculateInstant } from '../../../utils/instantCalc.js'
+import { readModelledEui } from '../../../utils/engineReads.js'   // Brief 88: canonical EUI read
 import { FABRIC_COLORS } from '../../../data/chartTokens.js'
 import GainsLossesChart from './GainsLossesChart.jsx'
 import ChartExportCard from '../../shared/ChartExportCard.jsx'
@@ -275,8 +276,8 @@ export default function LiveResultsPanel({ libraryData = {}, onSankeyExpand }) {
           </span>
         </div>
 
-        {/* EUI gauge */}
-        <EUIGauge eui={result.eui_kWh_m2} />
+        {/* EUI gauge — Brief 88: canonical read (was result.eui_kWh_m2 alias). */}
+        <EUIGauge eui={readModelledEui(result)} />
 
         {/* Gains & Losses butterfly chart */}
         <GainsLossesChart

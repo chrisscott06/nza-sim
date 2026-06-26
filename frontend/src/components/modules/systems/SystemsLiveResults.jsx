@@ -12,6 +12,7 @@ import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { useWeather } from '../../../context/WeatherContext.jsx'
 import { useHourlySolar } from '../../../hooks/useHourlySolar.js'
 import { calculateInstant } from '../../../utils/instantCalc.js'
+import { readModelledEui } from '../../../utils/engineReads.js'   // Brief 88: canonical EUI read
 
 // ── EUI bar gauge ─────────────────────────────────────────────────────────────
 // Horizontal bar — stable rendering, no SVG arc floating-point jitter.
@@ -396,8 +397,9 @@ export default function SystemsLiveResults({ libraryData = {}, scheduleProfiles 
           </div>
         )}
 
-        {/* EUI gauge */}
-        <EUIGauge eui={result.eui_kWh_m2} />
+        {/* EUI gauge — Brief 88: canonical read (was result.eui_kWh_m2, an alias
+            that diverged from Strategy's consumption.total.kwh_per_m2_yr). */}
+        <EUIGauge eui={readModelledEui(result)} />
 
         {/* Energy by demand */}
         {!isIdeal && (

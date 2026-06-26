@@ -29,6 +29,7 @@ import {
 import { Settings } from 'lucide-react'
 import { subscribeToState, requestInitialState } from '../utils/broadcastChannel.js'
 import { calculateInstant } from '../utils/instantCalc.js'
+import { readModelledEui } from '../utils/engineReads.js'   // Brief 88: canonical EUI read
 import { computeHourlySolarByFacade } from '../utils/solarCalc.js'
 import HeatBalance from '../components/modules/balance/HeatBalance.jsx'
 
@@ -268,7 +269,7 @@ function MonthlyPanel({ instantResult }) {
 
 function CRREMPanel({ instantResult, crremData }) {
   const currentYear = new Date().getFullYear()
-  const modelledEUI = instantResult?.eui_kWh_m2 ?? null
+  const modelledEUI = readModelledEui(instantResult)
 
   if (!crremData?.length) return <PanelPlaceholder label="Loading CRREM data…" />
 
@@ -321,7 +322,7 @@ function CRREMPanel({ instantResult, crremData }) {
 // ── Panel: EUI gauge ───────────────────────────────────────────────────────────
 
 function EUIGaugePanel({ instantResult }) {
-  const eui = instantResult?.eui_kWh_m2 ?? null
+  const eui = readModelledEui(instantResult)
   const pct = eui != null ? Math.min(100, (eui / 400) * 100) : 0
   const color = eui == null ? '#9CA3AF' : eui > 250 ? '#DC2626' : eui > 120 ? '#F59E0B' : '#16A34A'
   const label = eui == null ? '—' : eui > 250 ? 'High' : eui > 120 ? 'Moderate' : 'Low'
@@ -357,7 +358,7 @@ function EUIGaugePanel({ instantResult }) {
 // ── Panel: Performance gap ─────────────────────────────────────────────────────
 
 function PerformanceGapPanel({ instantResult, crremTarget }) {
-  const modelled = instantResult?.eui_kWh_m2 ?? null
+  const modelled = readModelledEui(instantResult)
   const target   = crremTarget
 
   const gap = modelled != null && target != null ? modelled - target : null

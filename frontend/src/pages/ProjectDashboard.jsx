@@ -25,6 +25,7 @@ import { SimulationContext } from '../context/SimulationContext.jsx'
 import { useWeather }        from '../context/WeatherContext.jsx'
 import { useHourlySolar }    from '../hooks/useHourlySolar.js'
 import { calculateInstant }  from '../utils/instantCalc.js'
+import { readModelledEui } from '../utils/engineReads.js'   // Brief 88: canonical EUI read
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -209,7 +210,7 @@ export default function ProjectDashboard() {
   // ── Derived values ───────────────────────────────────────────────────────────
 
   const gia          = params ? Math.round(params.length * params.width * params.num_floors) : null
-  const modelledEui  = results?.summary?.eui_kWh_per_m2 ?? instantResult?.eui ?? null
+  const modelledEui  = results?.summary?.eui_kWh_per_m2 ?? readModelledEui(instantResult)
   const epVerified   = results?.summary?.eui_kWh_per_m2 != null
 
   // Actual EUI from uploaded electricity consumption / GIA

@@ -6346,6 +6346,12 @@ export function calculateInstantDegreeDay(building = {}, constructions = {}, sys
   })
 
   return {
+    // Brief 88 — DEPRECATED alias. Canonical modelled EUI is
+    // `consumption.total.kwh_per_m2_yr` (read via utils/engineReads.readModelledEui).
+    // This top-level field is independently computed (total_kWh / gia here vs the
+    // consumption breakdown's own sum) so the two can diverge — a boundary-mismatch
+    // in waiting (Brief 88 root cause). Do NOT add new subscribers; retained for
+    // migration compatibility, remove in a dedicated engine-cleanup brief.
     eui_kWh_m2:            Math.round(eui_kWh_m2 * 10) / 10,
     annual_heating_kWh:    Math.round(heating_thermal),
     annual_cooling_kWh:    Math.round(cooling_thermal),
@@ -7161,6 +7167,12 @@ function _calculateInstantBaseline(building = {}, constructions = {}, systems = 
   return {
     state:                 stateNum,   // numeric per state contract: 1 | 2 | 2.5 | 3
     mode,                              // string per state contract: 'envelope-only' | 'full' | ...
+    // Brief 88 — DEPRECATED alias. Canonical modelled EUI is
+    // `consumption.total.kwh_per_m2_yr` (read via utils/engineReads.readModelledEui).
+    // This top-level field is independently computed (total_kWh / gia here vs the
+    // consumption breakdown's own sum) so the two can diverge — a boundary-mismatch
+    // in waiting (Brief 88 root cause). Do NOT add new subscribers; retained for
+    // migration compatibility, remove in a dedicated engine-cleanup brief.
     eui_kWh_m2:            Math.round(eui_kWh_m2 * 10) / 10,
     annual_heating_kWh:    Math.round(heating_thermal),
     annual_cooling_kWh:    Math.round(cooling_thermal),
