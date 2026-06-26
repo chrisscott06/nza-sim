@@ -156,8 +156,8 @@ export default function CrremStrandingDiagram({
         <HeadlineNum label="Lifetime carbon saved" value={Number.isFinite(lifetimeCarbonSaved) ? `${lifetimeCarbonSaved >= 0 ? '+' : '−'}${Math.abs(lifetimeCarbonSaved).toFixed(0)} tCO₂e` : '—'} sub="by 2050" accent="#16A34A" />
       </div>
 
-      {/* Two stacked charts */}
-      <div className="flex flex-col gap-3">
+      {/* Two charts side by side (stack only when narrow) */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
         <StrandingPanel
           data={data} title="GHG intensity (kgCO₂e/m²·yr)" unit="kgCO₂/m²"
           targetKey="carbonTarget" assetKey="carbonAsset" baseKey="carbonBase"
