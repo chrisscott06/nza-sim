@@ -60,7 +60,7 @@ function StrandingPanel({ data, title, unit, targetKey, assetKey, baseKey, exces
           {misalign ? <>misalignment <span className="font-semibold" style={{ color: RED }}>{misalign}</span></> : <span className="text-green-600 font-semibold">aligned to 2050</span>}
         </div>
       </div>
-      <ResponsiveContainer width="100%" height={190}>
+      <ResponsiveContainer width="100%" height={340}>
         <ComposedChart data={data} margin={{ top: 8, right: 10, left: -4, bottom: 0 }}>
           <XAxis dataKey="year" tick={{ fontSize: 9, fill: '#95A5A6' }} ticks={[2020, 2025, 2030, 2035, 2040, 2045, 2050]} />
           <YAxis tick={{ fontSize: 9, fill: '#95A5A6' }} width={42} domain={[0, 'auto']} />
