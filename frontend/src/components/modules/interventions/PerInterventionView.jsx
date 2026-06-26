@@ -34,6 +34,11 @@ import {
   computeLifetimeCarbon, perFuelFromDeltaRecord, defaultLifetimeYears,
 } from '../../../utils/lifetimeCarbon.js'
 import MiniCrremChart from './crrem/MiniCrremChart.jsx'
+import HeadlineCostEditor from './cost/HeadlineCostEditor.jsx'
+import {
+  emptyCost, computeCostTotal, computeAnnualOperationalSaving,
+  computeSimplePayback, computePoundsPerTonne,
+} from '../../../utils/costModel.js'
 
 const SAVE_GREEN = '#16A34A'
 const INCREASE_RED = '#DC2626'
@@ -100,7 +105,9 @@ function DemandRow({ label, rec, kind = KIND.MWH, gia }) {
   )
 }
 
-export default function PerInterventionView({ intervention, isolatedRow, crremPick }) {
+const gbp0 = n => `£${Math.round(Number(n) || 0).toLocaleString('en-GB')}`
+
+export default function PerInterventionView({ intervention, isolatedRow, crremPick, projectCostDefaults, onCostChange }) {
   const d = isolatedRow?.cumulativeDelta ?? null
   const gia = getGia(isolatedRow?.isolatedResult?.baseline)
   const patches = Array.isArray(intervention?.patches) ? intervention.patches : []
@@ -120,6 +127,14 @@ export default function PerInterventionView({ intervention, isolatedRow, crremPi
   const lifeTco2e = lifetime?.lifetime_carbon_saved_tco2e
   const baseFuels = {}, postFuels = {}
   for (const [f, v] of Object.entries(perFuel)) { baseFuels[f] = v.from_kwh; postFuels[f] = v.to_kwh }
+
+  // Brief 90 (Brief B): cost → £/tonne + simple payback (Headline mode).
+  const cost = intervention?.cost ?? emptyCost()
+  const costTotal = computeCostTotal(cost)
+  const annualSaving = computeAnnualOperationalSaving(d?.per_fuel, projectCostDefaults)
+  const poundsPerTonne = costTotal > 0 && Number.isFinite(lifeTco2e) ? computePoundsPerTonne(costTotal, lifeTco2e) : null
+  const payback = costTotal > 0 ? computeSimplePayback(costTotal, annualSaving) : null
+  const handleCostChange = (headline) => onCostChange?.(intervention.id, { ...cost, headline })
 
   return (
     <div className="flex flex-col gap-5 p-4 overflow-y-auto">
@@ -143,14 +158,30 @@ export default function PerInterventionView({ intervention, isolatedRow, crremPi
           ) : (
             <HeadlineCard title="Lifetime carbon saved" placeholder="no fuel delta" />
           )}
-          <HeadlineCard title="£ / tonne CO₂" placeholder="TBD — Brief B (cost)" />
+          {costTotal > 0 ? (
+            <HeadlineCard
+              title="£ / tonne CO₂"
+              value={poundsPerTonne != null ? gbp0(poundsPerTonne) : '—'}
+              sub={poundsPerTonne != null ? `${gbp0(costTotal)} total cost` : 'no lifetime carbon saving'}
+            />
+          ) : (
+            <HeadlineCard title="£ / tonne CO₂" placeholder="enter cost below" />
+          )}
           <HeadlineCard
             title="kWh saved / EUI Δ"
             accent={deltaColour(euiDelta)}
             value={`${fmtSigned(euiDelta, 1)} kWh/m²`}
             sub={Number.isFinite(totalDelta) ? `${fmtSigned(totalDelta, 1)} MWh/yr total` : null}
           />
-          <HeadlineCard title="Simple payback" placeholder="TBD — Brief B (cost)" />
+          {costTotal > 0 ? (
+            <HeadlineCard
+              title="Simple payback"
+              value={payback == null ? 'Never' : payback >= 999 ? '999+ yr' : `${payback.toFixed(1)} yr`}
+              sub={annualSaving > 0 ? `${gbp0(annualSaving)}/yr saved` : 'no operational £ saving'}
+            />
+          ) : (
+            <HeadlineCard title="Simple payback" placeholder="enter cost below" />
+          )}
         </div>
 
         {/* Brief 89: per-intervention CRREM carbon trajectory — saving vs baseline */}
@@ -184,6 +215,13 @@ export default function PerInterventionView({ intervention, isolatedRow, crremPi
             </tbody>
           </table>
         </div>
+
+        {/* Brief 90 (Brief B): NRM2 Headline cost editor — drives £/tonne + payback */}
+        {onCostChange && (
+          <div className="mt-3">
+            <HeadlineCostEditor headline={cost.headline} projectDefaults={projectCostDefaults} onChange={handleCostChange} />
+          </div>
+        )}
       </section>
 
       {/* ── Section 2 — Calc Trail (UI-side diff) ───────────────────── */}

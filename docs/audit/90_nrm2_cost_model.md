@@ -71,4 +71,22 @@ contingency £35,840 ((works+design+delivery)·(15%+5%)). **Total £215,040.** A
 **£/tonne £350** (£215k ÷ 614.8 tCO₂e). No-saving case → payback null. All sensible.
 
 ## §4 — Headline mode UI + cards (Part 4)
+
+`cost/HeadlineCostEditor.jsx` (6 NRM2 lines + "Fill % lines from defaults" + live total) on the
+`PerInterventionView` Isolated section. `InterventionsModule.updateInterventionCost(id, cost)` persists
+to `params.interventions[].cost` via `updateParam`. The £/tonne + Simple payback cards populate from
+`computeCostTotal` / `computeAnnualOperationalSaving` / `computePoundsPerTonne` / `computeSimplePayback`;
+they show "enter cost below" until a cost exists (honest empty state, no fabricated number).
+
+**Verified in browser (DHW, Bridgewater):** entered equipment £120k + install £30k + additional £10k →
+"Fill from defaults" derived design £13,440 / delivery £5,760 / contingency £35,840 → **Total £215,040**;
+cards updated live to **£/tonne £350** and **payback 18.9 yr** (£11,408/yr saved); persisted ("Saved").
+Matches the node worked example. (A demo cost now sits on DHW; other interventions remain uncosted.)
+
+## §5 — Detailed NRM2 mode (Part 5) — DEFERRED
+Must mirror the Applemore elemental structure exactly; building it blind risks rework. The shell
+(`computeDetailedTotal`, `NRM2_BUILDING_WORKS`, `NRM2_ONCOSTS`) is in place. Full Detailed-mode UI lands
+when the Applemore spreadsheet arrives.
+
+## §6 — Strategy capex (Part 6)
 _(to fill)_

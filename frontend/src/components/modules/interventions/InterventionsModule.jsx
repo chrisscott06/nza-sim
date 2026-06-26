@@ -122,6 +122,13 @@ export default function InterventionsModule() {
     property_type: (params?.building_type || 'hotel').toLowerCase(),
     pathway: crremPathway,
   }), [params?.building_type, crremPathway])
+
+  // Brief 90 (Brief B): project cost defaults + per-intervention cost persistence.
+  const projectCostDefaults = params?.cost_defaults ?? null
+  const updateInterventionCost = useCallback((id, cost) => {
+    const next = (params?.interventions ?? []).map(iv => (iv.id === id ? { ...iv, cost } : iv))
+    updateParam('interventions', next)
+  }, [params?.interventions, updateParam])
   // Brief 47 Part 1: libraryInterventions reads removed — library cut.
   // The params.library_interventions field is left in DEFAULT_PARAMS for
   // backwards compatibility (existing projects may carry library entries
@@ -540,7 +547,13 @@ export default function InterventionsModule() {
             </aside>
             <main className="flex-1 min-w-0 bg-off-white overflow-auto">
               {selectedIntervention ? (
-                <PerInterventionView intervention={selectedIntervention} isolatedRow={selectedIsolatedRow} crremPick={crremPick} />
+                <PerInterventionView
+                  intervention={selectedIntervention}
+                  isolatedRow={selectedIsolatedRow}
+                  crremPick={crremPick}
+                  projectCostDefaults={projectCostDefaults}
+                  onCostChange={updateInterventionCost}
+                />
               ) : (
                 <div className="p-8 text-sm text-mid-grey/60">
                   Select an intervention from the Library to see its isolated impact and calc trail.
