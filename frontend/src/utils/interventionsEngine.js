@@ -530,12 +530,12 @@ function _efficiencyPathFor(service) {
  */
 export function computeDelta(fromResult, toResult) {
   return {
-    // Headline — supports State 3 v2.5 (consumption.total.kwh_per_m2_yr,
-    // results.energy.kwh_per_m2_yr, energy_use.totals.eui_kwh_per_m2),
-    // degree-day fallback (eui_kWh_m2), and legacy summary shapes.
+    // Headline — canonical consumption.total.kwh_per_m2_yr first, then legacy
+    // per-m² summary shapes. The deprecated top-level alias (Brief 88) is not
+    // listed: canonical always wins for instant results, read via engineReads.
     eui_kwh_per_m2:      deltaRecord(
-      pickNumber(fromResult, ['consumption.total.kwh_per_m2_yr', 'results.energy.kwh_per_m2_yr', 'energy_use.totals.eui_kwh_per_m2', 'eui_kwh_per_m2', 'eui_kWh_per_m2', 'eui_kWh_m2', 'results_summary.eui_kWh_per_m2', 'results_summary.eui_kWh_m2']),
-      pickNumber(toResult,   ['consumption.total.kwh_per_m2_yr', 'results.energy.kwh_per_m2_yr', 'energy_use.totals.eui_kwh_per_m2', 'eui_kwh_per_m2', 'eui_kWh_per_m2', 'eui_kWh_m2', 'results_summary.eui_kWh_per_m2', 'results_summary.eui_kWh_m2']),
+      pickNumber(fromResult, ['consumption.total.kwh_per_m2_yr', 'results.energy.kwh_per_m2_yr', 'energy_use.totals.eui_kwh_per_m2', 'eui_kwh_per_m2', 'eui_kWh_per_m2', 'results_summary.eui_kWh_per_m2']),
+      pickNumber(toResult,   ['consumption.total.kwh_per_m2_yr', 'results.energy.kwh_per_m2_yr', 'energy_use.totals.eui_kwh_per_m2', 'eui_kwh_per_m2', 'eui_kWh_per_m2', 'results_summary.eui_kWh_per_m2']),
     ),
     total_delivered_mwh: deltaRecord(
       pickNumber(fromResult, ['results.energy.total_mwh', 'consumption.total_delivered_mwh', 'total_delivered_mwh', 'annual_energy.total_kWh', 'fuel_split.total_kWh']),

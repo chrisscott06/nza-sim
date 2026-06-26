@@ -276,7 +276,7 @@ export default function LiveResultsPanel({ libraryData = {}, onSankeyExpand }) {
           </span>
         </div>
 
-        {/* EUI gauge — Brief 88: canonical read (was result.eui_kWh_m2 alias). */}
+        {/* EUI gauge — Brief 88: canonical read (was a deprecated top-level alias). */}
         <EUIGauge eui={readModelledEui(result)} />
 
         {/* Gains & Losses butterfly chart */}

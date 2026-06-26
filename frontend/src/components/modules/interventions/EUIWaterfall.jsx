@@ -76,7 +76,6 @@ function pullEui(result) {
     'energy_use.totals.eui_kwh_per_m2',
     'eui_kwh_per_m2',
     'eui_kWh_per_m2',
-    'eui_kWh_m2',
   ])
 }
 

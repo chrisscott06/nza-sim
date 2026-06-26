@@ -211,7 +211,7 @@ export default function InterventionsModule() {
     // Brief 44 Part 2 (2026-05-21): the canonical result shape post-
     // Brief-28-IM-Polish IA 3.2 is `consumption.total.kwh_per_m2_yr` and
     // `carbon_kg_co2_per_m2`. The previous multi-path fallback walked
-    // seven candidate paths and the legacy `eui_kWh_m2` won at initial
+    // seven candidate paths and a legacy top-level alias won at initial
     // render (no saved interventions yet → engineResult fallback),
     // while the canonical path won post-save (stackResult.baseline has
     // consumption.total populated). The 169.1 → 89.0 flip Chris reported

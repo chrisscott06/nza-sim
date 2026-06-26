@@ -112,11 +112,11 @@ export default function InterventionEditorPreview({
   const isShareError = typeof validationError === 'string' && /share_pct of enabled systems sums to/.test(validationError)
   // Helper to pull numeric from either result. Supports State 3 v2.5
   // shape (consumption.total.* + results.energy.* + consumption.space_*.demand_mwh +
-  // carbon_kg_co2_per_m2), the legacy "full" path shape (eui_kWh_m2 +
-  // fuel_split.* + annual_*_kWh + carbon_kgCO2_m2), and historical
+  // carbon_kg_co2_per_m2), the legacy "full" path shape (deprecated
+  // top-level EUI alias + fuel_split.* + annual_*_kWh + carbon_kgCO2_m2), and historical
   // results_summary shapes. See audit doc §8.3.
-  const eb = pickFirst(baselineResult,    ['consumption.total.kwh_per_m2_yr', 'results.energy.kwh_per_m2_yr', 'energy_use.totals.eui_kwh_per_m2', 'eui_kwh_per_m2', 'eui_kWh_per_m2', 'eui_kWh_m2', 'results_summary.eui_kWh_per_m2'])
-  const ea = pickFirst(interventionResult,['consumption.total.kwh_per_m2_yr', 'results.energy.kwh_per_m2_yr', 'energy_use.totals.eui_kwh_per_m2', 'eui_kwh_per_m2', 'eui_kWh_per_m2', 'eui_kWh_m2', 'results_summary.eui_kWh_per_m2'])
+  const eb = pickFirst(baselineResult,    ['consumption.total.kwh_per_m2_yr', 'results.energy.kwh_per_m2_yr', 'energy_use.totals.eui_kwh_per_m2', 'eui_kwh_per_m2', 'eui_kWh_per_m2', 'results_summary.eui_kWh_per_m2'])
+  const ea = pickFirst(interventionResult,['consumption.total.kwh_per_m2_yr', 'results.energy.kwh_per_m2_yr', 'energy_use.totals.eui_kwh_per_m2', 'eui_kwh_per_m2', 'eui_kWh_per_m2', 'results_summary.eui_kWh_per_m2'])
   const heatB = pickFirst(baselineResult,    ['consumption.space_heating.demand_mwh', 'demand.heating_demand_mwh', 'consumption.heating_demand_mwh', 'annual_heating_kWh'])
   const heatA = pickFirst(interventionResult,['consumption.space_heating.demand_mwh', 'demand.heating_demand_mwh', 'consumption.heating_demand_mwh', 'annual_heating_kWh'])
   const coolB = pickFirst(baselineResult,    ['consumption.space_cooling.demand_mwh', 'demand.cooling_demand_mwh', 'consumption.cooling_demand_mwh', 'annual_cooling_kWh'])

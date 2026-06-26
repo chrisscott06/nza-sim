@@ -397,7 +397,7 @@ export default function SystemsLiveResults({ libraryData = {}, scheduleProfiles 
           </div>
         )}
 
-        {/* EUI gauge — Brief 88: canonical read (was result.eui_kWh_m2, an alias
+        {/* EUI gauge — Brief 88: canonical read (was a deprecated top-level alias
             that diverged from Strategy's consumption.total.kwh_per_m2_yr). */}
         <EUIGauge eui={readModelledEui(result)} />
 
