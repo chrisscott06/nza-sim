@@ -150,4 +150,16 @@ future-proof; the pathway pick is local state (not yet persisted) since with one
 nothing to persist. Persisting the pick + adding more curves is a future brief.
 
 ## §8 — Cleanup + grep verification (Part 8)
-_(to fill)_
+
+**Rule 11 grep (`ukGridCarbonTrajectory` / `crremPathwayUkHotel` consumers):**
+- `ukGridCarbonTrajectory.js` ← `carbonReads.js` (canonical helper) + `instantCalc.js` / `roadmapEngine.js`
+  (engine-internal, allowed). No UI consumer reads it directly.
+- `crremPathwayUkHotel.js` ← `carbonReads.js` only after migrating `CrremPicker` to `hasCrremPathway()`
+  (was importing the raw `CRREM_PATHWAYS` registry; fixed in P8).
+- All Brief 89 UI carbon/CRREM reads go through `carbonReads` — the new-files grep for direct
+  `kgCO2`/`carbon_factor`/`gCO2_per_kWh`/`GAS_CARBON`/`ukGridIntensity` outside `carbonReads` is **empty**.
+- The engine's `crremTargets.js` (v2.04) + `carbonFactors.js` references are pre-existing, untouched.
+
+**No engine changes:** `instantCalc.js` / `interventionsEngine.js` / `systemsEngine.js` not modified by
+Brief 89 (the `interventionsEngine` edit was Brief 88's alias purge, already merged-in on this branch).
+CLAUDE.md Rule 11 extended with the carbonReads note. Build clean throughout.

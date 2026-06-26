@@ -8,7 +8,7 @@
  * applies to both the Library per-intervention chart and the Strategy stranding
  * diagram. Persisting a non-default pick + adding more curves is a future brief.
  */
-import { CRREM_PATHWAYS } from '../../../../data/crremPathwayUkHotel.js'
+import { hasCrremPathway } from '../../../../utils/carbonReads.js'
 
 const PATHWAYS = [['1.5C', '1.5°C'], ['2C', '2°C'], ['4C', '4°C']]
 const PROPERTY_LABELS = { hotel: 'Hotel', office: 'Office', retail: 'Retail', residential: 'Residential' }
@@ -27,7 +27,7 @@ export default function CrremPicker({ pick, onPathwayChange }) {
         className={`${chip} text-navy bg-white`}
       >
         {PATHWAYS.map(([k, l]) => {
-          const available = !!CRREM_PATHWAYS[`${pick.country}|${pick.property_type}|${k}`]
+          const available = hasCrremPathway({ country: pick.country, property_type: pick.property_type, pathway: k })
           return <option key={k} value={k} disabled={!available}>{available ? l : `${l} — future`}</option>
         })}
       </select>
