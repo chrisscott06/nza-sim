@@ -1,8 +1,15 @@
 # Current brief
 
+**Brief 88 — Strategy baseline state-sync (diagnostic + targeted fix).** Active on branch
+`chris/interventions-rework-ux` alongside Brief 87. Diagnose + fix the Systems-vs-Strategy baseline EUI
+divergence (live baseline everywhere); audit the "Save failed" indicator. Brief:
+[`active/88_strategy_baseline_state_sync.md`](active/88_strategy_baseline_state_sync.md); design note:
+[`../design-notes/88_strategy_baseline_state_sync.md`](../design-notes/88_strategy_baseline_state_sync.md).
+Both Brief 87 + 88 close before the single PR to `main`.
+
 **Brief 87 — Interventions UX rework (Library/Strategy split + two-section per-intervention view).**
 Active on branch `chris/interventions-rework-ux` (cut from `main` `d8a6207`). UX restructure only — no
-engine changes. Brief: [`active/87_interventions_ux_rework.md`](active/87_interventions_ux_rework.md);
+engine changes. Part 6 cleanup / Part 7 walkthrough pending. Brief: [`active/87_interventions_ux_rework.md`](active/87_interventions_ux_rework.md);
 design note (canonical): [`../design-notes/interventions_rework.md`](../design-notes/interventions_rework.md).
 First of three: A (UX, this) → C (CRREM lifetime carbon) → B (NRM2 cost). Brief 75 stays open
 (P2-only — superseded by Brief 76 P2).
