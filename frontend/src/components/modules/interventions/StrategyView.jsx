@@ -16,6 +16,18 @@
 import { useState } from 'react'
 import EUIWaterfall from './EUIWaterfall.jsx'
 import HeatBalance, { LayoutToggle } from '../balance/HeatBalance.jsx'
+import CrremStrandingDiagram from './crrem/CrremStrandingDiagram.jsx'
+import { computeLifetimeCarbon, perFuelFromDeltaRecord, defaultLifetimeYears } from '../../../utils/lifetimeCarbon.js'
+import { readModelledEui } from '../../../utils/engineReads.js'
+import { getGia } from './visualiser/unitFmt.js'
+
+/** { electricity, gas } annual delivered kWh from an engine result. */
+function fuelsKwhFromResult(res) {
+  return {
+    electricity: (res?.consumption?.total?.electricity_mwh ?? 0) * 1000,
+    gas:         (res?.consumption?.total?.gas_mwh ?? 0) * 1000,
+  }
+}
 
 const SAVE_GREEN = '#16A34A'
 const INCREASE_RED = '#DC2626'
@@ -116,6 +128,22 @@ export default function StrategyView({ strategyName = 'Strategy 1', intervention
   const enabledCount = rows.filter((r) => r?.enabled).length
   const savingAccent = savingEUI != null ? (savingEUI < -0.05 ? SAVE_GREEN : savingEUI > 0.05 ? INCREASE_RED : undefined) : undefined
 
+  // Brief 89 (Brief C): CRREM stranding-diagram inputs + strategy lifetime carbon.
+  const crremGia = getGia(baselineResult)
+  const crremBaseEUI = readModelledEui(baselineResult)
+  const crremFinalEUI = readModelledEui(finalResult) ?? crremBaseEUI
+  const crremBaseFuels = fuelsKwhFromResult(baselineResult)
+  const crremFinalFuels = fuelsKwhFromResult(finalResult)
+  // Strategy lifetime carbon = Σ each enabled intervention's MARGINAL lifetime
+  // carbon (marginals telescope to the cumulative; using marginals lets each
+  // measure carry its own lifetime without double-counting).
+  const strategyLifetimeTco2e = rows.filter(r => r?.enabled).reduce((sum, row) => {
+    const iv = interventions.find(i => i.id === row.id) || {}
+    const pf = perFuelFromDeltaRecord(row.marginal_delta?.per_fuel)
+    const years = iv.lifetime_years ?? defaultLifetimeYears(iv.theme ?? iv.category)
+    return sum + (computeLifetimeCarbon(pf, { lifetimeYears: years }).lifetime_carbon_saved_tco2e || 0)
+  }, 0)
+
   // Never let both panels be hidden.
   const toggleBaseline = () => setShowBaseline((v) => (v && !showFinal ? v : !v))
   const toggleFinal = () => setShowFinal((v) => (v && !showBaseline ? v : !v))
@@ -134,7 +162,12 @@ export default function StrategyView({ strategyName = 'Strategy 1', intervention
           <Stat label="Final EUI" value={`${fmt(finalEUI)} kWh/m²`} sub={`baseline ${fmt(baselineEUI)}`} />
           <Stat label="Energy saved" accent={savingAccent} value={`${signed(savingEUI)} kWh/m²`} sub={cumTot ? `${signed(cumTot.delta)} MWh/yr` : null} />
           <Stat label="Carbon saved (yr 1)" accent={savingAccent} value={cumCarbon ? `${signed(cumCarbon.delta)} kgCO₂/m²` : '—'} />
-          <Stat label="Lifetime carbon" placeholder="TBD — Brief C" />
+          <Stat
+            label="Lifetime carbon"
+            accent={strategyLifetimeTco2e > 0.05 ? SAVE_GREEN : strategyLifetimeTco2e < -0.05 ? INCREASE_RED : undefined}
+            value={Number.isFinite(strategyLifetimeTco2e) ? `${signed(strategyLifetimeTco2e, 0)} tCO₂e` : '—'}
+            sub="by 2050"
+          />
           <Stat label="Total capex" placeholder="TBD — Brief B" />
           <Stat label="£ / tonne CO₂" placeholder="TBD — Brief B" />
         </div>
@@ -190,13 +223,14 @@ export default function StrategyView({ strategyName = 'Strategy 1', intervention
         )}
 
         {tab === 'carbon' && (
-          <div className="rounded-lg border border-dashed border-light-grey bg-white/40 p-5 flex flex-col items-center justify-center text-center h-full min-h-[260px]">
-            <div className="text-xs uppercase tracking-wider text-mid-grey/60 font-semibold mb-1">CRREM trajectory</div>
-            <div className="text-sm text-mid-grey/55 max-w-md">
-              Cumulative operational carbon vs the CRREM decarbonisation pathway, 2025–2050 — when (if) this strategy meets the target.
-            </div>
-            <div className="text-xxs text-mid-grey/40 mt-2">TBD — Brief C (CRREM lifetime carbon)</div>
-          </div>
+          <CrremStrandingDiagram
+            finalFuels={crremFinalFuels}
+            baseFuels={crremBaseFuels}
+            gia={crremGia}
+            finalEUI={crremFinalEUI}
+            baselineEUI={crremBaseEUI}
+            lifetimeCarbonSaved={strategyLifetimeTco2e}
+          />
         )}
       </div>
     </div>

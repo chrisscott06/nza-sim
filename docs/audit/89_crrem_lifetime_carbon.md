@@ -102,7 +102,26 @@ math cross-checks by hand. Year-1 op-carbon −32.0 tCO₂; lifetime grows to 61
 electricity penalty decarbonises away.
 
 ## §5 — Strategy CRREM stranding diagram (Part 5)
-_(to fill)_
+
+`crrem/CrremStrandingDiagram.jsx` on the Strategy "Carbon" tab. Two stacked charts (GHG intensity top,
+energy intensity below) sharing x 2020–2050, each with: CRREM target (navy dashed), strategy asset line
+(blue), current-year diamond, red-circle misalignment marker + translucent excess area when stranded.
+CRREM headline row: Strategy EUI, CRREM EUI target (current year), energy + carbon misalignment years,
+lifetime carbon saved. Main headline "Lifetime carbon" stat also populated.
+
+Inputs from the engine results (no engine change): `fuelsKwhFromResult()` reads
+`consumption.total.{electricity,gas}_mwh` for baseline (`stackResult.baseline`) + final (`lastEnabled.result`);
+EUI via canonical `readModelledEui`; gia via `getGia`. Strategy lifetime carbon = Σ each enabled
+intervention's MARGINAL lifetime carbon (marginals telescope to cumulative; lets each measure carry its
+own lifetime without double-counting).
+
+v1 modelling (design note): energy-intensity asset line flat at strategy EUI (kWh doesn't decarbonise);
+GHG-intensity asset line declines as the electricity portion follows the grid trajectory.
+
+**Bridgewater (7-measure strategy):** Strategy EUI **71.4**, CRREM EUI target 215 (2026), lifetime carbon
+**+797 tCO₂e**. Both axes report **Compliant / aligned to 2050** — correct: the strategy drives EUI to
+71.4, below the 2050 target (75), so it never strands. The misalignment circle + excess area therefore
+show on the BASELINE (139.5 EUI) via the Part 6 compare toggle, where stranding is visible.
 
 ## §6 — Comparison toggle / §7 picker / §8 cleanup
 _(to fill)_
