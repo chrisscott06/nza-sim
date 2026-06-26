@@ -119,10 +119,16 @@ bedroom-extract/MVHR **+3.6 (red increase)** … plug-load −16.2 → 76.2). He
 (−62.1 vs baseline; cooling 43.8 — cooling-leaning, consistent with the MVHR-increase finding). CRREM
 placeholder renders. No console errors; production build clean.
 
-**Heat-balance Compare button added + verified:** the heat balance section now has a "Compare ↔"
-toggle that expands to a **side-by-side baseline-vs-final** view (two `HeatBalance` instances, same
-chart type) — exactly the brief's Part 5 spec. Verified live: "Heat balance — strategy baseline vs
-final", Baseline | Strategy final panels render; toggle closes back to the single final-state view.
+**Strategy view → tabbed (Chris feedback, 2026-06-26):** the scroll-through layout is replaced by a
+fixed headline + **three tabs — Waterfall · Heat balance · Carbon** — each chart in a bounded-height
+container (this **fixes the "keeps growing" glitch**, which was a `ResponsiveContainer`/Sankey in an
+unbounded auto-height column). The **Heat balance** tab shows **baseline vs strategy-final side-by-side
+by default**, with **show/hide chips** for each panel (collapsing to one → single full-width) and a
+**single shared Rows/Stacked/Sankey toggle** that drives BOTH panels. Implemented by adding optional
+controlled `layout`/`onLayoutChange`/`hideLayoutToggle` props to `HeatBalance` (backward-compatible —
+other modules unchanged) + exporting its `LayoutToggle`. **Carbon** tab holds the CRREM placeholder.
+Verified live: tabs switch with no scroll; Sankey toggle flips both panels and the SVG height is stable
+over time (no growth); hiding Baseline gives a single full-width final panel; no console errors.
 
 **Drag-reorder UX reworked (Chris feedback, 2026-06-26):** the old native-HTML5 drag gave no feedback
 (the hovered row was tracked but never shown). Rebuilt in `InterventionStackView` + `InterventionRow`

@@ -634,6 +634,13 @@ export default function HeatBalance({
   //   Operation:       + 'natural_ventilation'
   //   Systems:         + 'mechanical_ventilation'
   modules = null,
+  // Brief 87 — optional controlled layout so the Strategy compare view can drive
+  // a single shared Rows/Stacked/Sankey toggle across both side-by-side panels.
+  // Omitted → uncontrolled (internal state + own toggle); existing callers
+  // (Building/Gains/Operation/Systems modules) are unaffected.
+  layout: layoutProp,
+  onLayoutChange,
+  hideLayoutToggle = false,
 }) {
   const [showStateOneDisclosure, setShowStateOneDisclosure] = useState(false)
 
@@ -643,13 +650,15 @@ export default function HeatBalance({
   // source choice.
   const { engineMode: uiEngineMode, unit } = useUISettings()
 
-  const [layout, setLayout] = useState(() => {
+  const [internalLayout, setInternalLayout] = useState(() => {
     try { return localStorage.getItem(LAYOUT_KEY) || 'rows' }
     catch { return 'rows' }
   })
   useEffect(() => {
-    try { localStorage.setItem(LAYOUT_KEY, layout) } catch {}
-  }, [layout])
+    if (layoutProp == null) { try { localStorage.setItem(LAYOUT_KEY, internalLayout) } catch {} }
+  }, [internalLayout, layoutProp])
+  const layout = layoutProp ?? internalLayout
+  const setLayout = onLayoutChange ?? setInternalLayout
 
   // Map the global engine setting ('static' / 'dynamic' / 'both') to a
   // single data source for the chart. 'both' shows Dynamic when available
@@ -727,7 +736,7 @@ export default function HeatBalance({
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <LayoutToggle layout={layout} onChange={setLayout} />
+          {!hideLayoutToggle && <LayoutToggle layout={layout} onChange={setLayout} />}
         </div>
       </div>
 
@@ -831,7 +840,7 @@ export default function HeatBalance({
 
 // ── Layout toggle ────────────────────────────────────────────────────────────
 
-function LayoutToggle({ layout, onChange }) {
+export function LayoutToggle({ layout, onChange }) {
   const opts = [
     { id: 'rows',    label: 'Rows',    title: 'Horizontal rows' },
     { id: 'stacked', label: 'Stacked', title: 'Stacked vertical bars' },
