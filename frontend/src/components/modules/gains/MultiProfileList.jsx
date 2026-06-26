@@ -176,13 +176,14 @@ function ProfileEditPanel({ profile, category, onChange, accent }) {
         </>
       )}
 
-      {/* Auxiliary gain_fraction — first-class editor on the profile
-          panel. Lighting / equipment get this on their section headers
-          in P8 (one inline editor per category, not per profile, because
-          lighting/equipment profiles share a category-level gain
-          assumption). Auxiliary's per-preset defaults make per-profile
-          editing the right shape. */}
-      {isAuxiliary && (
+      {/* Heat gain (gain_fraction) — first-class PER-PROFILE editor for all
+          load categories. Each profile carries its own fraction of input
+          power that becomes a sensible heat gain to the zone (e.g. plug
+          loads 100%, kitchen/catering 50%, external lighting 0%). The
+          section header shows the area-weighted average read-only; editing
+          is per profile here, consistent with auxiliary (was section-level
+          "set all" for lighting/equipment in Brief 72 P8 — unified 2026-06). */}
+      {(isLighting || isEquipment || isAuxiliary) && (
         <Field label="Heat gain">
           <PercentInput
             value={profile.gain_fraction ?? 1.0}
