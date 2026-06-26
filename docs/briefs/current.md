@@ -1,5 +1,12 @@
 # Current brief
 
+**Brief 91 — Cost Plan Builder.** Active on `chris/interventions-rework-ux`. Replaces Brief 90's
+HeadlineCostEditor with a line-item cost plan builder (groups → lines, on-costs footer, templates,
+keyboard discipline). Brief 90 math/cards/capex reused. Brief:
+[`active/91_cost_plan_builder.md`](active/91_cost_plan_builder.md); design note:
+[`../design-notes/91_cost_plan_builder.md`](../design-notes/91_cost_plan_builder.md); audit:
+[`../audit/91_cost_plan_builder.md`](../audit/91_cost_plan_builder.md). Final piece of the metrics layer.
+
 **Brief 90 (Brief B) — NRM2 cost model.** Landed on `chris/interventions-rework-ux` (Part 1 docs only).
 **BLOCKED at Part 2** — the Applemore Feasibility Cost Plan spreadsheet (the rate-library source) is not
 in the repo. Needs Chris to provide it at `docs/reference/applemore_cost_plan.xlsm`. Last of three:
