@@ -32,18 +32,31 @@ export const CRREM_ANALYSIS_END   = 2050
  */
 export const CATEGORY_LIFETIME_YEARS = Object.freeze({
   systems:     18,   // heat pumps / plant — 15–20
+  hvac:        18,   // alias for systems/plant
+  dhw:         18,   // DHW heat pump
+  heating:     18,
+  cooling:     18,
   lighting:    12,   // LED + controls — 10–15
   ventilation: 20,   // MVHR / BMS-tied — 15–20
   solar:       30,   // brise soleil / fixed shading — long-life fabric-like
+  shading:     30,
   fabric:      45,   // insulation — 40–50
+  envelope:    45,
   operation:   25,   // setpoint / occupancy / control — analysis horizon
   small_power: 25,   // plug-load management — behavioural/control, horizon
+  equipment:   12,
   default:     25,
 })
 
-/** Resolve a default lifetime for an intervention from its category. */
-export function defaultLifetimeYears(category) {
-  return CATEGORY_LIFETIME_YEARS[category] ?? CATEGORY_LIFETIME_YEARS.default
+/**
+ * Resolve a default lifetime (years) for an intervention from its category or
+ * theme string (e.g. the `intervention.theme` chip: "Systems", "Small power").
+ * Normalises case + spaces so "Small power" → small_power. Unknown → 25y horizon.
+ */
+export function defaultLifetimeYears(categoryOrTheme) {
+  if (!categoryOrTheme) return CATEGORY_LIFETIME_YEARS.default
+  const key = String(categoryOrTheme).toLowerCase().trim().replace(/\s+/g, '_')
+  return CATEGORY_LIFETIME_YEARS[key] ?? CATEGORY_LIFETIME_YEARS.default
 }
 
 /**

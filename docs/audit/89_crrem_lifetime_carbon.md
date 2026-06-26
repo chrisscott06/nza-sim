@@ -79,7 +79,27 @@ Helpers: `defaultLifetimeYears(category)` (systems 18 / lighting 12 / ventilatio
 `carbonIntensityForYear(fuelsKwh, gia, year)` (for the chart's asset-performance line).
 
 ## §4 — Per-intervention card (Part 4)
-_(to fill)_
+
+`PerInterventionView` Lifetime Carbon card populated + `crrem/MiniCrremChart.jsx` (target / baseline /
+post trajectories + translucent saving band, single carbon axis, no misalignment marker per design note).
+Lifetime = `intervention.lifetime_years` override ?? `defaultLifetimeYears(intervention.theme)`.
+
+**Field-name fix:** the intervention category chip is `intervention.theme` ("Systems", "Lighting", "Solar"…),
+NOT `.category` — initially fell through to the 25y default. Now normalised (case + spaces) in
+`defaultLifetimeYears`; DHW (theme "Systems") correctly resolves 18y.
+
+**Bridgewater magnitudes (verified physically sensible, all 7 interventions populate):**
+
+| Intervention | per-fuel Δ (MWh/yr) | life | lifetime tCO₂e | check |
+|---|---|---|---|---|
+| DHW ASHP (fuel switch) | gas −188.9, elec +12.4 | 18y | **+614.8** | hand-calc: 188.9·0.184·18 − elec penalty ≈ 610 ✓ |
+| LED | elec −14.5 | 12y | **+13.4** | in brief's 10–50 range ✓ (shrinks with grid) |
+| Brise soleil | elec −3.4 | 30y→2050 | **+3.2** | electricity-saving, erodes with grid ✓ |
+
+DHW is the largest (big hotel DHW gas→electric switch, gas saving constant over 18y). Above the brief's
+rough 100–300 guess because the actual gas DHW load (188.9 MWh/yr) is larger than guessed — not a bug;
+math cross-checks by hand. Year-1 op-carbon −32.0 tCO₂; lifetime grows to 614.8 as the +12.4 MWh
+electricity penalty decarbonises away.
 
 ## §5 — Strategy CRREM stranding diagram (Part 5)
 _(to fill)_

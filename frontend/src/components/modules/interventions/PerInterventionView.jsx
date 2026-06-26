@@ -30,6 +30,10 @@
  * Total toggle isn't needed here). Conversions via the shared unitFmt helper.
  */
 import { toDisplay, KIND, getGia } from './visualiser/unitFmt.js'
+import {
+  computeLifetimeCarbon, perFuelFromDeltaRecord, defaultLifetimeYears,
+} from '../../../utils/lifetimeCarbon.js'
+import MiniCrremChart from './crrem/MiniCrremChart.jsx'
 
 const SAVE_GREEN = '#16A34A'
 const INCREASE_RED = '#DC2626'
@@ -105,6 +109,18 @@ export default function PerInterventionView({ intervention, isolatedRow }) {
   const totalDelta = d?.total_delivered_mwh?.delta
   const carbonDelta = d?.carbon_kgco2_per_m2?.delta
 
+  // Brief 89 (Brief C): lifetime carbon saved, fuel-switching aware, vs the UK
+  // CRREM trajectory. perFuel.from = bare baseline, .to = baseline+this measure.
+  const perFuel = perFuelFromDeltaRecord(d?.per_fuel)
+  // Lifetime: explicit per-intervention override if set, else theme default.
+  const lifetimeYears = intervention?.lifetime_years
+    ?? defaultLifetimeYears(intervention?.theme ?? intervention?.category)
+  const hasFuel = gia > 0 && Object.keys(perFuel).length > 0
+  const lifetime = hasFuel ? computeLifetimeCarbon(perFuel, { lifetimeYears }) : null
+  const lifeTco2e = lifetime?.lifetime_carbon_saved_tco2e
+  const baseFuels = {}, postFuels = {}
+  for (const [f, v] of Object.entries(perFuel)) { baseFuels[f] = v.from_kwh; postFuels[f] = v.to_kwh }
+
   return (
     <div className="flex flex-col gap-5 p-4 overflow-y-auto">
       {/* ── Section 1 — Isolated impact ─────────────────────────────── */}
@@ -117,7 +133,16 @@ export default function PerInterventionView({ intervention, isolatedRow }) {
         </h3>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-3">
-          <HeadlineCard title="Lifetime carbon saved" placeholder="TBD — Brief C (CRREM)" />
+          {Number.isFinite(lifeTco2e) ? (
+            <HeadlineCard
+              title="Lifetime carbon saved"
+              accent={deltaColour(lifeTco2e, { savingIsNegative: false })}
+              value={`${fmtSigned(lifeTco2e, 1)} tCO₂e`}
+              sub={`by 2050 · ${lifetimeYears}y life`}
+            />
+          ) : (
+            <HeadlineCard title="Lifetime carbon saved" placeholder="no fuel delta" />
+          )}
           <HeadlineCard title="£ / tonne CO₂" placeholder="TBD — Brief B (cost)" />
           <HeadlineCard
             title="kWh saved / EUI Δ"
@@ -127,6 +152,13 @@ export default function PerInterventionView({ intervention, isolatedRow }) {
           />
           <HeadlineCard title="Simple payback" placeholder="TBD — Brief B (cost)" />
         </div>
+
+        {/* Brief 89: per-intervention CRREM carbon trajectory — saving vs baseline */}
+        {hasFuel && (
+          <div className="mb-3">
+            <MiniCrremChart baseFuels={baseFuels} postFuels={postFuels} gia={gia} />
+          </div>
+        )}
 
         <div className="rounded-lg border border-light-grey/70 bg-white px-3 py-2">
           <div className="text-xxs uppercase tracking-wider text-mid-grey/70 font-semibold pb-0.5">
