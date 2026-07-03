@@ -13,6 +13,7 @@
  *     people:    { kwh, peak_kw, hours_active }
  *     lighting:  { kwh, peak_kw, effective_lpd_w_per_m2, hours_active }
  *     equipment: { kwh, peak_kw, baseload_kwh, active_kwh, hours_active }
+ *     auxiliary: { kwh, electricity_kwh, peak_kw, hours_active, profiles }
  *     gia_m2:    number
  *     ready:     boolean    // false if weather isn't loaded yet
  *   }
@@ -36,6 +37,7 @@ export function useAnnualGains() {
       people:    { kwh: 0, peak_kw: 0, hours_active: 0 },
       lighting:  { kwh: 0, peak_kw: 0, effective_lpd_w_per_m2: 0, hours_active: 0 },
       equipment: { kwh: 0, peak_kw: 0, baseload_kwh: 0, active_kwh: 0, hours_active: 0 },
+      auxiliary: { kwh: 0, electricity_kwh: 0, peak_kw: 0, hours_active: 0, profiles: [] },
       gia_m2: 0,
       ready: false,
     }
@@ -51,10 +53,14 @@ export function useAnnualGains() {
     let peak_p = 0, peak_l = 0, peak_e = 0
     let baseload_wh = 0, active_wh = 0
     let hours_p = 0, hours_l = 0, hours_e_active = 0
+    // Auxiliary — heat-gain side (gain_fraction applied) + electricity carrier.
+    // Peak/hours track the electrical load (the section leads with electricity).
+    let aux_gain_wh = 0, aux_elec_wh = 0, peak_a = 0, hours_a = 0
 
     // v2.4 per-profile accumulators. Maps profile id → { kwh, peak_kw, hours }.
     const lightingProfileAccum  = new Map()
     const equipmentProfileAccum = new Map()
+    const auxiliaryProfileAccum = new Map()
 
     const n = weatherData.temperature.length
     for (let h = 0; h < n; h++) {
@@ -91,6 +97,21 @@ export function useAnnualGains() {
           if (p.active > 0.01) a.hours++
         }
       }
+
+      aux_gain_wh += g.auxiliary
+      aux_elec_wh += g.auxiliary_electricity
+      if (g.auxiliary_electricity > peak_a) peak_a = g.auxiliary_electricity
+      if (g.auxiliary_electricity > 0.01) hours_a++
+      if (g.auxiliary_per_profile) {
+        for (const p of g.auxiliary_per_profile) {
+          let a = auxiliaryProfileAccum.get(p.id)
+          if (!a) { a = { gain_wh: 0, elec_wh: 0, peak_w: 0, hours: 0 }; auxiliaryProfileAccum.set(p.id, a) }
+          a.gain_wh += p.value
+          a.elec_wh += p.electricity
+          if (p.electricity > a.peak_w) a.peak_w = p.electricity
+          if (p.electricity > 0.01) a.hours++
+        }
+      }
     }
 
     // Effective LPD = lighting kWh / GIA / 8760, useful for cross-check.
@@ -111,6 +132,15 @@ export function useAnnualGains() {
         kwh: a.wh / 1000, peak_kw: a.peak_w / 1000,
         baseload_kwh: a.base_wh / 1000, active_kwh: a.active_wh / 1000,
         hours_active: a.hours,
+      }
+    })
+    const auxiliary_profiles = (params?.gains?.auxiliary?.profiles ?? []).map(p => {
+      const a = auxiliaryProfileAccum.get(p.id) ?? { gain_wh: 0, elec_wh: 0, peak_w: 0, hours: 0 }
+      return {
+        id: p.id, label: p.label ?? p.id,
+        kwh: a.gain_wh / 1000,               // heat-gain side (matches other sections)
+        electricity_kwh: a.elec_wh / 1000,
+        peak_kw: a.peak_w / 1000, hours_active: a.hours,
       }
     })
 
@@ -134,6 +164,13 @@ export function useAnnualGains() {
         active_kwh: active_wh / 1000,
         hours_active: hours_e_active,
         profiles: equipment_profiles,
+      },
+      auxiliary: {
+        kwh: aux_gain_wh / 1000,             // heat gain to zone (gain_fraction applied)
+        electricity_kwh: aux_elec_wh / 1000, // electrical carrier (always full load)
+        peak_kw: peak_a / 1000,
+        hours_active: hours_a,
+        profiles: auxiliary_profiles,
       },
       gia_m2: gia,
       ready: true,

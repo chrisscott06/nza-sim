@@ -2829,7 +2829,7 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   const monthly_wall  = _mkM2(), monthly_roof = _mkM2(), monthly_floor = _mkM2(), monthly_glaz = _mkM2()
   const monthly_leakage = _mkM2(), monthly_permanent = _mkM2(), monthly_tb = _mkM2()
   const monthly_solar_n = _mkM2(), monthly_solar_e = _mkM2(), monthly_solar_s = _mkM2(), monthly_solar_w = _mkM2()
-  const monthly_people = _mkM2(), monthly_lighting = _mkM2(), monthly_equipment = _mkM2()
+  const monthly_people = _mkM2(), monthly_lighting = _mkM2(), monthly_equipment = _mkM2(), monthly_auxiliary = _mkM2()
 
   // Brief 28-IM IM-M3 (State 2 daily aggregation): mirror of State 1.
   // Adds per-opening natural-ventilation daily heat-loss + open-hours for
@@ -3092,6 +3092,7 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       monthly_people[_mi]    += gains.people
       monthly_lighting[_mi]  += gains.lighting
       monthly_equipment[_mi] += (gains.equipment_baseload + gains.equipment_active)
+      monthly_auxiliary[_mi] += gains.auxiliary   // heat-gain side (gain_fraction applied); 0 when gain_fraction=0
     }
     if (gains.people > peak_people) peak_people = gains.people
     if (gains.lighting > peak_lighting) peak_lighting = gains.lighting
@@ -4045,6 +4046,7 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
           people_kwh:    Array.from(monthly_people, v => r1k(v)),
           lighting_kwh:  Array.from(monthly_lighting, v => r1k(v)),
           equipment_kwh: Array.from(monthly_equipment, v => r1k(v)),
+          auxiliary_kwh: Array.from(monthly_auxiliary, v => r1k(v)),
         },
         totals: {
           total_heating_loss_kwh: r1k(

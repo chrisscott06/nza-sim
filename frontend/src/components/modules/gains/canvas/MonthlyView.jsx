@@ -71,6 +71,10 @@ export default function MonthlyView() {
   const peopleM    = gainsMonthly.people_kwh ?? _z()
   const lightingM  = gainsMonthly.lighting_kwh ?? _z()
   const equipmentM = gainsMonthly.equipment_kwh ?? _z()
+  // Auxiliary heat-gain side (gain_fraction applied) — joins the monthly
+  // breakdown so it's consistent with the annual heat balance, which already
+  // includes it. Zero when every auxiliary profile's gain_fraction = 0.
+  const auxiliaryM = gainsMonthly.auxiliary_kwh ?? _z()
   // Chris UX request (2026-05-17): also show solar gains here. Same source
   // as Building Monthly view — losses_at_setpoint.glazing.monthly_solar_transmission_kwh.
   const solarM     = los.glazing?.monthly_solar_transmission_kwh ?? _z()
@@ -78,7 +82,7 @@ export default function MonthlyView() {
   const totalGain = (gain) => Math.round(gain.reduce((s, v) => s + v, 0))
   const grandLoss = Math.round(lossMonthly.reduce((s, v) => s + v, 0))
   const grandSolar = totalGain(solarM)
-  const grandInternal = totalGain(peopleM) + totalGain(lightingM) + totalGain(equipmentM)
+  const grandInternal = totalGain(peopleM) + totalGain(lightingM) + totalGain(equipmentM) + totalGain(auxiliaryM)
 
   return (
     <div className="h-full overflow-y-auto">
@@ -97,7 +101,7 @@ export default function MonthlyView() {
           <p className="text-xxs text-mid-grey mt-0.5">
             Per-month aggregation of the 8760-hour engine trace. Months sit on
             a fixed horizontal axis through the middle; gains (solar + people +
-            lighting + equipment) grow upward, fabric heat loss grows downward.
+            lighting + equipment + auxiliary) grow upward, fabric heat loss grows downward.
           </p>
         </div>
 
@@ -111,6 +115,7 @@ export default function MonthlyView() {
                 { key: 'people',    label: `People (${totalGain(peopleM).toLocaleString()} kWh)`, color: GAIN_COLOURS.occupancy, values: peopleM },
                 { key: 'lighting',  label: `Lighting (${totalGain(lightingM).toLocaleString()} kWh)`, color: GAIN_COLOURS.lighting, values: lightingM },
                 { key: 'equipment', label: `Equipment (${totalGain(equipmentM).toLocaleString()} kWh)`, color: GAIN_COLOURS.equipment, values: equipmentM },
+                { key: 'auxiliary', label: `Auxiliary (${totalGain(auxiliaryM).toLocaleString()} kWh)`, color: GAIN_COLOURS.auxiliary, values: auxiliaryM },
               ]}
               lossesStacks={[
                 { key: 'fabric',    label: `Fabric loss (${grandLoss.toLocaleString()} kWh)`,    color: '#475569', values: lossMonthly },
