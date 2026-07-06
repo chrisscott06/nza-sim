@@ -479,7 +479,7 @@ export default function SystemsModule() {
    LEFT COLUMN — per-service section list (Brief 40 Part 3 rewrite)
    ─────────────────────────────────────────────────────────────────────── */
 
-const SERVICES_IN_ORDER = ['heating', 'cooling', 'dhw', 'ventilation', 'lighting', 'small_power']
+const SERVICES_IN_ORDER = ['heating', 'cooling', 'dhw', 'ventilation', 'lighting', 'small_power', 'auxiliary']
 const SERVICE_LABEL_BY_KEY = {
   heating:     'Heating',
   cooling:     'Cooling',
@@ -487,6 +487,7 @@ const SERVICE_LABEL_BY_KEY = {
   ventilation: 'Ventilation',
   lighting:    'Lighting',
   small_power: 'Small power',
+  auxiliary:   'Auxiliary',
 }
 
 /**
@@ -518,7 +519,7 @@ export function InputsColumn({ params, updateParam, consumption, comfortBand, op
   // clicking another service closes the current one. Clicking the open
   // section collapses it (leaving nothing open). Heating is the default.
   const [open, setOpen] = useState({
-    heating: true, cooling: false, dhw: false, ventilation: false, lighting: false, small_power: false,
+    heating: true, cooling: false, dhw: false, ventilation: false, lighting: false, small_power: false, auxiliary: false,
   })
   const toggle = (k) => setOpen(o => {
     const wasOpen = !!o[k]
@@ -1985,11 +1986,11 @@ function SystemsSchedule({ sysCfg, sysCfgV40, params, openScheduleEditor }) {
   const rows = []
   const SERVICE_LABELS = {
     heating: 'Heating', cooling: 'Cooling', dhw: 'DHW',
-    ventilation: 'Vent', lighting: 'Lighting', small_power: 'Small power',
+    ventilation: 'Vent', lighting: 'Lighting', small_power: 'Small power', auxiliary: 'Auxiliary',
   }
 
   if (sysCfgV40 && typeof sysCfgV40 === 'object') {
-    for (const service of ['heating', 'cooling', 'dhw', 'ventilation', 'lighting', 'small_power']) {
+    for (const service of ['heating', 'cooling', 'dhw', 'ventilation', 'lighting', 'small_power', 'auxiliary']) {
       const list = Array.isArray(sysCfgV40[service]) ? sysCfgV40[service] : []
       for (const sys of list) {
         if (!sys) continue

@@ -395,6 +395,26 @@ const DEFAULT_PARAMS = {
       notes:               '',
       enabled:             true,
     }],
+    // Brief 92 (2026-07-06) — auxiliary loads on/off. Thin entry mirroring
+    // lighting/small_power: the enabled flag gates the auxiliary LOAD (both
+    // electricity + heat gain) via effectiveSystemScalar. The loads themselves
+    // are defined per-profile in Internal Gains (gains.auxiliary); this is only
+    // the master on/off, like Lighting/Small power.
+    auxiliary: [{
+      id:                  'default_auxiliary',
+      label:               'Auxiliary (baseline)',
+      service:             'auxiliary',
+      source:              'electricity',
+      efficiency_metric:   null,
+      setpoint:            null,
+      control_mechanism:   'constant',
+      control_schedule_id: null,
+      control_factor:      1.0,
+      share_pct:           100,
+      capacity_kw:         null,
+      notes:               '',
+      enabled:             true,
+    }],
   },
   // Brief 40 Part 3 (2026-05-19) — per-project systems library (Brief 37
   // pattern, 'systems' namespace). Populated by SystemEditorCard "Save to
@@ -1040,6 +1060,22 @@ export function ProjectProvider({ children }) {
             ventilation: ventStripped,
           },
         }
+      }
+    }
+    // Brief 92 (2026-07-06): ensure systems_config_v40.auxiliary exists so the
+    // Systems on/off toggle appears for EXISTING projects (auxiliary was never a
+    // v40 service before). Unconditional + idempotent — no schema_version bump
+    // (purely additive; projects that already have it are a no-op). Mirrors the
+    // ventilation-strip pattern above. Absent auxiliary already means "on" in the
+    // engine (effectiveSystemScalar → 1.0), so this only materialises the toggle's
+    // storage; it changes no numbers.
+    if (bc?.systems_config_v40 && !Array.isArray(bc.systems_config_v40.auxiliary)) {
+      bc = {
+        ...bc,
+        systems_config_v40: {
+          ...bc.systems_config_v40,
+          auxiliary: DEFAULT_PARAMS.systems_config_v40.auxiliary.map(s => ({ ...s })),
+        },
       }
     }
     // Brief 72 P3 (2026-05-29): schema migration warning for the retired

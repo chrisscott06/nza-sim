@@ -2442,9 +2442,20 @@ function computeHourlyGains(building, h, weatherData, gia) {
       p.electricity *= smallPwrScalar
     }
   }
-  // Auxiliary has no v40 system scalar (auxiliary loads are not a Brief 40
-  // service; their on/off is governed by the profile's `relationship_to_
-  // occupancy` and area_share, not by a downstream systems array).
+  // Brief 92 (2026-07-06): auxiliary now has a v40 on/off scalar too, mirroring
+  // lighting/small_power. Gates the LOAD — both heat gain (Q_auxiliary) and
+  // electricity (Q_auxiliary_electricity) — so toggling auxiliary off in Systems
+  // removes it from the electricity total AND the heat balance. gain_fraction
+  // (the gain-vs-electricity split) is already applied upstream per profile.
+  const auxScalar = effectiveSystemScalar(building?.systems_config_v40?.auxiliary)
+  if (auxScalar !== 1) {
+    Q_auxiliary             *= auxScalar
+    Q_auxiliary_electricity *= auxScalar
+    for (const p of auxiliary_per_profile) {
+      p.value       *= auxScalar
+      p.electricity *= auxScalar
+    }
+  }
   const Q_equipment             = Q_equipment_baseload             + Q_equipment_active
   const Q_equipment_electricity = Q_equipment_electricity_baseload + Q_equipment_electricity_active
 
