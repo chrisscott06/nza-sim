@@ -13,18 +13,36 @@ from consolidated `main`). Also open: **Brief 91b** — Cost Plan Builder comple
 merged; P4–P9 remain — [`active/91b_cost_plan_completion_STUB.md`](active/91b_cost_plan_completion_STUB.md);
 "no brief touches the cost layer until it closes").
 
+## Housekeeping 2026-07-07 — stale-brief archive sweep
+
+Seven briefs moved out of `docs/briefs/active/` (only **91** + **91b** remain active). Suffixes are
+faithful to actual status, not blanket `_COMPLETED`:
+
+| Brief | New location | Status |
+|---|---|---|
+| 86 envelope-fix rebuild | [`archive/86_..._COMPLETED.md`](archive/86_envelope_fix_and_bridgwater_rebuild_COMPLETED.md) | merged into `main` (Brief 93) |
+| 87 interventions UX | [`archive/87_..._COMPLETED.md`](archive/87_interventions_ux_rework_COMPLETED.md) | code done; Part 7 walkthrough sign-off still Chris's |
+| 89 CRREM lifetime carbon | [`archive/89_..._COMPLETED.md`](archive/89_crrem_lifetime_carbon_COMPLETED.md) | done bar sign-off |
+| 92 auxiliary Systems toggle | [`archive/92_..._COMPLETED.md`](archive/92_auxiliary_systems_toggle_COMPLETED.md) | merged into `main` |
+| 90 NRM2 cost model | [`archive/90_..._SUPERSEDED.md`](archive/90_nrm2_cost_model_SUPERSEDED.md) | opened + blocked (Applemore); superseded by Brief 91 |
+| 75 ventilation heat modelling | [`archive/75_..._SUPERSEDED.md`](archive/75_ventilation_heat_modelling_SUPERSEDED.md) | P2-only open; superseded by Brief 76 |
+| 70 zone-temp/demand viewer | [`archive/70_..._ARCHIVED.md`](archive/70_zone_temp_demand_viewer_ARCHIVED.md) | Part 1 landed; P2–4 parked (still in Queued below) |
+
+Open remainders (70 P2–4, 75 P2) stay catalogued in the Queued section — archiving the files does not drop
+the work.
+
 **Brief 90 (Brief B) — NRM2 cost model.** Landed on `chris/interventions-rework-ux` (Part 1 docs only).
 **BLOCKED at Part 2** — the Applemore Feasibility Cost Plan spreadsheet (the rate-library source) is not
 in the repo. Needs Chris to provide it at `docs/reference/applemore_cost_plan.xlsm`. Last of three:
 A (UX, done) → C (CRREM, done bar sign-off) → **B (cost, blocked)**. Brief:
-[`active/90_nrm2_cost_model.md`](active/90_nrm2_cost_model.md); audit:
+[`archive/90_nrm2_cost_model_SUPERSEDED.md`](archive/90_nrm2_cost_model_SUPERSEDED.md); audit:
 [`../audit/90_nrm2_cost_model.md`](../audit/90_nrm2_cost_model.md).
 
 **Brief 89 (Brief C) — CRREM lifetime carbon.** Active on branch `chris/interventions-rework-ux`.
 Populates Brief A's placeholder Lifetime Carbon card (per-intervention) + CRREM stranding diagram
 (Strategy view) with fuel-switching-aware operational carbon math vs the UK CRREM trajectory. No engine
 changes; canonical carbon/CRREM read helpers per Bible Rule 11. Brief:
-[`active/89_crrem_lifetime_carbon.md`](active/89_crrem_lifetime_carbon.md); design note:
+[`archive/89_crrem_lifetime_carbon_COMPLETED.md`](archive/89_crrem_lifetime_carbon_COMPLETED.md); design note:
 [`../design-notes/brief_C_crrem_lifetime_carbon.md`](../design-notes/brief_C_crrem_lifetime_carbon.md);
 audit: [`../audit/89_crrem_lifetime_carbon.md`](../audit/89_crrem_lifetime_carbon.md). Closes into the
 combined PR with Brief 87 + 88. Second of three: A (UX, done) → **C (CRREM, this)** → B (NRM2 cost).
@@ -39,7 +57,7 @@ Independent review (Claude Chat) passed; tidy-up checks done (grep clean, Rule 1
 **Brief 87 — Interventions UX rework (Library/Strategy split + two-section per-intervention view).**
 Active on branch `chris/interventions-rework-ux` (cut from `main` `d8a6207`). UX restructure only — no
 engine changes. **Part 6 cleanup DONE** (old visualiser subgraph deleted); **Part 7 walkthrough = Chris's
-final sign-off pending**, then archive + single PR to `main`. Brief: [`active/87_interventions_ux_rework.md`](active/87_interventions_ux_rework.md);
+final sign-off pending**, then archive + single PR to `main`. Brief: [`archive/87_interventions_ux_rework_COMPLETED.md`](archive/87_interventions_ux_rework_COMPLETED.md);
 design note (canonical): [`../design-notes/interventions_rework.md`](../design-notes/interventions_rework.md).
 First of three: A (UX, this) → C (CRREM lifetime carbon) → B (NRM2 cost). Brief 75 stays open
 (P2-only — superseded by Brief 76 P2).
@@ -55,7 +73,7 @@ NB: Brief numbers 78–86 exist on other branches (`feat/energyplus-validation` 
 | 77 | 2026-06-02 | Per-system ventilation loss rendering (Heat Balance) — restore three per-system ribbons across Sankey/Rows/Stacked via mutual exclusion | [`archive/77_per_system_vent_rendering_COMPLETED.md`](archive/77_per_system_vent_rendering_COMPLETED.md) |
 | 76 | 2026-06-01 | v40-as-source for State 2 ventSystems builder (closes b9ae15b regression) | [`archive/76_v40_ventsystems_base_iterator_COMPLETED.md`](archive/76_v40_ventsystems_base_iterator_COMPLETED.md) |
 | ~~76 (draft)~~ | superseded before landing | ~~Route v40 projects to State 3 (close inline-legacy dispatch gap)~~ | [`archive/76_v40_state3_dispatch_SUPERSEDED.md`](archive/76_v40_state3_dispatch_SUPERSEDED.md) |
-| 75 | OPEN (P2-only) | Full ventilation heat modelling + Bridgewater heating-demand-zero diagnostic | [`active/75_ventilation_heat_modelling.md`](active/75_ventilation_heat_modelling.md) |
+| 75 | OPEN (P2-only) | Full ventilation heat modelling + Bridgewater heating-demand-zero diagnostic | [`archive/75_ventilation_heat_modelling_SUPERSEDED.md`](archive/75_ventilation_heat_modelling_SUPERSEDED.md) |
 | 74 | 2026-06-01 | Energy Flows auxiliary + Heat Balance mech vent loss ribbon (Sankey topology gaps) | [`archive/74_sankey_topology_gaps_COMPLETED.md`](archive/74_sankey_topology_gaps_COMPLETED.md) |
 | 73 | 2026-06-01 | Ventilation share rule + auxiliary visualisation + lighting baseline check | [`archive/73_ventilation_auxiliary_lighting_COMPLETED.md`](archive/73_ventilation_auxiliary_lighting_COMPLETED.md) |
 | 72 | 2026-05-29 | Auxiliary loads, gain_fraction, DHW load-shape UI + DB recovery (OVERNIGHT) | [`archive/72_auxiliary_loads_dhw_shape_COMPLETED.md`](archive/72_auxiliary_loads_dhw_shape_COMPLETED.md) |
