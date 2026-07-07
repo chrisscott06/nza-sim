@@ -50,6 +50,18 @@ import { computeFieldConflicts } from './InterventionStackView.jsx'
 import PerInterventionView from './PerInterventionView.jsx'
 import StrategyView from './StrategyView.jsx'
 import { useIsolatedResults } from './useIsolatedResults.js'
+// Brief 94 Part 3 — strategy = ordered refs into the library. The engine + stack
+// view consume the RESOLVED strategy (order + enabled from refs); reorder / toggle /
+// remove / add mutate strategies[0].refs, never the library definitions.
+import {
+  migrateStrategyRefs,
+  resolveStrategyInterventions,
+  reorderStrategyRefs,
+  setStrategyRefEnabled,
+  removeStrategyRef,
+  addStrategyRef,
+  strategyRefIdSet,
+} from '../../../utils/strategyModel.js'
 // Brief 47 Part 1 (2026-05-24): Library feature cut entirely per design
 // note. InterventionLibrary.jsx no longer imported.
 // Brief 47 Part 3 (2026-05-24): ComparisonView no longer mounted — the
@@ -110,7 +122,16 @@ export default function InterventionsModule() {
     editorDirtyRef.current = !!dirty
   }, [])
 
+  // The LIBRARY: all intervention definitions (order not meaningful). Backs the
+  // Library page + is the edit surface.
   const interventions = Array.isArray(params?.interventions) ? params.interventions : []
+
+  // Brief 94 Part 3 — the composed STRATEGY: library items in ref order with
+  // ref.enabled applied. The engine + the Strategy stack consume THIS, not the raw
+  // library — so reordering/toggling refs moves the stack. Post-migration it equals
+  // `interventions` exactly, so numbers stay byte-identical until the user acts.
+  const strategyInterventions = useMemo(() => resolveStrategyInterventions(params), [params])
+  const strategyRefIds = useMemo(() => strategyRefIdSet(params), [params])
 
   // Brief 89 (Brief C) Part 7: project-level CRREM pathway pick. v1 is single-
   // pathway — property type derives from the project building_type (single source
@@ -159,14 +180,17 @@ export default function InterventionsModule() {
   // unsaved edit in real time. When no editor is open or no live patches
   // have been emitted yet, paramsForEngine === params and engineResult
   // is identical to before this Part landed.
+  // Brief 94 Part 3 — the engine stacks the STRATEGY (ordered, enabled refs
+  // resolved to library items), not the raw library array. The live-patch swap for
+  // the open editor is applied on top by id.
   const paramsForEngine = useMemo(() => {
-    if (!editingId || !Array.isArray(livePatches)) return params
     if (!params) return params
-    const live = interventions.map(i =>
-      i.id === editingId ? { ...i, patches: livePatches } : i
-    )
-    return { ...params, interventions: live }
-  }, [params, interventions, editingId, livePatches])
+    let stack = strategyInterventions
+    if (editingId && Array.isArray(livePatches)) {
+      stack = stack.map(i => (i.id === editingId ? { ...i, patches: livePatches } : i))
+    }
+    return { ...params, interventions: stack }
+  }, [params, strategyInterventions, editingId, livePatches])
 
   // Engine result with interventions block (when present).
   //
@@ -264,15 +288,28 @@ export default function InterventionsModule() {
     setEditingId(id)
   }
 
+  // Brief 94 Part 3 — enable/disable is a STRATEGY-membership property: toggle the
+  // ref, not the library definition. (A library item could be enabled in one
+  // strategy, disabled in another — though v1 has a single strategy.)
   const handleToggleEnabled = (id) => {
-    const next = interventions.map(i =>
-      i.id === id ? { ...i, enabled: i.enabled === false } : i
-    )
-    updateParam('interventions', next)
+    updateParam('strategies', setStrategyRefEnabled(migrateStrategyRefs(params), id))
   }
 
-  const handleReorder = (next) => {
-    updateParam('interventions', next)
+  // Reorder mutates ref ORDER (the strategy), never the library array. The stack
+  // view hands back the reordered list of resolved items; we map to ids.
+  const handleReorder = (reorderedList) => {
+    const orderedIds = (Array.isArray(reorderedList) ? reorderedList : []).map(i => i.id)
+    updateParam('strategies', reorderStrategyRefs(migrateStrategyRefs(params), orderedIds))
+  }
+
+  // Remove from STRATEGY = drop the ref. The library definition survives (Decision 4).
+  const handleStrategyRemove = (id) => {
+    updateParam('strategies', removeStrategyRef(migrateStrategyRefs(params), id))
+  }
+
+  // Add a library item to the strategy (duplicate-guarded in addStrategyRef).
+  const handleAddFromLibrary = (id) => {
+    updateParam('strategies', addStrategyRef(migrateStrategyRefs(params), id))
   }
 
   // Brief 43 Part 1: switching to a different intervention while the
@@ -568,23 +605,23 @@ export default function InterventionsModule() {
             <aside className="flex-shrink-0 w-[440px] border-r border-light-grey bg-white overflow-auto">
               <div className="p-4">
                 <InterventionStackView
-                  interventions={interventions}
+                  interventions={strategyInterventions}
                   baselineSummary={baselineSummary}
                   stackResult={stackResult}
                   baselineConfig={baselineConfig}
                   onToggleEnabled={handleToggleEnabled}
                   onReorder={handleReorder}
-                  onEdit={handleEdit}
-                  onAdd={handleAdd}
-                  onDuplicate={handleDuplicate}
-                  onDelete={handleListDelete}
+                  onRemove={handleStrategyRemove}
+                  library={interventions}
+                  strategyRefIds={strategyRefIds}
+                  onAddFromLibrary={handleAddFromLibrary}
                 />
               </div>
             </aside>
             <main className="flex-1 min-w-0 bg-off-white overflow-hidden">
               <StrategyView
                 strategyName={params?.strategies?.[0]?.name ?? 'Strategy 1'}
-                interventions={interventions}
+                interventions={strategyInterventions}
                 stackResult={stackResult}
                 orientationDeg={Number(params?.orientation ?? 0)}
                 crremPick={crremPick}

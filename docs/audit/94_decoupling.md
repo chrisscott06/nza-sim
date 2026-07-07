@@ -138,3 +138,37 @@ enabled normalisation). Full frontend `npm run build` clean.
 
 _Parts 3–5 (UI wiring: strategy view reads refs, library edits, Apply-gating) require browser verification —
 pending Chris freeing port 5176 or preview autoPort._
+
+## §3 — Strategy view = select / order / toggle; reorder FIXED (Part 3)
+
+**Rewire.** The engine + Strategy stack now consume the **resolved strategy**
+(`resolveStrategyInterventions(params)` — library items in ref order, `ref.enabled` applied), not the raw
+library. `InterventionsModule`: `strategyInterventions` feeds `paramsForEngine.interventions` and the stack
+view; `handleReorder`/`handleToggleEnabled`/`handleStrategyRemove`/`handleAddFromLibrary` mutate
+`strategies[0].refs` via the pure helpers, never the library array. Post-migration the resolved list equals
+`interventions`, so numbers are byte-identical until the user acts (verified: baseline card reads 132.6).
+
+**Reorder fix (P1 root cause a106438).** `handleDrop(e, targetId)` no longer depends solely on the transient
+`dropGap`; it recomputes the destination from the drop-target row + cursor-Y at release when `dropGap` is
+null. Robust against the `<DropIndicator>` reflow that was invalidating the hover state.
+
+**Row affordances.** Strategy rows are selection/order/toggle/**remove** only — the edit + duplicate buttons
+were removed from `InterventionRow` (editing is the Library's job). "Remove" (X) drops the ref; the library
+item survives. New `AddFromLibraryPicker` (grouped by theme; items already in the strategy shown disabled as
+"In strategy" — Decision 2 dup guard).
+
+**Browser verification (Bridgewater, preview 5176):**
+- ✓ **Reorder persists after reload** — dragged "Widen setpoints" (#3 → #1); `strategies[0].refs` persisted to
+  DB with new order; `ordered_intervention_ids` gone (old shape not written back); full page reload shows the
+  new order. (Falsifiable #1.)
+- ✓ **No parameter inputs anywhere in the strategy pane** — DOM query: 0 `input`/`textarea`/`select`.
+  (Falsifiable #2.)
+- ✓ **Duplicate add impossible** — with all 8 items in the strategy, the picker shows all 8 as disabled
+  "In strategy". (Falsifiable #3.)
+- ✓ **Remove keeps the library item** — X on a row: stack 8→7, library still 8, removed item becomes addable
+  in the picker; re-add appends it at the end. Original order restored after testing.
+- ✓ No console errors. `npm run build` clean. Cost layer untouched (Brief 91b quarantine — £215k capex card
+  still renders).
+
+_Note: `handleDuplicate` in InterventionsModule is now unused by the strategy view; it is retained to be
+wired to the Library "clone" button in Part 4._

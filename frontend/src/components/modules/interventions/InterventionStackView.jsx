@@ -198,40 +198,101 @@ function BaselineRow({ baselineSummary, gia_m2 = 0 }) {
   )
 }
 
-function EmptyState({ onAdd }) {
+// Brief 94 P3 — the Strategy is a selection FROM the library. Empty strategy →
+// prompt to add from the library (or, if the library itself is empty, to create
+// one on the Library tab). No "create" here: the strategy never authors definitions.
+function EmptyState({ hasLibrary }) {
   return (
-    <div className="border border-dashed border-light-grey rounded-xl bg-off-white/30 p-10 text-center">
+    <div className="border border-dashed border-light-grey rounded-xl bg-off-white/30 p-8 text-center">
       <div className="mx-auto mb-3 w-12 h-12 rounded-full flex items-center justify-center" style={{ backgroundColor: INTERVENTIONS_ACCENT + '15' }}>
         <Plus size={20} style={{ color: INTERVENTIONS_ACCENT }} />
       </div>
-      <p className="text-caption font-medium text-navy mb-1">No interventions yet</p>
-      <p className="text-xxs text-mid-grey max-w-md mx-auto mb-5">
-        Interventions let you test what-if changes against the baseline
-        without modifying the baseline itself. Stack them in order to
-        see compounding effects.
+      <p className="text-caption font-medium text-navy mb-1">Strategy is empty</p>
+      <p className="text-xxs text-mid-grey max-w-md mx-auto">
+        {hasLibrary
+          ? 'Add interventions from your library below, then order them — each compounds on top of the ones above it.'
+          : 'Your library has no interventions yet. Create one on the Library tab, then add it to this strategy.'}
       </p>
+    </div>
+  )
+}
+
+// Brief 94 P3 — Add-from-library picker. Lists library items grouped by theme;
+// items already in the strategy are shown disabled ("In strategy" — duplicate guard,
+// Decision 2). Clicking an available item adds a reference (order = end).
+function AddFromLibraryPicker({ library = [], strategyRefIds, onAddFromLibrary }) {
+  const [open, setOpen] = useState(false)
+  const inStrategy = strategyRefIds instanceof Set ? strategyRefIds : new Set(strategyRefIds || [])
+
+  // Group by theme (fallback "Other"), preserving first-seen order.
+  const groups = []
+  const byTheme = new Map()
+  for (const iv of library) {
+    const theme = (iv?.theme && String(iv.theme).trim()) || 'Other'
+    if (!byTheme.has(theme)) { byTheme.set(theme, []); groups.push(theme) }
+    byTheme.get(theme).push(iv)
+  }
+
+  return (
+    <div>
       <button
-        onClick={onAdd}
-        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-white text-caption font-medium hover:opacity-90 transition-opacity"
-        style={{ backgroundColor: INTERVENTIONS_ACCENT }}
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-dashed text-xxs font-medium text-mid-grey hover:text-navy hover:bg-off-white/50 transition-colors"
+        style={{ borderColor: INTERVENTIONS_ACCENT + '60' }}
       >
-        <Plus size={14} /> Add your first intervention
+        <Plus size={12} style={{ color: INTERVENTIONS_ACCENT }} />
+        Add from library
       </button>
+      {open ? (
+        <div className="mt-1.5 rounded-lg border border-light-grey bg-white shadow-sm p-2 space-y-2 max-h-72 overflow-auto">
+          {library.length === 0 ? (
+            <p className="text-xxs text-mid-grey/60 italic px-1 py-1.5">
+              Library is empty — create interventions on the Library tab.
+            </p>
+          ) : (
+            groups.map(theme => (
+              <div key={theme}>
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-mid-grey/70 px-1 mb-0.5">{theme}</p>
+                {byTheme.get(theme).map(iv => {
+                  const already = inStrategy.has(iv.id)
+                  return (
+                    <button
+                      key={iv.id}
+                      type="button"
+                      disabled={already}
+                      onClick={() => { if (!already) { onAddFromLibrary?.(iv.id); setOpen(false) } }}
+                      className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded text-left transition-colors ${
+                        already ? 'cursor-not-allowed opacity-50' : 'hover:bg-off-white'
+                      }`}
+                    >
+                      <span className="text-xs text-navy truncate">{iv.label || '(untitled)'}</span>
+                      {already
+                        ? <span className="text-[10px] text-mid-grey/60 flex-shrink-0">In strategy</span>
+                        : <Plus size={12} className="flex-shrink-0" style={{ color: INTERVENTIONS_ACCENT }} />}
+                    </button>
+                  )
+                })}
+              </div>
+            ))
+          )}
+        </div>
+      ) : null}
     </div>
   )
 }
 
 export default function InterventionStackView({
-  interventions = [],
+  interventions = [],    // Brief 94 P3: the RESOLVED strategy (ordered library items + enabled)
   baselineSummary,
   stackResult,
   baselineConfig,
   onToggleEnabled,
   onReorder,
-  onEdit,
-  onAdd,
-  onDuplicate,           // Brief 45 Part 2
-  onDelete,              // Brief 47 Part 1.3
+  onRemove,              // Brief 94 P3: remove the reference from the strategy (library item survives)
+  library = [],          // Brief 94 P3: all library items (for the Add-from-library picker)
+  strategyRefIds,        // Brief 94 P3: Set of library_ids already in the strategy (dup guard)
+  onAddFromLibrary,      // Brief 94 P3: add a library item to the strategy
 }) {
   // Brief 87 drag UX: track the grabbed item + the insertion GAP (0..N) the
   // pink indicator points at, computed from the cursor's position within the
@@ -264,11 +325,25 @@ export default function InterventionStackView({
     const d = interventions.findIndex(i => i.id === draggingId)
     setDropGap(gap === d || gap === d + 1 ? null : gap)
   }
-  const handleDrop = (e) => {
+  // Brief 94 P3 fix (P1 diagnostic root cause: a106438): drop must NOT depend solely
+  // on the transient `dropGap` — the <DropIndicator> reflow shifts the list under the
+  // cursor and can leave `dropGap` null at release, silently no-op'ing the reorder.
+  // Recompute the destination from the row the drop fired on (`targetId`) + cursor Y
+  // at release, falling back to `dropGap` when it is set.
+  const handleDrop = (e, targetId) => {
     e.preventDefault()
     const d = interventions.findIndex(i => i.id === draggingId)
-    if (d === -1 || dropGap == null) { resetDrag(); return }
-    const insertAt = dropGap > d ? dropGap - 1 : dropGap
+    if (d === -1) { resetDrag(); return }
+    let gap = dropGap
+    if (gap == null && targetId != null) {
+      const idx = interventions.findIndex(i => i.id === targetId)
+      if (idx !== -1) {
+        const rect = e.currentTarget.getBoundingClientRect()
+        gap = e.clientY < rect.top + rect.height / 2 ? idx : idx + 1
+      }
+    }
+    if (gap == null) { resetDrag(); return }
+    const insertAt = gap > d ? gap - 1 : gap
     if (insertAt === d) { resetDrag(); return }
     const reordered = [...interventions]
     const [moved] = reordered.splice(d, 1)
@@ -288,7 +363,12 @@ export default function InterventionStackView({
     return (
       <div className="space-y-3">
         <BaselineRow baselineSummary={baselineSummary} gia_m2={gia_m2} />
-        <EmptyState onAdd={onAdd} />
+        <EmptyState hasLibrary={library.length > 0} />
+        <AddFromLibraryPicker
+          library={library}
+          strategyRefIds={strategyRefIds}
+          onAddFromLibrary={onAddFromLibrary}
+        />
       </div>
     )
   }
@@ -326,9 +406,7 @@ export default function InterventionStackView({
               baselineConfig={baselineConfig}
               gia_m2={gia_m2}
               onToggleEnabled={() => onToggleEnabled?.(intervention.id)}
-              onEdit={() => onEdit?.(intervention.id)}
-              onDuplicate={() => onDuplicate?.(intervention.id)}
-              onDelete={() => onDelete?.(intervention.id)}
+              onRemove={() => onRemove?.(intervention.id)}
               onDragStart={handleDragStart}
               onDragOver={handleDragOver}
               onDrop={handleDrop}
@@ -341,15 +419,13 @@ export default function InterventionStackView({
       })}
       {draggingId && dropGap === interventions.length ? <DropIndicator /> : null}
 
-      {/* + Add intervention */}
-      <button
-        onClick={onAdd}
-        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-dashed text-xxs font-medium text-mid-grey hover:text-navy hover:bg-off-white/50 transition-colors"
-        style={{ borderColor: INTERVENTIONS_ACCENT + '60' }}
-      >
-        <Plus size={12} style={{ color: INTERVENTIONS_ACCENT }} />
-        Add intervention
-      </button>
+      {/* Brief 94 P3 — Add from library (not "create"): pick an existing library
+          item; items already in the strategy are shown disabled (duplicate guard). */}
+      <AddFromLibraryPicker
+        library={library}
+        strategyRefIds={strategyRefIds}
+        onAddFromLibrary={onAddFromLibrary}
+      />
     </div>
   )
 }

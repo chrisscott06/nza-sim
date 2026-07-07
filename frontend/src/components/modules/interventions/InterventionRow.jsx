@@ -30,7 +30,7 @@
  */
 
 import { useState } from 'react'
-import { GripVertical, Pencil, AlertTriangle, Copy, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
+import { GripVertical, AlertTriangle, X, ChevronDown, ChevronRight } from 'lucide-react'
 import { summarizePatchListShort } from './patchCapture.js'
 import { useUISettings } from '../../../context/UISettingsContext.jsx'
 import { toDisplay, KIND } from './visualiser/unitFmt.js'
@@ -98,9 +98,7 @@ export default function InterventionRow({
   baselineConfig,
   gia_m2 = 0,               // 2026-05-26: for global unit-toggle conversion
   onToggleEnabled,
-  onEdit,
-  onDuplicate,              // Brief 45 Part 2
-  onDelete,                 // Brief 47 Part 1.3
+  onRemove,                 // Brief 94 P3 — remove ref from strategy (library item survives)
   onDragStart,
   onDragOver,
   onDrop,
@@ -263,36 +261,18 @@ export default function InterventionRow({
           {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
         </button>
 
-        {/* Action toolbar — visible up-front (Brief 47 Part 5a). Spacing
-            kept tight (gap-0.5) so the cluster reads as one toolbar, not
-            three loose icons. Backgrounds appear on hover. */}
+        {/* Brief 94 P3 — Strategy rows are selection/order/toggle/remove only. No
+            edit or duplicate here (editing is the Library's job — Decision 1).
+            "Remove" drops the reference from the strategy; the library item survives. */}
         <div className="flex-shrink-0 flex items-center gap-0.5">
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); onDuplicate?.() }}
-            className="p-1.5 rounded hover:bg-light-grey/50 text-mid-grey hover:text-navy transition-colors"
-            title="Duplicate this intervention"
-            aria-label="Duplicate"
-          >
-            <Copy size={13} />
-          </button>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onEdit?.() }}
-            className="p-1.5 rounded hover:bg-light-grey/50 text-mid-grey hover:text-navy transition-colors"
-            title="Edit this intervention"
-            aria-label="Edit"
-          >
-            <Pencil size={13} />
-          </button>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onDelete?.() }}
+            onClick={(e) => { e.stopPropagation(); onRemove?.() }}
             className="p-1.5 rounded hover:bg-red-50 text-mid-grey hover:text-red-600 transition-colors"
-            title="Delete this intervention"
-            aria-label="Delete"
+            title="Remove from strategy (keeps the library item)"
+            aria-label="Remove from strategy"
           >
-            <Trash2 size={13} />
+            <X size={13} />
           </button>
         </div>
       </div>

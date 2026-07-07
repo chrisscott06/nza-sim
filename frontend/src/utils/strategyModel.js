@@ -69,6 +69,61 @@ export function migrateStrategyRefs(bc) {
   }]
 }
 
+// ── Ref mutation helpers (Parts 3–5) — all immutable: take a strategies array,
+//    return a NEW strategies array with strategies[strategyIndex] updated. Order
+//    fields are always renumbered 0..N-1 to stay canonical. ─────────────────────
+
+function _withActive(strategies, strategyIndex, fn) {
+  const arr = Array.isArray(strategies) ? strategies : []
+  const strat = arr[strategyIndex]
+  if (!strat) return arr
+  const refs = Array.isArray(strat.refs) ? strat.refs : []
+  const nextRefs = fn(refs).map((r, i) => ({ ...r, order: i }))
+  const next = [...arr]
+  next[strategyIndex] = { ...strat, refs: nextRefs }
+  return next
+}
+
+/** Reorder refs to match `orderedLibraryIds` (ids not present are dropped; unknown ignored). */
+export function reorderStrategyRefs(strategies, orderedLibraryIds, strategyIndex = 0) {
+  return _withActive(strategies, strategyIndex, (refs) => {
+    const byId = new Map(refs.map((r) => [r.library_id, r]))
+    return orderedLibraryIds.map((id) => byId.get(id)).filter(Boolean)
+  })
+}
+
+/** Set (or toggle) a ref's enabled flag. Pass `enabled` omitted to toggle. */
+export function setStrategyRefEnabled(strategies, library_id, enabled, strategyIndex = 0) {
+  return _withActive(strategies, strategyIndex, (refs) =>
+    refs.map((r) =>
+      r.library_id === library_id
+        ? { ...r, enabled: enabled === undefined ? r.enabled === false : enabled !== false }
+        : r,
+    ),
+  )
+}
+
+/** Remove a library item's reference from the strategy (does NOT delete the library item). */
+export function removeStrategyRef(strategies, library_id, strategyIndex = 0) {
+  return _withActive(strategies, strategyIndex, (refs) =>
+    refs.filter((r) => r.library_id !== library_id),
+  )
+}
+
+/** Append a reference (enabled) if not already present (duplicate guard). No-op if present. */
+export function addStrategyRef(strategies, library_id, strategyIndex = 0) {
+  return _withActive(strategies, strategyIndex, (refs) =>
+    refs.some((r) => r.library_id === library_id) ? refs : [...refs, makeStrategyRef(library_id, true, refs.length)],
+  )
+}
+
+/** Set of library_ids currently referenced by the active strategy (for the picker's dup guard). */
+export function strategyRefIdSet(bc, strategyIndex = 0) {
+  const strategies = migrateStrategyRefs(bc)
+  const strat = strategies[strategyIndex]
+  return new Set(Array.isArray(strat?.refs) ? strat.refs.map((r) => r.library_id) : [])
+}
+
 /**
  * Canonical read path (Bible Rule 11) for the composed strategy: the ordered,
  * enabled-annotated library items the engine/UI should stack. Sorts by ref.order,
