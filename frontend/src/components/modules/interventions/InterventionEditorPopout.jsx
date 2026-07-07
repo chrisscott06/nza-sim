@@ -171,7 +171,6 @@ export default function InterventionEditorPopout({
   onCancel,
   onDelete,
   onDirtyChange,
-  onLivePatchesChange,   // Brief 47 Part 4 — visualiser live update
   themeSuggestions = [], // Brief 71 Part 4 — distinct existing themes for the combobox
 }) {
   const isOpen = !!intervention
@@ -197,6 +196,18 @@ export default function InterventionEditorPopout({
     () => cloneIncomingPatches(intervention?.patches)
   )
 
+  // Brief 94 P5 — Apply-gated recalc. `localPatches` updates on every keystroke/slider
+  // tick (form state). `debouncedPatches` trails it by 300 ms and is the ONLY thing that
+  // drives the editor's own preview engine — so a continuous slider drag fires ZERO
+  // engine runs mid-gesture; the preview updates once, 300 ms after the drag settles.
+  // The GLOBAL results never move while editing (the parent no longer swaps in-progress
+  // edits into its engine) — they recompute once on Apply.
+  const [debouncedPatches, setDebouncedPatches] = useState(localPatches)
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedPatches(localPatches), 300)
+    return () => clearTimeout(t)
+  }, [localPatches])
+
   // Reset local label + patches when intervention id changes (editor
   // switches to a different row without unmounting). Close-then-reopen
   // of the same intervention id remounts via SchedulePopout's
@@ -205,7 +216,9 @@ export default function InterventionEditorPopout({
   useEffect(() => {
     setLocalLabel(intervention?.label ?? '')
     setLocalTheme(intervention?.theme ?? '')
-    setLocalPatches(cloneIncomingPatches(intervention?.patches))
+    const seeded = cloneIncomingPatches(intervention?.patches)
+    setLocalPatches(seeded)
+    setDebouncedPatches(seeded)   // show the new intervention's preview immediately, not 300 ms late
   }, [intervention?.id])
 
   // Active section selection (left nav → right pane).
@@ -221,7 +234,7 @@ export default function InterventionEditorPopout({
       const editIntervention = {
         ...intervention,
         enabled: true,
-        patches: localPatches,
+        patches: debouncedPatches,   // Brief 94 P5 — debounced (300 ms), not per-tick
       }
       // Brief 58 A2 (2026-05-26): comfortBand required by engine. The cfg
       // passed by runInterventionStack carries the building under edit;
@@ -259,7 +272,7 @@ export default function InterventionEditorPopout({
       console.warn('[InterventionEditorPopout] preview engine threw:', err)
       return { baselineEui: null, baselineCarbon: null, previewEui: null, previewCarbon: null, baselineGia: 0 }
     }
-  }, [baselineConfig, intervention, localPatches, weatherData, hourlySolar, scheduleProfiles])
+  }, [baselineConfig, intervention, debouncedPatches, weatherData, hourlySolar, scheduleProfiles])
 
   // Dirty tracking — compares localPatches + localLabel against the
   // persisted intervention. Parent uses it for the switch-intervention
@@ -312,19 +325,21 @@ export default function InterventionEditorPopout({
     onCancel?.()
   }
 
-  // Re-seed local patches when capture context emits onChange.
-  // The provider lifts its local state into our localPatches so the
-  // engine recompute fires inside this component's useMemo above.
-  //
-  // Brief 47 Part 4 (2026-05-24): also relay to the parent's
-  // onLivePatchesChange so the InterventionsModule's right-pane
-  // visualiser can re-run its engine pass against the live-edited
-  // intervention. The two callbacks always agree; relaying both keeps
-  // the editor's own preview-EUI footer and the visualiser in sync.
+  // Capture-context onChange → update LOCAL editor state only (Brief 94 P5).
+  // The old Brief-47 relay to the parent's onLivePatchesChange (which recomputed the
+  // GLOBAL engine on every keystroke/drag) is removed: global numbers must not move
+  // until Apply. The editor's own preview is driven by `debouncedPatches` above.
   const handleCapturedPatchesChange = (nextPatches) => {
     setLocalPatches(nextPatches)
-    onLivePatchesChange?.(nextPatches)
   }
+
+  // Brief 94 P5 — Esc discards (with the unsaved-changes guard), same as Cancel.
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); handleCancel() } }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDirty])
 
   return (
     <SchedulePopout

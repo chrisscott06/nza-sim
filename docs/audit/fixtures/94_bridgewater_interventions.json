@@ -1,0 +1,333 @@
+{
+  "_note": "Brief 94 P2 migration fixture \u2014 real Bridgewater 12cf7cc4 interventions state, captured 2026-07-07",
+  "interventions": [
+    {
+      "id": "int_021d8687-4e7b-4015-a12d-b08cff955310",
+      "label": "Occupancy 2",
+      "notes": "",
+      "enabled": true,
+      "theme": "",
+      "capex_gbp": null,
+      "schema_version": 1,
+      "patches": [
+        {
+          "id": "patch_a0da1c06-66cc-448a-bb83-713fcc87ffa5",
+          "source": "inline",
+          "op": "set",
+          "path": "building.occupancy",
+          "value": {
+            "occupancy_rate": 1,
+            "density": {
+              "value": 2,
+              "basis": "per_room"
+            },
+            "sensible_w_per_person": 75,
+            "latent_w_per_person": 55,
+            "schedule": {
+              "weekday": [
+                0.9,
+                0.9,
+                0.9,
+                0.9,
+                0.9,
+                0.9,
+                0.7,
+                0.4,
+                0.3,
+                0.2,
+                0.2,
+                0.2,
+                0.2,
+                0.2,
+                0.2,
+                0.3,
+                0.4,
+                0.5,
+                0.6,
+                0.7,
+                0.8,
+                0.9,
+                0.9,
+                0.9
+              ],
+              "saturday": [
+                0.9,
+                0.9,
+                0.9,
+                0.9,
+                0.9,
+                0.9,
+                0.8,
+                0.5,
+                0.4,
+                0.3,
+                0.3,
+                0.3,
+                0.3,
+                0.3,
+                0.3,
+                0.4,
+                0.5,
+                0.6,
+                0.7,
+                0.8,
+                0.9,
+                0.9,
+                0.9,
+                0.9
+              ],
+              "sunday": [
+                0.9,
+                0.9,
+                0.9,
+                0.9,
+                0.9,
+                0.9,
+                0.8,
+                0.6,
+                0.5,
+                0.4,
+                0.4,
+                0.4,
+                0.4,
+                0.4,
+                0.4,
+                0.5,
+                0.5,
+                0.6,
+                0.7,
+                0.8,
+                0.9,
+                0.9,
+                0.9,
+                0.9
+              ],
+              "monthly_multipliers": [
+                0.7,
+                0.7,
+                0.8,
+                0.9,
+                1,
+                1,
+                1,
+                1,
+                1,
+                0.9,
+                0.8,
+                0.7
+              ],
+              "exceptions": []
+            },
+            "_provenance": {
+              "source": "migrated_from_legacy",
+              "confidence": "medium"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "int_dhw_ashp",
+      "label": "DHW: ASHP-only + exhaust-air (SCOP 5)",
+      "notes": "Replace gas water heater with exhaust-air ASHP, SCOP 5",
+      "enabled": true,
+      "theme": "Systems",
+      "capex_gbp": null,
+      "schema_version": 2,
+      "patches": [
+        {
+          "id": "p1",
+          "op": "set",
+          "path": "building.systems_config_v40.dhw[0].share_pct",
+          "value": 0,
+          "source": "inline"
+        },
+        {
+          "id": "p2",
+          "op": "set",
+          "path": "building.systems_config_v40.dhw[1].share_pct",
+          "value": 100,
+          "source": "inline"
+        },
+        {
+          "id": "p3",
+          "op": "set",
+          "path": "building.systems_config_v40.dhw[1].efficiency_metric",
+          "value": 5,
+          "source": "inline"
+        }
+      ],
+      "cost": {
+        "mode": "headline",
+        "headline": {
+          "design_engineering": 13440,
+          "equipment": 120000,
+          "installation_commissioning": 30000,
+          "additional_measures": 10000,
+          "project_delivery": 5760,
+          "contingency": 35840
+        },
+        "detailed": null,
+        "computed_total": 0
+      }
+    },
+    {
+      "id": "int_setpoints",
+      "label": "Widen setpoints (20 / 25 \u00b0C)",
+      "notes": "Heating 20, cooling 25 \u2014 wider deadband",
+      "enabled": true,
+      "theme": "Operation",
+      "capex_gbp": null,
+      "schema_version": 2,
+      "patches": [
+        {
+          "id": "p1",
+          "op": "set",
+          "path": "building.systems_config_v40.heating_setpoint_mode",
+          "value": "custom",
+          "source": "inline"
+        },
+        {
+          "id": "p2",
+          "op": "set",
+          "path": "building.systems_config_v40.heating_setpoint_c",
+          "value": 20,
+          "source": "inline"
+        },
+        {
+          "id": "p3",
+          "op": "set",
+          "path": "building.systems_config_v40.cooling_setpoint_mode",
+          "value": "custom",
+          "source": "inline"
+        },
+        {
+          "id": "p4",
+          "op": "set",
+          "path": "building.systems_config_v40.cooling_setpoint_c",
+          "value": 25,
+          "source": "inline"
+        }
+      ]
+    },
+    {
+      "id": "int_brise",
+      "label": "Brise soleil \u2014 south shading",
+      "notes": "~1.5 m horizontal shading on south facade",
+      "enabled": true,
+      "theme": "Solar",
+      "capex_gbp": null,
+      "schema_version": 2,
+      "patches": [
+        {
+          "id": "p1",
+          "op": "set",
+          "path": "building.shading_overhang.south.depth_m",
+          "value": 1.5,
+          "source": "inline"
+        },
+        {
+          "id": "patch_3f690ef6-b5ca-4bad-907c-dcfb4efcaadc",
+          "source": "inline",
+          "op": "set",
+          "path": "building.shading_overhang.south",
+          "value": {
+            "depth_m": 0.5,
+            "offset_m": 0
+          }
+        },
+        {
+          "id": "patch_89685123-b879-403c-8a87-505a7ffcffe3",
+          "source": "inline",
+          "op": "set",
+          "path": "building.shading_fin.south",
+          "value": {
+            "left_depth_m": 0.5,
+            "right_depth_m": 0.5
+          }
+        }
+      ]
+    },
+    {
+      "id": "int_mvhr",
+      "label": "Bedroom extract \u2192 MVHR (heat recovery)",
+      "notes": "Add 80% sensible heat recovery to bedroom extract",
+      "enabled": true,
+      "theme": "Ventilation",
+      "capex_gbp": null,
+      "schema_version": 2,
+      "patches": [
+        {
+          "id": "p1",
+          "op": "set",
+          "path": "building.systems_config_v40.ventilation[1].efficiency_metric.recovery_sensible_pct",
+          "value": 80,
+          "source": "inline"
+        }
+      ]
+    },
+    {
+      "id": "int_plug",
+      "label": "Plug-load management (daytime shutoff)",
+      "notes": "Reduce small-power baseload via daytime shutoff",
+      "enabled": true,
+      "theme": "Small power",
+      "capex_gbp": null,
+      "schema_version": 2,
+      "patches": [
+        {
+          "id": "p1",
+          "op": "set",
+          "path": "building.gains.equipment.profiles[0].baseload.value",
+          "value": 3.5,
+          "source": "inline"
+        }
+      ]
+    },
+    {
+      "id": "int_9e8760d5-711c-4c9a-b3fb-8ff9a31a15b7",
+      "label": "Air perm 1.9",
+      "notes": "",
+      "enabled": true,
+      "theme": "",
+      "capex_gbp": null,
+      "schema_version": 1,
+      "patches": [
+        {
+          "id": "patch_955991ba-46fa-4a13-b45e-c27d170e45e3",
+          "source": "inline",
+          "op": "set",
+          "path": "building.fabric",
+          "value": {
+            "air_permeability_q50": 1.9
+          }
+        }
+      ]
+    },
+    {
+      "id": "int_3279a9c9-a690-4310-9236-9df96dec2bc2",
+      "label": "New intervention",
+      "notes": "",
+      "enabled": true,
+      "theme": null,
+      "capex_gbp": null,
+      "schema_version": 1,
+      "patches": []
+    }
+  ],
+  "strategies": [
+    {
+      "id": "strategy_default",
+      "name": "Strategy 1",
+      "ordered_intervention_ids": [
+        "int_dhw_ashp",
+        "int_brise",
+        "int_led",
+        "int_setpoints",
+        "int_mvhr",
+        "int_plug"
+      ]
+    }
+  ],
+  "schema_version": 3
+}

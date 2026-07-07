@@ -2,6 +2,20 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
+## ✅ Brief 94 — Interventions Library/Strategy Decoupling + Apply-Gated Recalc — CLOSED 2026-07-07 *(branch `chris/interventions-decoupling`; PR open, NOT merged — Chris walkthrough + independent review PENDING)*
+
+Decoupled the intervention **library** (definitions, the sole edit surface) from the **strategy** (an ordered, parameter-read-only selection of `[{library_id, enabled, order}]` refs); gated all global recalc behind **Apply**; fixed the drag-reorder bug. **Zero physics** — fixture-anchor EUI **132.6** byte-identical from the P3 commit to the close commit.
+
+- **P1/P1b** — reorder diagnostic: **pre-existing** (not a merge regression; interventions UI byte-identical main vs parked branch). Root cause commit `a106438` (Brief 87 drag rework): `handleDrop` went from target-id-based → transient `dropGap` hover-state that the `<DropIndicator>` reflow invalidates. Baseline anchored 132.6 (aux = External-lighting input change from Chris's aux-toggle testing — explained, not drift).
+- **P2** — `frontend/src/utils/strategyModel.js`: Library = `interventions[]`, Strategy = `strategies[0].refs`. `migrateStrategyRefs` (idempotent, lossless; ignores the stale Brief-87 `ordered_intervention_ids`), `resolveStrategyInterventions` (Rule 11 read path). Test `scripts/_brief94_migration_test.mjs` **37/37**.
+- **P3** — strategy view = select/order/toggle/remove + AddFromLibraryPicker (dup guard); engine consumes the resolved strategy; **reorder fixed** (`handleDrop` recomputes from target row at release). Browser-verified: reorder persists after reload, 0 param inputs, dup add impossible.
+- **P4** — Library = sole editing surface: clone ("Copy of X", editor opens, no strategy touch) + guarded delete (confirm names strategy impact, drops ref). Browser-verified.
+- **P5** — Apply-gated recalc: removed the `livePatches→paramsForEngine` global coupling; editor edits are local; `debouncedPatches` (300 ms) drives the editor's own preview → zero engine mid-drag; **Save→Apply**; Esc discards. Browser-verified via label+DB: frozen during edit → Apply commits once → Esc discards.
+- **P6** — aux Systems pill `#4B5563` (was falling back to `#00AEEF` blue); removed the Energy-flow Sankey explainer paragraph (kept Σ chips).
+- **Anchor method amended** — `validation/fixtures/bridgewater_anchor_v2.yaml` (frozen) + `--fixture` mode in `_brief93_anchor.mjs`; the live DB is no longer a regression reference. P7 invariant: `--fixture` byte-identical P3↔close.
+
+Cost layer (Brief 91b quarantine) untouched throughout. Brief: [`archive/94_library_strategy_decoupling_COMPLETED.md`](docs/briefs/archive/94_library_strategy_decoupling_COMPLETED.md); audit: [`audit/94_decoupling.md`](docs/audit/94_decoupling.md).
+
 ## ✅ Brief 93 — Branch Consolidation — CLOSED 2026-07-07 *(on `main`; independent review PENDING)*
 
 **Consolidated three parallel branches into `main`** (which was 15 briefs stale at Brief 77 `d8a6207`).

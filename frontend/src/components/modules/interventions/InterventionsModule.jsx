@@ -27,7 +27,7 @@
  */
 
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { Pencil, Trash2 } from 'lucide-react'
+import { Pencil, Copy, Trash2 } from 'lucide-react'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { WeatherContext } from '../../../context/WeatherContext.jsx'
 import { useHourlySolar } from '../../../hooks/useHourlySolar.js'
@@ -50,6 +50,18 @@ import { computeFieldConflicts } from './InterventionStackView.jsx'
 import PerInterventionView from './PerInterventionView.jsx'
 import StrategyView from './StrategyView.jsx'
 import { useIsolatedResults } from './useIsolatedResults.js'
+// Brief 94 Part 3 — strategy = ordered refs into the library. The engine + stack
+// view consume the RESOLVED strategy (order + enabled from refs); reorder / toggle /
+// remove / add mutate strategies[0].refs, never the library definitions.
+import {
+  migrateStrategyRefs,
+  resolveStrategyInterventions,
+  reorderStrategyRefs,
+  setStrategyRefEnabled,
+  removeStrategyRef,
+  addStrategyRef,
+  strategyRefIdSet,
+} from '../../../utils/strategyModel.js'
 // Brief 47 Part 1 (2026-05-24): Library feature cut entirely per design
 // note. InterventionLibrary.jsx no longer imported.
 // Brief 47 Part 3 (2026-05-24): ComparisonView no longer mounted — the
@@ -91,15 +103,10 @@ export default function InterventionsModule() {
   const [page, setPage] = useState('library')
   const [selectedLibraryId, setSelectedLibraryId] = useState(null)
   // Brief 47 Part 1: library state (saveLibId / libraryPickerOpen) removed.
-  // Brief 47 Part 4 (2026-05-24): livePatches mirrors the editor's
-  // in-progress currentPatches so the right-pane visualiser updates
-  // live as the user edits in the (possibly off-screen) pop-out.
-  // Set to null when the editor isn't dirty / open; engineResult then
-  // consumes the saved params.interventions directly.
-  const [livePatches, setLivePatches] = useState(null)
-  const handleLivePatchesChange = useCallback((nextPatches) => {
-    setLivePatches(Array.isArray(nextPatches) ? nextPatches : null)
-  }, [])
+  // Brief 94 P5 — Apply-gated recalc: the editor no longer streams in-progress edits
+  // into the global engine. Global numbers recompute ONLY when params change (Apply /
+  // add / reorder / toggle). The old `livePatches` mirror is gone; the editor drives
+  // its OWN debounced preview locally.
   // Brief 43 Part 1: dirty state surfaced by the editor pop-out via
   // onDirtyChange. Used to gate switching to a different intervention
   // and closing the pop-out without saving. Stored in a ref so event
@@ -110,7 +117,16 @@ export default function InterventionsModule() {
     editorDirtyRef.current = !!dirty
   }, [])
 
+  // The LIBRARY: all intervention definitions (order not meaningful). Backs the
+  // Library page + is the edit surface.
   const interventions = Array.isArray(params?.interventions) ? params.interventions : []
+
+  // Brief 94 Part 3 — the composed STRATEGY: library items in ref order with
+  // ref.enabled applied. The engine + the Strategy stack consume THIS, not the raw
+  // library — so reordering/toggling refs moves the stack. Post-migration it equals
+  // `interventions` exactly, so numbers stay byte-identical until the user acts.
+  const strategyInterventions = useMemo(() => resolveStrategyInterventions(params), [params])
+  const strategyRefIds = useMemo(() => strategyRefIdSet(params), [params])
 
   // Brief 89 (Brief C) Part 7: project-level CRREM pathway pick. v1 is single-
   // pathway — property type derives from the project building_type (single source
@@ -152,21 +168,14 @@ export default function InterventionsModule() {
     library_schedules: params?.library_schedules ?? [],
   }), [constructionsLib, params?.library_systems, params?.library_schedules])
 
-  // Brief 47 Part 4 (2026-05-24): live-stack synthesis. When the editor
-  // is open AND has emitted live patches via onLivePatchesChange, swap
-  // the editing intervention's saved patches with the in-progress ones
-  // for the engine pass so the right-pane visualiser reflects the
-  // unsaved edit in real time. When no editor is open or no live patches
-  // have been emitted yet, paramsForEngine === params and engineResult
-  // is identical to before this Part landed.
+  // Brief 94 Part 3 — the engine stacks the STRATEGY (ordered, enabled refs resolved
+  // to library items), not the raw library array. Brief 94 P5 — Apply-gated: no
+  // in-progress editor edits are swapped in here, so the global result is frozen while
+  // editing and recomputes once when params change (Apply / add / reorder / toggle).
   const paramsForEngine = useMemo(() => {
-    if (!editingId || !Array.isArray(livePatches)) return params
     if (!params) return params
-    const live = interventions.map(i =>
-      i.id === editingId ? { ...i, patches: livePatches } : i
-    )
-    return { ...params, interventions: live }
-  }, [params, interventions, editingId, livePatches])
+    return { ...params, interventions: strategyInterventions }
+  }, [params, strategyInterventions])
 
   // Engine result with interventions block (when present).
   //
@@ -264,15 +273,28 @@ export default function InterventionsModule() {
     setEditingId(id)
   }
 
+  // Brief 94 Part 3 — enable/disable is a STRATEGY-membership property: toggle the
+  // ref, not the library definition. (A library item could be enabled in one
+  // strategy, disabled in another — though v1 has a single strategy.)
   const handleToggleEnabled = (id) => {
-    const next = interventions.map(i =>
-      i.id === id ? { ...i, enabled: i.enabled === false } : i
-    )
-    updateParam('interventions', next)
+    updateParam('strategies', setStrategyRefEnabled(migrateStrategyRefs(params), id))
   }
 
-  const handleReorder = (next) => {
-    updateParam('interventions', next)
+  // Reorder mutates ref ORDER (the strategy), never the library array. The stack
+  // view hands back the reordered list of resolved items; we map to ids.
+  const handleReorder = (reorderedList) => {
+    const orderedIds = (Array.isArray(reorderedList) ? reorderedList : []).map(i => i.id)
+    updateParam('strategies', reorderStrategyRefs(migrateStrategyRefs(params), orderedIds))
+  }
+
+  // Remove from STRATEGY = drop the ref. The library definition survives (Decision 4).
+  const handleStrategyRemove = (id) => {
+    updateParam('strategies', removeStrategyRef(migrateStrategyRefs(params), id))
+  }
+
+  // Add a library item to the strategy (duplicate-guarded in addStrategyRef).
+  const handleAddFromLibrary = (id) => {
+    updateParam('strategies', addStrategyRef(migrateStrategyRefs(params), id))
   }
 
   // Brief 43 Part 1: switching to a different intervention while the
@@ -296,7 +318,6 @@ export default function InterventionsModule() {
   const handleCloseEditor = () => {
     setEditingId(null)
     editorDirtyRef.current = false
-    setLivePatches(null)   // Brief 47 Part 4 — clear live override on close
   }
 
   const handleSaveEditing = (updatedIntervention) => {
@@ -307,7 +328,6 @@ export default function InterventionsModule() {
     updateParam('interventions', next)
     setEditingId(null)
     editorDirtyRef.current = false
-    setLivePatches(null)   // Brief 47 Part 4 — saved patches now in params; clear live override
   }
 
   const handleDeleteEditing = () => {
@@ -316,7 +336,6 @@ export default function InterventionsModule() {
     updateParam('interventions', next)
     setEditingId(null)
     editorDirtyRef.current = false
-    setLivePatches(null)   // Brief 47 Part 4
   }
 
   // Brief 45 Part 2 (2026-05-21): duplicate an intervention. Deep-clones
@@ -326,26 +345,32 @@ export default function InterventionsModule() {
   // The engine re-runs naturally as the interventions array updates via
   // updateParam, producing fresh marginal/cumulative deltas for the new
   // row.
-  const handleDuplicate = (id) => {
+  // Brief 94 P4 — CLONE is a Library action: variants of a type are separate library
+  // items (Decision 1). One click → "Copy of X", opened ready to edit. Deep-clones
+  // patches with fresh UUIDs. Does NOT touch the strategy (a clone is a new definition,
+  // not a strategy member — Decision 4 / Part 4.3).
+  const handleClone = (id) => {
     const sourceIdx = interventions.findIndex(i => i.id === id)
     if (sourceIdx === -1) return
     const source = interventions[sourceIdx]
     const newPatchId = () => `patch_${(typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2)}`
-    const duplicated = {
+    const cloneId = newId('int')
+    const cloned = {
       ...source,
-      id: newId('int'),
-      label: `${source.label ?? 'Intervention'} (copy)`,
-      enabled: source.enabled !== false,
+      id: cloneId,
+      label: `Copy of ${source.label ?? 'Intervention'}`,
       patches: Array.isArray(source.patches)
         ? source.patches.map(p => ({ ...p, id: newPatchId() }))
         : [],
     }
     const next = [
       ...interventions.slice(0, sourceIdx + 1),
-      duplicated,
+      cloned,
       ...interventions.slice(sourceIdx + 1),
     ]
     updateParam('interventions', next)
+    setSelectedLibraryId(cloneId)   // select the clone in the Library catalogue
+    setEditingId(cloneId)           // …and open the editor — "ready to edit"
   }
 
   const editing = editingId ? interventions.find(i => i.id === editingId) : null
@@ -354,21 +379,26 @@ export default function InterventionsModule() {
   // icon on each stack row invokes this. Confirm-before-delete because
   // interventions can be expensive to rebuild. Closes the editor pop-out
   // if the deleted intervention is currently being edited.
-  const handleListDelete = async (id) => {
+  // Brief 94 P4 — deleting a LIBRARY item removes the definition. If it is
+  // referenced by the strategy, the confirm names that impact and, on confirm, the
+  // reference is dropped from the stack too (Decision 4 / Part 4.2).
+  const handleLibraryDelete = async (id) => {
     const target = interventions.find(i => i.id === id)
     const label = target?.label || '(unnamed intervention)'
     const patchCount = Array.isArray(target?.patches) ? target.patches.length : 0
-    const message = patchCount > 0
-      ? `${patchCount} patch${patchCount === 1 ? '' : 'es'} will be permanently removed. This cannot be undone.`
-      : 'This cannot be undone.'
+    const inStrategy = strategyRefIds.has(id)
+    const bits = []
+    if (patchCount > 0) bits.push(`${patchCount} patch${patchCount === 1 ? '' : 'es'} will be permanently removed`)
+    if (inStrategy) bits.push('it will also be removed from your strategy')
+    const message = (bits.length ? `${bits.join('; ')}. ` : '') + 'This cannot be undone.'
     if (!(await confirm({
       title: `Delete "${label}"?`,
       message,
       confirmText: 'Delete',
       tone: 'danger',
     }))) return
-    const next = interventions.filter(i => i.id !== id)
-    updateParam('interventions', next)
+    updateParam('interventions', interventions.filter(i => i.id !== id))
+    if (inStrategy) updateParam('strategies', removeStrategyRef(migrateStrategyRefs(params), id))
     if (editingId === id) {
       setEditingId(null)
       editorDirtyRef.current = false
@@ -530,8 +560,16 @@ export default function InterventionsModule() {
                             </button>
                             <button
                               type="button"
+                              title="Clone — create an editable copy (a new library item)"
+                              onClick={(e) => { e.stopPropagation(); handleClone(iv.id) }}
+                              className="p-1 rounded text-mid-grey/40 hover:text-navy hover:bg-light-grey/50 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <Copy size={13} />
+                            </button>
+                            <button
+                              type="button"
                               title="Delete intervention"
-                              onClick={(e) => { e.stopPropagation(); handleListDelete(iv.id) }}
+                              onClick={(e) => { e.stopPropagation(); handleLibraryDelete(iv.id) }}
                               className="p-1 rounded text-mid-grey/40 hover:text-red-600 hover:bg-light-grey/50 opacity-0 group-hover:opacity-100 transition-opacity"
                             >
                               <Trash2 size={13} />
@@ -568,23 +606,23 @@ export default function InterventionsModule() {
             <aside className="flex-shrink-0 w-[440px] border-r border-light-grey bg-white overflow-auto">
               <div className="p-4">
                 <InterventionStackView
-                  interventions={interventions}
+                  interventions={strategyInterventions}
                   baselineSummary={baselineSummary}
                   stackResult={stackResult}
                   baselineConfig={baselineConfig}
                   onToggleEnabled={handleToggleEnabled}
                   onReorder={handleReorder}
-                  onEdit={handleEdit}
-                  onAdd={handleAdd}
-                  onDuplicate={handleDuplicate}
-                  onDelete={handleListDelete}
+                  onRemove={handleStrategyRemove}
+                  library={interventions}
+                  strategyRefIds={strategyRefIds}
+                  onAddFromLibrary={handleAddFromLibrary}
                 />
               </div>
             </aside>
             <main className="flex-1 min-w-0 bg-off-white overflow-hidden">
               <StrategyView
                 strategyName={params?.strategies?.[0]?.name ?? 'Strategy 1'}
-                interventions={interventions}
+                interventions={strategyInterventions}
                 stackResult={stackResult}
                 orientationDeg={Number(params?.orientation ?? 0)}
                 crremPick={crremPick}
@@ -611,7 +649,6 @@ export default function InterventionsModule() {
         onCancel={handleCloseEditor}
         onDelete={handleDeleteEditing}
         onDirtyChange={handleDirtyChange}
-        onLivePatchesChange={handleLivePatchesChange}
         themeSuggestions={themeSuggestions}
       />
 

@@ -171,9 +171,9 @@ export default function EditorFooter({
           disabled={!canSave}
           className="px-4 py-1.5 rounded-lg text-white text-xxs font-medium hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ backgroundColor: INTERVENTIONS_ACCENT }}
-          title={canSave ? 'Save changes to intervention' : (saveDisabledReason ?? 'Cannot save — see editor')}
+          title={canSave ? 'Apply changes — commits the definition and recomputes the strategy once' : (saveDisabledReason ?? 'Cannot apply — see editor')}
         >
-          Save intervention
+          Apply
         </button>
       </div>
     </div>

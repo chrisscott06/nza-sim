@@ -1,5 +1,18 @@
 # Current brief
 
+**Brief 94 — Interventions Library/Strategy Decoupling + Apply-Gated Recalc — CLOSED 2026-07-07 (PR open;
+Chris walkthrough + independent review pending).** On branch `chris/interventions-decoupling` (off `main`
+`533db7e`). Decoupled the intervention **library** (definitions) from the **strategy** (ordered
+`[{library_id, enabled, order}]` refs), gated all global recalc behind **Apply**, and fixed the drag-reorder
+bug. **Zero physics** (fixture-anchor EUI **132.6** byte-identical P3→close). Parts: P1 diagnostic (reorder =
+pre-existing, root cause Brief 87 `a106438`) · P2 refs data-model + lossless migrate-on-read (37/37 tests) ·
+P3 strategy view select/order/toggle + reorder fix · P4 library = sole editing surface (clone + guarded
+delete) · P5 Apply-gated recalc · P6 aux tab colour + Sankey explainer. Anchor method amended to a **frozen
+fixture** (`validation/fixtures/bridgewater_anchor_v2.yaml` + `--fixture` mode) — the live DB is no longer a
+regression reference. Brief: [`archive/94_library_strategy_decoupling_COMPLETED.md`](archive/94_library_strategy_decoupling_COMPLETED.md);
+audit: [`../audit/94_decoupling.md`](../audit/94_decoupling.md). **Do NOT merge until Chris walkthrough +
+independent review.**
+
 **Brief 93 — Branch Consolidation — CLOSED 2026-07-07 (independent review pending).** The three long-running
 branches are merged into `main`: `feat/envelope-fix-bridgwater-rebuild` (Brief 86 — rebuilt Bridgewater),
 `chris/interventions-rework-ux` (Briefs 87–92 — interventions / CRREM / cost / gains), and

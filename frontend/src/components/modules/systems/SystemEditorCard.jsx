@@ -44,6 +44,9 @@ export const SERVICE_COLOURS = {
   ventilation: '#14B8A6',  // teal-500
   lighting:    '#F59E0B',  // amber
   small_power: '#8B5CF6',  // violet
+  auxiliary:   '#4B5563',  // gray-600 — Brief 94 P6: match the internal-gains auxiliary
+                           // colour (DEMAND_COLOURS/INTERNAL_COLOURS.auxiliary) instead of
+                           // falling back to the #00AEEF cooling-blue.
 }
 
 // Per-service source options (audit doc §2.x)

@@ -30,7 +30,7 @@
  */
 
 import { useState } from 'react'
-import { GripVertical, Pencil, AlertTriangle, Copy, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
+import { GripVertical, AlertTriangle, X, ChevronDown, ChevronRight, ChevronUp, Loader2 } from 'lucide-react'
 import { summarizePatchListShort } from './patchCapture.js'
 import { useUISettings } from '../../../context/UISettingsContext.jsx'
 import { toDisplay, KIND } from './visualiser/unitFmt.js'
@@ -98,13 +98,14 @@ export default function InterventionRow({
   baselineConfig,
   gia_m2 = 0,               // 2026-05-26: for global unit-toggle conversion
   onToggleEnabled,
-  onEdit,
-  onDuplicate,              // Brief 45 Part 2
-  onDelete,                 // Brief 47 Part 1.3
+  onRemove,                 // Brief 94 P3 — remove ref from strategy (library item survives)
   onDragStart,
-  onDragOver,
-  onDrop,
   onDragEnd,
+  onMoveUp,                 // Brief 94 follow-up — deterministic keyboard-accessible reorder
+  onMoveDown,
+  canMoveUp = false,
+  canMoveDown = false,
+  pending = false,          // Brief 94 follow-up — reorder-in-flight spinner on the moved row
   draggingId,
   landed,           // Brief 87 drag UX — brief pink flash after the row settles
 }) {
@@ -164,9 +165,8 @@ export default function InterventionRow({
   return (
     <div
       draggable
+      data-row-id={intervention?.id}
       onDragStart={(e) => onDragStart?.(e, intervention?.id)}
-      onDragOver={(e) => onDragOver?.(e, intervention?.id)}
-      onDrop={(e) => onDrop?.(e, intervention?.id)}
       onDragEnd={onDragEnd}
       className={`${wrapperBase} ${wrapperPadding} ${wrapperState} ${wrapperDrag} ${isDragging || landed ? '' : 'border-light-grey'}`}
       style={
@@ -177,16 +177,47 @@ export default function InterventionRow({
             : undefined
       }
     >
-      {/* Header row: drag handle · enable dot · label · chevron · actions */}
+      {/* Header row: drag handle + up/down + enable dot · label · chevron · actions */}
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          className="cursor-grab text-mid-grey/60 hover:text-mid-grey active:cursor-grabbing flex-shrink-0"
-          title="Drag to reorder"
-          tabIndex={-1}
-        >
-          <GripVertical size={14} />
-        </button>
+        {/* Reorder controls: drag handle (mouse) + up/down arrows (deterministic,
+            keyboard-accessible fallback — Brief 94 follow-up). A spinner replaces the
+            handle while a reorder is in flight. */}
+        <div className="flex-shrink-0 flex items-center gap-0.5">
+          {pending ? (
+            <Loader2 size={14} className="animate-spin text-mid-grey/70" aria-label="Reordering…" />
+          ) : (
+            <button
+              type="button"
+              className="cursor-grab text-mid-grey/60 hover:text-mid-grey active:cursor-grabbing"
+              title="Drag to reorder"
+              tabIndex={-1}
+            >
+              <GripVertical size={14} />
+            </button>
+          )}
+          <div className="flex flex-col -my-1">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onMoveUp?.() }}
+              disabled={!canMoveUp}
+              title="Move up"
+              aria-label="Move up"
+              className="p-0.5 rounded text-mid-grey/50 hover:text-navy hover:bg-light-grey/50 disabled:opacity-25 disabled:cursor-not-allowed transition-colors leading-none"
+            >
+              <ChevronUp size={12} />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onMoveDown?.() }}
+              disabled={!canMoveDown}
+              title="Move down"
+              aria-label="Move down"
+              className="p-0.5 rounded text-mid-grey/50 hover:text-navy hover:bg-light-grey/50 disabled:opacity-25 disabled:cursor-not-allowed transition-colors leading-none"
+            >
+              <ChevronDown size={12} />
+            </button>
+          </div>
+        </div>
 
         <button
           type="button"
@@ -263,36 +294,18 @@ export default function InterventionRow({
           {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
         </button>
 
-        {/* Action toolbar — visible up-front (Brief 47 Part 5a). Spacing
-            kept tight (gap-0.5) so the cluster reads as one toolbar, not
-            three loose icons. Backgrounds appear on hover. */}
+        {/* Brief 94 P3 — Strategy rows are selection/order/toggle/remove only. No
+            edit or duplicate here (editing is the Library's job — Decision 1).
+            "Remove" drops the reference from the strategy; the library item survives. */}
         <div className="flex-shrink-0 flex items-center gap-0.5">
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); onDuplicate?.() }}
-            className="p-1.5 rounded hover:bg-light-grey/50 text-mid-grey hover:text-navy transition-colors"
-            title="Duplicate this intervention"
-            aria-label="Duplicate"
-          >
-            <Copy size={13} />
-          </button>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onEdit?.() }}
-            className="p-1.5 rounded hover:bg-light-grey/50 text-mid-grey hover:text-navy transition-colors"
-            title="Edit this intervention"
-            aria-label="Edit"
-          >
-            <Pencil size={13} />
-          </button>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onDelete?.() }}
+            onClick={(e) => { e.stopPropagation(); onRemove?.() }}
             className="p-1.5 rounded hover:bg-red-50 text-mid-grey hover:text-red-600 transition-colors"
-            title="Delete this intervention"
-            aria-label="Delete"
+            title="Remove from strategy (keeps the library item)"
+            aria-label="Remove from strategy"
           >
-            <Trash2 size={13} />
+            <X size={13} />
           </button>
         </div>
       </div>
