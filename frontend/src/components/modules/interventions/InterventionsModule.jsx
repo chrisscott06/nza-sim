@@ -103,15 +103,10 @@ export default function InterventionsModule() {
   const [page, setPage] = useState('library')
   const [selectedLibraryId, setSelectedLibraryId] = useState(null)
   // Brief 47 Part 1: library state (saveLibId / libraryPickerOpen) removed.
-  // Brief 47 Part 4 (2026-05-24): livePatches mirrors the editor's
-  // in-progress currentPatches so the right-pane visualiser updates
-  // live as the user edits in the (possibly off-screen) pop-out.
-  // Set to null when the editor isn't dirty / open; engineResult then
-  // consumes the saved params.interventions directly.
-  const [livePatches, setLivePatches] = useState(null)
-  const handleLivePatchesChange = useCallback((nextPatches) => {
-    setLivePatches(Array.isArray(nextPatches) ? nextPatches : null)
-  }, [])
+  // Brief 94 P5 — Apply-gated recalc: the editor no longer streams in-progress edits
+  // into the global engine. Global numbers recompute ONLY when params change (Apply /
+  // add / reorder / toggle). The old `livePatches` mirror is gone; the editor drives
+  // its OWN debounced preview locally.
   // Brief 43 Part 1: dirty state surfaced by the editor pop-out via
   // onDirtyChange. Used to gate switching to a different intervention
   // and closing the pop-out without saving. Stored in a ref so event
@@ -173,24 +168,14 @@ export default function InterventionsModule() {
     library_schedules: params?.library_schedules ?? [],
   }), [constructionsLib, params?.library_systems, params?.library_schedules])
 
-  // Brief 47 Part 4 (2026-05-24): live-stack synthesis. When the editor
-  // is open AND has emitted live patches via onLivePatchesChange, swap
-  // the editing intervention's saved patches with the in-progress ones
-  // for the engine pass so the right-pane visualiser reflects the
-  // unsaved edit in real time. When no editor is open or no live patches
-  // have been emitted yet, paramsForEngine === params and engineResult
-  // is identical to before this Part landed.
-  // Brief 94 Part 3 — the engine stacks the STRATEGY (ordered, enabled refs
-  // resolved to library items), not the raw library array. The live-patch swap for
-  // the open editor is applied on top by id.
+  // Brief 94 Part 3 — the engine stacks the STRATEGY (ordered, enabled refs resolved
+  // to library items), not the raw library array. Brief 94 P5 — Apply-gated: no
+  // in-progress editor edits are swapped in here, so the global result is frozen while
+  // editing and recomputes once when params change (Apply / add / reorder / toggle).
   const paramsForEngine = useMemo(() => {
     if (!params) return params
-    let stack = strategyInterventions
-    if (editingId && Array.isArray(livePatches)) {
-      stack = stack.map(i => (i.id === editingId ? { ...i, patches: livePatches } : i))
-    }
-    return { ...params, interventions: stack }
-  }, [params, strategyInterventions, editingId, livePatches])
+    return { ...params, interventions: strategyInterventions }
+  }, [params, strategyInterventions])
 
   // Engine result with interventions block (when present).
   //
@@ -333,7 +318,6 @@ export default function InterventionsModule() {
   const handleCloseEditor = () => {
     setEditingId(null)
     editorDirtyRef.current = false
-    setLivePatches(null)   // Brief 47 Part 4 — clear live override on close
   }
 
   const handleSaveEditing = (updatedIntervention) => {
@@ -344,7 +328,6 @@ export default function InterventionsModule() {
     updateParam('interventions', next)
     setEditingId(null)
     editorDirtyRef.current = false
-    setLivePatches(null)   // Brief 47 Part 4 — saved patches now in params; clear live override
   }
 
   const handleDeleteEditing = () => {
@@ -353,7 +336,6 @@ export default function InterventionsModule() {
     updateParam('interventions', next)
     setEditingId(null)
     editorDirtyRef.current = false
-    setLivePatches(null)   // Brief 47 Part 4
   }
 
   // Brief 45 Part 2 (2026-05-21): duplicate an intervention. Deep-clones
@@ -667,7 +649,6 @@ export default function InterventionsModule() {
         onCancel={handleCloseEditor}
         onDelete={handleDeleteEditing}
         onDirtyChange={handleDirtyChange}
-        onLivePatchesChange={handleLivePatchesChange}
         themeSuggestions={themeSuggestions}
       />
 

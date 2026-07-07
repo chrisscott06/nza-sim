@@ -219,3 +219,33 @@ playground — **never a regression reference again**.
 _Editing itself already lived on the Library page (the existing editor mounts from the catalogue's edit
 pencil → PerInterventionView / InterventionEditorPopout); Part 3 removed edit from the Strategy view, so the
 Library is now the single editing surface._
+
+## §5 — Apply-gated recalc (Part 5)
+
+**The only coupling causing live global recompute was `editor → onLivePatchesChange → parent livePatches →
+paramsForEngine swap`.** Removed:
+- `InterventionsModule`: deleted `livePatches` state + `handleLivePatchesChange`; `paramsForEngine` is now
+  `{ ...params, interventions: strategyInterventions }` (deps `[params, strategyInterventions]`) — the global
+  engine depends **only on committed params**, so global numbers are frozen while editing and recompute
+  **once** when params change (Apply / add / reorder / toggle). Removed the `onLivePatchesChange` prop + the
+  three `setLivePatches(null)` calls.
+- `InterventionEditorPopout`: input/slider changes update **local** state only (`handleCapturedPatchesChange`
+  no longer relays upward). A new `debouncedPatches` (300 ms) is the sole driver of the editor's OWN preview
+  engine → **zero engine runs mid-drag**; the preview updates once ~300 ms after the gesture settles. Added an
+  **Esc** handler → discards via the unsaved-changes guard (same as Cancel).
+- `EditorFooter`: commit button relabelled **"Save intervention" → "Apply"**.
+
+**Browser verification (Bridgewater, preview 5176) — via the label field (reliably dirties the editor) + DB:**
+- ✓ **Frozen during edit** — changed the label in the open editor; the DB (global source of truth) stayed
+  unchanged (no marker) while editing.
+- ✓ **Apply commits once** — clicked Apply → DB label updated in a single write.
+- ✓ **Esc discards** — changed the label again, pressed Esc → "Discard unsaved changes?" guard → confirm →
+  editor closed, DB unchanged (the Esc edit never persisted).
+- ✓ **Global panels frozen** — the Library catalogue's isolated deltas did not move during an in-editor change.
+- ✓ Editor preview is debounced (300 ms) by construction → gesture-smooth, no per-tick global recompute.
+- Test marker reverted; DB clean (8 interventions / 8 refs). Fresh reload: module renders, no ErrorBoundary,
+  page healthy. (Transient `livePatches is not defined` errors earlier in the console were mid-edit HMR states
+  while the removals landed incrementally — absent after reload; `npm run build` clean.)
+
+_Cost fields in the editor use the separate, non-gated `updateInterventionCost` path (Brief 91b quarantine) —
+untouched by P5; confirmed a stray cost-field poke did not persist._
