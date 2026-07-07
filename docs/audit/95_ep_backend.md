@@ -184,7 +184,10 @@ clean per-channel split needs dedicated output isolation (small follow-up). NZA'
 single blended figure (its own simplification). These residuals — heating +23%, cooling +20%, and the
 per-channel differences — are the **characterisation** and carry into P3; they are named here, not tuned away.
 
-## §4 — Baseline dual-engine characterisation (Part 3)
+## §4 — Baseline dual-engine characterisation (Part 3) — REFRESHED on the P4b baseline (2026-07-07)
+
+> Numbers below are the **P4b** baseline (heating 96.4 / cooling 130.3 / EUI 117.7 — occupancy.density spec fix,
+> RunPeriod-only read). This is the table P8 reads against.
 
 Frozen fixture through both engines. NZA-Sim from `_brief93_anchor.mjs --fixture` (EUI 132.6); EP from
 `run_full.py` on the corrected physical baseline (§3c). **Characterisation, not a gate — no tuning.**
@@ -193,30 +196,30 @@ Frozen fixture through both engines. NZA-Sim from `_brief93_anchor.mjs --fixture
 
 | Metric | NZA-Sim | EnergyPlus | Δ (EP−NZA)/NZA |
 |---|---|---|---|
-| **EUI** kWh/m² | 132.6 | 118.0 | **−11.0%** |
-| Electricity MWh | 401.5 | 371.2 | −7.5% |
+| **EUI** kWh/m² | 132.6 | 117.7 | **−11.2%** |
+| Electricity MWh | 401.5 | 370.1 | −7.8% |
 | Gas MWh | 157.4 | 126.1 | −19.9% |
-| **Heating demand** MWh | 87.7 | 107.7 | **+22.8%** |
-| **Cooling demand** MWh | 101.1 | 121.3 | **+20.0%** |
+| **Heating demand** MWh | 87.7 | 96.4 | **+9.9%** |
+| **Cooling demand** MWh | 101.1 | 130.3 | **+28.9%** |
 | DHW demand MWh | 257.3 | 206.2 | −19.9% (different deterministic ΔT) |
 
 ### Per-channel heat loss (NZA-Sim | EnergyPlus, MWh) — clean split, fold resolved
 
 | Channel | NZA-Sim | EnergyPlus | Note |
 |---|---|---|---|
-| Fabric — opaque (walls+roof+floor) | 47.2 | 60.0 | +27% |
+| Fabric — opaque (walls+roof+floor) | 47.2 | 61.7 | +31% |
 | Fabric — thermal bridging | 24.0 | **0 — not modelled** | EP gap |
-| Glazing conduction | 88.9 | 44.6 | −50% (net window conduction) |
-| Infiltration | 30.6 | **30.7** | matches by construction ✓ |
+| Glazing conduction | 88.9 | 44.8 | −50% (net window conduction) |
+| Infiltration | 30.6 | **31.0** | matches by construction ✓ |
 | Permanent vents | 18.9 | **0 — not modelled** | EP gap |
-| Mech-ventilation | 277.2 (blended) | 391.6 (MVHR 106.0 + extract-makeup 285.6) | +41% |
+| Mech-ventilation | 277.2 (blended) | 390.0 (MVHR 102.7 + extract-makeup 287.3) | +41% |
 
 ### Monthly shape correlations (Pearson r)
 
 | Profile | r | (EP demand vs NZA envelope-loss / gains-driver proxy) |
 |---|---|---|
-| **Heating** | **0.961** | both winter-high |
-| **Cooling** | **0.914** | both summer-high |
+| **Heating** | **0.951** | both winter-high |
+| **Cooling** | **0.915** | both summer-high |
 
 ### Honest reading
 
@@ -305,3 +308,13 @@ before P8. (Determinism holds; fixture invariant 132.6.)
 _Correction: an earlier draft of this section reported the post-P4b EUI as 136.9 — that was a run_full
 double-count (Monthly + RunPeriod demand summed after the P3 monthly outputs were added). Fixed in run_full.py
 (RunPeriod-only) + IDF regenerated; the true baseline is heating 96.4 / cooling 130.3 / EUI 117.7._
+
+## §5c — Shading diagnostic (pre-P8, 2026-07-07)
+
+Inspected the generated brise-soleil objects (isolated state): `SHADING:OVERHANG OH_SOUTH → WIN_SOUTH`
+(depth 0.5 m, height-above 0, tilt 90°) and `SHADING:FIN FIN_SOUTH → WIN_SOUTH` (depth 0.5 m). Both sit on
+the **correct facade (south)** and the **correct window**, with **plausible dimensions** (0.5 m overhang + 0.5 m
+fins, matching the intervention's last-write-wins spec). So the small whole-building effect is **honest
+physics, not a translation artifact**: the south glazing is only **122 of 640 m²** (this is a north-dominant
+building — north WWR 0.54), so a 0.5 m brise-soleil on the small south aperture moves whole-building cooling
+only marginally. P8 can cite the shading result as real (small), with this provenance.
