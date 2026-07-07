@@ -1,14 +1,32 @@
 # Current brief
 
-**Brief 95 — EnergyPlus Results Backend for Interventions — ACTIVE (Part 1).** On branch
-`chris/ep-interventions-backend` (re-cut from post-94 `main` `8601e7f`). A second results backend for
-Interventions: translate the strategy stack → EnergyPlus models, run as a user-triggered batch, display
-NZA-Sim | EP | Δ% side-by-side (primary target: the +108% cooling residual). **Never changes NZA-Sim engine
-numbers** (fixture anchor enforces). P1: EP pinned to **25-2-0** (Box gate — 25-2-0 reproduces the EP
-reference byte-identically; the −24%/+108% heating/cooling FAILs are the known characterisation, not a
-regression — closes Brief 93's smoke-test caveat), ZZ TEST seed (`scripts/seed_test_project.py`), fixture
-rule in CLAUDE.md. Brief: [`active/95_ep_results_backend.md`](active/95_ep_results_backend.md); audit:
-[`../audit/95_ep_backend.md`](../audit/95_ep_backend.md).
+**Brief 95 — EnergyPlus Results Backend for Interventions — CLOSED 2026-07-08 (P1–P9 done; independent
+review + Chris walkthrough PENDING; do NOT merge).** On branch `chris/ep-interventions-backend` (re-cut from
+post-94 `main` `8601e7f`). A second results backend for Interventions: translate the strategy stack →
+EnergyPlus models, run as a user-triggered batch, display NZA-Sim | EP | Δ% side-by-side. **NZA-Sim engine
+numbers byte-identical throughout** — fixture anchor `--fixture` EUI **132.6** unchanged P1→close; zero
+engine files touched on the branch (only 7 interventions UI files + the EP harness). Parts:
+- **P1** EP pinned **25-2-0** (Box gate byte-identical) · ZZ TEST seed · CLAUDE.md fixture rule.
+- **P2** full-project fixture → runnable IDF (IdealLoads demand + fixed-η post-processing).
+- **P3** dual-engine baseline characterisation; **P3b/c** gains + ventilation parity → physical baseline
+  (EP heating 96.4 / cooling 130.3 / EUI 117.7 vs NZA-Sim 132.6; monthly r 0.95/0.92 — level offset, not
+  shape). Discipline: specs match by construction, losses compared+explained, **never tuned**.
+- **P4/P4b** patch translation + state builder + config-hash cache; generator extended (setpoints, q50→ach
+  mirroring `instantCalc.js:387-394`, occupancy→People, shading) → translation_gaps zero physical.
+- **P5** EP batch runner + config-hash cache + `ep_runs` table (10/10 tests).
+- **P6** subprocess backend (venv, non-blocking, `ep_runs` is the interface) + "Validate with EnergyPlus"
+  run-selection panel (current-hash cache count).
+- **P7** side-by-side NZA-Sim | EP | Δ% (isolated/cumulative/marginal) + trajectory overlay + stale-guard
+  (edit/toggle/reorder → "stale · re-run", never a stale number as current; a real ivSig gap was caught +
+  fixed in browser verify).
+- **P8** cooling delta investigation ([`../audit/95_cooling_deltas.md`](../audit/95_cooling_deltas.md)):
+  the NZA-Sim cooling gap is a **+29 % baseline LEVEL error**, not per-measure — cooling DELTAS agree with
+  EP to ~2 MWh for gains/solar/infiltration measures; **one DELTA outlier: cooling-setpoint relaxation,
+  NZA-Sim over-credits ~4×**. Brise soleil small effect confirmed honest physics (§5c).
+- **P9** close: fixture invariant byte-identical · STATUS · archive · PR (no merge).
+
+Brief: [`archive/95_ep_results_backend_COMPLETED.md`](archive/95_ep_results_backend_COMPLETED.md); audit:
+[`../audit/95_ep_backend.md`](../audit/95_ep_backend.md) + [`../audit/95_cooling_deltas.md`](../audit/95_cooling_deltas.md).
 
 **Brief 94 — Interventions Library/Strategy Decoupling + Apply-Gated Recalc — MERGED to `main` `8601e7f`
 2026-07-07 (walkthrough passed; reorder x-sensitivity fix `24dff84` included).** Was on branch
