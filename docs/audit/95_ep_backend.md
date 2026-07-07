@@ -297,6 +297,11 @@ the single-facade brise-soleil effect on whole-building cooling is small and mar
 registry still escalates `openings` / `operable_openings` / `thermal_bridge` if a future patch touches them.
 
 **Baseline shift (spec-faithful, not tuned):** the occupancy.density fix (people 276→345, matching how NZA
-reads occupancy) moved the EP baseline **EUI 118.0 → 136.9 (vs NZA 132.6, now +3.2%; was −11%)** and EP people
-gain toward NZA's. This **supersedes the §4 table** — the §4 annual/per-channel figures were computed on the
-pre-P4b baseline and must be refreshed before P8 reads them. (Determinism holds; fixture invariant 132.6.)
+reads occupancy) moved EP **heating 107.7 → 96.4 MWh** (+23% → **+10%** vs NZA 87.7 — closer) and **cooling
+121.3 → 130.3 MWh** (+20% → +29% — more people, more cooling); **EUI ≈ unchanged at 117.7** (vs NZA 132.6,
+−11%). This **supersedes the §4 table** — the §4 annual/per-channel figures were pre-P4b and are refreshed
+before P8. (Determinism holds; fixture invariant 132.6.)
+
+_Correction: an earlier draft of this section reported the post-P4b EUI as 136.9 — that was a run_full
+double-count (Monthly + RunPeriod demand summed after the P3 monthly outputs were added). Fixed in run_full.py
+(RunPeriod-only) + IDF regenerated; the true baseline is heating 96.4 / cooling 130.3 / EUI 117.7._

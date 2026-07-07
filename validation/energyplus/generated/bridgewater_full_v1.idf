@@ -7556,7 +7556,7 @@ PEOPLE,
     Building_Zone,            !- Zone or ZoneList or Space or SpaceList Name
     OCC_SCHED,                !- Number of People Schedule Name
     People,                   !- Number of People Calculation Method
-    276,                      !- Number of People
+    345,                      !- Number of People
     ,                         !- People per Floor Area
     ,                         !- Floor Area per Person
     0.3,                      !- Fraction Radiant
@@ -7633,7 +7633,7 @@ ZONEINFILTRATION:DESIGNFLOWRATE,
     ,                         !- Design Flow Rate
     ,                         !- Flow Rate per Floor Area
     ,                         !- Flow Rate per Exterior Surface Area
-    0.0692,                   !- Air Changes per Hour
+    6.924820e-02,             !- Air Changes per Hour
     1,                        !- Constant Term Coefficient
     0,                        !- Temperature Term Coefficient
     0,                        !- Velocity Term Coefficient

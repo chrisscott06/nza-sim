@@ -65,8 +65,11 @@ def run_ep(epw):
 def read_demand():
     db = sqlite3.connect(RUN_DIR / "eplusout.sql")
     out = {"heating": 0.0, "cooling": 0.0, "facility_elec": 0.0}
+    # RunPeriod ONLY — the generator also emits Monthly copies of heating/cooling for the
+    # P3 shape correlation; summing across frequencies would double-count (Brief 95 P4b fix).
     q = """SELECT rdd.Name, SUM(rd.Value) FROM ReportData rd
            JOIN ReportDataDictionary rdd ON rd.ReportDataDictionaryIndex=rdd.ReportDataDictionaryIndex
+           WHERE rdd.ReportingFrequency = 'Run Period'
            GROUP BY rdd.Name"""
     for name, val in db.execute(q):
         if "Ideal Loads Zone Sensible Heating Energy" in name:
