@@ -113,17 +113,36 @@ ok("GROUND_FLOOR material R unchanged",
    mat_r(idf_a, "GROUND_FLOOR") == mat_r(idf_b, "GROUND_FLOOR"))
 ok("hashes differ for the two U-value configs", config_hash(cfg_a) != config_hash(cfg_b))
 
-# ── translation gaps: physical-but-unmapped patches ESCALATE (not silent-drop) ──
-print("\n── translation gaps (escalate, don't silently drop) ──")
-from state_builder import translation_gaps, is_translated  # noqa: E402
+# ── translation gaps closed (Brief 95 P4b) — every physical patch reaches the IDF ──
+print("\n── P4b: translation gaps closed + patches reach the IDF ──")
+from state_builder import translation_gaps, is_translated, resolved_to_idf  # noqa: E402
+from generate_idf import resolve_idd  # noqa: E402
 gaps = translation_gaps(IVS)
-gap_ivs = {g["intervention"] for g in gaps}
-ok("shading (Brise soleil) flagged as unmapped", any("Brise" in i for i in gap_ivs))
-ok("systems setpoints (Widen) flagged as unmapped", any("Widen" in i for i in gap_ivs))
-ok("occupancy density flagged as unmapped", any("Occupancy" in i for i in gap_ivs))
-ok("MVHR recovery IS translated (not a gap)", is_translated("building.systems_config_v40.ventilation[1].efficiency_metric.recovery_sensible_pct"))
-ok("EPD baseload IS translated (not a gap)", is_translated("building.gains.equipment.profiles[0].baseload.value"))
-ok("gaps list is non-empty (real stack has unmapped physicals — escalation surfaced)", len(gaps) > 0)
+ok("real stack has ZERO physical patches unreached (P4b target)", len(gaps) == 0)
+ok("MVHR recovery IS translated", is_translated("building.systems_config_v40.ventilation[1].efficiency_metric.recovery_sensible_pct"))
+
+_idd = resolve_idd()
+_st = build_states(FIX, REFS, BY_ID)
+_base = resolved_to_idf(_st["baseline"]["config"], _idd)
+def _iso(label):
+    iid = next(k for k, v in BY_ID.items() if label in (v.get("label") or ""))
+    return resolved_to_idf(_st["isolated"][iid]["config"], _idd)
+def _sched_val(idf, name):
+    m = re.search(name + r".*?Until: 24:00[^\n]*\n\s*([\d.]+)", idf, re.S)
+    return m.group(1) if m else None
+def _people(idf):
+    m = re.search(r"People,.*?People,[^\n]*\n\s*([\d.]+)", idf, re.S)
+    return m.group(1) if m else None
+widen = _iso("Widen setpoints")
+ok("Widen setpoints → HEATING_SETPOINT 20 in IDF", _sched_val(widen, "HEATING_SETPOINT") == "20")
+ok("Widen setpoints → COOLING_SETPOINT 25 in IDF", _sched_val(widen, "COOLING_SETPOINT") == "25")
+ok("baseline setpoints follow comfort (21/24)", _sched_val(_base, "HEATING_SETPOINT") == "21")
+ok("Occupancy 2 → People 276 (baseline 345, density 2.5→2)", _people(_iso("Occupancy 2")) == "276" and _people(_base) == "345")
+ok("Air perm → IDF differs from baseline (q50→infiltration)", _iso("Air perm") != _base)
+brise = _iso("Brise soleil")
+ok("Brise soleil → SHADING:OVERHANG + SHADING:FIN in IDF", "SHADING:OVERHANG" in brise and "SHADING:FIN" in brise)
+ok("thermal-bridge / permanent-vent patches still escalate if present (registry intact)",
+   translation_gaps([{"label": "x", "id": "x", "patches": [{"op": "set", "path": "building.openings.north", "value": {}}]}]))
 
 print(f"\n{'─'*48}\n{'✅ ALL PASS' if _f == 0 else '❌ FAILURES'}: {_p} passed, {_f} failed\n")
 sys.exit(0 if _f == 0 else 1)

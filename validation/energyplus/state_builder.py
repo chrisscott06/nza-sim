@@ -155,13 +155,14 @@ _TRANSLATED_FRAGMENTS = [
     "library_constructions", "construction_choices", "u_value", "g_value",  # fabric U/g
     "infiltration_ach", "\\.wwr", "orientation",  # infiltration / glazing area / orientation
     "num_bedrooms", "people_per_room",      # occupant count
+    # Brief 95 P4b — gaps closed in the generator:
+    "setpoint",             # v40 custom setpoints → thermostat schedules
+    "air_permeability", "\\.fabric\\b",   # q50 → infiltration ach (NZA divide-by-20)
+    "\\.occupancy\\b", "density",          # occupancy.density → People count
+    "shading_",             # shading_overhang / shading_fin → SHADING:OVERHANG / SHADING:FIN
 ]
-# Known-unmapped physical fragments (generator does not read these yet) — escalate.
+# Physical fragments the generator still does not read — escalate (not silently dropped).
 _UNMAPPED_HINT = {
-    "setpoint": "systems_config_v40 setpoints not read (generator uses comfort_band)",
-    "shading_": "shading surfaces not modelled in the full IDF",
-    "air_permeability": "generator reads pre-computed infiltration_ach, not fabric q50",
-    "\\.occupancy\\b": "generator derives people from room count, not occupancy.density",
     "operable_openings": "operable openings not modelled",
     "\\.openings\\b": "permanent vents not modelled in the full IDF",
     "thermal_bridge": "thermal bridges not modelled in the full IDF",

@@ -96,8 +96,15 @@ def build_idf(fix, idd_path):
     volume = footprint * H
     orient = float(bc.get("orientation", 0))
     cb = fix.get("comfort_band", {}) or {}
-    heat_sp = float(cb.get("lower_c", 21))
-    cool_sp = float(cb.get("upper_c", 24))
+    # Brief 95 P4b: v40 custom setpoints override the comfort band (mirrors the Systems
+    # scope: *_setpoint_mode 'custom' → use *_setpoint_c; else follow comfort). This is
+    # what makes the "Widen setpoints" intervention reach the EP thermostat.
+    def _resolve_sp(mode_key, c_key, comfort_default):
+        if v40.get(mode_key) == "custom" and v40.get(c_key) is not None:
+            return float(v40[c_key])
+        return comfort_default
+    heat_sp = _resolve_sp("heating_setpoint_mode", "heating_setpoint_c", float(cb.get("lower_c", 21)))
+    cool_sp = _resolve_sp("cooling_setpoint_mode", "cooling_setpoint_c", float(cb.get("upper_c", 24)))
     weather = fix.get("weather_file") or bc.get("weather_file")
 
     # ---- global sim control ------------------------------------------------
@@ -255,13 +262,47 @@ def build_idf(fix, idd_path):
         verts = [(xa, ya, z_hi), (xa, ya, z_lo), (xb, yb, z_lo), (xb, yb, z_hi)]
         add_window(f"WIN_{fname}", f"WALL_{fname}", verts)
 
+    # ---- shading (brise soleil): overhangs + fins on glazed facades (Brief 95 P4b) ----
+    sh_over = bc.get("shading_overhang") or {}
+    sh_fin = bc.get("shading_fin") or {}
+    for fname, key in [("SOUTH", "south"), ("NORTH", "north"), ("EAST", "east"), ("WEST", "west")]:
+        if facades[fname][1] <= 0:
+            continue
+        win = f"WIN_{fname}"
+        ov = sh_over.get(key) or {}
+        depth = float(ov.get("depth_m") or 0)
+        if depth > 0:
+            idf.newidfobject("SHADING:OVERHANG", Name=f"OH_{fname}", Window_or_Door_Name=win,
+                             Height_above_Window_or_Door=float(ov.get("offset_m") or 0),
+                             Tilt_Angle_from_WindowDoor=90,
+                             Left_extension_from_WindowDoor_Width=0,
+                             Right_extension_from_WindowDoor_Width=0, Depth=depth)
+        fin = sh_fin.get(key) or {}
+        ld = float(fin.get("left_depth_m") or 0); rd = float(fin.get("right_depth_m") or 0)
+        if ld > 0 or rd > 0:
+            idf.newidfobject("SHADING:FIN", Name=f"FIN_{fname}", Window_or_Door_Name=win,
+                             Left_Extension_from_WindowDoor=0, Left_Distance_Above_Top_of_Window=0,
+                             Left_Distance_Below_Bottom_of_Window=0, Left_Tilt_Angle_from_WindowDoor=90,
+                             Left_Depth=ld, Right_Extension_from_WindowDoor=0,
+                             Right_Distance_Above_Top_of_Window=0, Right_Distance_Below_Bottom_of_Window=0,
+                             Right_Tilt_Angle_from_WindowDoor=90, Right_Depth=rd)
+
     # ---- internal gains — SPEC-faithful (Chris 2026-07-07 discipline: specs match by
     # construction; the resulting zone-heat is an OUTPUT to compare/explain, never tuned).
     # Same W/m² + schedule + gain_fraction as the fixture go into EP. Differences vs NZA's
     # booked per-load heat (NZA daylight-dims lighting; integrates occupancy differently)
     # are characterisation, not calibration targets.
     shf = sens / (sens + lat)
-    people = int(bc["num_bedrooms"]) * int(bc["people_per_room"])
+    # Brief 95 P4b: people from occupancy.density (per_room basis), mirroring the NZA engine
+    # (instantCalc.js:2119-2122: num_bedrooms × density.value). Falls back to people_per_room
+    # only when density.value is 0/absent (Bridgewater carries density 2.5). This makes the
+    # "Occupancy 2" density intervention reach EP People — and aligns the baseline people gain
+    # with NZA (which uses density, not people_per_room).
+    _dens = (bc.get("occupancy") or {}).get("density") or {}
+    if _dens.get("basis") == "per_room" and float(_dens.get("value") or 0) > 0:
+        people = int(bc["num_bedrooms"]) * float(_dens["value"])
+    else:
+        people = int(bc["num_bedrooms"]) * int(bc["people_per_room"])
     idf.newidfobject("PEOPLE", Name="People", Zone_or_ZoneList_or_Space_or_SpaceList_Name="Building_Zone",
                      Number_of_People_Schedule_Name="OCC_SCHED",
                      Number_of_People_Calculation_Method="People", Number_of_People=people,
@@ -286,10 +327,21 @@ def build_idf(fix, idd_path):
                      Design_Level=auxd * gia, Fraction_Latent=0, Fraction_Radiant=0, Fraction_Lost=1)
 
     # ---- infiltration ------------------------------------------------------
+    # Brief 95 P4b: derive operational ACH from fabric.air_permeability_q50, mirroring the
+    # NZA engine EXACTLY (frontend/src/utils/instantCalc.js:387-394 deriveOperationalACH):
+    #   A_env = opaque walls + glazing + roof + ground;  n50 = q50·A_env/V;  ach = n50/20.
+    # Falls back to the pre-computed infiltration_ach. This makes the "Air perm" q50
+    # intervention reach EP infiltration.
+    q50 = (bc.get("fabric") or {}).get("air_permeability_q50")
+    if q50 is not None and float(q50) > 0:
+        a_env = 2 * (L + W) * H + footprint + footprint    # gross walls + roof + ground floor
+        infil_ach = (float(q50) * a_env / volume) / 20.0
+    else:
+        infil_ach = float(bc["infiltration_ach"])
     idf.newidfobject("ZONEINFILTRATION:DESIGNFLOWRATE", Name="Infiltration",
                      Zone_or_ZoneList_or_Space_or_SpaceList_Name="Building_Zone",
                      Schedule_Name="ALWAYS_ON", Design_Flow_Rate_Calculation_Method="AirChanges/Hour",
-                     Air_Changes_per_Hour=float(bc["infiltration_ach"]),
+                     Air_Changes_per_Hour=infil_ach,
                      Constant_Term_Coefficient=1.0, Temperature_Term_Coefficient=0.0,
                      Velocity_Term_Coefficient=0.0, Velocity_Squared_Term_Coefficient=0.0)
 

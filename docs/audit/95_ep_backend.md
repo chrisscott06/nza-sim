@@ -274,3 +274,29 @@ the generator maps them (shading surfaces; v40-setpoints → thermostat; q50 →
 the EP cooling-delta investigation can only cover the mappable subset (MVHR recovery, EPD, DHW SCOP via
 post-processing). **Decision needed before P8:** extend the generator to cover these four, or scope P8 to the
 mappable interventions and document the rest as NZA-Sim-only.
+
+## §5b — P4b: generator extended, translation gaps closed
+
+Chris (2026-07-07): all four gaps are physical patches under Decision 5 → translate them (inserted before P5).
+
+**Three plumbing fixes (each unit-tested to reach the IDF at exactly the right object; 33/33 tests):**
+1. **v40 setpoints → thermostat.** Custom `*_setpoint_mode` overrides `comfort_band` → the HEATING/COOLING
+   setpoint schedules. Widen setpoints now writes 20/25 (baseline follows comfort 21/24).
+2. **fabric.q50 → infiltration**, mirroring the NZA engine EXACTLY (`instantCalc.js:387-394`
+   `deriveOperationalACH`): `A_env = opaque walls + glazing + roof + ground; n50 = q50·A_env/V; ach = n50/20`.
+   No invented conversion. Air-perm patch now moves EP infiltration.
+3. **occupancy.density → People** (`instantCalc.js:2119-2122`: `num_bedrooms × density.value`, per_room). The
+   "Occupancy 2" density patch now writes People 276 (baseline 345).
+
+**Shading (timeboxed — succeeded, attempt 1):** brise soleil → `SHADING:OVERHANG` + `SHADING:FIN` on the
+glazed facades. Runs clean (0 severe/fatal). **Caveat for P8:** the south glazing is only 122 of 640 m², so
+the single-facade brise-soleil effect on whole-building cooling is small and marginally wrong-signed
+(+2.2 MWh isolated) — a characterisation finding, not sunk into shading geometry per the timebox.
+
+**`translation_gaps()` now returns ZERO physical patches unreached** for the real stack (target met). The
+registry still escalates `openings` / `operable_openings` / `thermal_bridge` if a future patch touches them.
+
+**Baseline shift (spec-faithful, not tuned):** the occupancy.density fix (people 276→345, matching how NZA
+reads occupancy) moved the EP baseline **EUI 118.0 → 136.9 (vs NZA 132.6, now +3.2%; was −11%)** and EP people
+gain toward NZA's. This **supersedes the §4 table** — the §4 annual/per-channel figures were computed on the
+pre-P4b baseline and must be refreshed before P8 reads them. (Determinism holds; fixture invariant 132.6.)
