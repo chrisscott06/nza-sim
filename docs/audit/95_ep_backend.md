@@ -361,3 +361,24 @@ the same selection served the baseline **from cache** (0 EP executions).
 **Remaining (P6 UI):** the Interventions "Validate with EnergyPlus" panel (cumulative toggle + per-intervention
 isolated checkboxes, NZA-Sim-only items disabled, live "N runs · ~min · M cached" count, Run → live per-state
 progress) wired to these three routes, browser-verified on ZZ TEST. The backend is ready and verified.
+
+## §6c — P6 UI: "Validate with EnergyPlus" panel (strategy view)
+
+`frontend/src/components/modules/interventions/EPValidationPanel.jsx`, mounted in the strategy page:
+cumulative-chain toggle + per-intervention isolated checkboxes (NZA-Sim-only items disabled with a flag —
+none in the current all-physical stack), live **"N runs · ~est · M cached"** count, Run → live per-state
+progress. The count comes from **POST `/api/ep/batch/plan`** which subprocess-invokes the runner in
+`--plan --project-id` mode: it builds states from the **CURRENT DB project** and hashes them, so the cached
+flag is always against current hashes (never stale). Run → `/batch/start`, then polls `/batch/{id}` every
+1.5 s.
+
+**Browser-verified on ZZ TEST (real clicks):** panel renders; plan shows "9 runs · 0 cached"; Run → 9 EP
+sims via the detached subprocess → per-state progress with live EUIs (baseline 117.7 · +DHW 90 · +Widen 88.1
+· +plug-load 75.3 · …) → all `done`; count flips to "0 runs · 9 cached"; **reordering the stack (a config
+change) → "9 runs · 0 cached"** — cache correctly invalidated, states show "will run".
+
+**Note — over-invalidation (safe side):** `config_hash` covers the full resolved config (incl. strategy order
++ all definitions), so any strategy/definition change invalidates all states, not just the touched one. This
+guarantees "never a stale cached hit" (the P6 requirement) at the cost of re-running the baseline after an
+unrelated edit. A precise-subset hash (EP-relevant fields only) is a future efficiency refinement, not a
+correctness gap.

@@ -25,7 +25,8 @@ EP_RUNS_DB = REPO / "data" / "ep_runs.db"
 
 
 class BatchRequest(BaseModel):
-    selection: dict   # {"cumulative": bool, "isolated": [library_ids]}
+    selection: dict          # {"cumulative": bool, "isolated": [library_ids]}
+    project_id: str | None = None   # build states from this DB project (current config → current hashes)
 
 
 def _rows(where_sql, params):
@@ -44,6 +45,31 @@ def _rows(where_sql, params):
              "results": json.loads(r[3]) if r[3] else None, "error_tail": r[4]} for r in rows]
 
 
+def _env():
+    env = {**os.environ}
+    env.setdefault("ENERGYPLUS_DIR", os.environ.get("ENERGYPLUS_DIR", "/Applications/EnergyPlus-25-2-0"))
+    return env
+
+
+@router.post("/batch/plan")
+def plan_batch(req: BatchRequest):
+    """Fast (no EP runs): current config hashes + cached flag per selected state. The hash is
+    over the CURRENT resolved config, so an edited-then-Applied definition shows cached:false
+    (never a stale-hash hit). Synchronous subprocess (~1-2 s venv startup)."""
+    if not VENV_PY.exists():
+        return {"error": f"harness venv not found at {VENV_PY}", "states": []}
+    cmd = [str(VENV_PY), str(RUNNER), "--plan", "--selection", json.dumps(req.selection)]
+    if req.project_id:
+        cmd += ["--project-id", req.project_id]
+    try:
+        out = subprocess.run(cmd, cwd=str(REPO), env=_env(), capture_output=True, text=True, timeout=30)
+        states = json.loads(out.stdout.strip() or "[]")
+    except Exception as e:  # noqa: BLE001
+        return {"error": f"plan failed: {e}", "stderr": (out.stderr[-400:] if 'out' in dir() else ""), "states": []}
+    return {"states": states, "n_runs": sum(1 for s in states if not s["cached"]),
+            "n_cached": sum(1 for s in states if s["cached"])}
+
+
 @router.post("/batch/start")
 def start_batch(req: BatchRequest):
     """Launch the runner as a detached subprocess (harness venv). Returns a batch_id to poll.
@@ -51,12 +77,11 @@ def start_batch(req: BatchRequest):
     if not VENV_PY.exists():
         return {"error": f"harness venv not found at {VENV_PY}", "batch_id": None}
     batch_id = "batch_" + uuid.uuid4().hex[:12]
-    env = {**os.environ}
-    env.setdefault("ENERGYPLUS_DIR", os.environ.get("ENERGYPLUS_DIR", "/Applications/EnergyPlus-25-2-0"))
-    subprocess.Popen(
-        [str(VENV_PY), str(RUNNER), "--selection", json.dumps(req.selection), "--batch-id", batch_id],
-        cwd=str(REPO), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env,
-        start_new_session=True)   # detached — never blocks the API
+    cmd = [str(VENV_PY), str(RUNNER), "--selection", json.dumps(req.selection), "--batch-id", batch_id]
+    if req.project_id:
+        cmd += ["--project-id", req.project_id]
+    subprocess.Popen(cmd, cwd=str(REPO), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     env=_env(), start_new_session=True)   # detached — never blocks the API
     return {"batch_id": batch_id}
 
 

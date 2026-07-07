@@ -49,6 +49,7 @@ import { computeFieldConflicts } from './InterventionStackView.jsx'
 // Brief 87 Part 4 — Library/Strategy split + two-section per-intervention view.
 import PerInterventionView from './PerInterventionView.jsx'
 import StrategyView from './StrategyView.jsx'
+import EPValidationPanel from './EPValidationPanel.jsx'
 import { useIsolatedResults } from './useIsolatedResults.js'
 // Brief 94 Part 3 — strategy = ordered refs into the library. The engine + stack
 // view consume the RESOLVED strategy (order + enabled from refs); reorder / toggle /
@@ -89,7 +90,7 @@ function newId(prefix) {
 }
 
 export default function InterventionsModule() {
-  const { params, constructions, systems, comfortBand, updateParam } = useContext(ProjectContext)
+  const { params, constructions, systems, comfortBand, updateParam, currentProjectId } = useContext(ProjectContext)
   const { weatherData } = useContext(WeatherContext)
   const hourlySolar = useHourlySolar(weatherData, params?.orientation ?? 0)
 
@@ -617,6 +618,9 @@ export default function InterventionsModule() {
                   strategyRefIds={strategyRefIds}
                   onAddFromLibrary={handleAddFromLibrary}
                 />
+                <div className="mt-3">
+                  <EPValidationPanel interventions={strategyInterventions} projectId={currentProjectId} />
+                </div>
               </div>
             </aside>
             <main className="flex-1 min-w-0 bg-off-white overflow-hidden">

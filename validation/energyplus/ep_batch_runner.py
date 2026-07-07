@@ -177,11 +177,33 @@ def batch_by_id(batch_id, db_path=None):
              "results": json.loads(r[3]) if r[3] else None, "error_tail": r[4]} for r in rows]
 
 
-# ── selection → states (ZZ TEST = the frozen fixture) ────────────────────────
-def build_selected_from_fixture(selection):
+NZA_DB = REPO_ROOT / "data" / "nza_sim.db"
+
+
+def load_project_fix(project_id):
+    """Build a fix-shaped config from the CURRENT DB project (so edits change the hash).
+    Library constructions come from the frozen fixture (ZZ TEST uses the same set; the
+    Bridgewater stack has no U-value edits) — building_config/choices/comfort come live."""
+    con = sqlite3.connect(NZA_DB)
+    row = con.execute("""SELECT building_config, construction_choices,
+                         comfort_band_lower_c, comfort_band_upper_c FROM projects WHERE id=?""",
+                      (project_id,)).fetchone()
+    con.close()
+    if not row:
+        raise ValueError(f"project not found: {project_id}")
+    bc = json.loads(row[0])
+    cc = json.loads(row[1]) if isinstance(row[1], str) else row[1]
+    fixture = yaml.safe_load(FIXTURE.read_text())
+    return {"building_config": bc, "construction_choices": cc,
+            "comfort_band": {"lower_c": row[2], "upper_c": row[3]},
+            "library_constructions": fixture["library_constructions"],
+            "weather_file": bc.get("weather_file")}
+
+
+# ── selection → states ───────────────────────────────────────────────────────
+def build_selected(fix, selection):
     """selection = {cumulative: bool, isolated: [library_ids]}. Returns [(descriptor, config)]
     including the baseline. States are the resolved fix-shaped configs (state_builder)."""
-    fix = yaml.safe_load(FIXTURE.read_text())
     by = {iv["id"]: iv for iv in fix["building_config"]["interventions"]}
     refs = fix["building_config"]["strategies"][0]["refs"]
     st = build_states(fix, refs, by)
@@ -212,15 +234,40 @@ def prequeue(states, batch_id, db_path=None):
     return hashes
 
 
+def plan(fix, selection, db_path=None):
+    """Compute the CURRENT config hashes for the selection + whether each is cached
+    (status 'done'). No EP runs — fast. This is what powers the live 'M cached' count;
+    because the hash is over the current resolved config, editing a definition + Apply
+    yields new hashes → not cached (Brief 95 P6 requirement)."""
+    con = _db(db_path)
+    out = []
+    for desc, cfg in build_selected(fix, selection):
+        h = config_hash(cfg)
+        row = con.execute("SELECT status FROM ep_runs WHERE config_hash=?", (h,)).fetchone()
+        out.append({"descriptor": desc, "config_hash": h, "cached": bool(row and row[0] == "done")})
+    con.close()
+    return out
+
+
+def _fix_for(args):
+    return load_project_fix(args.project_id) if args.project_id else yaml.safe_load(FIXTURE.read_text())
+
+
 def main():
     import argparse
     ap = argparse.ArgumentParser(description="EP batch runner (invoked as a subprocess by the backend).")
     ap.add_argument("--selection", required=True, help='JSON {"cumulative":bool,"isolated":[ids]}')
-    ap.add_argument("--batch-id", required=True)
+    ap.add_argument("--batch-id")
+    ap.add_argument("--project-id", help="build states from this DB project (else the frozen fixture)")
+    ap.add_argument("--plan", action="store_true", help="print hashes+cache flags as JSON; no EP runs")
     args = ap.parse_args()
-    states = build_selected_from_fixture(json.loads(args.selection))
+    fix = _fix_for(args)
+    selection = json.loads(args.selection)
+    if args.plan:
+        print(json.dumps(plan(fix, selection)))
+        return
+    states = build_selected(fix, selection)
     prequeue(states, args.batch_id)
-    fix = yaml.safe_load(FIXTURE.read_text())
     epw = REPO_ROOT / "data" / "weather" / "current" / fix["building_config"]["weather_file"]
     run_batch(states, epw, resolve_idd(), args.batch_id)
 
