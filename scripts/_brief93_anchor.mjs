@@ -16,6 +16,7 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
+import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { calculateInstant } from '../frontend/src/utils/instantCalc.js'
 import { computeHourlySolarByFacade } from '../frontend/src/utils/solarCalc.js'
@@ -30,11 +31,44 @@ const arr12 = a => Array.isArray(a) ? a.slice(0, 12).map(v => Math.round((v ?? 0
 
 async function fj(url) { const r = await fetch(url); if (!r.ok) throw new Error(`${url} → ${r.status}`); return r.json() }
 
-const project = await fj(`${API}/api/projects/${PROJECT_ID}`)
-const libArr  = (await fj(`${API}/api/library/constructions`)).constructions ?? []
-const constructions = project.construction_choices
-const building = project.building_config
-const dbCb = { lower_c: project.comfort_band_lower_c ?? 20, upper_c: project.comfort_band_upper_c ?? 26 }
+// ── Source selection (Brief 94) ──────────────────────────────────────────────
+// Default: live backend/DB (`api:` — Chris's playground; fine for ad-hoc checks).
+// `--fixture[=PATH]`: run the engine DIRECTLY against a committed frozen fixture,
+// no API/DB. This is the REGRESSION reference (Brief 94: never use the mutable live
+// DB as a regression baseline again). Fixture is YAML; node has no YAML parser and
+// the repo has no node project, so we reuse the validation venv's pyyaml to parse.
+const argv        = process.argv.slice(2)
+const FIXTURE_ARG = argv.find(a => a === '--fixture' || a.startsWith('--fixture='))
+const FIXTURE     = !!FIXTURE_ARG
+const FIXTURE_PATH = (FIXTURE_ARG && FIXTURE_ARG.includes('='))
+  ? path.resolve(REPO_ROOT, FIXTURE_ARG.split('=')[1])
+  : path.join(REPO_ROOT, 'validation/fixtures/bridgewater_anchor_v2.yaml')
+
+function loadYamlViaVenv(p) {
+  const py = path.join(REPO_ROOT, 'validation/.venv/bin/python')
+  if (!fs.existsSync(py)) throw new Error(`--fixture needs the validation venv (pyyaml) at ${py} — provision: python3 -m venv validation/.venv && validation/.venv/bin/pip install pyyaml`)
+  const out = execFileSync(py, ['-c', 'import yaml,json,sys; json.dump(yaml.safe_load(open(sys.argv[1])), sys.stdout)', p], { encoding: 'utf-8', maxBuffer: 128 * 1024 * 1024 })
+  return JSON.parse(out)
+}
+
+let building, constructions, dbCb, libArr, projectName, sourceLabel
+if (FIXTURE) {
+  const fx = loadYamlViaVenv(FIXTURE_PATH)
+  building      = fx.building_config
+  constructions = fx.construction_choices
+  dbCb          = { lower_c: fx.comfort_band?.lower_c ?? 20, upper_c: fx.comfort_band?.upper_c ?? 26 }
+  libArr        = fx.library_constructions ?? []
+  projectName   = fx._meta?.source_project ?? 'Bridgewater (fixture)'
+  sourceLabel   = `fixture:${path.relative(REPO_ROOT, FIXTURE_PATH)}`
+} else {
+  const project = await fj(`${API}/api/projects/${PROJECT_ID}`)
+  libArr        = (await fj(`${API}/api/library/constructions`)).constructions ?? []
+  constructions = project.construction_choices
+  building      = project.building_config
+  dbCb          = { lower_c: project.comfort_band_lower_c ?? 20, upper_c: project.comfort_band_upper_c ?? 26 }
+  projectName   = project.name
+  sourceLabel   = `api:${PROJECT_ID}`
+}
 
 const epwPath = path.join(REPO_ROOT, 'data/weather/current', building.weather_file)
 const epwLines = fs.readFileSync(epwPath, 'utf-8').split(/\r?\n/)
@@ -94,7 +128,8 @@ if (Array.isArray(solarM)) for (let i = 0; i < 12; i++) monthlyGains[i] += (sola
 console.log(JSON.stringify({
   brief: 'Brief 93 consolidation anchor',
   project_id: PROJECT_ID,
-  project_name: project.name,
+  project_name: projectName,
+  source: sourceLabel,
   git_head: process.env.GIT_HEAD ?? null,
   engine_dispatch: { state_numeric: result?.state ?? null, mode: result?.mode ?? null },
   gia_m2: hb?.metadata?.gia_m2 ?? null,

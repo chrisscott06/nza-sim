@@ -172,3 +172,24 @@ item survives. New `AddFromLibraryPicker` (grouped by theme; items already in th
 
 _Note: `handleDuplicate` in InterventionsModule is now unused by the strategy view; it is retained to be
 wired to the Library "clone" button in Part 4._
+
+## §Anchor-method amendment (pre-P4, 2026-07-07) — fixture-based regression reference
+
+**132.6 is explained, not drift.** Chris was testing the auxiliary toggle; the "External lighting" 1.5 W/m²
+load is a **live-DB input change**, not engine drift. No escalation. But it exposed a method flaw: the anchor
+read the **mutable live DB**, so Chris's normal editing moved the "regression reference". Fixed here.
+
+**Amendment:**
+1. **Frozen fixture** `validation/fixtures/bridgewater_anchor_v2.yaml` (committed) — a one-time export of the
+   current Bridgewater config (building_config + construction_choices + comfort_band 21/24 + resolved library
+   constructions; weather stays the on-disk EPW). Captures the aux=External-lighting input verbatim.
+2. **`--fixture` mode** in `scripts/_brief93_anchor.mjs` — runs the engine **directly** against the fixture,
+   **no API/DB**. (Node has no YAML parser and the repo has no node project, so it parses the YAML via the
+   validation venv's pyyaml — a clear error fires if that venv is absent.)
+3. **Verified byte-identical to the live-DB baseline:** `--fixture` → EUI 132.6, elec 401.544, gas 157.428,
+   heat 87.7, cool 101.1, dhw 257.335, monthly shape `[24307,20131,…,21879]` — exactly §1. Frozen reference:
+   `docs/audit/94_fixture_anchor_p3.json` (git_head excluded from the compare).
+
+**P7 invariant (REPLACES the §1 live-DB check):** `node scripts/_brief93_anchor.mjs --fixture` output must be
+**byte-identical (ignoring `git_head`) between the P3 commit and the close commit**. The live DB is Chris's
+playground — **never a regression reference again**.

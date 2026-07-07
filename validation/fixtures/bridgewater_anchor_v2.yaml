@@ -1,0 +1,1697 @@
+_meta:
+  brief: Brief 94 — frozen Bridgewater anchor fixture (engine-direct, no DB/API)
+  source_project: 12cf7cc4-9bdc-41bc-ab4e-24e044fbad9d (Bridgewater Hotel)
+  captured: '2026-07-07'
+  note: Aux = External lighting 1.5 W/m2 (Chris aux-toggle testing) — frozen input, NOT engine drift. The live DB is Chris playground; this fixture is the regression reference. Do NOT re-capture from the
+    live DB.
+  expected_eui_kwh_per_m2: 132.6
+weather_file: GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw
+comfort_band:
+  lower_c: 21.0
+  upper_c: 24.0
+building_config:
+  name: Bridgewater Hotel
+  length: 58.8
+  width: 14.34
+  num_floors: 5
+  floor_height: 3.2
+  orientation: 42
+  wwr:
+    north: 0.54
+    east: 0.02
+    south: 0.13
+    west: 0.02
+  infiltration_ach: 0.0692
+  window_count:
+    south: 14
+    north: 14
+    east: 1
+    west: 1
+  location:
+    latitude: 51.127
+    longitude: -2.992
+    name: Bridgewater, Somerset
+  num_bedrooms: 138
+  occupancy_rate: 1
+  people_per_room: 2
+  weather_file: GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw
+  occupancy:
+    occupancy_rate: 1
+    density:
+      value: 2.5
+      basis: per_room
+    sensible_w_per_person: 75
+    latent_w_per_person: 55
+    schedule:
+      weekday:
+      - 0.9
+      - 0.9
+      - 0.9
+      - 0.9
+      - 0.9
+      - 0.9
+      - 0.7
+      - 0.4
+      - 0.3
+      - 0.2
+      - 0.2
+      - 0.2
+      - 0.2
+      - 0.2
+      - 0.2
+      - 0.3
+      - 0.4
+      - 0.5
+      - 0.6
+      - 0.7
+      - 0.8
+      - 0.9
+      - 0.9
+      - 0.9
+      saturday:
+      - 0.9
+      - 0.9
+      - 0.9
+      - 0.9
+      - 0.9
+      - 0.9
+      - 0.8
+      - 0.5
+      - 0.4
+      - 0.3
+      - 0.3
+      - 0.3
+      - 0.3
+      - 0.3
+      - 0.3
+      - 0.4
+      - 0.5
+      - 0.6
+      - 0.7
+      - 0.8
+      - 0.9
+      - 0.9
+      - 0.9
+      - 0.9
+      sunday:
+      - 0.9
+      - 0.9
+      - 0.9
+      - 0.9
+      - 0.9
+      - 0.9
+      - 0.8
+      - 0.6
+      - 0.5
+      - 0.4
+      - 0.4
+      - 0.4
+      - 0.4
+      - 0.4
+      - 0.4
+      - 0.5
+      - 0.5
+      - 0.6
+      - 0.7
+      - 0.8
+      - 0.9
+      - 0.9
+      - 0.9
+      - 0.9
+      monthly_multipliers:
+      - 0.7
+      - 0.7
+      - 0.8
+      - 0.9
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 0.9
+      - 0.8
+      - 0.7
+      exceptions: []
+    _provenance:
+      source: migrated_from_legacy
+      confidence: medium
+  gains:
+    lighting:
+      profiles:
+      - id: default_lighting
+        label: Lighting
+        magnitude:
+          value: 2
+          unit: w_per_m2
+        relationship_to_occupancy: proportional_with_spill
+        spill_minutes: 15
+        daylight_factor: 0.7
+        gain_fraction: 1
+        area_share: 1
+        schedule:
+          weekday:
+          - 0.3
+          - 0.31
+          - 0.31
+          - 0.3
+          - 0.3
+          - 0.31
+          - 0.62
+          - 0.98
+          - 1
+          - 1
+          - 1
+          - 0.65
+          - 1
+          - 0.64
+          - 0.58
+          - 0.6
+          - 1
+          - 1
+          - 1
+          - 1
+          - 0.74
+          - 0.53
+          - 0.32
+          - 0.35
+          saturday:
+          - 0.3
+          - 0.31
+          - 0.31
+          - 0.3
+          - 0.3
+          - 0.31
+          - 0.62
+          - 0.98
+          - 1
+          - 1
+          - 1
+          - 0.65
+          - 1
+          - 0.64
+          - 0.58
+          - 0.6
+          - 1
+          - 1
+          - 1
+          - 1
+          - 0.74
+          - 0.53
+          - 0.32
+          - 0.35
+          sunday:
+          - 0.3
+          - 0.31
+          - 0.31
+          - 0.3
+          - 0.3
+          - 0.31
+          - 0.62
+          - 0.98
+          - 1
+          - 1
+          - 1
+          - 0.65
+          - 1
+          - 0.64
+          - 0.58
+          - 0.6
+          - 1
+          - 1
+          - 1
+          - 1
+          - 0.74
+          - 0.53
+          - 0.32
+          - 0.35
+          monthly_multipliers:
+          - 1
+          - 1
+          - 0.9
+          - 0.8
+          - 0.8
+          - 0.85
+          - 0.9
+          - 0.9
+          - 0.9
+          - 0.9
+          - 1
+          - 1
+          exceptions: []
+        _provenance:
+          source: migrated_from_legacy
+          confidence: low
+    equipment:
+      profiles:
+      - id: default_equipment
+        label: Equipment
+        baseload:
+          value: 5.04
+          unit: w_per_m2
+        active:
+          value: 0
+          unit: w_per_m2
+        relationship_to_occupancy: proportional
+        standby_factor: 0.04
+        gain_fraction: 1
+        area_share: 1
+        schedule:
+          weekday:
+          - 0.1
+          - 0.1
+          - 0.1
+          - 0.1
+          - 0.1
+          - 0.1
+          - 0.3
+          - 0.6
+          - 0.1
+          - 0.05
+          - 0.05
+          - 0.05
+          - 0.05
+          - 0.05
+          - 0.05
+          - 0.05
+          - 0.1
+          - 0.3
+          - 0.6
+          - 0.7
+          - 0.6
+          - 0.4
+          - 0.2
+          - 0.1
+          saturday:
+          - 0.1
+          - 0.1
+          - 0.1
+          - 0.1
+          - 0.1
+          - 0.1
+          - 0.2
+          - 0.5
+          - 0.3
+          - 0.1
+          - 0.1
+          - 0.1
+          - 0.1
+          - 0.1
+          - 0.1
+          - 0.1
+          - 0.2
+          - 0.4
+          - 0.6
+          - 0.7
+          - 0.6
+          - 0.4
+          - 0.2
+          - 0.1
+          sunday:
+          - 0.1
+          - 0.1
+          - 0.1
+          - 0.1
+          - 0.1
+          - 0.1
+          - 0.2
+          - 0.4
+          - 0.4
+          - 0.2
+          - 0.1
+          - 0.1
+          - 0.1
+          - 0.1
+          - 0.1
+          - 0.1
+          - 0.2
+          - 0.3
+          - 0.5
+          - 0.6
+          - 0.5
+          - 0.3
+          - 0.2
+          - 0.1
+          monthly_multipliers:
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          exceptions: []
+        _provenance:
+          source: migrated_from_legacy
+          confidence: low
+    auxiliary:
+      profiles:
+      - id: aux_external_lighting_mraj09kw_1
+        label: External lighting
+        magnitude:
+          value: 1.5
+          unit: w_per_m2
+        gain_fraction: 0
+        relationship_to_occupancy: independent
+        spill_minutes: 0
+        area_share: 1
+        schedule:
+          weekday:
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          saturday:
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          sunday:
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          - 0.5
+          monthly_multipliers:
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          exceptions: []
+        _provenance:
+          source: load_type_library
+          template_id: aux_external_lighting
+          confidence: medium
+  openings:
+    site_exposure: exposed
+    north:
+      louvre_area_m2: 1.1
+      cd: 0.49
+    east:
+      louvre_area_m2: 0
+    south:
+      louvre_area_m2: 1.1
+      cd: 0.49
+    west:
+      louvre_area_m2: 0
+  schema_version: 3
+  shading_overhang:
+    north:
+      depth_m: 0
+      offset_m: 0
+    south:
+      depth_m: 0
+      offset_m: 0
+    east:
+      depth_m: 0
+      offset_m: 0
+    west:
+      depth_m: 0
+      offset_m: 0
+  shading_fin:
+    north:
+      left_depth_m: 0
+      right_depth_m: 0
+    south:
+      left_depth_m: 0
+      right_depth_m: 0
+    east:
+      left_depth_m: 0
+      right_depth_m: 0
+    west:
+      left_depth_m: 0
+      right_depth_m: 0
+  systems_config_v25:
+    heating:
+      enabled: true
+      primary:
+        library_id: vrf_heat_recovery_dual_function
+      secondary:
+        library_id: electric_panel_heater
+      primary_pct: 95
+      setpoint_c: 21
+      schedule_ref: business_hours_09_18_weekdays
+    cooling:
+      enabled: true
+      primary:
+        library_id: vrf_heat_recovery_dual_function
+      secondary:
+        library_id: dx_split_cooling
+      primary_pct: 95
+      setpoint_c: 25
+      schedule_ref: business_hours_09_18_weekdays
+    dhw:
+      enabled: true
+      primary:
+        library_id: ashp_dhw_preheat
+      secondary:
+        library_id: gas_boiler_calorifier
+      primary_pct: 60
+      fuel_mix:
+        gas: 0.4
+        electric_resistance: 0
+        heat_pump: 0.6
+      circulation_pump_w: 120
+      litres_per_person_per_day: 80
+      store_temperature_c: 60
+      cold_mains_temperature_c: 10
+      schedule_ref: always_on
+    ventilation:
+    - id: vent_mvhr_gf_public
+      name: mvhr_gf_public
+      enabled: true
+      hre_enabled: true
+      library_id: mvhr_with_hr
+      flow_l_s: 1425
+      sfp_w_per_l_s: 1.4
+      hre: 0.8
+      hours: 8760
+      schedule_ref: always_on
+    - id: vent_bedroom_extract
+      name: bedroom_extract
+      enabled: true
+      hre_enabled: false
+      library_id: wc_extract_no_hr
+      flow_l_s: 2208
+      sfp_w_per_l_s: 0.4
+      hre: 0
+      hours: 8760
+      schedule_ref: always_on
+    - id: vent_public_toilet_extract
+      name: public_toilet_extract
+      enabled: true
+      hre_enabled: false
+      library_id: wc_extract_no_hr
+      flow_l_s: 210
+      sfp_w_per_l_s: 0.4
+      hre: 0
+      hours: 8760
+      schedule_ref: always_on
+  schedules:
+  - id: business_hours_09_18_weekdays
+    name: business_hours_09_18_weekdays
+    day_types:
+      weekday:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      saturday:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      sunday:
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+  - id: hotel_systems_24x7
+    name: hotel_systems_24x7
+    day_types:
+      weekday:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      saturday:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      sunday:
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+      - 1
+  fabric:
+    air_permeability_q50: 4.64
+  systems_config_v40:
+    heating:
+    - id: sys_heating_1782394791339_15293
+      label: Primary heating (vrf_heat_recovery_dual_function)
+      service: heating
+      source: ambient_air
+      efficiency_metric: 3
+      control_mechanism: scheduled
+      control_schedule_id: business_hours_09_18_weekdays
+      share_pct: 95
+      capacity_kw: null
+      enabled: true
+      notes: Migrated from systems_config_v25 (library_id=vrf_heat_recovery_dual_function)
+    - id: sys_heating_1782394791339_18072
+      label: Secondary heating (electric_panel_heater)
+      service: heating
+      source: electricity
+      efficiency_metric: 1
+      control_mechanism: scheduled
+      control_schedule_id: business_hours_09_18_weekdays
+      share_pct: 5
+      capacity_kw: null
+      enabled: true
+      notes: Migrated from systems_config_v25 (library_id=electric_panel_heater)
+    cooling:
+    - id: sys_cooling_1782394791339_17069
+      label: Primary cooling (vrf_heat_recovery_dual_function)
+      service: cooling
+      source: electricity
+      efficiency_metric: 3
+      control_mechanism: scheduled
+      control_schedule_id: business_hours_09_18_weekdays
+      share_pct: 100
+      capacity_kw: null
+      enabled: true
+      notes: Migrated from systems_config_v25 (library_id=vrf_heat_recovery_dual_function)
+    - id: sys_cooling_1782394791339_15552
+      label: Secondary cooling (dx_split_cooling)
+      service: cooling
+      source: electricity
+      efficiency_metric: 5.62
+      control_mechanism: scheduled
+      control_schedule_id: business_hours_09_18_weekdays
+      share_pct: 0
+      capacity_kw: null
+      enabled: true
+      notes: Migrated from systems_config_v25 (library_id=dx_split_cooling)
+    dhw:
+    - id: sys_dhw_1782394791339_60753
+      label: DHW gas (gas_boiler_calorifier)
+      service: dhw
+      source: gas
+      efficiency_metric: 0.85
+      control_mechanism: scheduled
+      control_schedule_id: always_on
+      share_pct: 52
+      capacity_kw: null
+      enabled: true
+      notes: Migrated from systems_config_v25 fuel_mix[gas=0.40]; tap-mix correction applies (hot_fraction = (40 - 10.0) / (60.0 - 10.0))
+    - id: sys_dhw_1782394791339_41585
+      label: DHW heat pump (ashp_dhw_preheat)
+      service: dhw
+      source: ambient_air
+      efficiency_metric: 3
+      control_mechanism: scheduled
+      control_schedule_id: always_on
+      share_pct: 48
+      capacity_kw: null
+      enabled: true
+      notes: Migrated from systems_config_v25 fuel_mix[heat_pump=0.60]; tap-mix correction applies (hot_fraction = (40 - 10.0) / (60.0 - 10.0))
+    ventilation:
+    - id: vent_mvhr_gf_public
+      label: mvhr_gf_public
+      service: ventilation
+      source: electricity
+      efficiency_metric:
+        sfp_w_per_lps: 1.8
+        recovery_sensible_pct: 80
+        recovery_latent_pct: 0
+      flow_rate: 1425
+      flow_rate_basis: constant
+      setpoint: null
+      control_mechanism: scheduled
+      control_schedule_id: always_on
+      capacity_kw: null
+      enabled: true
+      defrost_penalty_kwh: null
+      notes: Migrated from systems_config_v25.ventilation[mvhr_with_hr]
+    - id: vent_bedroom_extract
+      label: bedroom_extract
+      service: ventilation
+      source: electricity
+      efficiency_metric:
+        sfp_w_per_lps: 0.9
+        recovery_sensible_pct: 0
+        recovery_latent_pct: 0
+      flow_rate: 2208
+      flow_rate_basis: constant
+      setpoint: null
+      control_mechanism: scheduled
+      control_schedule_id: always_on
+      capacity_kw: null
+      enabled: true
+      defrost_penalty_kwh: null
+      notes: Migrated from systems_config_v25.ventilation[wc_extract_no_hr]
+    - id: vent_public_toilet_extract
+      label: public_toilet_extract
+      service: ventilation
+      source: electricity
+      efficiency_metric:
+        sfp_w_per_lps: 0.4
+        recovery_sensible_pct: 0
+        recovery_latent_pct: 0
+      flow_rate: 210
+      flow_rate_basis: constant
+      setpoint: null
+      control_mechanism: scheduled
+      control_schedule_id: always_on
+      capacity_kw: null
+      enabled: true
+      defrost_penalty_kwh: null
+      notes: Migrated from systems_config_v25.ventilation[wc_extract_no_hr]
+    lighting:
+    - id: sys_lighting_1782412542020_305
+      label: Lighting (no controls)
+      service: lighting
+      share_pct: 100
+      capacity_kw: null
+      notes: ''
+      control_mechanism: constant
+      control_schedule_id: null
+      enabled: true
+      source: electricity
+      efficiency_metric: null
+      setpoint: null
+      control_factor: 1
+    small_power:
+    - id: sys_small_power_1782412557630_172
+      label: Small power (baseline)
+      service: small_power
+      share_pct: 100
+      capacity_kw: null
+      notes: ''
+      control_mechanism: constant
+      control_schedule_id: null
+      enabled: true
+      source: electricity
+      efficiency_metric: null
+      setpoint: null
+      control_factor: 1
+    schema_version: 2
+    heating_setpoint_mode: follow_comfort
+    heating_setpoint_c: null
+    cooling_setpoint_mode: follow_comfort
+    cooling_setpoint_c: null
+    dhw_storage_setpoint_c: 60
+    dhw_tap_outlet_temp_c: 42
+    dhw_cold_supply_temp_c: 10
+    dhw_demand_basis: per_person
+    dhw_demand_litres_per_person_per_day: 55
+    dhw_demand_litres_per_m2_per_day: 1.1
+    dhw_load_shape: flat
+    auxiliary:
+    - id: default_auxiliary
+      label: Auxiliary (baseline)
+      service: auxiliary
+      source: electricity
+      efficiency_metric: null
+      setpoint: null
+      control_mechanism: constant
+      control_schedule_id: null
+      control_factor: 1
+      share_pct: 100
+      capacity_kw: null
+      notes: ''
+      enabled: true
+  reported_gia: null
+  address: ''
+  postcode: ''
+  building_type: ''
+  operator: ''
+  future_weather_file: null
+  thermal_mass_mode: auto
+  thermal_mass_category: light
+  thermal_bridges:
+    mode: iso14683_auto
+    multiplier: 3
+  operable_openings: null
+  roadmap:
+    interventions: []
+  control_strategy: active_setpoint
+  library_systems: []
+  interventions:
+  - id: int_021d8687-4e7b-4015-a12d-b08cff955310
+    label: Occupancy 2
+    notes: ''
+    enabled: true
+    theme: ''
+    capex_gbp: null
+    schema_version: 1
+    patches:
+    - id: patch_a0da1c06-66cc-448a-bb83-713fcc87ffa5
+      source: inline
+      op: set
+      path: building.occupancy
+      value:
+        occupancy_rate: 1
+        density:
+          value: 2
+          basis: per_room
+        sensible_w_per_person: 75
+        latent_w_per_person: 55
+        schedule:
+          weekday:
+          - 0.9
+          - 0.9
+          - 0.9
+          - 0.9
+          - 0.9
+          - 0.9
+          - 0.7
+          - 0.4
+          - 0.3
+          - 0.2
+          - 0.2
+          - 0.2
+          - 0.2
+          - 0.2
+          - 0.2
+          - 0.3
+          - 0.4
+          - 0.5
+          - 0.6
+          - 0.7
+          - 0.8
+          - 0.9
+          - 0.9
+          - 0.9
+          saturday:
+          - 0.9
+          - 0.9
+          - 0.9
+          - 0.9
+          - 0.9
+          - 0.9
+          - 0.8
+          - 0.5
+          - 0.4
+          - 0.3
+          - 0.3
+          - 0.3
+          - 0.3
+          - 0.3
+          - 0.3
+          - 0.4
+          - 0.5
+          - 0.6
+          - 0.7
+          - 0.8
+          - 0.9
+          - 0.9
+          - 0.9
+          - 0.9
+          sunday:
+          - 0.9
+          - 0.9
+          - 0.9
+          - 0.9
+          - 0.9
+          - 0.9
+          - 0.8
+          - 0.6
+          - 0.5
+          - 0.4
+          - 0.4
+          - 0.4
+          - 0.4
+          - 0.4
+          - 0.4
+          - 0.5
+          - 0.5
+          - 0.6
+          - 0.7
+          - 0.8
+          - 0.9
+          - 0.9
+          - 0.9
+          - 0.9
+          monthly_multipliers:
+          - 0.7
+          - 0.7
+          - 0.8
+          - 0.9
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 0.9
+          - 0.8
+          - 0.7
+          exceptions: []
+        _provenance:
+          source: migrated_from_legacy
+          confidence: medium
+  - id: int_dhw_ashp
+    label: 'DHW: ASHP-only + exhaust-air (SCOP 5)'
+    notes: Replace gas water heater with exhaust-air ASHP, SCOP 5
+    enabled: true
+    theme: Systems
+    capex_gbp: null
+    schema_version: 2
+    patches:
+    - id: p1
+      op: set
+      path: building.systems_config_v40.dhw[0].share_pct
+      value: 0
+      source: inline
+    - id: p2
+      op: set
+      path: building.systems_config_v40.dhw[1].share_pct
+      value: 100
+      source: inline
+    - id: p3
+      op: set
+      path: building.systems_config_v40.dhw[1].efficiency_metric
+      value: 5
+      source: inline
+    cost:
+      mode: headline
+      headline:
+        design_engineering: 13440
+        equipment: 120000
+        installation_commissioning: 30000
+        additional_measures: 10000
+        project_delivery: 5760
+        contingency: 35840
+      detailed: null
+      computed_total: 0
+  - id: int_setpoints
+    label: Widen setpoints (20 / 25 °C)
+    notes: Heating 20, cooling 25 — wider deadband
+    enabled: true
+    theme: Operation
+    capex_gbp: null
+    schema_version: 2
+    patches:
+    - id: p1
+      op: set
+      path: building.systems_config_v40.heating_setpoint_mode
+      value: custom
+      source: inline
+    - id: p2
+      op: set
+      path: building.systems_config_v40.heating_setpoint_c
+      value: 20
+      source: inline
+    - id: p3
+      op: set
+      path: building.systems_config_v40.cooling_setpoint_mode
+      value: custom
+      source: inline
+    - id: p4
+      op: set
+      path: building.systems_config_v40.cooling_setpoint_c
+      value: 25
+      source: inline
+  - id: int_brise
+    label: Brise soleil — south shading
+    notes: ~1.5 m horizontal shading on south facade
+    enabled: true
+    theme: Solar
+    capex_gbp: null
+    schema_version: 2
+    patches:
+    - id: p1
+      op: set
+      path: building.shading_overhang.south.depth_m
+      value: 1.5
+      source: inline
+    - id: patch_3f690ef6-b5ca-4bad-907c-dcfb4efcaadc
+      source: inline
+      op: set
+      path: building.shading_overhang.south
+      value:
+        depth_m: 0.5
+        offset_m: 0
+    - id: patch_89685123-b879-403c-8a87-505a7ffcffe3
+      source: inline
+      op: set
+      path: building.shading_fin.south
+      value:
+        left_depth_m: 0.5
+        right_depth_m: 0.5
+  - id: int_mvhr
+    label: Bedroom extract → MVHR (heat recovery)
+    notes: Add 80% sensible heat recovery to bedroom extract
+    enabled: true
+    theme: Ventilation
+    capex_gbp: null
+    schema_version: 2
+    patches:
+    - id: p1
+      op: set
+      path: building.systems_config_v40.ventilation[1].efficiency_metric.recovery_sensible_pct
+      value: 80
+      source: inline
+  - id: int_plug
+    label: Plug-load management (daytime shutoff)
+    notes: Reduce small-power baseload via daytime shutoff
+    enabled: true
+    theme: Small power
+    capex_gbp: null
+    schema_version: 2
+    patches:
+    - id: p1
+      op: set
+      path: building.gains.equipment.profiles[0].baseload.value
+      value: 3.5
+      source: inline
+  - id: int_9e8760d5-711c-4c9a-b3fb-8ff9a31a15b7
+    label: Air perm 1.9
+    notes: ''
+    enabled: true
+    theme: ''
+    capex_gbp: null
+    schema_version: 1
+    patches:
+    - id: patch_955991ba-46fa-4a13-b45e-c27d170e45e3
+      source: inline
+      op: set
+      path: building.fabric
+      value:
+        air_permeability_q50: 1.9
+  - id: int_3279a9c9-a690-4310-9236-9df96dec2bc2
+    label: New intervention
+    notes: ''
+    enabled: true
+    theme: null
+    capex_gbp: null
+    schema_version: 1
+    patches: []
+  library_interventions: []
+  strategies:
+  - id: strategy_default
+    name: Strategy 1
+    refs:
+    - library_id: int_021d8687-4e7b-4015-a12d-b08cff955310
+      enabled: true
+      order: 0
+    - library_id: int_dhw_ashp
+      enabled: true
+      order: 1
+    - library_id: int_setpoints
+      enabled: true
+      order: 2
+    - library_id: int_brise
+      enabled: true
+      order: 3
+    - library_id: int_mvhr
+      enabled: true
+      order: 4
+    - library_id: int_plug
+      enabled: true
+      order: 5
+    - library_id: int_9e8760d5-711c-4c9a-b3fb-8ff9a31a15b7
+      enabled: true
+      order: 6
+    - library_id: int_3279a9c9-a690-4310-9236-9df96dec2bc2
+      enabled: true
+      order: 7
+construction_choices:
+  external_wall: bridgwater_ext_wall
+  roof: bridgwater_roof
+  ground_floor: bridgwater_ground_floor
+  glazing: bridgwater_glazing
+library_constructions:
+- name: cavity_wall_enhanced
+  u_value_W_per_m2K: 0.18
+  y_factor: null
+  g_value: null
+  config_json:
+    name: cavity_wall_enhanced
+    display_name: Brick outer leaf, 150mm PIR cavity insulation, dense concrete block, plasterboard
+    description: Brick outer leaf, 150mm PIR cavity insulation, dense concrete block, plasterboard
+    type: wall
+    u_value_W_per_m2K: 0.18
+    g_value: null
+    thermal_mass: medium
+    y_factor: null
+    u_value_effective_W_per_m2K: null
+    layers: &id001
+    - name: CavWall_Enh_BrickOuter
+      kind: Material
+      thickness: 0.102
+      conductivity: 0.77
+      density: 1700
+      specific_heat: 800
+    - name: CavWall_Enh_PIR150
+      kind: Material
+      thickness: 0.15
+      conductivity: 0.022
+      density: 30
+      specific_heat: 1400
+    - name: CavWall_Enh_ConcreteBlock
+      kind: Material
+      thickness: 0.1
+      conductivity: 0.51
+      density: 1400
+      specific_heat: 1000
+    - name: CavWall_Enh_Plasterboard
+      kind: Material
+      thickness: 0.013
+      conductivity: 0.16
+      density: 950
+      specific_heat: 840
+  layers: *id001
+- name: cavity_wall_standard
+  u_value_W_per_m2K: 0.28
+  y_factor: null
+  g_value: null
+  config_json:
+    name: cavity_wall_standard
+    display_name: Brick outer leaf, 100mm mineral wool cavity, dense concrete block inner, plasterboard
+    description: Brick outer leaf, 100mm mineral wool cavity, dense concrete block inner, plasterboard
+    type: wall
+    u_value_W_per_m2K: 0.28
+    g_value: null
+    thermal_mass: medium
+    y_factor: null
+    u_value_effective_W_per_m2K: null
+    layers: &id002
+    - name: CavWall_Std_BrickOuter
+      kind: Material
+      thickness: 0.102
+      conductivity: 0.77
+      density: 1700
+      specific_heat: 800
+    - name: CavWall_Std_MineralWool100
+      kind: Material
+      thickness: 0.1
+      conductivity: 0.038
+      density: 15
+      specific_heat: 1030
+    - name: CavWall_Std_ConcreteBlock
+      kind: Material
+      thickness: 0.1
+      conductivity: 0.51
+      density: 1400
+      specific_heat: 1000
+    - name: CavWall_Std_Plasterboard
+      kind: Material
+      thickness: 0.013
+      conductivity: 0.16
+      density: 950
+      specific_heat: 840
+  layers: *id002
+- name: double_low_e
+  u_value_W_per_m2K: 1.4
+  y_factor: null
+  g_value: null
+  config_json:
+    name: double_low_e
+    display_name: Double glazing, low-e coating, argon filled
+    description: Double glazing, low-e coating, argon filled
+    type: glazing
+    u_value_W_per_m2K: 1.4
+    g_value: 0.42
+    thermal_mass: null
+    y_factor: null
+    u_value_effective_W_per_m2K: null
+    layers: &id003 []
+  layers: *id003
+- name: flat_roof_enhanced
+  u_value_W_per_m2K: 0.11
+  y_factor: null
+  g_value: null
+  config_json:
+    name: flat_roof_enhanced
+    display_name: Concrete deck, vapour barrier, 200mm PIR insulation, waterproofing
+    description: Concrete deck, vapour barrier, 200mm PIR insulation, waterproofing
+    type: roof
+    u_value_W_per_m2K: 0.11
+    g_value: null
+    thermal_mass: high
+    y_factor: null
+    u_value_effective_W_per_m2K: null
+    layers: &id004
+    - name: FlatRoof_Enh_Waterproof
+      kind: Material
+      thickness: 0.005
+      conductivity: 0.2
+      density: 1100
+      specific_heat: 1000
+    - name: FlatRoof_Enh_PIR200
+      kind: Material
+      thickness: 0.2
+      conductivity: 0.022
+      density: 30
+      specific_heat: 1400
+    - name: FlatRoof_Enh_VapourBarrier
+      kind: Material
+      thickness: 0.002
+      conductivity: 0.19
+      density: 920
+      specific_heat: 2090
+    - name: FlatRoof_Enh_ConcreteDeck
+      kind: Material
+      thickness: 0.15
+      conductivity: 1.13
+      density: 2000
+      specific_heat: 1000
+  layers: *id004
+- name: flat_roof_standard
+  u_value_W_per_m2K: 0.18
+  y_factor: null
+  g_value: null
+  config_json:
+    name: flat_roof_standard
+    display_name: Concrete deck, vapour barrier, 120mm PIR insulation, waterproofing
+    description: Concrete deck, vapour barrier, 120mm PIR insulation, waterproofing
+    type: roof
+    u_value_W_per_m2K: 0.18
+    g_value: null
+    thermal_mass: high
+    y_factor: null
+    u_value_effective_W_per_m2K: null
+    layers: &id005
+    - name: FlatRoof_Std_Waterproof
+      kind: Material
+      thickness: 0.005
+      conductivity: 0.2
+      density: 1100
+      specific_heat: 1000
+    - name: FlatRoof_Std_PIR120
+      kind: Material
+      thickness: 0.12
+      conductivity: 0.022
+      density: 30
+      specific_heat: 1400
+    - name: FlatRoof_Std_VapourBarrier
+      kind: Material
+      thickness: 0.002
+      conductivity: 0.19
+      density: 920
+      specific_heat: 2090
+    - name: FlatRoof_Std_ConcreteDeck
+      kind: Material
+      thickness: 0.15
+      conductivity: 1.13
+      density: 2000
+      specific_heat: 1000
+  layers: *id005
+- name: ground_floor_enhanced
+  u_value_W_per_m2K: 0.15
+  y_factor: null
+  g_value: null
+  config_json:
+    name: ground_floor_enhanced
+    display_name: Carpet, screed, 150mm concrete slab, 150mm XPS insulation, hardcore
+    description: Carpet, screed, 150mm concrete slab, 150mm XPS insulation, hardcore
+    type: floor
+    u_value_W_per_m2K: 0.15
+    g_value: null
+    thermal_mass: high
+    y_factor: null
+    u_value_effective_W_per_m2K: null
+    layers: &id006
+    - name: GFloor_Enh_Carpet
+      kind: Material
+      thickness: 0.01
+      conductivity: 0.06
+      density: 200
+      specific_heat: 1300
+    - name: GFloor_Enh_Screed
+      kind: Material
+      thickness: 0.065
+      conductivity: 0.41
+      density: 1200
+      specific_heat: 840
+    - name: GFloor_Enh_ConcreteSlab
+      kind: Material
+      thickness: 0.15
+      conductivity: 1.13
+      density: 2000
+      specific_heat: 1000
+    - name: GFloor_Enh_XPS150
+      kind: Material
+      thickness: 0.15
+      conductivity: 0.033
+      density: 35
+      specific_heat: 1400
+  layers: *id006
+- name: ground_floor_slab
+  u_value_W_per_m2K: 0.22
+  y_factor: null
+  g_value: null
+  config_json:
+    name: ground_floor_slab
+    display_name: Carpet, screed, 150mm concrete slab, 100mm XPS insulation, hardcore
+    description: Carpet, screed, 150mm concrete slab, 100mm XPS insulation, hardcore
+    type: floor
+    u_value_W_per_m2K: 0.22
+    g_value: null
+    thermal_mass: high
+    y_factor: null
+    u_value_effective_W_per_m2K: null
+    layers: &id007
+    - name: GFloor_Std_Carpet
+      kind: Material
+      thickness: 0.01
+      conductivity: 0.06
+      density: 200
+      specific_heat: 1300
+    - name: GFloor_Std_Screed
+      kind: Material
+      thickness: 0.065
+      conductivity: 0.41
+      density: 1200
+      specific_heat: 840
+    - name: GFloor_Std_ConcreteSlab
+      kind: Material
+      thickness: 0.15
+      conductivity: 1.13
+      density: 2000
+      specific_heat: 1000
+    - name: GFloor_Std_XPS100
+      kind: Material
+      thickness: 0.1
+      conductivity: 0.033
+      density: 35
+      specific_heat: 1400
+  layers: *id007
+- name: interior_floor_ceiling
+  u_value_W_per_m2K: null
+  y_factor: null
+  g_value: null
+  config_json:
+    name: interior_floor_ceiling
+    display_name: Carpet, screed, 200mm reinforced concrete, plaster skim
+    description: Carpet, screed, 200mm reinforced concrete, plaster skim
+    type: interior
+    u_value_W_per_m2K: null
+    g_value: null
+    thermal_mass: high
+    y_factor: null
+    u_value_effective_W_per_m2K: null
+    layers: &id008
+    - name: IntFloor_Carpet
+      kind: Material
+      thickness: 0.01
+      conductivity: 0.06
+      density: 200
+      specific_heat: 1300
+    - name: IntFloor_Screed
+      kind: Material
+      thickness: 0.065
+      conductivity: 0.41
+      density: 1200
+      specific_heat: 840
+    - name: IntFloor_Concrete200
+      kind: Material
+      thickness: 0.2
+      conductivity: 1.13
+      density: 2000
+      specific_heat: 1000
+    - name: IntFloor_Plaster
+      kind: Material
+      thickness: 0.013
+      conductivity: 0.5
+      density: 1300
+      specific_heat: 1000
+  layers: *id008
+- name: pitched_roof_standard
+  u_value_W_per_m2K: 0.16
+  y_factor: null
+  g_value: null
+  config_json:
+    name: pitched_roof_standard
+    display_name: Tiles, battens, membrane, 200mm mineral wool between rafters, plasterboard
+    description: Tiles, battens, membrane, 200mm mineral wool between rafters, plasterboard
+    type: roof
+    u_value_W_per_m2K: 0.16
+    g_value: null
+    thermal_mass: low
+    y_factor: null
+    u_value_effective_W_per_m2K: null
+    layers: &id009
+    - name: PitchedRoof_Std_Tiles
+      kind: Material
+      thickness: 0.012
+      conductivity: 0.84
+      density: 1900
+      specific_heat: 800
+    - name: PitchedRoof_Std_Membrane
+      kind: Material:NoMass
+      thermal_resistance: 0.06
+    - name: PitchedRoof_Std_MineralWool200
+      kind: Material
+      thickness: 0.2
+      conductivity: 0.038
+      density: 15
+      specific_heat: 1030
+    - name: PitchedRoof_Std_Plasterboard
+      kind: Material
+      thickness: 0.013
+      conductivity: 0.16
+      density: 950
+      specific_heat: 840
+  layers: *id009
+- name: timber_frame_standard
+  u_value_W_per_m2K: 0.22
+  y_factor: null
+  g_value: null
+  config_json:
+    name: timber_frame_standard
+    display_name: Brick outer leaf, cavity, OSB sheathing, 140mm mineral wool between studs, plasterboard
+    description: Brick outer leaf, cavity, OSB sheathing, 140mm mineral wool between studs, plasterboard
+    type: wall
+    u_value_W_per_m2K: 0.22
+    g_value: null
+    thermal_mass: low
+    y_factor: null
+    u_value_effective_W_per_m2K: null
+    layers: &id010
+    - name: TF_Std_BrickOuter
+      kind: Material
+      thickness: 0.102
+      conductivity: 0.77
+      density: 1700
+      specific_heat: 800
+    - name: TF_Std_AirCavity
+      kind: Material:NoMass
+      thermal_resistance: 0.18
+    - name: TF_Std_OSB
+      kind: Material
+      thickness: 0.012
+      conductivity: 0.13
+      density: 650
+      specific_heat: 1700
+    - name: TF_Std_MineralWool140
+      kind: Material
+      thickness: 0.14
+      conductivity: 0.038
+      density: 15
+      specific_heat: 1030
+    - name: TF_Std_Plasterboard
+      kind: Material
+      thickness: 0.013
+      conductivity: 0.16
+      density: 950
+      specific_heat: 840
+  layers: *id010
+- name: triple_glazing
+  u_value_W_per_m2K: 0.8
+  y_factor: null
+  g_value: null
+  config_json:
+    name: triple_glazing
+    display_name: Triple glazing, double low-e coatings, argon filled
+    description: Triple glazing, double low-e coatings, argon filled
+    type: glazing
+    u_value_W_per_m2K: 0.8
+    g_value: 0.35
+    thermal_mass: null
+    y_factor: null
+    u_value_effective_W_per_m2K: null
+    layers: &id011 []
+  layers: *id011
+- name: bridgwater_ext_wall
+  u_value_W_per_m2K: 0.14
+  y_factor: null
+  g_value: null
+  config_json:
+    name: bridgwater_ext_wall
+    display_name: HIEX Bridgwater external wall — precast insulated panel, BRUKL U=0.14
+    description: HIEX Bridgwater external wall — precast insulated panel, BRUKL U=0.14
+    type: wall
+    u_value_W_per_m2K: 0.14
+    g_value: null
+    thermal_mass: high
+    y_factor: null
+    u_value_effective_W_per_m2K: null
+    layers: &id012
+    - name: Brdg_Wall_Insul
+      kind: Material:NoMass
+      thermal_resistance: 6.759
+    - name: Brdg_Wall_Concrete150
+      kind: Material
+      thickness: 0.15
+      conductivity: 1.13
+      density: 2300
+      specific_heat: 1000
+    - name: Brdg_Wall_Plasterboard
+      kind: Material
+      thickness: 0.013
+      conductivity: 0.16
+      density: 950
+      specific_heat: 840
+  layers: *id012
+- name: bridgwater_glazing
+  u_value_W_per_m2K: 1.4
+  y_factor: null
+  g_value: null
+  config_json:
+    name: bridgwater_glazing
+    display_name: HIEX Bridgwater glazing — area-weighted G1/G2 bedroom DGU dominant, BRUKL U=1.4 / g=0.55
+    description: HIEX Bridgwater glazing — area-weighted G1/G2 bedroom DGU dominant, BRUKL U=1.4 / g=0.55
+    type: glazing
+    u_value_W_per_m2K: 1.4
+    g_value: 0.55
+    thermal_mass: null
+    y_factor: null
+    u_value_effective_W_per_m2K: null
+    layers: &id013 []
+  layers: *id013
+- name: bridgwater_ground_floor
+  u_value_W_per_m2K: 0.13
+  y_factor: null
+  g_value: null
+  config_json:
+    name: bridgwater_ground_floor
+    display_name: HIEX Bridgwater ground floor — insulated precast slab + screed, BRUKL U=0.13
+    description: HIEX Bridgwater ground floor — insulated precast slab + screed, BRUKL U=0.13
+    type: floor
+    u_value_W_per_m2K: 0.13
+    g_value: null
+    thermal_mass: high
+    y_factor: null
+    u_value_effective_W_per_m2K: null
+    layers: &id014
+    - name: Brdg_GF_Insul
+      kind: Material:NoMass
+      thermal_resistance: 7.191
+    - name: Brdg_GF_Concrete150
+      kind: Material
+      thickness: 0.15
+      conductivity: 1.13
+      density: 2300
+      specific_heat: 1000
+    - name: Brdg_GF_Screed
+      kind: Material
+      thickness: 0.065
+      conductivity: 0.41
+      density: 1200
+      specific_heat: 840
+  layers: *id014
+- name: bridgwater_roof
+  u_value_W_per_m2K: 0.15
+  y_factor: null
+  g_value: null
+  config_json:
+    name: bridgwater_roof
+    display_name: HIEX Bridgwater roof — precast concrete deck + insulation, BRUKL U=0.15
+    description: HIEX Bridgwater roof — precast concrete deck + insulation, BRUKL U=0.15
+    type: roof
+    u_value_W_per_m2K: 0.15
+    g_value: null
+    thermal_mass: high
+    y_factor: null
+    u_value_effective_W_per_m2K: null
+    layers: &id015
+    - name: Brdg_Roof_Waterproof
+      kind: Material
+      thickness: 0.005
+      conductivity: 0.2
+      density: 1100
+      specific_heat: 1000
+    - name: Brdg_Roof_Insul
+      kind: Material:NoMass
+      thermal_resistance: 6.369
+    - name: Brdg_Roof_Concrete150
+      kind: Material
+      thickness: 0.15
+      conductivity: 1.13
+      density: 2300
+      specific_heat: 1000
+  layers: *id015
