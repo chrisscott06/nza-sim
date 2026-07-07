@@ -19,7 +19,7 @@
  * your first intervention" CTA.
  */
 
-import { Fragment, useState } from 'react'
+import { Fragment, useState, useRef, useEffect } from 'react'
 import { Plus } from 'lucide-react'
 import InterventionRow from './InterventionRow.jsx'
 import { useUISettings } from '../../../context/UISettingsContext.jsx'
@@ -302,8 +302,26 @@ export default function InterventionStackView({
   const [draggingId, setDraggingId] = useState(null)
   const [dropGap,    setDropGap]    = useState(null)
   const [landedId,   setLandedId]   = useState(null)
+  const [pendingId,  setPendingId]  = useState(null)   // moved-row spinner until the reorder re-renders
+  const listRef = useRef(null)
 
   const resetDrag = () => { setDraggingId(null); setDropGap(null) }
+
+  // Brief 94 follow-up (walkthrough): the destination gap is resolved from the pointer's
+  // Y ONLY, measured against every row's mid-line across the whole list column — never
+  // from which row element the pointer's X happens to be over. This fixes drops failing
+  // on straight-up / leftward drags (the old per-row hit-testing was x-sensitive: a
+  // pointer drifting left of a row's box, or over a narrow child, resolved to the wrong
+  // gap or none). Any X within the list now yields the same gap for a given Y.
+  const gapFromPointerY = (clientY) => {
+    const rowEls = listRef.current ? [...listRef.current.querySelectorAll('[data-row-id]')] : []
+    let gap = rowEls.length
+    for (let i = 0; i < rowEls.length; i++) {
+      const r = rowEls[i].getBoundingClientRect()
+      if (clientY < r.top + r.height / 2) { gap = i; break }
+    }
+    return gap
+  }
 
   const handleDragStart = (e, id) => {
     setDraggingId(id)
@@ -311,49 +329,61 @@ export default function InterventionStackView({
     // Some browsers require setData to enable drop
     try { e.dataTransfer.setData('text/plain', id) } catch { /* ignore */ }
   }
-  const handleDragOver = (e, id) => {
+
+  // Container-level dragover — y-only gap (see gapFromPointerY). Drives the pink
+  // indicator exactly as before (dropGap semantics unchanged).
+  const handleContainerDragOver = (e) => {
+    if (!draggingId) return
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
-    if (!draggingId) return
-    const idx = interventions.findIndex(i => i.id === id)
-    if (idx === -1) return
-    const rect = e.currentTarget.getBoundingClientRect()
-    const before = e.clientY < rect.top + rect.height / 2
-    const gap = before ? idx : idx + 1
-    // Hide the indicator when the gap is adjacent to the item's own slot —
-    // dropping there wouldn't move it, so don't promise a move.
+    const gap = gapFromPointerY(e.clientY)
     const d = interventions.findIndex(i => i.id === draggingId)
+    // Hide the indicator at the dragged item's own slot — dropping there wouldn't move it.
     setDropGap(gap === d || gap === d + 1 ? null : gap)
   }
-  // Brief 94 P3 fix (P1 diagnostic root cause: a106438): drop must NOT depend solely
-  // on the transient `dropGap` — the <DropIndicator> reflow shifts the list under the
-  // cursor and can leave `dropGap` null at release, silently no-op'ing the reorder.
-  // Recompute the destination from the row the drop fired on (`targetId`) + cursor Y
-  // at release, falling back to `dropGap` when it is set.
-  const handleDrop = (e, targetId) => {
+
+  // Container-level drop — lands where the pink gap showed (dropGap), with a y-only
+  // recompute as the fallback so a stale/never-fired dragover can't no-op the reorder.
+  const handleContainerDrop = (e) => {
+    if (!draggingId) { resetDrag(); return }
     e.preventDefault()
     const d = interventions.findIndex(i => i.id === draggingId)
     if (d === -1) { resetDrag(); return }
-    let gap = dropGap
-    if (gap == null && targetId != null) {
-      const idx = interventions.findIndex(i => i.id === targetId)
-      if (idx !== -1) {
-        const rect = e.currentTarget.getBoundingClientRect()
-        gap = e.clientY < rect.top + rect.height / 2 ? idx : idx + 1
-      }
-    }
-    if (gap == null) { resetDrag(); return }
+    const movedId = draggingId
+    const gap = dropGap != null ? dropGap : gapFromPointerY(e.clientY)
+    resetDrag()
     const insertAt = gap > d ? gap - 1 : gap
-    if (insertAt === d) { resetDrag(); return }
+    if (insertAt === d) return   // no-op (dropped at its own slot)
     const reordered = [...interventions]
     const [moved] = reordered.splice(d, 1)
     reordered.splice(insertAt, 0, moved)
-    onReorder?.(reordered)
-    setLandedId(draggingId)
+    setPendingId(movedId)                              // spinner until the new order confirms
+    setLandedId(movedId)
     setTimeout(() => setLandedId(null), 850)
-    resetDrag()
+    onReorder?.(reordered)
   }
   const handleDragEnd = () => resetDrag()
+
+  // Clear the pending spinner once the new order has been applied to the props
+  // (the reorder round-tripped through the parent). Keyed on the order signature so
+  // it clears exactly when the move is confirmed.
+  const orderSig = interventions.map(i => i.id).join('|')
+  useEffect(() => { setPendingId(null) }, [orderSig])
+
+  // Deterministic, keyboard-accessible fallback: move a row up/down one slot.
+  const move = (id, dir) => {
+    const idx = interventions.findIndex(i => i.id === id)
+    if (idx === -1) return
+    const to = idx + dir
+    if (to < 0 || to >= interventions.length) return
+    const reordered = [...interventions]
+    const [m] = reordered.splice(idx, 1)
+    reordered.splice(to, 0, m)
+    setPendingId(id)
+    setLandedId(id)
+    setTimeout(() => setLandedId(null), 850)
+    onReorder?.(reordered)
+  }
 
   // 2026-05-26: GIA from the baseline result so child rows can honour
   // the global unit toggle (kWh/m²·yr ↔ MWh) on their EUI numbers.
@@ -385,7 +415,12 @@ export default function InterventionStackView({
   // space-y-3 → space-y-1.5 so collapsed rows pack tightly enough that
   // a long stack stays drag-reorderable without scrolling.
   return (
-    <div className="space-y-1.5">
+    <div
+      className="space-y-1.5"
+      ref={listRef}
+      onDragOver={handleContainerDragOver}
+      onDrop={handleContainerDrop}
+    >
       {/* Baseline card */}
       <BaselineRow baselineSummary={baselineSummary} gia_m2={gia_m2} />
 
@@ -408,9 +443,12 @@ export default function InterventionStackView({
               onToggleEnabled={() => onToggleEnabled?.(intervention.id)}
               onRemove={() => onRemove?.(intervention.id)}
               onDragStart={handleDragStart}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
               onDragEnd={handleDragEnd}
+              onMoveUp={() => move(intervention.id, -1)}
+              onMoveDown={() => move(intervention.id, +1)}
+              canMoveUp={i > 0}
+              canMoveDown={i < interventions.length - 1}
+              pending={pendingId === intervention.id}
               draggingId={draggingId}
               landed={landedId === intervention.id}
             />

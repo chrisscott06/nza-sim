@@ -277,3 +277,30 @@ scoped (data-model + UI only).
 code + fixture test (`strategyModel.js`, `_brief94_migration_test.mjs`), the strategy data model, the P5 diff
 removing live recalc, and the P1 diagnostic. Merging agent does not grade. PR opened to `main`; **not merged**
 pending Chris's walkthrough + independent review.
+
+## §3b — Reorder fix follow-up (walkthrough feedback, 2026-07-07)
+
+Chris's Brief 94 walkthrough refined the reorder symptom: **down-and-right drags succeeded, straight-up /
+leftward drags failed** — the P3 `handleDrop`/`handleDragOver` resolved the destination from *which row
+element the pointer was over* (x-sensitive), so a pointer drifting left of a row's box (or over a narrow
+child) resolved to the wrong gap or none.
+
+**Fix (`InterventionStackView.jsx`):** destination is now resolved from the pointer's **Y only**, measured
+against every row's mid-line across the whole list column (`gapFromPointerY`, keyed off `[data-row-id]`
+elements). Drag-over/drop moved from per-row to **container-level** handlers — any X within the list yields
+the same gap for a given Y. The pink `<DropIndicator>` behaviour is unchanged (still driven by `dropGap`);
+drop lands where the pink gap showed, with a y-only recompute as fallback.
+
+**Async-persist feedback:** a small `Loader2` spinner replaces the drag handle on the moved row (`pending`)
+until the reorder round-trips through the parent (cleared on the order-signature change).
+
+**Deterministic fallback:** per-row **↑/↓ arrow buttons** (keyboard-accessible; end-stops disabled) that move
+a row one slot via the same `onReorder` path.
+
+**Browser-verified (isolated scratch instance — vite 5177 → backend 8003 → scratch DB copy, so Chris's live
+walkthrough on 5176/8002 was untouched):**
+- ✓ Arrows via **real clicks**: ↓ moved a row 0→1, ↑ returned it 0; scratch DB persisted the round-trip. End-stops disabled correctly.
+- ✓ **Y-only drag**: dragging a row UP with the pointer pinned to the **far-left** edge landed it at the Y-determined gap (the exact leftward/upward case that failed before).
+- ✓ No console errors; `npm run build` clean.
+
+**Flagged for Chris:** re-test the *human* mouse drag — straight-up, leftward, and down-right must all land where the pink gap showed. **Nothing merges until that re-test passes.**
