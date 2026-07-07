@@ -395,6 +395,26 @@ const DEFAULT_PARAMS = {
       notes:               '',
       enabled:             true,
     }],
+    // Brief 92 (2026-07-06) — auxiliary loads on/off. Thin entry mirroring
+    // lighting/small_power: the enabled flag gates the auxiliary LOAD (both
+    // electricity + heat gain) via effectiveSystemScalar. The loads themselves
+    // are defined per-profile in Internal Gains (gains.auxiliary); this is only
+    // the master on/off, like Lighting/Small power.
+    auxiliary: [{
+      id:                  'default_auxiliary',
+      label:               'Auxiliary (baseline)',
+      service:             'auxiliary',
+      source:              'electricity',
+      efficiency_metric:   null,
+      setpoint:            null,
+      control_mechanism:   'constant',
+      control_schedule_id: null,
+      control_factor:      1.0,
+      share_pct:           100,
+      capacity_kw:         null,
+      notes:               '',
+      enabled:             true,
+    }],
   },
   // Brief 40 Part 3 (2026-05-19) — per-project systems library (Brief 37
   // pattern, 'systems' namespace). Populated by SystemEditorCard "Save to
@@ -426,6 +446,38 @@ const DEFAULT_PARAMS = {
   // schema_version) plus a saved_at timestamp and a `lib_intervention_*`
   // id assigned at save time.
   library_interventions: [],
+  // Brief 87 Part 3 (interventions UX rework) — named, ordered strategies.
+  // The Library is `interventions` (a catalogue; order is not meaningful there).
+  // A Strategy is an ORDERED SELECTION of intervention ids — order matters
+  // because interventions interact (fabric before heat pump). Single strategy
+  // per project for v1; the data model allows many. Migrated on load: a project
+  // without `strategies` gets a default "Strategy 1" holding every current
+  // intervention in its current array order (see migrateStrategies). Inert data
+  // until the Strategy view consumes it (Part 5) — adding it moves no engine
+  // numbers. Strategy = { id, name, ordered_intervention_ids: string[] }.
+  strategies: [],
+}
+
+// ── Brief 87 Part 3 — Strategy data model + lossless migration ────────────────
+// Library = `interventions` (catalogue). Strategy = ordered selection of ids.
+function makeDefaultStrategy(interventions) {
+  return {
+    id: 'strategy_default',
+    name: 'Strategy 1',
+    ordered_intervention_ids: (Array.isArray(interventions) ? interventions : [])
+      .map((i) => i?.id)
+      .filter(Boolean),
+  }
+}
+
+// Returns the project's strategies, creating a default "Strategy 1" (all current
+// interventions, original order) for any project authored before this brief.
+// Lossless: every existing intervention is referenced, in the same order the
+// engine already stacks them, so the migrated project's engine output is
+// byte-identical to its pre-migration output.
+function migrateStrategies(bc) {
+  if (Array.isArray(bc?.strategies) && bc.strategies.length > 0) return bc.strategies
+  return [makeDefaultStrategy(bc?.interventions)]
 }
 
 // ── Brief 27 Part 1 — v2.3 migration helpers ─────────────────────────────────
@@ -1010,6 +1062,22 @@ export function ProjectProvider({ children }) {
         }
       }
     }
+    // Brief 92 (2026-07-06): ensure systems_config_v40.auxiliary exists so the
+    // Systems on/off toggle appears for EXISTING projects (auxiliary was never a
+    // v40 service before). Unconditional + idempotent — no schema_version bump
+    // (purely additive; projects that already have it are a no-op). Mirrors the
+    // ventilation-strip pattern above. Absent auxiliary already means "on" in the
+    // engine (effectiveSystemScalar → 1.0), so this only materialises the toggle's
+    // storage; it changes no numbers.
+    if (bc?.systems_config_v40 && !Array.isArray(bc.systems_config_v40.auxiliary)) {
+      bc = {
+        ...bc,
+        systems_config_v40: {
+          ...bc.systems_config_v40,
+          auxiliary: DEFAULT_PARAMS.systems_config_v40.auxiliary.map(s => ({ ...s })),
+        },
+      }
+    }
     // Brief 72 P3 (2026-05-29): schema migration warning for the retired
     // `people_per_room` phantom field. When a persisted project still
     // carries the field, log a one-shot console.warn explaining what
@@ -1165,6 +1233,11 @@ export function ProjectProvider({ children }) {
       // Brief 41 Part 5 (2026-05-20) — per-project intervention library.
       // Same load semantics as systems_config_v40 / library_systems.
       library_interventions: Array.isArray(bc.library_interventions) ? bc.library_interventions : DEFAULT_PARAMS.library_interventions,
+      // Brief 87 Part 3 — Strategy data model + lossless migration. A project
+      // without `strategies` gets a default "Strategy 1" referencing every
+      // current intervention in its current order. Inert until the Strategy
+      // view consumes it (Part 5), so this moves no engine numbers.
+      strategies: migrateStrategies(bc),
     })
     setConstructions(project.construction_choices ?? DEFAULT_CONSTRUCTIONS)
     setSystems(migrateSystemsConfig(project.systems_config))

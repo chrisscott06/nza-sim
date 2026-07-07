@@ -65,11 +65,20 @@ Merged `instantCalc.js` = 7374 lines (= envelope-fix's).
 shape identical — 0% drift, well inside the <1% gate). Expected, per the Part-1b finding (physics invariant).
 **This post-merge state (169.8, breakdown as in the P1b table) is now THE anchor for Parts 3–4.**
 
-## §Part 3 — interventions merged
-_(to fill)_
+## §Part 3 — interventions merged — deltas: NONE
 
-## §Part 3 — interventions merged
-_(to fill)_
+`git merge --no-ff chris/interventions-rework-ux` into main (= main+envelope-fix). **`instantCalc.js`
+auto-merged cleanly** (envelope-fix's Brief 86 changes + interventions' Brief 88/92 changes were in
+different regions → git combined them: merged = 7399 lines, carrying BOTH `auxScalar`×6 and the Brief 88
+alias-deprecation). Only 2 conflicts, **both pure docs** — STATUS.md + docs/briefs/current.md — resolved
+as a scribe (STATUS = union, interventions briefs newest-first then envelope/validation; current.md = Brief
+93 consolidation lead). No physics conflict; nothing blended.
+
+**Post-merge anchor = P2 anchor, FULL byte-match** (EUI 169.8, every metric + 12-month shape identical).
+**Delta table: every metric moved 0.0% → zero unexplained, zero >5% — stop condition not triggered.**
+
+Brief 91 transitional state **survived intact** (`HeadlineCostEditor` mounted, `computeCostPlanTotal`
+old-headline dual-path present, `CostPlanEditor.jsx` absent). Full frontend `npm run build` clean.
 
 ## §Part 4 — EP-validation merged
 _(to fill)_

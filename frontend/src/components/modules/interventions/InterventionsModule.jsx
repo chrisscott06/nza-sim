@@ -27,6 +27,7 @@
  */
 
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { Pencil, Trash2 } from 'lucide-react'
 import { ProjectContext } from '../../../context/ProjectContext.jsx'
 import { WeatherContext } from '../../../context/WeatherContext.jsx'
 import { useHourlySolar } from '../../../hooks/useHourlySolar.js'
@@ -41,7 +42,14 @@ import { confirm } from '../../shared/ConfirmDialog.jsx'
 // edit-pencil click.
 import InterventionEditorPopout from './InterventionEditorPopout.jsx'
 import { computeFieldConflicts } from './InterventionStackView.jsx'
-import VisualiserHost from './visualiser/VisualiserHost.jsx'
+// Brief 87 Part 5/6 — VisualiserHost retired: the Strategy page now uses
+// StrategyView and the Library page uses PerInterventionView. VisualiserHost +
+// its IsolatedView/BeforeAfterBars/BreakdownPanel/ComparisonView children are no
+// longer mounted; full file deletion deferred to Part 6 close (post-walkthrough).
+// Brief 87 Part 4 — Library/Strategy split + two-section per-intervention view.
+import PerInterventionView from './PerInterventionView.jsx'
+import StrategyView from './StrategyView.jsx'
+import { useIsolatedResults } from './useIsolatedResults.js'
 // Brief 47 Part 1 (2026-05-24): Library feature cut entirely per design
 // note. InterventionLibrary.jsx no longer imported.
 // Brief 47 Part 3 (2026-05-24): ComparisonView no longer mounted — the
@@ -76,6 +84,12 @@ export default function InterventionsModule() {
   // Brief 47 Part 3 (2026-05-24): `tab` state retired — Stack | Comparison
   // switcher gone, replaced by inputs-left / visualiser-right split.
   const [editingId, setEditingId] = useState(null)
+  // Brief 87 Part 4 — Library/Strategy page split. Library = author + the
+  // per-intervention two-section view; Strategy = ordered composition (Part 5,
+  // still the existing stack + visualiser for now). `selectedLibraryId` is the
+  // intervention shown in the Library's right pane.
+  const [page, setPage] = useState('library')
+  const [selectedLibraryId, setSelectedLibraryId] = useState(null)
   // Brief 47 Part 1: library state (saveLibId / libraryPickerOpen) removed.
   // Brief 47 Part 4 (2026-05-24): livePatches mirrors the editor's
   // in-progress currentPatches so the right-pane visualiser updates
@@ -97,6 +111,24 @@ export default function InterventionsModule() {
   }, [])
 
   const interventions = Array.isArray(params?.interventions) ? params.interventions : []
+
+  // Brief 89 (Brief C) Part 7: project-level CRREM pathway pick. v1 is single-
+  // pathway — property type derives from the project building_type (single source
+  // of truth), country fixed UK, pathway local (1.5°C; persistence + more curves
+  // are a future brief). Applies to both Library + Strategy CRREM charts.
+  const [crremPathway, setCrremPathway] = useState('1.5C')
+  const crremPick = useMemo(() => ({
+    country: 'UK',
+    property_type: (params?.building_type || 'hotel').toLowerCase(),
+    pathway: crremPathway,
+  }), [params?.building_type, crremPathway])
+
+  // Brief 90 (Brief B): project cost defaults + per-intervention cost persistence.
+  const projectCostDefaults = params?.cost_defaults ?? null
+  const updateInterventionCost = useCallback((id, cost) => {
+    const next = (params?.interventions ?? []).map(iv => (iv.id === id ? { ...iv, cost } : iv))
+    updateParam('interventions', next)
+  }, [params?.interventions, updateParam])
   // Brief 47 Part 1: libraryInterventions reads removed — library cut.
   // The params.library_interventions field is left in DEFAULT_PARAMS for
   // backwards compatibility (existing projects may carry library entries
@@ -197,7 +229,7 @@ export default function InterventionsModule() {
     // Brief 44 Part 2 (2026-05-21): the canonical result shape post-
     // Brief-28-IM-Polish IA 3.2 is `consumption.total.kwh_per_m2_yr` and
     // `carbon_kg_co2_per_m2`. The previous multi-path fallback walked
-    // seven candidate paths and the legacy `eui_kWh_m2` won at initial
+    // seven candidate paths and a legacy top-level alias won at initial
     // render (no saved interventions yet → engineResult fallback),
     // while the canonical path won post-save (stackResult.baseline has
     // consumption.total populated). The 169.1 → 89.0 flip Chris reported
@@ -396,6 +428,14 @@ export default function InterventionsModule() {
     )
   }, [params, constructions, systems, libraryData, weatherData, hourlySolar, comfortBand])
 
+  // Brief 87 Part 4 — per-intervention isolated deltas for the Library view.
+  // Reuses the existing Brief 71 hook (singleton stack per intervention), so no
+  // new engine work. The selected intervention's row feeds PerInterventionView.
+  const isolatedRows = useIsolatedResults(interventions, baselineConfig, runEngine, libraryData, stackResult)
+  const selectedLibId = selectedLibraryId ?? interventions[0]?.id ?? null
+  const selectedIntervention = interventions.find((i) => i.id === selectedLibId) ?? null
+  const selectedIsolatedRow = isolatedRows.find((r) => r.id === selectedLibId) ?? null
+
   // ── Render ──────────────────────────────────────────────────────────
 
   return (
@@ -413,9 +453,26 @@ export default function InterventionsModule() {
           <h1 className="text-heading font-semibold text-navy">Interventions</h1>
         </div>
         <p className="text-caption text-mid-grey mt-1 max-w-3xl">
-          Stack interventions against the baseline. Each intervention compounds on top of the ones above it.
-          Toggle, reorder, or click to edit. Baseline stays untouched.
+          {page === 'library'
+            ? 'A catalogue of interventions. Select one to see its isolated impact and calc trail. Order has no meaning here — sequencing lives in the Strategy.'
+            : 'Compose an ordered strategy from the Library. Order matters — each intervention compounds on top of the ones above it.'}
         </p>
+        {/* Brief 87 Part 4 — Library | Strategy page tabs */}
+        <div className="flex gap-1 mt-3">
+          {[['library', 'Library'], ['strategy', 'Strategy']].map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setPage(id)}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                page === id ? 'text-white' : 'text-mid-grey hover:text-navy bg-light-grey/40'
+              }`}
+              style={page === id ? { backgroundColor: INTERVENTIONS_ACCENT } : undefined}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Body — Brief 47 Part 3: split into stack-left + visualiser-right.
@@ -424,44 +481,118 @@ export default function InterventionsModule() {
           (lands as part of Part 4). The library button never existed
           post-Brief-47 Part 1. */}
       <div className="flex-1 min-h-0 flex">
-        {/* Left pane — intervention stack */}
-        <aside className="flex-shrink-0 w-[560px] border-r border-light-grey bg-white overflow-auto">
-          <div className="p-4">
-            <InterventionStackView
-              interventions={interventions}
-              baselineSummary={baselineSummary}
-              stackResult={stackResult}
-              baselineConfig={baselineConfig}
-              onToggleEnabled={handleToggleEnabled}
-              onReorder={handleReorder}
-              onEdit={handleEdit}
-              onAdd={handleAdd}
-              onDuplicate={handleDuplicate}
-              onDelete={handleListDelete}
-            />
-          </div>
-        </aside>
-
-        {/* Right pane — Brief 47 Part 4 visualiser surface. View switcher
-            with Waterfall (reuse EUIWaterfall) / Before-after (new
-            BeforeAfterBars) / Heat balance (reuse HeatBalance via
-            PhysicsView). Live-update: engineResult re-runs with the
-            editor's in-progress patches substituted into the editing
-            intervention (see paramsForEngine useMemo); all three views
-            consume the recomputed stackResult so the visualiser stays
-            in sync with edits in the (potentially off-screen) pop-out. */}
-        <main className="flex-1 min-w-0 bg-off-white overflow-hidden">
-          <VisualiserHost
-            interventions={interventions}
-            stackResult={stackResult}
-            orientationDeg={Number(params?.orientation ?? 0)}
-            baselineConfig={baselineConfig}
-            runEngine={runEngine}
-            libraryData={libraryData}
-            onToggleEnabled={handleToggleEnabled}
-            onEdit={handleEdit}
-          />
-        </main>
+        {page === 'library' ? (
+          <>
+            {/* ── Library page — catalogue (left) + two-section per-intervention view (right) ── */}
+            <aside className="flex-shrink-0 w-[420px] border-r border-light-grey bg-white overflow-auto">
+              <div className="p-4 space-y-2">
+                <div className="flex items-center justify-between mb-1">
+                  <h2 className="text-xs uppercase tracking-wider font-semibold text-navy">Library</h2>
+                  <button type="button" onClick={handleAdd} className="text-xs font-semibold" style={{ color: INTERVENTIONS_ACCENT }}>
+                    + Add
+                  </button>
+                </div>
+                {interventions.length === 0 ? (
+                  <p className="text-xs text-mid-grey/60 italic">No interventions yet. Add one to start the catalogue.</p>
+                ) : (
+                  interventions.map((iv) => {
+                    const row = isolatedRows.find((r) => r.id === iv.id)
+                    const euiD = row?.cumulativeDelta?.eui_kwh_per_m2?.delta
+                    const isSel = iv.id === selectedLibId
+                    return (
+                      <div
+                        key={iv.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSelectedLibraryId(iv.id)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedLibraryId(iv.id) }}
+                        className={`group cursor-pointer rounded-lg px-3 py-2 transition-colors ${
+                          isSel ? 'border-2' : 'border border-light-grey/70 hover:border-light-grey'
+                        }`}
+                        style={isSel ? { borderColor: INTERVENTIONS_ACCENT } : undefined}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium text-navy truncate">{iv.label || '(untitled)'}</span>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span
+                              className="text-xs tabular-nums"
+                              style={{ color: Number.isFinite(euiD) && euiD < -0.05 ? '#16A34A' : '#6B7280' }}
+                            >
+                              {!Number.isFinite(euiD) ? '—' : `${euiD < 0 ? '−' : '+'}${Math.abs(euiD).toFixed(1)} kWh/m²`}
+                            </span>
+                            <button
+                              type="button"
+                              title="Edit intervention"
+                              onClick={(e) => { e.stopPropagation(); handleEdit(iv.id) }}
+                              className="p-1 rounded text-mid-grey/40 hover:text-navy hover:bg-light-grey/50 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              title="Delete intervention"
+                              onClick={(e) => { e.stopPropagation(); handleListDelete(iv.id) }}
+                              className="p-1 rounded text-mid-grey/40 hover:text-red-600 hover:bg-light-grey/50 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+                        {iv.theme ? <span className="text-xxs text-mid-grey/60">{iv.theme}</span> : null}
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            </aside>
+            <main className="flex-1 min-w-0 bg-off-white overflow-auto">
+              {selectedIntervention ? (
+                <PerInterventionView
+                  intervention={selectedIntervention}
+                  isolatedRow={selectedIsolatedRow}
+                  crremPick={crremPick}
+                  projectCostDefaults={projectCostDefaults}
+                  onCostChange={updateInterventionCost}
+                />
+              ) : (
+                <div className="p-8 text-sm text-mid-grey/60">
+                  Select an intervention from the Library to see its isolated impact and calc trail.
+                </div>
+              )}
+            </main>
+          </>
+        ) : (
+          <>
+            {/* ── Strategy page — ordered stack (left) + composed StrategyView
+                (right: headline + waterfall + final-state heat balance + CRREM). ── */}
+            <aside className="flex-shrink-0 w-[440px] border-r border-light-grey bg-white overflow-auto">
+              <div className="p-4">
+                <InterventionStackView
+                  interventions={interventions}
+                  baselineSummary={baselineSummary}
+                  stackResult={stackResult}
+                  baselineConfig={baselineConfig}
+                  onToggleEnabled={handleToggleEnabled}
+                  onReorder={handleReorder}
+                  onEdit={handleEdit}
+                  onAdd={handleAdd}
+                  onDuplicate={handleDuplicate}
+                  onDelete={handleListDelete}
+                />
+              </div>
+            </aside>
+            <main className="flex-1 min-w-0 bg-off-white overflow-hidden">
+              <StrategyView
+                strategyName={params?.strategies?.[0]?.name ?? 'Strategy 1'}
+                interventions={interventions}
+                stackResult={stackResult}
+                orientationDeg={Number(params?.orientation ?? 0)}
+                crremPick={crremPick}
+                onCrremPathwayChange={setCrremPathway}
+              />
+            </main>
+          </>
+        )}
       </div>
 
       {/* Brief 46 Part 5 (2026-05-22): the rebuilt InterventionEditorPopout

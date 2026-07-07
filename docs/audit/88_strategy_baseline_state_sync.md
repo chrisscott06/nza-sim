@@ -1,0 +1,103 @@
+# Audit — Brief 88: Strategy baseline state-sync (diagnostic + targeted fix)
+
+Branch: `chris/interventions-rework-ux` (same branch as Brief 87; both close before single PR to `main`).
+Design note (canonical): [`docs/design-notes/88_strategy_baseline_state_sync.md`](../design-notes/88_strategy_baseline_state_sync.md).
+Brief: [`docs/briefs/active/88_strategy_baseline_state_sync.md`](../briefs/active/88_strategy_baseline_state_sync.md).
+
+**Principle (locked):** live baseline everywhere — the Strategy waterfall's baseline EUI must equal the
+Systems page's EUI at all times, for the same project state. No frozen snapshots. The fix (if any) is in
+the caller's option-passthrough, never in the engine numbers or `interventionsEngine.js`.
+
+## §A — Part 2: source-read diagnostic (read-only)
+
+### A0 — Does the bug currently reproduce? **NO.** (verified first, per the banked lesson)
+Browser, current Bridgewater state (2026-06-26):
+- **Systems page EUI = 139.5 kWh/m²**
+- **Strategy headline baseline = 139.5**
+- **Left "Baseline" card = 588.1 MWh** — which is *the same number*: 588.1 MWh × 1000 ÷ 4,216 m² = 139.5 kWh/m² (it reads MWh because the global toggle was on "Total"). The "245.6" of the design note does **not** reproduce. All three baselines agree.
+
+The systems config was regenerated to main's defaults mid-Brief-87 (EUI ~139.5); the 245.6 was the state at the time of Chris's walkthrough, not the current state.
+
+### A1 — SystemsModule call
+`SystemsModule.jsx:180` (and `systems/SystemsLiveResults.jsx:294`):
+`calculateInstant(params, constructions ?? {}, systems ?? {}, libraryData, weatherData, hourlySolar, null, { _skipInterventions: true, comfortBand })` — **no `mode`, no `engine:'v2.5'`**. EUI displayed from **`result.eui_kWh_m2`** (`SystemsLiveResults.jsx:400`).
+
+### A2 — InterventionsModule call
+`InterventionsModule.jsx:186–189`:
+`calculateInstant(paramsForEngine, constructions, systems, libraryData, weatherData, hourlySolar, null, { mode: 'full', comfortBand, engine: 'v2.5' })`. `stackResult = engineResult.consumption.interventions`; baseline = `stack.baseline` (rollingResults[0]); Strategy reads `cumulative_delta.eui_kwh_per_m2.from` = **`consumption.total.kwh_per_m2_yr`** of that baseline result (`StrategyView.jsx`, `InterventionsModule` baselineSummary).
+
+### A3 — `_runInterventionStack` call site + inner closure (`instantCalc.js:7311–7339`)
+- `baselineConfig = { building, constructions, systems, libraryData }` (L7322) — **includes `systems`**.
+- The inner runEngine closure (L7323–7332):
+  ```js
+  const runEngine = (cfg) => _calculateInstantBaseline(
+    cfg.building ?? building, …,
+    { ...options, _skipInterventions: true },   // ← spreads options
+  )
+  ```
+  **It spreads `{ ...options }`** — so `engine:'v2.5'` and `comfortBand` from the outer call ARE preserved. The baseline pass runs the same dispatch as the fast path (`_calculateInstantBaseline`, L7317).
+
+### A4 — Ranked hypotheses (after source-read)
+- **H1 (inner closure drops `v2.5` → inline-legacy): REFUTED.** The closure spreads `{...options}` (instantCalc.js:7331); `v2.5` is preserved. If H1 were true the bug would reproduce structurally — it doesn't.
+- **H2 (baselineConfig stripped of systems): REFUTED.** `baselineConfig` includes `systems` (instantCalc.js:7322).
+- **H3 (different EUI field / boundary): PLAUSIBLE LATENT RISK — the only real inconsistency found.** Systems reads `result.eui_kWh_m2` (`= total_kWh / gia`, instantCalc.js:6144/7011); Strategy reads `consumption.total.kwh_per_m2_yr` (instantCalc.js:5584/5775). These are **independently computed** in different regions of the engine. Currently identical (both 139.5) but they *could* diverge if the two `total` sums ever differ. The design note's own boundary principle says both should read `consumption.total.kwh_per_m2_yr`.
+- **H4 (stale state from save failures): LEADING explanation for the original 245.6.** Structural paths are correct + bug doesn't reproduce + saves currently work → the 245.6 was almost certainly transient stale/desynced state at walkthrough time (possibly the H3 fields diverging in that state, or a stale `systems`/`paramsForEngine`).
+
+### A5 — Recommended fix shape
+**No option-passthrough fix is warranted** (H1/H2 refuted; the closure is correct). The brief's leading hypothesis is wrong — flagging per the premise-check authority (same as Briefs 76/83/84). The only principled, *available* change is **H3 harmonisation**: make the Systems page read `consumption.total.kwh_per_m2_yr` (the same boundary the Strategy + the design note specify) instead of `eui_kWh_m2`, so the two can never diverge even if those engine fields differ in some state. That's a ~1-line read change in `SystemsLiveResults.jsx`, defensive and boundary-aligned. **But it is not proven to be the 245.6 cause** (they're equal now), so it's a guard, not a confirmed fix. **STOP + escalate to Chris** before Part 3 (brief rule: hypothesis refuted → ask before continuing).
+
+## §A6 — REVISED SCOPE (Chris, 2026-06-26): canonicalise the EUI read path
+Chris reframed after the A4 escalation: H3 is the real issue and *not* a one-line guard. Two
+independently-computed EUI exposures is a structural smell — "boundary-mismatch in waiting." Revised
+scope = audit every EUI reader → make `consumption.total.kwh_per_m2_yr` the canonical exposure + read
+path → migrate non-canonical readers → deprecate the alias → add a Bible Engine-Discipline rule. Verify
+the Bridgewater gate (Systems EUI = Strategy baseline) **by construction**, not by guard.
+
+### Reader catalog (instant engine)
+- **Canonical** (`consumption.total.kwh_per_m2_yr`): InterventionsModule baselineSummary (L221) + Strategy;
+  SystemsModule charts (L2281/2414/2501); intervention delta records (`computeDelta` → `eui_kwh_per_m2`).
+- **Non-canonical alias `eui_kWh_m2`** (independently computed `total_kWh/gia`, instantCalc.js:6144/7011):
+  `SystemsLiveResults:400` (← the actual 139.5), `building/LiveResultsPanel:279`, `PopOutResults:271/324/360`,
+  `ProjectDashboard:212` (`instantResult?.eui`). **→ migrated.**
+- **Canonical-first multi-path readers** (`pickFirst([...])` preferring `consumption.total.kwh_per_m2_yr`
+  then legacy fallbacks): EUIWaterfall, ComparisonView, BeforeAfterBars, PhysicsView, InterventionEditor*.
+  Not a divergence risk (canonical wins); fallback strings retained — simplifiable in a follow-on.
+- **Out of scope (different boundary):** `results.summary.eui_kWh_per_m2` = the EnergyPlus *simulation*
+  EUI (OverviewTab, CRREMTab, EnergyFlowsTab, ResultsDashboard, ProjectDashboard, Information/CRREM modules).
+  Left as-is; the Bible rule + `engineReads.js` docstring keep the two boundaries distinct.
+
+## §B — Part 3/4: fix + falsifiable verification — DONE
+
+**Fix (caller-side only; engine numbers untouched):**
+- New `frontend/src/utils/engineReads.js` → `readModelledEui(result)` = the ONE canonical read path
+  (`consumption.total.kwh_per_m2_yr`).
+- Migrated the non-canonical `eui_kWh_m2`/`.eui` readers to it: `SystemsLiveResults.jsx:400`,
+  `building/LiveResultsPanel.jsx:279`, `pages/PopOutResults.jsx` (×3), `pages/ProjectDashboard.jsx:212`.
+- Deprecated the `eui_kWh_m2` alias at both engine assignment sites (`instantCalc.js:6349/7164`) with a
+  "do not subscribe; remove in an engine-cleanup brief" comment.
+- Added Bible/Engine-Discipline rule 11 to `CLAUDE.md` (one canonical quantity / exposure / read path).
+
+**Verification (falsifiable visual gate, browser):**
+- Systems EUI **139.5** = Strategy baseline **139.5** (match). Both read `consumption.total.kwh_per_m2_yr`.
+- Live tracking: changed building length 58.8 → 65; Systems EUI **and** Strategy baseline both moved to
+  **132.7** together (match). Restored length to 58.8.
+- By construction the two can no longer diverge (same field, same helper). `npm run build` clean; no
+  console errors. `interventionsEngine.js` untouched. No `main` changes.
+
+## §C — Part 5: "Save failed" — does NOT reproduce
+Triggered a real save (building length 58.8 → 59.8 via the Building page); it **persisted to the DB
+with no failure** (`length: 59.8` confirmed in `building_config`), the indicator read "SAVED", and the
+network `failed` filter showed **no failed requests** across the session. Restored to 58.8. So Thread C
+also doesn't reproduce in the current state — consistent with H4 (the walkthrough-session save failures
+were transient/state-specific, and likely the same root as the baseline divergence). **Root cause
+unconfirmed** — stays as an open Thread C.
+
+### Next-occurrence capture procedure (when "Save failed" returns)
+The save path is a debounced `PUT /api/projects/{id}/{endpoint}` (`ProjectContext.jsx:1254 _scheduleSave`);
+on a rejected/transport-failed PUT it sets `saveStatus='error'` and logs `[ProjectContext] Save failed: <err>`.
+To diagnose the *next* occurrence:
+1. Dev tools → **Network**, filter `projects`, reproduce the triggering action (any input edit; saves fire ~1 s after the last change).
+2. Capture the failing `PUT /api/projects/…`: **HTTP status** (4xx = client/validation/payload-shape; 5xx = server), the **request payload** (which sub-resource: `…/building`, `…/systems`, or root), and the **response body**.
+3. Also grab the **Console** `[ProjectContext] Save failed:` line.
+4. Likely candidates post-Brief-87: a payload-shape mismatch on `…/building` (e.g. the new `strategies[]` field or a large `systems_config_v40`) rejected by request validation, or a transient backend restart. Backend handlers: `api/routers/projects.py:252` (root), `:404` (`/building`), `:465` (`/systems`).
+Fix here only if it's a small payload/field issue; escalate if it's an API-contract change.
