@@ -138,3 +138,48 @@ characterisation, is the same parity discipline on the LOSS side — get EP's pe
 (mech-ventilation 277, infiltration, fabric conduction) to match NZA by construction. Correcting the
 ventilation model (proper MVHR 80% recovery on 1425 L/s + extract-only makeup, summer bypass) is the prime
 candidate.
+
+## §3c — Loss-side parity: input audit + faithful ventilation (Chris 2026-07-07)
+
+**Discipline (Chris):** SPECS match by construction; LOSSES are outputs — compared and explained, **never
+tuned** toward NZA's figures. The §3b lighting/people *calibration* to NZA's booked heat violated this and was
+**reverted to spec-faithful** (2 W/m² lighting × schedule; 276 people × schedule). The equipment fix stays —
+`baseload` is genuinely an always-on constant in the fixture (a spec correction, not a calibration).
+
+**(1) Input audit — envelope ruled out.** EP's per-element U-factors match the fixture **by construction**:
+walls 0.140 (0.14), floor 0.130 (0.13), roof 0.150 (0.15); areas walls ≈1727 / roof 843 / floor 843 m²;
+glazing simple-glazing U 1.4. `ZoneInfiltration` present at the fixture ach. So heating≈0 was **not** the
+envelope conductance.
+
+**(2) Ventilation rebuilt faithfully to the FIXTURE** (not NZA's blend): MVHR **80% sensible recovery on its
+own 1425 L/s** with **summer bypass** (IdealLoads `DifferentialDryBulb` economizer, cooling-flow-limited to
+clear the economizer severe); extract-only streams (bedroom 2208 + toilet 210 = 2418 L/s) as **0%-recovery**
+outdoor-air makeup via `ZoneVentilation:DesignFlowRate`. Two distinct recovery regimes, per the fixture.
+
+**Result — physical baseline (0 Severe, deterministic, NZA untouched at 132.6):**
+
+| | EP | NZA | Δ |
+|---|---|---|---|
+| Heating demand | **107.7** | 87.7 | +23% |
+| Cooling demand | **121.3** | 101.1 | +20% |
+| EUI | **118.0** | 132.6 | −11% |
+
+Heating is now meaningfully non-zero and cooling well below 300 — the sanity band. The heating direction now
+matches the Box arc (EP-heating-higher). The extreme reversal (heating 0.1 / cooling 316.7) was entirely the
+ventilation model.
+
+**(3) Per-channel losses (NZA | EP, MWh) — residuals are characterisation, not gates:**
+
+| Channel | NZA | EP | Note |
+|---|---|---|---|
+| Mech-ventilation (MVHR OA) | 277.2 (incl. all vent) | 106.6 (OA-sensible) + extract-makeup | see caveat |
+| Infiltration | 30.6 | (EP lumps extract-makeup here) | **EP accounting caveat** |
+| Fabric (opaque) | 47.2 | 60.0 | +27% |
+| Glazing conduction | 88.9 | 44.6 | −50% (window net, addition/removal split) |
+
+**EP accounting caveat:** EP's `SensibleHeatGainSummary` folds `ZoneVentilation:DesignFlowRate` (my
+2418 L/s extract-makeup) into the **Infiltration** line, so EP's "infiltration" 317.4 = true infiltration +
+extract-makeup, and EP's total ventilation loss = MVHR OA (106.6) + extract-makeup (within that 317.4). A
+clean per-channel split needs dedicated output isolation (small follow-up). NZA's mech-ventilation 277.2 is a
+single blended figure (its own simplification). These residuals — heating +23%, cooling +20%, and the
+per-channel differences — are the **characterisation** and carry into P3; they are named here, not tuned away.

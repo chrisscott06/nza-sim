@@ -7556,7 +7556,7 @@ PEOPLE,
     Building_Zone,            !- Zone or ZoneList or Space or SpaceList Name
     OCC_SCHED,                !- Number of People Schedule Name
     People,                   !- Number of People Calculation Method
-    345.32,                   !- Number of People
+    276,                      !- Number of People
     ,                         !- People per Floor Area
     ,                         !- Floor Area per Person
     0.3,                      !- Fraction Radiant
@@ -7587,7 +7587,7 @@ LIGHTS,
     Building_Zone,            !- Zone or ZoneList or Space or SpaceList Name
     LIGHTS_SCHED,             !- Schedule Name
     LightingLevel,            !- Design Level Calculation Method
-    7394.3,                   !- Lighting Level
+    8431.92,                  !- Lighting Level
     ,                         !- Watts per Floor Area
     ,                         !- Watts per Person
     0,                        !- Return Air Fraction
@@ -7640,12 +7640,41 @@ ZONEINFILTRATION:DESIGNFLOWRATE,
     0,                        !- Velocity Squared Term Coefficient
     Outdoor;                  !- Density Basis
 
+ZONEVENTILATION:DESIGNFLOWRATE,
+    Extract_Makeup,           !- Name
+    Building_Zone,            !- Zone or ZoneList or Space or SpaceList Name
+    ALWAYS_ON,                !- Schedule Name
+    Flow/Zone,                !- Design Flow Rate Calculation Method
+    2.418,                    !- Design Flow Rate
+    ,                         !- Flow Rate per Floor Area
+    ,                         !- Flow Rate per Person
+    ,                         !- Air Changes per Hour
+    Balanced,                 !- Ventilation Type
+    0,                        !- Fan Pressure Rise
+    1,                        !- Fan Total Efficiency
+    1,                        !- Constant Term Coefficient
+    0,                        !- Temperature Term Coefficient
+    0,                        !- Velocity Term Coefficient
+    0,                        !- Velocity Squared Term Coefficient
+    -100,                     !- Minimum Indoor Temperature
+    ,                         !- Minimum Indoor Temperature Schedule Name
+    100,                      !- Maximum Indoor Temperature
+    ,                         !- Maximum Indoor Temperature Schedule Name
+    -100,                     !- Delta Temperature
+    ,                         !- Delta Temperature Schedule Name
+    -100,                     !- Minimum Outdoor Temperature
+    ,                         !- Minimum Outdoor Temperature Schedule Name
+    100,                      !- Maximum Outdoor Temperature
+    ,                         !- Maximum Outdoor Temperature Schedule Name
+    40,                       !- Maximum Wind Speed
+    Outdoor;                  !- Density Basis
+
 DESIGNSPECIFICATION:OUTDOORAIR,
     MVHR_OA,                  !- Name
     Flow/Zone,                !- Outdoor Air Method
     0,                        !- Outdoor Air Flow per Person
     0,                        !- Outdoor Air Flow per Zone Floor Area
-    3.843,                    !- Outdoor Air Flow per Zone
+    1.425,                    !- Outdoor Air Flow per Zone
     0;                        !- Outdoor Air Flow Air Changes per Hour
 
 ZONECONTROL:THERMOSTAT,
@@ -7680,8 +7709,8 @@ ZONEHVAC:IDEALLOADSAIRSYSTEM,
     NoLimit,                  !- Heating Limit
     ,                         !- Maximum Heating Air Flow Rate
     ,                         !- Maximum Sensible Heating Capacity
-    NoLimit,                  !- Cooling Limit
-    ,                         !- Maximum Cooling Air Flow Rate
+    LimitFlowRate,            !- Cooling Limit
+    30,                       !- Maximum Cooling Air Flow Rate
     ,                         !- Maximum Total Cooling Capacity
     ,                         !- Heating Availability Schedule Name
     ,                         !- Cooling Availability Schedule Name
@@ -7691,9 +7720,9 @@ ZONEHVAC:IDEALLOADSAIRSYSTEM,
     MVHR_OA,                  !- Design Specification Outdoor Air Object Name
     OA_Inlet_Node,            !- Outdoor Air Inlet Node Name
     None,                     !- Demand Controlled Ventilation Type
-    NoEconomizer,             !- Outdoor Air Economizer Type
+    DifferentialDryBulb,      !- Outdoor Air Economizer Type
     Sensible,                 !- Heat Recovery Type
-    0.2966,                   !- Sensible Heat Recovery Effectiveness
+    0.8,                      !- Sensible Heat Recovery Effectiveness
     0,                        !- Latent Heat Recovery Effectiveness
     ,                         !- Design Specification ZoneHVAC Sizing Object Name
     ,                         !- Heating Fuel Efficiency Schedule Name
@@ -7747,6 +7776,16 @@ OUTPUT:VARIABLE,
 OUTPUT:VARIABLE,
     *,                        !- Key Value
     Zone Ideal Loads Zone Sensible Cooling Energy,    !- Variable Name
+    RunPeriod;                !- Reporting Frequency
+
+OUTPUT:VARIABLE,
+    *,                        !- Key Value
+    Zone Ideal Loads Outdoor Air Sensible Heating Energy,    !- Variable Name
+    RunPeriod;                !- Reporting Frequency
+
+OUTPUT:VARIABLE,
+    *,                        !- Key Value
+    Zone Ideal Loads Outdoor Air Sensible Cooling Energy,    !- Variable Name
     RunPeriod;                !- Reporting Frequency
 
 OUTPUT:METER,

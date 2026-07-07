@@ -255,39 +255,24 @@ def build_idf(fix, idd_path):
         verts = [(xa, ya, z_hi), (xa, ya, z_lo), (xb, yb, z_lo), (xb, yb, z_hi)]
         add_window(f"WIN_{fname}", f"WALL_{fname}", verts)
 
-    # ---- internal gains — matched to NZA-Sim per-load zone heat "by construction" ----
-    # Brief 95 gain-parity check (Chris 2026-07-07): every load's ANNUAL zone-heat must
-    # equal NZA-Sim's booked value, so the demand comparison isolates the envelope, not the
-    # gain inputs. NZA per-load (from bridgewater_anchor_v2.yaml via
-    # `_brief93_anchor.mjs --fixture`, frozen fixture): people 120.41, lighting 39.01,
-    # equipment 186.14, aux 0 MWh. NZA differs from a raw magnitude×schedule because it
-    # (a) treats equipment BASELOAD as always-on (constant, active=0 → 5.04 W/m² × 8760),
-    # (b) daylight-dims lighting, (c) integrates occupancy on a different day/monthly basis.
-    NZA_GAIN_MWH = {"people": 120.41, "lighting": 39.01}
-
-    def sched_avg(s):
-        wd = s.get("weekday", [0] * 24); sa = s.get("saturday", wd); su = s.get("sunday", sa)
-        mm = s.get("monthly_multipliers", [1] * 12)
-        daily = (5 * sum(wd) + sum(sa) + sum(su)) / 7 / 24
-        return daily * (sum(mm) / len(mm))
-
-    occ_avg = sched_avg(bc["occupancy"]["schedule"])
-    lit_avg = sched_avg(bc["gains"]["lighting"]["profiles"][0]["schedule"])
+    # ---- internal gains — SPEC-faithful (Chris 2026-07-07 discipline: specs match by
+    # construction; the resulting zone-heat is an OUTPUT to compare/explain, never tuned).
+    # Same W/m² + schedule + gain_fraction as the fixture go into EP. Differences vs NZA's
+    # booked per-load heat (NZA daylight-dims lighting; integrates occupancy differently)
+    # are characterisation, not calibration targets.
     shf = sens / (sens + lat)
-    # People count set so sensible zone heat over OCC_SCHED == NZA people (fractional OK).
-    people = NZA_GAIN_MWH["people"] * 1e6 / (sens * HOURS * occ_avg)
+    people = int(bc["num_bedrooms"]) * int(bc["people_per_room"])
     idf.newidfobject("PEOPLE", Name="People", Zone_or_ZoneList_or_Space_or_SpaceList_Name="Building_Zone",
                      Number_of_People_Schedule_Name="OCC_SCHED",
-                     Number_of_People_Calculation_Method="People", Number_of_People=round(people, 2),
+                     Number_of_People_Calculation_Method="People", Number_of_People=people,
                      Activity_Level_Schedule_Name="ACTIVITY_LEVEL",
                      Sensible_Heat_Fraction=round(shf, 4), Fraction_Radiant=0.3)
-    # Lighting level set so gain over LIGHTS_SCHED == NZA lighting (daylight-dimmed).
-    light_level = NZA_GAIN_MWH["lighting"] * 1e6 / (HOURS * lit_avg)
+    lpd = float(bc["gains"]["lighting"]["profiles"][0]["magnitude"]["value"])
     idf.newidfobject("LIGHTS", Name="Lights", Zone_or_ZoneList_or_Space_or_SpaceList_Name="Building_Zone",
                      Schedule_Name="LIGHTS_SCHED", Design_Level_Calculation_Method="LightingLevel",
-                     Lighting_Level=round(light_level, 1), Return_Air_Fraction=0,
-                     Fraction_Radiant=0.5, Fraction_Visible=0.2)
-    # Equipment: baseload is ALWAYS-ON (constant); active=0. → 5.04 W/m² × 8760 = 186.1 MWh.
+                     Lighting_Level=lpd * gia, Fraction_Radiant=0.5, Fraction_Visible=0.2)
+    # Equipment: the fixture's `baseload` is an always-on constant floor (active=0) — a
+    # genuine SPEC fix (was mis-scheduled). 5.04 W/m² × GIA × 8760 = 186.1 MWh.
     epd = float(bc["gains"]["equipment"]["profiles"][0]["baseload"]["value"])
     idf.newidfobject("ELECTRICEQUIPMENT", Name="Equipment",
                      Zone_or_ZoneList_or_Space_or_SpaceList_Name="Building_Zone",
@@ -308,17 +293,30 @@ def build_idf(fix, idd_path):
                      Constant_Term_Coefficient=1.0, Temperature_Term_Coefficient=0.0,
                      Velocity_Term_Coefficient=0.0, Velocity_Squared_Term_Coefficient=0.0)
 
-    # ---- ventilation (FOUNDATION: blended OA + effective recovery on IdealLoads) --
+    # ---- ventilation — FAITHFUL to the fixture (Chris 2026-07-07), not a blend ----
+    # MVHR streams (recovery > 0): their own flow with sensible recovery + summer bypass
+    # (economizer). Extract-only streams (recovery 0): unrecovered OA makeup via
+    # ZoneVentilation. Two distinct recovery regimes, per the fixture's system set.
     vents = [v for v in v40["ventilation"] if v.get("enabled", True)]
-    total_flow = sum(float(v["flow_rate"]) for v in vents)          # L/s
-    rec_num = sum(float(v["flow_rate"]) * float(v["efficiency_metric"].get("recovery_sensible_pct", 0)) / 100.0
-                  for v in vents)
-    eff_hre = (rec_num / total_flow) if total_flow else 0.0
-    oa_flow = total_flow / 1000.0                                    # m3/s
+    mvhr = [v for v in vents if float(v["efficiency_metric"].get("recovery_sensible_pct", 0)) > 0]
+    extract = [v for v in vents if float(v["efficiency_metric"].get("recovery_sensible_pct", 0)) == 0]
+    mvhr_flow = sum(float(v["flow_rate"]) for v in mvhr) / 1000.0        # m3/s
+    mvhr_hre = (max(float(v["efficiency_metric"]["recovery_sensible_pct"]) for v in mvhr) / 100.0) if mvhr else 0.0
+    extract_flow = sum(float(v["flow_rate"]) for v in extract) / 1000.0  # m3/s
+    # MVHR balanced OA on IdealLoads (recovery + economizer bypass set on the IdealLoads).
     idf.newidfobject("DESIGNSPECIFICATION:OUTDOORAIR", Name="MVHR_OA",
                      Outdoor_Air_Method="Flow/Zone", Outdoor_Air_Flow_per_Person=0,
-                     Outdoor_Air_Flow_per_Zone_Floor_Area=0, Outdoor_Air_Flow_per_Zone=oa_flow)
+                     Outdoor_Air_Flow_per_Zone_Floor_Area=0, Outdoor_Air_Flow_per_Zone=mvhr_flow)
     idf.newidfobject("OUTDOORAIR:NODE", Name="OA_Inlet_Node")
+    # Extract-only makeup: unrecovered outdoor air, balanced (supply = exhaust), 0% recovery.
+    idf.newidfobject("ZONEVENTILATION:DESIGNFLOWRATE", Name="Extract_Makeup",
+                     Zone_or_ZoneList_or_Space_or_SpaceList_Name="Building_Zone", Schedule_Name="ALWAYS_ON",
+                     Design_Flow_Rate_Calculation_Method="Flow/Zone", Design_Flow_Rate=extract_flow,
+                     Ventilation_Type="Balanced", Fan_Pressure_Rise=0, Fan_Total_Efficiency=1,
+                     Constant_Term_Coefficient=1, Temperature_Term_Coefficient=0,
+                     Velocity_Term_Coefficient=0, Velocity_Squared_Term_Coefficient=0,
+                     Minimum_Indoor_Temperature=-100, Maximum_Indoor_Temperature=100,
+                     Delta_Temperature=-100)
 
     # ---- thermostat + ideal loads (foundation) -----------------------------
     idf.newidfobject("ZONECONTROL:THERMOSTAT", Name="Thermostat",
@@ -340,12 +338,16 @@ def build_idf(fix, idd_path):
                      Maximum_Heating_Supply_Air_Temperature=50, Minimum_Cooling_Supply_Air_Temperature=13,
                      Maximum_Heating_Supply_Air_Humidity_Ratio=0.0156,
                      Minimum_Cooling_Supply_Air_Humidity_Ratio=0.0077,
-                     Heating_Limit="NoLimit", Cooling_Limit="NoLimit",
+                     Heating_Limit="NoLimit",
+                     # Economizer (MVHR summer bypass) requires a cooling-air-flow limit;
+                     # generous fixed cap so cooling is never starved (Brief 95 P2 vent rebuild).
+                     Cooling_Limit="LimitFlowRate", Maximum_Cooling_Air_Flow_Rate=30.0,
                      Dehumidification_Control_Type="None", Humidification_Control_Type="None",
                      Design_Specification_Outdoor_Air_Object_Name="MVHR_OA",
                      Outdoor_Air_Inlet_Node_Name="OA_Inlet_Node",
-                     Demand_Controlled_Ventilation_Type="None", Outdoor_Air_Economizer_Type="NoEconomizer",
-                     Heat_Recovery_Type="Sensible", Sensible_Heat_Recovery_Effectiveness=round(eff_hre, 4),
+                     Demand_Controlled_Ventilation_Type="None",
+                     Outdoor_Air_Economizer_Type="DifferentialDryBulb",   # MVHR summer bypass
+                     Heat_Recovery_Type="Sensible", Sensible_Heat_Recovery_Effectiveness=round(mvhr_hre, 4),
                      Latent_Heat_Recovery_Effectiveness=0.0)
 
     # ---- output ------------------------------------------------------------
@@ -356,7 +358,9 @@ def build_idf(fix, idd_path):
     for m in ["Electricity:Facility", "NaturalGas:Facility"]:
         idf.newidfobject("OUTPUT:METER", Key_Name=m, Reporting_Frequency="RunPeriod")
     for v in ["Zone Ideal Loads Zone Sensible Heating Energy",
-              "Zone Ideal Loads Zone Sensible Cooling Energy"]:
+              "Zone Ideal Loads Zone Sensible Cooling Energy",
+              "Zone Ideal Loads Outdoor Air Sensible Heating Energy",
+              "Zone Ideal Loads Outdoor Air Sensible Cooling Energy"]:
         idf.newidfobject("OUTPUT:VARIABLE", Key_Value="*", Variable_Name=v, Reporting_Frequency="RunPeriod")
 
     return idf
