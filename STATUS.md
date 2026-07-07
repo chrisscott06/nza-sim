@@ -2,7 +2,7 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
-## ✅ Brief 94 — Interventions Library/Strategy Decoupling + Apply-Gated Recalc — CLOSED 2026-07-07 *(branch `chris/interventions-decoupling`; PR open, NOT merged — Chris walkthrough + independent review PENDING)*
+## ✅ Brief 94 — Interventions Library/Strategy Decoupling + Apply-Gated Recalc — MERGED to `main` `8601e7f` 2026-07-07 *(walkthrough passed; reorder x-sensitivity fix `24dff84` included: pointer-Y-only destination + pending spinner + ↑/↓ arrows)*
 
 Decoupled the intervention **library** (definitions, the sole edit surface) from the **strategy** (an ordered, parameter-read-only selection of `[{library_id, enabled, order}]` refs); gated all global recalc behind **Apply**; fixed the drag-reorder bug. **Zero physics** — fixture-anchor EUI **132.6** byte-identical from the P3 commit to the close commit.
 

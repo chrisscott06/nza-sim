@@ -402,6 +402,13 @@ If the task is missing or disabled, re-register it before proceeding by re-runni
 
 ---
 
+## Testing reference discipline — fixtures vs playground (Brief 95 P1, 2026-07-07)
+
+1. **Committed fixtures are the only regression references.** Every baseline/regression check cites a fixture at a commit (e.g. `validation/fixtures/bridgewater_anchor_v2.yaml` via `scripts/_brief93_anchor.mjs --fixture`) — never the live DB, which Chris edits freely (his playground). A number that moved because the live DB changed is not a regression.
+2. **UI verification uses the ZZ TEST project, never Chris's real projects.** Seed it with `scripts/seed_test_project.py` (idempotent, from the frozen fixture); it is named "ZZ TEST — do not use". Drive browser checks against ZZ TEST — or an isolated scratch instance (own port + a scratch DB copy) — so a live session is never disturbed.
+
+---
+
 ## Brief management
 
 1. **Active brief:** `docs/briefs/current.md` — this is always the brief being worked on right now.

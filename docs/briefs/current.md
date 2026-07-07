@@ -1,8 +1,18 @@
 # Current brief
 
-**Brief 94 — Interventions Library/Strategy Decoupling + Apply-Gated Recalc — CLOSED 2026-07-07 (PR open;
-Chris walkthrough + independent review pending).** On branch `chris/interventions-decoupling` (off `main`
-`533db7e`). Decoupled the intervention **library** (definitions) from the **strategy** (ordered
+**Brief 95 — EnergyPlus Results Backend for Interventions — ACTIVE (Part 1).** On branch
+`chris/ep-interventions-backend` (re-cut from post-94 `main` `8601e7f`). A second results backend for
+Interventions: translate the strategy stack → EnergyPlus models, run as a user-triggered batch, display
+NZA-Sim | EP | Δ% side-by-side (primary target: the +108% cooling residual). **Never changes NZA-Sim engine
+numbers** (fixture anchor enforces). P1: EP pinned to **25-2-0** (Box gate — 25-2-0 reproduces the EP
+reference byte-identically; the −24%/+108% heating/cooling FAILs are the known characterisation, not a
+regression — closes Brief 93's smoke-test caveat), ZZ TEST seed (`scripts/seed_test_project.py`), fixture
+rule in CLAUDE.md. Brief: [`active/95_ep_results_backend.md`](active/95_ep_results_backend.md); audit:
+[`../audit/95_ep_backend.md`](../audit/95_ep_backend.md).
+
+**Brief 94 — Interventions Library/Strategy Decoupling + Apply-Gated Recalc — MERGED to `main` `8601e7f`
+2026-07-07 (walkthrough passed; reorder x-sensitivity fix `24dff84` included).** Was on branch
+`chris/interventions-decoupling` (off `main` `533db7e`). Decoupled the intervention **library** (definitions) from the **strategy** (ordered
 `[{library_id, enabled, order}]` refs), gated all global recalc behind **Apply**, and fixed the drag-reorder
 bug. **Zero physics** (fixture-anchor EUI **132.6** byte-identical P3→close). Parts: P1 diagnostic (reorder =
 pre-existing, root cause Brief 87 `a106438`) · P2 refs data-model + lossless migrate-on-read (37/37 tests) ·

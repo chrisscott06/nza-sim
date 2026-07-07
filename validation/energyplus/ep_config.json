@@ -1,29 +1,31 @@
 {
   "_comment": [
     "Brief 81 P4 — EnergyPlus locator config for the validation harness.",
-    "The runner (P7, validation/energyplus/run.py) resolves the EnergyPlus install in this order:",
+    "Brief 95 P1 (2026-07-07): PINNED to the installed EnergyPlus 25-2-0 on this macOS machine.",
+    "The runner (validation/energyplus/run.py) resolves EnergyPlus in this order:",
     "  1. ENERGYPLUS_DIR environment variable, if set (overrides this file — keeps the harness portable).",
     "  2. install_dir below.",
-    "This file is the 'config file, not global install' the brief requires: EnergyPlus is NOT on PATH and",
-    "no system environment was modified (divergence D1 — we use the pre-existing C:\\EnergyPlusV26-1-0",
-    "install rather than a fresh contained one). The install dir itself is outside the repo, so nothing",
-    "binary is committed. Paths use forward slashes; both Python and Node accept them on Windows.",
-    "Verified 2026-06-02: bundled ExampleFiles/1ZoneEvapCooler.idf ran clean (0 severe, 1 warning) and",
-    "produced a 3.1 MB eplusout.eso — see audit docs/audit/81_energyplus_validation_box.md §4."
+    "EnergyPlus is NOT on PATH and no system environment was modified; the install lives outside the repo so",
+    "nothing binary is committed. The 26.1.0 upgrade is a separate future decision (Brief 95 Decision 7).",
+    "Box-validation gate re-run against 25-2-0 (Brief 95 P1): 25-2-0 reproduces the committed EP reference",
+    "BYTE-IDENTICALLY (0/42 metrics moved) — see docs/audit/95_ep_backend.md. Also closes Brief 93's",
+    "deferred EP smoke-test caveat."
   ],
-  "version": "26.1.0-6f2e40d102",
-  "install_dir": "C:/EnergyPlusV26-1-0",
-  "energyplus_exe": "C:/EnergyPlusV26-1-0/energyplus.exe",
-  "idd": "C:/EnergyPlusV26-1-0/Energy+.idd",
-  "weather_data_dir": "C:/EnergyPlusV26-1-0/WeatherData",
-  "example_files_dir": "C:/EnergyPlusV26-1-0/ExampleFiles",
+  "version": "25.2.0-cf7368216c",
+  "install_dir": "/Applications/EnergyPlus-25-2-0",
+  "energyplus_exe": "/Applications/EnergyPlus-25-2-0/energyplus",
+  "idd": "/Applications/EnergyPlus-25-2-0/Energy+.idd",
+  "weather_data_dir": "/Applications/EnergyPlus-25-2-0/WeatherData",
+  "example_files_dir": "/Applications/EnergyPlus-25-2-0/ExampleFiles",
   "env_override_var": "ENERGYPLUS_DIR",
   "verified": {
-    "at": "2026-06-02",
-    "example_idf": "ExampleFiles/1ZoneEvapCooler.idf",
-    "weather": "WeatherData/USA_CO_Golden-NREL.724666_TMY3.epw",
-    "result": "Completed Successfully — 1 Warning, 0 Severe Errors",
-    "eso_bytes": 3136719,
-    "eso_lines": 176192
+    "at": "2026-07-07",
+    "fixture": "bridgewater_box_v1 (validation/energyplus/generated/bridgewater_box_v1.idf)",
+    "weather": "data/weather/current/GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw",
+    "result": "Completed Successfully — 3 Warnings, 0 Severe Errors",
+    "heating_mwh": 3.277516,
+    "cooling_mwh": 0.676843,
+    "eui_kwh_m2": 166.6,
+    "note": "byte-identical to the previously-committed EP reference (0/42 metrics moved) — version pin holds"
   }
 }

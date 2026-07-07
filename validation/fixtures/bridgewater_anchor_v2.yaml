@@ -1,3 +1,4 @@
+# Frozen reference incl. aux-load experiments (EUI 132.6) — do not "correct"; frozen is the point.
 _meta:
   brief: Brief 94 — frozen Bridgewater anchor fixture (engine-direct, no DB/API)
   source_project: 12cf7cc4-9bdc-41bc-ab4e-24e044fbad9d (Bridgewater Hotel)
