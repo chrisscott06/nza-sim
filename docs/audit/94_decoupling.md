@@ -193,3 +193,29 @@ read the **mutable live DB**, so Chris's normal editing moved the "regression re
 **P7 invariant (REPLACES the §1 live-DB check):** `node scripts/_brief93_anchor.mjs --fixture` output must be
 **byte-identical (ignoring `git_head`) between the P3 commit and the close commit**. The live DB is Chris's
 playground — **never a regression reference again**.
+
+## §4 — Library = the sole editing surface; clone + guarded delete (Part 4)
+
+`InterventionsModule`: the Library catalogue rows gain a **Clone** button; delete is now guarded.
+- **`handleClone`** — one click → new library item `"Copy of X"` with deep-cloned patches (fresh UUIDs),
+  selected + editor opened ("ready to edit"). A clone is a new *definition*; it does **not** create a strategy
+  ref (Decision 4 / Part 4.3).
+- **`handleLibraryDelete`** — deletes the definition; if it is referenced by the strategy the confirm names
+  that impact ("it will also be removed from your strategy") and, on confirm, `removeStrategyRef` drops the
+  ref too. `updateParam` is functional (`setParams(p => …)`), so the two sequential key updates compose.
+- **Create** (`handleAdd`, unchanged) appends a library item only — never touches the strategy.
+
+**Browser verification (Bridgewater, preview 5176):**
+- ✓ **Clone → strategy unchanged** — cloned "Occupancy 2": library 8→9, "Copy of Occupancy 2" created + editor
+  opened, strategy stayed 8 (clone not in stack). (Falsifiable: create/clone doesn't touch strategy.)
+- ✓ **Clone is independent** — fresh library entry with fresh patch UUIDs; source "Occupancy 2" untouched
+  throughout the add/reference/delete cycle.
+- ✓ **Guarded delete of a referenced item** — added the clone to the strategy (8→9), deleted it from the
+  Library: confirm read *"1 patch will be permanently removed; it will also be removed from your strategy."*;
+  on confirm, library 9→8 AND strategy 9→8 (ref dropped). (Falsifiable #3.)
+- ✓ DB clean after test (8 interventions / 8 refs, order preserved, no "Copy of" leftovers). No console
+  errors. `npm run build` clean.
+
+_Editing itself already lived on the Library page (the existing editor mounts from the catalogue's edit
+pencil → PerInterventionView / InterventionEditorPopout); Part 3 removed edit from the Strategy view, so the
+Library is now the single editing surface._
