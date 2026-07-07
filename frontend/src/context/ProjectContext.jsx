@@ -25,6 +25,7 @@ import {
 import { publishState, onInitialStateRequest } from '../utils/broadcastChannel.js'
 import { SCHEDULE_PRESETS, findPreset } from '../data/schedulePresets.js'
 import { migrateInterventionPatches } from '../utils/interventionsEngine.js'  // Brief 42 Part 2
+import { migrateStrategyRefs } from '../utils/strategyModel.js'  // Brief 94 Part 2
 
 export const ProjectContext = createContext(null)
 
@@ -446,38 +447,18 @@ const DEFAULT_PARAMS = {
   // schema_version) plus a saved_at timestamp and a `lib_intervention_*`
   // id assigned at save time.
   library_interventions: [],
-  // Brief 87 Part 3 (interventions UX rework) — named, ordered strategies.
+  // Brief 87 Part 3 → Brief 94 Part 2 (interventions library/strategy decoupling).
   // The Library is `interventions` (a catalogue; order is not meaningful there).
-  // A Strategy is an ORDERED SELECTION of intervention ids — order matters
-  // because interventions interact (fabric before heat pump). Single strategy
-  // per project for v1; the data model allows many. Migrated on load: a project
-  // without `strategies` gets a default "Strategy 1" holding every current
-  // intervention in its current array order (see migrateStrategies). Inert data
-  // until the Strategy view consumes it (Part 5) — adding it moves no engine
-  // numbers. Strategy = { id, name, ordered_intervention_ids: string[] }.
+  // A Strategy is an ORDERED SELECTION of library items — order matters because
+  // interventions interact (fabric before heat pump). Single strategy per project
+  // for v1; the data model allows many. Migrated on load (migrateStrategyRefs, in
+  // utils/strategyModel.js): a project gets "Strategy 1" whose `refs` reference every
+  // current intervention in the engine's stack order. Adding it moves no engine
+  // numbers (additive; the engine still reads `interventions` + per-item `enabled`
+  // until Parts 3–5 switch consumers to the refs). Strategy =
+  // { id, name, refs: [{ library_id, enabled, order }] }. The Brief 87
+  // `ordered_intervention_ids` shape is superseded and never written back.
   strategies: [],
-}
-
-// ── Brief 87 Part 3 — Strategy data model + lossless migration ────────────────
-// Library = `interventions` (catalogue). Strategy = ordered selection of ids.
-function makeDefaultStrategy(interventions) {
-  return {
-    id: 'strategy_default',
-    name: 'Strategy 1',
-    ordered_intervention_ids: (Array.isArray(interventions) ? interventions : [])
-      .map((i) => i?.id)
-      .filter(Boolean),
-  }
-}
-
-// Returns the project's strategies, creating a default "Strategy 1" (all current
-// interventions, original order) for any project authored before this brief.
-// Lossless: every existing intervention is referenced, in the same order the
-// engine already stacks them, so the migrated project's engine output is
-// byte-identical to its pre-migration output.
-function migrateStrategies(bc) {
-  if (Array.isArray(bc?.strategies) && bc.strategies.length > 0) return bc.strategies
-  return [makeDefaultStrategy(bc?.interventions)]
 }
 
 // ── Brief 27 Part 1 — v2.3 migration helpers ─────────────────────────────────
@@ -1237,7 +1218,7 @@ export function ProjectProvider({ children }) {
       // without `strategies` gets a default "Strategy 1" referencing every
       // current intervention in its current order. Inert until the Strategy
       // view consumes it (Part 5), so this moves no engine numbers.
-      strategies: migrateStrategies(bc),
+      strategies: migrateStrategyRefs(bc),
     })
     setConstructions(project.construction_choices ?? DEFAULT_CONSTRUCTIONS)
     setSystems(migrateSystemsConfig(project.systems_config))

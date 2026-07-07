@@ -105,3 +105,36 @@ never depends on hover-state that the indicator itself invalidates.
   the interventions merge (Brief 93 P3) brought them in, so the premise "missed in Brief 93 P1, still
   untracked" is already resolved. Nothing to commit. The session-start git snapshot was stale.
 - `active/` before Brief 94: only `91` + `91b` (Brief 93 follow-up item 4 archived the rest).
+
+## §2 — Data model + lossless migration (Part 2)
+
+**Model.** `frontend/src/utils/strategyModel.js` (pure, node-importable):
+- **Library** = `building_config.interventions[]` — definitions; order not meaningful; each `id` IS its
+  `library_id`; owns all params (patches/label/theme/notes/capex/cost/schema_version).
+- **Strategy** = `building_config.strategies[0] = { id, name, refs: [{ library_id, enabled, order }] }` —
+  ordered, parameter-free selection carrying per-membership `enabled`.
+- Exports: `migrateStrategyRefs(bc)` (idempotent migrate-on-read), `resolveStrategyInterventions(bc)`
+  (Rule 11 canonical read path → ordered, enabled-annotated library items for Parts 3–5),
+  `hasStrategyRefs`, `makeStrategyRef`, `STRATEGY_REFS_SCHEMA`.
+
+**Wiring.** `ProjectContext` `_applyProject` now calls `migrateStrategyRefs(bc)` (replacing the dead
+Brief-87 `migrateStrategies`/`makeDefaultStrategy`, removed). **Additive & non-breaking:** the migration only
+*adds* `strategies[0].refs`; the engine still reads `interventions` + per-item `enabled` until Parts 3–5
+switch consumers over — so Part 2 moves **zero** engine numbers. The anchor is unaffected (it bypasses
+ProjectContext, building config directly from the API).
+
+**Canonical order = `interventions` array order, NOT legacy `ordered_intervention_ids`.** The fixture proved
+why: real Bridgewater's `ordered_intervention_ids` is **stale** — it lists 6 ids including a ghost `int_led`
+(absent from the 8-item library) and omits 3 current interventions. Trusting it would lose data. The
+migration ignores it entirely and derives refs from the array order the engine actually stacks. Old shape is
+never written back.
+
+**Test.** `scripts/_brief94_migration_test.mjs` against fixture
+`docs/audit/fixtures/94_bridgewater_interventions.json` (real 8-intervention Bridgewater state):
+**24/24 pass** — N→N lossless, order + enabled preserved, zero data loss, stale legacy list ignored
+(ghost dropped, omitted interventions retained), idempotent (load-twice-migrates-once; already-refs returns
+same reference), library untouched, read-path resolves in order, + edge cases (empty / disabled / duplicate /
+enabled normalisation). Full frontend `npm run build` clean.
+
+_Parts 3–5 (UI wiring: strategy view reads refs, library edits, Apply-gating) require browser verification —
+pending Chris freeing port 5176 or preview autoPort._
