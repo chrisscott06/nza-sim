@@ -96,3 +96,27 @@ state recorded: EnergyPlus **is** installed (`/Applications/EnergyPlus-25-2-0`, 
 `validation/README` isn't provisioned in this session's environment). The determinism check is an
 IDF-build-twice equality assertion — no physics/consolidation dependence — so deferring it to Chris's
 walkthrough (with the harness venv active) is safe.
+
+## §Part 4 follow-up (2026-07-07) — harness smoke test RUN, PASSED
+
+The deferral above is now closed. The harness venv was provisioned per the `generate_idf.py` header recipe
+(no standalone `validation/README` exists — the docstring is the authority): `python3 -m venv validation/.venv`
+then `pip install eppy pyyaml` → **eppy 0.5.69, pyyaml 6.0.3** (venv gitignored, `.gitignore:41`).
+
+```
+$ ENERGYPLUS_DIR=/Applications/EnergyPlus-25-2-0 \
+    validation/.venv/bin/python validation/energyplus/generate_idf.py --check-determinism
+DETERMINISM OK: two builds byte-identical (40815 bytes).
+(exit 0)
+```
+
+**Result: PASS.** The generator is a pure function of the fixture — two in-memory builds are byte-identical
+(40815 bytes). No EnergyPlus *run* is involved in this check (it's a build-twice-and-diff assertion), so it
+exercises the eppy/IDD object-assembly path only.
+
+**IDD-version caveat (recorded, not a blocker):** `ep_config.json` nominally targets EnergyPlus **26.1.0**
+(Windows `C:/EnergyPlusV26-1-0`), but this Mac has **25-2-0** at `/Applications/EnergyPlus-25-2-0`. The
+determinism check passed against the 25-2-0 IDD, i.e. every object the generator emits assembles cleanly
+against the 25-2-0 field schema too. This does **not** certify semantic equivalence on 26.1.0 (that needs a
+full EP run + SQLite diff, audit §6.3 — still a walkthrough item on the 26.1.0 install); it certifies only
+that byte-stability holds and the generator is IDD-parseable on the locally available EnergyPlus.
