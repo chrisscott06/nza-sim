@@ -34,6 +34,7 @@ import {
   computeLifetimeCarbon, perFuelFromDeltaRecord, defaultLifetimeYears,
 } from '../../../utils/lifetimeCarbon.js'
 import MiniCrremChart from './crrem/MiniCrremChart.jsx'
+import EPCompareCard from './EPCompareCard.jsx'
 import HeadlineCostEditor from './cost/HeadlineCostEditor.jsx'
 import {
   emptyCost, computeCostTotal, computeAnnualOperationalSaving,
@@ -107,10 +108,20 @@ function DemandRow({ label, rec, kind = KIND.MWH, gia }) {
 
 const gbp0 = n => `£${Math.round(Number(n) || 0).toLocaleString('en-GB')}`
 
-export default function PerInterventionView({ intervention, isolatedRow, crremPick, projectCostDefaults, onCostChange }) {
+export default function PerInterventionView({ intervention, isolatedRow, crremPick, projectCostDefaults, onCostChange, epIso, epNzaOnly = false }) {
   const d = isolatedRow?.cumulativeDelta ?? null
   const gia = getGia(isolatedRow?.isolatedResult?.baseline)
   const patches = Array.isArray(intervention?.patches) ? intervention.patches : []
+
+  // Brief 95 P7 — isolated EP comparison (this measure alone vs the bare baseline,
+  // both engines). NZA absolute isolated values are the delta record's `.to`; EP
+  // absolutes come from the stored EP result. epIso.status drives the stale-guard.
+  const epRes = epIso?.result
+  const epRows = [
+    { label: 'EUI', unit: 'kWh/m²', nza: d?.eui_kwh_per_m2?.to, ep: epRes?.eui_kwh_per_m2_yr, digits: 1 },
+    { label: 'Heating demand', unit: 'MWh', nza: d?.heating_demand_mwh?.to, ep: epRes?.demand_mwh?.space_heating, digits: 1 },
+    { label: 'Cooling demand', unit: 'MWh', nza: d?.cooling_demand_mwh?.to, ep: epRes?.demand_mwh?.space_cooling, digits: 1 },
+  ]
 
   const euiDelta = d?.eui_kwh_per_m2?.delta
   const totalDelta = d?.total_delivered_mwh?.delta
@@ -214,6 +225,17 @@ export default function PerInterventionView({ intervention, isolatedRow, crremPi
               <DemandRow label="Operational carbon (yr 1)" rec={d?.carbon_kgco2_per_m2} kind={KIND.KG_M2} gia={gia} />
             </tbody>
           </table>
+        </div>
+
+        {/* Brief 95 P7 — EnergyPlus side-by-side for the isolated state */}
+        <div className="mt-3">
+          <EPCompareCard
+            title="EnergyPlus validation"
+            subtitle="this measure alone · absolute state values"
+            epStatus={epNzaOnly ? 'none' : (epIso?.status ?? 'none')}
+            nzaOnly={epNzaOnly}
+            rows={epRows}
+          />
         </div>
 
         {/* Brief 90 (Brief B): NRM2 Headline cost editor — drives £/tonne + payback */}

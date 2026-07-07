@@ -382,3 +382,43 @@ change) → "9 runs · 0 cached"** — cache correctly invalidated, states show 
 guarantees "never a stale cached hit" (the P6 requirement) at the cost of re-running the baseline after an
 unrelated edit. A precise-subset hash (EP-relevant fields only) is a future efficiency refinement, not a
 correctness gap.
+
+## §7 — P7: side-by-side NZA-Sim | EP | Δ% + trajectory overlay
+
+Read-side surfacing of the EP results next to NZA-Sim's, across the isolated /
+cumulative / marginal views. No engine change; NZA-Sim's own charts are untouched
+(additive overlay only).
+
+**New pieces**
+- `useEpResults(projectId, interventions)` — POSTs a FULL plan (cumulative + every
+  isolated) to `/api/ep/batch/plan`, then GETs `/api/ep/result/{hash}` for each cached
+  state. Returns results keyed by descriptor with a per-state `status`:
+  `fresh` | `stale` | `none`. **Stale-guard:** a session-scoped `memRef` remembers the
+  last hash a fresh result was shown under, per descriptor; when the current hash no
+  longer matches a done run but a prior result exists under a different hash → `stale`.
+  `isNzaOnly(id)` = isolated hash === baseline hash (an all-nza_sim_only measure yields a
+  patch-free isolated config identical to baseline — no server flag needed).
+- `EPCompareCard` — NZA-Sim | EP | Δ% table for one state. `fresh` shows EP + Δ%;
+  `stale` greys the EP figure with a "stale · re-run" pill and suppresses Δ%; `none`
+  em-dashes. Δ% = (EP − NZA)/|NZA| × 100 (amber ≥25 %, red ≥50 % — divergence cue).
+- `EPTrajectory` — cumulative-EUI overlay: NZA-Sim pink solid, EnergyPlus blue dashed +
+  hollow markers. EP points appear ONLY where fresh (stale/un-run steps omitted — a
+  stale value is never drawn as current).
+- Wired: PerInterventionView gets the isolated card; StrategyView gets a new
+  "EnergyPlus" tab (trajectory + final-cumulative card + per-measure marginal ΔEUI
+  table); EPValidationPanel calls `onResultsChanged` on run-complete → the columns
+  repopulate.
+
+**Bug caught + fixed during browser verification.** The refresh signature (`ivSig`)
+originally folded in only `id + patches`, so toggling `enabled` or reordering did NOT
+re-evaluate — the final card kept showing the old EP figure as *fresh* against a
+recomputed NZA number (a stale value presented as current). Fixed in BOTH `useEpResults`
+and `EPValidationPanel`: the signature now folds in index (order) + enabled flag.
+
+**Browser-verified on ZZ TEST (real clicks).** Ran the full set (baseline + 8 cumulative
++ 8 isolated). Fresh render — final EUI NZA 77.5 | EP 76.3 | −1.5 %; cooling 135.5 |
+234.6 | +73 %; per-measure marginals (DHW −27.9/−28.0, plug-load −15.4/−17.0, brise
+soleil −0.1/−0.5, …); trajectory 9 EP points. Un-run config → em-dash. **Stale cycle:**
+full stack fresh (76.3) → disable DHW → EP cell greys (rgb 156,163,175) + "stale · re-run"
+pill + Δ% suppressed while NZA moves to 105.4 → re-enable → repopulates fresh
+(76.3, −1.5 %). Isolated card (Library) verified for Plug-load: EUI 119.4 | 104.7 | −12 %.

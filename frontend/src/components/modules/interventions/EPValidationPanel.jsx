@@ -17,7 +17,7 @@ const STATUS = {
   failed:  { label: 'failed',  cls: 'text-red-600' },
 }
 
-export default function EPValidationPanel({ interventions = [], projectId }) {
+export default function EPValidationPanel({ interventions = [], projectId, onResultsChanged }) {
   const [cumulative, setCumulative] = useState(true)
   const [isolated, setIsolated] = useState(() => new Set())
   const [plan, setPlan] = useState(null)        // { states, n_runs, n_cached }
@@ -43,7 +43,11 @@ export default function EPValidationPanel({ interventions = [], projectId }) {
     } catch { setPlan({ error: 'plan failed', states: [] }) }
   }, [projectId, selection])
 
-  const ivSig = interventions.map(i => i.id + JSON.stringify(i.patches || [])).join('|')
+  // Fold in ORDER + ENABLED (not just patches): reordering/toggling changes the
+  // cumulative chain, so the plan (run count + cached flags) must re-evaluate.
+  const ivSig = interventions
+    .map((i, idx) => `${idx}:${i.id}:${i.enabled !== false ? 1 : 0}:${JSON.stringify(i.patches || [])}`)
+    .join('|')
   useEffect(() => { refreshPlan() }, [refreshPlan, ivSig])
 
   const poll = useCallback((id) => {
@@ -56,11 +60,12 @@ export default function EPValidationPanel({ interventions = [], projectId }) {
         const states = d.states || []
         if (states.length && states.every(s => ['done', 'cached', 'failed'].includes(s.status))) {
           clearInterval(pollRef.current)
-          refreshPlan()   // refresh cached count now that runs are stored
+          refreshPlan()          // refresh cached count now that runs are stored
+          onResultsChanged?.()   // repopulate the NZA|EP|Δ% columns + trajectory (Brief 95 P7)
         }
       } catch { /* keep polling */ }
     }, 1500)
-  }, [refreshPlan])
+  }, [refreshPlan, onResultsChanged])
 
   useEffect(() => () => clearInterval(pollRef.current), [])
 

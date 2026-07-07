@@ -18,6 +18,8 @@ import EUIWaterfall from './EUIWaterfall.jsx'
 import HeatBalance, { LayoutToggle } from '../balance/HeatBalance.jsx'
 import CrremStrandingDiagram from './crrem/CrremStrandingDiagram.jsx'
 import CrremPicker from './crrem/CrremPicker.jsx'
+import EPTrajectory from './EPTrajectory.jsx'
+import EPCompareCard from './EPCompareCard.jsx'
 import { computeLifetimeCarbon, perFuelFromDeltaRecord, defaultLifetimeYears } from '../../../utils/lifetimeCarbon.js'
 import { readModelledEui } from '../../../utils/engineReads.js'
 import { getGia } from './visualiser/unitFmt.js'
@@ -46,7 +48,28 @@ const TABS = [
   ['waterfall', 'Waterfall'],
   ['heatbalance', 'Heat balance'],
   ['carbon', 'Carbon'],
+  ['epcompare', 'EnergyPlus'],
 ]
+
+/** EP marginal ΔEUI table row: NZA marginal | EP marginal | Δ%. */
+function MarginalRow({ label, nza, ep }) {
+  const sgn = (v) => (!Number.isFinite(v) ? '—' : `${v < 0 ? '−' : '+'}${Math.abs(v).toFixed(1)}`)
+  const both = [nza, ep].every(Number.isFinite)
+  const pct = both && nza !== 0 ? ((ep - nza) / Math.abs(nza)) * 100 : null
+  const pctColour = pct == null ? '#9CA3AF' : Math.abs(pct) >= 50 ? '#DC2626' : Math.abs(pct) >= 25 ? '#D97706' : '#6B7280'
+  return (
+    <tr className="border-t border-light-grey/40">
+      <td className="py-1.5 pr-3 text-mid-grey truncate max-w-[160px]"><span title={label}>{label}</span></td>
+      <td className="py-1.5 px-2 text-right tabular-nums text-navy">{sgn(nza)}</td>
+      <td className="py-1.5 px-2 text-right tabular-nums" style={{ color: Number.isFinite(ep) ? '#1F2937' : undefined }}>
+        {Number.isFinite(ep) ? sgn(ep) : <span className="text-mid-grey/40">—</span>}
+      </td>
+      <td className="py-1.5 pl-2 text-right tabular-nums" style={{ color: pctColour }}>
+        {pct == null ? <span className="text-mid-grey/40">—</span> : `${pct < 0 ? '−' : '+'}${Math.abs(pct).toFixed(Math.abs(pct) >= 10 ? 0 : 1)}%`}
+      </td>
+    </tr>
+  )
+}
 
 function fmt(n, d = 1, suffix = '') {
   return Number.isFinite(n) ? `${n.toFixed(d)}${suffix}` : '—'
@@ -117,7 +140,7 @@ function HBPanel({ label, accent, result, orientationDeg, layout }) {
   )
 }
 
-export default function StrategyView({ strategyName = 'Strategy 1', interventions = [], stackResult, orientationDeg = 0, crremPick, onCrremPathwayChange }) {
+export default function StrategyView({ strategyName = 'Strategy 1', interventions = [], stackResult, orientationDeg = 0, crremPick, onCrremPathwayChange, epResults }) {
   const [tab, setTab] = useState('waterfall')
   const [showBaseline, setShowBaseline] = useState(true)
   const [showFinal, setShowFinal] = useState(true)
@@ -167,6 +190,51 @@ export default function StrategyView({ strategyName = 'Strategy 1', intervention
   const toggleBaseline = () => setShowBaseline((v) => (v && !showFinal ? v : !v))
   const toggleFinal = () => setShowFinal((v) => (v && !showBaseline ? v : !v))
   const bothOn = showBaseline && showFinal
+
+  // ── Brief 95 P7 — EnergyPlus overlay + side-by-side ───────────────────────
+  // Enabled NZA rows (strategy order) align 1:1 by index with the EP cumulative
+  // states (build_states walks the same ordered-enabled refs), so we zip by index
+  // rather than by label — robust to duplicate labels. EP values are only surfaced
+  // when FRESH (status), so a stale/un-run step is simply absent from the overlay.
+  const enabledRows = rows.filter((r) => r?.enabled)
+  const epCumStates = (epResults?.states ?? []).filter((s) => s.descriptor?.startsWith('cumulative:'))
+  const epBaseline = epResults?.byDesc?.baseline ?? null
+  const epFresh = (st) => (st && st.status === 'fresh' ? st.result : null)
+  const labelFor = (row, i) => interventions.find((iv) => iv.id === row.id)?.label || row.label || `Step ${i + 1}`
+
+  const trajSteps = [
+    { label: 'Baseline', nza: baselineEUI, ep: epFresh(epBaseline)?.eui_kwh_per_m2_yr ?? null },
+    ...enabledRows.map((r, i) => ({
+      label: labelFor(r, i),
+      nza: r?.cumulative_delta?.eui_kwh_per_m2?.to,
+      ep: epFresh(epCumStates[i])?.eui_kwh_per_m2_yr ?? null,
+    })),
+  ]
+
+  // Final cumulative state (full metric breakdown) — last enabled row vs last EP
+  // cumulative state; falls back to the baseline when the strategy is empty.
+  const lastRow = enabledRows[enabledRows.length - 1] ?? null
+  const lastEpState = epCumStates[epCumStates.length - 1] ?? epBaseline
+  const finalCd = lastRow?.cumulative_delta ?? null
+  // Raw result (fresh OR stale) so a stale state shows the GREYED old figure per the
+  // stale-guard; finalStatus drives the grey + "re-run" pill + Δ% suppression.
+  const finalEpRes = lastEpState?.result ?? null
+  const finalRows = [
+    { label: 'EUI', unit: 'kWh/m²', nza: finalCd ? finalCd.eui_kwh_per_m2?.to : baselineEUI, ep: finalEpRes?.eui_kwh_per_m2_yr },
+    { label: 'Heating demand', unit: 'MWh', nza: finalCd?.heating_demand_mwh?.to, ep: finalEpRes?.demand_mwh?.space_heating },
+    { label: 'Cooling demand', unit: 'MWh', nza: finalCd?.cooling_demand_mwh?.to, ep: finalEpRes?.demand_mwh?.space_cooling },
+  ]
+  const finalStatus = lastEpState?.status ?? 'none'
+
+  // Per-measure MARGINAL ΔEUI: NZA marginal vs EP marginal (cum[i] − cum[i−1]).
+  const marginalRows = enabledRows.map((r, i) => {
+    const cur = epFresh(epCumStates[i])
+    const prev = i === 0 ? epFresh(epBaseline) : epFresh(epCumStates[i - 1])
+    const epMarg = cur && prev ? cur.eui_kwh_per_m2_yr - prev.eui_kwh_per_m2_yr : null
+    return { label: labelFor(r, i), nza: r?.marginal_delta?.eui_kwh_per_m2?.delta, ep: epMarg }
+  })
+
+  const anyEp = epResults?.states?.some((s) => s.status === 'fresh')
 
   return (
     <div className="flex flex-col h-full">
@@ -267,6 +335,54 @@ export default function StrategyView({ strategyName = 'Strategy 1', intervention
                 showBaseline={crremCompare}
                 pick={crremPick}
               />
+            </div>
+          </div>
+        )}
+
+        {tab === 'epcompare' && (
+          <div className="flex flex-col gap-3">
+            {!anyEp && (
+              <div className="rounded-lg border border-dashed border-light-grey bg-off-white/40 px-3 py-2 text-xxs text-mid-grey">
+                No EnergyPlus results for the current config yet. Run them from the “Validate with EnergyPlus” panel
+                (left). Numbers appear here once a fresh run exists; edited measures grey out until re-run.
+              </div>
+            )}
+
+            <EPTrajectory steps={trajSteps} />
+
+            <EPCompareCard
+              title="Strategy final (cumulative)"
+              subtitle="baseline + all enabled measures · absolute state values"
+              epStatus={finalStatus}
+              rows={finalRows}
+            />
+
+            <div className="rounded-lg border border-light-grey/70 bg-white px-3 py-2">
+              <div className="text-xxs uppercase tracking-wider text-mid-grey/70 font-semibold pb-0.5">
+                Marginal ΔEUI per measure
+                <span className="ml-2 font-normal normal-case tracking-normal text-mid-grey/50">
+                  each measure’s step, both engines
+                </span>
+              </div>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-xxs uppercase tracking-wider text-mid-grey/50">
+                    <th className="text-left font-semibold py-1 pr-3">Measure</th>
+                    <th className="text-right font-semibold py-1 px-2">NZA-Sim</th>
+                    <th className="text-right font-semibold py-1 px-2">EnergyPlus</th>
+                    <th className="text-right font-semibold py-1 pl-2">Δ%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {marginalRows.length === 0
+                    ? <tr><td colSpan={4} className="py-2 text-mid-grey/50 italic">No enabled measures.</td></tr>
+                    : marginalRows.map((m, i) => <MarginalRow key={`${m.label}-${i}`} label={m.label} nza={m.nza} ep={m.ep} />)}
+                </tbody>
+              </table>
+              <p className="text-xxs text-mid-grey/50 pt-1 italic">
+                Marginal ΔEUI in kWh/m²·yr. EP marginal = EP(through this) − EP(through previous); shown only where both
+                cumulative steps have a fresh run. Δ% is EP vs NZA-Sim.
+              </p>
             </div>
           </div>
         )}

@@ -51,6 +51,7 @@ import PerInterventionView from './PerInterventionView.jsx'
 import StrategyView from './StrategyView.jsx'
 import EPValidationPanel from './EPValidationPanel.jsx'
 import { useIsolatedResults } from './useIsolatedResults.js'
+import { useEpResults } from './useEpResults.js'
 // Brief 94 Part 3 — strategy = ordered refs into the library. The engine + stack
 // view consume the RESOLVED strategy (order + enabled from refs); reorder / toggle /
 // remove / add mutate strategies[0].refs, never the library definitions.
@@ -467,6 +468,14 @@ export default function InterventionsModule() {
   const selectedIntervention = interventions.find((i) => i.id === selectedLibId) ?? null
   const selectedIsolatedRow = isolatedRows.find((r) => r.id === selectedLibId) ?? null
 
+  // Brief 95 P7 — EnergyPlus results (read side) for the CURRENT project config,
+  // keyed by state descriptor. Powers the NZA-Sim | EP | Δ% columns + trajectory
+  // overlay in both the Library (isolated) and Strategy (cumulative/marginal) views.
+  // Uses the strategy interventions so labels/order match the EP cumulative chain.
+  const epResults = useEpResults(currentProjectId, strategyInterventions)
+  const selectedEpIso = epResults.byDesc?.[`isolated:${selectedLibId}`] ?? null
+  const selectedEpNzaOnly = selectedLibId ? epResults.isNzaOnly(selectedLibId) : false
+
   // ── Render ──────────────────────────────────────────────────────────
 
   return (
@@ -592,6 +601,8 @@ export default function InterventionsModule() {
                   crremPick={crremPick}
                   projectCostDefaults={projectCostDefaults}
                   onCostChange={updateInterventionCost}
+                  epIso={selectedEpIso}
+                  epNzaOnly={selectedEpNzaOnly}
                 />
               ) : (
                 <div className="p-8 text-sm text-mid-grey/60">
@@ -619,7 +630,7 @@ export default function InterventionsModule() {
                   onAddFromLibrary={handleAddFromLibrary}
                 />
                 <div className="mt-3">
-                  <EPValidationPanel interventions={strategyInterventions} projectId={currentProjectId} />
+                  <EPValidationPanel interventions={strategyInterventions} projectId={currentProjectId} onResultsChanged={epResults.refresh} />
                 </div>
               </div>
             </aside>
@@ -631,6 +642,7 @@ export default function InterventionsModule() {
                 orientationDeg={Number(params?.orientation ?? 0)}
                 crremPick={crremPick}
                 onCrremPathwayChange={setCrremPathway}
+                epResults={epResults}
               />
             </main>
           </>
