@@ -120,3 +120,39 @@ determinism check passed against the 25-2-0 IDD, i.e. every object the generator
 against the 25-2-0 field schema too. This does **not** certify semantic equivalence on 26.1.0 (that needs a
 full EP run + SQLite diff, audit §6.3 — still a walkthrough item on the 26.1.0 install); it certifies only
 that byte-stability holds and the generator is IDD-parseable on the locally available EnergyPlus.
+
+## Post-consolidation: corrected baseline (2026-07-07) — debug auxiliary removed
+
+The 5 W/m² always-on "Custom auxiliary" profile added to Bridgewater during Brief 92
+auxiliary-bug debugging was removed from the DB (project `12cf7cc4`,
+`building_config.gains.auxiliary.profiles` → `[]`; DB write only, no code change, backend
+stopped during the write, DB backed up first to `~/Backups/nza-sim-db/nza_sim_pre-aux-strip_*`).
+Anchor re-run on consolidated `main` (`5d22ebd`). Raw JSON:
+`docs/audit/93_snapshots/main-corrected-baseline.json`.
+
+| Metric | 169.8 snapshot (debug aux in) | Corrected baseline (aux removed) | Δ |
+|---|---|---|---|
+| **EUI kWh/m²** | 169.8 | **126.0** | **−43.8** |
+| electricity MWh | 558.504 | **373.845** | −184.66 |
+| gas MWh | 157.428 | 157.428 | 0 |
+| heating demand MWh | 87.7 | 87.7 | 0 |
+| cooling demand MWh | 101.1 | 101.1 | 0 |
+| DHW demand MWh | 257.335 | 257.335 | 0 |
+| mech-vent fan MWh | 40.613 | 40.613 | 0 |
+| HB losses / gains kWh | 486754 / 493345 | 486754 / 493345 | 0 / 0 |
+| 12-month heating-loss shape | `[24307,20131,21130,16993,12862,8739,5932,7274,9589,12787,18695,21879]` | identical | 0 |
+
+**Reconciliation — the drop is arithmetically exact.** 5 W/m² always-on × 8760 h =
+**43.8 kWh/m²/yr** of electricity; 169.8 − 43.8 = **126.0** to the digit. The electricity
+delta (184.66 MWh ÷ 4216 m² GIA = 43.8 kWh/m²) is the same number from the energy side.
+
+**Envelope demand is invariant** because the debug profile carried `gain_fraction: 0` — it
+booked electricity end-use but contributed **zero heat to the zone**, so heating/cooling
+demand, the heat balance, and the monthly shape are byte-identical to the 169.8 snapshot.
+The consolidation's zero-drift finding is therefore untouched: removing the debug load is a
+pure electricity/EUI correction on top of an unchanged envelope.
+
+**Note on the expected figure.** The session shorthand "expect ~139.5" was an earlier
+approximate recollection; the precise corrected baseline is **126.0**, fully explained by the
+43.8 kWh/m² auxiliary electricity above. 126.0 is the number to carry forward as Bridgewater's
+clean modelled EUI.

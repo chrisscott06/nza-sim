@@ -1,0 +1,107 @@
+{
+  "brief": "Brief 93 consolidation anchor",
+  "project_id": "12cf7cc4-9bdc-41bc-ab4e-24e044fbad9d",
+  "project_name": "Bridgewater Hotel",
+  "git_head": "5d22ebd",
+  "engine_dispatch": {
+    "state_numeric": 3,
+    "mode": "full"
+  },
+  "gia_m2": 4216,
+  "headline": {
+    "eui_kwh_per_m2": 126,
+    "electricity_mwh": 373.845,
+    "gas_mwh": 157.428,
+    "heating_demand_mwh": 87.7,
+    "heating_delivered_mwh": 87.7,
+    "cooling_demand_mwh": 101.1,
+    "cooling_delivered_mwh": 101.1,
+    "dhw_demand_mwh": 257.335,
+    "mech_vent_fan_mwh": 40.613,
+    "mech_vent_loss_kwh": {
+      "kwh": 277214.3,
+      "kwh_per_m2": 65.75
+    }
+  },
+  "heat_balance_annual": {
+    "losses_kwh": 486754.1,
+    "gains_kwh": 493345.1,
+    "losses_per_element": {
+      "external_wall": {
+        "kwh": 23653.8,
+        "kwh_per_m2": 5.61,
+        "area_m2": 1701
+      },
+      "roof": {
+        "kwh": 12563,
+        "kwh_per_m2": 2.98,
+        "area_m2": 843
+      },
+      "ground_floor": {
+        "kwh": 10850.3,
+        "kwh_per_m2": 2.57,
+        "area_m2": 843
+      },
+      "glazing": {
+        "kwh": 88931.4,
+        "kwh_per_m2": 21.09,
+        "area_m2": 640
+      },
+      "thermal_bridging": {
+        "kwh": 24006.2,
+        "kwh_per_m2": 5.69
+      },
+      "fabric_leakage": {
+        "kwh": 30622.9,
+        "kwh_per_m2": 7.26,
+        "ach": 0.06924819969828935
+      },
+      "permanent_vents": {
+        "kwh": 18912.2,
+        "kwh_per_m2": 4.49
+      },
+      "mech_ventilation": {
+        "kwh": 277214.3,
+        "kwh_per_m2": 65.75
+      }
+    },
+    "gains_internal": {
+      "people": 120409.1,
+      "lighting": 39014.3,
+      "equipment": 186136.3,
+      "auxiliary": 0
+    }
+  },
+  "monthly_shape": {
+    "method": "Σ per-element losses_at_setpoint.monthly_heating_loss_kwh (heating) + internal_gains_monthly + solar (gains). result.monthly demand-shape is inline-legacy only; v2.5 anchor uses envelope monthly loss as the proxy.",
+    "heating_loss_kwh_by_month": [
+      24307,
+      20131,
+      21130,
+      16993,
+      12862,
+      8739,
+      5932,
+      7274,
+      9589,
+      12787,
+      18695,
+      21879
+    ],
+    "gains_kwh_by_month": [
+      32547,
+      31471,
+      39713,
+      45631,
+      50068,
+      51346,
+      51796,
+      46961,
+      42221,
+      37516,
+      32618,
+      31457
+    ],
+    "monthly_loss_source_present": true
+  }
+}
