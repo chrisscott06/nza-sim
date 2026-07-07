@@ -1,14 +1,17 @@
 # Current brief
 
-**Brief 93 — Branch Consolidation (active).** Merging the three long-running branches into `main`:
-`feat/envelope-fix-bridgwater-rebuild` (Brief 86 — rebuilt Bridgewater), `chris/interventions-rework-ux`
-(Briefs 87–92 — interventions / CRREM / cost / gains), and `feat/energyplus-validation` (Briefs 81–85 —
-EP validation harness). Brief: [`active/93_branch_consolidation.md`](active/93_branch_consolidation.md);
-snapshots + merge deltas: [`../audit/93_consolidation_snapshots.md`](../audit/93_consolidation_snapshots.md).
+**Brief 93 — Branch Consolidation — CLOSED 2026-07-07 (independent review pending).** The three long-running
+branches are merged into `main`: `feat/envelope-fix-bridgwater-rebuild` (Brief 86 — rebuilt Bridgewater),
+`chris/interventions-rework-ux` (Briefs 87–92 — interventions / CRREM / cost / gains), and
+`feat/energyplus-validation` (Briefs 81–85 — EP validation harness). **Zero physics drift** (Bridgewater
+anchor EUI 169.8 identical through every merge). Archived:
+[`archive/93_branch_consolidation_COMPLETED.md`](archive/93_branch_consolidation_COMPLETED.md); audit:
+[`../audit/93_consolidation_snapshots.md`](../audit/93_consolidation_snapshots.md).
 
-Brief 91 (Cost Plan Builder) lands in its **transitional** state (P4–P9 tracked separately; sized 10–18 h,
-P8 blocked on the Applemore spreadsheet — see `active/91b_cost_plan_completion_STUB.md`). Brief 86's rebuilt
-Bridgewater physics + Briefs 81–85 EP validation are the base. Next: EP-as-canonical-results for Interventions.
+**Next work:** EP-as-canonical-results for Interventions, on branch `chris/ep-interventions-backend` (cut
+from consolidated `main`). Also open: **Brief 91b** — Cost Plan Builder completion (transitional Brief 91
+merged; P4–P9 remain — [`active/91b_cost_plan_completion_STUB.md`](active/91b_cost_plan_completion_STUB.md);
+"no brief touches the cost layer until it closes").
 
 **Brief 90 (Brief B) — NRM2 cost model.** Landed on `chris/interventions-rework-ux` (Part 1 docs only).
 **BLOCKED at Part 2** — the Applemore Feasibility Cost Plan spreadsheet (the rate-library source) is not

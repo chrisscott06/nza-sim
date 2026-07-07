@@ -2,6 +2,30 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
+## ✅ Brief 93 — Branch Consolidation — CLOSED 2026-07-07 *(on `main`; independent review PENDING)*
+
+**Consolidated three parallel branches into `main`** (which was 15 briefs stale at Brief 77 `d8a6207`).
+Merge order: **envelope-fix (Brief 86)** → **interventions-rework-ux (Briefs 87–92)** → **energyplus-validation
+(Briefs 81–85)** (last was "already up to date" — an ancestor of main via envelope-fix). Audit +
+per-merge deltas: [`audit/93_consolidation_snapshots.md`](docs/audit/93_consolidation_snapshots.md).
+
+- **Physics: zero drift.** Bridgewater Hotel (`12cf7cc4`) anchor **EUI 169.8 / elec 558.5 / gas 157.4 /
+  heat 87.7 / cool 101.1 MWh** was byte-identical across all four pre-merge snapshots AND every post-merge
+  check. The engine diffs are read-path-only (Brief 88), inert-when-enabled (Brief 92 `auxScalar`), or
+  data-only (Brief 86 rebuild lives in the shared DB) — so the >5% stop condition **structurally could not
+  fire**. (EUI is 169.8 not ~139.5 because a 5 W/m² auxiliary load was added to the DB during debugging.)
+- **Conflicts:** only 2, **both pure docs** (STATUS.md + current.md) — resolved as scribe (union). `instantCalc.js`
+  **auto-merged** (both change-sets combined, 7399 lines); no physics conflict, nothing blended.
+- **Brief 91 (Cost Plan Builder) merged TRANSITIONAL** — completion tracked in
+  [`active/91b_cost_plan_completion_STUB.md`](docs/briefs/active/91b_cost_plan_completion_STUB.md)
+  ("no brief touches the cost layer until it closes").
+- **Harness smoke test DEFERRED** to walkthrough (EnergyPlus installed but `eppy` venv not provisioned here).
+- **Branch map:** `main` = consolidated (86 + 87–92 + 81–85). **Parked, NOT deleted** (Chris decides
+  post-walkthrough): `feat/envelope-fix-bridgwater-rebuild`, `feat/energyplus-validation`,
+  `chris/interventions-rework-ux`. **Next work branch:** `chris/ep-interventions-backend` (EP-as-canonical-results).
+- **Independent review PENDING** — Claude Chat reads `instantCalc.js` + `costModel.js` + the merge-commit
+  conflict resolutions + the audit before sign-off (the merging agent doesn't grade the merge).
+
 ## 🔵 Brief 92 — Auxiliary on/off in Systems — DONE (pending Chris HMR verify) 2026-07-06 *(branch `chris/interventions-rework-ux`)*
 
 **Auxiliary loads now have a Systems on/off toggle**, mirroring Lighting/Small power (Chris: "plug-in loads aren't systems but I can still turn them off"). Brief: [`active/92_auxiliary_systems_toggle.md`](docs/briefs/active/92_auxiliary_systems_toggle.md). Sibling to the auxiliary Monthly-chart wiring fix `b6f71d5`. **Changes:** DEFAULT_PARAMS `systems_config_v40.auxiliary` thin entry; idempotent load-injection in `_applyProject` (mirrors Brief 73 ventilation-strip — no schema bump; existing projects get the toggle); engine `auxScalar = effectiveSystemScalar(systems_config_v40.auxiliary)` applied to `Q_auxiliary` + `Q_auxiliary_electricity` + per-profile (instantCalc ~2450) → off zeros auxiliary electricity AND heat gain everywhere (Systems rollup, heat balance, Monthly chart, Internal Gains readout — all via `computeHourlyGains`); `SystemsModule` service maps + loop get `'auxiliary'`. `systemsEngine.VALID_SERVICES` intentionally unchanged (auxiliary isn't a delivered-energy service). Absent auxiliary → scalar 1.0 (on) = current behaviour, so no anchor change. **Build clean; node/pattern-verified.** **Pending: Chris HMR-verify the toggle** (Code can't bind port 5176). Single master toggle (not per-profile), matching lighting/small power.
