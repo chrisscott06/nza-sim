@@ -241,3 +241,36 @@ Frozen fixture through both engines. NZA-Sim from `_brief93_anchor.mjs --fixture
   DHW + the mech-vent recovery split feeding the fuel roll-up. No channel is tuned; every residual is named.
 
 This table is the reference frame for reading every intervention delta in P8.
+
+## §5 — Patch translation + state builder + config-hash (Part 4)
+
+`validation/energyplus/state_builder.py` (pure logic; unit tests `scripts/_brief95_p4_test.py` — **30/30**):
+- **classify_patch** — physical (→ EP) vs nza_sim_only (percentage-adjustment op/marker, or an unrecognised
+  path). The real Bridgewater stack is all-physical (no percentage-adjustment patches).
+- **apply_patch** — declarative set/add/remove on a fix-shaped dict (building_config / construction_choices /
+  library_constructions), dotted + `[i]` paths; deep-copies, raises on a bad path (never silent no-op).
+- **build_states** — baseline · cumulative-prefix states (nza_sim_only / empty interventions skipped, skip
+  recorded on the state) · isolated states (baseline + one item). Each state carries a fully-resolved config.
+- **config_hash** — sorted-key canonical-JSON SHA (16 hex). Verified: reordering the stack does **not** change
+  isolated-state hashes; toggling one item does **not** change others'; cumulative-prefix hashes **are**
+  order-sensitive; two different U-value patches → differing IDFs at exactly `EXT_WALL` (ROOF/FLOOR identical).
+
+### ⚠ ESCALATION — physical patches with no EP mapping (do NOT silently drop, per brief)
+
+`translation_gaps()` compares each physical patch's path against what the P2 generator + post-processor
+actually consume. **The real Bridgewater stack has 9 physical patches (4 interventions) that DO NOT translate:**
+
+| Intervention | Path(s) | Reason |
+|---|---|---|
+| **Brise soleil — south shading** | `shading_overhang.south*`, `shading_fin.south` | shading surfaces not modelled in the full IDF |
+| **Widen setpoints (20/25)** | `systems_config_v40.{heating,cooling}_setpoint_*` | generator reads `comfort_band`, not v40 setpoints |
+| **Occupancy 2** | `occupancy` (density) | generator derives people from room count, not `occupancy.density` |
+| **Air perm 1.9** | `fabric` (`air_permeability_q50`) | generator reads pre-computed `infiltration_ach`, not q50 |
+
+These are **classified physical and correctly resolved into the config**, but the current generator does not
+emit them into the IDF — so they are surfaced as escalations, not silently applied. **Impact on P8:** Brise
+soleil (shading) and Widen setpoints are the two most **cooling-relevant** interventions in the stack; until
+the generator maps them (shading surfaces; v40-setpoints → thermostat; q50 → ach; occupancy.density → people),
+the EP cooling-delta investigation can only cover the mappable subset (MVHR recovery, EPD, DHW SCOP via
+post-processing). **Decision needed before P8:** extend the generator to cover these four, or scope P8 to the
+mappable interventions and document the rest as NZA-Sim-only.
