@@ -262,3 +262,18 @@ Two cosmetic fixes:
    Sankey are retained. Browser-verified: paragraph gone, chips + Sankey present.
 
 `npm run build` clean.
+
+## §7 — Close (Part 7)
+
+**Physics invariant — PASS.** `node scripts/_brief93_anchor.mjs --fixture` at the close commit is
+**byte-identical** (ignoring `git_head`) to the frozen P3 reference `docs/audit/94_fixture_anchor_p3.json`:
+EUI 132.6, elec 401.544, gas 157.428, heat 87.7, cool 101.1, monthly
+`[24307,20131,21130,16993,12862,8739,5932,7274,9589,12787,18695,21879]`. Brief 94 touched zero physics, as
+scoped (data-model + UI only).
+
+**Migration test:** `node scripts/_brief94_migration_test.mjs` → **37/37 pass**.
+
+**Independent review PENDING** (mandatory, data-model migration). Claude Chat reads on GitHub: the migration
+code + fixture test (`strategyModel.js`, `_brief94_migration_test.mjs`), the strategy data model, the P5 diff
+removing live recalc, and the P1 diagnostic. Merging agent does not grade. PR opened to `main`; **not merged**
+pending Chris's walkthrough + independent review.
