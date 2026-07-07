@@ -80,5 +80,19 @@ as a scribe (STATUS = union, interventions briefs newest-first then envelope/val
 Brief 91 transitional state **survived intact** (`HeadlineCostEditor` mounted, `computeCostPlanTotal`
 old-headline dual-path present, `CostPlanEditor.jsx` absent). Full frontend `npm run build` clean.
 
-## §Part 4 — EP-validation merged
-_(to fill)_
+## §Part 4 — EP-validation merged (already present via envelope-fix)
+
+`git merge --no-ff feat/energyplus-validation` → **"Already up to date."** `feat/energyplus-validation`
+(tip `7b9b252`) is an **ancestor of main** — envelope-fix was cut *from* it (Brief 86 STATUS), so Part 2's
+envelope-fix merge already brought Briefs 81–85 onto main. No merge commit is possible or needed; the
+harness goal (EP-validation on main) was met in Part 2. Harness files confirmed present on main:
+`validation/{energyplus,nza_sim,fixtures,reports,sweeps}`, `generate_idf.py`, `compare.py`.
+
+**Anchor unchanged** — nothing merged, so EUI still 169.8 (= P2/P3 anchor). No delta, stop condition N/A.
+
+**Harness smoke test (`generate_idf.py --check-determinism`): DEFERRED to walkthrough** (not skipped). Exact
+state recorded: EnergyPlus **is** installed (`/Applications/EnergyPlus-25-2-0`, `Energy+.idd` resolves with
+`ENERGYPLUS_DIR` set), but the `eppy` module is **absent from the available Python** (the harness venv per
+`validation/README` isn't provisioned in this session's environment). The determinism check is an
+IDF-build-twice equality assertion — no physics/consolidation dependence — so deferring it to Chris's
+walkthrough (with the harness venv active) is safe.
