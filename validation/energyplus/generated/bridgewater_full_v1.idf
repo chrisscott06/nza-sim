@@ -7788,6 +7788,36 @@ OUTPUT:VARIABLE,
     Zone Ideal Loads Outdoor Air Sensible Cooling Energy,    !- Variable Name
     RunPeriod;                !- Reporting Frequency
 
+OUTPUT:VARIABLE,
+    *,                        !- Key Value
+    Zone Infiltration Sensible Heat Loss Energy,    !- Variable Name
+    RunPeriod;                !- Reporting Frequency
+
+OUTPUT:VARIABLE,
+    *,                        !- Key Value
+    Zone Infiltration Sensible Heat Gain Energy,    !- Variable Name
+    RunPeriod;                !- Reporting Frequency
+
+OUTPUT:VARIABLE,
+    *,                        !- Key Value
+    Zone Ventilation Sensible Heat Loss Energy,    !- Variable Name
+    RunPeriod;                !- Reporting Frequency
+
+OUTPUT:VARIABLE,
+    *,                        !- Key Value
+    Zone Ventilation Sensible Heat Gain Energy,    !- Variable Name
+    RunPeriod;                !- Reporting Frequency
+
+OUTPUT:VARIABLE,
+    *,                        !- Key Value
+    Zone Ideal Loads Zone Sensible Heating Energy,    !- Variable Name
+    Monthly;                  !- Reporting Frequency
+
+OUTPUT:VARIABLE,
+    *,                        !- Key Value
+    Zone Ideal Loads Zone Sensible Cooling Energy,    !- Variable Name
+    Monthly;                  !- Reporting Frequency
+
 OUTPUT:METER,
     Electricity:Facility,     !- Key Name
     RunPeriod;                !- Reporting Frequency

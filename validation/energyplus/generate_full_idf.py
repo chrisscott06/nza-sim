@@ -357,11 +357,22 @@ def build_idf(fix, idd_path):
     idf.newidfobject("OUTPUT:TABLE:SUMMARYREPORTS", Report_1_Name="AllSummary")
     for m in ["Electricity:Facility", "NaturalGas:Facility"]:
         idf.newidfobject("OUTPUT:METER", Key_Name=m, Reporting_Frequency="RunPeriod")
+    # Annual channel isolation (Brief 95 P3): infiltration and the extract-makeup
+    # ZoneVentilation are SEPARATE variables here (EP only folds them together in the
+    # SensibleHeatGainSummary tabular — these output variables keep them distinct).
     for v in ["Zone Ideal Loads Zone Sensible Heating Energy",
               "Zone Ideal Loads Zone Sensible Cooling Energy",
               "Zone Ideal Loads Outdoor Air Sensible Heating Energy",
-              "Zone Ideal Loads Outdoor Air Sensible Cooling Energy"]:
+              "Zone Ideal Loads Outdoor Air Sensible Cooling Energy",
+              "Zone Infiltration Sensible Heat Loss Energy",
+              "Zone Infiltration Sensible Heat Gain Energy",
+              "Zone Ventilation Sensible Heat Loss Energy",
+              "Zone Ventilation Sensible Heat Gain Energy"]:
         idf.newidfobject("OUTPUT:VARIABLE", Key_Value="*", Variable_Name=v, Reporting_Frequency="RunPeriod")
+    # Monthly heating/cooling demand shapes (Brief 95 P3 — monthly correlation with NZA).
+    for v in ["Zone Ideal Loads Zone Sensible Heating Energy",
+              "Zone Ideal Loads Zone Sensible Cooling Energy"]:
+        idf.newidfobject("OUTPUT:VARIABLE", Key_Value="*", Variable_Name=v, Reporting_Frequency="Monthly")
 
     return idf
 

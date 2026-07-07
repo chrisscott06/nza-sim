@@ -183,3 +183,61 @@ extract-makeup, and EP's total ventilation loss = MVHR OA (106.6) + extract-make
 clean per-channel split needs dedicated output isolation (small follow-up). NZA's mech-ventilation 277.2 is a
 single blended figure (its own simplification). These residuals — heating +23%, cooling +20%, and the
 per-channel differences — are the **characterisation** and carry into P3; they are named here, not tuned away.
+
+## §4 — Baseline dual-engine characterisation (Part 3)
+
+Frozen fixture through both engines. NZA-Sim from `_brief93_anchor.mjs --fixture` (EUI 132.6); EP from
+`run_full.py` on the corrected physical baseline (§3c). **Characterisation, not a gate — no tuning.**
+
+### Annual (NZA-Sim | EnergyPlus | Δ%)
+
+| Metric | NZA-Sim | EnergyPlus | Δ (EP−NZA)/NZA |
+|---|---|---|---|
+| **EUI** kWh/m² | 132.6 | 118.0 | **−11.0%** |
+| Electricity MWh | 401.5 | 371.2 | −7.5% |
+| Gas MWh | 157.4 | 126.1 | −19.9% |
+| **Heating demand** MWh | 87.7 | 107.7 | **+22.8%** |
+| **Cooling demand** MWh | 101.1 | 121.3 | **+20.0%** |
+| DHW demand MWh | 257.3 | 206.2 | −19.9% (different deterministic ΔT) |
+
+### Per-channel heat loss (NZA-Sim | EnergyPlus, MWh) — clean split, fold resolved
+
+| Channel | NZA-Sim | EnergyPlus | Note |
+|---|---|---|---|
+| Fabric — opaque (walls+roof+floor) | 47.2 | 60.0 | +27% |
+| Fabric — thermal bridging | 24.0 | **0 — not modelled** | EP gap |
+| Glazing conduction | 88.9 | 44.6 | −50% (net window conduction) |
+| Infiltration | 30.6 | **30.7** | matches by construction ✓ |
+| Permanent vents | 18.9 | **0 — not modelled** | EP gap |
+| Mech-ventilation | 277.2 (blended) | 391.6 (MVHR 106.0 + extract-makeup 285.6) | +41% |
+
+### Monthly shape correlations (Pearson r)
+
+| Profile | r | (EP demand vs NZA envelope-loss / gains-driver proxy) |
+|---|---|---|
+| **Heating** | **0.961** | both winter-high |
+| **Cooling** | **0.914** | both summer-high |
+
+### Honest reading
+
+- **Shape is right; the divergence is level, not dynamics.** Monthly r 0.96 (heating) / 0.91 (cooling) means
+  the two engines agree on *when* load occurs across the year; they differ on *how much*. That is a materially
+  stronger position than the annual deltas alone — and it predicts that intervention **deltas** (P8) may track
+  better than absolute levels.
+- **Infiltration matches by construction (30.6 vs 30.7)** — spec parity confirmed on the one channel with an
+  unambiguous spec. This anchors trust in the input translation.
+- **Mech-ventilation is the largest residual (EP 391.6 vs NZA 277.2, +41%).** EP models the fixture faithfully
+  as two streams — MVHR (80% recovery on 1425 L/s) + **unrecovered extract-makeup (2418 L/s → 285.6 MWh)**.
+  NZA books a single blended 277.2 MWh, its own simplification (effectively more recovery / lower loss on the
+  extract). This is the dominant NZA↔EP difference and is NZA's blend, not an EP error.
+- **Two EP modelling gaps, named not tuned:** thermal bridging (NZA 24.0) and permanent vents (NZA 18.9) are
+  not yet in the EP model (~43 MWh of loss absent). Adding them would raise EP heating further (widening the
+  +22.8% heating gap) — a candidate refinement, not a calibration.
+- **Glazing −50%** (EP 44.6 vs NZA 88.9): EP's net window conduction (simple-glazing U 1.4) is lower than
+  NZA's glazing-loss figure; likely bound up with the solar-gain split (window heat addition vs removal).
+- **DHW −19.9%** is not an engine difference — both are deterministic; EP uses ΔT(42−10)=32 K, NZA a higher
+  effective ΔT (storage 60 °C / tap-mix). Same litres, different assumed rise.
+- **Net:** EP EUI 118.0 is 11% below NZA 132.6 — EP's higher space heating+cooling is outweighed by lower
+  DHW + the mech-vent recovery split feeding the fuel roll-up. No channel is tuned; every residual is named.
+
+This table is the reference frame for reading every intervention delta in P8.
