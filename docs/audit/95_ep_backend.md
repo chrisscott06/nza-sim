@@ -318,3 +318,26 @@ fins, matching the intervention's last-write-wins spec). So the small whole-buil
 physics, not a translation artifact**: the south glazing is only **122 of 640 m²** (this is a north-dominant
 building — north WWR 0.54), so a 0.5 m brise-soleil on the small south aperture moves whole-building cooling
 only marginally. P8 can cite the shading result as real (small), with this provenance.
+
+## §6 — EP batch runner + config-hash cache (Part 5)
+
+`validation/energyplus/ep_batch_runner.py` (tests `scripts/_brief95_p5_test.py` — **10/10**, runs real EP):
+- **`ep_runs` table** (`data/ep_runs.db`, gitignored): `config_hash` PK · descriptor · status
+  (running/done/failed/cached) · started/finished · normalised `results_json` · `ep_version` · provenance ·
+  `error_tail`.
+- **`run_state`** — cache-check by config_hash → skip if `done` (status `cached`); else generate IDF
+  (state_builder), run EP once, parse demand → consumption (`consumption_from_demand`, shared model with
+  run_full), store. Failures store the `.err` tail as `failed` — **never retried silently**.
+- **`run_batch`** — sequential queue; a per-state exception is isolated (recorded FAILED) so **one broken
+  state does not block the rest**. Isolated-state results survive stack reordering by construction (the hash
+  is over the resolved config, not the stack position).
+- **API surface** (importable by the FastAPI backend): `run_batch` (start), `batch_progress` (per-state
+  status by hash), `fetch_result` (normalised result / error tail).
+
+**Falsifiable verified:** a 2-state batch run twice → the second invocation performs **0 EP executions**
+(both `cached`, results byte-identical); a deliberately-broken state (inverted setpoints → EP fatal) records
+**FAILED with error tail** and the following valid state still runs.
+
+**Remaining for the UI (P6):** thin FastAPI HTTP routes wrapping these three functions + backend/venv wiring
+(the backend runs on base python; the runner needs the harness venv — invoke via the venv interpreter or add
+pyyaml). The importable functions are ready; P6 wires the run-selection matrix to them.
