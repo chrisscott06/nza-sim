@@ -249,3 +249,16 @@ paramsForEngine swap`.** Removed:
 
 _Cost fields in the editor use the separate, non-gated `updateInterventionCost` path (Brief 91b quarantine) —
 untouched by P5; confirmed a stray cost-field poke did not persist._
+
+## §6 — Walkthrough polish (Part 6)
+
+Two cosmetic fixes:
+1. **Auxiliary service pill colour.** `SERVICE_COLOURS` (SystemEditorCard.jsx) had no `auxiliary` key, so the
+   Systems auxiliary pill fell back to `#00AEEF` (the cooling blue). Added `auxiliary: '#4B5563'` (gray-600) —
+   matches the internal-gains auxiliary colour (`DEMAND_COLOURS`/`INTERNAL_COLOURS.auxiliary`). Browser-verified:
+   aux pill now `rgb(75,85,99)`, cooling still `rgb(0,174,239)`.
+2. **Systems Energy Flows explainer.** Removed the long explainer paragraph ("Each demand on the left passes
+   through its system…") above the energy-flow Sankey. The header title + **Σ elec / Σ gas** chips and the
+   Sankey are retained. Browser-verified: paragraph gone, chips + Sankey present.
+
+`npm run build` clean.

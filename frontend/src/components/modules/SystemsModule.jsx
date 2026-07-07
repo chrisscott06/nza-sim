@@ -1536,18 +1536,9 @@ Fuel consumed:  ${calcStr}`
           <ChartTotalsBadge label="Σ gas"  value_kwh={totalGas  * 1000} />
         </div>
       </div>
-      <p className="text-xxs text-mid-grey mb-3">
-        Each demand on the left passes through its system in the middle, which
-        consumes electricity and/or gas on the right. The ribbon's width on
-        the left side is the demand served by that branch; on the right side
-        it's the fuel consumed — so a heat pump's ribbon necks down
-        through the system column, a gas boiler's barely tapers. Bar height
-        and ribbon width share a single uniform scale (the total demand sets
-        the canvas height). Heat rejection (cooling condenser, MEV / MVHR
-        exhaust, gas flue) is intentionally out of scope of this view.
-      </p>
-
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: H }} preserveAspectRatio="xMidYMid meet">
+      {/* Brief 94 P6: explainer paragraph removed (walkthrough polish). The
+          header title + Σ elec / Σ gas chips above are retained. */}
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full mt-3" style={{ maxHeight: H }} preserveAspectRatio="xMidYMid meet">
         {/* Column headers */}
         <g fontSize="10" fill="#475569" fontWeight="600" textAnchor="middle">
           <text x={leftX0 + nodeW / 2}  y={padT - 12}>Demand</text>
