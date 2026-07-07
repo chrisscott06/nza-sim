@@ -7556,7 +7556,7 @@ PEOPLE,
     Building_Zone,            !- Zone or ZoneList or Space or SpaceList Name
     OCC_SCHED,                !- Number of People Schedule Name
     People,                   !- Number of People Calculation Method
-    276,                      !- Number of People
+    345.32,                   !- Number of People
     ,                         !- People per Floor Area
     ,                         !- Floor Area per Person
     0.3,                      !- Fraction Radiant
@@ -7587,7 +7587,7 @@ LIGHTS,
     Building_Zone,            !- Zone or ZoneList or Space or SpaceList Name
     LIGHTS_SCHED,             !- Schedule Name
     LightingLevel,            !- Design Level Calculation Method
-    8431.92,                  !- Lighting Level
+    7394.3,                   !- Lighting Level
     ,                         !- Watts per Floor Area
     ,                         !- Watts per Person
     0,                        !- Return Air Fraction
@@ -7602,7 +7602,7 @@ LIGHTS,
 ELECTRICEQUIPMENT,
     Equipment,                !- Name
     Building_Zone,            !- Zone or ZoneList or Space or SpaceList Name
-    EQUIP_SCHED,              !- Schedule Name
+    ALWAYS_ON,                !- Schedule Name
     EquipmentLevel,           !- Design Level Calculation Method
     21248.4384,               !- Design Level
     ,                         !- Watts per Floor Area

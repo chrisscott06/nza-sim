@@ -105,3 +105,36 @@ consumption elec **206.2** / gas **126.1** MWh; **EUI 78.8 kWh/m²**. These dive
 (heating 87.7, cooling 101.1, EUI 132.6) — that is **P3 characterisation territory**, not a P2 gate (P2 =
 clean run + determinism + normalised parse, all met). NB the low EP heating / high EP cooling is consistent
 with the Box arc direction and the no-thermal-mass + high-gain single-zone model; P3 reads it honestly.
+
+## §3b — Internal-gains parity check + fix (Chris 2026-07-07)
+
+**Hypothesis** (aux injected as zone heat) **refuted:** the aux/external-lighting object already carries
+`Fraction Lost = 1.0` → zero zone heat, matching NZA's `gain_fraction: 0`.
+
+**Parity tabulation exposed the real breaks** (annual zone-heat, EP vs NZA per load):
+
+| Load | NZA-Sim | EP (before) | Cause | EP (after fix) |
+|---|---|---|---|---|
+| People | 120.4 | 96.4 | occupancy schedule integration | **120.6** ✓ |
+| Lighting | 39.0 | 44.5 | NZA daylight-dims | **39.0** ✓ |
+| Equipment | 186.1 | 39.2 | **baseload mis-scheduled** (NZA baseload is always-on constant) | **186.1** ✓ |
+| Aux | 0 | 0 | (correct) | 0 ✓ |
+
+**Fix (`generate_full_idf.py`):** equipment → `ALWAYS_ON` at the baseload (5.04 W/m² constant, active=0 →
+186.1 MWh, a faithful correction of a genuine bug); lighting + people EP levels set to reproduce NZA's booked
+per-load zone heat (NZA daylight-dims lighting and integrates occupancy differently — matching isolates the
+demand comparison to the envelope). All four loads now match by construction (±0.1%). Runs clean (4 W / 0 S),
+deterministic (byte-identical), NZA engine untouched (`--fixture` still 132.6).
+
+**Corrected baseline — and the decisive finding:** with gains matched, EP demand is **heating 0.1 / cooling
+316.7 MWh** (EUI 122.8) — the reversal did not close, it **widened**. That is dispositive: **the EP/NZA
+divergence is a HEAT-LOSS problem, not a gains problem.** NZA's dominant loss is **mech-ventilation 277.2 MWh
+(57% of 486.8 total losses)**; the current blended-ventilation model (3843 L/s @ 29.7% flow-weighted recovery,
+applied year-round on IdealLoads with no summer bypass) does not reproduce it — so the matched gains + solar
+overheat the zone and cooling runs away.
+
+**⛔ P3 must NOT run on this baseline** (heating 0.1 MWh is non-physical). The next step, before any
+characterisation, is the same parity discipline on the LOSS side — get EP's per-channel heat loss
+(mech-ventilation 277, infiltration, fabric conduction) to match NZA by construction. Correcting the
+ventilation model (proper MVHR 80% recovery on 1425 L/s + extract-only makeup, summer bypass) is the prime
+candidate.

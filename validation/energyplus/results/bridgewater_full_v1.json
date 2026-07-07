@@ -30,27 +30,27 @@
   },
   "gia_m2": 4216.0,
   "demand_mwh": {
-    "space_heating": 10.748,
-    "space_cooling": 173.604,
+    "space_heating": 0.065,
+    "space_cooling": 316.687,
     "dhw": 206.163
   },
   "consumption_mwh": {
-    "electricity": 206.164,
+    "electricity": 391.439,
     "gas": 126.123,
     "space_heating": {
-      "electricity": 3.941
+      "electricity": 0.024
     },
     "space_cooling": {
-      "electricity": 57.868
+      "electricity": 105.562
     },
     "dhw": {
       "gas": 126.123,
       "electricity": 32.986
     },
     "ventilation_fans_electricity": 0.041,
-    "lighting_equipment_aux_electricity": 111.329
+    "lighting_equipment_aux_electricity": 252.826
   },
-  "eui_kwh_per_m2_yr": 78.8,
+  "eui_kwh_per_m2_yr": 122.8,
   "breakdown": {
     "space_heating": [
       {
@@ -59,7 +59,7 @@
         "share_pct": 95.0,
         "efficiency": 3.0,
         "fuel": "electricity",
-        "fuel_mwh": 3.403
+        "fuel_mwh": 0.02
       },
       {
         "label": "Secondary heating (electric_panel_heater)",
@@ -67,7 +67,7 @@
         "share_pct": 5.0,
         "efficiency": 1.0,
         "fuel": "electricity",
-        "fuel_mwh": 0.537
+        "fuel_mwh": 0.003
       }
     ],
     "space_cooling": [
@@ -77,7 +77,7 @@
         "share_pct": 100.0,
         "efficiency": 3.0,
         "fuel": "electricity",
-        "fuel_mwh": 57.868
+        "fuel_mwh": 105.562
       }
     ],
     "dhw": [

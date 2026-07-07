@@ -55,6 +55,7 @@ from generate_idf import resolve_idd, fnum, flat_verts  # noqa: E402
 
 # Standard combined surface film resistances (ISO 6946) to back out material R from a
 # whole-element U-value (which includes films).
+HOURS = 8760.0
 FILM_R = {"wall": 0.17, "roof": 0.14, "floor": 0.17}
 MONTH_END = ["1/31", "2/28", "3/31", "4/30", "5/31", "6/30",
              "7/31", "8/31", "9/30", "10/31", "11/30", "12/31"]
@@ -254,22 +255,43 @@ def build_idf(fix, idd_path):
         verts = [(xa, ya, z_hi), (xa, ya, z_lo), (xb, yb, z_lo), (xb, yb, z_hi)]
         add_window(f"WIN_{fname}", f"WALL_{fname}", verts)
 
-    # ---- internal gains (total watts referencing GIA) ----------------------
-    people = int(bc["num_bedrooms"]) * int(bc["people_per_room"])
+    # ---- internal gains — matched to NZA-Sim per-load zone heat "by construction" ----
+    # Brief 95 gain-parity check (Chris 2026-07-07): every load's ANNUAL zone-heat must
+    # equal NZA-Sim's booked value, so the demand comparison isolates the envelope, not the
+    # gain inputs. NZA per-load (from bridgewater_anchor_v2.yaml via
+    # `_brief93_anchor.mjs --fixture`, frozen fixture): people 120.41, lighting 39.01,
+    # equipment 186.14, aux 0 MWh. NZA differs from a raw magnitude×schedule because it
+    # (a) treats equipment BASELOAD as always-on (constant, active=0 → 5.04 W/m² × 8760),
+    # (b) daylight-dims lighting, (c) integrates occupancy on a different day/monthly basis.
+    NZA_GAIN_MWH = {"people": 120.41, "lighting": 39.01}
+
+    def sched_avg(s):
+        wd = s.get("weekday", [0] * 24); sa = s.get("saturday", wd); su = s.get("sunday", sa)
+        mm = s.get("monthly_multipliers", [1] * 12)
+        daily = (5 * sum(wd) + sum(sa) + sum(su)) / 7 / 24
+        return daily * (sum(mm) / len(mm))
+
+    occ_avg = sched_avg(bc["occupancy"]["schedule"])
+    lit_avg = sched_avg(bc["gains"]["lighting"]["profiles"][0]["schedule"])
     shf = sens / (sens + lat)
+    # People count set so sensible zone heat over OCC_SCHED == NZA people (fractional OK).
+    people = NZA_GAIN_MWH["people"] * 1e6 / (sens * HOURS * occ_avg)
     idf.newidfobject("PEOPLE", Name="People", Zone_or_ZoneList_or_Space_or_SpaceList_Name="Building_Zone",
                      Number_of_People_Schedule_Name="OCC_SCHED",
-                     Number_of_People_Calculation_Method="People", Number_of_People=people,
+                     Number_of_People_Calculation_Method="People", Number_of_People=round(people, 2),
                      Activity_Level_Schedule_Name="ACTIVITY_LEVEL",
                      Sensible_Heat_Fraction=round(shf, 4), Fraction_Radiant=0.3)
-    lpd = float(bc["gains"]["lighting"]["profiles"][0]["magnitude"]["value"])
+    # Lighting level set so gain over LIGHTS_SCHED == NZA lighting (daylight-dimmed).
+    light_level = NZA_GAIN_MWH["lighting"] * 1e6 / (HOURS * lit_avg)
     idf.newidfobject("LIGHTS", Name="Lights", Zone_or_ZoneList_or_Space_or_SpaceList_Name="Building_Zone",
                      Schedule_Name="LIGHTS_SCHED", Design_Level_Calculation_Method="LightingLevel",
-                     Lighting_Level=lpd * gia, Fraction_Radiant=0.5, Fraction_Visible=0.2)
+                     Lighting_Level=round(light_level, 1), Return_Air_Fraction=0,
+                     Fraction_Radiant=0.5, Fraction_Visible=0.2)
+    # Equipment: baseload is ALWAYS-ON (constant); active=0. → 5.04 W/m² × 8760 = 186.1 MWh.
     epd = float(bc["gains"]["equipment"]["profiles"][0]["baseload"]["value"])
     idf.newidfobject("ELECTRICEQUIPMENT", Name="Equipment",
                      Zone_or_ZoneList_or_Space_or_SpaceList_Name="Building_Zone",
-                     Schedule_Name="EQUIP_SCHED", Design_Level_Calculation_Method="EquipmentLevel",
+                     Schedule_Name="ALWAYS_ON", Design_Level_Calculation_Method="EquipmentLevel",
                      Design_Level=epd * gia, Fraction_Latent=0, Fraction_Radiant=0.3, Fraction_Lost=0)
     auxd = float(aux_prof["magnitude"]["value"])
     # External lighting → an equipment object with Fraction_Lost=1 (electricity use, no zone gain).
