@@ -2,6 +2,155 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
+## 🔵 Brief 86 — OPENED 2026-06-25 *(branch `feat/envelope-fix-bridgwater-rebuild`, cut from `feat/energyplus-validation` tip `7b9b252` — NOT on main)*
+
+**Envelope-Only Heat-Balance Fix + HIEX Bridgwater Model Rebuild + Input Persistence.** Architect-directed (supersedes the Brief-85 handoff's residual-isolation recommendation). Brief: [`active/86_envelope_fix_and_bridgwater_rebuild.md`](docs/briefs/active/86_envelope_fix_and_bridgwater_rebuild.md). Goal: restore the envelope-only heat balance (currently 500-erroring — epJSON assembler not requesting Zone Mean Air Temperature), rebuild the HIEX Bridgwater inputs (UUID `12cf7cc4…`, "Bridgewater Hotel" in DB; populated inputs lost in a machine migration), then add project input export/snapshot persistence.
+
+**Part 1 — landed brief + reconciliation.** Archived six closed briefs (81 EnergyPlus validation box, 82 zone-temp delta, 83 MVHR recovery booking, 84a harness like-for-like, 84b free-float, 85 internal-mass partition) from `active/` → `archive/…_COMPLETED.md`; `current.md` repointed; `active/` now holds only 70, 75, 86. (`b272c74`)
+
+**Part 2 — envelope-only 500 DIAGNOSED; no assembler change needed.** The brief's premise (assembler not requesting `Zone Mean Air Temperature`) is false for this codebase: `epjson_assembler.py:1719` emits the temp request unconditionally for all modes (added Brief 26, `a5f16ef`); `assemble_epjson` is the only builder. The 500 is **stale SQL** — the only completed Bridgwater run (`683c1509`, 2026-04-04, full-mode VRF) predates the temp feature and has zero temperature vars; the GET balance endpoint reads that old SQL and the parser correctly raises. A fresh envelope-only run will return 200 but needs the rebuilt project → **re-sequenced (Chris): rebuild first, verify 200 after.** JSX half: `npm run build` clean, no stray `>`. Audit: [`docs/audit/86_envelope_fix_and_bridgwater_rebuild.md`](docs/audit/86_envelope_fix_and_bridgwater_rebuild.md).
+
+**Part 2 VERIFIED (via Part 3):** live `GET …/balance?mode=envelope-only` now returns **HTTP 200** (run `2e9d639f`) — the 500 was stale SQL, fixed by the rebuild giving a runnable project, no assembler change.
+
+**Part 3 — geometry + fabric DONE.** Source: Chris's HIX Static Model + BRUKL Apr-2019. Geometry L58.8×W14.34×**5fl**×3.2 → GIA 4,216; orient 42°; WWR 0.55/0.10/0.38/0.11; infiltration 0.232 ACH (perm 4.64÷20); comfort 21/24; shading 0.5; sealed openings; Yeovilton EPW. Four BRUKL constructions (wall 0.14 / roof 0.15 / ground 0.13 / glazing 1.4·g0.55) minted in `constructions.py` **and** DB (nominal U verified exact). Envelope-only sim renders sensible losses, heating/cooling sensible. NB: genuinely 5 storeys (4 bedroom floors + communal GF, confirmed by site photo) — GIA 4,216 legitimate. **DB-only — not in git yet (Part 6 persists it).** Audit §Part 3.
+
+**Infiltration corrected (Chris's call):** static model's 0.232 ACH (q50÷20) was dimensionally wrong; engine derives n50=q50×A_env/V÷20 → **0.0692 ACH**. Set `fabric.air_permeability_q50=4.64` + `infiltration_ach=0.0692`. Re-verified: leakage 102→42 MWh, heating 69 / cooling 162 MWh (envelope strongly cooling-dominated — sets up the "extract drives heating" finding).
+
+**Part 4 — systems DONE.** Restored canonical Bridgewater systems (lost in migration) from `seed_bridgewater_v25_systems.mjs` + `systemTemplatesLibrary.js`: wrote `systems_config_v25`, ran `40_bridgewater`+`42_systems_ux` migrations → `systems_config_v40` (schema_v2). Heating VRF SCOP 5.12 (95%)+panel; cooling VRF SEER 3.51 (95%)+DX; DHW 60% ASHP/40% gas; 3 vent systems (MVHR 80%HR + bedroom extract 2208 l/s no-HR + WC extract). Kept Part 3's real constructions (better than seed's u_value_override). Fuel split 70/30 verifies in Part 5 (needs small power). DB-only. Audit §Part 4.
+
+**Part 4 v40 schema-drift bug (fixed):** Python Brief-40 migration put DHW-demand/setpoint fields per-system, but Brief-85 engine reads them service-level → heating/cooling/DHW delivered 0. Python 42 chain wouldn't lift headlessly (3 strikes). Built v40 service-level fields directly (DHW per-person 80 L, store 60, mains 10; setpoints follow-comfort 21/24; schema_v2) + stripped stale per-system fields.
+
+**Part 5 — loads DONE; calibration gap REPORTED, not forced.** Loads: LED LPD 2, small power baseload 5.04 W/m² → 186 MWh, occupancy 138×2@75W. Bottom-up: heating 21.5 / cooling 34 / fans 26 / DHW 57e+125g / lighting 14 / small power 186 = 463.6 MWh → **EUI 110**. Targets met: **fuel split 73/27 (≈70/30 ✓), gas 125 MWh (≈134.8 anchor ✓), small power 186 ✓**. **EUI 110→180 NOT forced** (Chris): the ~295 MWh inferred base load needed > all modelled end-uses combined AND, being electricity, would break the validated 73/27 split (→84/16). Gap reported from first principles (likely extract-driven heating under-count + unmodelled hotel loads); confirm vs sub-metering before any base load. Harness: `scripts/_brief86_calibrate.mjs`. DB-only. Audit §Part 5.
+
+**Part 6 — input persistence DONE.** `scripts/export_project_inputs.py` / `import_project_inputs.py` capture+restore the full input set (all project columns incl. building_config/systems v25+v40/loads/schedules + the 4 custom constructions) to/from one committable JSON. Committed snapshot: `projects/snapshots/bridgewater_hotel.json`. Round-trip verified: re-export byte-identical, restored project engine EUI 110 (matches original). **This finally gets the rebuild out of DB-only into git** — the failure this brief exists to fix is now closed. Audit §Part 6. Part 7 (close) pending: needs independent review + Chris's sign-off before the single push.
+
+## ✅ Brief 85 — CLOSED 2026-06-08 *(branch only — NOT on main; outcome (c); one bounded engine plumbing fix)*
+
+**Internal mass partition (Finding A resolution) — SAME-DAY, staged.** Tested whether the +1.10 °C free-float delta (Brief 84b) is thermal mass or solver convention. **Verdict: OUTCOME (c) — the mass hypothesis is REFUTED; the delta is ~98 % a solver-convention residual, not mass.** All work on `feat/energyplus-validation`; **never merged to `main`** (`d8a6207` throughout). Audit: [`docs/audit/85_internal_mass_partition.md`](docs/audit/85_internal_mass_partition.md) (§0–§2.3); design note [`docs/design-notes/85_internal_mass_partition.md`](docs/design-notes/85_internal_mass_partition.md).
+
+| Part | SHA | Deliverable |
+|---|---|---|
+| P0.1 | `17a4eba` | Brief + design note + audit stub. |
+| P0.2 | `5e7a8cd` | Source read of the dropped `opts.tuning` (premise-check: it's a 3-function gap `_calculateInstantBaseline`→`_calculateState3`→`_calculateState2`, ~4 lines, not the single L4961 Brief 84b cited). |
+| P0.3 | `da484db` | **Engine plumbing fix** — wire `opts.tuning` through `_calculateState3` (sig + call site + both `_calculateState2` calls). Default byte-identical when absent. |
+| P0.4 | `d8ce26c` | **HARD CHECKPOINT cleared** — Test 1 default byte-identical (5/7, EUI 160.4, heating 2.492, cooling 1.407); Test 2 hook live + damping direction (night-day spread 0.67→0, range 3.52→3.04). |
+| P1.1 | `ff7be66` | Sweep design + construction-derived mass 83.15 MJ/K (+ double-count caveat) + prediction (outcome c). |
+| P1.2 | `e855ce2` | Sweep execution (`internal_mass_sweep.mjs` + `validation/sweeps/85_internal_mass_sweep.csv`). |
+| P1.3 | `4edf58f` | Analysis + partition: mass-explained ≈ 0.02 °C, residual ≈ 1.06 °C. |
+| P2.1 | `93743a1` | Verdict (c) + Rule-10 refinement (isolate the residual before declaring it defensible). |
+| P2.2 | `2b190d1` | Validation state at mass_min = 5/7 (no change — demand FAILs are mass-independent). |
+| P2.3 | (this commit) | Close + STATUS + Brief 86 handoff + push. |
+
+**Key result:** the `opts.tuning` hook is now live (Step 0, default-preserving). The sweep (0–100 MJ/K internal mass) shows the **mean** free-float delta is flat at ~1.06–1.09 °C (`mass_min` 10 MJ/K, `delta_residual` 1.060 °C; mass explains ~2 %). Mass cleanly governs the **diurnal amplitude** (night Δ 1.06→1.56, midday 1.08→0.61; range 3.52→3.04) but the rise/fall cancel in the mean (mean-preserving capacitance, Brief 84b §5.2 confirmed). So the +1.10 °C is a **solver-convention residual**, ΔT-driven, persisting at all masses — a free-float **ΣUA / surface-drive / integration** difference, *identified as a class but not isolated*. Validation state unchanged at **5/7** (mass tuning doesn't advance it; the binding FAILs are the demand metrics).
+
+**Recommended Brief 86 (reframed from design note):** mass is refuted, so there's nothing to calibrate and widening tolerance blind would violate Rule 10. Brief 86 = a **residual-isolation diagnostic** — isolate the ~1.06 °C among {free-float loss ΣUA [leading suspect per 84b's Δ-lower-under-sun], sol-air drive, 70 %-to-air gains split, 1st-vs-3rd-order integration}, *then* decide tolerance-widen (if defensible convention) vs targeted fix (if defect). Separate optional cleanup: resolve the construction-derived-mass **double-count** if pursuing that philosophy. **Back-port candidates** (Chris's call): 84a harness fix + 85 Step-0 plumbing fix (both non-architectural). **Open questions for Chris:** accept the diagnostic reframe? tolerance vs integration-scheme change if residual is defensible? back-port now or hold?
+
+## ✅ Brief 84b — CLOSED 2026-06-08 *(branch only — NOT on main; diagnostic only, NO engine change)*
+
+**Finding A free-float characterisation (zone air-node solver convention) — SAME-DAY.** Characterises the ~+1 °C free-float zone-temp delta that Brief 83 showed is the single structural finding behind Brief 81's heating −24 % / cooling +108 % / mech-vent +93 %. **Diagnostic-only; no engine/IDF/tolerance change.** All work on `feat/energyplus-validation`; **never merged to `main`** (`d8a6207` throughout). Audit: [`docs/audit/84b_finding_a_freefloat.md`](docs/audit/84b_finding_a_freefloat.md) (§0–§7); design note [`docs/design-notes/84b_finding_a_freefloat.md`](docs/design-notes/84b_finding_a_freefloat.md).
+
+| Part | SHA | Deliverable |
+|---|---|---|
+| P1 | `1e4b087` | Brief + design note + audit stub; evidence inventory (existing B82/B83 per-hour CSVs + EPW suffice; no new instrumentation). |
+| P2 | `023de72` | `freefloat_diagnostic.py`: free-float (both unconditioned, 2949 h) delta **+1.10 °C**, 97.5 % NZA warmer. CONDITIONAL/loss-side — grows as outdoor falls (r −0.57) + with ΔT (r +0.50), night-heavy (1.41 vs 0.66), lower under solar/occupancy. Not gains-driven, not flat. |
+| P3 | `06b278c` | NZA source: implicit-Euler air node, 1 step/hr; zone capacitance 25.36 MJ/K is **98.6 % a tuned lumped internal mass** (250 kJ/K/m², calibrated to EP summer-max). |
+| P4 | `776183d` | EP source: CTF, 6 steps/hr, 3rd-order air node; **zero `InternalMass`** (0 MJ/K). Differentiator = NZA's 25 MJ/K internal mass with no EP counterpart. |
+| P5 | `9401910` | Localisation. Decisive sweep **blocked**: `calculateInstant` drops `opts.tuning` (L4961) → internal-mass hook dead via production path (real minor defect, flagged not fixed). Physics: night-heavy variation = mass over-damping; +1.06 °C mean only partly mass + partly a separate free-float offset — not cleanly partitioned. |
+| P6 | `dfddb6d` | Brief 85 recommendation (staged, evidence-gated). |
+| P7 | (this commit) | Audit §7 close + STATUS + push. |
+
+**Verdict:** the brief's hypothesis is **SUPPORTED** — the +1 °C free-float offset is a **structural solver-convention difference (thermal storage / transient response), defensible on both sides, not a bug.** Dominated by NZA's tuned 25 MJ/K lumped internal mass (vs EP's 0) + its 1-hour 1st-order integration (vs EP's 6/hr 3rd-order). Confidence high on mechanism class + structural facts; moderate/unquantified on the single-knob magnitude (decisive experiment blocked by the dead hook; mean partly a separate offset). Outcome between **(b) calibration** and **(d) coupled/ambiguous**.
+
+**Recommended Brief 85 (staged):** Step 0 — wire the dropped `opts.tuning` (≈1–2 line bug fix, prerequisite); Step 1 — run the now-live internal-mass sweep to partition the delta; Step 2 if (b) — make both models agree on internal mass (derive from constructions [most defensible] / lower the flat default / add EP `InternalMass`), physics-grounded not fitted; (a) document + widen free-float tolerance stays legitimate. Must treat the float delta as one finding with the heating/cooling/mech-vent gaps. **Open questions for Chris:** internal-mass philosophy (generic default vs construction-derived); validation-target philosophy (bare envelope vs furnished); tolerance-vs-engine-change preference.
+
+## ✅ Brief 84a — CLOSED 2026-06-08 *(branch only — NOT on main; harness-only, NO engine change)*
+
+**Harness like-for-like comparison fix (mech-vent on coil-run hours) — SAME-DAY.** Implements the correction Brief 83's evidence named: the Brief-81 "mech-vent +92.9 % FAIL" was a **comparison-framework domain mismatch**, not an engine bug. `validation/compare.py` now pairs the mech-vent metric **like-for-like over EnergyPlus coil-run hours** (from the Brief 83 P4 per-hour CSVs): **NZA 0.919 vs EP 0.887 = +3.6 % PASS** (was 1.282 vs 0.665 = +92.9 % FAIL). **No engine/IDF/tolerance change.** All work on `feat/energyplus-validation`; **never merged to `main`** (`d8a6207` throughout). Audit: [`docs/audit/84a_harness_likeforlike_fix.md`](docs/audit/84a_harness_likeforlike_fix.md) (§0–§5); design note [`docs/design-notes/84a_harness_likeforlike_fix.md`](docs/design-notes/84a_harness_likeforlike_fix.md).
+
+| Part | SHA | Deliverable |
+|---|---|---|
+| P1 | `4436f01` | Brief + design note + audit stub landing. |
+| P2 | `646cdad` | Like-for-like definition: option 1 (coil-run hours) over option 2 (no clean NZA scalar; would pair NZA-hours vs EP-hours). Verified read-only: all-hours +93.6 % → coil-run +3.6 % (4426 heating-coil hours). |
+| P3 | `be8ea12` | `compare.py` helper `mech_vent_like_for_like()` (joins the two P4 CSVs over EP coil-run hours, per side). Gated row swaps to LLF basis; all-hours kept as INFO row (Rule 9); graceful fallback + Note if CSVs absent. Only mech-vent logic touched. |
+| P4 | `ce0b823` | Full fresh re-run (run.py → extract_mvhr_hourly.py → extract.mjs [+`--mvhr-hourly`] → compare.py). Mech-vent +92.9 % FAIL → +3.6 % PASS; every other gated/info metric byte-identical. |
+| P5 | (this commit) | Audit §5 close + STATUS + push. |
+
+**Bridgewater-Box validation state: 5/7 gated tolerances pass** (was 4/7). Remaining FAILs — heating −24.0 %, cooling +107.9 % — are **Finding A** (free-float warmth), the subject of **Brief 84b** (parallel). Overall verdict stays FAIL until Finding A is addressed; that is correct, not a regression. Design-note back-port to `main` waits until Brief 84b closes.
+
+## ✅ Brief 83 — CLOSED 2026-06-07 *(branch only — NOT on main; diagnostic only, NO engine fix)*
+
+**MVHR recovery booking (Finding B fix) — SAME-DAY.** Brief 83 set out to fix Finding B (NZA "~54 % effective recovery vs EP ~82 %, both nominally 75 %"). **The premise is REFUTED by the evidence — there is no recovery-booking bug.** Diagnostic-only; **no engine fix landed** (brief explicitly sanctions this). All work on `feat/energyplus-validation`; **never merged/pushed to `main`** (`d8a6207` throughout). Audit: [`docs/audit/83_mvhr_recovery_booking.md`](docs/audit/83_mvhr_recovery_booking.md) (§0–§8).
+
+| Part | SHA | Deliverable |
+|---|---|---|
+| P1 | `a25eb70` | Brief landing + branch verify + audit stub. |
+| P2 | `73da3c4` | Source read — NZA MVHR (recovery folded into `ventUA = flow·ρCp·(1−HRE)`; loss booked over all heating-degree hours; `recovery_offset` is display-only) + **premise-check flag**. |
+| P3 | `931bf2d` | Source read — EP MVHR (IdealLoads OA + Sensible HX ε=0.75; `oa_sensible − heat_recovery`; coil-domain). |
+| P4 | `b5129f8` | Per-hour MVHR extraction both engines (opt-in engine arrays + EP hourly outputs + 2 extractors + CSVs). **Decisive.** |
+| P5 | `9ee127e` | Verdict — premise refuted; accounting-domain mismatch coupled to Finding A; no in-scope fix. |
+| P6 | — | No engine fix (diagnostic-only). |
+| P7 | `abea317` | Re-validation — harness unchanged (correct, no fix); like-for-like agreement +3.7 %. |
+| P8 | (this commit) | Close + STATUS + Brief 84 handoff + push. |
+
+**Decisive evidence (P4):** in the 4426 hours EnergyPlus's heating coil runs, NZA's net mech-vent loss agrees with EP to **3.7 %** (0.914 vs 0.882 MWh) — **per-hour recovery is ~75 % in BOTH engines.** The "+92.9 % mech-vent" and "54 % effective recovery" are artifacts of comparing different accounting objects: NZA's `losses.mech_ventilation` is a zone-balance **loss-at-setpoint over all heating-degree hours**; EP's `oa_sensible − recovery` is a **coil OA load over coil-run hours**. The gap (0.622 MWh) is 59 % "NZA books vent loss in free-float hours EP's coil is off" + 36 % "EP HX-warming in cooling-season hours" + 5 % shared-hour ΔT-reference. **100 % of NZA's excess is in free-float hours → this is one face of Finding A, not an independent bug.**
+
+**Why no fix:** every gap-closing change trips a brief hard-STOP — touch the air-node solver (Finding A / Brief 84), violate Rule 9 (free-float vent loss is a real heat-balance term), make the gap worse, or tune the report to pass. The recovery booking is correct; the harness metric is mis-paired.
+
+**Recommended Brief 84:** (1) small harness like-for-like fix (compare mech-vent on coil-run hours → +3.7 % PASS, no engine change); (2) Finding A free-float solver characterisation as originally scoped, folding in the mech-vent "loss at setpoint" reporting convention (same phenomenon); (3) do NOT pursue an MVHR recovery-fraction fix — no such bug.
+
+## ✅ Brief 82 — CLOSED 2026-06-03 *(branch only — NOT on main; diagnostic only)*
+
+**Zone-temperature delta diagnostic (Bridgewater-Box root cause) — SAME-DAY.** Tested whether Brief 81's four divergences (heating −24.0 %, cooling +107.9 %, mech-vent +92.9 %, zone air +0.49 °C) are *one* finding — a zone floating ~0.5 °C warmer in NZA. **Diagnostic-only: no engine / IDF / DB change.** All work on `feat/energyplus-validation` (cut from `main` tip `d8a6207`); **never merged or pushed to `main`** — branch verified before every commit, `main` stayed `d8a6207`. Audit: [`docs/audit/82_zone_temp_delta_diagnostic.md`](docs/audit/82_zone_temp_delta_diagnostic.md) (§0–§6).
+
+| Part | SHA | Deliverable |
+|---|---|---|
+| P1 | `89668d0` | Brief landing + branch verify + premise-check + audit §0/§1. |
+| P2 | `a788be6` | Hourly zone-temp extraction both engines (`extract_hourly_temps.py`; `extract.mjs --hourly-temps`; 2× 8760-row CSV). Hourly sums = Brief 81 annual totals exactly. |
+| P3 | `6a5992f` | `validation/zone_temp_diagnostic.py` trace comparison + divergence regimes + report. Headline: delta is a **free-float phenomenon** (+1.06 °C free-float, ≈0 conditioned). |
+| P4 | `9f2dace` | Counterfactual re-booking (mode-crossing reconciliation) + report. **Outcome (b) — partial** (matched prediction). |
+| P5 | `090e832` | Candidate root-cause verdict + evidence (§5). |
+| P6 | (this commit) | Audit §6 close + STATUS + Brief 83 recommendation + push. |
+
+**Verdict: the single-root-cause hypothesis is REJECTED — it is (at least) TWO findings.**
+- **(A) Free-float warmth (~+1 °C, unconditioned).** Loss-side, night-heavy, ΔT-driven, *not* gains. Explains *all* the heating gap: 80 % of the −24.0 % shortfall is hours NZA floats just above 21 °C (median 21.26 °C) while EP heats — cooling the float reconciles heating to −10.3 % at δ=0.49 (−4.9 % ceiling). Best fit **candidate 2 (solver/mass convention)**: P4 found NZA's per-hour demand is an implicit-Euler one-step solve, `−C_coef ≈ 8793 W/K` dominated by lumped `C_thermal ≈ 31.7 MJ/K`. Moderate, contingent confidence.
+- **(B) Same-setpoint magnitude (cooling + mech-vent).** NZA removes ~2× cooling and loses ~2× vent heat at an agreed 24 °C — 86 % of the cooling excess + all the mech-vent gap, immune to any temperature shift. Best fit **candidate 1 (recovery booking)**: NZA 54.4 % vs EP 82.1 % effective recovery, both nominally 75 %. High confidence for the vent gap; the 2× cooling magnitude is genuinely ambiguous.
+- **Candidate 3 (deadband): rejected** (setpoints match; warmth is broad-spectrum, not a transition spike).
+
+**Method note:** the naive "subtract δ, re-book via NZA's own `−C_coef` law" recipe *explodes* (+423 % heating at δ=0.49) because `−C_coef` is a capacitance-dominated one-step coefficient, not a steady-state conductance — multiplying a standing offset by it fabricates a perpetual thermal-mass recharge. Caught on the smell test, diagnosed, replaced with mode-crossing reconciliation; preserved as report Appendix A.
+
+**Recommended Brief 83: MULTIPLE staged threads, not one fix** — (1) mech-vent/heat-recovery booking (highest signal, likely a real accounting bug, may cascade); (2) free-float warmth via a quantitative NZA-lumped-mass vs EP-CTF/timestep comparison; (3) re-measure same-setpoint cooling after (1)+(2). No hard-STOP triggered.
+
+## ✅ Brief 81 — CLOSED 2026-06-02 *(branch only — NOT on main)*
+
+**EnergyPlus validation harness (Bridgewater-Box first rung) — OVERNIGHT.** Built an *independent* EnergyPlus reference for NZA-Sim's custom JS engine, the EnergyPlus way (single integrated `ZoneHVAC:IdealLoadsAirSystem` sim, compared at the OUTPUT level only). All work on `feat/energyplus-validation` (cut from `main` tip `d8a6207`); **never merged or pushed to `main`** — branch verified before every commit. Audit: [`docs/audit/81_energyplus_validation_box.md`](docs/audit/81_energyplus_validation_box.md) (§0–§10).
+
+| Part | SHA | Deliverable |
+|---|---|---|
+| P1 | `277ea1b` | Branch cut + brief landing + audit stub + premise-check (D1–D5: use existing `C:\EnergyPlusV26-1-0\`, off-PATH via `ENERGYPLUS_DIR`). |
+| P2 | `ed8c20b` | Bridgewater-Box YAML fixture + NZA-Sim anchor capture (`run_box_anchor.mjs`). |
+| P3 | `b65ad6e` | Frozen v1 fixture (stable anchor for Brief 82). |
+| P4 | `bb607a8` | EnergyPlus install verify + bundled-example validation. |
+| P5 | `6079329` | Hand-authored Bridgewater-Box IDF + first EnergyPlus run. |
+| P6 | `9faf88a` | Python IDF generator + byte-stability verification. |
+| P7 | `996802e` | `validation/energyplus/run.py` runner + normalised output JSON. |
+| P8 | `c9a942d` | `validation/nza_sim/extract.mjs` — NZA-Sim extractor in matching schema. |
+| P9 | `310ce96` | `validation/compare.py` comparator + first-pass markdown report. |
+| P10 | (this commit) | Audit §10 close + STATUS. |
+
+**First-rung comparator verdict: FAIL — 4/7 gated metrics within tolerance** (a *finding*, not a defect; nothing was tuned). Reproduce: `python validation/energyplus/run.py` → `node validation/nza_sim/extract.mjs` → `python validation/compare.py`.
+
+| Gated metric | NZA | EnergyPlus | Δ | Result |
+|---|---|---|---|---|
+| EUI (kWh/m²) | 160.4 | 166.6 | −3.7 % | ✅ ±10 |
+| Heating demand (MWh) | 2.492 | 3.278 | −24.0 % | ❌ ±15 |
+| Cooling demand (MWh) | 1.407 | 0.677 | +107.9 % | ❌ ±15 |
+| Fabric conduction total (MWh) | 5.454 | 4.909 | +11.1 % | ✅ ±20 |
+| Mech-vent net loss (MWh) | 1.282 | 0.665 | +92.9 % | ❌ ±15 |
+| Monthly heating profile | — | — | r = 0.993 | ✅ ≥0.85 |
+| Monthly cooling profile | — | — | r = 0.945 | ✅ ≥0.85 |
+
+**Reading:** envelope physics and EUI agree (infiltration −1.4 %, solar +1.4 %, internal gains ~0 %, zone temp +0.49 °C), and monthly *shape* correlates strongly — but the per-service demand split and ventilation/recovery booking diverge. **Handoff to Brief 82:** investigate mech-vent/heat-recovery booking → cooling free-float (warmer NZA zone) → heating demand. Out of scope (deferred per brief): more fixtures, envelope-only EP mode, CI, any NZA engine change (none made).
+
 ## ✅ Brief 77 — CLOSED 2026-06-02
 
 **Per-system ventilation loss rendering (Heat Balance).** Follow-on to Brief 76. Restores the three per-system ventilation extract ribbons across all three Heat Balance view modes (Sankey, Rows, Stacked) by replacing Brief 74 P5's strict "aggregate wins" guard with a mutual-exclusion contract (per-system if available; aggregate as fallback when per-system empty).

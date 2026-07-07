@@ -484,6 +484,134 @@ _CONSTRUCTIONS["triple_glazing"] = {
     },
 }
 
+# ── HIEX Bridgwater (Brief 86) — BRUKL as-built fabric ──────────────────────────
+# U-values from BRUKL April 2019 (area-weighted, design-spec inputs only — never
+# BRUKL output figures). Build-ups use externally-applied tuned-resistance
+# insulation with the precast-concrete structural layer on the INSIDE of the
+# insulation, so thermal mass is coupled to the zone (the building is precast
+# concrete + brick/block GF). NoMass insulation R is tuned so the nominal U
+# (incl. ISO 6946 surface films) equals the BRUKL value. See
+# docs/audit/86_envelope_fix_and_bridgwater_rebuild.md §Part 3.
+
+_CONSTRUCTIONS["bridgwater_ext_wall"] = {
+    "summary": {
+        "description": "HIEX Bridgwater external wall — precast insulated panel, BRUKL U=0.14",
+        "u_value_W_per_m2K": 0.14,
+        "thermal_mass": "high",
+        "type": "wall",
+    },
+    "Material": {
+        "Brdg_Wall_Concrete150": _mat(
+            "Brdg_Wall_Concrete150",
+            thickness=0.150, conductivity=1.13, density=2300, specific_heat=1000,
+        ),
+        "Brdg_Wall_Plasterboard": _mat(
+            "Brdg_Wall_Plasterboard",
+            thickness=0.013, conductivity=0.16, density=950, specific_heat=840,
+            roughness="Smooth",
+        ),
+    },
+    "Material:NoMass": {
+        # R tuned so 1/(0.17 films + 0.1327 concrete + 6.759 + 0.0813 pb) = 0.140
+        "Brdg_Wall_Insul": _mat_nomass("Brdg_Wall_Insul", thermal_resistance=6.759),
+    },
+    "WindowMaterial:SimpleGlazingSystem": {},
+    "Construction": {
+        "bridgwater_ext_wall": _construction([
+            "Brdg_Wall_Insul",
+            "Brdg_Wall_Concrete150",
+            "Brdg_Wall_Plasterboard",
+        ]),
+    },
+}
+
+_CONSTRUCTIONS["bridgwater_roof"] = {
+    "summary": {
+        "description": "HIEX Bridgwater roof — precast concrete deck + insulation, BRUKL U=0.15",
+        "u_value_W_per_m2K": 0.15,
+        "thermal_mass": "high",
+        "type": "roof",
+    },
+    "Material": {
+        "Brdg_Roof_Waterproof": _mat(
+            "Brdg_Roof_Waterproof",
+            thickness=0.005, conductivity=0.20, density=1100, specific_heat=1000,
+            roughness="Smooth",
+        ),
+        "Brdg_Roof_Concrete150": _mat(
+            "Brdg_Roof_Concrete150",
+            thickness=0.150, conductivity=1.13, density=2300, specific_heat=1000,
+        ),
+    },
+    "Material:NoMass": {
+        # R tuned so 1/(0.14 films + 0.025 wp + 6.369 + 0.1327 deck) = 0.150
+        "Brdg_Roof_Insul": _mat_nomass("Brdg_Roof_Insul", thermal_resistance=6.369),
+    },
+    "WindowMaterial:SimpleGlazingSystem": {},
+    "Construction": {
+        "bridgwater_roof": _construction([
+            "Brdg_Roof_Waterproof",
+            "Brdg_Roof_Insul",
+            "Brdg_Roof_Concrete150",
+        ]),
+    },
+}
+
+_CONSTRUCTIONS["bridgwater_ground_floor"] = {
+    "summary": {
+        "description": "HIEX Bridgwater ground floor — insulated precast slab + screed, BRUKL U=0.13",
+        "u_value_W_per_m2K": 0.13,
+        "thermal_mass": "high",
+        "type": "floor",
+    },
+    "Material": {
+        "Brdg_GF_Concrete150": _mat(
+            "Brdg_GF_Concrete150",
+            thickness=0.150, conductivity=1.13, density=2300, specific_heat=1000,
+        ),
+        "Brdg_GF_Screed": _mat(
+            "Brdg_GF_Screed",
+            thickness=0.065, conductivity=0.41, density=1200, specific_heat=840,
+        ),
+    },
+    "Material:NoMass": {
+        # R tuned so 1/(0.21 films + 7.191 + 0.1327 slab + 0.1585 screed) = 0.130
+        "Brdg_GF_Insul": _mat_nomass("Brdg_GF_Insul", thermal_resistance=7.191),
+    },
+    "WindowMaterial:SimpleGlazingSystem": {},
+    "Construction": {
+        "bridgwater_ground_floor": _construction([
+            "Brdg_GF_Insul",
+            "Brdg_GF_Concrete150",
+            "Brdg_GF_Screed",
+        ]),
+    },
+}
+
+_CONSTRUCTIONS["bridgwater_glazing"] = {
+    "summary": {
+        "description": "HIEX Bridgwater glazing — area-weighted G1/G2 bedroom DGU dominant, BRUKL U=1.4 / g=0.55",
+        "u_value_W_per_m2K": 1.4,
+        "g_value": 0.55,
+        "thermal_mass": None,
+        "type": "glazing",
+    },
+    "Material": {},
+    "Material:NoMass": {},
+    "WindowMaterial:SimpleGlazingSystem": {
+        "bridgwater_glazing_pane": {
+            "u_factor": 1.4,
+            "solar_heat_gain_coefficient": 0.55,
+            "visible_transmittance": 0.70,
+        },
+    },
+    "Construction": {
+        "bridgwater_glazing": {
+            "outside_layer": "bridgwater_glazing_pane",
+        },
+    },
+}
+
 
 # ── Public API ────────────────────────────────────────────────────────────────
 

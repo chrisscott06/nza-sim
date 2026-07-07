@@ -1,6 +1,15 @@
 # Current brief
 
-**No active brief.** Brief 77 just closed (`8b2301f` P2+P3 + close commit landing now). Brief 75 stays open at "P2-only — superseded by Brief 76 P2."
+**Brief 86 — Envelope-Only Heat-Balance Fix + HIEX Bridgwater Model Rebuild + Input Persistence.**
+Working on branch `feat/envelope-fix-bridgwater-rebuild` (cut from `feat/energyplus-validation` tip `7b9b252`).
+Fix the envelope-only heat-balance 500 (epJSON assembler not requesting zone temperature), rebuild the
+HIEX Bridgwater project inputs (lost in a machine migration), then add input-export persistence.
+Brief: [`active/86_envelope_fix_and_bridgwater_rebuild.md`](active/86_envelope_fix_and_bridgwater_rebuild.md).
+
+Briefs 81–85 (EnergyPlus validation harness → internal-mass partition) **CLOSED 2026-06-02…06-08** and
+archived to `archive/` as part of this brief's reconciliation pass.
+
+Brief 75 stays open at "P2-only — superseded by Brief 76 P2."
 
 Next brief is architect's call. Likely candidates:
 - **Brief 78 — door bug** (operable door heat_loss=0 on Systems Heat Balance).

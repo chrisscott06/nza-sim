@@ -1,0 +1,220 @@
+{
+  "brief": "Brief 81 P7 - Bridgewater-Box EnergyPlus reference",
+  "source": "python validation/energyplus/run.py",
+  "fixture": "bridgewater_box_v1",
+  "fixture_schema_version": 1,
+  "captured_at": "2026-06-07T19:20:34.694030+00:00",
+  "engine": {
+    "name": "EnergyPlus",
+    "version": "26.1.0-6f2e40d102",
+    "idf": "validation/energyplus/generated/bridgewater_box_v1.idf",
+    "idf_sha256": "af3f4ca2f33766cd4bbe2b28598a9f302eaebd134dbec80099b1deb662be2227",
+    "weather_epw": "GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw",
+    "run_dir": "validation/energyplus/runs/bridgewater_box_v1_ep",
+    "severe_errors": 0,
+    "warnings": 1,
+    "completed_successfully": true,
+    "warning_note": "The single expected warning is 'Zone BOX_ZONE is not fully enclosed' from the detached thermal-bridge patch (audit D5e/S5.5); benign \u2014 explicit zone volume used."
+  },
+  "geometry": {
+    "gia_m2": 100.0,
+    "volume_m3": 300.0,
+    "weather_file": "GBR_ENG_Yeovilton.AF.038530_TMYx.2011-2025.epw",
+    "comfort_band_c": {
+      "lower_c": 21,
+      "upper_c": 24
+    }
+  },
+  "demand_mwh": {
+    "heating_supply_air_sensible": 3.277516,
+    "cooling_supply_air_sensible": 0.676843,
+    "heating_supply_air_total": 3.277516,
+    "cooling_supply_air_total": 0.852796,
+    "heating_zone_sensible": 2.391521,
+    "cooling_zone_sensible": 2.419875,
+    "oa_sensible_heating": 3.688171,
+    "oa_sensible_cooling": 0.020739,
+    "oa_total_heating": 3.688171,
+    "heat_recovery_sensible_heating": 3.028581,
+    "heat_recovery_sensible_cooling": 0.015586,
+    "_note": "Raw ZoneHVAC:IdealLoadsAirSystem outputs. 'supply_air_sensible' is the net zone+OA sensible demand the system meets (after heat recovery) \u2014 the direct analogue of NZA-Sim heating/cooling demand. OA + heat-recovery terms are reported separately for the P9 mech-ventilation mapping."
+  },
+  "fabric_conduction_mwh": {
+    "wall_south": -0.338764,
+    "wall_north": -0.457274,
+    "wall_east": -0.380301,
+    "wall_west": -0.390063,
+    "external_wall_sum": -1.566402,
+    "roof": -1.270501,
+    "ground_floor": -1.88352,
+    "thermal_bridge": -0.18836,
+    "_note": "Surface Average Face Conduction Heat Transfer Energy. EnergyPlus sign convention: negative = net annual heat flow OUT of the zone. Glazing conduction is NOT in this set (windows reported separately below). P9 compares magnitudes against NZA-Sim losses_per_element."
+  },
+  "windows_mwh": {
+    "transmitted_solar": {
+      "south": 1.216332,
+      "north": 0.403589,
+      "east": 0.832771,
+      "west": 0.942777,
+      "sum_facades": 3.395469,
+      "enclosure_total": 3.395469
+    },
+    "heat_loss": {
+      "south": 0.218628,
+      "north": 0.222862,
+      "east": 0.215882,
+      "west": 0.223122,
+      "sum": 0.880494
+    },
+    "heat_gain": {
+      "south": 1.306006,
+      "north": 0.337141,
+      "east": 0.843766,
+      "west": 0.977762,
+      "sum": 3.464675
+    },
+    "_note": "Per-facade window energy. 'transmitted_solar' is solar energy through the glazing into the zone; 'heat_loss'/'heat_gain' are the conduction+convection window energy flows (positive magnitudes)."
+  },
+  "infiltration_mwh": {
+    "sensible_loss": 4.877136,
+    "sensible_gain": 0.016691,
+    "total_loss": 5.179619
+  },
+  "internal_gains_mwh": {
+    "people_sensible": 1.073057,
+    "people_total": 1.86004,
+    "lights": 2.555,
+    "equipment": 3.65
+  },
+  "meters_mwh": {
+    "interior_lights_electricity": 2.555,
+    "interior_equipment_electricity": 3.65
+  },
+  "zone_temperature": {
+    "mean_air_temp_annual_c": 21.814,
+    "_note": "Annual = mean of 8760 hourly values; monthly array under 'monthly'."
+  },
+  "monthly": {
+    "month_labels": [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec"
+    ],
+    "heating_supply_air_sensible_kwh": [
+      816.293,
+      573.331,
+      468.628,
+      166.334,
+      31.674,
+      0.297,
+      0.0,
+      0.0,
+      19.177,
+      96.448,
+      429.3,
+      676.033
+    ],
+    "cooling_supply_air_sensible_kwh": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      11.953,
+      126.543,
+      385.234,
+      121.754,
+      31.358,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "zone_mean_air_temp_c": [
+      21.0,
+      21.001,
+      21.046,
+      21.299,
+      21.826,
+      22.914,
+      23.676,
+      23.241,
+      22.448,
+      21.243,
+      21.009,
+      21.0
+    ],
+    "outdoor_drybulb_c": [
+      5.244,
+      6.331,
+      7.391,
+      9.412,
+      12.656,
+      15.678,
+      18.139,
+      16.602,
+      14.686,
+      12.845,
+      8.652,
+      7.094
+    ],
+    "_note": "Heating/cooling = monthly sums of hourly ideal-loads energy; temps = monthly means. For P9 monthly-correlation check (>=0.85)."
+  },
+  "derived_delivered": {
+    "_note": "EnergyPlus zone demand passed through the fixture's DOCUMENTED system layer (the same efficiencies / SFP NZA-Sim uses). DHW and fan are closed-form analytical loads with NO zone coupling (audit D5c/D5d) \u2014 recomputed here independently from the fixture, not copied from the NZA-Sim anchor. This block exists so EUI / fuel can be compared; the demand-level comparison (P9) uses the raw demand_mwh block above, not these.",
+    "heating": {
+      "demand_mwh": 3.277516,
+      "efficiency": 0.9,
+      "fuel": "gas",
+      "fuel_mwh": 3.641684
+    },
+    "cooling": {
+      "demand_mwh": 0.676843,
+      "eer": 3.0,
+      "fuel": "electricity",
+      "fuel_mwh": 0.225614
+    },
+    "dhw": {
+      "demand_mwh": 4.746622,
+      "efficiency": 0.8,
+      "fuel": "gas",
+      "fuel_mwh": 5.933278,
+      "headcount": 2.8,
+      "litres_per_day": 224.0,
+      "hot_fraction": 1.0,
+      "delta_t_k": 50.0,
+      "basis": "litres x cp x dT / eta (closed form, audit S2.4)"
+    },
+    "ventilation": {
+      "fan_electrical_mwh": 0.657,
+      "sfp_w_per_lps": 1.5,
+      "flow_l_s": 50.0,
+      "hours": 8760.0,
+      "recovery_sensible_pct": 75,
+      "summer_bypass": false
+    },
+    "lighting_mwh": 2.555,
+    "equipment_mwh": 3.65
+  },
+  "headline": {
+    "eui_kwh_per_m2_yr": 166.6,
+    "heating_demand_mwh": 3.277516,
+    "cooling_demand_mwh": 0.676843,
+    "dhw_demand_mwh": 4.746622,
+    "electricity_mwh": 7.087614,
+    "gas_mwh": 9.574962
+  },
+  "totals": {
+    "eui_kwh_per_m2_yr": 166.6,
+    "electricity_mwh": 7.087614,
+    "gas_mwh": 9.574962,
+    "district_heat_mwh": 0
+  }
+}

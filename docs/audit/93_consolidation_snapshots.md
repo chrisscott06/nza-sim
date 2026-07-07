@@ -55,7 +55,17 @@ agree. Merges bring the *code* together (features + harness); the physics is alr
 > by all four engines (auxiliary electricity accounting predates the branch split, Brief 74/77 base), so it
 > is common to every snapshot and does not affect cross-branch comparison.
 
-## §Part 2 — envelope-fix merged
+## §Part 2 — envelope-fix merged → ANCHOR ESTABLISHED
+
+`git merge --no-ff feat/envelope-fix-bridgwater-rebuild` into main. **0 conflicts** (main had only added
+new files since `d8a6207`; envelope-fix's STATUS.md / current.md / engine changes applied without overlap).
+Merged `instantCalc.js` = 7374 lines (= envelope-fix's).
+
+**Post-merge anchor = envelope-fix snapshot, FULL byte-match** (EUI 169.8, every metric + the 12-month
+shape identical — 0% drift, well inside the <1% gate). Expected, per the Part-1b finding (physics invariant).
+**This post-merge state (169.8, breakdown as in the P1b table) is now THE anchor for Parts 3–4.**
+
+## §Part 3 — interventions merged
 _(to fill)_
 
 ## §Part 3 — interventions merged

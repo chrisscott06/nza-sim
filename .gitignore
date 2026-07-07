@@ -35,6 +35,11 @@ Thumbs.db
 # EnergyPlus simulation outputs (regenerable)
 /data/simulations/
 
+# Brief 81 — EnergyPlus validation raw run scratch (.eso/.sql/.err/.audit etc, regenerable)
+/validation/energyplus/runs/
+# Brief 81 — contained Python venv for the validation harness (eppy etc.)
+/validation/.venv/
+
 # Weather files (large, downloaded separately)
 /data/weather/
 

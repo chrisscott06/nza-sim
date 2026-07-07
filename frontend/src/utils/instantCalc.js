@@ -3044,6 +3044,16 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   const heating_demand_hourly_kwh = new Float32Array(n)
   const cooling_demand_hourly_kwh = new Float32Array(n)
 
+  // Brief 83 P4 (2026-06-07): opt-in per-hour mechanical-ventilation net loss
+  // (heating side) / net gain (cooling side) in W. DIAGNOSTIC OUTPUT ONLY for
+  // the MVHR recovery-booking comparison (Finding B). Records the SAME per-hour
+  // net values already summed into losses.mech_ventilation — i.e. AFTER MVHR
+  // recovery via the (1 - HRE) ventUA. Additive; does not alter any demand,
+  // heat-balance, or existing-output value. The theoretical recovery flow is
+  // derivable downstream as loss x HRE / (1 - HRE).
+  const mech_vent_loss_hourly_W = new Float32Array(n)
+  const mech_vent_gain_hourly_W = new Float32Array(n)
+
   // Brief 53 Part 2 (2026-05-26): lagged signals for free-cooling bypass.
   // At hour h, bypass is active when the PREVIOUS hour had cooling demand
   // AND outside air is cooler than the previous-hour zone air (T_extract
@@ -3445,6 +3455,10 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
         monthly_mech_vent_per_system[vi][_md] += heat_h
       }
     }
+    // Brief 83 P4: record this hour's post-recovery mech-vent net loss/gain (W)
+    // for the MVHR diagnostic extract. Same locals already accumulated above.
+    mech_vent_loss_hourly_W[h] = mech_vent_heat_h
+    mech_vent_gain_hourly_W[h] = mech_vent_cool_h
 
     // ── Brief 28e Gate E2: per-operable-opening natural ventilation (State 2) ─
     // Brief 41 Part 1 (2026-05-19): flow_mode dispatch ported in from
@@ -4162,6 +4176,11 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       // (the Systems Zone-temperature heatmap) the user wants to see
       // what the building would reach with no conditioning — the float.
       hourly_zone_air_free_c: T_air_free_hourly,
+      // Brief 83 P4 (2026-06-07): per-hour mech-vent net loss/gain (W) — MVHR
+      // recovery-booking diagnostic (Finding B). Post-recovery net values,
+      // same as losses.mech_ventilation summed. Engine-internal/diagnostic.
+      mech_vent_loss_hourly_w: mech_vent_loss_hourly_W,
+      mech_vent_gain_hourly_w: mech_vent_gain_hourly_W,
     },
     // Brief 53 Part 2 reconciliation log: per-system bypass-hours +
     // suppressed-recovery integral on the State 2 side. State 3's
@@ -4906,7 +4925,11 @@ function computeVentilationEnergy(ventSystems, weatherData, T_setpoint_c, buildi
  * Library refs validated upfront via resolveAndValidateSystems; throws
  * MissingLibraryField on any missing template / required field.
  */
-function _calculateState3(building, constructions, libraryData, weatherData, hourlySolar, comfortBand) {
+function _calculateState3(building, constructions, libraryData, weatherData, hourlySolar, comfortBand, opts = {}) {
+  // Brief 85 P0.3: accept `opts` so the calibration hook (opts.tuning) can reach
+  // _calculateState2. Pre-fix this signature took no opts, so opts.tuning passed to
+  // calculateInstant was silently dropped here (audit 85 §0.2). Default {} preserves
+  // byte-identical behaviour when no tuning is supplied.
   // Brief 62 Part 2 (2026-05-27) — single-source setpoint resolution.
   // Closes Brief 61 Root Cause A: pre-fix, this main _calculateState2
   // call passed NO setpointOverride, so the demand integrand always
@@ -4939,7 +4962,8 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
   const resolvedCoolingSetpoint = _resolveSetpointForState2(building, 'cooling', comfortBand)
   const state2Result = _calculateState2(
     building, constructions, libraryData, weatherData, hourlySolar, comfortBand,
-    { setpointOverride: { heating: resolvedHeatingSetpoint, cooling: resolvedCoolingSetpoint } },
+    { setpointOverride: { heating: resolvedHeatingSetpoint, cooling: resolvedCoolingSetpoint },
+      tuning: opts.tuning },   // Brief 85 P0.3: forward calibration hook (undefined when absent)
   )
   if (state2Result.state !== 2) return state2Result   // bailout: _empty()
 
@@ -4952,7 +4976,7 @@ function _calculateState3(building, constructions, libraryData, weatherData, hou
   // produces a directly comparable demand integral.
   const state2Recompute = (override) => _calculateState2(
     building, constructions, libraryData, weatherData, hourlySolar, comfortBand,
-    { setpointOverride: override },
+    { setpointOverride: override, tuning: opts.tuning },   // Brief 85 P0.3: same tuning as main call
   )
 
   // Brief 28f Part 5.6/5.7: prefer the v2.5-shaped field (`systems_config_v25`)
@@ -6665,6 +6689,7 @@ function _calculateInstantBaseline(building = {}, constructions = {}, systems = 
       withMode(building, mode),
       constructions, libraryData, weatherData, hourlySolar,
       options.comfortBand,   // Brief 58 A2: required, validated at entry
+      options,               // Brief 85 P0.3: forward opts (carries opts.tuning calibration hook)
     )
   }
 
