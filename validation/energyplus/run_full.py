@@ -104,10 +104,23 @@ def split_delivered(demand_mwh, systems):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--reuse", help="skip EP run; parse an existing run dir")
+    ap.add_argument("--fixture", default=str(FIXTURE),
+                    help="fixture YAML (default anchor; Brief 96 uses report_baseline_v1)")
+    ap.add_argument("--idf", help="IDF to run (default: the generated bridgewater_full_v1.idf)")
+    ap.add_argument("--run-dir", help="EP run dir override")
+    ap.add_argument("--out", help="results JSON path override")
     ap.add_argument("--stdout", action="store_true")
     args = ap.parse_args()
 
-    fix = yaml.safe_load(FIXTURE.read_text())
+    global IDF, RUN_DIR, RESULTS
+    if args.idf:
+        IDF = Path(args.idf)
+    if args.run_dir:
+        RUN_DIR = Path(args.run_dir)
+    if args.out:
+        RESULTS = Path(args.out)
+
+    fix = yaml.safe_load(Path(args.fixture).read_text())
     bc = fix["building_config"]
     v40 = bc["systems_config_v40"]
     gia = float(bc["length"]) * float(bc["width"]) * int(bc["num_floors"])
@@ -115,7 +128,6 @@ def main():
     epw = REPO_ROOT / "data" / "weather" / "current" / weather
 
     if args.reuse:
-        global RUN_DIR
         RUN_DIR = Path(args.reuse)
     else:
         run_ep(epw)

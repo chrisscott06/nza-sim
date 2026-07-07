@@ -170,8 +170,11 @@ def build_idf(fix, idd_path):
     month_schedule("OCC_SCHED", bc["occupancy"]["schedule"])
     month_schedule("LIGHTS_SCHED", bc["gains"]["lighting"]["profiles"][0]["schedule"])
     month_schedule("EQUIP_SCHED", bc["gains"]["equipment"]["profiles"][0]["schedule"])
-    aux_prof = bc["gains"]["auxiliary"]["profiles"][0]
-    month_schedule("AUX_SCHED", aux_prof["schedule"])
+    # Aux (external-lighting) is optional — the clean report baseline has none (Brief 96).
+    aux_profiles = bc.get("gains", {}).get("auxiliary", {}).get("profiles") or []
+    aux_prof = aux_profiles[0] if aux_profiles else None
+    if aux_prof:
+        month_schedule("AUX_SCHED", aux_prof["schedule"])
     # People activity level (sensible + latent, W/person) + occupancy setpoints.
     sens = float(bc["occupancy"]["sensible_w_per_person"])
     lat = float(bc["occupancy"]["latent_w_per_person"])
@@ -319,12 +322,13 @@ def build_idf(fix, idd_path):
                      Zone_or_ZoneList_or_Space_or_SpaceList_Name="Building_Zone",
                      Schedule_Name="ALWAYS_ON", Design_Level_Calculation_Method="EquipmentLevel",
                      Design_Level=epd * gia, Fraction_Latent=0, Fraction_Radiant=0.3, Fraction_Lost=0)
-    auxd = float(aux_prof["magnitude"]["value"])
     # External lighting → an equipment object with Fraction_Lost=1 (electricity use, no zone gain).
-    idf.newidfobject("ELECTRICEQUIPMENT", Name="ExternalLighting",
-                     Zone_or_ZoneList_or_Space_or_SpaceList_Name="Building_Zone",
-                     Schedule_Name="AUX_SCHED", Design_Level_Calculation_Method="EquipmentLevel",
-                     Design_Level=auxd * gia, Fraction_Latent=0, Fraction_Radiant=0, Fraction_Lost=1)
+    if aux_prof:
+        auxd = float(aux_prof["magnitude"]["value"])
+        idf.newidfobject("ELECTRICEQUIPMENT", Name="ExternalLighting",
+                         Zone_or_ZoneList_or_Space_or_SpaceList_Name="Building_Zone",
+                         Schedule_Name="AUX_SCHED", Design_Level_Calculation_Method="EquipmentLevel",
+                         Design_Level=auxd * gia, Fraction_Latent=0, Fraction_Radiant=0, Fraction_Lost=1)
 
     # ---- infiltration ------------------------------------------------------
     # Brief 95 P4b: derive operational ACH from fabric.air_permeability_q50, mirroring the
@@ -432,11 +436,13 @@ def build_idf(fix, idd_path):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=str(DEFAULT_OUT))
+    ap.add_argument("--fixture", default=str(FIXTURE_PATH),
+                    help="fixture YAML to build from (default: bridgewater_anchor_v2 — Brief 96 uses report_baseline_v1)")
     ap.add_argument("--stdout", action="store_true")
     ap.add_argument("--check-determinism", action="store_true")
     args = ap.parse_args()
 
-    fix = yaml.safe_load(FIXTURE_PATH.read_text())
+    fix = yaml.safe_load(Path(args.fixture).read_text())
     idd = resolve_idd()
 
     if args.check_determinism:
