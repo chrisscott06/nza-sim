@@ -28,6 +28,7 @@ from api.routers import projects as projects_router
 from api.routers import scenarios as scenarios_router
 from api.routers import weather as weather_router
 from api.routers import consumption as consumption_router
+from api.routers import ep_backend as ep_backend_router
 from api.db.database import init_db
 
 
@@ -60,6 +61,7 @@ app.include_router(projects_router.router)
 app.include_router(scenarios_router.router)
 app.include_router(weather_router.router)
 app.include_router(consumption_router.router)
+app.include_router(ep_backend_router.router)
 
 
 @app.get("/api/health")

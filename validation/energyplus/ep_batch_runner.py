@@ -30,10 +30,11 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 VALIDATION_DIR = SCRIPT_DIR.parent
 REPO_ROOT = VALIDATION_DIR.parent
 sys.path.insert(0, str(SCRIPT_DIR))
-from state_builder import config_hash, resolved_to_idf  # noqa: E402
+from state_builder import config_hash, resolved_to_idf, build_states  # noqa: E402
 from generate_idf import resolve_idd  # noqa: E402
 from run_full import split_delivered  # noqa: E402  (proportional-split, reused)
 
+FIXTURE = VALIDATION_DIR / "fixtures" / "bridgewater_anchor_v2.yaml"
 EP_RUNS_DB = REPO_ROOT / "data" / "ep_runs.db"
 RUNS_DIR = SCRIPT_DIR / "runs" / "ep_batch"
 EP_VERSION = "25.2.0-cf7368216c"
@@ -164,3 +165,65 @@ def fetch_result(h, db_path=None):
     if not row:
         return None
     return {"status": row[0], "results": json.loads(row[1]) if row[1] else None, "error_tail": row[2]}
+
+
+def batch_by_id(batch_id, db_path=None):
+    """All rows for a batch (provenance == batch_id) — the polling interface."""
+    con = _db(db_path)
+    rows = con.execute("""SELECT config_hash, descriptor, status, results_json, error_tail
+                          FROM ep_runs WHERE provenance=? ORDER BY started""", (batch_id,)).fetchall()
+    con.close()
+    return [{"config_hash": r[0], "descriptor": r[1], "status": r[2],
+             "results": json.loads(r[3]) if r[3] else None, "error_tail": r[4]} for r in rows]
+
+
+# ── selection → states (ZZ TEST = the frozen fixture) ────────────────────────
+def build_selected_from_fixture(selection):
+    """selection = {cumulative: bool, isolated: [library_ids]}. Returns [(descriptor, config)]
+    including the baseline. States are the resolved fix-shaped configs (state_builder)."""
+    fix = yaml.safe_load(FIXTURE.read_text())
+    by = {iv["id"]: iv for iv in fix["building_config"]["interventions"]}
+    refs = fix["building_config"]["strategies"][0]["refs"]
+    st = build_states(fix, refs, by)
+    out = [("baseline", st["baseline"]["config"])]
+    if selection.get("cumulative"):
+        for c in st["cumulative"]:
+            out.append((f"cumulative:{c['through']}", c["config"]))
+    for iid in selection.get("isolated", []):
+        if iid in st["isolated"]:
+            out.append((f"isolated:{iid}", st["isolated"][iid]["config"]))
+    return out
+
+
+def prequeue(states, batch_id, db_path=None):
+    """Insert all selected states as 'queued' (or re-tag already-'done' ones) under batch_id,
+    so the UI sees the full queue immediately. Returns the config_hashes in order."""
+    con = _db(db_path)
+    hashes = []
+    for desc, cfg in states:
+        h = config_hash(cfg); hashes.append(h)
+        row = con.execute("SELECT status FROM ep_runs WHERE config_hash=?", (h,)).fetchone()
+        if row and row[0] == "done":
+            con.execute("UPDATE ep_runs SET provenance=?, descriptor=? WHERE config_hash=?", (batch_id, desc, h))
+        else:
+            con.execute("""INSERT OR REPLACE INTO ep_runs (config_hash, descriptor, status, provenance, ep_version)
+                           VALUES (?,?,?,?,?)""", (h, desc, "queued", batch_id, EP_VERSION))
+    con.commit(); con.close()
+    return hashes
+
+
+def main():
+    import argparse
+    ap = argparse.ArgumentParser(description="EP batch runner (invoked as a subprocess by the backend).")
+    ap.add_argument("--selection", required=True, help='JSON {"cumulative":bool,"isolated":[ids]}')
+    ap.add_argument("--batch-id", required=True)
+    args = ap.parse_args()
+    states = build_selected_from_fixture(json.loads(args.selection))
+    prequeue(states, args.batch_id)
+    fix = yaml.safe_load(FIXTURE.read_text())
+    epw = REPO_ROOT / "data" / "weather" / "current" / fix["building_config"]["weather_file"]
+    run_batch(states, epw, resolve_idd(), args.batch_id)
+
+
+if __name__ == "__main__":
+    main()

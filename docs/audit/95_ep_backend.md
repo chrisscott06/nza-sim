@@ -341,3 +341,23 @@ only marginally. P8 can cite the shading result as real (small), with this prove
 **Remaining for the UI (P6):** thin FastAPI HTTP routes wrapping these three functions + backend/venv wiring
 (the backend runs on base python; the runner needs the harness venv — invoke via the venv interpreter or add
 pyyaml). The importable functions are ready; P6 wires the run-selection matrix to them.
+
+## §6b — P6 backend: non-blocking batch API (subprocess + ep_runs interface)
+
+Architecture (Chris 2026-07-07) — **the backend never imports the runner**:
+- `ep_batch_runner.py` gains a **CLI** (`--selection <json> --batch-id <id>`): builds states from the frozen
+  fixture (ZZ TEST), `prequeue`s them into `ep_runs` (status `queued`, tagged with the batch_id) so the UI
+  sees the full queue immediately, then runs the batch. `batch_by_id()` reads a batch's rows.
+- `api/routers/ep_backend.py` — three routes, all reading `ep_runs` directly via `sqlite3` (base python, no
+  venv needed): **POST `/api/ep/batch/start`** launches the runner as a **detached subprocess using the
+  harness venv's python** (`validation/.venv/bin/python`), `start_new_session=True` → returns a `batch_id`
+  immediately; **GET `/api/ep/batch/{id}`** polls per-state status; **GET `/api/ep/result/{hash}`** fetches a
+  normalised result. `ep_runs` is the sole interface (runner writes, routes read).
+
+**Verified end-to-end (backend on :8002):** POST returned in **0.015 s** (non-blocking); the subprocess ran
+the baseline and wrote `ep_runs`; the progress route returned `baseline → done, EUI 117.7`. A second POST with
+the same selection served the baseline **from cache** (0 EP executions).
+
+**Remaining (P6 UI):** the Interventions "Validate with EnergyPlus" panel (cumulative toggle + per-intervention
+isolated checkboxes, NZA-Sim-only items disabled, live "N runs · ~min · M cached" count, Run → live per-state
+progress) wired to these three routes, browser-verified on ZZ TEST. The backend is ready and verified.
