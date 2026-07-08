@@ -42,7 +42,9 @@ def compute_row(iv, baseline=None, modelled=None, off=None, ep_validated=False):
         "flags": _flags(iv), "ep_validated": ep_validated,
     }
 
-    if iv.get("enabling"):          # Class D — capex only, energy em-dashed
+    if iv.get("enabling") or (off is None and modelled is None):
+        # Class D, or a measure with no clean static-engine representation (e.g. 2.3):
+        # capex only, energy metrics em-dashed.
         return row
 
     if off is not None:             # Class C off-model (1.5, 7.1)
