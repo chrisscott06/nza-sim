@@ -1,20 +1,21 @@
 # Current brief
 
-**Brief 91b — Cost Plan Editor (Brief 91 P4–P9, HIEX-seeded) — IN PROGRESS 2026-07-08.** On branch
-`chris/cost-plan-editor` (cut from `main` `d7d2c37`, post-95/96 merge). Completes Brief 91: replaces the
-transitional headline cost card with the full hierarchical Cost Plan Editor (groups → line items, qty × unit
-× rate, unit-adaptive labels, % on-cost lines, drag + keyboard reorder, templates), deletes the old
-`HeadlineCostEditor` + both transitional `costModel.js` blocks, and seeds type-default rates from the HIEX
-benchmarks. Lifts the "no brief touches the cost layer" quarantine. **Zero physics** (`--fixture` anchor EUI
-132.6 byte-identical start→close). Parts: **P1** brief landing + EP-flag-rename rider (soften "EP-validated ✓"
-→ "EP-checked — see Table 3" where |EUI Δ%|>25%: 2.2/3.3/3.4/3.5) · **P2** CostPlanEditor + transitional
-removal · **P3** keyboard discipline · **P4** template save/apply UI · **P5** HIEX type-default rates · **P6**
-walkthrough (ZZ TEST, two acceptance cases, 50-line perf) · **P7** close (PR, NOT merged). Design authority:
-[`active/91_cost_plan_builder.md`](active/91_cost_plan_builder.md) +
-[`../design-notes/91_cost_plan_builder.md`](../design-notes/91_cost_plan_builder.md) +
-[`active/91b_cost_plan_completion_STUB.md`](active/91b_cost_plan_completion_STUB.md). Brief:
-[`active/91b_cost_plan_editor.md`](active/91b_cost_plan_editor.md). **Independent review + Chris walkthrough
-gate close; do NOT merge without both.**
+**Brief 97 — Interventions Studio (module redesign + RICS cost editor as pop-out) — IN PROGRESS 2026-07-08
+(overnight, unattended).** On branch `chris/cost-plan-editor` (cut from `main` `d7d2c37`, post-95/96 merge).
+**Supersedes Brief 91 + the 91b stub/editor drafts** (91b files `git rm`'d from active/; 91 kept as content
+source). Turns the Interventions module from a grey-scroll into a designed, tabbed workspace and replaces the
+transitional headline cost card with the full RICS/NRM2 cost editor built as a **pop-out** window (not inline —
+overrides 91's UX-freeze). **Zero physics** (`--fixture` anchor EUI 132.6 byte-identical start→close). Parts:
+**P1** land brief + supersede 91b + EP-flag rename rider (already applied: "EP-validated ✓" → "EP-checked — see
+Table 3" where |EUI Δ%|>25%: 2.2/3.3/3.4/3.5) · **P2** semantic colour tokens · **P3** Library isolated view →
+tabs (Impact/Carbon/Demand/Cost) · **P4** cost data model + lossless headline migration · **P5** RICS cost
+editor as pop-out + delete headline editor + transitional dual-path (lifts the 91b quarantine) · **P6** keyboard
+discipline (best-effort) · **P7** HIEX-seeded templates + fill-from-defaults · **P8** Strategy restyle + validate
+panel cleanup · **P9** close (PR, NOT merged). Carries forward the 91b P2 work (CostPlanEditor component,
+migrate-on-read, transitional-block removal — rehomed into the pop-out). Canonical design note: Notion
+"Interventions Studio". Brief: [`active/97_interventions_studio.md`](active/97_interventions_studio.md); content
+source: [`active/91_cost_plan_builder.md`](active/91_cost_plan_builder.md). **Independent review + Chris
+walkthrough gate close; do NOT merge unattended.**
 
 **Brief 96 — HIEX Report Modelling (22 interventions, four-metric table, CSV/XLSX) — CLOSED 2026-07-08;
 MERGED to `main` `d7d2c37` (PR #3) 2026-07-08.** Was on branch `chris/hiex-report-modelling`
