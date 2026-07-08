@@ -1,7 +1,23 @@
 # Current brief
 
-**Brief 96 — HIEX Report Modelling (22 interventions, four-metric table, CSV/XLSX) — CLOSED 2026-07-08
-(overnight, unattended; P1–P7 done; stacked PR open, do NOT merge).** On branch `chris/hiex-report-modelling`
+**Brief 91b — Cost Plan Editor (Brief 91 P4–P9, HIEX-seeded) — IN PROGRESS 2026-07-08.** On branch
+`chris/cost-plan-editor` (cut from `main` `d7d2c37`, post-95/96 merge). Completes Brief 91: replaces the
+transitional headline cost card with the full hierarchical Cost Plan Editor (groups → line items, qty × unit
+× rate, unit-adaptive labels, % on-cost lines, drag + keyboard reorder, templates), deletes the old
+`HeadlineCostEditor` + both transitional `costModel.js` blocks, and seeds type-default rates from the HIEX
+benchmarks. Lifts the "no brief touches the cost layer" quarantine. **Zero physics** (`--fixture` anchor EUI
+132.6 byte-identical start→close). Parts: **P1** brief landing + EP-flag-rename rider (soften "EP-validated ✓"
+→ "EP-checked — see Table 3" where |EUI Δ%|>25%: 2.2/3.3/3.4/3.5) · **P2** CostPlanEditor + transitional
+removal · **P3** keyboard discipline · **P4** template save/apply UI · **P5** HIEX type-default rates · **P6**
+walkthrough (ZZ TEST, two acceptance cases, 50-line perf) · **P7** close (PR, NOT merged). Design authority:
+[`active/91_cost_plan_builder.md`](active/91_cost_plan_builder.md) +
+[`../design-notes/91_cost_plan_builder.md`](../design-notes/91_cost_plan_builder.md) +
+[`active/91b_cost_plan_completion_STUB.md`](active/91b_cost_plan_completion_STUB.md). Brief:
+[`active/91b_cost_plan_editor.md`](active/91b_cost_plan_editor.md). **Independent review + Chris walkthrough
+gate close; do NOT merge without both.**
+
+**Brief 96 — HIEX Report Modelling (22 interventions, four-metric table, CSV/XLSX) — CLOSED 2026-07-08;
+MERGED to `main` `d7d2c37` (PR #3) 2026-07-08.** Was on branch `chris/hiex-report-modelling`
 (stacked on the Brief 95 branch). Turned the 22 HIEX Bridgwater interventions into a demonstrator report:
 cost plans seeded verbatim from the benchmarks doc (reconciled 22/22 ≤1%), a clean frozen baseline
 (`report_baseline_v1`, EUI 126.0 NZA / 111.1 EP), isolated + cumulative NZA-Sim runs, EP validation
@@ -13,9 +29,9 @@ sanity-check items in `docs/report/` (esp. `OVERNIGHT_FINDINGS.md`). Brief:
 [`archive/96_hiex_report_modelling_COMPLETED.md`](archive/96_hiex_report_modelling_COMPLETED.md).
 **Independent review (Claude Chat) + Chris sanity-check gate it before any merge.**
 
-**Brief 95 — EnergyPlus Results Backend for Interventions — CLOSED 2026-07-08 (P1–P9 done; independent
-review + Chris walkthrough PENDING; do NOT merge).** On branch `chris/ep-interventions-backend` (re-cut from
-post-94 `main` `8601e7f`). A second results backend for Interventions: translate the strategy stack →
+**Brief 95 — EnergyPlus Results Backend for Interventions — CLOSED 2026-07-08; MERGED to `main` `b138702`
+(PR #2) 2026-07-08 (independent review + Chris walkthrough still PENDING).** Was on branch
+`chris/ep-interventions-backend` (re-cut from post-94 `main` `8601e7f`). A second results backend for Interventions: translate the strategy stack →
 EnergyPlus models, run as a user-triggered batch, display NZA-Sim | EP | Δ% side-by-side. **NZA-Sim engine
 numbers byte-identical throughout** — fixture anchor `--fixture` EUI **132.6** unchanged P1→close; zero
 engine files touched on the branch (only 7 interventions UI files + the EP harness). Parts:

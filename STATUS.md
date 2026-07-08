@@ -2,7 +2,14 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
-## 🔶 Brief 96 — HIEX Report Modelling (22 interventions, four-metric table, CSV/XLSX) — CLOSED 2026-07-08 on `chris/hiex-report-modelling` *(overnight, unattended; P1–P7 done; stacked PR open, NOT merged; independent review + Chris sanity-check gate it)*
+## 🔨 Brief 91b — Cost Plan Editor (Brief 91 P4–P9, HIEX-seeded) — IN PROGRESS 2026-07-08 on `chris/cost-plan-editor` *(cut from `main` `d7d2c37` post-95/96 merge; do NOT merge until Chris walkthrough + independent review)*
+
+Completes Brief 91: replaces the transitional headline cost card with the full hierarchical Cost Plan Editor (groups → line items, qty × unit × rate, unit-adaptive labels, % on-cost lines, drag + keyboard reorder, templates), deletes `HeadlineCostEditor` + both transitional `costModel.js` blocks, and seeds type-default rates from the HIEX benchmarks. Lifts the "no brief touches the cost layer" quarantine. **Zero physics** — `_brief93_anchor.mjs --fixture` EUI **132.6** captured at start; must be byte-identical at close.
+
+- **P1** — brief landed (`docs/briefs/active/91b_cost_plan_editor.md`) + session reconcile + EP-flag-rename rider: in the report export (`scripts/report/build_tables.py`), "EP-validated ✓" softens to "EP-checked — see Table 3" where the EP EUI cross-check diverges **|Δ%| > 25** (Chris's chosen metric, 2026-07-08 — the brief's "(currently 3.3)" parenthetical was stale; the rule trips **2.2, 3.3, 3.4, 3.5**). CSV + XLSX regenerated; only those 4 flag cells changed, all other data byte-identical.
+- **P2–P7** — pending (CostPlanEditor + transitional removal · keyboard · templates · HIEX rates · walkthrough · close).
+
+## 🔶 Brief 96 — HIEX Report Modelling (22 interventions, four-metric table, CSV/XLSX) — CLOSED 2026-07-08; MERGED to `main` `d7d2c37` (PR #3) 2026-07-08 *(independent review + Chris sanity-check still gate it)*
 
 Turned the 22 HIEX Bridgwater interventions into a demonstrator report: cost plans seeded from the benchmarks doc, a frozen clean baseline, isolated + cumulative NZA-Sim runs, EP validation, a metrics engine, and CSV/XLSX exports for PowerPoint. **Canonical inputs:** the Notion design note (fetched) + `docs/report/HIEX_Intervention_Spec_and_Cost_Benchmarks.md`. **Zero engine change** — `instantCalc.js`/`interventionsEngine.js` untouched; both fixture invariants hold (`bridgewater_anchor_v2` **132.6**, `report_baseline_v1` **126.0**).
 
@@ -16,7 +23,7 @@ Turned the 22 HIEX Bridgwater interventions into a demonstrator report: cost pla
 
 **Headline for Chris:** cumulative reaches EUI 74.8 (below both targets) for ~£800k; 1.4 DHW ASHP is carbon-strong (399t) but cost-negative (gas→elec); EP reproduces the B95 P8 setpoint over-sensitivity. **Sanity-check items** (stated assumptions, cumulative-DHW lower-bound) in `docs/report/OVERNIGHT_FINDINGS.md`. Commits `1f746ea`→`…` on `chris/hiex-report-modelling`.
 
-## 🔶 Brief 95 — EnergyPlus Results Backend for Interventions — CLOSED 2026-07-08 on `chris/ep-interventions-backend` *(P1–P9 done; PR open, NOT merged; independent review + Chris walkthrough gate it)*
+## 🔶 Brief 95 — EnergyPlus Results Backend for Interventions — CLOSED 2026-07-08; MERGED to `main` `b138702` (PR #2) 2026-07-08 *(independent review + Chris walkthrough still gate it)*
 
 A second results backend for Interventions: translate the strategy stack → EnergyPlus models, run as a user-triggered batch, display **NZA-Sim | EP | Δ%** side-by-side. **NZA-Sim engine numbers byte-identical throughout** — `_brief93_anchor.mjs --fixture` EUI **132.6** unchanged P1→close; `git diff main...HEAD` touches **zero engine files** (only 7 interventions UI components + the `validation/energyplus/` harness + `api/routers/ep_backend.py`).
 

@@ -30,6 +30,21 @@ CRREM_2026, PLATEAU = 184.1, 95.0
 nza_base = NZA["baseline"]
 OFF = {"1.5": interlink_1_5(), "7.1": pv_7_1()}
 
+# Brief 91b P1 rider — where the EnergyPlus cross-check diverges materially from
+# NZA (|EUI Δ%| > 25), the "EP-validated ✓" claim overstates agreement. Soften it
+# to "EP-checked — see Table 3" (the divergence lives in the EP validation
+# appendix). Divergence metric = |EUI Δ%| per Chris (2026-07-08); currently trips
+# 2.2, 3.3, 3.4, 3.5. Rows without an EP EUI Δ% are treated as non-divergent.
+EP_DIVERGENCE_EUI_PCT_THRESHOLD = 25
+
+
+def _ep_diverges(ref):
+    r = ep_by_ref.get(ref)
+    if not r or r.get("status") not in ("done", "cached"):
+        return False
+    pct = (r.get("eui") or {}).get("delta_pct")
+    return pct is not None and abs(pct) > EP_DIVERGENCE_EUI_PCT_THRESHOLD
+
 
 # ── Table 1 — isolated rows for all 22 ────────────────────────────────────────
 def row_for(iv):
@@ -63,6 +78,14 @@ T1_COLS = ["ref", "name", "theme", "category", "cls", "confidence", "capex_centr
            "ep_validated", "basis"]
 
 
+def _ep_flag(r):
+    # Brief 91b P1 rider: soften "EP-validated ✓" → "EP-checked — see Table 3"
+    # where the EP EUI cross-check diverges >25% (agreement is not what was found).
+    if not r["ep_validated"]:
+        return ""
+    return "EP-checked — see Table 3 " if _ep_diverges(r["ref"]) else "EP-validated ✓ "
+
+
 def t1_record(r):
     return {
         "ref": r["ref"], "name": r["name"], "theme": r["theme"], "category": r["category"],
@@ -72,7 +95,7 @@ def t1_record(r):
         "annual_£_saving": r["annual_gbp"], "EUI_Δ_kWh_m2": r["eui_delta"],
         "lifetime_tCO2e": r["lifetime_tco2e"], "£_per_tCO2e": r["gbp_per_tco2e"],
         "simple_payback_yr": r["payback_yrs"],
-        "flags": ("EP-validated ✓ " if r["ep_validated"] else "") + " ".join(r["flags"]),
+        "flags": _ep_flag(r) + " ".join(r["flags"]),
         "basis": r["basis"],
     }
 
