@@ -1,0 +1,122 @@
+{
+  "_header": {
+    "brief": "Brief 95 P2 — full-Bridgewater EP (IdealLoads demand + fixed-efficiency post-processing)",
+    "energyplus_version": "25.2.0-cf7368216c",
+    "simulation_layer": "ZoneHVAC:IdealLoadsAirSystem (envelope + gains + ventilation → zone demand)",
+    "efficiency_assumptions": {
+      "space_heating": [
+        "Primary heating (vrf_heat_recovery_dual_function): 95% ÷ SCOP 3.0",
+        "Secondary heating (electric_panel_heater): 5% ÷ η/COP 1.0"
+      ],
+      "space_cooling": [
+        "Primary cooling (vrf_heat_recovery_dual_function): 100% ÷ EER 3.0"
+      ],
+      "dhw": {
+        "method": "deterministic (not EP)",
+        "formula": "55.0 L·person⁻¹·day⁻¹ × 276 people × 365 d × cp 4.186 kJ/(L·K) × ΔT(42.0−10.0)°C",
+        "demand_mwh": 206.163,
+        "split": [
+          "DHW gas (gas_boiler_calorifier): 52% ÷ η 0.85",
+          "DHW heat pump (ashp_dhw_preheat): 48% ÷ SCOP 3.0"
+        ]
+      },
+      "ventilation_fans": [
+        "mvhr_gf_public: SFP 1.8 × 1425.0 L/s × 8760 h",
+        "bedroom_extract: SFP 0.9 × 2208.0 L/s × 8760 h",
+        "public_toilet_extract: SFP 0.4 × 210.0 L/s × 8760 h"
+      ],
+      "notes": "No HVAC equipment modelled in EP (no PTHP/VRF/coils/curves/plant loop). Full-equipment EP model is parked (possible later upgrade)."
+    }
+  },
+  "gia_m2": 4216.0,
+  "demand_mwh": {
+    "space_heating": 96.443,
+    "space_cooling": 130.305,
+    "dhw": 206.163
+  },
+  "consumption_mwh": {
+    "electricity": 370.122,
+    "gas": 126.123,
+    "space_heating": {
+      "electricity": 35.362
+    },
+    "space_cooling": {
+      "electricity": 43.435
+    },
+    "dhw": {
+      "gas": 126.123,
+      "electricity": 32.986
+    },
+    "ventilation_fans_electricity": 0.041,
+    "lighting_equipment_aux_electricity": 258.298
+  },
+  "eui_kwh_per_m2_yr": 117.7,
+  "breakdown": {
+    "space_heating": [
+      {
+        "label": "Primary heating (vrf_heat_recovery_dual_function)",
+        "source": "ambient_air",
+        "share_pct": 95.0,
+        "efficiency": 3.0,
+        "fuel": "electricity",
+        "fuel_mwh": 30.54
+      },
+      {
+        "label": "Secondary heating (electric_panel_heater)",
+        "source": "electricity",
+        "share_pct": 5.0,
+        "efficiency": 1.0,
+        "fuel": "electricity",
+        "fuel_mwh": 4.822
+      }
+    ],
+    "space_cooling": [
+      {
+        "label": "Primary cooling (vrf_heat_recovery_dual_function)",
+        "source": "electricity",
+        "share_pct": 100.0,
+        "efficiency": 3.0,
+        "fuel": "electricity",
+        "fuel_mwh": 43.435
+      }
+    ],
+    "dhw": [
+      {
+        "label": "DHW gas (gas_boiler_calorifier)",
+        "source": "gas",
+        "share_pct": 52.0,
+        "efficiency": 0.85,
+        "fuel": "gas",
+        "fuel_mwh": 126.123
+      },
+      {
+        "label": "DHW heat pump (ashp_dhw_preheat)",
+        "source": "ambient_air",
+        "share_pct": 48.0,
+        "efficiency": 3.0,
+        "fuel": "electricity",
+        "fuel_mwh": 32.986
+      }
+    ],
+    "ventilation": [
+      {
+        "label": "mvhr_gf_public",
+        "sfp_w_per_lps": 1.8,
+        "flow_l_s": 1425.0,
+        "fuel_mwh": 0.022
+      },
+      {
+        "label": "bedroom_extract",
+        "sfp_w_per_lps": 0.9,
+        "flow_l_s": 2208.0,
+        "fuel_mwh": 0.017
+      },
+      {
+        "label": "public_toilet_extract",
+        "sfp_w_per_lps": 0.4,
+        "flow_l_s": 210.0,
+        "fuel_mwh": 0.001
+      }
+    ]
+  }
+}
