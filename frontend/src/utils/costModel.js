@@ -20,8 +20,10 @@ import { readProjectDefault, readEnergyPrice } from './costReads.js'
 
 export const PAYBACK_CLAMP_YEARS = 999
 
-/** UI unit list per line; rate label adapts ("£/nr", "£/kW", …). */
-export const UNITS = ['nr', 'm', 'm²', 'm³', 'kW', 'kg', 'hr', 'item', 'sum', '%']
+/** UI unit list per line; rate label adapts ("£/nr", "£/kW", "£/(l/s)", "£/day", …).
+ *  Brief 97 P4 adds l/s (ventilation flow) + day (labour day-rate) for the HIEX
+ *  benchmark categories; the design-note originals are retained (superset). */
+export const UNITS = ['nr', 'm', 'm²', 'm³', 'kW', 'l/s', 'day', 'kg', 'hr', 'item', 'sum', '%']
 
 const num = v => (v == null || v === '' || !Number.isFinite(Number(v))) ? 0 : Number(v)
 const newId = (p) => `${p}_${(globalThis.crypto?.randomUUID?.() || `${p}${Math.round(performance.now())}x`).slice(0, 12)}`
