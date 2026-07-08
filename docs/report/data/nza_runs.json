@@ -1,0 +1,295 @@
+{
+ "_meta": {
+  "fixture": "report_baseline_v1",
+  "engine": "v2.5",
+  "generated_by": "scripts/report/run_nza.mjs"
+ },
+ "baseline": {
+  "eui": 126,
+  "elec_mwh": 373.845,
+  "gas_mwh": 157.428,
+  "heating_mwh": 87.7,
+  "cooling_mwh": 101.1,
+  "dhw_mwh": 257.3
+ },
+ "isolated": {
+  "1.1": {
+   "eui": 116.8,
+   "elec_mwh": 365.834,
+   "gas_mwh": 126.801,
+   "heating_mwh": 87.7,
+   "cooling_mwh": 101.1,
+   "dhw_mwh": 207.3
+  },
+  "1.2": {
+   "eui": 117.5,
+   "elec_mwh": 366.433,
+   "gas_mwh": 129.091,
+   "heating_mwh": 87.7,
+   "cooling_mwh": 101.1,
+   "dhw_mwh": 211
+  },
+  "1.3": {
+   "eui": 124.9,
+   "elec_mwh": 369.001,
+   "gas_mwh": 157.428,
+   "heating_mwh": 87.7,
+   "cooling_mwh": 101.1,
+   "dhw_mwh": 257.3
+  },
+  "1.4": {
+   "eui": 100,
+   "elec_mwh": 421.407,
+   "gas_mwh": 0,
+   "heating_mwh": 87.7,
+   "cooling_mwh": 101.1,
+   "dhw_mwh": 257.3
+  },
+  "2.1": {
+   "eui": 130.7,
+   "elec_mwh": 393.629,
+   "gas_mwh": 157.428,
+   "heating_mwh": 3.4,
+   "cooling_mwh": 201.3,
+   "dhw_mwh": 257.3
+  },
+  "2.2": {
+   "eui": 122.4,
+   "elec_mwh": 358.744,
+   "gas_mwh": 157.428,
+   "heating_mwh": 50.5,
+   "cooling_mwh": 129.3,
+   "dhw_mwh": 257.3
+  },
+  "3.1": {
+   "eui": 124.3,
+   "elec_mwh": 366.612,
+   "gas_mwh": 157.428,
+   "heating_mwh": 87.7,
+   "cooling_mwh": 101.1,
+   "dhw_mwh": 257.3
+  },
+  "3.2": {
+   "eui": 123.1,
+   "elec_mwh": 361.55,
+   "gas_mwh": 157.428,
+   "heating_mwh": 87.7,
+   "cooling_mwh": 101.1,
+   "dhw_mwh": 257.3
+  },
+  "3.3": {
+   "eui": 122.9,
+   "elec_mwh": 360.761,
+   "gas_mwh": 157.428,
+   "heating_mwh": 69.1,
+   "cooling_mwh": 82.2,
+   "dhw_mwh": 257.3
+  },
+  "3.4": {
+   "eui": 125,
+   "elec_mwh": 369.411,
+   "gas_mwh": 157.428,
+   "heating_mwh": 95.7,
+   "cooling_mwh": 79,
+   "dhw_mwh": 257.3
+  },
+  "3.5": {
+   "eui": 125.9,
+   "elec_mwh": 373.315,
+   "gas_mwh": 157.428,
+   "heating_mwh": 89.8,
+   "cooling_mwh": 97.2,
+   "dhw_mwh": 257.3
+  },
+  "4.2": {
+   "eui": 115.2,
+   "elec_mwh": 328.214,
+   "gas_mwh": 157.428,
+   "heating_mwh": 107.8,
+   "cooling_mwh": 81.7,
+   "dhw_mwh": 257.3
+  },
+  "5.2": {
+   "eui": 124.7,
+   "elec_mwh": 368.15,
+   "gas_mwh": 157.428,
+   "heating_mwh": 90.4,
+   "cooling_mwh": 98.6,
+   "dhw_mwh": 257.3
+  }
+ },
+ "cumulative": {
+  "order": [
+   "3.3",
+   "2.2",
+   "3.1",
+   "1.1",
+   "5.2",
+   "4.2",
+   "3.2",
+   "1.4",
+   "1.2",
+   "1.3",
+   "3.4",
+   "3.5",
+   "2.1"
+  ],
+  "skips": [
+   {
+    "ref": "5.3",
+    "reason": "enabling"
+   },
+   {
+    "ref": "4.1",
+    "reason": "enabling"
+   },
+   {
+    "ref": "5.1",
+    "reason": "enabling"
+   },
+   {
+    "ref": "6.1",
+    "reason": "enabling"
+   },
+   {
+    "ref": "5.4",
+    "reason": "enabling"
+   },
+   {
+    "ref": "2.3",
+    "reason": "off_model"
+   },
+   {
+    "ref": "4.3",
+    "reason": "enabling"
+   },
+   {
+    "ref": "1.5",
+    "reason": "off_model"
+   },
+   {
+    "ref": "7.1",
+    "reason": "off_model"
+   }
+  ],
+  "states": [
+   {
+    "ref": "3.3",
+    "eui": 122.9,
+    "elec_mwh": 360.761,
+    "gas_mwh": 157.428,
+    "heating_mwh": 69.1,
+    "cooling_mwh": 82.2,
+    "dhw_mwh": 257.3
+   },
+   {
+    "ref": "2.2",
+    "eui": 119.7,
+    "elec_mwh": 347.31,
+    "gas_mwh": 157.428,
+    "heating_mwh": 37.4,
+    "cooling_mwh": 109.3,
+    "dhw_mwh": 257.3
+   },
+   {
+    "ref": "3.1",
+    "eui": 118.4,
+    "elec_mwh": 341.627,
+    "gas_mwh": 157.428,
+    "heating_mwh": 37.4,
+    "cooling_mwh": 109.3,
+    "dhw_mwh": 257.3
+   },
+   {
+    "ref": "1.1",
+    "eui": 109.2,
+    "elec_mwh": 333.616,
+    "gas_mwh": 126.801,
+    "heating_mwh": 37.4,
+    "cooling_mwh": 109.3,
+    "dhw_mwh": 207.3
+   },
+   {
+    "ref": "5.2",
+    "eui": 107.8,
+    "elec_mwh": 327.596,
+    "gas_mwh": 126.801,
+    "heating_mwh": 39.4,
+    "cooling_mwh": 106.6,
+    "dhw_mwh": 207.3
+   },
+   {
+    "ref": "4.2",
+    "eui": 96.5,
+    "elec_mwh": 280.133,
+    "gas_mwh": 126.801,
+    "heating_mwh": 55.6,
+    "cooling_mwh": 85.2,
+    "dhw_mwh": 207.3
+   },
+   {
+    "ref": "3.2",
+    "eui": 94.6,
+    "elec_mwh": 272.009,
+    "gas_mwh": 126.801,
+    "heating_mwh": 55.6,
+    "cooling_mwh": 85.2,
+    "dhw_mwh": 207.3
+   },
+   {
+    "ref": "1.4",
+    "eui": 73.6,
+    "elec_mwh": 310.319,
+    "gas_mwh": 0,
+    "heating_mwh": 55.6,
+    "cooling_mwh": 85.2,
+    "dhw_mwh": 207.3
+   },
+   {
+    "ref": "1.2",
+    "eui": 73.9,
+    "elec_mwh": 311.61,
+    "gas_mwh": 0,
+    "heating_mwh": 55.6,
+    "cooling_mwh": 85.2,
+    "dhw_mwh": 211
+   },
+   {
+    "ref": "1.3",
+    "eui": 71.4,
+    "elec_mwh": 300.909,
+    "gas_mwh": 0,
+    "heating_mwh": 55.6,
+    "cooling_mwh": 85.2,
+    "dhw_mwh": 211
+   },
+   {
+    "ref": "3.4",
+    "eui": 70.6,
+    "elec_mwh": 297.832,
+    "gas_mwh": 0,
+    "heating_mwh": 62.5,
+    "cooling_mwh": 64.2,
+    "dhw_mwh": 211
+   },
+   {
+    "ref": "3.5",
+    "eui": 70.6,
+    "elec_mwh": 297.657,
+    "gas_mwh": 0,
+    "heating_mwh": 64.1,
+    "cooling_mwh": 61.6,
+    "dhw_mwh": 211
+   },
+   {
+    "ref": "2.1",
+    "eui": 74.8,
+    "elec_mwh": 315.214,
+    "gas_mwh": 0,
+    "heating_mwh": 6,
+    "cooling_mwh": 125.9,
+    "dhw_mwh": 211
+   }
+  ]
+ }
+}

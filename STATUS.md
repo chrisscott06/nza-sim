@@ -2,6 +2,20 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
+## 🔶 Brief 96 — HIEX Report Modelling (22 interventions, four-metric table, CSV/XLSX) — CLOSED 2026-07-08 on `chris/hiex-report-modelling` *(overnight, unattended; P1–P7 done; stacked PR open, NOT merged; independent review + Chris sanity-check gate it)*
+
+Turned the 22 HIEX Bridgwater interventions into a demonstrator report: cost plans seeded from the benchmarks doc, a frozen clean baseline, isolated + cumulative NZA-Sim runs, EP validation, a metrics engine, and CSV/XLSX exports for PowerPoint. **Canonical inputs:** the Notion design note (fetched) + `docs/report/HIEX_Intervention_Spec_and_Cost_Benchmarks.md`. **Zero engine change** — `instantCalc.js`/`interventionsEngine.js` untouched; both fixture invariants hold (`bridgewater_anchor_v2` **132.6**, `report_baseline_v1` **126.0**).
+
+- **P1** `report_baseline_v1` = clean Bridgewater (aux experiment + playground interventions stripped). Dual-engine baseline: NZA EUI **126.0** (heat 87.7/cool 101.1) · EP EUI **111.1** (heat 96.4/cool 130.3); aux removal drops both exactly 6.6. `00_baseline.md`.
+- **P2** 22 library items (`scripts/report/interventions.py`) — patches per class + cost plans transcribed verbatim; **cost reconciliation 22/22 within ±1%** (`01_cost_reconciliation.md`), total capex ~£800k.
+- **P3** Class B scalars + Class C off-model calculators (`benchmarks.py` FES grid series + `offmodel.py`): interlink 20.6 MWh/yr, refrigerant 4.7 tCO₂e/yr, PV 47.5 MWh (EUI-neutral). 15/15 tests.
+- **P4** metrics engine (`metrics.py`): capex · kWh/£ saved · EUI Δ · lifetime tCO₂e (life-capped) · £/tCO₂e · payback. 3 hand-checks (22 assertions) match to the decimal.
+- **P5** runs (`run_nza.mjs` + `run_ep_mappable.py`): 13 modellable isolated + 13-state cumulative spine (NZA); 13/13 EP-mappable validated. Cumulative final EUI **74.8** (−40.6%, in band, below CRREM 184.1 + plateau 95). `02_run_manifest.md`.
+- **P6** exports: `HIEX_intervention_metrics.{csv,xlsx}` (Isolated MACC 22 · Cumulative spine 22 · EP validation 13). Best MACC 3.3 setpoints £0/t; brise soleil £57,750/t; MVHR adverse. `03_assumptions_README.md`.
+- **P7** close: both invariants byte-identical · STATUS · brief archived · stacked PR (no merge).
+
+**Headline for Chris:** cumulative reaches EUI 74.8 (below both targets) for ~£800k; 1.4 DHW ASHP is carbon-strong (399t) but cost-negative (gas→elec); EP reproduces the B95 P8 setpoint over-sensitivity. **Sanity-check items** (stated assumptions, cumulative-DHW lower-bound) in `docs/report/OVERNIGHT_FINDINGS.md`. Commits `1f746ea`→`…` on `chris/hiex-report-modelling`.
+
 ## 🔶 Brief 95 — EnergyPlus Results Backend for Interventions — CLOSED 2026-07-08 on `chris/ep-interventions-backend` *(P1–P9 done; PR open, NOT merged; independent review + Chris walkthrough gate it)*
 
 A second results backend for Interventions: translate the strategy stack → EnergyPlus models, run as a user-triggered batch, display **NZA-Sim | EP | Δ%** side-by-side. **NZA-Sim engine numbers byte-identical throughout** — `_brief93_anchor.mjs --fixture` EUI **132.6** unchanged P1→close; `git diff main...HEAD` touches **zero engine files** (only 7 interventions UI components + the `validation/energyplus/` harness + `api/routers/ep_backend.py`).

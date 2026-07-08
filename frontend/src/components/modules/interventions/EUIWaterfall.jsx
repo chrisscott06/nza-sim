@@ -43,7 +43,7 @@
  */
 
 import { useUISettings } from '../../../context/UISettingsContext.jsx'
-import { toDisplay, displayUnitLabel, KIND, getGia } from './visualiser/unitFmt.js'
+import { displayUnitLabel, KIND, getGia } from './visualiser/unitFmt.js'
 import ChartExportCard from '../../shared/ChartExportCard.jsx'
 
 const COLORS = {
@@ -170,16 +170,24 @@ export default function EUIWaterfall({ interventions = [], stackResult }) {
   // helper to convert EUI ↔ absolute kWh when the toggle is in 'kwh' mode.
   const gia = getGia(stackResult.baseline)
 
-  // Convert every series value in-place to the chosen display unit.
-  // Chart shape stays IDENTICAL because all values scale by the same
-  // factor (× gia or × 1) — only the numeric labels + axis title change.
+  // Convert every series value to the chosen display unit with a SINGLE consistent
+  // factor, so every bar, delta label and running total share one unit (the axis unit).
+  // NB: we deliberately do NOT use `toDisplay` here — its 'kwh' mode is magnitude-adaptive
+  // (returns kWh below 1 MWh, MWh above), which put a big cumulative total in MWh next to a
+  // tiny marginal in kWh on the same axis (Brise soleil's ~0 marginal rendered as "−421.6"
+  // kWh beside "→390" MWh). The axis label is `displayUnitLabel(KWH_M2, unit)` — 'MWh' in
+  // absolute mode, 'kWh/m²·yr' in intensity mode — so convert to exactly that: × gia/1000
+  // (MWh) or identity (intensity).
+  const axisLabel = displayUnitLabel(KIND.KWH_M2, unit)
   const rawSeries = buildSeries(interventions, stackResult)
-  const convert = (v) => toDisplay(v, KIND.KWH_M2, unit, gia).value
+  const convert = (v) => {
+    if (v == null || !Number.isFinite(v)) return v
+    return unit === 'kwh' && gia > 0 ? (v * gia) / 1000 : v
+  }
   const series = rawSeries.map(s => {
     if (s.kind === 'total') return { ...s, value: convert(s.value) }
     return { ...s, from: convert(s.from), to: convert(s.to), delta: convert(s.delta) }
   })
-  const axisLabel = displayUnitLabel(KIND.KWH_M2, unit)
 
   // Scale: max of all values + a 10% headroom so the tallest bar has
   // room for its label above.
