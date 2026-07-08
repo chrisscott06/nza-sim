@@ -36,3 +36,30 @@ reconcile 22/22 within ±1% (`01_cost_reconciliation.md`).
 
 ## Stop-and-write items
 _(none — all ambiguities resolved to stated assumptions within doc ranges or flagged as limitations above)_
+
+---
+
+## CLOSING SUMMARY (morning read)
+
+**All 7 parts completed** and committed on `chris/hiex-report-modelling` (stacked on the
+Brief 95 branch). No escalation trigger fired; no thread stopped. Both fixture invariants
+hold at close: `bridgewater_anchor_v2` EUI **132.6**, `report_baseline_v1` re-run **126.0**;
+`instantCalc.js`/`interventionsEngine.js` untouched (only the EP harness gained `--fixture`).
+
+### Headline numbers
+- **Dual-engine baseline** (GIA 4,215): NZA-Sim EUI **126.0** (heat 87.7 / cool 101.1); EnergyPlus EUI **111.1** (heat 96.4 / cool 130.3). Aux-removal drops both by exactly 6.6 kWh/m².
+- **Best £/tCO₂e (MACC):** 3.3 setpoint optimisation at **£0/tCO₂e** (free settings). Then 1.1 low-flow £92/t, 1.4 DHW ASHP £263/t, 1.2 WWHR £265/t, 2.2 fan duty £268/t.
+- **Worst modelled:** 3.5 brise soleil **£57,750/t** (tiny saving — the doc predicted "poor £/tCO₂e by construction"); 2.1 MVHR is **adverse** (EUI +4.7, increases carbon — the note's "net effect may be adverse" confirmed by both engines).
+- **1.4 DHW ASHP** — the principal carbon measure: **399 tCO₂e lifetime** but a *negative* annual £ saving (gas→electric: electricity is ~4× the price of gas even at SCOP 2.9). Carbon-strong, cost-negative — a key report talking point.
+- **Cumulative (full spine):** EUI **74.8** kWh/m² · capex **£798,835** · £44,516/yr saving · **585.8 tCO₂e** lifetime. Lands **below both** the CRREM 2026 target (184.1) and the 95 plateau (−20.2 vs plateau).
+- **EP validation:** 13/13 mappable ran; NZA/EP EUI deltas agree well (4.2 −10.8/−10.7). Reproduces the Brief 95 P8 finding — **NZA-Sim over-credits cooling-setpoint relaxation** (3.3 cooling Δ: NZA −18.9 vs EP −4.4).
+
+### Chris must sanity-check before the table goes in the report
+1. The **stated engineering assumptions** (section above): 1.1 −19.5%, 5.2 −15%, 3.4 g→0.42, 3.5 south+west, 2.2 cube-law, 4.2 −25%, 1.4 SCOP 2.9. All within the doc's ranges but they're *my* central picks where the doc/note left a band.
+2. The **cumulative DHW lower-bound** caveat (same-path last-write-wins) — cumulative DHW savings in Table 2 are conservative. If you want them fully compounded, that needs an engine change (out of scope tonight) or per-state hand-composition.
+3. **2.3 bypass** carries no modelled saving ("no-model" flag) — the static engine can't represent seasonal HRV bypass.
+4. **Film life** (3.4) uses the note's fabric=30y; real window-film life is ~10–15y, so its lifetime carbon is likely overstated.
+5. The **£/tCO₂e** divides by the 1-dp displayed lifetime (report internal-consistency) — a hair different from dividing by full-precision.
+
+### Deliverables
+`docs/report/HIEX_intervention_metrics.{csv,xlsx}` (3 sheets) · `00_baseline.md` · `01_cost_reconciliation.md` (22/22 ≤1%) · `02_run_manifest.md` · `03_assumptions_README.md`. Engines under `scripts/report/`.

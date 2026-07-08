@@ -1,5 +1,18 @@
 # Current brief
 
+**Brief 96 — HIEX Report Modelling (22 interventions, four-metric table, CSV/XLSX) — CLOSED 2026-07-08
+(overnight, unattended; P1–P7 done; stacked PR open, do NOT merge).** On branch `chris/hiex-report-modelling`
+(stacked on the Brief 95 branch). Turned the 22 HIEX Bridgwater interventions into a demonstrator report:
+cost plans seeded verbatim from the benchmarks doc (reconciled 22/22 ≤1%), a clean frozen baseline
+(`report_baseline_v1`, EUI 126.0 NZA / 111.1 EP), isolated + cumulative NZA-Sim runs, EP validation
+(13/13 mappable), a metrics engine (£/tCO₂e MACC + payback + lifetime carbon), and CSV/XLSX exports. **Zero
+engine change** (`instantCalc.js` untouched); both fixture invariants hold (anchor 132.6, report baseline
+126.0). Cumulative reaches EUI **74.8** (below CRREM 184.1 + plateau 95) for ~£800k. Canonical inputs: the
+Notion design note + `docs/report/HIEX_Intervention_Spec_and_Cost_Benchmarks.md`. Deliverables + Chris
+sanity-check items in `docs/report/` (esp. `OVERNIGHT_FINDINGS.md`). Brief:
+[`archive/96_hiex_report_modelling_COMPLETED.md`](archive/96_hiex_report_modelling_COMPLETED.md).
+**Independent review (Claude Chat) + Chris sanity-check gate it before any merge.**
+
 **Brief 95 — EnergyPlus Results Backend for Interventions — CLOSED 2026-07-08 (P1–P9 done; independent
 review + Chris walkthrough PENDING; do NOT merge).** On branch `chris/ep-interventions-backend` (re-cut from
 post-94 `main` `8601e7f`). A second results backend for Interventions: translate the strategy stack →
