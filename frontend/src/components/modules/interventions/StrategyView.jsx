@@ -24,6 +24,7 @@ import { computeLifetimeCarbon, perFuelFromDeltaRecord, defaultLifetimeYears } f
 import { readModelledEui } from '../../../utils/engineReads.js'
 import { getGia } from './visualiser/unitFmt.js'
 import { computeCostTotal } from '../../../utils/costModel.js'
+import { SEMANTIC } from './semanticColour.js'
 
 const gbpShort = (n) => {
   const v = Number(n) || 0
@@ -40,8 +41,8 @@ function fuelsKwhFromResult(res) {
   }
 }
 
-const SAVE_GREEN = '#16A34A'
-const INCREASE_RED = '#DC2626'
+const SAVE_GREEN = SEMANTIC.saving     // Brief 97 P2/P8 — shared semantic tokens
+const INCREASE_RED = SEMANTIC.increase
 const ACCENT = '#E84393'
 
 const TABS = [

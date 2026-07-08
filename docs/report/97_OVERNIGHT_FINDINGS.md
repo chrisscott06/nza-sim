@@ -70,6 +70,18 @@ server runs on a free port (it picked :3000) alongside your live :5176 — it pr
   separate fill button is redundant; the "draw from defaults" requirement is met by
   (a) on-costs defaulting live and (b) the HIEX rate datalist on new lines. If you
   want an explicit one-click "reset on-costs to defaults", that's a small add.
+- **P8** — Strategy restyle + validate-panel cleanup (presentation only; EP logic
+  untouched). StrategyView's local SAVE_GREEN/INCREASE_RED now alias the shared
+  `SEMANTIC` tokens (P2 "defined once, reused"). The validate panel's bare checkbox
+  stack became: a selected-card cumulative toggle (pink border when on) + isolated
+  runs grouped by theme in bordered row-lists, module accent aligned to #E84393
+  (was #E5506A). Verified on ZZ TEST: headline metrics colour correctly (Energy
+  saved −59.4 green, Lifetime +649 green), waterfall green/red/greyed reads right,
+  Total capex £327k aggregates the new cost model, and the validate panel still
+  computes **"9 runs · ~5 min · 0 cached"**. **Run not clicked** — its wiring is
+  byte-identical to Brief 95 (restyle only) and EnergyPlus may not be installed on
+  this Mac, so a real batch could fail noisily; the plan endpoint (same code path)
+  computing 9 runs confirms the logic. Chris to click Run in the walkthrough.
 
 ---
 

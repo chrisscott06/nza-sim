@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, CheckCircle2, XCircle, Database, Play } from 'lucide-react'
 
-const INTERVENTIONS_ACCENT = '#E5506A'
+const INTERVENTIONS_ACCENT = '#E84393'   // Brief 97 P8 — align to the module accent
 const STATUS = {
   queued:  { label: 'queued',  cls: 'text-mid-grey/60' },
   running: { label: 'running', cls: 'text-navy' },
@@ -96,26 +96,53 @@ export default function EPValidationPanel({ interventions = [], projectId, onRes
         <span className="ml-auto text-xxs text-mid-grey">EP 25-2-0 · side-by-side, non-destructive</span>
       </div>
 
-      <label className="flex items-center gap-2 text-xs text-navy cursor-pointer">
-        <input type="checkbox" checked={cumulative} onChange={e => setCumulative(e.target.checked)} />
-        Cumulative chain (baseline + each step in order)
+      {/* Cumulative chain — a selectable card, not a bare checkbox */}
+      <label
+        className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 text-xs cursor-pointer transition-colors ${
+          cumulative ? 'bg-off-white/60' : 'border-light-grey hover:bg-off-white/40'
+        }`}
+        style={cumulative ? { borderColor: INTERVENTIONS_ACCENT } : undefined}
+      >
+        <input type="checkbox" checked={cumulative} onChange={e => setCumulative(e.target.checked)}
+          style={{ accentColor: INTERVENTIONS_ACCENT }} />
+        <span className="font-medium text-navy">Cumulative chain</span>
+        <span className="text-mid-grey/70">baseline + each step in order</span>
       </label>
 
       <div>
-        <p className="text-xxs uppercase tracking-wider text-mid-grey/70 mb-1">Isolated runs</p>
-        <div className="space-y-1 max-h-40 overflow-auto">
-          {interventions.map(iv => {
-            const nzaOnly = iv._nza_sim_only   // reserved: none in the current stack
-            return (
-              <label key={iv.id}
-                className={`flex items-center gap-2 text-xs ${nzaOnly ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer text-navy'}`}>
-                <input type="checkbox" disabled={nzaOnly}
-                  checked={isolated.has(iv.id)} onChange={() => toggleIso(iv.id)} />
-                <span className="truncate">{iv.label || '(untitled)'}</span>
-                {nzaOnly ? <span className="text-[10px] text-mid-grey ml-auto flex-shrink-0">NZA-Sim only</span> : null}
-              </label>
-            )
-          })}
+        <p className="text-xxs uppercase tracking-wider text-mid-grey/70 mb-1.5">Isolated runs</p>
+        <div className="space-y-2 max-h-52 overflow-auto pr-0.5">
+          {(() => {
+            // Presentation-only grouping by theme (no change to selection logic).
+            const groups = []
+            const byTheme = new Map()
+            for (const iv of interventions) {
+              const theme = (iv?.theme && String(iv.theme).trim()) || 'Other'
+              if (!byTheme.has(theme)) { byTheme.set(theme, []); groups.push(theme) }
+              byTheme.get(theme).push(iv)
+            }
+            return groups.map(theme => (
+              <div key={theme}>
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-mid-grey/60 mb-0.5 px-0.5">{theme}</p>
+                <div className="rounded-lg border border-light-grey/70 divide-y divide-light-grey/40 overflow-hidden">
+                  {byTheme.get(theme).map(iv => {
+                    const nzaOnly = iv._nza_sim_only
+                    const on = isolated.has(iv.id)
+                    return (
+                      <label key={iv.id}
+                        className={`flex items-center gap-2 px-2.5 py-1.5 text-xs ${nzaOnly ? 'opacity-40 cursor-not-allowed' : `cursor-pointer text-navy ${on ? 'bg-off-white/50' : 'hover:bg-off-white/30'}`}`}>
+                        <input type="checkbox" disabled={nzaOnly}
+                          checked={on} onChange={() => toggleIso(iv.id)}
+                          style={{ accentColor: INTERVENTIONS_ACCENT }} />
+                        <span className="truncate">{iv.label || '(untitled)'}</span>
+                        {nzaOnly ? <span className="text-[10px] text-mid-grey ml-auto flex-shrink-0">NZA-Sim only</span> : null}
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            ))
+          })()}
         </div>
       </div>
 
