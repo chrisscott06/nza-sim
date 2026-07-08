@@ -204,8 +204,34 @@ function LineMenu({ canMoveUp, canMoveDown, onDuplicate, onMoveUp, onMoveDown, o
 }
 
 // ── Line row ────────────────────────────────────────────────────────────────
-function LineRow({ line, dragHandlers, dragging, pending, landed, canMoveUp, canMoveDown, onChange, onDuplicate, onMoveUp, onMoveDown, onDelete }) {
+function LineRow({ line, dragHandlers, dragging, pending, landed, canMoveUp, canMoveDown, autoFocus, onChange, onAddLine, onAddGroup, onDuplicate, onMoveUp, onMoveDown, onDelete }) {
   const extension = (Number(line.quantity) || 0) * (Number(line.rate) || 0)
+
+  // Brief 97 P6 — keyboard discipline. Esc reverts the field (and stops the
+  // event so the pop-out's window-level Esc doesn't fire); Enter adds a line;
+  // Cmd/Ctrl+Enter adds a group; ↑↓ on number fields step by 1 (×10 with Shift).
+  const captureOrig = (e) => { e.currentTarget.dataset.orig = e.currentTarget.value }
+  const fieldKey = (field, isNum) => (e) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation()
+      const orig = e.currentTarget.dataset.orig ?? ''
+      onChange({ [field]: isNum ? numOrNull(orig) : orig })
+      e.currentTarget.blur()
+      return
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      if (e.metaKey || e.ctrlKey) onAddGroup?.()
+      else onAddLine?.()
+      return
+    }
+    if (isNum && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault()
+      const dir = e.key === 'ArrowUp' ? 1 : -1
+      const cur = Number(e.currentTarget.value) || 0
+      onChange({ [field]: Math.max(0, cur + dir * (e.shiftKey ? 10 : 1)) })
+    }
+  }
   return (
     <tr
       data-row-id={line.id}
@@ -226,6 +252,10 @@ function LineRow({ line, dragHandlers, dragging, pending, landed, canMoveUp, can
       <td className="py-0.5 pr-1">
         <input
           type="text" value={line.name ?? ''} placeholder="Line description"
+          data-focus-id={line.id}
+          ref={autoFocus ? (el => el && el.focus()) : undefined}
+          onFocus={captureOrig}
+          onKeyDown={fieldKey('name', false)}
           onChange={e => onChange({ name: e.target.value })}
           className="w-full px-1 py-0.5 text-xs border border-transparent rounded hover:border-light-grey focus:border-mid-grey focus:outline-none bg-transparent"
         />
@@ -233,6 +263,8 @@ function LineRow({ line, dragHandlers, dragging, pending, landed, canMoveUp, can
       <td className="py-0.5 px-0.5 w-14">
         <input
           type="number" min={0} step={1} value={line.quantity ?? ''} placeholder="0"
+          onFocus={captureOrig}
+          onKeyDown={fieldKey('quantity', true)}
           onChange={e => onChange({ quantity: numOrNull(e.target.value) })}
           className="w-full px-1 py-0.5 text-xs text-right tabular-nums border border-light-grey/70 rounded focus:border-mid-grey focus:outline-none"
         />
@@ -251,6 +283,8 @@ function LineRow({ line, dragHandlers, dragging, pending, landed, canMoveUp, can
           <span className="text-[10px] text-mid-grey/45 whitespace-nowrap">£/{line.unit ?? 'nr'}</span>
           <input
             type="number" min={0} step={1} value={line.rate ?? ''} placeholder="0"
+            onFocus={captureOrig}
+            onKeyDown={fieldKey('rate', true)}
             onChange={e => onChange({ rate: numOrNull(e.target.value) })}
             className="w-full px-1 py-0.5 text-xs text-right tabular-nums border border-light-grey/70 rounded focus:border-mid-grey focus:outline-none"
           />
@@ -272,7 +306,7 @@ function LineRow({ line, dragHandlers, dragging, pending, landed, canMoveUp, can
 }
 
 // ── Group block (header + its own line list with line-level reorder) ──────────
-function GroupBlock({ group, onChange, onDelete, groupDragHandlers, groupDragging, groupPending, groupLanded }) {
+function GroupBlock({ group, autoFocusId, requestFocus, onAddGroup, onChange, onDelete, groupDragHandlers, groupDragging, groupPending, groupLanded }) {
   const subtotal = useMemo(() => computeGroupSubtotal(group), [group])
   const lineReorder = useVerticalReorder(group.lines ?? [], (lines) => onChange({ lines }))
 
@@ -280,7 +314,11 @@ function GroupBlock({ group, onChange, onDelete, groupDragHandlers, groupDraggin
     lines: (group.lines ?? []).map(l => l.id === lineId ? { ...l, ...patch } : l),
   })
   const deleteLine = (lineId) => onChange({ lines: (group.lines ?? []).filter(l => l.id !== lineId) })
-  const addLine = () => onChange({ lines: [...(group.lines ?? []), newLine()] })
+  const addLine = () => {
+    const nl = newLine()
+    onChange({ lines: [...(group.lines ?? []), nl] })
+    requestFocus?.(nl.id)                       // focus the new line's name (Brief 97 P6)
+  }
   const duplicateLine = (lineId) => {
     const lines = group.lines ?? []
     const i = lines.findIndex(l => l.id === lineId)
@@ -288,6 +326,13 @@ function GroupBlock({ group, onChange, onDelete, groupDragHandlers, groupDraggin
     const src = lines[i]
     const copy = newLine({ name: src.name, quantity: src.quantity, unit: src.unit, rate: src.rate, notes: src.notes })
     onChange({ lines: [...lines.slice(0, i + 1), copy, ...lines.slice(i + 1)] })
+    requestFocus?.(copy.id)
+  }
+  // Group-name keyboard: Esc reverts (and stops the pop-out Esc); Enter adds the
+  // first/next line; Cmd/Ctrl+Enter adds a group.
+  const groupNameKey = (e) => {
+    if (e.key === 'Escape') { e.stopPropagation(); onChange({ name: e.currentTarget.dataset.orig ?? '' }); e.currentTarget.blur(); return }
+    if (e.key === 'Enter') { e.preventDefault(); if (e.metaKey || e.ctrlKey) onAddGroup?.(); else addLine(); }
   }
   const moveLine = (lineId, dir) => {
     const lines = [...(group.lines ?? [])]
@@ -320,6 +365,10 @@ function GroupBlock({ group, onChange, onDelete, groupDragHandlers, groupDraggin
         </button>
         <input
           type="text" value={group.name ?? ''} placeholder="Group name (e.g. Enabling works)"
+          data-focus-id={group.id}
+          ref={autoFocusId === group.id ? (el => el && el.focus()) : undefined}
+          onFocus={e => { e.currentTarget.dataset.orig = e.currentTarget.value }}
+          onKeyDown={groupNameKey}
           onChange={e => onChange({ name: e.target.value })}
           className="flex-1 min-w-0 px-1 py-0.5 text-xs font-semibold text-navy border border-transparent rounded hover:border-light-grey focus:border-mid-grey focus:outline-none bg-transparent"
         />
@@ -356,7 +405,10 @@ function GroupBlock({ group, onChange, onDelete, groupDragHandlers, groupDraggin
                       landed={lineReorder.landedId === line.id}
                       canMoveUp={i > 0}
                       canMoveDown={i < (group.lines ?? []).length - 1}
+                      autoFocus={autoFocusId === line.id}
                       onChange={(patch) => setLine(line.id, patch)}
+                      onAddLine={addLine}
+                      onAddGroup={onAddGroup}
                       onDuplicate={() => duplicateLine(line.id)}
                       onMoveUp={() => moveLine(line.id, -1)}
                       onMoveDown={() => moveLine(line.id, +1)}
@@ -430,6 +482,12 @@ export default function CostPlanEditor({ cost, projectDefaults, onChange }) {
   const breakdown = useMemo(() => computeOnCostsBreakdown(cost, projectDefaults), [cost, projectDefaults])
   const groupReorder = useVerticalReorder(groups, (nextGroups) => onChange({ ...cost, groups: nextGroups }))
 
+  // Brief 97 P6 — keyboard focus target: the id of a just-added group/line whose
+  // name input should grab focus. The name input auto-focuses when its id matches
+  // (via the `autoFocus`/ref props threaded down), so this clears itself.
+  const [autoFocusId, setAutoFocusId] = useState(null)
+  useEffect(() => { if (autoFocusId) setAutoFocusId(null) }, [autoFocusId])
+
   const updateGroup = useCallback((groupId, patch) => {
     onChange({ ...cost, groups: groups.map(g => g.id === groupId ? { ...g, ...patch } : g) })
   }, [cost, groups, onChange])
@@ -437,7 +495,9 @@ export default function CostPlanEditor({ cost, projectDefaults, onChange }) {
     onChange({ ...cost, groups: groups.filter(g => g.id !== groupId) })
   }, [cost, groups, onChange])
   const addGroup = useCallback(() => {
-    onChange({ ...cost, groups: [...groups, newGroup({ lines: [newLine()] })] })
+    const g = newGroup({ lines: [newLine()] })
+    onChange({ ...cost, groups: [...groups, g] })
+    setAutoFocusId(g.id)                         // focus the new group's name (Brief 97 P6)
   }, [cost, groups, onChange])
   const setOnCosts = useCallback((on_costs) => onChange({ ...cost, on_costs }), [cost, onChange])
 
@@ -465,6 +525,9 @@ export default function CostPlanEditor({ cost, projectDefaults, onChange }) {
               {groupReorder.draggingId && groupReorder.dropGap === i ? <DropIndicator /> : null}
               <GroupBlock
                 group={group}
+                autoFocusId={autoFocusId}
+                requestFocus={setAutoFocusId}
+                onAddGroup={addGroup}
                 onChange={(patch) => updateGroup(group.id, patch)}
                 onDelete={() => deleteGroup(group.id)}
                 groupDragHandlers={groupReorder}

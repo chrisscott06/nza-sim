@@ -42,6 +42,17 @@ server runs on a free port (it picked :3000) alongside your live :5176 — it pr
   P4 added the HIEX units (`l/s`, `day`) and the falsifiable fixture test
   `scripts/_brief97_migration_test.mjs` — **11/11 PASS**: Brief-90 headline
   £215,040 → grouped model £215,040 (±£1), idempotent, absent/new-shape pass-through.
+- **P5** — RICS editor pop-out: per-line ⋮ menu (Duplicate / Move up / Move down /
+  Delete). ASHP worked-example acceptance `scripts/_brief97_ashp_acceptance.mjs`
+  **13/13 PASS** → £95,941 exact. HeadlineCostEditor + transitional blocks confirmed
+  gone (grep: only docstring mentions). Browser: pop-out open → build → ⋮ Duplicate →
+  live totals → Save → persist → Cost-tab summary updates. `--fixture` anchor identical.
+- **P6** — keyboard discipline: **all five behaviours work, none hit the 3-strikes
+  wall.** Enter → new line (+ focus); Cmd/Ctrl+Enter → new group (+ focus); ↑↓ step
+  ±1 (×10 with Shift) on qty/rate; **Esc reverts the field AND the pop-out stays
+  open** (the flagged React/DOM conflict — resolved by `stopPropagation()` in the
+  field key handler, verified: Escape on a field did not close the SchedulePopout).
+  Tab/Shift-Tab uses native DOM order (field→field, accepted).
 
 ---
 
