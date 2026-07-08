@@ -25,7 +25,7 @@ import {
   UNITS, newLine, newGroup,
   computeGroupSubtotal, computeOnCostsBreakdown,
 } from '../../../../utils/costModel.js'
-import { readProjectDefault } from '../../../../utils/costReads.js'
+import { readProjectDefault, hiexRatesForUnit } from '../../../../utils/costReads.js'
 
 const ACCENT = '#E84393'                          // interventions pink (matches the stack view)
 const gbp = n => `£${Math.round(Number(n) || 0).toLocaleString('en-GB')}`
@@ -206,6 +206,8 @@ function LineMenu({ canMoveUp, canMoveDown, onDuplicate, onMoveUp, onMoveDown, o
 // ── Line row ────────────────────────────────────────────────────────────────
 function LineRow({ line, dragHandlers, dragging, pending, landed, canMoveUp, canMoveDown, autoFocus, onChange, onAddLine, onAddGroup, onDuplicate, onMoveUp, onMoveDown, onDelete }) {
   const extension = (Number(line.quantity) || 0) * (Number(line.rate) || 0)
+  const rateSuggestions = hiexRatesForUnit(line.unit)   // Brief 97 P7 — HIEX rate hints for this unit
+  const listId = `rates-${line.id}`
 
   // Brief 97 P6 — keyboard discipline. Esc reverts the field (and stops the
   // event so the pop-out's window-level Esc doesn't fire); Enter adds a line;
@@ -283,11 +285,17 @@ function LineRow({ line, dragHandlers, dragging, pending, landed, canMoveUp, can
           <span className="text-[10px] text-mid-grey/45 whitespace-nowrap">£/{line.unit ?? 'nr'}</span>
           <input
             type="number" min={0} step={1} value={line.rate ?? ''} placeholder="0"
+            list={rateSuggestions.length ? listId : undefined}
             onFocus={captureOrig}
             onKeyDown={fieldKey('rate', true)}
             onChange={e => onChange({ rate: numOrNull(e.target.value) })}
             className="w-full px-1 py-0.5 text-xs text-right tabular-nums border border-light-grey/70 rounded focus:border-mid-grey focus:outline-none"
           />
+          {rateSuggestions.length > 0 && (
+            <datalist id={listId}>
+              {rateSuggestions.map(r => <option key={r.key} value={r.rate}>{`${r.label} — ${r.source}`}</option>)}
+            </datalist>
+          )}
         </div>
       </td>
       <td className="py-0.5 pl-1 pr-1 w-20 text-right text-xs tabular-nums text-navy">{gbp(extension)}</td>

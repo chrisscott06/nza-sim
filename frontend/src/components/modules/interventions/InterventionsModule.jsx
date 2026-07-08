@@ -678,6 +678,8 @@ export default function InterventionsModule() {
         isOpen={!!costEditorIv}
         intervention={costEditorIv}
         projectDefaults={projectCostDefaults}
+        templates={params?.cost_template_library ?? []}
+        onTemplatesChange={(lib) => updateParam('cost_template_library', lib)}
         onSave={updateInterventionCost}
         onClose={() => setCostEditorIv(null)}
       />

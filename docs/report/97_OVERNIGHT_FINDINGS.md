@@ -53,6 +53,23 @@ server runs on a free port (it picked :3000) alongside your live :5176 — it pr
   open** (the flagged React/DOM conflict — resolved by `stopPropagation()` in the
   field key handler, verified: Escape on a field did not close the SchedulePopout).
   Tab/Shift-Tab uses native DOM order (field→field, accepted).
+- **P7** — HIEX-seeded templates + rate suggestions. `data/hiexCostRates.js` — 17
+  per-unit rates lifted verbatim from the HIEX benchmark build-ups (£550/kW ASHP,
+  £450/kW VRF, £12/(l/s) MVHR, £45/m² film, £550/m² brise soleil, £110/fitting LED,
+  £140/room keycard, £350–600/day labour, £1,100/kWp PV …), each with its `source`
+  string — derived, **not invented** (Bible Rule 2). Read via
+  `costReads.listHiexRates` / `hiexRatesForUnit` (Rule 11). The line rate field now
+  offers a `<datalist>` of HIEX rates matching the row's unit. Template save/apply
+  UI added to the pop-out (Apply-template dropdown + "Save as template…"); persists
+  to `project.cost_template_library`. Verified: save from one plan → persists to DB
+  → apply to another intervention reproduces it (£112,320, fresh ids).
+
+  **"Fill % lines from defaults" interpretation (for Chris):** the old headline
+  editor had a button to fill the derived %-lines. In the new model the on-cost
+  rows already *show and use* the project defaults (grey until overridden), so a
+  separate fill button is redundant; the "draw from defaults" requirement is met by
+  (a) on-costs defaulting live and (b) the HIEX rate datalist on new lines. If you
+  want an explicit one-click "reset on-costs to defaults", that's a small add.
 
 ---
 
