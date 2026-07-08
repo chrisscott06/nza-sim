@@ -40,21 +40,13 @@ import {
   emptyCost, computeCostTotal, computeAnnualOperationalSaving,
   computeSimplePayback, computePoundsPerTonne,
 } from '../../../utils/costModel.js'
-
-const SAVE_GREEN = '#16A34A'
-const INCREASE_RED = '#DC2626'
+import { deltaColour } from './semanticColour.js'
 
 function fmtSigned(value, digits = 1, suffix = '') {
   if (value == null || !Number.isFinite(value)) return '—'
   if (Math.abs(value) < 10 ** -digits / 2) return `0${suffix}`
   const sign = value < 0 ? '−' : '+'
   return `${sign}${Math.abs(value).toFixed(digits)}${suffix}`
-}
-
-function deltaColour(delta, { savingIsNegative = true } = {}) {
-  if (delta == null || !Number.isFinite(delta) || Math.abs(delta) < 0.05) return '#6B7280'
-  const isSaving = savingIsNegative ? delta < 0 : delta > 0
-  return isSaving ? SAVE_GREEN : INCREASE_RED
 }
 
 /** A single headline card. `placeholder` renders the "TBD — Brief X" frame. */

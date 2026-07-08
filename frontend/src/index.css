@@ -25,6 +25,18 @@
   --color-fabric-roof:     #78909C;
   --color-infiltration:    #9E9E9E;
 
+  /* ── Semantic value tokens (Brief 97 P2) ───────────────────────
+     One source of truth for value colour across the Interventions
+     Studio (Library isolated view + Strategy). Deltas pick colour by
+     sign; headings/totals go bold navy; grey is demoted to labels only.
+       saving   — a reduction / good outcome (green)
+       increase — a rise / adverse outcome (red)
+       cost     — money figures, neutral + consistent (navy)
+       (heading/total reuse --color-navy; muted reuses --color-mid-grey) */
+  --color-saving:   #16A34A;
+  --color-increase: #DC2626;
+  --color-cost:     #2B2A4C;
+
   /* ── Typography ─────────────────────────────────────────────── */
   --font-family-sans: "Stolzl", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
