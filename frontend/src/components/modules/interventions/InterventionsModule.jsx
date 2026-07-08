@@ -48,6 +48,7 @@ import { computeFieldConflicts } from './InterventionStackView.jsx'
 // longer mounted; full file deletion deferred to Part 6 close (post-walkthrough).
 // Brief 87 Part 4 — Library/Strategy split + two-section per-intervention view.
 import PerInterventionView from './PerInterventionView.jsx'
+import CostEditorPopout from './cost/CostEditorPopout.jsx'
 import StrategyView from './StrategyView.jsx'
 import EPValidationPanel from './EPValidationPanel.jsx'
 import { useIsolatedResults } from './useIsolatedResults.js'
@@ -147,6 +148,9 @@ export default function InterventionsModule() {
     const next = (params?.interventions ?? []).map(iv => (iv.id === id ? { ...iv, cost } : iv))
     updateParam('interventions', next)
   }, [params?.interventions, updateParam])
+  // Brief 97 P3/P5 — the RICS cost editor is a pop-out; this holds the
+  // intervention whose plan is being edited (null = closed).
+  const [costEditorIv, setCostEditorIv] = useState(null)
   // Brief 47 Part 1: libraryInterventions reads removed — library cut.
   // The params.library_interventions field is left in DEFAULT_PARAMS for
   // backwards compatibility (existing projects may carry library entries
@@ -600,7 +604,7 @@ export default function InterventionsModule() {
                   isolatedRow={selectedIsolatedRow}
                   crremPick={crremPick}
                   projectCostDefaults={projectCostDefaults}
-                  onCostChange={updateInterventionCost}
+                  onEditCost={setCostEditorIv}
                   epIso={selectedEpIso}
                   epNzaOnly={selectedEpNzaOnly}
                 />
@@ -666,6 +670,16 @@ export default function InterventionsModule() {
         onDelete={handleDeleteEditing}
         onDirtyChange={handleDirtyChange}
         themeSuggestions={themeSuggestions}
+      />
+
+      {/* Brief 97 P5 — RICS cost editor pop-out. Opened from the Library
+          isolated view's Cost tab; commits the plan via updateInterventionCost. */}
+      <CostEditorPopout
+        isOpen={!!costEditorIv}
+        intervention={costEditorIv}
+        projectDefaults={projectCostDefaults}
+        onSave={updateInterventionCost}
+        onClose={() => setCostEditorIv(null)}
       />
 
       {/* Brief 47 Part 1 (2026-05-24): library save/load modals removed. */}
