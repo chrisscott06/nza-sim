@@ -56,6 +56,9 @@ def classify_patch(patch):
 
 def _parse_path(path):
     """'building.systems_config_v40.dhw[0].share_pct' → ['building_config',...,'dhw',0,'share_pct'].
+    Supports two list selectors, mirroring the JS engine (interventionsEngine.applyPatch):
+      [i]         → integer index
+      [field=val] → find-by-field, e.g. heating[id=sys_heating_1] → ('id', 'sys_heating_1')
     First segment routes the root: building→building_config; construction_choices /
     library_constructions stay as-is; anything else defaults to building_config."""
     parts = []
@@ -63,8 +66,14 @@ def _parse_path(path):
         key = re.match(r"([^\[]*)", tok).group(1)
         if key:
             parts.append(key)
-        for idx in re.findall(r"\[(\d+)\]", tok):
-            parts.append(int(idx))
+        for sel in re.findall(r"\[([^\]]+)\]", tok):
+            m = re.match(r"([A-Za-z_]\w*)=(.+)", sel)
+            if m:
+                parts.append((m.group(1), m.group(2)))   # find-by-field selector
+            elif sel.lstrip("-").isdigit():
+                parts.append(int(sel))
+            else:
+                raise ValueError(f"unparseable list selector [{sel}] in path {path!r}")
     if not parts:
         return parts
     root = parts[0]
@@ -75,6 +84,18 @@ def _parse_path(path):
     return parts
 
 
+def _resolve(node, seg):
+    """Resolve one path segment against the current node. Tuple = find-by-field selector
+    on a list; else a plain dict key / list index."""
+    if isinstance(seg, tuple):
+        field, val = seg
+        for i, el in enumerate(node):
+            if isinstance(el, dict) and str(el.get(field)) == str(val):
+                return i
+        raise KeyError(f"no list element with {field}={val!r}")
+    return seg
+
+
 def apply_patch(fix, patch):
     """Apply one declarative patch to a fix-shaped dict IN PLACE. Raises on a bad path
     (never silently no-ops)."""
@@ -82,8 +103,8 @@ def apply_patch(fix, patch):
     op = patch.get("op", "set")
     node = fix
     for p in parts[:-1]:
-        node = node[p]
-    last = parts[-1]
+        node = node[_resolve(node, p)]
+    last = _resolve(node, parts[-1])
     if op == "set":
         node[last] = copy.deepcopy(patch.get("value"))
     elif op == "add":
