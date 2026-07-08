@@ -35,7 +35,7 @@ import {
 } from '../../../utils/lifetimeCarbon.js'
 import MiniCrremChart from './crrem/MiniCrremChart.jsx'
 import EPCompareCard from './EPCompareCard.jsx'
-import HeadlineCostEditor from './cost/HeadlineCostEditor.jsx'
+import CostPlanEditor from './cost/CostPlanEditor.jsx'
 import {
   emptyCost, computeCostTotal, computeAnnualOperationalSaving,
   computeSimplePayback, computePoundsPerTonne,
@@ -139,13 +139,15 @@ export default function PerInterventionView({ intervention, isolatedRow, crremPi
   const baseFuels = {}, postFuels = {}
   for (const [f, v] of Object.entries(perFuel)) { baseFuels[f] = v.from_kwh; postFuels[f] = v.to_kwh }
 
-  // Brief 90 (Brief B): cost → £/tonne + simple payback (Headline mode).
+  // Brief 90 (Brief B) → Brief 91b: cost → £/tonne + simple payback. The cost is
+  // the line-item plan shape (migrate-on-read guarantees it); the total resolves
+  // on-costs against project defaults.
   const cost = intervention?.cost ?? emptyCost()
-  const costTotal = computeCostTotal(cost)
+  const costTotal = computeCostTotal(cost, projectCostDefaults)
   const annualSaving = computeAnnualOperationalSaving(d?.per_fuel, projectCostDefaults)
   const poundsPerTonne = costTotal > 0 && Number.isFinite(lifeTco2e) ? computePoundsPerTonne(costTotal, lifeTco2e) : null
   const payback = costTotal > 0 ? computeSimplePayback(costTotal, annualSaving) : null
-  const handleCostChange = (headline) => onCostChange?.(intervention.id, { ...cost, headline })
+  const handleCostChange = (nextCost) => onCostChange?.(intervention.id, nextCost)
 
   return (
     <div className="flex flex-col gap-5 p-4 overflow-y-auto">
@@ -238,10 +240,10 @@ export default function PerInterventionView({ intervention, isolatedRow, crremPi
           />
         </div>
 
-        {/* Brief 90 (Brief B): NRM2 Headline cost editor — drives £/tonne + payback */}
+        {/* Brief 91b: hierarchical Cost Plan Editor — drives £/tonne + payback */}
         {onCostChange && (
           <div className="mt-3">
-            <HeadlineCostEditor headline={cost.headline} projectDefaults={projectCostDefaults} onChange={handleCostChange} />
+            <CostPlanEditor cost={cost} projectDefaults={projectCostDefaults} onChange={handleCostChange} />
           </div>
         )}
       </section>

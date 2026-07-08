@@ -26,6 +26,7 @@ import { publishState, onInitialStateRequest } from '../utils/broadcastChannel.j
 import { SCHEDULE_PRESETS, findPreset } from '../data/schedulePresets.js'
 import { migrateInterventionPatches } from '../utils/interventionsEngine.js'  // Brief 42 Part 2
 import { migrateStrategyRefs } from '../utils/strategyModel.js'  // Brief 94 Part 2
+import { migrateCostShape } from '../utils/costModel.js'  // Brief 91b Part 2 — migrate-on-read
 
 export const ProjectContext = createContext(null)
 
@@ -459,6 +460,12 @@ const DEFAULT_PARAMS = {
   // { id, name, refs: [{ library_id, enabled, order }] }. The Brief 87
   // `ordered_intervention_ids` shape is superseded and never written back.
   strategies: [],
+  // Brief 91b Part 6 — per-project cost-plan template library. Populated by
+  // the CostPlanEditor "Save current as template…" action; consumed by its
+  // "Apply template…" picker. Entries: { id, name, groups, on_costs,
+  // created_at, updated_at, group_count, line_count }. Cross-project sharing
+  // is a future migration (the shape moves storage tier cleanly).
+  cost_template_library: [],
 }
 
 // ── Brief 27 Part 1 — v2.3 migration helpers ─────────────────────────────────
@@ -1209,7 +1216,11 @@ export function ProjectProvider({ children }) {
       // older schemas, so no migration to run on load). schema_version
       // tracks the building_config schema version this project's
       // interventions were authored against; absent → default to current.
-      interventions:  Array.isArray(bc.interventions) ? bc.interventions : DEFAULT_PARAMS.interventions,
+      // Brief 91b Part 2 — migrate-on-read: any Brief 90-shape cost
+      // (cost.mode / cost.headline) on a library intervention is converted
+      // LOSSLESSLY to the line-item shape at load. Idempotent (new-shape /
+      // absent costs pass through), so it runs safely on every load.
+      interventions:  (Array.isArray(bc.interventions) ? bc.interventions : DEFAULT_PARAMS.interventions).map(migrateCostShape),
       schema_version: Number.isInteger(bc.schema_version) ? bc.schema_version : DEFAULT_PARAMS.schema_version,
       // Brief 41 Part 5 (2026-05-20) — per-project intervention library.
       // Same load semantics as systems_config_v40 / library_systems.
@@ -1219,6 +1230,9 @@ export function ProjectProvider({ children }) {
       // current intervention in its current order. Inert until the Strategy
       // view consumes it (Part 5), so this moves no engine numbers.
       strategies: migrateStrategyRefs(bc),
+      // Brief 91b Part 6 — persist the cost-plan template library across loads
+      // (dropping it here would lose saved templates on reload).
+      cost_template_library: Array.isArray(bc.cost_template_library) ? bc.cost_template_library : DEFAULT_PARAMS.cost_template_library,
     })
     setConstructions(project.construction_choices ?? DEFAULT_CONSTRUCTIONS)
     setSystems(migrateSystemsConfig(project.systems_config))
