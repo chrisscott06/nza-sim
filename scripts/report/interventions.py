@@ -159,7 +159,7 @@ INTERVENTIONS = [
     {
         "ref": "3.4", "name": "Fabric — glazing G-value (solar film)", "theme": "Heating & cooling",
         "category": "Fabric", "cls": "A", "life": 30,
-        "patches": [{"op": "set", "path": "building.construction_choices.glazing", "value": "double_low_e"}],
+        "patches": [{"op": "set", "path": "constructions.glazing", "value": "double_low_e"}],
         "assumption": "Glazing g 0.55→0.42 (nearest library construction double_low_e; u unchanged at 1.4 — film reduces g, not u; doc target g 0.40). Expected marginal/counterproductive here (cuts useful winter heat, raises cooling). Film life ~10–15y in reality but note maps fabric→30y.",
         "basis": "Solar-control film to bedroom glazing (193 m²).",
         "cost": {"lines": [{"desc": "Film to all bedroom glazing (193 m² @ £45)", "qty": 193, "unit": "m2", "rate": 45}],

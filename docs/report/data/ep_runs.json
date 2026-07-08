@@ -1,0 +1,287 @@
+{
+ "ep_baseline": {
+  "eui": 111.1,
+  "heating_mwh": 96.4,
+  "cooling_mwh": 130.3
+ },
+ "nza_baseline": {
+  "eui": 126,
+  "heating_mwh": 87.7,
+  "cooling_mwh": 101.1
+ },
+ "rows": [
+  {
+   "ref": "1.1",
+   "name": "Reduce DHW demand (low-flow fittings)",
+   "status": "done",
+   "hash": "aa7dbebe7fe6",
+   "eui": {
+    "nza_delta": -9.2,
+    "ep_delta": -7.3,
+    "delta_pct": 21
+   },
+   "heating_mwh": {
+    "nza_delta": 0.0,
+    "ep_delta": 0.0,
+    "delta_pct": null
+   },
+   "cooling_mwh": {
+    "nza_delta": 0.0,
+    "ep_delta": 0.0,
+    "delta_pct": null
+   }
+  },
+  {
+   "ref": "1.2",
+   "name": "Waste-water heat recovery (WWHR)",
+   "status": "done",
+   "hash": "de5e25df1a86",
+   "eui": {
+    "nza_delta": -8.5,
+    "ep_delta": -6.8,
+    "delta_pct": 20
+   },
+   "heating_mwh": {
+    "nza_delta": 0.0,
+    "ep_delta": 0.0,
+    "delta_pct": null
+   },
+   "cooling_mwh": {
+    "nza_delta": 0.0,
+    "ep_delta": 0.0,
+    "delta_pct": null
+   }
+  },
+  {
+   "ref": "1.3",
+   "name": "Exhaust air over ASHP (COP uplift)",
+   "status": "done",
+   "hash": "dcbd8640d170",
+   "eui": {
+    "nza_delta": -1.1,
+    "ep_delta": -0.9,
+    "delta_pct": 18
+   },
+   "heating_mwh": {
+    "nza_delta": 0.0,
+    "ep_delta": 0.0,
+    "delta_pct": null
+   },
+   "cooling_mwh": {
+    "nza_delta": 0.0,
+    "ep_delta": 0.0,
+    "delta_pct": null
+   }
+  },
+  {
+   "ref": "1.4",
+   "name": "Larger ASHP \u2014 full DHW off gas",
+   "status": "done",
+   "hash": "06bfdd4bc8a6",
+   "eui": {
+    "nza_delta": -26,
+    "ep_delta": -20.8,
+    "delta_pct": 20
+   },
+   "heating_mwh": {
+    "nza_delta": 0.0,
+    "ep_delta": 0.0,
+    "delta_pct": null
+   },
+   "cooling_mwh": {
+    "nza_delta": 0.0,
+    "ep_delta": 0.0,
+    "delta_pct": null
+   }
+  },
+  {
+   "ref": "2.1",
+   "name": "MVHR replacing central electric heating + bathroom extract",
+   "status": "done",
+   "hash": "622bb2438a32",
+   "eui": {
+    "nza_delta": 4.7,
+    "ep_delta": 4.4,
+    "delta_pct": -6
+   },
+   "heating_mwh": {
+    "nza_delta": -84.3,
+    "ep_delta": -95.5,
+    "delta_pct": -13
+   },
+   "cooling_mwh": {
+    "nza_delta": 100.2,
+    "ep_delta": 160.0,
+    "delta_pct": 60
+   }
+  },
+  {
+   "ref": "2.2",
+   "name": "Reduce fan duty",
+   "status": "done",
+   "hash": "0ad882a0544e",
+   "eui": {
+    "nza_delta": -3.6,
+    "ep_delta": -1.5,
+    "delta_pct": 58
+   },
+   "heating_mwh": {
+    "nza_delta": -37.2,
+    "ep_delta": -41.1,
+    "delta_pct": -10
+   },
+   "cooling_mwh": {
+    "nza_delta": 28.2,
+    "ep_delta": 26.5,
+    "delta_pct": -6
+   }
+  },
+  {
+   "ref": "3.1",
+   "name": "VRF metering, commissioning & diagnostic health check",
+   "status": "done",
+   "hash": "49d37d6315cb",
+   "eui": {
+    "nza_delta": -1.7,
+    "ep_delta": -2.0,
+    "delta_pct": -18
+   },
+   "heating_mwh": {
+    "nza_delta": 0.0,
+    "ep_delta": 0.0,
+    "delta_pct": null
+   },
+   "cooling_mwh": {
+    "nza_delta": 0.0,
+    "ep_delta": 0.0,
+    "delta_pct": null
+   }
+  },
+  {
+   "ref": "3.2",
+   "name": "VRF replacement (current-gen R-32 heat recovery)",
+   "status": "done",
+   "hash": "d14093b39483",
+   "eui": {
+    "nza_delta": -2.9,
+    "ep_delta": -3.5,
+    "delta_pct": -21
+   },
+   "heating_mwh": {
+    "nza_delta": 0.0,
+    "ep_delta": 0.0,
+    "delta_pct": null
+   },
+   "cooling_mwh": {
+    "nza_delta": 0.0,
+    "ep_delta": 0.0,
+    "delta_pct": null
+   }
+  },
+  {
+   "ref": "3.3",
+   "name": "Setpoint optimisation (heating/cooling dead-band)",
+   "status": "done",
+   "hash": "fb3cda87da99",
+   "eui": {
+    "nza_delta": -3.1,
+    "ep_delta": -1.8,
+    "delta_pct": 42
+   },
+   "heating_mwh": {
+    "nza_delta": -18.6,
+    "ep_delta": -16.8,
+    "delta_pct": 10
+   },
+   "cooling_mwh": {
+    "nza_delta": -18.9,
+    "ep_delta": -4.4,
+    "delta_pct": 77
+   }
+  },
+  {
+   "ref": "3.4",
+   "name": "Fabric \u2014 glazing G-value (solar film)",
+   "status": "done",
+   "hash": "4b73591489fb",
+   "eui": {
+    "nza_delta": -1,
+    "ep_delta": -1.6,
+    "delta_pct": -60
+   },
+   "heating_mwh": {
+    "nza_delta": 8.0,
+    "ep_delta": 3.1,
+    "delta_pct": -61
+   },
+   "cooling_mwh": {
+    "nza_delta": -22.1,
+    "ep_delta": -24.0,
+    "delta_pct": -9
+   }
+  },
+  {
+   "ref": "3.5",
+   "name": "Brise soleil (external solar shading)",
+   "status": "done",
+   "hash": "8b04ed588151",
+   "eui": {
+    "nza_delta": -0.1,
+    "ep_delta": -0.5,
+    "delta_pct": -400
+   },
+   "heating_mwh": {
+    "nza_delta": 2.1,
+    "ep_delta": 0.5,
+    "delta_pct": -76
+   },
+   "cooling_mwh": {
+    "nza_delta": -3.9,
+    "ep_delta": -7.0,
+    "delta_pct": -79
+   }
+  },
+  {
+   "ref": "4.2",
+   "name": "Automatic room shut-off (keycard/occupancy master switch)",
+   "status": "done",
+   "hash": "7fba28ab9957",
+   "eui": {
+    "nza_delta": -10.8,
+    "ep_delta": -10.7,
+    "delta_pct": 1
+   },
+   "heating_mwh": {
+    "nza_delta": 20.1,
+    "ep_delta": 21.0,
+    "delta_pct": 4
+   },
+   "cooling_mwh": {
+    "nza_delta": -19.4,
+    "ep_delta": -19.0,
+    "delta_pct": 2
+   }
+  },
+  {
+   "ref": "5.2",
+   "name": "Communal lighting + controls",
+   "status": "done",
+   "hash": "cb79d3f9c852",
+   "eui": {
+    "nza_delta": -1.3,
+    "ep_delta": -1.6,
+    "delta_pct": -23
+   },
+   "heating_mwh": {
+    "nza_delta": 2.7,
+    "ep_delta": 2.5,
+    "delta_pct": -7
+   },
+   "cooling_mwh": {
+    "nza_delta": -2.5,
+    "ep_delta": -2.8,
+    "delta_pct": -12
+   }
+  }
+ ]
+}
