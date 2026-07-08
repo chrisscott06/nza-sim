@@ -1,7 +1,8 @@
 # Current brief
 
-**Brief 97 — Interventions Studio (module redesign + RICS cost editor as pop-out) — IN PROGRESS 2026-07-08
-(overnight, unattended).** On branch `chris/cost-plan-editor` (cut from `main` `d7d2c37`, post-95/96 merge).
+**Brief 97 — Interventions Studio (module redesign + RICS cost editor as pop-out) — CLOSED 2026-07-08
+(overnight, unattended; P1–P9 done; PR open, NOT merged — independent review + Chris walkthrough gate it).**
+On branch `chris/cost-plan-editor` (cut from `main` `d7d2c37`, post-95/96 merge).
 **Supersedes Brief 91 + the 91b stub/editor drafts** (91b files `git rm`'d from active/; 91 kept as content
 source). Turns the Interventions module from a grey-scroll into a designed, tabbed workspace and replaces the
 transitional headline cost card with the full RICS/NRM2 cost editor built as a **pop-out** window (not inline —
@@ -13,9 +14,11 @@ editor as pop-out + delete headline editor + transitional dual-path (lifts the 9
 discipline (best-effort) · **P7** HIEX-seeded templates + fill-from-defaults · **P8** Strategy restyle + validate
 panel cleanup · **P9** close (PR, NOT merged). Carries forward the 91b P2 work (CostPlanEditor component,
 migrate-on-read, transitional-block removal — rehomed into the pop-out). Canonical design note: Notion
-"Interventions Studio". Brief: [`active/97_interventions_studio.md`](active/97_interventions_studio.md); content
-source: [`active/91_cost_plan_builder.md`](active/91_cost_plan_builder.md). **Independent review + Chris
-walkthrough gate close; do NOT merge unattended.**
+"Interventions Studio". Brief: [`archive/97_interventions_studio_COMPLETED.md`](archive/97_interventions_studio_COMPLETED.md);
+content source: [`archive/91_cost_plan_builder_SUPERSEDED.md`](archive/91_cost_plan_builder_SUPERSEDED.md);
+overnight log: [`../report/97_OVERNIGHT_FINDINGS.md`](../report/97_OVERNIGHT_FINDINGS.md). All 9 parts done,
+`--fixture` anchor EUI 132.6 byte-identical start→close, migration 11/11, ASHP acceptance £95,941.
+**Independent review + Chris walkthrough gate close; do NOT merge unattended.**
 
 **Brief 96 — HIEX Report Modelling (22 interventions, four-metric table, CSV/XLSX) — CLOSED 2026-07-08;
 MERGED to `main` `d7d2c37` (PR #3) 2026-07-08.** Was on branch `chris/hiex-report-modelling`

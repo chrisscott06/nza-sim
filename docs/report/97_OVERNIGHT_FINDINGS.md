@@ -114,8 +114,35 @@ None of these block the acceptance cases (central totals £95,941 / ~£105k).
 
 ---
 
-## Physics invariant
+## Physics invariant — PASS
 
-`--fixture` anchor captured at brief start: EUI **132.6**, elec 401.544, gas 157.428,
-heating 87.7, cooling 101.1, DHW 257.335. Re-checked at close (P9). Zero engine files
-touched (cost/UI only).
+`--fixture` anchor at brief start: EUI **132.6**, elec 401.544, gas 157.428, heating
+87.7, cooling 101.1, DHW 257.335. Re-run at close (P9) → **byte-identical diff (empty)**.
+Zero engine files touched (cost/UI only). Node gates at close: migration **11/11**,
+ASHP acceptance **£95,941**, `npm run build` clean.
+
+## What to check in the morning (Chris)
+
+1. **Walkthrough on ZZ TEST** (@1440): Library → an intervention → the tabbed isolated
+   view (Impact / Carbon / Demand / Cost — no scroll to find a metric). Cost tab →
+   "Edit cost plan →" opens the pop-out. Build the ASHP example (2× ASHP @ £18k, etc.)
+   → Total lands ~£95,941. Save → Cost tab total updates. Template round-trip. Strategy
+   tab → colour/hierarchy + **click Run on the validate panel** (I did not — see P8).
+2. **The three "design note wins" reconciliations** (field names, plan-level on-costs,
+   low/central/high deferred) — see the decisions section above. Say if you want per-line
+   ranges or per-line on-cost lines as real features.
+3. **"Fill % lines from defaults"** interpretation (P7 note) — confirm the on-costs-default-
+   live + rate-datalist behaviour is what you meant, or ask for the explicit reset button.
+4. **Independent review** (mandatory — data-layer deletion + cost math): post the migration
+   + fixture test, the headline-editor/dual-path deletion diff, the line→group→plan math,
+   and the pop-out reuse to Claude Chat. The agent that built it does not grade it.
+
+## Housekeeping notes (for Chris)
+
+- **ZZ TEST residue from verification** (ZZ TEST is the disposable test project): its
+  "Occupancy 2" intervention now carries a test cost plan (£112,320), and one template
+  "ASHP DHW retrofit (test)" sits in the project's `cost_template_library`. Harmless;
+  delete from the editor if you want a clean slate for the walkthrough.
+- **Stray backend** on :8002 (my restart) + `autoPort:true` in the gitignored
+  `.claude/launch.json` — see the backend-recovery note at the top.
+- A DB backup was taken before the restart: `data/nza_sim.backup-brief97-<ts>.db`.
