@@ -20,7 +20,7 @@
  * Template save/apply UI lands in Brief 91b P4.
  */
 import { Fragment, useState, useRef, useEffect, useMemo, useCallback } from 'react'
-import { GripVertical, ChevronDown, ChevronRight, MoreVertical, Plus, X, Loader2 } from 'lucide-react'
+import { GripVertical, ChevronDown, ChevronRight, MoreVertical, Plus, Loader2, Copy, ArrowUp, ArrowDown, Trash2 } from 'lucide-react'
 import {
   UNITS, newLine, newGroup,
   computeGroupSubtotal, computeOnCostsBreakdown,
@@ -170,8 +170,41 @@ function GroupMenu({ group, onSetCategory, onDelete }) {
   )
 }
 
+// ── ⋮ line-row menu (duplicate / move / delete) ──────────────────────────────
+function LineMenu({ canMoveUp, canMoveDown, onDuplicate, onMoveUp, onMoveDown, onDelete }) {
+  const [open, setOpen] = useState(false)
+  const item = 'w-full flex items-center gap-2 px-2.5 py-1.5 text-left hover:bg-off-white text-mid-grey hover:text-navy disabled:opacity-40 disabled:hover:bg-transparent'
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)}
+        className="p-0.5 rounded text-mid-grey/30 hover:text-navy hover:bg-off-white opacity-0 group-hover:opacity-100 transition-opacity" title="Line options">
+        <MoreVertical size={13} />
+      </button>
+    )
+  }
+  const run = (fn) => () => { setOpen(false); fn?.() }
+  return (
+    <>
+      <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+      <div className="relative z-20 inline-block">
+        <MoreVertical size={13} className="text-navy" />
+        <div className="absolute right-0 top-5 w-36 rounded-lg border border-light-grey bg-white shadow-md py-1 text-xs">
+          <button type="button" className={item} onClick={run(onDuplicate)}><Copy size={12} /> Duplicate</button>
+          <button type="button" className={item} disabled={!canMoveUp} onClick={run(onMoveUp)}><ArrowUp size={12} /> Move up</button>
+          <button type="button" className={item} disabled={!canMoveDown} onClick={run(onMoveDown)}><ArrowDown size={12} /> Move down</button>
+          <div className="border-t border-light-grey/60 mt-0.5">
+            <button type="button" className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-red-600 hover:bg-red-50" onClick={run(onDelete)}>
+              <Trash2 size={12} /> Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
 // ── Line row ────────────────────────────────────────────────────────────────
-function LineRow({ line, dragHandlers, dragging, pending, landed, onChange, onDelete }) {
+function LineRow({ line, dragHandlers, dragging, pending, landed, canMoveUp, canMoveDown, onChange, onDuplicate, onMoveUp, onMoveDown, onDelete }) {
   const extension = (Number(line.quantity) || 0) * (Number(line.rate) || 0)
   return (
     <tr
@@ -224,12 +257,15 @@ function LineRow({ line, dragHandlers, dragging, pending, landed, onChange, onDe
         </div>
       </td>
       <td className="py-0.5 pl-1 pr-1 w-20 text-right text-xs tabular-nums text-navy">{gbp(extension)}</td>
-      <td className="w-6">
-        <button type="button" onClick={onDelete}
-          className="p-0.5 rounded text-mid-grey/30 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
-          title="Delete line">
-          <X size={12} />
-        </button>
+      <td className="w-6 text-right">
+        <LineMenu
+          canMoveUp={canMoveUp}
+          canMoveDown={canMoveDown}
+          onDuplicate={onDuplicate}
+          onMoveUp={onMoveUp}
+          onMoveDown={onMoveDown}
+          onDelete={onDelete}
+        />
       </td>
     </tr>
   )
@@ -245,6 +281,23 @@ function GroupBlock({ group, onChange, onDelete, groupDragHandlers, groupDraggin
   })
   const deleteLine = (lineId) => onChange({ lines: (group.lines ?? []).filter(l => l.id !== lineId) })
   const addLine = () => onChange({ lines: [...(group.lines ?? []), newLine()] })
+  const duplicateLine = (lineId) => {
+    const lines = group.lines ?? []
+    const i = lines.findIndex(l => l.id === lineId)
+    if (i < 0) return
+    const src = lines[i]
+    const copy = newLine({ name: src.name, quantity: src.quantity, unit: src.unit, rate: src.rate, notes: src.notes })
+    onChange({ lines: [...lines.slice(0, i + 1), copy, ...lines.slice(i + 1)] })
+  }
+  const moveLine = (lineId, dir) => {
+    const lines = [...(group.lines ?? [])]
+    const i = lines.findIndex(l => l.id === lineId)
+    const to = i + dir
+    if (i < 0 || to < 0 || to >= lines.length) return
+    const [m] = lines.splice(i, 1)
+    lines.splice(to, 0, m)
+    onChange({ lines })
+  }
   const collapsed = !!group.collapsed
 
   return (
@@ -301,7 +354,12 @@ function GroupBlock({ group, onChange, onDelete, groupDragHandlers, groupDraggin
                       dragging={lineReorder.draggingId === line.id}
                       pending={lineReorder.pendingId === line.id}
                       landed={lineReorder.landedId === line.id}
+                      canMoveUp={i > 0}
+                      canMoveDown={i < (group.lines ?? []).length - 1}
                       onChange={(patch) => setLine(line.id, patch)}
+                      onDuplicate={() => duplicateLine(line.id)}
+                      onMoveUp={() => moveLine(line.id, -1)}
+                      onMoveDown={() => moveLine(line.id, +1)}
                       onDelete={() => deleteLine(line.id)}
                     />
                   </Fragment>
