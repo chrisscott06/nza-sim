@@ -27,6 +27,7 @@ from api.db.database import get_db, DEFAULT_BUILDING_CONFIG, DEFAULT_CONSTRUCTIO
 from api.utils import resolve_weather_file
 from nza_engine.config import SIMULATIONS_DIR
 from nza_engine.generators.epjson_assembler import assemble_epjson
+from nza_engine.systems_from_v40 import derive_systems_for_sim
 from nza_engine.runner import run_simulation
 from nza_engine.parsers.sql_parser import (
     get_building_summary,
@@ -570,7 +571,21 @@ async def simulate_project(
 
     building_params = project["building_config"]
     construction_choices = project["construction_choices"]
-    systems_config = project["systems_config"]
+
+    # Brief 98-pre-b: single source of system truth. systems_config_v40 (what the
+    # UI edits and NZA-Sim reads) is authoritative. The simple systems_config DB
+    # column and systems_config_v25 gates are legacy copies the UI no longer writes
+    # → they drift, so /api/simulate would silently simulate pre-edit systems.
+    # Derive both the simple config AND the v25 enabled gates from v40 at run time
+    # (ephemeral — never persisted). Legacy projects with no v40 fall back to the
+    # stored simple copy unchanged. See docs/audit/98preb_config_drift.md.
+    systems_config, derived_v25 = derive_systems_for_sim(
+        building_params, fallback_simple=project["systems_config"]
+    )
+    if derived_v25 is not None:
+        # Don't mutate the persisted project dict — shallow-copy for the sim only.
+        building_params = {**building_params, "systems_config_v25": derived_v25}
+
     schedule_assignments = project.get("schedule_assignments") or {}
 
     # Resolve schedule assignments: fetch config_json for each assigned library item
