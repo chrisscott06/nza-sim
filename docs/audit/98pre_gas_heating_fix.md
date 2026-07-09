@@ -45,3 +45,72 @@ Three cited sources agree the plant is VRF heating + gas DHW-only:
 
 Without the config fix, "unblocking" the sim would just produce a *gas-heated* EP baseline to
 compare against a *VRF-heated* NZA-Sim — apples to oranges. Both fixes are required.
+
+## P2 — The two fixes
+
+### Fix 1 (generator, unconditional): valid EP gas-heating object
+
+`nza_engine/generators/hvac_heating_boiler.py` rewritten. The invalid
+`ZoneHVAC:Baseboard:Convective:Gas` is replaced by a per-zone **`ZoneHVAC:UnitHeater`**
+driven by a **`Coil:Heating:Fuel`** (`fuel_type: NaturalGas`) + a `Fan:ConstantVolume`.
+All three object types are present in `Energy+.schema.epJSON` 25.2.0 (verified). Gas
+fuel accounting is exact (Σ zone fuel-coil input / burner efficiency); the only physics
+delta vs the old *intent* is a small supply-fan electricity term (warm-air unit heater
+vs a wet baseboard — the wet alternative needs a `Boiler:HotWater` plant loop nza_engine
+has no scaffolding for). Also **clamps `burner_efficiency ≤ 1.0`** (defaults to 0.92 if a
+COP/SCOP is mistakenly routed in — the exact gas/VRF mislabelling P1 found). The old name
+`generate_gas_baseboard_system` is kept as an alias, so the assembler import is unchanged.
+
+**Verified:** the invalid-object fatal is gone. Error progression on a forced gas config —
+invalid object → (fixed) → efficiency > 1 → (fixed) → node topology (below) — proves the
+object itself now validates and processes.
+
+### Fix 2 (config): report_baseline heating → VRF
+
+Per P1, Bridgewater's heating is VRF, not gas. The fixture `report_baseline_v1.yaml` now
+carries a corrected simple `systems_config` (`space_heating`/`space_cooling` = `vrf_standard`,
+SCOP 3 / EER 4.6 — matching `systems_config_v40` + HIEX; DHW/ventilation carried from source).
+The main sim now dispatches to the (valid, already-working) VRF generator. This makes the EP
+baseline like-for-like with NZA-Sim's VRF-heated 126.0 — not a fictional gas building.
+
+### 🚩 Second issue surfaced (documented per brief escalation — needs its own fix)
+
+Fixing the invalid object **unmasked a deeper, pre-existing problem** the earlier fatal hid:
+for the **gas-heating + VRF-cooling combination** in one zone, the VRF terminal unit's air
+inlet node (`{zone}_TU_Inlet`) is not reconciled with the zone-exhaust node the gas unit
+heater claims (`{zone}_UH_Inlet`) → `ZoneHVAC:TerminalUnit:VariableRefrigerantFlow … air inlet
+node name must be the same as a zone inlet or exhaust node name` (1 fatal / 7 severe). Two zone
+air systems need a shared zone-exhaust *NodeList*, which `add_vrf_cooling_to_baseboard` doesn't
+build. Compounded by cooling being read from a *third* config source (`systems_config_v25.cooling.enabled`),
+independent of `space_cooling.primary.system`. **This does not affect report_baseline (VRF-heated)
+or this brief's goal**, and it's a rarer case (genuinely gas-heated building *with* VRF cooling).
+Flagged for a follow-up fix; not chased here (3-strikes discipline; the brief's "second fatal →
+document, may need its own fix").
+
+**Also flagged (deeper data-consistency bug, out of scope):** the simple `systems_config` drifts
+from `systems_config_v40` — on Bridgewater it was stale on *both* heating (gas vs VRF) and cooling
+(none vs VRF). The main `/api/simulate` reads the stale simple copy; NZA-Sim reads v40. Every
+project whose v40 has been edited risks the same drift. The real fix is to derive/sync the simple
+`systems_config` from v40 (or have the main sim read v40) — its own brief.
+
+## P3 — Clean main-EP baseline on report_baseline_v1
+
+`scripts/_brief98pre_mainsim.py`, EnergyPlus **25.2.0**, VRF heating/cooling: **0 fatal, 0 severe,
+2.8 s.** ✅ The EP column Brief 98 P0 was blocked on now exists (`docs/audit/98pre_mainsim_baseline.json`):
+
+| Metric | Main EP (VRF) |
+|---|---|
+| EUI (space-only, excl. DHW) | 60.5 kWh/m² |
+| Annual heating | 229.6 MWh |
+| Annual cooling | 11.8 MWh |
+| Lighting | 15.7 MWh · Equipment | 39.6 MWh |
+| Fuel split | elec 179.3 MWh (70.3 %) / gas 75.6 MWh (29.7 %) |
+| Peaks | heating 33.4 W/m² · cooling 17.5 W/m² · unmet hours 0 |
+
+**Not analysed here** (that's Brief 98 P0's resumed residual table): note EP heating 229.6 MWh vs
+NZA-Sim 87.7 MWh is a large gap — the 0.5 ACH infiltration default (P0 flag) is a prime suspect,
+plus constructions and thermal mass. P0 characterises it from first principles; this brief only
+proves the run is clean.
+
+**Brief 98 P0 can now resume** — the residual table has a running EP baseline to diff against.
+EP version 25.2.0 confirmed. `--fixture` anchors byte-identical (132.6 / 126.0); NZA-Sim untouched.

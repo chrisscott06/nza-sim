@@ -1,5 +1,19 @@
 # Current brief
 
+**Brief 98-pre — Fix Main-Sim Gas Heating (unblock the EnergyPlus baseline) — CLOSED 2026-07-09.**
+On branch `chris/fix-mainsim-gas-heating` (off `main` `351a72f`). Prerequisite for Brief 98 P0. The
+main `/api/simulate` EnergyPlus fatalled on Bridgewater because `hvac_heating_boiler.py` emitted
+`ZoneHVAC:Baseboard:Convective:Gas` (not an EP object) **and** the simple `systems_config` wrongly
+said `gas_boiler_heating` (real plant = VRF, per systems_config_v40 + HIEX). **Both fixed:** generator
+now emits `ZoneHVAC:UnitHeater` + `Coil:Heating:Fuel` (schema-valid, efficiency clamped ≤ 1); fixture
+`systems_config` corrected to VRF. **report_baseline_v1 now runs clean (0 fatal, EP EUI 60.5 space-only,
+elec 179.3 / gas 75.6 MWh)** — the EP column Brief 98 P0 was blocked on. 🚩 Flagged (not chased, per
+3-strikes): a second fatal in the gas+VRF-cooling combination (VRF-TU node reconciliation) + the deeper
+simple-vs-v40 systems_config drift — each its own follow-up. NZA-Sim untouched; anchors 132.6 / 126.0
+byte-identical. Deliverable: [`../audit/98pre_gas_heating_fix.md`](../audit/98pre_gas_heating_fix.md).
+Brief: [`active/98pre_fix_mainsim_gas_heating.md`](active/98pre_fix_mainsim_gas_heating.md). **PR open,
+NOT merged — independent review gates it; then Brief 98 P0 resumes.**
+
 **Brief 97 — Interventions Studio (module redesign + RICS cost editor as pop-out) — CLOSED 2026-07-08
 (overnight, unattended; P1–P9 done; PR open, NOT merged — independent review + Chris walkthrough gate it).**
 On branch `chris/cost-plan-editor` (cut from `main` `d7d2c37`, post-95/96 merge).
