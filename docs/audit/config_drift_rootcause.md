@@ -23,18 +23,20 @@ open) so the derive-on-read fix (`nza_engine/systems_from_v40.py`) is present to
 > the change was an envelope-only check that doesn't use the systems config at all. **The risk was
 > real but never realised** — no stale EnergyPlus result was ever put in front of anyone.
 >
-> **Is it fixed? Yes — the drift that matters is closed.** The core problem — EnergyPlus simulating the
-> wrong *type* of heating, cooling or ventilation — is **fixed and proven** (Brief 98-pre-b now derives
-> EnergyPlus's systems from the single source of truth, `v40`). The audit initially flagged four
-> secondary fields (a hot-water heat-pump efficiency, a lighting-control setting, hot-water setpoints,
-> one edge case) as also needing to come from `v40`; **on closer investigation (Brief 98-pre-c) that
-> recommendation was withdrawn** — for these fields NZA-Sim's own displayed engine reads the *older*
-> config too, so EnergyPlus copying them from there **already matches what the app shows**. Deriving
-> them from `v40` would have made EnergyPlus disagree with the app, not agree. See the **CORRECTION**
-> at the end of this doc. One genuine open question remains — *which* systems are "true" for
-> Bridgewater's hot water — but that's a decision about the building, not a software fix.
+> **Is it fixed? Yes — fully.** The core problem (EnergyPlus simulating the wrong *type* of heating,
+> cooling or ventilation) was fixed by **Brief 98-pre-b**. The audit's four secondary fields were then
+> chased through two more steps: an interim note (Brief 98-pre-c) mis-read which engine sourced them
+> and briefly withdrew the fix — **that interim note was wrong** and is superseded below. Definitive
+> read-only traces (Brief 98-pre-d) proved NZA-Sim's *displayed* engine reads **v40** for both hot water
+> and lighting, and that two of the four fields were genuine EnergyPlus-side gaps: EnergyPlus was using
+> a stale lighting-control setting (~20% low on lighting) and a default hot-water heat-pump efficiency
+> instead of v40's. **Brief 98-pre-d fixed both in the EnergyPlus derive** (no NZA-Sim change); the
+> other two were latent/no-effect. EnergyPlus now matches the displayed engine across all four. The
+> Bridgewater hot-water configuration is unambiguous — v40 (gas + ASHP) is what the app shows and what
+> EnergyPlus now simulates.
 >
-> _(Full evidence — commit trail, per-project table, field-by-field classification — below.)_
+> _(Full evidence below. The interim 98-pre-c CORRECTION section near the end is retained for the record
+> but is itself superseded by the FINAL section — read the FINAL.)_
 
 Three questions:
 1. When and why did the two configs diverge?
@@ -215,6 +217,16 @@ rule (no fixes here).
 
 ---
 
+## ⛔ SUPERSEDED — the CORRECTION below (Brief 98-pre-c) is itself WRONG; read the FINAL section
+
+The 98-pre-c CORRECTION section that follows traced the wrong function — the **legacy
+`calculateInstantDegreeDay`** (`instantCalc.js:5971+`, the `6050`/`6138` lines it cites) — which does
+**not** produce the displayed numbers or the anchors. The **displayed** engine is `_calculateState3`
+(`instantCalc.js:4941`), and it reads **v40** for both DHW and lighting. So this CORRECTION's premise
+("the instant engine reads the simple config", "deriving from v40 would move the drift", "DHW is
+gas-only") is false. It is retained below only for the record. **The definitive resolution is the
+FINAL section at the very bottom.**
+
 ## ⚠️ CORRECTION (Brief 98-pre-c, 2026-07-09) — the Q3 recommendation above was WRONG
 
 The recommendation to derive the four secondary fields from v40 was investigated for Brief 98-pre-c and **retracted**. It rests on a false premise: that v40 is the reference these fields must match. It is not — **NZA-Sim's *instant engine* (the engine behind the 132.6/126.0 anchors and the displayed Results) does not read v40 for these fields; it reads the flat/simple config.** Deriving them from v40 would make EnergyPlus **disagree** with NZA-Sim's instant engine, i.e. *move* the drift, not close it. Full evidence: [`98prec_escalation.md`](98prec_escalation.md).
@@ -228,3 +240,39 @@ The recommendation to derive the four secondary fields from v40 was investigated
 **Open question for Chris (not Code's to answer) — flagged before Brief 98 P0 / the report:** which config is the intended source of truth for **Bridgewater's DHW** — the simple fields (gas-only) or v40 (52 % gas / 48 % ASHP at COP 3)? NZA-Sim currently holds *both* (instant engine = gas-only; systems-electricity path = v40 split). The report's DHW baseline depends on the answer. This is a "what is the building" decision, not a plumbing bug.
 
 **98-pre-b remains correct and mergeable as-is** — it closes the dangerous part (wrong system *type*) and is strictly better than the drift it replaced.
+
+---
+
+## ✅ FINAL (Brief 98-pre-d, 2026-07-09) — definitive traces + both real gaps fixed
+
+Supersedes the 98-pre-c CORRECTION above. Definitive **read-only** traces of the **displayed** engine
+`_calculateState3` (`instantCalc.js:4941`) on the **live Bridgewater** project settle it:
+
+- **DHW — displayed reads v40.** `_calculateState3` → `computeSystemsDelivered(v40)` → `dhw =
+  dhw_v40_block ?? dhw_v25` (`instantCalc.js:5176`). Live displayed `consumption.dhw` = **electricity
+  42.2 MWh + gas 157.4 MWh** (heat-pump 60% of demand share) — the ASHP **is** present, not gas-only.
+- **Lighting — displayed reads v40.** `_calculateState3` scales lighting by
+  `effectiveSystemScalar(building.systems_config_v40.lighting)` (`instantCalc.js:2418`, uses v40
+  `control_factor`). Live v40 lighting `control_factor 1.0` → displayed **44.46 MWh** (full LPD).
+
+Against that reference, two of the four fields were **genuine EnergyPlus-derive gaps** (the audit's
+original C1/C2 were right; 98-pre-c wrongly retracted them). **Brief 98-pre-d fixed both in
+`derive_systems_for_sim` — EP-derive only, no `instantCalc.js`/assembler change, anchors 132.6/126.0
+byte-identical:**
+
+| Field | Was (98-pre-b) | Displayed (v40) | 98-pre-d fix | Proof |
+|---|---|---|---|---|
+| **C1 `lighting_control`** | preserved stale `occupancy_sensing` → factor **0.80** (~20% low) | v40 `constant` → **1.0** | map v40 `control_mechanism` → `lighting_control` | emitted `Lights.watts_per_floor_area` = LPD×1.0 (not ×0.80); EP 0 fatal |
+| **C2 ASHP DHW COP** | default **2.8** | v40 **3.0** | derive `secondary.efficiency_override` from v40 heat-pump DHW `efficiency_metric` | emitted `DHW_ASHP_Preheat.heater_thermal_efficiency` = 3.0 |
+| C3 DHW setpoints | preserved (=60) | v40 =60 | latent — matches; no change needed | — |
+| C4 stale `dhw_preheat` | symmetric add/clear | — | latent — no project triggers | — |
+
+Tests: `scripts/_brief98pred_p2.py` (6 lighting mappings + 3 COPs + symmetry + EP run 0 fatal).
+Residual note: v40's `daylight_dimming` `control_factor` is 0.70 while the assembler/instantCalc string
+table uses 0.60 — a pre-existing NZA-Sim internal table difference (both string paths use 0.60), not
+Bridgewater-relevant (constant), left as-is.
+
+**FINAL verdict:** the config drift is **fully closed**. `/api/simulate` now matches NZA-Sim's displayed
+engine across system type (98-pre-b), enabled gates (98-pre-b), lighting control and ASHP DHW COP
+(98-pre-d). Bridgewater's DHW is unambiguously v40 (gas + ASHP) in both engines. Brief 98 P0's residual
+table can be built on a baseline faithful across every audited field.
