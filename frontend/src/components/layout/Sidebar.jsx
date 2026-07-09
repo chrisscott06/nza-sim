@@ -8,7 +8,6 @@ import {
   Flame,
   FileSpreadsheet,
   BarChart3,
-  TrendingDown,
   BookOpen,
   Cloud,
   Route as RouteIcon,
@@ -45,7 +44,6 @@ const INPUT_ITEMS = [
 
 const OUTPUT_ITEMS = [
   { to: '/results',     icon: BarChart3,       label: 'Results' },
-  { to: '/crrem',       icon: TrendingDown,    label: 'CRREM' },
   // Brief 41 — Interventions: Pattern Y declarative patches against the
   // baseline; engine runs cumulative state for each enabled intervention.
   { to: '/interventions', icon: Layers,        label: 'Interventions' },

@@ -36,7 +36,6 @@ import InternalGainsModule from './components/modules/gains/InternalGainsModule.
 // declarative patches against the baseline.
 import InterventionsModule from './components/modules/interventions/InterventionsModule.jsx'
 import ConsumptionManager from './components/modules/consumption/ConsumptionManager.jsx'
-import CRREMModule from './components/modules/CRREMModule.jsx'
 import WeatherModule from './components/modules/WeatherModule.jsx'
 import BalanceTestPage from './components/modules/balance/BalanceTestPage.jsx'
 import ChartComponentsTestPage from './pages/ChartComponentsTestPage.jsx'
@@ -69,7 +68,6 @@ export default function App() {
                 <Route path="/results"   element={<ErrorBoundary moduleName="Results"><IMResultsModule /></ErrorBoundary>} />
                 <Route path="/roadmap"   element={<ErrorBoundary moduleName="Retrofit Roadmap"><RoadmapModule /></ErrorBoundary>} />
                 <Route path="/results-legacy" element={<ErrorBoundary moduleName="Results Dashboard"><ResultsDashboard /></ErrorBoundary>} />
-                <Route path="/crrem"     element={<ErrorBoundary moduleName="CRREM"><CRREMModule /></ErrorBoundary>} />
                 <Route path="/weather"   element={<ErrorBoundary moduleName="Weather"><WeatherModule /></ErrorBoundary>} />
                 <Route path="/balance-test" element={<ErrorBoundary moduleName="Heat Balance Test"><BalanceTestPage /></ErrorBoundary>} />
                 <Route path="/chart-test"   element={<ErrorBoundary moduleName="Chart Components Test"><ChartComponentsTestPage /></ErrorBoundary>} />
