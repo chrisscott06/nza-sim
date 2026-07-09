@@ -2,6 +2,16 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
+## ✅ Brief 98-pre — Fix Main-Sim Gas Heating (unblock the EnergyPlus baseline) — CLOSED 2026-07-09 on `chris/fix-mainsim-gas-heating` *(off `main` `351a72f`; PR open, NOT merged)*
+
+Prerequisite for Brief 98 P0. The main `/api/simulate` EnergyPlus fatalled on Bridgewater: `hvac_heating_boiler.py` emitted `ZoneHVAC:Baseboard:Convective:Gas` (not an EP object) **and** the simple `systems_config` wrongly said `gas_boiler_heating` (real plant = VRF per `systems_config_v40` + HIEX; gas is DHW-only).
+
+- **P1** — heating-config investigation: Bridgewater is VRF-heated (three cited sources); the simple `systems_config` is stale/wrong. Two-layer failure: config drift + invalid generator object.
+- **P2** — two fixes: (1) generator emits `ZoneHVAC:UnitHeater` + `Coil:Heating:Fuel` (NaturalGas) + `Fan:ConstantVolume`, all schema-valid; `burner_efficiency` clamped ≤ 1. (2) fixture `systems_config` corrected to VRF (SCOP 3 / EER 4.6).
+- **P3** — `report_baseline_v1` runs **clean (0 fatal, 0 severe, EP EUI 60.5 space-only; elec 179.3 / gas 75.6 MWh)** — the EP column Brief 98 P0 was blocked on. `scripts/_brief98pre_mainsim.py`.
+- 🚩 **Flagged, not chased (per 3-strikes / brief escalation):** a second fatal surfaced once the invalid object cleared — the gas-heating + VRF-cooling combination doesn't reconcile the VRF-TU inlet with the unit-heater zone-exhaust node (needs a shared NodeList; cooling also read from a 3rd source, `systems_config_v25`). Also the deeper simple-vs-v40 `systems_config` drift. Each its own follow-up; neither affects report_baseline.
+- NZA-Sim untouched; `--fixture` anchors **132.6 / 126.0** byte-identical. Deliverable: [`audit/98pre_gas_heating_fix.md`](docs/audit/98pre_gas_heating_fix.md). **Brief 98 P0 can now resume.**
+
 ## ✅ Brief 97 — Interventions Studio (module redesign + RICS cost editor as pop-out) — CLOSED 2026-07-08 (overnight, unattended; P1–P9) on `chris/cost-plan-editor` *(cut from `main` `d7d2c37` post-95/96 merge; PR open, NOT merged — Chris walkthrough + independent review gate it)*
 
 **Supersedes Brief 91 + the 91b stub/editor drafts.** Turns the Interventions module from a grey-scroll into a designed, tabbed workspace (Impact/Carbon/Demand/Cost with semantic colour), restyles the Strategy view + validate panel, and replaces the transitional headline cost card with the full RICS/NRM2 cost editor as a **pop-out** window (overrides 91's inline + UX-freeze choices). Carries forward the 91b P2 work — CostPlanEditor component, migrate-on-read, transitional-block removal — rehomed into the pop-out. **Zero physics** — `_brief93_anchor.mjs --fixture` EUI **132.6** byte-identical start→close.
