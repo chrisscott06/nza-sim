@@ -276,8 +276,8 @@ export default function StrategyView({ strategyName = 'Strategy 1', intervention
               <Stat label="Carbon saved (yr 1)" accent={savingAccent} value={cumCarbon ? `${signed(cumCarbon.delta)} kgCO₂/m²` : '—'} />
               <Stat
                 label="Lifetime carbon"
-                accent={strategyLifetimeTco2e > 0.05 ? SAVE_GREEN : strategyLifetimeTco2e < -0.05 ? INCREASE_RED : undefined}
-                value={Number.isFinite(strategyLifetimeTco2e) ? `${signed(strategyLifetimeTco2e, 0)} tCO₂e` : '—'}
+                accent={-strategyLifetimeTco2e < -0.05 ? SAVE_GREEN : -strategyLifetimeTco2e > 0.05 ? INCREASE_RED : undefined}
+                value={Number.isFinite(strategyLifetimeTco2e) ? `${signed(-strategyLifetimeTco2e, 0)} tCO₂e` : '—'}
                 sub="by 2050"
               />
               {enabledCostTotal > 0
