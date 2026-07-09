@@ -1,0 +1,90 @@
+{
+  "db": "data/nza_sim.db",
+  "projects": [
+    {
+      "id": "12cf7cc4-9bd",
+      "name": "Bridgewater Hotel",
+      "updated_at": "2026-07-07 19:43:08",
+      "has_v40": true,
+      "drifted": true,
+      "differing_services": [
+        "heating: stored=gas \u2192 v40=vrf/other",
+        "ventilation: stored=mev \u2192 v40=mvhr"
+      ],
+      "stored_dispatch": {
+        "heating": "gas",
+        "cooling": "vrf",
+        "ventilation": "mev",
+        "dhw": "gas"
+      },
+      "v40_dispatch": {
+        "heating": "vrf/other",
+        "cooling": "vrf",
+        "ventilation": "mvhr",
+        "dhw": "gas"
+      }
+    },
+    {
+      "id": "5092bba3-c41",
+      "name": "Bridgewater \u2014 Enhanced Fabric",
+      "updated_at": "2026-06-24 14:19:25",
+      "has_v40": false,
+      "drifted": false,
+      "differing_services": [],
+      "stored_dispatch": {
+        "heating": "vrf/other",
+        "cooling": "vrf",
+        "ventilation": "mev",
+        "dhw": "gas"
+      },
+      "v40_dispatch": {
+        "heating": "(no v40 \u2014 falls back to stored, no drift)",
+        "cooling": "-",
+        "ventilation": "-",
+        "dhw": "-"
+      }
+    },
+    {
+      "id": "c17af731-c16",
+      "name": "New Project",
+      "updated_at": "2026-06-24 14:19:25",
+      "has_v40": false,
+      "drifted": false,
+      "differing_services": [],
+      "stored_dispatch": {
+        "heating": "vrf/other",
+        "cooling": "vrf",
+        "ventilation": "mev",
+        "dhw": "gas"
+      },
+      "v40_dispatch": {
+        "heating": "(no v40 \u2014 falls back to stored, no drift)",
+        "cooling": "-",
+        "ventilation": "-",
+        "dhw": "-"
+      }
+    },
+    {
+      "id": "zztest00-000",
+      "name": "ZZ TEST \u2014 do not use",
+      "updated_at": "2026-07-09 06:39:54",
+      "has_v40": true,
+      "drifted": true,
+      "differing_services": [
+        "ventilation: stored=mev \u2192 v40=mvhr"
+      ],
+      "stored_dispatch": {
+        "heating": "vrf/other",
+        "cooling": "vrf",
+        "ventilation": "mev",
+        "dhw": "gas"
+      },
+      "v40_dispatch": {
+        "heating": "vrf/other",
+        "cooling": "vrf",
+        "ventilation": "mvhr",
+        "dhw": "gas"
+      }
+    }
+  ]
+}

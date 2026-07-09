@@ -1,5 +1,34 @@
 # Current brief
 
+**Brief 98-pre-c — Derive Remaining Fields — CLOSED as a doc correction 2026-07-09 (no code changed).**
+On branch `chris/derive-remaining-fields` (off `chris/fix-systems-config-drift`); the escalation + doc
+correction were consolidated onto `chris/audit-config-drift`. Investigation found the audit's four (c)
+findings rest on a false premise: NZA-Sim's *instant engine* (behind the 132.6/126.0 anchors + displayed
+Results) reads `lighting_control` and DHW from the flat/simple config, NOT v40. So 98-pre-b's *preserved*
+values already match the instant engine; deriving from v40 would open a ~20% EP-vs-anchor lighting gap.
+**STOP-and-write** per the brief's escalate clause — derive/assembler/instantCalc untouched. The dangerous
+drift (system *type*) is fully closed by 98-pre-b; the residual is an upstream NZA-Sim instant-engine split
+(out of scope, would move the anchors). ⚠️ **Open decision for Chris:** is Bridgewater DHW gas-only (simple)
+or ASHP-48%-COP-3 (v40)? — the report's DHW baseline depends on it. Deliverable:
+[`../audit/98prec_escalation.md`](../audit/98prec_escalation.md) + CORRECTION in
+[`../audit/config_drift_rootcause.md`](../audit/config_drift_rootcause.md). Brief:
+[`archive/98prec_derive_remaining_fields_COMPLETED.md`](archive/98prec_derive_remaining_fields_COMPLETED.md).
+
+**Audit — systems_config Drift Root-Cause (read-only, findings only) — CLOSED 2026-07-09.**
+On branch `chris/audit-config-drift` (off `chris/fix-systems-config-drift`, PR #7's branch — read-only,
+so the derive it audits is present). Evidence trail behind the 98-pre-b fix. **Q1:** accidental orphan —
+Brief 40 (2026-05-19) migrated the systems model to v40 for the instant engine + UI but left the EP
+`/api/simulate` path reading the un-maintained simple `systems_config` column (~7 weeks exposure).
+**Q2:** 2 of 4 projects drifted (Bridgewater Hotel materially); **no realised stale EP result** — all
+full-systems runs predate v40, the only later run was envelope-only. **Q3:** primary dispatch faithful,
+but **4 (c) findings** — `lighting_control` (~20% lighting), `ashp_cop_dhw` (~7% ASHP-DHW), v40 DHW
+setpoints (latent), stale `dhw_preheat` (latent) — still preserved-from-stored not derived-from-v40.
+**Verdict: drift NOT fully closed** — 98-pre-b is mergeable as-is (fixes wrong system *type*), but a
+short follow-up fix brief should derive the 4 secondary fields from v40 before EP numbers go
+client-facing. No engine/config changes made. Deliverable:
+[`../audit/config_drift_rootcause.md`](../audit/config_drift_rootcause.md). Brief:
+[`archive/audit_config_drift_COMPLETED.md`](archive/audit_config_drift_COMPLETED.md). **PR open, NOT merged — the value is the doc.**
+
 **Brief 98-pre-b — systems_config Drift: one source of system truth for `/api/simulate` — CLOSED 2026-07-09.**
 On branch `chris/fix-systems-config-drift` (off `main` `0d68618`, post-PR#6 merge). `/api/simulate` read two
 legacy configs the current UI never writes — the simple `systems_config` DB column (`projects.py:573`) and the
