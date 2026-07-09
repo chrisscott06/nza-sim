@@ -466,6 +466,11 @@ const DEFAULT_PARAMS = {
   // created_at, updated_at, group_count, line_count }. Cross-project sharing
   // is a future migration (the shape moves storage tier cleanly).
   cost_template_library: [],
+  // Project-level cost defaults — energy tariffs (£/kWh) + on-cost % defaults.
+  // Edited on the Overview page; read everywhere via costReads.readProjectDefault
+  // (a set key wins over the costLibrary floor). Empty {} → the library defaults
+  // apply (elec £0.30 / gas £0.08, fees 12 / prelims 10 / OHP 8 / cont 15 / infl 5).
+  cost_defaults: {},
 }
 
 // ── Brief 27 Part 1 — v2.3 migration helpers ─────────────────────────────────
@@ -1233,6 +1238,8 @@ export function ProjectProvider({ children }) {
       // Brief 91b Part 6 — persist the cost-plan template library across loads
       // (dropping it here would lose saved templates on reload).
       cost_template_library: Array.isArray(bc.cost_template_library) ? bc.cost_template_library : DEFAULT_PARAMS.cost_template_library,
+      // Project cost defaults (tariffs + on-cost %s) — persist across loads.
+      cost_defaults: (bc.cost_defaults && typeof bc.cost_defaults === 'object' && !Array.isArray(bc.cost_defaults)) ? bc.cost_defaults : DEFAULT_PARAMS.cost_defaults,
     })
     setConstructions(project.construction_choices ?? DEFAULT_CONSTRUCTIONS)
     setSystems(migrateSystemsConfig(project.systems_config))
