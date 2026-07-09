@@ -1,7 +1,27 @@
 # Current brief
 
-**Brief 96 — HIEX Report Modelling (22 interventions, four-metric table, CSV/XLSX) — CLOSED 2026-07-08
-(overnight, unattended; P1–P7 done; stacked PR open, do NOT merge).** On branch `chris/hiex-report-modelling`
+**Brief 97 — Interventions Studio (module redesign + RICS cost editor as pop-out) — CLOSED 2026-07-08
+(overnight, unattended; P1–P9 done; PR open, NOT merged — independent review + Chris walkthrough gate it).**
+On branch `chris/cost-plan-editor` (cut from `main` `d7d2c37`, post-95/96 merge).
+**Supersedes Brief 91 + the 91b stub/editor drafts** (91b files `git rm`'d from active/; 91 kept as content
+source). Turns the Interventions module from a grey-scroll into a designed, tabbed workspace and replaces the
+transitional headline cost card with the full RICS/NRM2 cost editor built as a **pop-out** window (not inline —
+overrides 91's UX-freeze). **Zero physics** (`--fixture` anchor EUI 132.6 byte-identical start→close). Parts:
+**P1** land brief + supersede 91b + EP-flag rename rider (already applied: "EP-validated ✓" → "EP-checked — see
+Table 3" where |EUI Δ%|>25%: 2.2/3.3/3.4/3.5) · **P2** semantic colour tokens · **P3** Library isolated view →
+tabs (Impact/Carbon/Demand/Cost) · **P4** cost data model + lossless headline migration · **P5** RICS cost
+editor as pop-out + delete headline editor + transitional dual-path (lifts the 91b quarantine) · **P6** keyboard
+discipline (best-effort) · **P7** HIEX-seeded templates + fill-from-defaults · **P8** Strategy restyle + validate
+panel cleanup · **P9** close (PR, NOT merged). Carries forward the 91b P2 work (CostPlanEditor component,
+migrate-on-read, transitional-block removal — rehomed into the pop-out). Canonical design note: Notion
+"Interventions Studio". Brief: [`archive/97_interventions_studio_COMPLETED.md`](archive/97_interventions_studio_COMPLETED.md);
+content source: [`archive/91_cost_plan_builder_SUPERSEDED.md`](archive/91_cost_plan_builder_SUPERSEDED.md);
+overnight log: [`../report/97_OVERNIGHT_FINDINGS.md`](../report/97_OVERNIGHT_FINDINGS.md). All 9 parts done,
+`--fixture` anchor EUI 132.6 byte-identical start→close, migration 11/11, ASHP acceptance £95,941.
+**Independent review + Chris walkthrough gate close; do NOT merge unattended.**
+
+**Brief 96 — HIEX Report Modelling (22 interventions, four-metric table, CSV/XLSX) — CLOSED 2026-07-08;
+MERGED to `main` `d7d2c37` (PR #3) 2026-07-08.** Was on branch `chris/hiex-report-modelling`
 (stacked on the Brief 95 branch). Turned the 22 HIEX Bridgwater interventions into a demonstrator report:
 cost plans seeded verbatim from the benchmarks doc (reconciled 22/22 ≤1%), a clean frozen baseline
 (`report_baseline_v1`, EUI 126.0 NZA / 111.1 EP), isolated + cumulative NZA-Sim runs, EP validation
@@ -13,9 +33,9 @@ sanity-check items in `docs/report/` (esp. `OVERNIGHT_FINDINGS.md`). Brief:
 [`archive/96_hiex_report_modelling_COMPLETED.md`](archive/96_hiex_report_modelling_COMPLETED.md).
 **Independent review (Claude Chat) + Chris sanity-check gate it before any merge.**
 
-**Brief 95 — EnergyPlus Results Backend for Interventions — CLOSED 2026-07-08 (P1–P9 done; independent
-review + Chris walkthrough PENDING; do NOT merge).** On branch `chris/ep-interventions-backend` (re-cut from
-post-94 `main` `8601e7f`). A second results backend for Interventions: translate the strategy stack →
+**Brief 95 — EnergyPlus Results Backend for Interventions — CLOSED 2026-07-08; MERGED to `main` `b138702`
+(PR #2) 2026-07-08 (independent review + Chris walkthrough still PENDING).** Was on branch
+`chris/ep-interventions-backend` (re-cut from post-94 `main` `8601e7f`). A second results backend for Interventions: translate the strategy stack →
 EnergyPlus models, run as a user-triggered batch, display NZA-Sim | EP | Δ% side-by-side. **NZA-Sim engine
 numbers byte-identical throughout** — fixture anchor `--fixture` EUI **132.6** unchanged P1→close; zero
 engine files touched on the branch (only 7 interventions UI files + the EP harness). Parts:

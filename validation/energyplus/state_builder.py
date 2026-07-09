@@ -210,9 +210,31 @@ def translation_gaps(interventions):
     return gaps
 
 
+# Non-physical building_config fields — money, not physics. Stripping them before
+# hashing means editing a tariff / cost plan / template never changes the EP config
+# hash, so cached EnergyPlus results are NOT invalidated by cost edits. Only a real
+# physical change (geometry, fabric, systems, patches) re-runs EnergyPlus.
+_NONPHYSICAL_BC_KEYS = ("cost_defaults", "cost_template_library")
+
+
+def _strip_nonphysical(config):
+    """Deep copy of a resolved config with non-physical (cost) fields removed."""
+    c = copy.deepcopy(config)
+    bc = c.get("building_config") if isinstance(c, dict) else None
+    if isinstance(bc, dict):
+        for k in _NONPHYSICAL_BC_KEYS:
+            bc.pop(k, None)
+        for iv in bc.get("interventions", []) if isinstance(bc.get("interventions"), list) else []:
+            if isinstance(iv, dict):
+                iv.pop("cost", None)
+    return c
+
+
 def config_hash(config):
-    """Stable 16-hex hash of a resolved config (order-insensitive canonical JSON)."""
-    canon = json.dumps(config, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    """Stable 16-hex hash of a resolved config (order-insensitive canonical JSON).
+    Non-physical cost/tariff/template fields are stripped first (see _strip_nonphysical)
+    so cost edits never invalidate cached EnergyPlus results."""
+    canon = json.dumps(_strip_nonphysical(config), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(canon.encode("utf-8")).hexdigest()[:16]
 
 

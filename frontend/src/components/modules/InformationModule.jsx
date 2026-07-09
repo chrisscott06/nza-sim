@@ -30,8 +30,22 @@ import {
 import { ProjectContext }    from '../../context/ProjectContext.jsx'
 import { SimulationContext } from '../../context/SimulationContext.jsx'
 import WeatherSelector       from './building/WeatherSelector.jsx'
+import { readProjectDefault } from '../../utils/costReads.js'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
+
+// Project-level cost defaults, edited here and read everywhere via costReads.
+const TARIFF_FIELDS = [
+  { key: 'electricity_price_per_kWh', label: 'Electricity', unit: '£/kWh', step: 0.01 },
+  { key: 'gas_price_per_kWh',         label: 'Gas',         unit: '£/kWh', step: 0.01 },
+]
+const ONCOST_FIELDS = [
+  { key: 'design_fees_pct', label: 'Design fees' },
+  { key: 'prelims_pct',     label: 'Prelims' },
+  { key: 'ohp_pct',         label: 'OHP' },
+  { key: 'contingency_pct', label: 'Contingency' },
+  { key: 'inflation_pct',   label: 'Inflation' },
+]
 
 const BUILDING_TYPES = [
   '', 'Hotel', 'Office', 'Retail', 'Education', 'Healthcare',
@@ -121,6 +135,16 @@ function CheckItem({ done, warning, label, sub, href }) {
 export default function InformationModule() {
   const { params, updateParam, currentProjectId, constructions, systems } = useContext(ProjectContext)
   const { results, status: simStatus } = useContext(SimulationContext)
+
+  // Project cost defaults (tariffs + on-cost %s). Blank → drop the key so the
+  // library floor applies; a number wins over it (costReads.readProjectDefault).
+  const costDefaults = params?.cost_defaults ?? {}
+  const setCostDefault = useCallback((key, raw) => {
+    const next = { ...(params?.cost_defaults ?? {}) }
+    if (raw === '' || raw == null || !Number.isFinite(Number(raw))) delete next[key]
+    else next[key] = Number(raw)
+    updateParam('cost_defaults', next)
+  }, [params?.cost_defaults, updateParam])
 
   const [datasets,     setDatasets]     = useState([])
   const [weatherFiles, setWeatherFiles] = useState([])
@@ -278,6 +302,53 @@ export default function InformationModule() {
             onFutureChange={filename => updateParam('future_weather_file', filename)}
             projectLat={params?.location?.latitude ?? 51.5}
           />
+        </SectionCard>
+
+        {/* ── Cost & tariffs (project-wide defaults) ────────────────── */}
+        <SectionCard title="Cost & tariffs">
+          <p className="text-xxs text-mid-grey mb-3">
+            Project-wide defaults. Energy tariffs drive running-cost + payback figures;
+            on-cost %s seed every intervention cost plan (overridable per line). Blank a
+            field to fall back to the standard default.
+          </p>
+          <div>
+            <label className="block text-xxs uppercase tracking-wider text-mid-grey mb-1.5">Energy tariffs</label>
+            <div className="grid grid-cols-2 gap-3">
+              {TARIFF_FIELDS.map(({ key, label, unit, step }) => (
+                <div key={key}>
+                  <label className="block text-xxs text-mid-grey/70 mb-1">{label}</label>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number" min={0} step={step}
+                      value={readProjectDefault(key, costDefaults)}
+                      onChange={e => setCostDefault(key, e.target.value)}
+                      className="w-full px-2 py-1.5 text-caption text-navy border border-light-grey rounded focus:outline-none focus:border-teal bg-white tabular-nums"
+                    />
+                    <span className="text-xxs text-mid-grey/60 whitespace-nowrap">{unit}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="mt-4">
+            <label className="block text-xxs uppercase tracking-wider text-mid-grey mb-1.5">On-cost defaults (%)</label>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              {ONCOST_FIELDS.map(({ key, label }) => (
+                <div key={key}>
+                  <label className="block text-xxs text-mid-grey/70 mb-1">{label}</label>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number" min={0} step={0.5}
+                      value={readProjectDefault(key, costDefaults)}
+                      onChange={e => setCostDefault(key, e.target.value)}
+                      className="w-full px-2 py-1.5 text-caption text-navy border border-light-grey rounded focus:outline-none focus:border-teal bg-white tabular-nums"
+                    />
+                    <span className="text-xxs text-mid-grey/60">%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </SectionCard>
 
         {/* ── Summary cards: read-only, link out ───────────────────── */}

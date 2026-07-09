@@ -20,8 +20,10 @@ import { readProjectDefault, readEnergyPrice } from './costReads.js'
 
 export const PAYBACK_CLAMP_YEARS = 999
 
-/** UI unit list per line; rate label adapts ("£/nr", "£/kW", …). */
-export const UNITS = ['nr', 'm', 'm²', 'm³', 'kW', 'kg', 'hr', 'item', 'sum', '%']
+/** UI unit list per line; rate label adapts ("£/nr", "£/kW", "£/(l/s)", "£/day", …).
+ *  Brief 97 P4 adds l/s (ventilation flow) + day (labour day-rate) for the HIEX
+ *  benchmark categories; the design-note originals are retained (superset). */
+export const UNITS = ['nr', 'm', 'm²', 'm³', 'kW', 'l/s', 'day', 'kg', 'hr', 'item', 'sum', '%']
 
 const num = v => (v == null || v === '' || !Number.isFinite(Number(v))) ? 0 : Number(v)
 const newId = (p) => `${p}_${(globalThis.crypto?.randomUUID?.() || `${p}${Math.round(performance.now())}x`).slice(0, 12)}`
@@ -139,37 +141,15 @@ export function computeOnCostsBreakdown(cost, projectDefaults = null) {
 
 /** Total cost of a plan (lines + on-costs, NRM2 sequence). */
 export function computeCostPlanTotal(cost, projectDefaults = null) {
-  if (!cost) return 0
-  if (!Array.isArray(cost.groups)) {
-    // TRANSITIONAL (removed in P4 once migrate-on-read is wired): a not-yet-
-    // migrated Brief 90 cost — sum its 6 headline lines so the DHW demo total
-    // stays correct between P2 and P4. No new code should rely on this branch.
-    if (cost.headline) return Object.values(cost.headline).reduce((s, v) => s + num(v), 0)
-    return 0
-  }
+  // Migrate-on-read (ProjectContext) guarantees every persisted cost is the
+  // line-item shape by the time it reaches here; a bare/absent cost totals 0.
+  if (!cost || !Array.isArray(cost.groups)) return 0
   return computeOnCostsBreakdown(cost, projectDefaults).total
 }
 
 /** Public API (Brief 90 name) — delegates to the plan total. */
 export function computeCostTotal(cost, projectDefaults = null) {
   return computeCostPlanTotal(cost, projectDefaults)
-}
-
-// ── TRANSITIONAL (removed in P4 together with HeadlineCostEditor.jsx) ─────────
-// Brief 90's headline math, kept only so the not-yet-replaced HeadlineCostEditor
-// still builds during P2/P3. No new code should import these.
-export function computeHeadlineTotal(headline) {
-  return Object.values(headline ?? {}).reduce((s, v) => s + num(v), 0)
-}
-export function deriveHeadlineLines(headline, projectDefaults = null) {
-  const works = num(headline?.equipment) + num(headline?.installation_commissioning) + num(headline?.additional_measures)
-  const feePct = readProjectDefault('design_fees_pct', projectDefaults) / 100
-  const feeBudget = works * feePct
-  const design_engineering = Math.round(feeBudget * readProjectDefault('design_share_of_fee', projectDefaults))
-  const project_delivery   = Math.round(feeBudget * readProjectDefault('delivery_share_of_fee', projectDefaults))
-  const subtotal = works + design_engineering + project_delivery
-  const contingency = Math.round(subtotal * (readProjectDefault('contingency_pct', projectDefaults) + readProjectDefault('inflation_pct', projectDefaults)) / 100)
-  return { design_engineering, project_delivery, contingency }
 }
 
 // ── Operational saving / payback / £-per-tonne (unchanged from Brief 90) ──────

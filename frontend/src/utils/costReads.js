@@ -9,6 +9,7 @@
 import {
   PROJECT_COST_DEFAULTS, INTERVENTION_TYPES,
 } from '../data/costLibrary.js'
+import { HIEX_COST_RATES } from '../data/hiexCostRates.js'
 
 /** Canonical project-level default for a key, project override winning over library. */
 export function readProjectDefault(key, projectDefaults = null) {
@@ -38,6 +39,22 @@ export function readRateForIntervention(typeOrTheme) {
 /** True once any per-type rate seeds exist (i.e. Applemore has been ingested). */
 export function hasSeededRates() {
   return Object.keys(INTERVENTION_TYPES).length > 0
+}
+
+// ── HIEX type-default rates (Brief 97 P7) ─────────────────────────────────────
+// Canonical read path for the HIEX benchmark-derived per-unit rates. Editor
+// components read suggestions ONLY through here (Bible Rule 11), never by
+// importing hiexCostRates.js directly.
+
+/** All HIEX rate seeds ({ key, label, unit, rate, source }). */
+export function listHiexRates() {
+  return HIEX_COST_RATES
+}
+
+/** HIEX rate seeds matching a line unit (for new-line rate suggestions). */
+export function hiexRatesForUnit(unit) {
+  if (!unit) return []
+  return HIEX_COST_RATES.filter(r => r.unit === unit)
 }
 
 // ── Per-project template library (Brief 91) ──────────────────────────────────
