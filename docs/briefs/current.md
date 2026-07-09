@@ -1,5 +1,19 @@
 # Current brief
 
+**Brief 98-pre-c — Derive Remaining Fields — CLOSED as a doc correction 2026-07-09 (no code changed).**
+On branch `chris/derive-remaining-fields` (off `chris/fix-systems-config-drift`); the escalation + doc
+correction were consolidated onto `chris/audit-config-drift`. Investigation found the audit's four (c)
+findings rest on a false premise: NZA-Sim's *instant engine* (behind the 132.6/126.0 anchors + displayed
+Results) reads `lighting_control` and DHW from the flat/simple config, NOT v40. So 98-pre-b's *preserved*
+values already match the instant engine; deriving from v40 would open a ~20% EP-vs-anchor lighting gap.
+**STOP-and-write** per the brief's escalate clause — derive/assembler/instantCalc untouched. The dangerous
+drift (system *type*) is fully closed by 98-pre-b; the residual is an upstream NZA-Sim instant-engine split
+(out of scope, would move the anchors). ⚠️ **Open decision for Chris:** is Bridgewater DHW gas-only (simple)
+or ASHP-48%-COP-3 (v40)? — the report's DHW baseline depends on it. Deliverable:
+[`../audit/98prec_escalation.md`](../audit/98prec_escalation.md) + CORRECTION in
+[`../audit/config_drift_rootcause.md`](../audit/config_drift_rootcause.md). Brief:
+[`archive/98prec_derive_remaining_fields_COMPLETED.md`](archive/98prec_derive_remaining_fields_COMPLETED.md).
+
 **Audit — systems_config Drift Root-Cause (read-only, findings only) — CLOSED 2026-07-09.**
 On branch `chris/audit-config-drift` (off `chris/fix-systems-config-drift`, PR #7's branch — read-only,
 so the derive it audits is present). Evidence trail behind the 98-pre-b fix. **Q1:** accidental orphan —

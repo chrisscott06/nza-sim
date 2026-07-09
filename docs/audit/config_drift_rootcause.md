@@ -23,13 +23,16 @@ open) so the derive-on-read fix (`nza_engine/systems_from_v40.py`) is present to
 > the change was an envelope-only check that doesn't use the systems config at all. **The risk was
 > real but never realised** — no stale EnergyPlus result was ever put in front of anyone.
 >
-> **Is it fixed?** The core problem — EnergyPlus simulating the wrong *type* of heating, cooling or
-> ventilation — is **fixed and proven** (Brief 98-pre-b now derives EnergyPlus's systems from the
-> single source of truth, `v40`). The audit did, however, find **four remaining fields** (a hot-water
-> heat-pump efficiency, a lighting-control setting, hot-water setpoints, and one edge case) that the
-> fix still copies from the old config instead of the new one — two of which shift a number today
-> (~20 % on lighting, ~7 % on hot-water heat-pump efficiency). **These need a short follow-up fix
-> before EnergyPlus numbers go into a client report.** Details in § P3.
+> **Is it fixed? Yes — the drift that matters is closed.** The core problem — EnergyPlus simulating the
+> wrong *type* of heating, cooling or ventilation — is **fixed and proven** (Brief 98-pre-b now derives
+> EnergyPlus's systems from the single source of truth, `v40`). The audit initially flagged four
+> secondary fields (a hot-water heat-pump efficiency, a lighting-control setting, hot-water setpoints,
+> one edge case) as also needing to come from `v40`; **on closer investigation (Brief 98-pre-c) that
+> recommendation was withdrawn** — for these fields NZA-Sim's own displayed engine reads the *older*
+> config too, so EnergyPlus copying them from there **already matches what the app shows**. Deriving
+> them from `v40` would have made EnergyPlus disagree with the app, not agree. See the **CORRECTION**
+> at the end of this doc. One genuine open question remains — *which* systems are "true" for
+> Bridgewater's hot water — but that's a decision about the building, not a software fix.
 >
 > _(Full evidence — commit trail, per-project table, field-by-field classification — below.)_
 
@@ -209,3 +212,19 @@ rule (no fixes here).
 **Recommendation:** before any EnergyPlus number goes into a client-facing report, land a short **follow-up fix brief** that extends `derive_systems_for_sim` to derive those four fields from v40 (map v40 `control_mechanism` → lighting/ventilation control; map the heat-pump DHW `efficiency_metric` → ASHP COP; map v40 service-level DHW setpoints; clear a stale `dhw_preheat` when v40 has no heat-pump DHW). None require assembler or NZA-Sim changes. After that, the read path is provably faithful across **all** fields, and Brief 98 P0's residual table can be trusted.
 
 **98-pre-b remains correct and mergeable as-is** — it closes the dangerous part (wrong system *type*) and is strictly better than the drift it replaced. The four (c) findings are refinements, not regressions.
+
+---
+
+## ⚠️ CORRECTION (Brief 98-pre-c, 2026-07-09) — the Q3 recommendation above was WRONG
+
+The recommendation to derive the four secondary fields from v40 was investigated for Brief 98-pre-c and **retracted**. It rests on a false premise: that v40 is the reference these fields must match. It is not — **NZA-Sim's *instant engine* (the engine behind the 132.6/126.0 anchors and the displayed Results) does not read v40 for these fields; it reads the flat/simple config.** Deriving them from v40 would make EnergyPlus **disagree** with NZA-Sim's instant engine, i.e. *move* the drift, not close it. Full evidence: [`98prec_escalation.md`](98prec_escalation.md).
+
+- **`lighting_control`** — instantCalc reads `systems.lighting_control` (`instantCalc.js:6050`) from the **simple field** `raw.lighting_control` (`ProjectContext.jsx:789`); no v40→lighting_control mapping exists in NZA-Sim. The EP assembler is *explicitly kept in sync* with instantCalc's factor (`instantCalc.js:86`), so 98-pre-b's preserved `occupancy_sensing` (0.80) **already matches** the instant engine. Deriving v40's `constant` (1.0) would open a **20 % EP-vs-anchor gap**. C1 measured derive-vs-v40; the correct reference is the instant engine.
+- **DHW (`ashp_cop_dhw`)** — instantCalc reads DHW from `systems.dhw` + flat `dhw_preheat` (`instantCalc.js:6138-6143`); Bridgewater's simple config has `dhw.secondary = null` / `dhw_preheat = "none"`, so **the instant engine models DHW as gas-only** and never reads v40's ASHP COP 3. Raising the EP ASHP COP to 3 would *widen* the EP-vs-anchor gap. (98-pre-b already adds an ASHP preheat secondary the instant engine lacks — a pre-existing DHW-reference question, see below.)
+- **DHW setpoints / stale-preheat** — latent; no live effect today.
+
+**Corrected verdict:** the *dangerous* drift (wrong system **type** — gas vs VRF, none vs VRF, MEV vs MVHR) is **fully closed** by 98-pre-b, and the EP derive **already matches NZA-Sim's instant engine** on the four secondary fields (by preserving them from the simple config, which is what the instant engine reads). The residual "(c)" items are **not an EP-derive defect** — they are an **upstream NZA-Sim inconsistency**: the instant engine reads the simple flat fields for lighting/DHW while a separate systems-electricity path reads v40. Reconciling that is an `instantCalc.js` change (a deliberate physics change that would move the anchors), not a config-derive fix. **Brief 98-pre-c is therefore closed as this documentation correction — no derive change.** 98-pre-b is the correct closure; the drift is genuinely closed for the purpose that matters (EP matches the displayed engine).
+
+**Open question for Chris (not Code's to answer) — flagged before Brief 98 P0 / the report:** which config is the intended source of truth for **Bridgewater's DHW** — the simple fields (gas-only) or v40 (52 % gas / 48 % ASHP at COP 3)? NZA-Sim currently holds *both* (instant engine = gas-only; systems-electricity path = v40 split). The report's DHW baseline depends on the answer. This is a "what is the building" decision, not a plumbing bug.
+
+**98-pre-b remains correct and mergeable as-is** — it closes the dangerous part (wrong system *type*) and is strictly better than the drift it replaced.
