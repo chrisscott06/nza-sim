@@ -1336,3 +1336,58 @@ library_constructions:
       density: 2300
       specific_heat: 1000
   layers: *id015
+
+
+# ── Brief 98-pre Job 2 (2026-07-09): the simple systems_config the MAIN /api/simulate
+# reads. Derived from source project 12cf7cc4, with space heating + cooling CORRECTED
+# from the stale gas_boiler_heating / none_cooling to VRF — matching systems_config_v40
+# (vrf_heat_recovery_dual_function, SCOP 3) and the HIEX plant spec (Toshiba SHRM VRF;
+# gas is DHW-only). See docs/audit/98pre_gas_heating_fix.md.
+systems_config:
+  mode: detailed
+  hvac_type: vrf_standard
+  ventilation_type: mev_standard
+  natural_ventilation: true
+  natural_vent_threshold: 22
+  dhw_primary: gas_boiler_dhw
+  dhw_preheat: none
+  dhw_setpoint: 60
+  dhw_preheat_setpoint: 50
+  lighting_power_density: 2
+  lighting_control: occupancy_sensing
+  pump_type: variable_speed
+  sfp_override: 2.8
+  cop_heating: 3.6
+  cop_cooling: 3.1
+  space_heating:
+    primary:
+      system: vrf_standard
+      share: 1
+      efficiency_override: 3.0
+    secondary: null
+    tertiary: null
+  space_cooling:
+    primary:
+      system: vrf_standard
+      share: 1
+      efficiency_override: 4.6
+    secondary: null
+    tertiary: null
+  dhw:
+    primary:
+      system: gas_boiler_dhw
+      share: 1
+      efficiency_override: 0.8
+    secondary: null
+    tertiary: null
+  ventilation:
+    primary:
+      system: mev_standard
+      share: 1
+      efficiency_override: 74
+    secondary: null
+    tertiary: null
+  equipment_power_density: 4.5
+  window_opening_threshold: 22
+  hre_override: 85
+  ventilation_control: continuous
