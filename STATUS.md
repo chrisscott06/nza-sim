@@ -2,6 +2,16 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
+## 🚩 Brief 98 P0 — NZA-Sim vs Main-Sim EnergyPlus baseline characterisation — BLOCKER SURFACED 2026-07-09 on `chris/ep-baseline-characterisation` *(off `main` `351a72f`; PR open, NOT merged)*
+
+Read-only P0 to characterise the NZA-Sim ↔ main-`/api/simulate`-EP pair on `report_baseline_v1` before building the Results-page comparison. **Finding: the main EnergyPlus fatals before it simulates.** `nza_engine/generators/hvac_heating_boiler.py` emits **`ZoneHVAC:Baseboard:Convective:Gas`** — an object type **not in the EP 25.2.0 schema** (valid: `:Water`, `:Electric`) — so every `gas_boiler_heating` building (Bridgewater/report_baseline) dies with `1 fatal, 1 severe` at input processing (0.02 s). Reproduced engine-direct (`scripts/_brief98_mainsim.py`) and present in the project's own run history (2026-04-03).
+
+- **NZA-Sim side ran clean:** EUI 126.0 (heating 87.7 / cooling 101.1 / DHW 257.3), per-element losses match the reference note (thermal bridging 24.0, permanent vents 18.9, infiltration 30.6, mech-vent 277.2 MWh).
+- **Residual table not produced** — can't diff against a fatal run (would violate "no agreement claim without a magnitude").
+- **Whole Brief 98 Results comparison is blocked** on a prerequisite fix: make the gas-heating generator emit a valid EP object (hot-water baseboard + boiler, or fuel heating coil). Recommended as its own small brief. Chris decides.
+- Useful side-finding: the main sim's `sql_parser` already extracts annual/monthly end-use + envelope + fuel — so the Sankey/fabric comparison is mostly overlay, not rebuild.
+- Zero engine code touched; `--fixture` anchor **132.6** byte-identical. Deliverable: [`audit/98p0_nza_vs_mainsim.md`](docs/audit/98p0_nza_vs_mainsim.md).
+
 ## ✅ Brief 97 — Interventions Studio (module redesign + RICS cost editor as pop-out) — CLOSED 2026-07-08 (overnight, unattended; P1–P9) on `chris/cost-plan-editor` *(cut from `main` `d7d2c37` post-95/96 merge; PR open, NOT merged — Chris walkthrough + independent review gate it)*
 
 **Supersedes Brief 91 + the 91b stub/editor drafts.** Turns the Interventions module from a grey-scroll into a designed, tabbed workspace (Impact/Carbon/Demand/Cost with semantic colour), restyles the Strategy view + validate panel, and replaces the transitional headline cost card with the full RICS/NRM2 cost editor as a **pop-out** window (overrides 91's inline + UX-freeze choices). Carries forward the 91b P2 work — CostPlanEditor component, migrate-on-read, transitional-block removal — rehomed into the pop-out. **Zero physics** — `_brief93_anchor.mjs --fixture` EUI **132.6** byte-identical start→close.

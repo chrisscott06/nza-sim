@@ -1,5 +1,19 @@
 # Current brief
 
+**Brief 98 P0 — NZA-Sim vs Main-Sim EnergyPlus baseline characterisation — 🚩 BLOCKER SURFACED
+2026-07-09.** On branch `chris/ep-baseline-characterisation` (off `main` `351a72f`, post-97 merge).
+Read-only characterisation to measure the NZA-Sim ↔ main-`/api/simulate`-EP pair before the Results-page
+comparison UI. **Outcome: the main EnergyPlus cannot produce a baseline** — `nza_engine/generators/
+hvac_heating_boiler.py` emits `ZoneHVAC:Baseboard:Convective:Gas`, an object absent from the EP 25.2.0
+schema (valid siblings: Water/Electric) → **fatal at input processing** for every gas-heated building
+(reproduced engine-direct + in the project's own 2026-04-03 run history). NZA-Sim side ran clean (EUI
+126.0). The residual table + the whole Brief 98 Results comparison are **blocked** on fixing the gas-heating
+generator (recommended as its own small brief). Zero engine code touched; `--fixture` anchor 132.6
+byte-identical. Deliverable: [`../audit/98p0_nza_vs_mainsim.md`](../audit/98p0_nza_vs_mainsim.md). Brief:
+[`active/98p0_ep_baseline_characterisation.md`](active/98p0_ep_baseline_characterisation.md). **PR open, NOT
+merged — independent review + Chris decision on the prerequisite fix.**
+
+
 **Brief 97 — Interventions Studio (module redesign + RICS cost editor as pop-out) — CLOSED 2026-07-08
 (overnight, unattended; P1–P9 done; PR open, NOT merged — independent review + Chris walkthrough gate it).**
 On branch `chris/cost-plan-editor` (cut from `main` `d7d2c37`, post-95/96 merge).
