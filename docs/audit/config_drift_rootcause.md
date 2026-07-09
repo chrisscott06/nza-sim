@@ -72,3 +72,49 @@ match. **P2 quantifies which projects actually drifted.**
 EnergyPlus `/api/simulate` read path when the systems model deliberately migrated to `v40` for the
 instant engine and UI. `/api/simulate` read the un-maintained simple `systems_config` column (and
 v25 gates) for ~7 weeks until Brief 98-pre-b re-pointed it at v40 via derive-on-read.
+
+---
+
+## P2 — Blast radius (Question 2)
+
+Read-only comparison (`scripts/_audit_config_drift_blast.py` → `config_drift_blast.json`): for every
+project, the dispatch the **stored** simple config would produce (what `/api/simulate` emitted
+*before* 98-pre-b) vs the dispatch **`derive_systems_for_sim(v40)`** produces (what it emits now).
+DB opened read-only (`data/nza_sim.db`, `mode=ro`).
+
+### Per-project drift (4 projects)
+| Project | has v40? | Drifted? | Differing services (stored → v40) |
+|---|---|---|---|
+| **Bridgewater Hotel** `12cf7cc4` | yes | **DRIFTED** | heating **gas → VRF** · ventilation **MEV → MVHR** |
+| **ZZ TEST — do not use** `zztest00` | yes | **DRIFTED** | ventilation **MEV → MVHR** (heating/cooling/DHW match) |
+| Bridgewater — Enhanced Fabric `5092bba3` | no | no | no v40 → derive falls back to stored, no drift possible |
+| New Project `c17af731` | no | no | no v40 → derive falls back to stored, no drift possible |
+
+**2 of 4 drifted — both projects that carry a v40.** The real client project (Bridgewater Hotel)
+was wrong on **two** services: the simple config said **gas heating + MEV**, while v40 (what
+NZA-Sim displays) is **VRF heating + MVHR**. A full-systems `/api/simulate` run on it from the
+stored config would have modelled a materially different building. (The two v40-less projects can't
+drift; note they also can't be read by NZA-Sim's v40 path — a separate, pre-existing matter, not
+this drift.)
+
+### Were any EP results actually produced against a stale building? → **No — the exposure was latent, not realised.**
+`simulation_runs` in `nza_sim.db`, **61 runs total**, read-only:
+- **60 runs are 2026-04-02 → pre-05-19 — they predate v40** (Brief 40 = 2026-05-19). At that time
+  the simple config *was* the canonical source, so they were not stale-vs-v40. (Includes the
+  2026-04-03 Bridgewater runs the 98-pre audit named — EUI 75.4/73.7/83.5, full mode, pre-v40:
+  they correctly used the then-canonical simple config; not a drift artefact.)
+- **Exactly 1 run after Brief 40**: Bridgewater, **2026-06-25 12:25:22** (run `2e9d639f`) — but its
+  `simulation_mode = envelope-only`. Envelope-only (State 1) **forces ideal loads and bypasses the
+  systems dispatch entirely** (`epjson_assembler.py:1405` `hvac_mode = "ideal_loads" if (state1 or
+  state2)`), so it never read the drifted systems config (its snapshot carries no systems dispatch;
+  heating/cooling = 0, a free-run envelope check).
+
+So although Bridgewater's stored config was materially wrong from 2026-05-19 on, **no full-systems
+EnergyPlus result was ever generated from a drifted config** between Brief 40 and Brief 98-pre-b.
+The "Run EnergyPlus" button would have produced a stale gas+MEV Bridgewater — but no such run was
+executed on a drifted project in that window. **No client-facing stale EP result exists in the DB.**
+
+**P2 verdict:** blast radius = 2 of 4 projects drifted (Bridgewater Hotel materially, on heating +
+ventilation; ZZ TEST on ventilation). Realised impact = **zero** — every full-systems EP run
+predates v40, and the only post-migration run was envelope-only (systems-independent). The risk was
+real and latent; it was never cashed into a wrong client number.
