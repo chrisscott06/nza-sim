@@ -1,5 +1,21 @@
 # Brief 98-pre-c — STOP-and-write escalation (no code changed)
 
+> ## ⛔ SUPERSEDED by Brief 98-pre-d (2026-07-09) — this escalation was WRONG
+>
+> This escalation traced the **legacy `calculateInstantDegreeDay`** (`instantCalc.js:5971+`, the
+> `6050`/`6138` lines below), **not** the displayed engine. The displayed engine is `_calculateState3`
+> (`instantCalc.js:4941`), and definitive read-only traces on live Bridgewater (Brief 98-pre-d) proved
+> it reads **v40** for both DHW and lighting:
+> - DHW: displayed `consumption.dhw` = electricity **42.2 MWh** + gas 157.4 MWh (ASHP present, not gas-only).
+> - Lighting: displayed uses `effectiveSystemScalar(v40.lighting)` (`instantCalc.js:2418`) → v40 `control_factor 1.0` → **44.46 MWh**.
+>
+> So the conclusion below ("preserve-from-simple matches the instant engine; deriving from v40 would
+> move the drift") is **false**. The audit's original **C1 (lighting_control) and C2 (ASHP DHW COP)
+> were real EP-derive gaps** — EnergyPlus was 20% low on lighting and used COP 2.8 vs v40's 3.0.
+> **Brief 98-pre-d fixed both** in `derive_systems_for_sim` (EP-derive only, no NZA-Sim change, anchors
+> 132.6/126.0 unchanged). See the FINAL section of [`config_drift_rootcause.md`](config_drift_rootcause.md)
+> and `scripts/_brief98pred_p2.py`. The text below is retained for the record only.
+
 **Trigger (per the brief's Escalate clause):** _"A field the audit listed genuinely has no v40
 source (report it — preserve-from-existing may be correct, but confirm) · deriving a field would need
 … NZA-Sim changes."_ Both fire. **I have not touched `derive_systems_for_sim`, the assembler, or

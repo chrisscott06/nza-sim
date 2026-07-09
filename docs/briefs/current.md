@@ -1,5 +1,19 @@
 # Current brief
 
+**Brief 98-pre-d — C1 lighting + C2 ASHP DHW COP EP-derive fixes — CLOSED 2026-07-09.**
+On branch `chris/98pre-d-lighting-dhw-cop` (off `main`). Definitive read-only traces of the displayed
+engine `_calculateState3` (`instantCalc.js:4941`) on live Bridgewater proved it reads **v40** for both
+DHW (consumption.dhw = 42.2 MWh elec + 157.4 MWh gas, ASHP present) and lighting (44.46 MWh, v40
+control_factor 1.0) — correcting the 98-pre-c escalation, which had traced the wrong function (legacy
+`calculateInstantDegreeDay`). So the audit's original **C1/C2 were real EP-derive gaps**, now fixed in
+`derive_systems_for_sim`: **C1** maps v40 lighting `control_mechanism` → `lighting_control` (constant →
+EP factor 1.0, was 0.80 ≈ 20% low); **C2** derives ASHP DHW COP from v40 (3.0, was 2.8). Proven
+(`scripts/_brief98pred_p2.py`): emitted Lights watts/area = LPD×1.0, ASHP tank efficiency 3.0, EP 0
+fatal. **No `instantCalc.js`/assembler change; anchors 132.6/126.0 byte-identical.** Corrected the
+superseded "displayed reads simple" claim in the audit doc + escalation. **Config drift fully closed.**
+Brief: [`archive/98pred_lighting_dhw_cop_COMPLETED.md`](archive/98pred_lighting_dhw_cop_COMPLETED.md).
+**PR open, NOT merged.** Supersedes 98-pre-c + the PR #9 note (folded in).
+
 **Brief 98-pre-c — Derive Remaining Fields — CLOSED as a doc correction 2026-07-09 (no code changed).**
 On branch `chris/derive-remaining-fields` (off `chris/fix-systems-config-drift`); the escalation + doc
 correction were consolidated onto `chris/audit-config-drift`. Investigation found the audit's four (c)

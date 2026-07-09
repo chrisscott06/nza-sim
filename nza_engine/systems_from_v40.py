@@ -53,6 +53,22 @@ _COMBUSTION_SOURCES = {
 }
 _HEATPUMP_DHW_SOURCES = {"ambient_air", "exhaust_air", "ground", "water"}
 
+# C1 (Brief 98-pre-d): v40 lighting `control_mechanism` → the assembler's
+# `lighting_control` key (epjson_assembler.py:_lighting_control_factors). Identity
+# where the vocabularies overlap; unknown → 'constant' (assembler factor 1.0, no
+# reduction). The displayed instant engine scales lighting by v40 `control_factor`
+# via effectiveSystemScalar (instantCalc.js:2418); this mirrors it on the EP side.
+# NB: 'daylight_dimming' maps to the assembler's 0.60, which differs from v40's own
+# control_factor 0.70 — a pre-existing NZA-Sim internal table difference (the string
+# path instantCalc.lightingControlFactor also uses 0.60), documented, out of scope.
+_LIGHTING_CONTROL_MAP = {
+    "constant": "constant",                    # → assembler default 1.0
+    "daylight_dimming": "daylight_dimming",    # → 0.60
+    "occupancy_sensing": "occupancy_sensing",  # → 0.80
+    "occupancy": "occupancy_sensing",          # → 0.80
+    "manual": "manual",                        # → 1.20
+}
+
 
 def _primary(systems):
     """The representative single system for a v40 service array: the highest-share
@@ -158,11 +174,30 @@ def derive_systems_for_sim(building_config, fallback_simple=None):
             "efficiency_override": _num_metric(dhw.get("efficiency_metric"), 0.92),
         }}
         # If a separate heat-pump DHW entry exists, model it as an ASHP preheat.
+        # C2 (Brief 98-pre-d): carry its COP from v40's efficiency_metric so the
+        # assembler's ashp_cop reflects v40 (e.g. 3.0) not the 2.8 default. The
+        # assembler reads systems.dhw.secondary.efficiency_override as ashp_cop
+        # (epjson_assembler.py:1537-1539).
         others = [s for s in (v40.get("dhw") or [])
                   if isinstance(s, dict) and s is not dhw and s.get("enabled", True)]
-        if any((s.get("source") or "").lower() in _HEATPUMP_DHW_SOURCES for s in others):
+        hp_dhw = next((s for s in others
+                       if (s.get("source") or "").lower() in _HEATPUMP_DHW_SOURCES), None)
+        if hp_dhw is not None:
             simple["dhw_preheat"] = "ashp_dhw"  # assembler reads flat dhw_preheat (sc.get)
-            systems["dhw"]["secondary"] = {"system": "ashp_dhw"}
+            systems["dhw"]["secondary"] = {
+                "system": "ashp_dhw",
+                "efficiency_override": _num_metric(hp_dhw.get("efficiency_metric"), 2.8),
+            }
+
+    # ── Lighting control (C1, Brief 98-pre-d) ────────────────────────────────
+    # Derive lighting_control from the v40 lighting primary's control_mechanism so
+    # EP's LPD-scaling factor tracks v40 (Bridgewater constant → 1.0) instead of
+    # preserving a stale simple value (occupancy_sensing → 0.80, a ~20% under-count
+    # vs the displayed engine). Single-primary simplification, as for other services.
+    light = _primary(v40.get("lighting"))
+    if light is not None:
+        cm = (light.get("control_mechanism") or "").lower()
+        simple["lighting_control"] = _LIGHTING_CONTROL_MAP.get(cm, "constant")
 
     simple["systems"] = systems
 
