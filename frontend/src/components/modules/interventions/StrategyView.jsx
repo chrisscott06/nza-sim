@@ -46,6 +46,7 @@ const INCREASE_RED = SEMANTIC.increase
 const ACCENT = '#E84393'
 
 const TABS = [
+  ['summary', 'Summary'],
   ['waterfall', 'Waterfall'],
   ['heatbalance', 'Heat balance'],
   ['carbon', 'Carbon'],
@@ -142,7 +143,7 @@ function HBPanel({ label, accent, result, orientationDeg, layout }) {
 }
 
 export default function StrategyView({ strategyName = 'Strategy 1', interventions = [], stackResult, orientationDeg = 0, crremPick, onCrremPathwayChange, epResults }) {
-  const [tab, setTab] = useState('waterfall')
+  const [tab, setTab] = useState('summary')
   const [showBaseline, setShowBaseline] = useState(true)
   const [showFinal, setShowFinal] = useState(true)
   const [hbLayout, setHbLayout] = useState('rows')
@@ -239,30 +240,12 @@ export default function StrategyView({ strategyName = 'Strategy 1', intervention
 
   return (
     <div className="flex flex-col h-full">
-      {/* Strategy headline (always visible) */}
-      <div className="flex-shrink-0 border-b border-light-grey bg-white px-4 py-3">
-        <div className="flex items-center gap-2 mb-2.5">
-          <span className="inline-block w-1.5 h-5 rounded-full" style={{ backgroundColor: ACCENT }} />
-          <h2 className="text-sm font-semibold text-navy">{strategyName}</h2>
-          <span className="text-xxs text-mid-grey/60">{enabledCount} measure{enabledCount === 1 ? '' : 's'} active</span>
-        </div>
-        <div className="flex flex-wrap gap-x-6 gap-y-3">
-          <Stat label="Final EUI" value={`${fmt(finalEUI)} kWh/m²`} sub={`baseline ${fmt(baselineEUI)}`} />
-          <Stat label="Energy saved" accent={savingAccent} value={`${signed(savingEUI)} kWh/m²`} sub={cumTot ? `${signed(cumTot.delta)} MWh/yr` : null} />
-          <Stat label="Carbon saved (yr 1)" accent={savingAccent} value={cumCarbon ? `${signed(cumCarbon.delta)} kgCO₂/m²` : '—'} />
-          <Stat
-            label="Lifetime carbon"
-            accent={strategyLifetimeTco2e > 0.05 ? SAVE_GREEN : strategyLifetimeTco2e < -0.05 ? INCREASE_RED : undefined}
-            value={Number.isFinite(strategyLifetimeTco2e) ? `${signed(strategyLifetimeTco2e, 0)} tCO₂e` : '—'}
-            sub="by 2050"
-          />
-          {enabledCostTotal > 0
-            ? <Stat label="Total capex" value={gbpShort(enabledCostTotal)} sub="enabled measures" />
-            : <Stat label="Total capex" placeholder="add costs in Library" />}
-          {strategyPerTonne != null
-            ? <Stat label="£ / tonne CO₂" value={gbpShort(strategyPerTonne)} sub="capex ÷ lifetime tCO₂e" />
-            : <Stat label="£ / tonne CO₂" placeholder="add costs in Library" />}
-        </div>
+      {/* Slim strategy header (the summary metrics moved into the Summary tab
+          — Chris walkthrough — so the tab content gets the full right-hand pane) */}
+      <div className="flex-shrink-0 flex items-center gap-2 border-b border-light-grey bg-white px-4 py-2.5">
+        <span className="inline-block w-1.5 h-5 rounded-full" style={{ backgroundColor: ACCENT }} />
+        <h2 className="text-sm font-semibold text-navy">{strategyName}</h2>
+        <span className="text-xxs text-mid-grey/60">{enabledCount} measure{enabledCount === 1 ? '' : 's'} active</span>
       </div>
 
       {/* Tab bar */}
@@ -284,6 +267,29 @@ export default function StrategyView({ strategyName = 'Strategy 1', intervention
 
       {/* Tab content — bounded height so charts never run away */}
       <div className="flex-1 min-h-0 overflow-auto p-4">
+        {tab === 'summary' && (
+          <div className="rounded-lg border border-light-grey/70 bg-white p-4">
+            <div className="text-xxs uppercase tracking-wider text-mid-grey/70 font-semibold mb-3">Strategy summary</div>
+            <div className="flex flex-wrap gap-x-8 gap-y-4">
+              <Stat label="Final EUI" value={`${fmt(finalEUI)} kWh/m²`} sub={`baseline ${fmt(baselineEUI)}`} />
+              <Stat label="Energy saved" accent={savingAccent} value={`${signed(savingEUI)} kWh/m²`} sub={cumTot ? `${signed(cumTot.delta)} MWh/yr` : null} />
+              <Stat label="Carbon saved (yr 1)" accent={savingAccent} value={cumCarbon ? `${signed(cumCarbon.delta)} kgCO₂/m²` : '—'} />
+              <Stat
+                label="Lifetime carbon"
+                accent={strategyLifetimeTco2e > 0.05 ? SAVE_GREEN : strategyLifetimeTco2e < -0.05 ? INCREASE_RED : undefined}
+                value={Number.isFinite(strategyLifetimeTco2e) ? `${signed(strategyLifetimeTco2e, 0)} tCO₂e` : '—'}
+                sub="by 2050"
+              />
+              {enabledCostTotal > 0
+                ? <Stat label="Total capex" value={gbpShort(enabledCostTotal)} sub="enabled measures" />
+                : <Stat label="Total capex" placeholder="add costs in Library" />}
+              {strategyPerTonne != null
+                ? <Stat label="£ / tonne CO₂" value={gbpShort(strategyPerTonne)} sub="capex ÷ lifetime tCO₂e" />
+                : <Stat label="£ / tonne CO₂" placeholder="add costs in Library" />}
+            </div>
+          </div>
+        )}
+
         {tab === 'waterfall' && (
           <div className="rounded-lg border border-light-grey/70 bg-white p-3">
             <EUIWaterfall interventions={interventions} stackResult={stackResult} />
