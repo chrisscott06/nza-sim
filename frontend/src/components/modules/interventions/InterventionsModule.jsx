@@ -606,6 +606,7 @@ export default function InterventionsModule() {
                   projectCostDefaults={projectCostDefaults}
                   onEditCost={setCostEditorIv}
                   epIso={selectedEpIso}
+                  epBaseline={epResults.byDesc?.baseline ?? null}
                   epNzaOnly={selectedEpNzaOnly}
                 />
               ) : (

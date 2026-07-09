@@ -173,11 +173,24 @@ function CostSummary({ cost, costTotal, linesTotal, poundsPerTonne, onEdit }) {
   )
 }
 
-export default function PerInterventionView({ intervention, isolatedRow, crremPick, projectCostDefaults, onCostChange, onEditCost, epIso, epNzaOnly = false }) {
+export default function PerInterventionView({ intervention, isolatedRow, crremPick, projectCostDefaults, onCostChange, onEditCost, epIso, epBaseline, epNzaOnly = false }) {
   const [tab, setTab] = useState('impact')
   const d = isolatedRow?.cumulativeDelta ?? null
   const gia = getGia(isolatedRow?.isolatedResult?.baseline)
   const patches = Array.isArray(intervention?.patches) ? intervention.patches : []
+
+  // Brief 97 follow-up — the BASELINE reference ("where we're working from"): the
+  // bare-baseline absolute state, NZA-Sim vs EnergyPlus, shown in grey above the
+  // isolated impact so every delta is read against a visible starting point. Baseline
+  // NZA absolutes are the delta record's `.from` (same bare baseline for every
+  // measure); baseline EP comes from the cached `baseline` state.
+  const epBaseRes = epBaseline?.result
+  const baselineRows = [
+    { label: 'EUI', unit: 'kWh/m²', nza: d?.eui_kwh_per_m2?.from, ep: epBaseRes?.eui_kwh_per_m2_yr, digits: 1 },
+    { label: 'Heating demand', unit: 'MWh', nza: d?.heating_demand_mwh?.from, ep: epBaseRes?.demand_mwh?.space_heating, digits: 1 },
+    { label: 'Cooling demand', unit: 'MWh', nza: d?.cooling_demand_mwh?.from, ep: epBaseRes?.demand_mwh?.space_cooling, digits: 1 },
+    { label: 'Operational carbon', unit: 'kgCO₂/m²', nza: d?.carbon_kgco2_per_m2?.from, ep: undefined, digits: 1 },
+  ]
 
   // Brief 95 P7 — isolated EP comparison (this measure alone vs the bare baseline).
   const epRes = epIso?.result
@@ -242,6 +255,16 @@ export default function PerInterventionView({ intervention, isolatedRow, crremPi
       <div className="flex-1 min-h-0 overflow-auto p-4">
         {tab === 'impact' && (
           <div className="flex flex-col gap-3">
+            {/* Baseline reference — where we're working from (NZA-Sim vs EnergyPlus) */}
+            <div className="rounded-lg border border-light-grey/70 bg-off-white/40 px-1 py-0.5">
+              <EPCompareCard
+                title="Baseline · where we're working from"
+                subtitle="the starting point, before this measure"
+                epStatus={epBaseline?.status ?? 'none'}
+                rows={baselineRows}
+              />
+            </div>
+
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
               {Number.isFinite(lifeTco2e) ? (
                 <HeadlineCard
