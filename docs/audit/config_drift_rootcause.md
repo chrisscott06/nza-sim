@@ -4,8 +4,34 @@
 Branch `chris/audit-config-drift`, cut off `chris/fix-systems-config-drift` (PR #7, intentionally
 open) so the derive-on-read fix (`nza_engine/systems_from_v40.py`) is present to audit.
 
-> **Plain-English summary (top-line answer — filled at P4).**
-> _(see § Verdict at the bottom once P2/P3 complete)_
+> ## Plain-English summary (quotable)
+>
+> **What happened.** NZA-Sim describes a building's heating, cooling, ventilation and hot-water
+> systems in a rich config called `systems_config_v40` — the one the app's editor writes and the
+> instant engine reads. When we introduced that richer model (19 May 2026, "Brief 40"), the
+> EnergyPlus "Run simulation" path was not moved across with it: it kept reading an **older, simpler
+> copy of the systems** that the editor had stopped updating. So EnergyPlus could simulate the
+> building's *previous* systems while the app showed the *current* ones.
+>
+> **Since when, and who's affected.** The gap existed for **~7 weeks** (19 May → 9 Jul 2026), until
+> we fixed it (Brief 98-pre-b). Of the four projects in the database, **two had drifted** — most
+> importantly **Bridgewater Hotel**, whose EnergyPlus copy said *gas heating + extract-only
+> ventilation* while the truth is *VRF heat pumps + heat-recovery ventilation*.
+>
+> **Did it produce a wrong answer for a client? No.** Every full systems-level EnergyPlus run in the
+> database predates the richer model (so its inputs were correct at the time), and the only run after
+> the change was an envelope-only check that doesn't use the systems config at all. **The risk was
+> real but never realised** — no stale EnergyPlus result was ever put in front of anyone.
+>
+> **Is it fixed?** The core problem — EnergyPlus simulating the wrong *type* of heating, cooling or
+> ventilation — is **fixed and proven** (Brief 98-pre-b now derives EnergyPlus's systems from the
+> single source of truth, `v40`). The audit did, however, find **four remaining fields** (a hot-water
+> heat-pump efficiency, a lighting-control setting, hot-water setpoints, and one edge case) that the
+> fix still copies from the old config instead of the new one — two of which shift a number today
+> (~20 % on lighting, ~7 % on hot-water heat-pump efficiency). **These need a short follow-up fix
+> before EnergyPlus numbers go into a client report.** Details in § P3.
+>
+> _(Full evidence — commit trail, per-project table, field-by-field classification — below.)_
 
 Three questions:
 1. When and why did the two configs diverge?
@@ -169,3 +195,17 @@ the drift "fully closed."** Each is fixable in the derive (map v40 `control_mech
 control; map the heat-pump DHW `efficiency_metric` → ASHP COP; map v40 service-level DHW setpoints;
 clear a stale preheat when v40 lacks one) — **a follow-up fix brief**, per this audit's stop-and-write
 rule (no fixes here).
+
+---
+
+## Verdict
+
+**The systems-config drift is NOT yet fully closed by Brief 98-pre-b.**
+
+- **Root cause (Q1):** an accidental orphan — Brief 40 (2026-05-19) deliberately migrated the systems model to `v40` for the instant engine + UI, but left the EnergyPlus `/api/simulate` read path reading the un-maintained simple `systems_config` column. ~7 weeks of exposure.
+- **Blast radius (Q2):** 2 of 4 projects drifted (Bridgewater Hotel materially: heating + ventilation). **No realised stale EP result** — all full-systems runs predate v40; the only later run was envelope-only.
+- **Fix faithfulness (Q3):** the **primary dispatch is faithful** (system types, enabled gates, space efficiencies — the fields that caused the drift now track v40). But **four secondary fields remain preserved-from-stored instead of derived-from-v40** — `lighting_control` (~20 % lighting), `ashp_cop_dhw` (~7 % ASHP-DHW), the v40 service-level DHW setpoints (latent), and stale-preheat clearing (latent).
+
+**Recommendation:** before any EnergyPlus number goes into a client-facing report, land a short **follow-up fix brief** that extends `derive_systems_for_sim` to derive those four fields from v40 (map v40 `control_mechanism` → lighting/ventilation control; map the heat-pump DHW `efficiency_metric` → ASHP COP; map v40 service-level DHW setpoints; clear a stale `dhw_preheat` when v40 has no heat-pump DHW). None require assembler or NZA-Sim changes. After that, the read path is provably faithful across **all** fields, and Brief 98 P0's residual table can be trusted.
+
+**98-pre-b remains correct and mergeable as-is** — it closes the dangerous part (wrong system *type*) and is strictly better than the drift it replaced. The four (c) findings are refinements, not regressions.

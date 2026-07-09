@@ -2,6 +2,15 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
+## 📋 Audit — systems_config Drift Root-Cause (read-only, findings only) — CLOSED 2026-07-09 on `chris/audit-config-drift` *(off `chris/fix-systems-config-drift`; PR open, NOT merged — the deliverable is the doc)*
+
+Tier-2 read-only audit behind the 98-pre-b fix — evidence trail for an industry audience before EP numbers go in a client report. No engine/config/assembler changes; anchors 132.6 / 126.0 untouched. Deliverable: [`audit/config_drift_rootcause.md`](docs/audit/config_drift_rootcause.md).
+
+- **Q1 root cause** — accidental orphan. Brief 40 (2026-05-19, `94d7288`/`18d52b7`/`e0dd1af`) deliberately migrated the systems model to v40 for the instant engine + UI, but left the EP `/api/simulate` path reading the un-maintained simple `systems_config` column. `projects.py` never referenced v40 until 98-pre-b (`c83dc94`). No v40→simple sync ever existed. **~7 weeks** of exposure.
+- **Q2 blast radius** — 2 of 4 projects drifted (Bridgewater Hotel materially: heating gas→VRF + ventilation MEV→MVHR; ZZ TEST: ventilation). **No realised stale EP result** — of 61 `simulation_runs`, 60 predate v40; the sole post-Brief-40 run was envelope-only (bypasses systems dispatch). Risk real but never cashed.
+- **Q3 fix faithfulness** — primary dispatch is faithful (system types, gates, space efficiencies now track v40); LPD/EPD correctly preserved. **4 (c) findings** — secondary fields still preserved-from-stored not derived-from-v40: **C1 `lighting_control`** (v40 constant vs derive occupancy_sensing → ~20% lighting), **C2 `ashp_cop_dhw`** (v40 COP 3 vs default 2.8 → ~7% ASHP-DHW), **C3** v40 service-level DHW setpoints (latent), **C4** stale `dhw_preheat` not cleared (latent).
+- **Verdict:** drift **NOT fully closed** — 98-pre-b fixes the dangerous part (wrong system *type*) and is mergeable as-is, but a short **follow-up fix brief** should extend `derive_systems_for_sim` to derive the 4 secondary fields from v40 before EP numbers go client-facing. No assembler/NZA-Sim changes needed.
+
 ## ✅ Brief 98-pre-b — systems_config Drift: one source of system truth for `/api/simulate` — CLOSED 2026-07-09 on `chris/fix-systems-config-drift` *(off `main` `0d68618` post-PR#6 merge; PR open, NOT merged)*
 
 `/api/simulate` read the simple `systems_config` DB column (`projects.py:573`) + `systems_config_v25` gates (`epjson_assembler.py:1418`) — both **legacy copies the current UI never writes**. The UI edits only `systems_config_v40` (what NZA-Sim reads). So any edited project silently simulated its pre-edit systems (the 98-pre gas-vs-VRF contradiction).
