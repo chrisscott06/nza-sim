@@ -1,0 +1,121 @@
+{
+  "ep_version": "/Applications/EnergyPlus-25-2-0",
+  "run1_baseline": {
+    "systems": {
+      "space_heating": {
+        "primary": {
+          "system": "vrf_standard",
+          "efficiency_override": 3.0
+        }
+      },
+      "space_cooling": {
+        "primary": {
+          "system": "vrf_standard",
+          "efficiency_override": 3.0
+        }
+      },
+      "ventilation": {
+        "primary": {
+          "system": "mvhr_standard",
+          "efficiency_override": 80.0
+        }
+      },
+      "dhw": {
+        "primary": {
+          "system": "gas_boiler_dhw",
+          "efficiency_override": 0.85
+        },
+        "secondary": {
+          "system": "ashp_dhw"
+        }
+      }
+    },
+    "v25": {
+      "heating": {
+        "enabled": true
+      },
+      "cooling": {
+        "enabled": true
+      },
+      "dhw": {
+        "enabled": true
+      }
+    },
+    "objects": {
+      "vrf_heating_coils": 5,
+      "vrf_cooling_coils": 5,
+      "gas_fuel_coils": 0
+    },
+    "fatal": 0,
+    "severe": 0,
+    "summary": {
+      "total_gia_m2": 4216.0,
+      "total_volume_m3": 13491.1,
+      "annual_heating_kWh": 54210.8,
+      "annual_cooling_kWh": 64498.5,
+      "annual_lighting_kWh": 15720.5,
+      "annual_equipment_kWh": 39561.9,
+      "annual_total_kWh": 199120.5,
+      "eui_kWh_per_m2": 47.2,
+      "peak_heating_W": 106340.0,
+      "peak_cooling_W": 78620.0,
+      "peak_heating_W_per_m2": 25.2,
+      "peak_cooling_W_per_m2": 18.6,
+      "unmet_heating_hours": 0.0,
+      "unmet_cooling_hours": 0.0
+    },
+    "fuel_split": {
+      "electricity_kwh": 175467.9,
+      "natural_gas_kwh": 23652.6,
+      "total_kwh": 199120.5,
+      "electricity_fraction": 0.8812,
+      "gas_fraction": 0.1188
+    }
+  },
+  "run2_edited": {
+    "systems": {
+      "space_heating": {
+        "primary": {
+          "system": "gas_boiler_heating",
+          "efficiency_override": 0.9
+        }
+      },
+      "space_cooling": {
+        "primary": {
+          "system": "none_cooling"
+        }
+      },
+      "ventilation": {
+        "primary": {
+          "system": "mvhr_standard",
+          "efficiency_override": 80.0
+        }
+      },
+      "dhw": {
+        "primary": {
+          "system": "gas_boiler_dhw",
+          "efficiency_override": 0.85
+        },
+        "secondary": {
+          "system": "ashp_dhw"
+        }
+      }
+    },
+    "v25": {
+      "heating": {
+        "enabled": true
+      },
+      "cooling": {
+        "enabled": false
+      },
+      "dhw": {
+        "enabled": true
+      }
+    },
+    "objects": {
+      "vrf_heating_coils": 0,
+      "vrf_cooling_coils": 0,
+      "gas_fuel_coils": 5
+    }
+  }
+}

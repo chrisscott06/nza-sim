@@ -2,7 +2,18 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
-## ✅ Brief 98-pre — Fix Main-Sim Gas Heating (unblock the EnergyPlus baseline) — CLOSED 2026-07-09 on `chris/fix-mainsim-gas-heating` *(off `main` `351a72f`; PR open, NOT merged)*
+## ✅ Brief 98-pre-b — systems_config Drift: one source of system truth for `/api/simulate` — CLOSED 2026-07-09 on `chris/fix-systems-config-drift` *(off `main` `0d68618` post-PR#6 merge; PR open, NOT merged)*
+
+`/api/simulate` read the simple `systems_config` DB column (`projects.py:573`) + `systems_config_v25` gates (`epjson_assembler.py:1418`) — both **legacy copies the current UI never writes**. The UI edits only `systems_config_v40` (what NZA-Sim reads). So any edited project silently simulated its pre-edit systems (the 98-pre gas-vs-VRF contradiction).
+
+- **P1** — mapped the three configs (where written / read, file:line) and the divergence; chose **derive-on-read** over rewriting the tested assembler. The third source (`systems_config_v25` enabled gates) is real and handled *within* the same derive, not a separate brief. [`audit/98preb_config_drift.md`](docs/audit/98preb_config_drift.md).
+- **P2** — `nza_engine/systems_from_v40.py` `derive_systems_for_sim()` derives the simple config **and** v25 gates from v40 at simulate time (ephemeral; **merges** onto the existing simple config — overrides system types/efficiencies/gates, preserves non-system fields LPD/EPD/dhw-setpoint/natural-vent). `simulate_project` reads it instead of the stale column. Auto-corrects stale projects, no migration. Falsifiable proof `scripts/_brief98preb_prove.py`: v40=VRF + poisoned gas simple → 5 VRF coils, 0 gas coils.
+- **P3** — `scripts/_brief98preb_p3.py`: baseline runs **0 fatal / 0 severe** (VRF from v40 despite poisoned copy; LPD/EPD preserved → lighting 15.7 / equip 39.6 MWh match 98-pre); an edited v40 (heating→gas, cooling off) flips emitted objects with **no manual sync**. `audit/98preb_proof.json`.
+- 🐛 **First-cut bug caught (Rule 10):** the initial derive dropped non-system fields → LPD 2→default inflated lighting 15.7→68.8 MWh and cooling 11.8→120 MWh. A hidden-term omission, not an engine artefact. Fixed by merging onto the base config.
+- ⚠️ **For Brief 98 P0:** the faithful v40-derived EP baseline is **EUI 47.2 (heat 54.2 / cool 64.5 MWh)**, not 98-pre's 60.5 — because v40 ventilation = **MVHR 80%** where 98-pre's hand-corrected fixture had **MEV**. 98-pre's baseline was itself an unfaithful hand-sync; P0's residual table diffs against **this** derived baseline.
+- NZA-Sim `instantCalc.js` untouched; `--fixture` anchors **132.6 / 126.0** byte-identical. **Brief 98 P0 resumes on a config layer that can no longer drift.**
+
+## ✅ Brief 98-pre — Fix Main-Sim Gas Heating (unblock the EnergyPlus baseline) — CLOSED 2026-07-09, MERGED to `main` `0d68618` (PR #6) *(from `chris/fix-mainsim-gas-heating`)*
 
 Prerequisite for Brief 98 P0. The main `/api/simulate` EnergyPlus fatalled on Bridgewater: `hvac_heating_boiler.py` emitted `ZoneHVAC:Baseboard:Convective:Gas` (not an EP object) **and** the simple `systems_config` wrongly said `gas_boiler_heating` (real plant = VRF per `systems_config_v40` + HIEX; gas is DHW-only).
 

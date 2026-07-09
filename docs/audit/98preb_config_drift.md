@@ -62,3 +62,53 @@ system types and the enabled gates. No assembler change.
 - `mode` forced `"detailed"` for the main sim.
 
 NZA-Sim untouched; anchors intact.
+
+## P2 — implementation
+
+`nza_engine/systems_from_v40.py` — `derive_systems_for_sim(building_config, fallback_simple)`
+returns `(simple_systems_config, v25_enabled)` derived from v40. **Merges onto** the
+existing simple config: overrides only the per-service system entry (type + efficiency)
+and the v25 enabled gates; preserves every non-system field (`lighting_power_density`,
+`equipment_power_density`, `dhw_setpoint`, `natural_ventilation`, `sfp_override`, `mode`, …).
+Ephemeral — never persisted. Legacy projects with no v40 → `(fallback_simple, stored v25)`
+unchanged.
+
+`api/routers/projects.py` `simulate_project` — reads the derived config instead of the
+stale `project["systems_config"]`; injects the derived v25 gates into a per-sim copy of
+`building_params` (persisted project untouched).
+
+**Falsifiable proof** (`scripts/_brief98preb_prove.py`): v40 = VRF, simple copy POISONED
+to gas heating + no cooling → emitted epJSON has 5 VRF heating + 5 VRF cooling coils,
+0 gas fuel coils. Stale copy never reaches the sim.
+
+## P3 — proven on baseline + edited project
+
+`scripts/_brief98preb_p3.py`, EnergyPlus 25.2.0, `docs/audit/98preb_proof.json`:
+
+| | Run 1 — baseline (production fallback) | Run 2 — edited v40 |
+|---|---|---|
+| v40 systems | VRF heat + VRF cool + MVHR 80% + gas DHW/ASHP preheat | heating→natural_gas, cooling disabled |
+| emitted objects | 5 VRF heating + 5 VRF cooling coils, 0 gas coils | 5 gas fuel coils, 0 VRF (cooling gate off) |
+| EnergyPlus | **0 fatal / 0 severe**, 3.6 s, EUI 47.2 | (object-level: edit propagates, no manual sync) |
+| LPD / EPD | **preserved 2 / 4.5** (lighting 15.7 MWh, equip 39.6 MWh — match 98-pre) | — |
+
+Both runs confirm `/api/simulate` tracks v40: the baseline drives VRF from v40 despite a
+poisoned simple copy, and a v40 edit (heating→gas, cooling off) flips the emitted objects
+with no manual sync. Anchors byte-identical (132.6 / 126.0); `instantCalc.js` untouched.
+
+### First-cut bug caught + fixed (Bible Rule 10 — diagnose, don't hand-wave)
+The first P3 cut returned a fresh `{mode, systems}` config and **dropped** the non-system
+fields. LPD 2 → library default inflated lighting 15.7→68.8 MWh; the extra internal gains
+drove cooling 11.8→120 MWh. Not an engine artefact — a hidden-term omission. Fixed by
+merging onto the existing simple config (systems overridden, non-system fields preserved).
+
+### ⚠️ Note for Brief 98 P0 (resumed residual table)
+The faithful v40-derived EP baseline is **EUI 47.2, heating 54.2 MWh, cooling 64.5 MWh** —
+**not** the 98-pre figures (60.5 / heating 229.6 / cooling 11.8). The difference is
+ventilation: 98-pre's hand-corrected fixture `systems_config` carried `mev_standard`
+(exhaust only, no recovery) where **v40 says MVHR 80%** (`mvhr_gf_public`, the config
+NZA-Sim actually reads). 98-pre's own baseline was itself an unfaithful hand-sync. P0's
+residual table must diff NZA-Sim against **this** derived baseline, not the 98-pre one.
+(Also: cooling EER 3 from v40 vs 4.6 hand; DHW gas+ASHP-preheat from v40 vs gas-only hand.)
+Analysing whether 47.2 is *right* vs NZA-Sim's 126 remains P0's job — this brief only makes
+the config faithful.

@@ -24,11 +24,25 @@ mvhr-vs-mev — so the translation is small):
            documented limitation, out of scope for this brief) + ashp_dhw preheat if a
            heat-pump DHW entry exists. Efficiency passed through from v40.
 
+**Scope of the override — systems only.** Single-source-of-truth applies to the
+fields that DRIFT because the UI edits them via v40: the per-service system TYPE,
+EFFICIENCY, and ENABLED gate. The simple systems_config ALSO carries non-system
+fields the assembler reads — `lighting_power_density` / `equipment_power_density`
+(Internal-Gains concepts, epjson_assembler.py:1242-1243), `natural_ventilation`,
+`dhw_setpoint`, `sfp_override`, `pump_type`, `mode` — that are NOT v40 concepts and
+have their own edit paths. This derive MERGES onto the existing simple config,
+overriding only the system fields and preserving the rest. (Dropping them was the
+Brief 98-pre-b P3 first-cut bug: LPD 2→library-default inflated lighting 15.7→68.8
+MWh and, via internal gains, cooling 11.8→120 MWh — a hidden-term omission, not an
+engine artefact.)
+
 The DHW generator supporting only a gas primary is a pre-existing generator limitation
 (hvac_dhw.py: primary is always WaterHeater:Mixed NaturalGas). Correcting THAT is
 "changing what the systems are" — explicitly out of Brief 98-pre-b scope.
 """
 from __future__ import annotations
+
+import copy
 
 # Sources that route heating to a combustion (fuel-coil) generator rather than a
 # heat pump / electric VRF. Everything else (ambient_air, ground, water,
@@ -94,7 +108,15 @@ def derive_systems_for_sim(building_config, fallback_simple=None):
     dhw = _primary(v40.get("dhw"))
     vent = _primary(v40.get("ventilation"))
 
-    systems: dict = {}
+    # Start from the existing simple config so its NON-SYSTEM fields survive
+    # (lighting/equipment power density, natural ventilation, dhw setpoints, sfp,
+    # pump, mode, …). Override only the per-service system entries below. The
+    # nested `systems.{service}` path is what the assembler reads first
+    # (epjson_assembler.py:1429), so setting it there is authoritative; stale flat
+    # fallback keys (hvac_type, cop_*) are never reached and left untouched.
+    simple = copy.deepcopy(fallback_simple) if isinstance(fallback_simple, dict) else {}
+    simple.setdefault("mode", "detailed")
+    systems: dict = dict(simple.get("systems") or {})
 
     # ── Heating ──────────────────────────────────────────────────────────────
     if heat is not None:
@@ -139,9 +161,10 @@ def derive_systems_for_sim(building_config, fallback_simple=None):
         others = [s for s in (v40.get("dhw") or [])
                   if isinstance(s, dict) and s is not dhw and s.get("enabled", True)]
         if any((s.get("source") or "").lower() in _HEATPUMP_DHW_SOURCES for s in others):
+            simple["dhw_preheat"] = "ashp_dhw"  # assembler reads flat dhw_preheat (sc.get)
             systems["dhw"]["secondary"] = {"system": "ashp_dhw"}
 
-    simple = {"mode": "detailed", "systems": systems}
+    simple["systems"] = systems
 
     # ── v25 enabled gates (the third source) — derived from v40 too ──────────
     def _any_enabled(service: str) -> bool:

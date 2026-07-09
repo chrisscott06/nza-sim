@@ -1,18 +1,34 @@
 # Current brief
 
-**Brief 98-pre — Fix Main-Sim Gas Heating (unblock the EnergyPlus baseline) — CLOSED 2026-07-09.**
-On branch `chris/fix-mainsim-gas-heating` (off `main` `351a72f`). Prerequisite for Brief 98 P0. The
-main `/api/simulate` EnergyPlus fatalled on Bridgewater because `hvac_heating_boiler.py` emitted
-`ZoneHVAC:Baseboard:Convective:Gas` (not an EP object) **and** the simple `systems_config` wrongly
-said `gas_boiler_heating` (real plant = VRF, per systems_config_v40 + HIEX). **Both fixed:** generator
-now emits `ZoneHVAC:UnitHeater` + `Coil:Heating:Fuel` (schema-valid, efficiency clamped ≤ 1); fixture
-`systems_config` corrected to VRF. **report_baseline_v1 now runs clean (0 fatal, EP EUI 60.5 space-only,
-elec 179.3 / gas 75.6 MWh)** — the EP column Brief 98 P0 was blocked on. 🚩 Flagged (not chased, per
-3-strikes): a second fatal in the gas+VRF-cooling combination (VRF-TU node reconciliation) + the deeper
-simple-vs-v40 systems_config drift — each its own follow-up. NZA-Sim untouched; anchors 132.6 / 126.0
-byte-identical. Deliverable: [`../audit/98pre_gas_heating_fix.md`](../audit/98pre_gas_heating_fix.md).
-Brief: [`active/98pre_fix_mainsim_gas_heating.md`](active/98pre_fix_mainsim_gas_heating.md). **PR open,
-NOT merged — independent review gates it; then Brief 98 P0 resumes.**
+**Brief 98-pre-b — systems_config Drift: one source of system truth for `/api/simulate` — CLOSED 2026-07-09.**
+On branch `chris/fix-systems-config-drift` (off `main` `0d68618`, post-PR#6 merge). `/api/simulate` read two
+legacy configs the current UI never writes — the simple `systems_config` DB column (`projects.py:573`) and the
+`systems_config_v25` enabled gates (`epjson_assembler.py:1418`) — while the UI edits only `systems_config_v40`
+(what NZA-Sim reads). So any edited project silently simulated its pre-edit systems. **Fix (derive-on-read):**
+`nza_engine/systems_from_v40.py` `derive_systems_for_sim()` derives the simple config **and** v25 gates from
+v40 at simulate time (ephemeral; merges onto the existing simple config — overrides system
+types/efficiencies/gates, preserves non-system fields LPD/EPD/dhw-setpoint/natural-vent). `simulate_project`
+now reads the derived config. Auto-corrects stale projects, no migration. **Proven** (`scripts/_brief98preb_p3.py`):
+baseline runs 0 fatal / 0 severe as VRF from v40 despite a poisoned gas simple copy (LPD/EPD preserved →
+lighting 15.7 / equip 39.6 MWh match 98-pre); an edited v40 (heating→gas, cooling off) flips emitted objects
+with no manual sync. NZA-Sim untouched; anchors 132.6 / 126.0 byte-identical.
+⚠️ **For Brief 98 P0:** the faithful v40-derived EP baseline is **EUI 47.2** (heat 54.2 / cool 64.5 MWh), not
+98-pre's 60.5 — v40 ventilation is **MVHR 80%** where 98-pre's hand-corrected fixture had **MEV**; P0's residual
+table diffs NZA-Sim against this derived baseline. Deliverables:
+[`../audit/98preb_config_drift.md`](../audit/98preb_config_drift.md), `../audit/98preb_proof.json`. Brief:
+[`archive/98preb_systems_config_drift_COMPLETED.md`](archive/98preb_systems_config_drift_COMPLETED.md).
+**PR open, NOT merged — independent review gates it; then Brief 98 P0 resumes on a config layer that can no longer drift.**
+
+**Brief 98-pre — Fix Main-Sim Gas Heating (unblock the EnergyPlus baseline) — CLOSED 2026-07-09; MERGED to
+`main` `0d68618` (PR #6).** Was on branch `chris/fix-mainsim-gas-heating`. The main `/api/simulate` EnergyPlus
+fatalled on Bridgewater because `hvac_heating_boiler.py` emitted `ZoneHVAC:Baseboard:Convective:Gas` (not an EP
+object) **and** the simple `systems_config` wrongly said `gas_boiler_heating` (real plant = VRF). **Both fixed:**
+generator now emits `ZoneHVAC:UnitHeater` + `Coil:Heating:Fuel` (schema-valid, efficiency clamped ≤ 1); fixture
+`systems_config` corrected to VRF. report_baseline_v1 ran clean (0 fatal). 🚩 Flagged (not chased): a second fatal
+in the gas+VRF-cooling combination (VRF-TU node reconciliation) — its own follow-up; the systems_config drift is
+now fixed by Brief 98-pre-b. NZA-Sim untouched; anchors 132.6 / 126.0 byte-identical. Deliverable:
+[`../audit/98pre_gas_heating_fix.md`](../audit/98pre_gas_heating_fix.md). Brief:
+[`archive/98pre_fix_mainsim_gas_heating_COMPLETED.md`](archive/98pre_fix_mainsim_gas_heating_COMPLETED.md).
 
 **Brief 97 — Interventions Studio (module redesign + RICS cost editor as pop-out) — CLOSED 2026-07-08
 (overnight, unattended; P1–P9 done; PR open, NOT merged — independent review + Chris walkthrough gate it).**
