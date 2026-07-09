@@ -118,3 +118,54 @@ executed on a drifted project in that window. **No client-facing stale EP result
 ventilation; ZZ TEST on ventilation). Realised impact = **zero** — every full-systems EP run
 predates v40, and the only post-migration run was envelope-only (systems-independent). The risk was
 real and latent; it was never cashed into a wrong client number.
+
+---
+
+## P3 — Fix faithfulness across ALL fields (Question 3)
+
+Every field the assembler reads from the simple config (`sc.get(...)` + nested `sc["systems"].*`),
+classified under the current 98-pre-b derive: **(a)** correctly derived from v40, **(b)** correctly
+preserved from the existing config (not a v40 concept), or **(c)** AT RISK — preserved-from-stored
+where it should track v40, so it can carry a stale value. Verified against Bridgewater's real DB
+config (v40 vs stored vs derived).
+
+| # | Field (assembler line) | Class | Evidence / note |
+|---|---|---|---|
+| 1 | `systems.space_heating.primary` (1429) | **a** | derived: source→gas/VRF, metric→eff |
+| 2 | `systems.space_cooling.primary` (1434) | **a** | derived: enabled→VRF, else none_cooling |
+| 3 | `systems.ventilation.primary` (1510) | **a** | derived: recovery%>0→MVHR eff, else MEV |
+| 4 | `systems.dhw.primary` (1530) | **a** | derived: gas_boiler_dhw + eff from v40 |
+| 5 | v25 heating/cooling/dhw `enabled` (1418) | **a** | derived: any-enabled-in-v40-service |
+| 6 | `dhw_preheat` / `systems.dhw.secondary` (1533/1531) | **a→c** | derived ADDS `ashp_dhw` when v40 has a heat-pump DHW entry (Bridgewater: none→ashp_dhw ✓). **(c) asymmetry:** it does NOT clear a stale `ashp_dhw` when v40 has no heat-pump DHW — latent (no project triggers it now) |
+| 7 | `lighting_power_density` (1242) | **b** | Internal-Gains concept, not v40 → preserved (correct; the LPD-collapse bug fixed in 98-pre-b) |
+| 8 | `equipment_power_density` (1243) | **b** | Internal-Gains concept → preserved (correct) |
+| 9 | `mode` (1405) | **b** | preserved-or-`detailed`; main sim runs detailed |
+| 10 | `dhw_preheat_setpoint` (1555) | **b** | ASHP preheat target; no direct v40 field; preserved (low risk) |
+| 11 | flat `hvac_type`/`cop_heating`/`cop_cooling`/`ventilation_type`/`mvhr_efficiency`/`dhw_primary`/`dhw_efficiency` (1430-1535) | **b\*** | pure fallbacks — never read because the nested `systems.*` path (set from v40) takes precedence. Stale values remain but are **unreachable**. Hygiene note, not a live defect |
+| 12 | **`lighting_control` (1254)** | **🔴 c** | v40 `lighting.control_mechanism = "constant"` (→ factor 1.0); derive **preserves stored `occupancy_sensing` (→ factor 0.80)**. Sim scales LPD ×0.80 → **~20 % lighting under-count vs v40's intent.** Not derived from v40 |
+| 13 | **`ashp_cop_dhw` (1538)** | **🔴 c** | v40 heat-pump DHW `efficiency_metric = 3`; derive sets `secondary={system:ashp_dhw}` with **no COP** → assembler default **2.8**. ~7 % COP error on the 48 %-share ASHP DHW |
+| 14 | **`dhw_setpoint` (1554)** | **🟠 c** | v40 service-level `dhw_storage_setpoint_c = 60` (Brief 42); derive **preserves stored 60** — matches today (magnitude 0) but latent: edit v40's setpoint and the sim keeps the stored value |
+| 15 | `ventilation_control` (1266) | **🟠 c (minor)** | v40 `ventilation.control_mechanism = "scheduled"` (always_on) ≈ stored `continuous`; functionally equal today, but not mapped from v40 |
+
+**Also (assembler limitation, not a derive defect):** v40 DHW is a **52 % gas / 48 % ASHP split**;
+the simple assembler has no proportional DHW model, so the derive represents it as gas-primary +
+series ASHP-preheat. Documented in the derive; correcting it is "changing what the systems are"
+(out of 98-pre-b scope) — noted for completeness.
+
+### P3 verdict — the derive is faithful on the PRIMARY dispatch, NOT on four secondary fields
+- **Faithful (a):** heating/cooling/ventilation/DHW **system type**, per-service **enabled gates**,
+  space-heating/cooling/vent/DHW-primary **efficiencies**, ASHP-preheat **presence**. These are the
+  fields that caused the original drift — all now track v40.
+- **Correctly preserved (b):** LPD, EPD, mode, preheat setpoint (not v40 concepts).
+- **AT RISK (c) — four findings, two with real magnitude today:**
+  - **C1 `lighting_control`** — ~20 % lighting error (v40 `constant` vs derive `occupancy_sensing`). 🔴
+  - **C2 `ashp_cop_dhw`** — ~7 % ASHP-DHW COP error (v40 3 vs derive default 2.8). 🔴
+  - **C3 `dhw_setpoint`** (+ tap/cold service-level setpoints) — latent; matches today, will drift on v40 edit. 🟠
+  - **C4 stale `dhw_preheat` not cleared** when v40 has no heat-pump DHW — latent. 🟠
+
+These are the **same class as the LPD bug 98-pre-b caught mid-build** (a field not correctly synced
+from v40), but in secondary DHW/control fields rather than the primary dispatch. **They gate calling
+the drift "fully closed."** Each is fixable in the derive (map v40 `control_mechanism` → lighting/vent
+control; map the heat-pump DHW `efficiency_metric` → ASHP COP; map v40 service-level DHW setpoints;
+clear a stale preheat when v40 lacks one) — **a follow-up fix brief**, per this audit's stop-and-write
+rule (no fixes here).
