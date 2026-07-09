@@ -28,7 +28,7 @@ const r1 = n => (n == null || !Number.isFinite(n)) ? null : Math.round(n * 10) /
  * @param gia        m²
  * @param pick       CRREM project pick (country/property/pathway)
  */
-export default function MiniCrremChart({ baseFuels, postFuels, gia, pick }) {
+export default function MiniCrremChart({ baseFuels, postFuels, gia, pick, fill = false }) {
   if (!(gia > 0)) return null
   if (pick && !hasCrremPathway(pick)) {
     return (
@@ -46,11 +46,12 @@ export default function MiniCrremChart({ baseFuels, postFuels, gia, pick }) {
   }
 
   return (
-    <div className="rounded-lg border border-light-grey/70 bg-white px-3 pt-2 pb-1">
-      <div className="text-xxs uppercase tracking-wider text-mid-grey/70 font-semibold pb-1">
+    <div className={`rounded-lg border border-light-grey/70 bg-white px-3 pt-2 pb-1 ${fill ? 'flex flex-col h-full' : ''}`}>
+      <div className="text-xxs uppercase tracking-wider text-mid-grey/70 font-semibold pb-1 flex-shrink-0">
         Carbon trajectory · saving vs baseline (kgCO₂/m²·yr)
       </div>
-      <ResponsiveContainer width="100%" height={150}>
+      <div className={fill ? 'flex-1 min-h-0' : ''}>
+      <ResponsiveContainer width="100%" height={fill ? '100%' : 150}>
         <ComposedChart data={data} margin={{ top: 6, right: 8, left: -18, bottom: 0 }}>
           <XAxis dataKey="year" tick={{ fontSize: 9, fill: '#95A5A6' }} ticks={[2025, 2030, 2035, 2040, 2045, 2050]} />
           <YAxis tick={{ fontSize: 9, fill: '#95A5A6' }} width={34} />
@@ -66,6 +67,7 @@ export default function MiniCrremChart({ baseFuels, postFuels, gia, pick }) {
           <Line dataKey="post"     stroke={POST}   strokeWidth={2} dot={false} name="With measure" isAnimationActive={false} />
         </ComposedChart>
       </ResponsiveContainer>
+      </div>
     </div>
   )
 }

@@ -21,6 +21,8 @@ function fmt(v, digits = 1) {
   return v.toFixed(digits)
 }
 
+const gbp0 = (v) => (v == null || !Number.isFinite(v)) ? '—' : `£${Math.round(v).toLocaleString('en-GB')}`
+
 function pctCell(nza, ep) {
   if (![nza, ep].every(Number.isFinite) || nza === 0) return <span className="text-mid-grey/40">—</span>
   const pct = ((ep - nza) / Math.abs(nza)) * 100
@@ -46,9 +48,9 @@ function StalePill() {
  * @param {Array<{label,nza,ep,unit,digits}>} rows
  * @param {boolean} [nzaOnly]  render the "NZA-Sim only" badge; EP columns disabled
  */
-export default function EPCompareCard({ title, subtitle, epStatus = 'none', rows = [], nzaOnly = false }) {
+export default function EPCompareCard({ title, subtitle, epStatus = 'none', rows = [], nzaOnly = false, muted = false }) {
   return (
-    <div className="rounded-lg border border-light-grey/70 bg-white px-3 py-2">
+    <div className={`rounded-lg border px-3 py-2 ${muted ? 'border-light-grey bg-off-white' : 'border-light-grey/70 bg-white'}`}>
       <div className="flex items-baseline gap-2 pb-1">
         <span className="text-xxs uppercase tracking-wider text-mid-grey/70 font-semibold">{title}</span>
         {subtitle ? <span className="text-xxs text-mid-grey/50">{subtitle}</span> : null}
@@ -69,16 +71,19 @@ export default function EPCompareCard({ title, subtitle, epStatus = 'none', rows
         </thead>
         <tbody>
           {rows.map((r) => {
-            const showEp = !nzaOnly && epStatus !== 'none' && Number.isFinite(r.ep)
+            // gbp rows (running cost / capex) have no EnergyPlus counterpart — £ formatted, EP n/a.
+            const showEp = !r.gbp && !nzaOnly && epStatus !== 'none' && Number.isFinite(r.ep)
             const epColour = epStatus === 'stale' ? MUTED : '#1F2937'
             return (
               <tr key={r.label} className="border-t border-light-grey/40">
                 <td className="py-1.5 pr-3 text-mid-grey">{r.label}</td>
                 <td className="py-1.5 px-2 text-right tabular-nums text-navy">
-                  {fmt(r.nza, r.digits ?? 1)} <span className="text-mid-grey/45 font-normal">{r.unit}</span>
+                  {r.gbp
+                    ? gbp0(r.nza)
+                    : <>{fmt(r.nza, r.digits ?? 1)} <span className="text-mid-grey/45 font-normal">{r.unit}</span></>}
                 </td>
                 <td className="py-1.5 px-2 text-right tabular-nums" style={{ color: showEp ? epColour : undefined }}>
-                  {nzaOnly
+                  {r.gbp || nzaOnly
                     ? <span className="text-mid-grey/40">n/a</span>
                     : showEp
                       ? <>{fmt(r.ep, r.digits ?? 1)} <span className="text-mid-grey/45 font-normal">{r.unit}</span></>

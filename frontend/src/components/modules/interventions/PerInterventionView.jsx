@@ -29,6 +29,7 @@ import {
   emptyCost, computeCostTotal, computeLinesTotal, computeAnnualOperationalSaving,
   computeSimplePayback, computePoundsPerTonne,
 } from '../../../utils/costModel.js'
+import { readEnergyPrice } from '../../../utils/costReads.js'
 import { SEMANTIC, deltaColour } from './semanticColour.js'
 
 const ACCENT = '#E84393'   // interventions module accent (kept per Brief 97)
@@ -185,11 +186,19 @@ export default function PerInterventionView({ intervention, isolatedRow, crremPi
   // NZA absolutes are the delta record's `.from` (same bare baseline for every
   // measure); baseline EP comes from the cached `baseline` state.
   const epBaseRes = epBaseline?.result
+  // Baseline running cost = bare-baseline fuel use × tariffs (the `.from` side). Capex
+  // is £0 at baseline — no measure installed (not user-editable). Both are NZA-only
+  // reference rows (no EnergyPlus counterpart).
+  const baselineRunningCost =
+    (d?.per_fuel?.electricity_mwh?.from ?? 0) * 1000 * readEnergyPrice('electricity', projectCostDefaults)
+    + (d?.per_fuel?.gas_mwh?.from ?? 0) * 1000 * readEnergyPrice('gas', projectCostDefaults)
   const baselineRows = [
     { label: 'EUI', unit: 'kWh/m²', nza: d?.eui_kwh_per_m2?.from, ep: epBaseRes?.eui_kwh_per_m2_yr, digits: 1 },
     { label: 'Heating demand', unit: 'MWh', nza: d?.heating_demand_mwh?.from, ep: epBaseRes?.demand_mwh?.space_heating, digits: 1 },
     { label: 'Cooling demand', unit: 'MWh', nza: d?.cooling_demand_mwh?.from, ep: epBaseRes?.demand_mwh?.space_cooling, digits: 1 },
     { label: 'Operational carbon', unit: 'kgCO₂/m²', nza: d?.carbon_kgco2_per_m2?.from, ep: undefined, digits: 1 },
+    { label: 'Running cost / yr', gbp: true, nza: baselineRunningCost },
+    { label: 'Capex', gbp: true, nza: 0 },
   ]
 
   // Brief 95 P7 — isolated EP comparison (this measure alone vs the bare baseline).
@@ -211,6 +220,11 @@ export default function PerInterventionView({ intervention, isolatedRow, crremPi
   const hasFuel = gia > 0 && Object.keys(perFuel).length > 0
   const lifetime = hasFuel ? computeLifetimeCarbon(perFuel, { lifetimeYears }) : null
   const lifeTco2e = lifetime?.lifetime_carbon_saved_tco2e
+  // Sign convention (Chris walkthrough): show the emissions CHANGE, not tonnes-saved,
+  // so it reads like every other delta — a reduction is negative + green, an increase
+  // (e.g. adverse ventilation) is positive + red. lifeTco2e is tonnes SAVED (positive
+  // when good), so the change is its negation.
+  const carbonSavedDelta = Number.isFinite(lifeTco2e) ? -lifeTco2e : null
   const baseFuels = {}, postFuels = {}
   for (const [f, v] of Object.entries(perFuel)) { baseFuels[f] = v.from_kwh; postFuels[f] = v.to_kwh }
 
@@ -256,25 +270,24 @@ export default function PerInterventionView({ intervention, isolatedRow, crremPi
         {tab === 'impact' && (
           <div className="flex flex-col gap-3">
             {/* Baseline reference — where we're working from (NZA-Sim vs EnergyPlus) */}
-            <div className="rounded-lg border border-light-grey/70 bg-off-white/40 px-1 py-0.5">
-              <EPCompareCard
-                title="Baseline · where we're working from"
-                subtitle="the starting point, before this measure"
-                epStatus={epBaseline?.status ?? 'none'}
-                rows={baselineRows}
-              />
-            </div>
+            <EPCompareCard
+              title="Baseline · where we're working from"
+              subtitle="the starting point, before this measure"
+              epStatus={epBaseline?.status ?? 'none'}
+              rows={baselineRows}
+              muted
+            />
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
               {Number.isFinite(lifeTco2e) ? (
                 <HeadlineCard
-                  title="Lifetime carbon saved"
-                  accent={deltaColour(lifeTco2e, { savingIsNegative: false })}
-                  value={`${fmtSigned(lifeTco2e, 1)} tCO₂e`}
+                  title="Lifetime carbon"
+                  accent={deltaColour(carbonSavedDelta)}
+                  value={`${fmtSigned(carbonSavedDelta, 1)} tCO₂e`}
                   sub={`by 2050 · ${lifetimeYears}y life`}
                 />
               ) : (
-                <HeadlineCard title="Lifetime carbon saved" placeholder="no fuel delta" />
+                <HeadlineCard title="Lifetime carbon" placeholder="no fuel delta" />
               )}
               {costTotal > 0 ? (
                 <HeadlineCard
@@ -317,7 +330,9 @@ export default function PerInterventionView({ intervention, isolatedRow, crremPi
 
         {tab === 'carbon' && (
           hasFuel ? (
-            <MiniCrremChart baseFuels={baseFuels} postFuels={postFuels} gia={gia} pick={crremPick} />
+            <div className="h-full">
+              <MiniCrremChart baseFuels={baseFuels} postFuels={postFuels} gia={gia} pick={crremPick} fill />
+            </div>
           ) : (
             <div className="text-xs text-mid-grey/60 italic py-8 text-center">
               No fuel-level delta for this measure — nothing to plot against the CRREM trajectory.
