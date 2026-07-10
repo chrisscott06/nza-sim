@@ -1,5 +1,19 @@
 # Current brief
 
+**Brief 100 — Interventions Library: XLSX export + off-model savings + narratives — CLOSED 2026-07-10.**
+On branch `chris/interventions-export` (off `chris/seed-hiex-interventions`, PR #11, which carries the
+seed script Brief 100 extends). Three connected pieces: (1) **off-model savings** — a new optional
+`off_model` field lets PV/interlink/refrigerant show their real carbon/£/kWh (from `offmodel.py`),
+additive to the engine + rolled into strategy totals — Solar PV now shows −30.8 tCO₂e / £1,786/tonne /
+4.9 yr, EUI Δ 0 (honest, gross-demand), badged off-model, instead of looking dead; (2) **narratives** —
+a two-part (energy + cost) plain-language "How this works" panel from the intervention notes, all
+sourced; (3) **XLSX export** — a Library "Export XLSX" button producing a 4-sheet workbook (Summary /
+Calc trail per-service demand / Cost plans / Narratives) via a shared metrics helper so it matches the
+screen. Also fixed the Demand tab (DHW shape bug + hidden ventilation/lighting/small-power). **No engine
+change** — anchors 132.6/126.0 byte-identical. Verified in browser + a workbook round-trip test. Brief:
+[`archive/100_interventions_export_COMPLETED.md`](archive/100_interventions_export_COMPLETED.md).
+**PR open, NOT merged — Chris walkthrough gates it.**
+
 **Brief 99 — Seed 22 HIEX Interventions into live Bridgewater Library — CLOSED 2026-07-10.**
 On branch `chris/seed-hiex-interventions` (off `main` `7195b7c`). Seeded all 22 HIEX report interventions
 (with cost plans, in the new groups shape) into the LIVE Bridgewater project's Library via API PUT
