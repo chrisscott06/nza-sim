@@ -31,6 +31,27 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts" / "report"))
 import interventions as REPORT  # noqa: E402
+import offmodel as OFFMODEL  # noqa: E402
+
+# Brief 100: off-model measures (Class C) carry their real energy/carbon effect in an
+# `off_model` field (computed by scripts/report/offmodel.py), which the frontend metrics
+# add on top of the engine result. ref -> (offmodel callable). 3.2 is the refrigerant
+# component that rides ALONGSIDE 3.2's energy patch (additive carbon).
+_OFF_MODEL_FN = {
+    "1.5": OFFMODEL.interlink_1_5,
+    "3.2": OFFMODEL.refrigerant_3_2,
+    "7.1": OFFMODEL.pv_7_1,
+}
+_OFF_MODEL_KEYS = ("annual_elec_kwh_saved", "annual_gas_kwh_saved", "annual_gbp_saved",
+                   "lifetime_tco2e", "eui_delta_kwh_m2", "basis")
+
+
+def _off_model(ref):
+    fn = _OFF_MODEL_FN.get(ref)
+    if fn is None:
+        return None
+    raw = fn()
+    return {k: raw[k] for k in _OFF_MODEL_KEYS if k in raw}
 
 API = "http://127.0.0.1:8002"
 SCHEMA_VERSION = 2  # D1
@@ -107,7 +128,7 @@ def adapt(entry):
         "notes": (f"Cost carried by ref {cost.get('within')}." if cost.get("within") else ""),
     }
 
-    return {
+    out = {
         "id": f"int_hiex_{_slug(ref)}",
         "label": entry["name"],
         "notes": _notes(entry, flag),
@@ -118,6 +139,10 @@ def adapt(entry):
         "patches": patches,
         "cost": cost_obj,
     }
+    om = _off_model(ref)
+    if om is not None:
+        out["off_model"] = om
+    return out
 
 
 def seeded_total(persisted):

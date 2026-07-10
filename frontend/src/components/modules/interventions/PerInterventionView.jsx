@@ -209,16 +209,31 @@ export default function PerInterventionView({ intervention, isolatedRow, crremPi
     { label: 'Cooling demand', unit: 'MWh', nza: d?.cooling_demand_mwh?.to, ep: epRes?.demand_mwh?.space_cooling, digits: 1 },
   ]
 
-  const euiDelta = d?.eui_kwh_per_m2?.delta
-  const totalDelta = d?.total_delivered_mwh?.delta
+  // Brief 100: off-model measures (PV 7.1, interlink 1.5, refrigerant 3.2) carry their
+  // real energy/carbon/£ effect in `intervention.off_model` — the engine can't produce
+  // it (gross-demand PV, refrigerant GWP, inter-plant heat). It is ADDITIVE to the
+  // engine delta so these no longer read as "does nothing". PV keeps EUI Δ 0 (its
+  // off_model.eui_delta_kwh_m2 is 0) but surfaces carbon/£/payback.
+  const om = intervention?.off_model ?? null
+  const isOffModel = !!om
+  const omEuiDelta = Number(om?.eui_delta_kwh_m2 ?? 0) || 0
+  const omDeliveredMwhDelta =
+    -((Number(om?.annual_elec_kwh_saved ?? 0) || 0) + (Number(om?.annual_gas_kwh_saved ?? 0) || 0)) / 1000
+
+  const euiDelta = om ? (Number(d?.eui_kwh_per_m2?.delta ?? 0) + omEuiDelta) : d?.eui_kwh_per_m2?.delta
+  const totalDelta = om ? (Number(d?.total_delivered_mwh?.delta ?? 0) + omDeliveredMwhDelta) : d?.total_delivered_mwh?.delta
   const carbonDelta = d?.carbon_kgco2_per_m2?.delta
 
-  // Brief 89 (Brief C): lifetime carbon saved, fuel-switching aware.
+  // Brief 89 (Brief C): lifetime carbon saved, fuel-switching aware. Brief 100: add the
+  // off-model lifetime carbon (already a lifetime figure) so pure off-model measures
+  // (0 engine fuel) still produce a carbon saving.
   const perFuel = perFuelFromDeltaRecord(d?.per_fuel)
   const lifetimeYears = intervention?.lifetime_years
     ?? defaultLifetimeYears(intervention?.theme ?? intervention?.category)
   const hasFuel = gia > 0 && Object.keys(perFuel).length > 0
-  const lifetime = hasFuel ? computeLifetimeCarbon(perFuel, { lifetimeYears }) : null
+  const lifetime = (hasFuel || om)
+    ? computeLifetimeCarbon(perFuel, { lifetimeYears, offModelTco2e: om?.lifetime_tco2e })
+    : null
   const lifeTco2e = lifetime?.lifetime_carbon_saved_tco2e
   // Sign convention (Chris walkthrough): show the emissions CHANGE, not tonnes-saved,
   // so it reads like every other delta — a reduction is negative + green, an increase
@@ -232,7 +247,7 @@ export default function PerInterventionView({ intervention, isolatedRow, crremPi
   const cost = intervention?.cost ?? emptyCost()
   const costTotal = computeCostTotal(cost, projectCostDefaults)
   const linesTotal = computeLinesTotal(cost)
-  const annualSaving = computeAnnualOperationalSaving(d?.per_fuel, projectCostDefaults)
+  const annualSaving = computeAnnualOperationalSaving(d?.per_fuel, projectCostDefaults, om?.annual_gbp_saved)
   const poundsPerTonne = costTotal > 0 && Number.isFinite(lifeTco2e) ? computePoundsPerTonne(costTotal, lifeTco2e) : null
   const payback = costTotal > 0 ? computeSimplePayback(costTotal, annualSaving) : null
 
@@ -245,6 +260,14 @@ export default function PerInterventionView({ intervention, isolatedRow, crremPi
           <span className="ml-2 font-normal text-mid-grey/60 normal-case tracking-normal">
             this measure alone, vs the bare baseline
           </span>
+          {isOffModel && (
+            <span
+              className="ml-2 inline-block px-1.5 py-0.5 rounded text-xxs font-semibold uppercase tracking-wide bg-amber-100 text-amber-800 align-middle"
+              title="Energy/carbon effect calculated off-model (not a simulated demand reduction) — see the narrative for the method."
+            >
+              off-model
+            </span>
+          )}
         </h3>
       </div>
 
