@@ -30,6 +30,7 @@ import {
   computeSimplePayback, computePoundsPerTonne,
 } from '../../../utils/costModel.js'
 import { readEnergyPrice } from '../../../utils/costReads.js'
+import { computeInterventionMetrics } from '../../../utils/interventionMetrics.js'
 import { SEMANTIC, deltaColour } from './semanticColour.js'
 
 const ACCENT = '#E84393'   // interventions module accent (kept per Brief 97)
@@ -209,32 +210,25 @@ export default function PerInterventionView({ intervention, isolatedRow, crremPi
     { label: 'Cooling demand', unit: 'MWh', nza: d?.cooling_demand_mwh?.to, ep: epRes?.demand_mwh?.space_cooling, digits: 1 },
   ]
 
-  const euiDelta = d?.eui_kwh_per_m2?.delta
-  const totalDelta = d?.total_delivered_mwh?.delta
+  // Brief 100: off-model measures (PV 7.1, interlink 1.5, refrigerant 3.2) carry their
+  // real energy/carbon/£ effect in `intervention.off_model` — the engine can't produce
+  // it (gross-demand PV, refrigerant GWP, inter-plant heat). It is ADDITIVE to the
+  // engine delta so these no longer read as "does nothing". PV keeps EUI Δ 0 (its
+  // off_model.eui_delta_kwh_m2 is 0) but surfaces carbon/£/payback.
+  // Brief 100: one canonical metric derivation (shared with the XLSX export via
+  // interventionMetrics.js) so the two never drift. Off-model additive handling +
+  // lifetime carbon + £/tonne + payback all live in the helper.
+  const m = computeInterventionMetrics(intervention, d, projectCostDefaults, gia)
+  const { isOffModel, euiDelta, lifeTco2e, annualSaving, costTotal, linesTotal, poundsPerTonne, payback, perFuel, lifetimeYears } = m
+  const totalDelta = m.deliveredMwhDelta
   const carbonDelta = d?.carbon_kgco2_per_m2?.delta
-
-  // Brief 89 (Brief C): lifetime carbon saved, fuel-switching aware.
-  const perFuel = perFuelFromDeltaRecord(d?.per_fuel)
-  const lifetimeYears = intervention?.lifetime_years
-    ?? defaultLifetimeYears(intervention?.theme ?? intervention?.category)
   const hasFuel = gia > 0 && Object.keys(perFuel).length > 0
-  const lifetime = hasFuel ? computeLifetimeCarbon(perFuel, { lifetimeYears }) : null
-  const lifeTco2e = lifetime?.lifetime_carbon_saved_tco2e
   // Sign convention (Chris walkthrough): show the emissions CHANGE, not tonnes-saved,
-  // so it reads like every other delta — a reduction is negative + green, an increase
-  // (e.g. adverse ventilation) is positive + red. lifeTco2e is tonnes SAVED (positive
-  // when good), so the change is its negation.
+  // so a reduction reads negative + green like every other delta.
   const carbonSavedDelta = Number.isFinite(lifeTco2e) ? -lifeTco2e : null
   const baseFuels = {}, postFuels = {}
   for (const [f, v] of Object.entries(perFuel)) { baseFuels[f] = v.from_kwh; postFuels[f] = v.to_kwh }
-
-  // Cost → £/tonne + simple payback. Line-item plan shape (migrate-on-read guarantees it).
   const cost = intervention?.cost ?? emptyCost()
-  const costTotal = computeCostTotal(cost, projectCostDefaults)
-  const linesTotal = computeLinesTotal(cost)
-  const annualSaving = computeAnnualOperationalSaving(d?.per_fuel, projectCostDefaults)
-  const poundsPerTonne = costTotal > 0 && Number.isFinite(lifeTco2e) ? computePoundsPerTonne(costTotal, lifeTco2e) : null
-  const payback = costTotal > 0 ? computeSimplePayback(costTotal, annualSaving) : null
 
   return (
     <div className="h-full flex flex-col">
@@ -245,6 +239,14 @@ export default function PerInterventionView({ intervention, isolatedRow, crremPi
           <span className="ml-2 font-normal text-mid-grey/60 normal-case tracking-normal">
             this measure alone, vs the bare baseline
           </span>
+          {isOffModel && (
+            <span
+              className="ml-2 inline-block px-1.5 py-0.5 rounded text-xxs font-semibold uppercase tracking-wide bg-amber-100 text-amber-800 align-middle"
+              title="Energy/carbon effect calculated off-model (not a simulated demand reduction) — see the narrative for the method."
+            >
+              off-model
+            </span>
+          )}
         </h3>
       </div>
 
@@ -325,6 +327,16 @@ export default function PerInterventionView({ intervention, isolatedRow, crremPi
             />
 
             <CalcTrail patches={patches} euiDelta={euiDelta} totalDelta={totalDelta} carbonDelta={carbonDelta} />
+
+            {/* Brief 100: plain-language narrative (how it works + energy & cost
+                assumptions), read from the intervention's notes. Makes the
+                zero-saving / off-model / enabling measures self-explanatory. */}
+            {intervention?.notes && (
+              <div className="mt-3 rounded-lg border border-light-grey bg-white p-3">
+                <div className="text-xxs uppercase tracking-wider font-semibold text-navy mb-1">How this works</div>
+                <p className="text-xs text-mid-grey leading-relaxed whitespace-pre-wrap">{intervention.notes}</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -357,7 +369,14 @@ export default function PerInterventionView({ intervention, isolatedRow, crremPi
               <tbody>
                 <DemandRow label="Heating demand" rec={d?.heating_demand_mwh} gia={gia} />
                 <DemandRow label="Cooling demand" rec={d?.cooling_demand_mwh} gia={gia} />
-                <DemandRow label="DHW demand" rec={d?.per_service?.dhw ?? d?.dhw_demand_mwh} gia={gia} />
+                {/* Brief 100: per_service.dhw is a container of sub-records, not a delta
+                    record — the DHW row must read its `.demand_mwh` (the old `?? dhw_demand_mwh`
+                    fallback was dead + passed the wrong shape). Ventilation/lighting/small_power
+                    demand exist in the data but were previously hidden — now shown. */}
+                <DemandRow label="DHW demand" rec={d?.per_service?.dhw?.demand_mwh} gia={gia} />
+                <DemandRow label="Ventilation demand" rec={d?.per_service?.ventilation?.demand_mwh} gia={gia} />
+                <DemandRow label="Lighting" rec={d?.per_service?.lighting?.delivered_mwh} gia={gia} />
+                <DemandRow label="Small power" rec={d?.per_service?.small_power?.delivered_mwh} gia={gia} />
                 <DemandRow label="Total annual energy" rec={d?.total_delivered_mwh} gia={gia} />
                 <DemandRow label="Electricity" rec={d?.per_fuel?.electricity_mwh} gia={gia} />
                 <DemandRow label="Gas" rec={d?.per_fuel?.gas_mwh} gia={gia} />

@@ -31,6 +31,27 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts" / "report"))
 import interventions as REPORT  # noqa: E402
+import offmodel as OFFMODEL  # noqa: E402
+
+# Brief 100: off-model measures (Class C) carry their real energy/carbon effect in an
+# `off_model` field (computed by scripts/report/offmodel.py), which the frontend metrics
+# add on top of the engine result. ref -> (offmodel callable). 3.2 is the refrigerant
+# component that rides ALONGSIDE 3.2's energy patch (additive carbon).
+_OFF_MODEL_FN = {
+    "1.5": OFFMODEL.interlink_1_5,
+    "3.2": OFFMODEL.refrigerant_3_2,
+    "7.1": OFFMODEL.pv_7_1,
+}
+_OFF_MODEL_KEYS = ("annual_elec_kwh_saved", "annual_gas_kwh_saved", "annual_gbp_saved",
+                   "lifetime_tco2e", "eui_delta_kwh_m2", "basis")
+
+
+def _off_model(ref):
+    fn = _OFF_MODEL_FN.get(ref)
+    if fn is None:
+        return None
+    raw = fn()
+    return {k: raw[k] for k in _OFF_MODEL_KEYS if k in raw}
 
 API = "http://127.0.0.1:8002"
 SCHEMA_VERSION = 2  # D1
@@ -55,25 +76,54 @@ def _flag(entry):
     return {"A": "simulated", "B": "derived", "C": "off_model", "D": "enabling"}.get(entry.get("cls"), "simulated")
 
 
-def _notes(entry, flag):
+def _notes(entry, flag, om=None):
+    """Plain-language narrative covering BOTH energy and cost (Brief 100 decision 4).
+    All content is sourced (interventions.py assumption/basis/cost + offmodel basis) —
+    nothing invented; the flag/class semantics are restated factually."""
     ref, cls = entry["ref"], entry.get("cls")
-    bits = [f"HIEX ref {ref} · Class {cls} ({flag})."]
-    if flag == "off_model":
-        bits.append("Energy/carbon effect calculated off-model — see report.")
-    within = (entry.get("cost") or {}).get("within")
-    if within:
-        bits.append(f"Cost carried by ref {within}.")
+    cost = entry.get("cost") or {}
+
+    # ── Energy narrative ─────────────────────────────────────────────────────
+    energy = ["Energy —"]
     if entry.get("assumption"):
-        bits.append(entry["assumption"])
-    if entry.get("basis"):
-        bits.append(f"Basis: {entry['basis']}")
-    return " ".join(bits).strip()
+        energy.append(entry["assumption"].rstrip("."))
+    if flag == "off_model":
+        energy.append(". This effect is calculated off-model (not a demand reduction the "
+                      "simulation produces), so the isolated EUI change may be 0 while carbon/£ still apply")
+        if om and om.get("basis"):
+            energy.append(f". {om['basis'].rstrip('.')}")
+    elif flag == "enabling":
+        energy.append(". This is an enabling/monitoring measure — it carries no standalone "
+                      "energy saving; the savings it unlocks are counted on the measures it enables")
+    elif entry.get("basis"):
+        energy.append(f". Basis: {entry['basis'].rstrip('.')}")
+    energy_str = "".join(e if e.startswith(".") else (" " + e) for e in energy).strip()
+
+    # ── Cost narrative (from the seeded cost plan — factual) ──────────────────
+    if cost.get("within"):
+        cost_str = f"Cost — no standalone cost; carried by ref {cost['within']}."
+    elif cost.get("lines"):
+        lt = sum(l["qty"] * l["rate"] for l in cost["lines"])
+        biggest = max(cost["lines"], key=lambda l: l["qty"] * l["rate"])
+        conf = {"H": "high", "M": "medium", "L": "low"}.get(cost.get("confidence"), "")
+        n = len(cost["lines"])
+        cost_str = (f"Cost — ~£{cost.get('central', 0):,} capital "
+                    f"({n} line item{'s' if n != 1 else ''}, £{lt:,.0f} works + {cost.get('on_cost_pct', 0)}% on-costs; "
+                    f"largest item: {biggest['desc']})"
+                    + (f", {conf}-confidence estimate." if conf else "."))
+    else:
+        cost_str = f"Cost — ~£{cost.get('central', 0):,} capital."
+    if om and om.get("annual_gbp_saved"):
+        cost_str += f" Off-model operational saving ~£{om['annual_gbp_saved']:,}/yr."
+
+    return f"{energy_str} {cost_str} [HIEX ref {ref} · Class {cls} · {flag}]"
 
 
 def adapt(entry):
     """report entry -> persisted intervention (Brief 41 §3 shape)."""
     ref = entry["ref"]
     flag = _flag(entry)
+    om = _off_model(ref)
     cost = entry.get("cost") or {}
     lines = cost.get("lines") or []
     on_cost_pct = cost.get("on_cost_pct") or 0
@@ -107,10 +157,10 @@ def adapt(entry):
         "notes": (f"Cost carried by ref {cost.get('within')}." if cost.get("within") else ""),
     }
 
-    return {
+    out = {
         "id": f"int_hiex_{_slug(ref)}",
         "label": entry["name"],
-        "notes": _notes(entry, flag),
+        "notes": _notes(entry, flag, om),
         "enabled": True,
         "theme": entry.get("theme", ""),
         "capex_gbp": cost.get("central") if cost.get("central") else None,
@@ -118,6 +168,9 @@ def adapt(entry):
         "patches": patches,
         "cost": cost_obj,
     }
+    if om is not None:
+        out["off_model"] = om
+    return out
 
 
 def seeded_total(persisted):

@@ -2,6 +2,16 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
+## ✅ Brief 100 — Interventions Library: XLSX export + off-model savings + narratives — CLOSED 2026-07-10 on `chris/interventions-export` *(off `chris/seed-hiex-interventions` (PR #11); PR open, NOT merged)*
+
+Makes every intervention explorable: off-model measures show real numbers, each carries a plain-language narrative, and the whole Library exports to one XLSX. **Engine untouched** (`instantCalc.js`/assembler/derive); anchors 132.6/126.0 byte-identical. Answers Chris's "PV shows nothing" + "export everything" asks.
+
+- **P1** — new optional `off_model` field (schema doc 41 §3) carrying real energy/carbon/£ for measures the engine can't simulate (PV gross-demand, refrigerant GWP, VRF→DHW interlink), from `scripts/report/offmodel.py`; seeded onto 1.5/3.2/7.1. **Additive** to the engine result (a measure can have engine patches AND off_model — 3.2 = VRF energy + refrigerant carbon), threaded through `computeLifetimeCarbon({offModelTco2e})` + `computeAnnualOperationalSaving(...,offModelGbp)` so isolated AND strategy totals include it. **Solar PV now shows −30.8 tCO₂e / £1,786 per tonne / 4.9 yr / £11,305 yr / −40.4 MWh avoided import, EUI Δ 0 (honest, gross-demand), badged OFF-MODEL.**
+- **P2** — two-part `notes` narrative (energy + cost, all sourced, nothing invented) shown in a "How this works" panel; fixed the Demand tab (DHW read the wrong shape + ventilation/lighting/small-power were hidden — now all 9 rows render).
+- **P3** — `xlsx` dep + Library "⬇ Export XLSX" button. Shared `interventionMetrics.js` helper (one derivation for view + export, Rule 11). Workbook: **Summary / Calc trail (per-service demand baseline→post→Δ + per-fuel) / Cost plans / Narratives**. Verified via `scripts/_brief100_export_test.mjs` (round-trips 4 sheets, 22 rows; 1.4 £105,700, PV −30.8/off-model) + browser (107KB valid xlsx, no error).
+- **P4** — browser render check on live Bridgewater: Export button, off-model badge + metrics, narratives, Demand rows all confirmed. Anchors intact; one bug caught + fixed (refactor dropped `lifetimeYears` from the destructure).
+- **Close:** Chris walkthrough on live Bridgewater is the gate. Strategy-scope export deferred (Library-only per the brief).
+
 ## ✅ Brief 99 — Seed 22 HIEX Interventions into live Bridgewater Library — CLOSED 2026-07-10 on `chris/seed-hiex-interventions` *(off `main` `7195b7c`; PR open, NOT merged — Chris walkthrough gates it)*
 
 Seeded all 22 HIEX report interventions (with cost plans) into the LIVE Bridgewater project's Library so the report can be written from the tool. **No engine change** — Library data only; `--fixture` anchors 132.6/126.0 byte-identical (the fixture regression ref is unaffected by the live-project seed).

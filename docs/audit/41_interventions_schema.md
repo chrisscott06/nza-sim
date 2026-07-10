@@ -101,9 +101,36 @@ migration to run.
   schema_version:  number,              // building_config schema version
                                         // this intervention's patches
                                         // were authored against
-  patches: [ Patch, ... ]               // see §4
+  patches: [ Patch, ... ],              // see §4
+  cost:     CostPlan | undefined,       // Brief 97 groups→lines→on_costs
+  off_model: OffModel | undefined       // Brief 100 — see below
 }
 ```
+
+**`off_model` (Brief 100, optional).** For measures whose energy/carbon effect the
+engine cannot simulate (PV under the CRREM gross-demand rule, refrigerant GWP,
+inter-plant heat interlink). The frontend metrics ADD these on top of the engine
+result (they are additive, not a replacement — a measure can have both engine
+patches AND an off_model, e.g. 3.2 VRF energy patch + refrigerant carbon). Computed
+by `scripts/report/offmodel.py`.
+
+```js
+off_model: {
+  annual_elec_kwh_saved: number,   // avoided delivered electricity/yr (0 where n/a)
+  annual_gas_kwh_saved:  number,
+  annual_gbp_saved:      number,   // operational £ saving/yr (adds to payback saving)
+  lifetime_tco2e:        number,   // lifetime carbon saving (already life-scaled)
+  eui_delta_kwh_m2:      number,   // demand-intensity change; 0 for PV (gross-demand)
+  basis:                 string    // one-line method, shown in the narrative
+}
+```
+
+Read path: `computeLifetimeCarbon(perFuel, { offModelTco2e })` (`lifetimeCarbon.js`) and
+`computeAnnualOperationalSaving(perFuelDelta, defaults, offModelGbp)` (`costModel.js`)
+— both isolated (`PerInterventionView`) and portfolio (`StrategyView`) pass it, so
+off-model carbon/£ roll into strategy totals. Strategy Final EUI stays engine-demand
+only (off-model demand effects are surfaced as carbon/£, not folded into the cumulative
+EUI, to keep EUI matching the engine run + the fixture anchor).
 
 ### `enabled`
 

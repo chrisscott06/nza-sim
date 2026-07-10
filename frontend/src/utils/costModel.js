@@ -160,10 +160,13 @@ export function computeCostTotal(cost, projectDefaults = null) {
  * post − baseline, so a saving is negative). £/yr (can be negative for a fuel
  * switch to pricier electricity).
  */
-export function computeAnnualOperationalSaving(perFuelDelta, projectDefaults = null) {
+export function computeAnnualOperationalSaving(perFuelDelta, projectDefaults = null, offModelGbp = 0) {
   const savedKwh = (key) => -num(perFuelDelta?.[key]?.delta) * 1000
+  // Brief 100: off-model measures (PV, interlink) save operational £ outside the
+  // engine (avoided grid import / recovered heat). Additive to the fuel-based saving.
   return savedKwh('electricity_mwh') * readEnergyPrice('electricity', projectDefaults)
        + savedKwh('gas_mwh')         * readEnergyPrice('gas', projectDefaults)
+       + (Number(offModelGbp) || 0)
 }
 
 /** Simple payback (years), clamped; null when there's no positive annual saving. */

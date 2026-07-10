@@ -116,9 +116,15 @@ export function computeLifetimeCarbon(perFuel = {}, opts = {}) {
     annual.push({ year: y, saved_kg: yearKg, saved_tco2e: yearKg / 1000, per_fuel_kg: perFuelKg })
   }
 
+  // Brief 100: off-model measures (PV, refrigerant, interlink) carry a lifetime
+  // carbon saving computed outside the engine (CRREM gross-demand rule, refrigerant
+  // GWP, inter-plant heat flows). It is ADDITIVE to the engine's fuel-based total so
+  // both the isolated view and the strategy sum surface it. Already a lifetime figure.
+  const offModelTco2e = Number(opts.offModelTco2e ?? 0) || 0
   return {
-    lifetime_carbon_saved_tco2e: totalKg / 1000,
-    lifetime_carbon_saved_kg: totalKg,
+    lifetime_carbon_saved_tco2e: totalKg / 1000 + offModelTco2e,
+    lifetime_carbon_saved_kg: totalKg + offModelTco2e * 1000,
+    off_model_tco2e: offModelTco2e,
     annual_by_year: annual,
     horizon: { startYear, lastYear, lifetimeYears },
     unknown_fuels: unknownFuels,

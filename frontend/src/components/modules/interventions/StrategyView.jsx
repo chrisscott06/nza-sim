@@ -176,7 +176,10 @@ export default function StrategyView({ strategyName = 'Strategy 1', intervention
     const iv = interventions.find(i => i.id === row.id) || {}
     const pf = perFuelFromDeltaRecord(row.marginal_delta?.per_fuel)
     const years = iv.lifetime_years ?? defaultLifetimeYears(iv.theme ?? iv.category)
-    return sum + (computeLifetimeCarbon(pf, { lifetimeYears: years }).lifetime_carbon_saved_tco2e || 0)
+    // Brief 100: off-model measures (PV, interlink, refrigerant) add their lifetime
+    // carbon to the portfolio total (they contribute no engine per_fuel). £/tonne below
+    // divides capex by this, so off-model measures now carry their real carbon weight.
+    return sum + (computeLifetimeCarbon(pf, { lifetimeYears: years, offModelTco2e: iv.off_model?.lifetime_tco2e }).lifetime_carbon_saved_tco2e || 0)
   }, 0)
 
   // Brief 90 (Brief B): strategy capex = Σ enabled interventions' cost totals
