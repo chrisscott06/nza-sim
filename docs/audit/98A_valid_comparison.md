@@ -78,3 +78,26 @@ things NZA-Sim models and EnergyPlus doesn't — **thermal bridging (24 MWh) and
 The **systems layer does NOT agree**: NZA-Sim's small power (4.7×), DHW (~10×) and lighting (2×) are
 far larger than EnergyPlus's, and these — not the fabric — dominate the headline EUI gap. These are
 candidate bugs in the demand→delivered accounting, flagged here, not chased or tuned.
+
+---
+
+## Recommendation for Brief 98-B (Results UI + perturbation tester)
+**Do a Claim-2 bug-fix pass BEFORE 98-B.** The fabric physics (Claim 1) is trustworthy and ready to
+present — but 98-B builds a headline NZA-vs-EP comparison UI, and right now that headline is
+dominated by the Claim-2 systems candidates (small_power 4.7×, DHW ~10×, lighting 2×), not by the
+defensible fabric residual. Shipping the interrogation UI on top of an EUI gap that's mostly
+uncharacterised systems discrepancies would present drift as physics — the exact failure this brief
+was reframed to avoid.
+
+Suggested order of the follow-up fixes (each its own short brief, EP-side or scope-alignment only —
+NZA-Sim engine stays untouched):
+1. **DHW demand basis** (biggest, ~10×) — reconcile the EP DHW generator's litres/sizing with NZA's
+   tap-mix (55 L/person/day). Likely the EP DHW is under-demanded.
+2. **small_power schedule** (4.7×) — determine whether NZA runs small power flat 8760 h vs EP's
+   scheduled ~2100 h; align the basis.
+3. **lighting hours** (2×) — same LPD, so a schedule/hours mismatch.
+4. **fan/ventilation accounting** — surface NZA's MVHR fan electricity to compare like-for-like.
+
+Once Claim 2 is tight (<5 % per service), 98-B's comparison headline will reflect the defensible
+fabric residual (bridging + perm vents), and the perturbation tester will vary real physics.
+EP version 25-2-0 confirmed; airtightness matched; anchors 132.6/126.0 intact.

@@ -1,6 +1,21 @@
 # Current brief
 
-**Brief 100 — Interventions Library: XLSX export + off-model savings + narratives — CLOSED 2026-07-10.**
+**Brief 98-A — Same-Building Engine Comparison (airtightness fix + two-claim residual) — CLOSED 2026-07-10.**
+On branch `chris/engine-comparison-p0` (off clean `main` `a5d8107`). The first valid NZA-vs-EnergyPlus
+comparison — same building, both engines, nothing tuned (prior numbers void: measured across mismatched
+stale configs). **P0:** EP infiltration now reads NZA-Sim's envelope-derived operational ACH (q50 →
+n50/20) instead of flat 0.5 — `derive_operational_ach()` mirrors `deriveOperationalACH`; proven
+byte-identical (0.06925 both sides), EP 0 fatal. **P1:** Claim 1 (Fabric→Demand) is **defensible
+physics** — heating NZA 87.7 / EP 52.9 MWh, r 0.896, gap dominated by thermal_bridging 24.0 (EP 0) +
+permanent_vents 18.9 (EP-absent); Claim 2 (Demand→Delivered) is **NOT tight** — candidate bugs flagged
+(small_power 4.7×, DHW ~10×, lighting 2×, fans). **P2 verdict:** fabric is trustworthy, but the systems
+layer has real candidate bugs dominating the EUI gap → **a Claim-2 bug-fix pass should precede Brief
+98-B** (Results UI). NZA-Sim `instantCalc.js` untouched; anchors 132.6/126.0 byte-identical. Deliverable:
+[`../audit/98A_valid_comparison.md`](../audit/98A_valid_comparison.md). Brief:
+[`archive/98A_engine_comparison_COMPLETED.md`](archive/98A_engine_comparison_COMPLETED.md).
+**PR open, NOT merged — independent review gates it.**
+
+**Brief 100 — Interventions Library: XLSX export + off-model savings + narratives — CLOSED 2026-07-10; MERGED to `main` `a5d8107` (PR #12).**
 On branch `chris/interventions-export` (off `chris/seed-hiex-interventions`, PR #11, which carries the
 seed script Brief 100 extends). Three connected pieces: (1) **off-model savings** — a new optional
 `off_model` field lets PV/interlink/refrigerant show their real carbon/£/kWh (from `offmodel.py`),
