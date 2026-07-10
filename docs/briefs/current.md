@@ -1,6 +1,20 @@
 # Current brief
 
-**Brief 98-pre-d — C1 lighting + C2 ASHP DHW COP EP-derive fixes — CLOSED 2026-07-09.**
+**Brief 99 — Seed 22 HIEX Interventions into live Bridgewater Library — CLOSED 2026-07-10.**
+On branch `chris/seed-hiex-interventions` (off `main` `7195b7c`). Seeded all 22 HIEX report interventions
+(with cost plans, in the new groups shape) into the LIVE Bridgewater project's Library via API PUT
+`/{id}/building`, so the report can be written from the tool. **No engine change** — Library data only;
+anchors 132.6/126.0 byte-identical. Adapter `scripts/seed_hiex_interventions.py` (report→persisted shape;
+schema_version=2; blended on-cost → contingency_pct, others explicit 0). **22/22 cost totals reconcile
+±1%** ([`../report/99_seed_reconciliation.md`](../report/99_seed_reconciliation.md)). Class flags honest:
+A simulated / B derived / C off_model / D enabling; off-model + enabling carry 0 patches (no faked
+savings). Engine verification (`scripts/_brief99_p4_verify.mjs`): 13 modellable move EUI, 9
+off-model/enabling show 0 Δ, cumulative spine 83.5 (−37.6%) ≈ report 74.8 (−40.6%) given the +7.9
+live-baseline offset. The 8 originals backed up + DB snapshotted (reversible). Brief:
+[`archive/99_seed_hiex_interventions_COMPLETED.md`](archive/99_seed_hiex_interventions_COMPLETED.md).
+**PR open, NOT merged — Chris walkthrough on LIVE Bridgewater gates close.**
+
+**Brief 98-pre-d — C1 lighting + C2 ASHP DHW COP EP-derive fixes — CLOSED 2026-07-09; MERGED to `main` `7195b7c` (PR #10).**
 On branch `chris/98pre-d-lighting-dhw-cop` (off `main`). Definitive read-only traces of the displayed
 engine `_calculateState3` (`instantCalc.js:4941`) on live Bridgewater proved it reads **v40** for both
 DHW (consumption.dhw = 42.2 MWh elec + 157.4 MWh gas, ASHP present) and lighting (44.46 MWh, v40
