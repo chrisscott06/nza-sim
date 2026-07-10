@@ -53,6 +53,8 @@ import StrategyView from './StrategyView.jsx'
 import EPValidationPanel from './EPValidationPanel.jsx'
 import { useIsolatedResults } from './useIsolatedResults.js'
 import { useEpResults } from './useEpResults.js'
+import { exportInterventionsXlsx } from '../../../utils/interventionExport.js'
+import { getGia } from './visualiser/unitFmt.js'
 // Brief 94 Part 3 — strategy = ordered refs into the library. The engine + stack
 // view consume the RESOLVED strategy (order + enabled from refs); reorder / toggle /
 // remove / add mutate strategies[0].refs, never the library definitions.
@@ -262,6 +264,16 @@ export default function InterventionsModule() {
   }, [stackResult, engineResult])
 
   // ── Mutators ─────────────────────────────────────────────────────────
+
+  // Brief 100 P3 — export the whole Library to one XLSX (metrics + calc trail +
+  // cost plans + narratives). Numbers come from the same helper the isolated view uses.
+  const handleExportXlsx = () => {
+    const gia = getGia(isolatedRows[0]?.isolatedResult?.baseline) || 0
+    exportInterventionsXlsx({
+      interventions, isolatedRows, projectDefaults: projectCostDefaults, gia,
+      projectName: params?.project_name || params?.name || 'bridgewater',
+    })
+  }
 
   const handleAdd = () => {
     const id = newId('int')
@@ -532,9 +544,20 @@ export default function InterventionsModule() {
               <div className="p-4 space-y-2">
                 <div className="flex items-center justify-between mb-1">
                   <h2 className="text-xs uppercase tracking-wider font-semibold text-navy">Library</h2>
-                  <button type="button" onClick={handleAdd} className="text-xs font-semibold" style={{ color: INTERVENTIONS_ACCENT }}>
-                    + Add
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleExportXlsx}
+                      disabled={interventions.length === 0}
+                      className="text-xs font-semibold text-mid-grey hover:text-navy disabled:opacity-40"
+                      title="Export all interventions (metrics + calc trail + cost plans + narratives) to an Excel workbook"
+                    >
+                      ⬇ Export XLSX
+                    </button>
+                    <button type="button" onClick={handleAdd} className="text-xs font-semibold" style={{ color: INTERVENTIONS_ACCENT }}>
+                      + Add
+                    </button>
+                  </div>
                 </div>
                 {interventions.length === 0 ? (
                   <p className="text-xs text-mid-grey/60 italic">No interventions yet. Add one to start the catalogue.</p>

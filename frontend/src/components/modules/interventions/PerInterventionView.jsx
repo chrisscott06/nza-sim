@@ -30,6 +30,7 @@ import {
   computeSimplePayback, computePoundsPerTonne,
 } from '../../../utils/costModel.js'
 import { readEnergyPrice } from '../../../utils/costReads.js'
+import { computeInterventionMetrics } from '../../../utils/interventionMetrics.js'
 import { SEMANTIC, deltaColour } from './semanticColour.js'
 
 const ACCENT = '#E84393'   // interventions module accent (kept per Brief 97)
@@ -214,42 +215,20 @@ export default function PerInterventionView({ intervention, isolatedRow, crremPi
   // it (gross-demand PV, refrigerant GWP, inter-plant heat). It is ADDITIVE to the
   // engine delta so these no longer read as "does nothing". PV keeps EUI Δ 0 (its
   // off_model.eui_delta_kwh_m2 is 0) but surfaces carbon/£/payback.
-  const om = intervention?.off_model ?? null
-  const isOffModel = !!om
-  const omEuiDelta = Number(om?.eui_delta_kwh_m2 ?? 0) || 0
-  const omDeliveredMwhDelta =
-    -((Number(om?.annual_elec_kwh_saved ?? 0) || 0) + (Number(om?.annual_gas_kwh_saved ?? 0) || 0)) / 1000
-
-  const euiDelta = om ? (Number(d?.eui_kwh_per_m2?.delta ?? 0) + omEuiDelta) : d?.eui_kwh_per_m2?.delta
-  const totalDelta = om ? (Number(d?.total_delivered_mwh?.delta ?? 0) + omDeliveredMwhDelta) : d?.total_delivered_mwh?.delta
+  // Brief 100: one canonical metric derivation (shared with the XLSX export via
+  // interventionMetrics.js) so the two never drift. Off-model additive handling +
+  // lifetime carbon + £/tonne + payback all live in the helper.
+  const m = computeInterventionMetrics(intervention, d, projectCostDefaults, gia)
+  const { isOffModel, euiDelta, lifeTco2e, annualSaving, costTotal, linesTotal, poundsPerTonne, payback, perFuel, lifetimeYears } = m
+  const totalDelta = m.deliveredMwhDelta
   const carbonDelta = d?.carbon_kgco2_per_m2?.delta
-
-  // Brief 89 (Brief C): lifetime carbon saved, fuel-switching aware. Brief 100: add the
-  // off-model lifetime carbon (already a lifetime figure) so pure off-model measures
-  // (0 engine fuel) still produce a carbon saving.
-  const perFuel = perFuelFromDeltaRecord(d?.per_fuel)
-  const lifetimeYears = intervention?.lifetime_years
-    ?? defaultLifetimeYears(intervention?.theme ?? intervention?.category)
   const hasFuel = gia > 0 && Object.keys(perFuel).length > 0
-  const lifetime = (hasFuel || om)
-    ? computeLifetimeCarbon(perFuel, { lifetimeYears, offModelTco2e: om?.lifetime_tco2e })
-    : null
-  const lifeTco2e = lifetime?.lifetime_carbon_saved_tco2e
   // Sign convention (Chris walkthrough): show the emissions CHANGE, not tonnes-saved,
-  // so it reads like every other delta — a reduction is negative + green, an increase
-  // (e.g. adverse ventilation) is positive + red. lifeTco2e is tonnes SAVED (positive
-  // when good), so the change is its negation.
+  // so a reduction reads negative + green like every other delta.
   const carbonSavedDelta = Number.isFinite(lifeTco2e) ? -lifeTco2e : null
   const baseFuels = {}, postFuels = {}
   for (const [f, v] of Object.entries(perFuel)) { baseFuels[f] = v.from_kwh; postFuels[f] = v.to_kwh }
-
-  // Cost → £/tonne + simple payback. Line-item plan shape (migrate-on-read guarantees it).
   const cost = intervention?.cost ?? emptyCost()
-  const costTotal = computeCostTotal(cost, projectCostDefaults)
-  const linesTotal = computeLinesTotal(cost)
-  const annualSaving = computeAnnualOperationalSaving(d?.per_fuel, projectCostDefaults, om?.annual_gbp_saved)
-  const poundsPerTonne = costTotal > 0 && Number.isFinite(lifeTco2e) ? computePoundsPerTonne(costTotal, lifeTco2e) : null
-  const payback = costTotal > 0 ? computeSimplePayback(costTotal, annualSaving) : null
 
   return (
     <div className="h-full flex flex-col">
