@@ -348,6 +348,16 @@ export default function PerInterventionView({ intervention, isolatedRow, crremPi
             />
 
             <CalcTrail patches={patches} euiDelta={euiDelta} totalDelta={totalDelta} carbonDelta={carbonDelta} />
+
+            {/* Brief 100: plain-language narrative (how it works + energy & cost
+                assumptions), read from the intervention's notes. Makes the
+                zero-saving / off-model / enabling measures self-explanatory. */}
+            {intervention?.notes && (
+              <div className="mt-3 rounded-lg border border-light-grey bg-white p-3">
+                <div className="text-xxs uppercase tracking-wider font-semibold text-navy mb-1">How this works</div>
+                <p className="text-xs text-mid-grey leading-relaxed whitespace-pre-wrap">{intervention.notes}</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -380,7 +390,14 @@ export default function PerInterventionView({ intervention, isolatedRow, crremPi
               <tbody>
                 <DemandRow label="Heating demand" rec={d?.heating_demand_mwh} gia={gia} />
                 <DemandRow label="Cooling demand" rec={d?.cooling_demand_mwh} gia={gia} />
-                <DemandRow label="DHW demand" rec={d?.per_service?.dhw ?? d?.dhw_demand_mwh} gia={gia} />
+                {/* Brief 100: per_service.dhw is a container of sub-records, not a delta
+                    record — the DHW row must read its `.demand_mwh` (the old `?? dhw_demand_mwh`
+                    fallback was dead + passed the wrong shape). Ventilation/lighting/small_power
+                    demand exist in the data but were previously hidden — now shown. */}
+                <DemandRow label="DHW demand" rec={d?.per_service?.dhw?.demand_mwh} gia={gia} />
+                <DemandRow label="Ventilation demand" rec={d?.per_service?.ventilation?.demand_mwh} gia={gia} />
+                <DemandRow label="Lighting" rec={d?.per_service?.lighting?.delivered_mwh} gia={gia} />
+                <DemandRow label="Small power" rec={d?.per_service?.small_power?.delivered_mwh} gia={gia} />
                 <DemandRow label="Total annual energy" rec={d?.total_delivered_mwh} gia={gia} />
                 <DemandRow label="Electricity" rec={d?.per_fuel?.electricity_mwh} gia={gia} />
                 <DemandRow label="Gas" rec={d?.per_fuel?.gas_mwh} gia={gia} />
