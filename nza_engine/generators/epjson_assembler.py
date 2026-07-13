@@ -118,6 +118,53 @@ def derive_operational_ach(building_params: dict):
             pass
     return DEFAULT_INFILTRATION_ACH, {"source": "default", "ach": DEFAULT_INFILTRATION_ACH}
 
+
+def _nza_dhw_boiler_litres_per_day(building_params: dict) -> float | None:
+    """NZA-Sim's daily hot-water volume at the storage setpoint (litres/day), so
+    EnergyPlus is sized to the SAME DHW demand (Brief 98-A2 P2). Mirrors the tap-mix
+    model in systemsEngine.js:453-491 + computeTotalOccupants (instantCalc.js:2118):
+
+      hot_fraction = (tap_outlet − cold) / (setpoint − cold)
+      occupants    = num_bedrooms × density.value (per_room) | gia × value (per_m2)
+                     | value (total),  × occupancy_rate
+      total_tap    = occupants × L/person (per_person) | L/m² × gia (per_m2)
+      boiler_litres = total_tap × hot_fraction
+
+    Returns None when the building carries no v40 DHW service-level fields (caller keeps
+    the room-based estimate). Does NOT change NZA's inputs — only reads them."""
+    v40 = building_params.get("systems_config_v40") or {}
+    if not v40.get("dhw"):
+        return None
+    L = float(building_params.get("length", 60.0) or 60.0)
+    W = float(building_params.get("width", 15.0) or 15.0)
+    nf = float(building_params.get("num_floors", 4.0) or 4.0)
+    gia = L * W * nf
+    setpoint = float(v40.get("dhw_storage_setpoint_c", 60) or 60)
+    cold = float(v40.get("dhw_cold_supply_temp_c", 10) or 10)
+    tap = float(v40.get("dhw_tap_outlet_temp_c", 40) or 40)
+    dt = max(setpoint - cold, 1.0)
+    hot_fraction = max(0.0, min(1.0, (tap - cold) / dt))
+
+    occ = building_params.get("occupancy") or {}
+    dens = occ.get("density") or {"value": 1.5, "basis": "per_room"}
+    dv = float(dens.get("value", 1.5) or 1.5)
+    db = dens.get("basis", "per_room")
+    nbeds = max(0.0, float(building_params.get("num_bedrooms", 0) or 0))
+    if db == "per_m2":
+        occupants = gia * dv
+    elif db == "total":
+        occupants = dv
+    else:  # per_room (default)
+        occupants = nbeds * dv
+    occ_rate = float(occ.get("occupancy_rate", building_params.get("occupancy_rate", 1)) or 1)
+    occupants = max(0.0, occupants * occ_rate)
+
+    if v40.get("dhw_demand_basis", "per_m2") == "per_person":
+        total_tap = occupants * float(v40.get("dhw_demand_litres_per_person_per_day", 80) or 80)
+    else:
+        total_tap = float(v40.get("dhw_demand_litres_per_m2_per_day", 1.1) or 1.1) * gia
+    return total_tap * hot_fraction
+
 # Ventilation (fresh air) design flow per person — m³/s
 # Bedrooms: 8 l/s/person = 0.008 m³/s/person
 _VENT_M3_PER_S_PER_PERSON = 0.008
@@ -310,14 +357,16 @@ def _build_equipment_objects(
     zones: dict,
     zone_type: str = "hotel_bedroom",
     epd_override: float | None = None,
+    schedule_override: str | None = None,
 ) -> dict:
     loads = get_zone_loads(zone_type)
     epd = epd_override if epd_override is not None else loads["equipment_power_density_W_per_m2"]
+    sched = schedule_override if schedule_override is not None else loads["equipment_schedule"]
     equip = {}
     for zone_name in zones:
         equip[f"{zone_name}_Equip"] = {
             "zone_or_zonelist_or_space_or_spacelist_name": zone_name,
-            "schedule_name": loads["equipment_schedule"],
+            "schedule_name": sched,
             "design_level_calculation_method": "Watts/Area",
             "watts_per_floor_area": epd,
             "fraction_radiant": 0.30,
@@ -1371,22 +1420,25 @@ def assemble_epjson(
     # ZERO density (the per-profile objects below carry the real loads).
     # In state1 both are zero. In 'full' / other modes they use library
     # defaults.
-    lights_objects  = _build_lights_objects(zones, lpd_override=lpd_override)
-    equip_objects   = _build_equipment_objects(zones, epd_override=epd_override)
+    # Brief 98-A2 (P0 small power, P1 lighting): in FULL mode, EnergyPlus inherits
+    # NZA-Sim's lighting + small-power loads via the SAME per-profile emission state2
+    # uses (magnitude/baseload × NZA-mirrored schedules `_v24_lighting_profile_schedule`
+    # / equipment baseload-flat + active-scheduled), instead of a library LPD/EPD × a
+    # hotel schedule — so both engines run identical internal loads. The base
+    # Lights/ElectricEquipment objects then emit at ZERO density; the per-profile
+    # objects carry the real load (the pattern state2 already used).
+    _gains = building_params.get("gains") or {}
+    _use_nza_lighting  = (not (state1 or state2)) and bool((_gains.get("lighting") or {}).get("profiles"))
+    _use_nza_equipment = (not (state1 or state2)) and bool((_gains.get("equipment") or {}).get("profiles"))
 
-    # ── State 2 per-profile multi-profile emission (Brief 27 Revised Part 10) ──
-    if state2:
-        # Lighting: one Lights object per profile per zone.
-        lighting_profile_objects = _emit_state2_lighting_profiles(
-            building_params, zones, all_schedules, _gia,
-        )
-        lights_objects.update(lighting_profile_objects)
+    lights_objects  = _build_lights_objects(zones, lpd_override=(0.0 if _use_nza_lighting else lpd_override))
+    equip_objects   = _build_equipment_objects(zones, epd_override=(0.0 if _use_nza_equipment else epd_override))
 
-        # Equipment: baseload + active objects per profile per zone.
-        equipment_profile_objects = _emit_state2_equipment_profiles(
-            building_params, zones, all_schedules, _gia,
-        )
-        equip_objects.update(equipment_profile_objects)
+    # ── Per-profile multi-profile emission (state2 + Brief 98-A2 full-mode inherit) ──
+    if state2 or _use_nza_lighting:
+        lights_objects.update(_emit_state2_lighting_profiles(building_params, zones, all_schedules, _gia))
+    if state2 or _use_nza_equipment:
+        equip_objects.update(_emit_state2_equipment_profiles(building_params, zones, all_schedules, _gia))
     # Brief 98-A P0: feed the envelope-derived operational ACH (q50 → n50/20) so EP
     # reads the SAME airtightness basis as NZA-Sim, not the flat 0.5 default.
     _op_ach, _op_ach_meta = derive_operational_ach(building_params)
@@ -1591,6 +1643,10 @@ def assemble_epjson(
         # demand is implicit in the occupancy schedule (no service to fail).
         if dhw_enabled:
             # Pass actual bedroom count + occupancy so peak flow scales with real demand
+            # Brief 98-A2 P2: size EP DHW to NZA-Sim's tap-mix boiler_litres_per_day so
+            # both engines run the same hot-water demand (delivered split then falls out
+            # of EP's own gas/ASHP efficiencies — an expected, named residual).
+            _nza_dhw_litres = _nza_dhw_boiler_litres_per_day(building_params)
             dhw_objects = generate_dhw_system(
                 zone_floor_area_m2=zone_floor_area,
                 num_zones=len(zones),
@@ -1602,6 +1658,7 @@ def assemble_epjson(
                 dhw_setpoint=float(sc.get("dhw_setpoint", 60.0)),
                 dhw_preheat_setpoint=float(sc.get("dhw_preheat_setpoint", 45.0)),
                 ashp_cop=ashp_cop,
+                daily_hot_litres_override=_nza_dhw_litres,
             )
             for obj_type, items in dhw_objects.items():
                 hvac_objects.setdefault(obj_type, {}).update(items)
