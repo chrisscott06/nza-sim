@@ -306,18 +306,41 @@ def _build_lights_objects(
     return lights
 
 
+def _nza_gain_flat_wpm2(building_params: dict, service: str) -> float | None:
+    """NZA-Sim's flat (uniform-8760) internal-gain density (W/m²) for `service`
+    ('equipment' or 'lighting'), read from the building's internal-gains model so
+    EnergyPlus can inherit the SAME load NZA-Sim runs (Brief 98-A2). NZA runs the
+    profile BASELOAD uniformly across 8760 h (`gains.<service>.profiles[].baseload`);
+    the profile schedule modulates only the 'active' component (0 on report_baseline).
+    Σ over profiles of baseload × area_share × gain_fraction. Mirrors instantCalc.js
+    computeHourlyGains. Returns None when no gains profile is present (caller keeps its
+    library default)."""
+    profs = ((building_params.get("gains") or {}).get(service) or {}).get("profiles")
+    if not profs:
+        return None
+    total = 0.0
+    for p in profs:
+        base = float(((p.get("baseload") or {}).get("value")) or 0.0)
+        share = float(p.get("area_share", 1.0) or 1.0)
+        gf = float(p.get("gain_fraction", 1.0) or 1.0)
+        total += base * share * gf
+    return total
+
+
 def _build_equipment_objects(
     zones: dict,
     zone_type: str = "hotel_bedroom",
     epd_override: float | None = None,
+    schedule_override: str | None = None,
 ) -> dict:
     loads = get_zone_loads(zone_type)
     epd = epd_override if epd_override is not None else loads["equipment_power_density_W_per_m2"]
+    sched = schedule_override if schedule_override is not None else loads["equipment_schedule"]
     equip = {}
     for zone_name in zones:
         equip[f"{zone_name}_Equip"] = {
             "zone_or_zonelist_or_space_or_spacelist_name": zone_name,
-            "schedule_name": loads["equipment_schedule"],
+            "schedule_name": sched,
             "design_level_calculation_method": "Watts/Area",
             "watts_per_floor_area": epd,
             "fraction_radiant": 0.30,
@@ -1372,7 +1395,14 @@ def assemble_epjson(
     # In state1 both are zero. In 'full' / other modes they use library
     # defaults.
     lights_objects  = _build_lights_objects(zones, lpd_override=lpd_override)
-    equip_objects   = _build_equipment_objects(zones, epd_override=epd_override)
+    # Brief 98-A2 P0: in full mode, EnergyPlus inherits NZA-Sim's flat small-power
+    # density (baseload, uniform 8760 h via `always_on`) so both engines run the same
+    # equipment load — instead of a library EPD × a ~24%-load hotel-equipment schedule.
+    _nza_equip_wpm2 = None if (state1 or state2) else _nza_gain_flat_wpm2(building_params, "equipment")
+    if _nza_equip_wpm2 is not None:
+        equip_objects = _build_equipment_objects(zones, epd_override=_nza_equip_wpm2, schedule_override="always_on")
+    else:
+        equip_objects = _build_equipment_objects(zones, epd_override=epd_override)
 
     # ── State 2 per-profile multi-profile emission (Brief 27 Revised Part 10) ──
     if state2:
