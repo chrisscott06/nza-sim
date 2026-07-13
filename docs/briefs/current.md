@@ -1,5 +1,22 @@
 # Current brief
 
+**Brief 98-C — The Convergence — CLOSED 2026-07-13.**
+On branch `chris/engine-convergence` (off `chris/reconciliation-table`). Closed all six EP-side,
+anchor-safe gaps from the 98-R register, with the reconciliation table as the acceptance test.
+**EP assembler + hvac_dhw only; NZA-Sim `instantCalc.js` untouched; anchors 132.6/126.0 byte-identical;
+inherited inputs, nothing tuned.** Headline: **space-heating demand converged from EP 10.3 → 107.2
+(NZA 87.7, +22%)** and cooling 163.8 → 88.3 (NZA 101.1, −13%) — from ~8× apart to within ~20%; red cells
+14→3. Six inherits: people gain (1.2→120.4), ventilation topology (0→3 systems, ~248 MWh restored),
+thermostat (setback→flat band), DHW fuel split (gas 45→155), thermal bridging (0→24 via psi-adjusted U),
+permanent vents (55.7→16 on NZA's wind correlation). Residual demand gap = named method difference
+(EP full sub-hourly balance vs NZA gated/lumped-mass-reset). 3 remaining reds all delivered-side: VRF
+heating-elec COP (curves ~1.4 vs flat SCOP 3.0 — a NEW finding), cooling-elec (downstream), fan-elec
+(parked/NZA-side). **Meter sanity:** EP now shows a winter signature but over-shoots (VRF COP over-dumps
+winter electricity) → the remaining reality gap is the SYSTEMS layer (VRF COP), delivered-side, anchor-safe.
+Deliverable [`../audit/98R_reconciliation.md`](../audit/98R_reconciliation.md) (BEFORE `98C_before.md`,
+AFTER `98C_after.md`). Brief [`archive/98C_convergence_COMPLETED.md`](archive/98C_convergence_COMPLETED.md).
+**PR open, NOT merged.**
+
 **Brief 98-R — The Reconciliation Table — CLOSED 2026-07-13.**
 On branch `chris/reconciliation-table` (off `chris/ep-inherit-nza-inputs`). The systematic gap-detector:
 every energy channel + every config field, NZA | EP, side by side, automatic flags. **DETECTS, does not

@@ -2,6 +2,21 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
+## ✅ Brief 98-C — The Convergence (close every EP-side gap from the 98-R register) — CLOSED 2026-07-13 on `chris/engine-convergence` *(off `chris/reconciliation-table`; PR open, NOT merged)*
+
+Closed all six EP-side, anchor-safe gaps the reconciliation table found, with the table as the acceptance test. **EP assembler + hvac_dhw only; NZA-Sim `instantCalc.js` untouched; anchors 132.6/126.0 byte-identical.** Inherited inputs — nothing tuned toward NZA's outputs. Deliverable: the AFTER table [`audit/98R_reconciliation.md`](docs/audit/98R_reconciliation.md) (BEFORE snapshot `98C_before.md`, AFTER `98C_after.md`).
+
+- **Headline — demand converged from ~8× apart to within ~20%:** space heating NZA 87.7 vs EP **10.3→107.2** (+22%); cooling NZA 101.1 vs EP **163.8→88.3** (−13%). Red cells **14→3**.
+- **P1 people** — EP activity level was the 0-1 occupancy fraction (~1 W/person); now 75 W (`occ.sensible_w_per_person`) + headcount 345 (density.value) + config schedule → people gain 1.2→**120.4 = NZA**.
+- **P2 ventilation (the big one)** — retired the single-primary/per-person-OA model; all 3 v40 systems emit as ZoneVentilation:DesignFlowRate at flow×(1−HRE) (285/2208/210 L/s) → ~248 MWh of extract loss restored. Heating 2.4→106.
+- **P3 thermostat** — flat 21/24 band from comfort/v40 setpoint; EP's overnight setback removed.
+- **P4 DHW** — parallel 52/48 gas/ASHP split (v40 shares) + fixed a latent sizing error (`_DHW_SCHEDULE_AVG_FRACTION` 0.65→0.35, the true schedule avg) → DHW gas 45→**155 = NZA 157**.
+- **P5 thermal bridging** — inherited as psi-adjusted U (H_TB 278 W/K mirror of ISO 14683 auto; degrades opaque insulation R); folds into conduction (no native EP ψ object).
+- **P6 permanent vents** — WindandStack Autocalculate (55.7) replaced by NZA's wind correlation via ZoneVentilation velocity coeff → ~16 = NZA.
+- **Residual demand gap (+22%/−13%) = named METHOD difference**, not an input gap: EP's full sub-hourly balance books losses every hour; NZA integrates net setpoint-gated demand + resets its lumped mass to setpoint each conditioned hour. Both under the 30% escalate threshold.
+- **3 remaining 🔴 all delivered-side:** heating-elec (NEW finding — EP VRF curve COP ~1.4 vs NZA flat SCOP 3.0), cooling-elec (downstream), fan-elec (parked/NZA-side).
+- **🗒️ Meter sanity (honest twist):** EP now shows a winter electricity signature (Jan/mean 0.99→1.35) but OVER-shoots the meter (1.03; shape r 0.84→0.22) — the low VRF heating COP over-dumps winter electricity. **Envelope/demand converged; the remaining divergence from reality is the SYSTEMS layer (VRF COP), delivered-side, anchor-safe — the clean next question.**
+
 ## ✅ Brief 98-R — The Reconciliation Table (every channel + input, both engines) — CLOSED 2026-07-13 on `chris/reconciliation-table` *(off `chris/ep-inherit-nza-inputs`; PR open, NOT merged)*
 
 The systematic gap-detector: every energy channel + every config field, NZA | EP, side by side, with automatic flags. **DETECTS, does not fix.** No physics change either engine — EP assembler change limited to OUTPUT:VARIABLE requests (P1, demand byte-identical). Anchors 132.6/126.0 byte-identical; instantCalc read-only. Deliverable: [`audit/98R_reconciliation.md`](docs/audit/98R_reconciliation.md), fully script-generated (`scripts/report/reconcile.py` + `_98R_nza_channels.mjs`).

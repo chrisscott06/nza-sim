@@ -220,17 +220,17 @@ Assembler = `nza_engine/generators/epjson_assembler.py`.
 | `thermal_mass_category` / `_mode` | medium/lumped | 🟠 divergent | EP mass = construction CTF (real layers); NZA = lumped 250k J/K·m² — different basis, both defensible |
 | `gains.lighting` | 2 W/m² profile | ✅ INHERITED | `_emit_state2_lighting_profiles` (98-A2 P1) → 39.0=39.0 |
 | `gains.equipment` (small power) | 5.04 W/m² flat | ✅ INHERITED | `_emit_state2_equipment_profiles` (98-A2 P0) → 186.1=186.1 |
-| `occupancy.density` | 2.5/room (345 ppl) | 🟠 basis differs | EP People/Area 0.0655 p/m² = 276 ppl (assembler L327) — headcount basis diverges |
-| `occupancy.schedule` | config weekday/sat/sun | 🟠 derived | EP `hotel_bedroom_occupancy` derived from config (L1434) — shape approx, not the raw arrays |
-| `occupancy.sensible_w_per_person` (75 W) | 75 W/person | 🔴 NOT INHERITED (BUG) | EP `activity_level_schedule_name="hotel_bedroom_occupancy"` (the 0-1 FRACTION, assembler L330) → ~1 W/person → people gain 1.2 vs 120.4 MWh |
+| `occupancy.density` | 2.5/room (345 ppl) | ✅ INHERITED (98-C P1) | full mode now uses `_v23_compute_occupancy_density` (density.value 2.5, per_room → 345), not the legacy people_per_room (276) |
+| `occupancy.schedule` | config weekday/sat/sun | ✅ INHERITED (98-C P1) | full mode splices the config-derived `hotel_bedroom_occupancy` (was the library fixed schedule) |
+| `occupancy.sensible_w_per_person` (75 W) | 75 W/person | ✅ INHERITED (98-C P1) | constant activity schedule = 75 W + sensible_heat_fraction 1.0 → people gain 1.2→120.4 = NZA (was the activity-schedule-fraction bug) |
 | `systems_config_v40.heating` (VRF+panel, shares, SCOP) | 2 systems | 🟠 primary-only | `_primary` keeps highest-share; proportional split is NZA-only; SCOP of primary inherited |
 | `systems_config_v40.cooling` | 2 systems | 🟠 primary-only | same single-primary simplification |
 | `systems_config_v40.dhw` (2 systems, shares) | gas 52 / ASHP 48 | ✅ INHERITED (98-C P4) | parallel share split (two WaterHeater:Mixed, flow split by v40 share, own effs) + corrected peak-flow sizing (0.35 schedule avg) → gas 154.6 = NZA 157.4 |
 | DHW setpoints (storage 60 / tap 42 / cold 10) | — | ✅ INHERITED | `_nza_dhw_boiler_litres_per_day` tap-mix (98-A2 P2) → demand 257.3=257.3 |
 | `dhw_demand_basis` / litres_per_person (55) | per_person | ✅ INHERITED | 98-A2 P2 → 12,144 L/day |
-| `ventilation[*].flow_rate` (1425/2208/210 L/s) | 3843 L/s total | 🔴 NOT INHERITED | EP OA = per-person constant `_VENT_M3_PER_S_PER_PERSON` (assembler L688), NOT v40 flows |
-| `ventilation[*]` bedroom + toilet extract | 2 systems | 🔴 STRUCTURAL | `_primary` models only the public MVHR; other two absent from EP |
-| `ventilation[0].recovery_sensible_pct` (80) | 80% | 🟠 passed, idle | effectiveness_override→ERV, but HeatExchanger recovery reports 0.0 MWh (ERV not conditioning) |
+| `ventilation[*].flow_rate` (1425/2208/210 L/s) | 3843 L/s total | ✅ INHERITED (98-C P2) | `_build_mech_ventilation_objects` emits each system as ZoneVentilation:DesignFlowRate at its v40 flow (was the per-person OA constant) |
+| `ventilation[*]` bedroom + toilet extract | 2 systems | ✅ INHERITED (98-C P2) | all 3 systems now emitted (bedroom 2208, toilet 210 L/s) — the ~248 MWh hole closed |
+| `ventilation[0].recovery_sensible_pct` (80) | 80% | ✅ INHERITED (98-C P2) | applied as effective flow × (1−0.80) = 285 L/s in `_build_mech_ventilation_objects` (mirrors NZA ventUA), replacing the idle ERV |
 | `heating_setpoint_mode`/`cooling_setpoint_mode` (follow_comfort) | flat 21/24 band | ✅ INHERITED (98-C P3) | full mode overwrites `hotel_*_setpoint` with a flat band from `_resolve_comfort_setpoints` (comfort band + v40 mode); overnight setback removed |
 | `lighting` / `small_power` (v40 delivered) | — | ✅ INHERITED | InteriorLights/Equipment meters 39.0/186.1 match |
 """
@@ -276,30 +276,43 @@ header = ("# Brief 98-R — the reconciliation table\n\n"
           "are classification with assembler citations.\n\n")
 
 SUMMARY = (
-    "## In plain English\n\n"
-    "**Where the engines agree (✅, ≤10%):** lighting (39.0=39.0), equipment/small power "
-    "(186.1=186.1), DHW demand (257.3=257.3), cooling-electricity (33.7 vs 36.7), and total "
-    "electricity (373.8 vs 357.8). The inputs that dominate the electricity bill are matched.\n\n"
-    "**Where they differ, and why (🔴):** heating demand (NZA 87.7 vs EP 10.3) and cooling "
-    "demand (101.1 vs 163.8) diverge — but those are *downstream*. The **roots** are five input "
-    "gaps: (1) **ventilation** — EP models only 1 of NZA's 3 systems and ignores the v40 flows, "
-    "so it misses ~248 MWh of extract loss (bedroom extract alone is 226); (2) **people** — an "
-    "assembler bug points the EP occupant activity level at the 0–1 occupancy *fraction* instead "
-    "of 75 W/person, so EP books 1.2 MWh of body heat against NZA's 120; (3) **thermostat regime** "
-    "— EP runs an overnight setback (21/18, 24/28) while NZA holds a flat 21/24 band; (4) **thermal "
-    "bridging** — EP has no bridging object (NZA books 24 MWh); (5) **DHW fuel split** — EP series-"
-    "preheat ASHP vs NZA parallel 52/48 (gas 45 vs 157).\n\n"
-    "**Inputs inherited:** of ~25 config-field groups, **9 are fully inherited** (airtightness, "
-    "glazing U+g, geometry, lighting, equipment, DHW demand+setpoints), **9 partial/divergent-"
-    "basis**, and **7 not inherited** (ventilation flows + 2 of 3 systems, occupant heat, "
-    "thermostat regime, thermal bridging, shading effectiveness, site-exposure Cw). The un-"
-    "inherited set is the finish-the-model backlog below.\n\n"
-    "**The one-line verdict:** the electricity-side inputs are matched; the *heating*-side inputs "
-    "are not — ventilation topology and occupant heat are the two big holes, both fixable on the "
-    "EP side without moving the anchor. Only the thermostat and fan-accounting items touch the "
-    "anchor and need Chris's call.\n\n"
+    "## Convergence verdict (Brief 98-C — the AFTER table)\n\n"
+    "The six EP-side, anchor-safe gaps the reconciliation table found are now closed. EP was "
+    "changed to INHERIT NZA's inputs; nothing was tuned toward NZA's outputs. NZA-Sim untouched; "
+    "anchors 132.6/126.0 byte-identical throughout.\n\n"
+    "**Headline — the demand converged from ~8× apart to within ~20%:**\n\n"
+    "| Demand (MWh) | NZA | EP before (98-R) | EP after (98-C) |\n"
+    "|---|--:|--:|--:|\n"
+    "| Space heating | 87.7 | 10.3 (−88%) | **107.2 (+22%)** |\n"
+    "| Space cooling | 101.1 | 163.8 (+62%) | **88.3 (−13%)** |\n\n"
+    "Red cells fell **14 → 3**. The six inherits: people gain 1.2→120.4 (P1) · ventilation "
+    "0→3 systems at v40 flows, ~248 MWh of extract loss restored (P2) · thermostat setback→flat "
+    "21/24 band (P3) · DHW gas 45→155 via parallel 52/48 (P4) · thermal bridging 0→24 MWh via "
+    "psi-adjusted U (P5) · permanent vents 55.7→16 on NZA's wind correlation (P6).\n\n"
+    "**The residual demand gap (heating +22%, cooling −13%) is a named METHOD difference, not an "
+    "input gap:** EP's full sub-hourly heat balance books envelope + ventilation losses in every "
+    "hour, whereas NZA integrates net setpoint-gated demand and resets its lumped mass to the "
+    "setpoint each conditioned hour (the gain-banking/mass-reset mechanism from the physics trace). "
+    "Same inputs, different integration. Both under the 30% escalate threshold; not chased.\n\n"
+    "**The 3 remaining 🔴 are all DELIVERED-side, downstream of the (now-converged) demand:**\n"
+    "1. **Heating electricity 32.2 vs 77.4** — a NEW finding, not in the 98-R register: EP's VRF "
+    "heating COP comes from performance curves (~1.4 in-service at UK winter temps + defrost) vs "
+    "NZA's flat SCOP 3.0. A systems-layer (VRF-efficiency) difference, not envelope.\n"
+    "2. **Cooling electricity 33.7 vs 24.2** — downstream of cooling demand ÷ the same curve-based VRF COP.\n"
+    "3. **Ventilation fan electricity — NZA null vs EP 54.3** — parked/NZA-side (NZA books no separate "
+    "fan channel; on the OUT list, Chris-gated).\n\n"
+    "**Meter sanity check (the honest twist):** before 98-C, EP had almost no winter electricity "
+    "(heating 10 MWh → Jan/mean 0.99, summer-only). After 98-C, EP heating is real (107 MWh, electric "
+    "VRF) so a winter signature appears — but it OVER-shoots: EP Jan/mean 1.35 vs the real meter's 1.03, "
+    "and the shape correlation to the meter fell (r 0.84→0.22). The cause is the same low VRF heating "
+    "COP: it over-dumps winter electricity. So the **envelope/demand is converged; the remaining "
+    "divergence from reality is entirely in the SYSTEMS layer (VRF COP curves vs flat SCOP)** — the "
+    "clean next question, and a delivered-side one that does not touch the anchor.\n\n"
+    "**Bottom line:** the engines now model the same building on the demand side; every remaining red "
+    "is either delivered-side systems method (VRF COP), parked/anchor-moving (fans), or STRUCTURAL "
+    "(shading — Brief 23 H3). The comparison is presentable with the method residual named. "
     f"*(Flag tally: 🔴 {n_red} · 🟠 {n_amber} across {len(rows)} channels; every flag named, none "
-    "unexplained. Anchors 132.6/126.0 byte-identical; EP change = output requests only.)*\n\n")
+    "unexplained. Anchors 132.6/126.0 byte-identical; NZA-Sim untouched; EP changes = input inherits.)*\n\n")
 
 OUT.write_text(header + SUMMARY + "\n".join(lines) + "\n" + TABLE_B + "\n" + REGISTER + "\n")
 print(f"wrote {OUT.relative_to(REPO)}")
