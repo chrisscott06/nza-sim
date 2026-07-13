@@ -237,9 +237,15 @@ def generate_dhw_system(
     dhw_setpoint: float = 60.0,
     dhw_preheat_setpoint: float = 45.0,
     ashp_cop: float = 2.8,
+    daily_hot_litres_override: float | None = None,
 ) -> dict:
     """
     Generate DHW system epJSON objects.
+
+    Brief 98-A2 P2: `daily_hot_litres_override` (litres/day of hot water at the storage
+    setpoint) overrides the room-based peak-flow estimate so EnergyPlus is sized to the
+    SAME DHW demand NZA-Sim computes (its tap-mix boiler_litres_per_day). When None, the
+    legacy litres-per-room estimate is used.
 
     Parameters
     ----------
@@ -268,8 +274,15 @@ def generate_dhw_system(
             for obj_type, items in dhw_objects.items():
                 hvac_objects.setdefault(obj_type, {}).update(items)
     """
-    peak_flow = _peak_flow_m3s(zone_floor_area_m2, num_zones, num_bedrooms, occupancy_rate)
-    tank_vol  = _tank_volume_m3(zone_floor_area_m2, num_zones, num_bedrooms, occupancy_rate)
+    if daily_hot_litres_override is not None and daily_hot_litres_override > 0:
+        # Brief 98-A2 P2: size to NZA-Sim's boiler_litres_per_day. peak_flow delivers
+        # the target daily volume given the demand schedule's average fraction.
+        daily_m3 = daily_hot_litres_override / 1000.0
+        peak_flow = round(daily_m3 / (_DHW_SCHEDULE_AVG_FRACTION * 86400.0), 7)
+        tank_vol  = round(daily_m3 * 0.5, 4)   # ~½-day storage
+    else:
+        peak_flow = _peak_flow_m3s(zone_floor_area_m2, num_zones, num_bedrooms, occupancy_rate)
+        tank_vol  = _tank_volume_m3(zone_floor_area_m2, num_zones, num_bedrooms, occupancy_rate)
 
     result: dict = {}
 

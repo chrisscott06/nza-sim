@@ -118,6 +118,53 @@ def derive_operational_ach(building_params: dict):
             pass
     return DEFAULT_INFILTRATION_ACH, {"source": "default", "ach": DEFAULT_INFILTRATION_ACH}
 
+
+def _nza_dhw_boiler_litres_per_day(building_params: dict) -> float | None:
+    """NZA-Sim's daily hot-water volume at the storage setpoint (litres/day), so
+    EnergyPlus is sized to the SAME DHW demand (Brief 98-A2 P2). Mirrors the tap-mix
+    model in systemsEngine.js:453-491 + computeTotalOccupants (instantCalc.js:2118):
+
+      hot_fraction = (tap_outlet − cold) / (setpoint − cold)
+      occupants    = num_bedrooms × density.value (per_room) | gia × value (per_m2)
+                     | value (total),  × occupancy_rate
+      total_tap    = occupants × L/person (per_person) | L/m² × gia (per_m2)
+      boiler_litres = total_tap × hot_fraction
+
+    Returns None when the building carries no v40 DHW service-level fields (caller keeps
+    the room-based estimate). Does NOT change NZA's inputs — only reads them."""
+    v40 = building_params.get("systems_config_v40") or {}
+    if not v40.get("dhw"):
+        return None
+    L = float(building_params.get("length", 60.0) or 60.0)
+    W = float(building_params.get("width", 15.0) or 15.0)
+    nf = float(building_params.get("num_floors", 4.0) or 4.0)
+    gia = L * W * nf
+    setpoint = float(v40.get("dhw_storage_setpoint_c", 60) or 60)
+    cold = float(v40.get("dhw_cold_supply_temp_c", 10) or 10)
+    tap = float(v40.get("dhw_tap_outlet_temp_c", 40) or 40)
+    dt = max(setpoint - cold, 1.0)
+    hot_fraction = max(0.0, min(1.0, (tap - cold) / dt))
+
+    occ = building_params.get("occupancy") or {}
+    dens = occ.get("density") or {"value": 1.5, "basis": "per_room"}
+    dv = float(dens.get("value", 1.5) or 1.5)
+    db = dens.get("basis", "per_room")
+    nbeds = max(0.0, float(building_params.get("num_bedrooms", 0) or 0))
+    if db == "per_m2":
+        occupants = gia * dv
+    elif db == "total":
+        occupants = dv
+    else:  # per_room (default)
+        occupants = nbeds * dv
+    occ_rate = float(occ.get("occupancy_rate", building_params.get("occupancy_rate", 1)) or 1)
+    occupants = max(0.0, occupants * occ_rate)
+
+    if v40.get("dhw_demand_basis", "per_m2") == "per_person":
+        total_tap = occupants * float(v40.get("dhw_demand_litres_per_person_per_day", 80) or 80)
+    else:
+        total_tap = float(v40.get("dhw_demand_litres_per_m2_per_day", 1.1) or 1.1) * gia
+    return total_tap * hot_fraction
+
 # Ventilation (fresh air) design flow per person — m³/s
 # Bedrooms: 8 l/s/person = 0.008 m³/s/person
 _VENT_M3_PER_S_PER_PERSON = 0.008
@@ -1596,6 +1643,10 @@ def assemble_epjson(
         # demand is implicit in the occupancy schedule (no service to fail).
         if dhw_enabled:
             # Pass actual bedroom count + occupancy so peak flow scales with real demand
+            # Brief 98-A2 P2: size EP DHW to NZA-Sim's tap-mix boiler_litres_per_day so
+            # both engines run the same hot-water demand (delivered split then falls out
+            # of EP's own gas/ASHP efficiencies — an expected, named residual).
+            _nza_dhw_litres = _nza_dhw_boiler_litres_per_day(building_params)
             dhw_objects = generate_dhw_system(
                 zone_floor_area_m2=zone_floor_area,
                 num_zones=len(zones),
@@ -1607,6 +1658,7 @@ def assemble_epjson(
                 dhw_setpoint=float(sc.get("dhw_setpoint", 60.0)),
                 dhw_preheat_setpoint=float(sc.get("dhw_preheat_setpoint", 45.0)),
                 ashp_cop=ashp_cop,
+                daily_hot_litres_override=_nza_dhw_litres,
             )
             for obj_type, items in dhw_objects.items():
                 hvac_objects.setdefault(obj_type, {}).update(items)
