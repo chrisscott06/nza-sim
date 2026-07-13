@@ -817,6 +817,38 @@ def _build_mech_ventilation_objects(building_params: dict, zones: dict, gia: flo
     return objs
 
 
+def _resolve_comfort_setpoints(building_params: dict) -> tuple[float, float]:
+    """Brief 98-C P3: mirror NZA's setpoint resolution. NZA holds a flat comfort band
+    continuously (active_setpoint); the band is comfort_band lower/upper, defaulting to
+    21/24 (run_nza.mjs:43; instantCalc comfortBand fallback). v40 setpoint mode overrides:
+    follow_comfort → the band; custom → *_setpoint_c (CLAUDE.md Brief 42 service-level
+    setpoint rule). Returns (heating_c, cooling_c)."""
+    cb = building_params.get("comfort_band") or {}
+    lower = building_params.get("comfort_band_lower_c")
+    lower = lower if lower is not None else cb.get("lower_c", 21)
+    upper = building_params.get("comfort_band_upper_c")
+    upper = upper if upper is not None else cb.get("upper_c", 24)
+    v40 = building_params.get("systems_config_v40") or {}
+    if v40.get("heating_setpoint_mode") == "custom" and v40.get("heating_setpoint_c") is not None:
+        heat = float(v40["heating_setpoint_c"])
+    else:
+        heat = float(lower if lower is not None else 21)
+    if v40.get("cooling_setpoint_mode") == "custom" and v40.get("cooling_setpoint_c") is not None:
+        cool = float(v40["cooling_setpoint_c"])
+    else:
+        cool = float(upper if upper is not None else 24)
+    return heat, cool
+
+
+def _flat_temperature_schedule(value: float) -> dict:
+    """A constant 24/7/365 Temperature Schedule:Compact — no setback."""
+    return {
+        "schedule_type_limits_name": "Temperature",
+        "data": [{"field": "Through: 12/31"}, {"field": "For: AllDays"},
+                 {"field": "Until: 24:00"}, {"field": float(value)}],
+    }
+
+
 def _output_variables() -> dict:
     """
     Build Output:Variable request objects for key simulation outputs.
@@ -1537,6 +1569,16 @@ def assemble_epjson(
     people_objects  = _build_people_objects(zones, density_override=_density_override,
                                             activity_schedule_name=_people_activity_sched,
                                             sensible_fraction=_people_sensible_frac)
+
+    # Brief 98-C P3: EP inherits NZA's thermostat REGIME. NZA holds a flat comfort band
+    # continuously (active_setpoint); the EP hotel_*_setpoint schedules ran an overnight
+    # SETBACK (21/18 heating, 24/28 cooling) — EP inventing its own operating hours. In
+    # full mode we overwrite them with a flat band resolved from the comfort band + v40
+    # setpoint mode (same building = same setpoint), no setback.
+    if not (state1 or state2):
+        _heat_sp, _cool_sp = _resolve_comfort_setpoints(building_params)
+        all_schedules["hotel_heating_setpoint"] = _flat_temperature_schedule(_heat_sp)
+        all_schedules["hotel_cooling_setpoint"] = _flat_temperature_schedule(_cool_sp)
     # In state2 the v2.3-shape Lights / ElectricEquipment objects emit at
     # ZERO density (the per-profile objects below carry the real loads).
     # In state1 both are zero. In 'full' / other modes they use library

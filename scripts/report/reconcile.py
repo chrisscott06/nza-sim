@@ -108,9 +108,9 @@ rows = [
     ("", "Lighting", G["lighting"], var_sum("Zone Lights Total Heating Energy"), "clean", None),
     ("", "Equipment / small power", G["equipment"], var_sum("Zone Electric Equipment Total Heating Energy"), "clean", None),
     ("DEMAND (MWh/yr)", "Heating demand", Dm["heating"], meter("Heating:EnergyTransfer"), "clean",
-     "98-C P1+P2 converged 10.3→106.2 (NZA 87.7); residual +21% is EP's higher ventilation loss (permvent basis P6 + ρCp 1.5%) + thermostat regime not yet inherited (P3)"),
+     "98-C P1-P3: 10.3→120.4 (NZA 87.7). Both engines now hold a flat 21/24 band (P3 removed EP's night setback, which had masked the vent over-count). Residual is EP's higher ventilation loss — permvent basis (P6) + EP books ventilation ALL hours vs NZA setpoint-gated (method); expected to fall at P6"),
     ("", "Cooling demand", Dm["cooling"], meter("Cooling:EnergyTransfer"), "clean",
-     "98-C P1+P2 converged 163.8→82.9 (NZA 101.1); residual −18% downstream of the same ventilation + thermostat differences (P3/P6)"),
+     "98-C P1-P3: 163.8→84.5 (NZA 101.1); −16%, downstream of the same ventilation/thermostat treatment"),
     ("DELIVERED (MWh/yr)", "Heating — electricity", De["heating_electricity"], meter("Heating:Electricity"), "clean",
      "tracks the heating-demand gap (÷ VRF SCOP)"),
     ("", "Cooling — electricity", De["cooling_electricity"], meter("Cooling:Electricity"), "clean",
@@ -123,7 +123,8 @@ rows = [
      "NZA does not book fan electricity as a separate delivered channel (folded / null); EP books the MVHR+VRF fans explicitly"),
     ("", "Lighting — electricity", De["lighting_electricity"], meter("InteriorLights:Electricity"), "clean", None),
     ("", "Small power — electricity", De["small_power_electricity"], meter("InteriorEquipment:Electricity"), "clean", None),
-    ("FUEL (MWh/yr)", "Total electricity", De["total_electricity"], meter("Electricity:Facility"), "clean", None),
+    ("FUEL (MWh/yr)", "Total electricity", De["total_electricity"], meter("Electricity:Facility"), "clean",
+     "downstream of heating-electricity (rose when P3 removed the compensating setback); settles as the ventilation residual closes at P6"),
     ("", "Total gas", De["total_gas"], meter("NaturalGas:Facility"), "clean",
      "NZA gas = DHW gas share (157.4); EP gas = DHW preheat remainder (45.4) — the ASHP-topology split"),
 ]
@@ -230,7 +231,7 @@ Assembler = `nza_engine/generators/epjson_assembler.py`.
 | `ventilation[*].flow_rate` (1425/2208/210 L/s) | 3843 L/s total | 🔴 NOT INHERITED | EP OA = per-person constant `_VENT_M3_PER_S_PER_PERSON` (assembler L688), NOT v40 flows |
 | `ventilation[*]` bedroom + toilet extract | 2 systems | 🔴 STRUCTURAL | `_primary` models only the public MVHR; other two absent from EP |
 | `ventilation[0].recovery_sensible_pct` (80) | 80% | 🟠 passed, idle | effectiveness_override→ERV, but HeatExchanger recovery reports 0.0 MWh (ERV not conditioning) |
-| `heating_setpoint_mode`/`cooling_setpoint_mode` (follow_comfort) | flat 21/24 band | 🔴 NOT INHERITED | EP uses hardcoded `hotel_heating/cooling_setpoint` schedules with overnight SETBACK (21/18, 24/28); ignores comfort band + v40 setpoint |
+| `heating_setpoint_mode`/`cooling_setpoint_mode` (follow_comfort) | flat 21/24 band | ✅ INHERITED (98-C P3) | full mode overwrites `hotel_*_setpoint` with a flat band from `_resolve_comfort_setpoints` (comfort band + v40 mode); overnight setback removed |
 | `lighting` / `small_power` (v40 delivered) | — | ✅ INHERITED | InteriorLights/Equipment meters 39.0/186.1 match |
 """
 
