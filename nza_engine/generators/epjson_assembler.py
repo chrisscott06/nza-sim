@@ -906,6 +906,59 @@ def _apply_thermal_bridging(construction_epjson: dict, building_params: dict) ->
     return H_TB
 
 
+def _build_permanent_vent_objects(building_params: dict, zones: dict) -> dict:
+    """Brief 98-C P6: emit the permanent-vent louvres as ZoneVentilation:DesignFlowRate
+    driven by NZA's OWN wind-flow correlation, replacing EP's ZoneVentilation:WindandStack
+    (Autocalculate effectiveness, which over-booked 55.7 vs NZA 16.2). NZA
+    (instantCalc.js:1240-1252):
+        single_sided: Q = 0.025 · min(1, cd/0.6) · A · v_wind
+        cross:        Q = cd · A · sqrt(Cw) · v_wind
+    i.e. flow ∝ wind speed with coefficient K. EP's DesignFlowRate rate =
+    design_flow_rate · (C · WindSpeed) with velocity_term_coefficient C=1 reproduces this
+    exactly when design_flow_rate = K. cd / louvre area / site-exposure Cw read from the
+    openings block — nothing invented. Flow mode defaults to single_sided (NZA's default,
+    instantCalc.js:210)."""
+    openings = building_params.get("openings") or {}
+    cw = {"sheltered": 0.05, "normal": 0.10, "exposed": 0.20}.get(openings.get("site_exposure"), 0.10)
+    sqrt_cw = math.sqrt(cw)
+    K = 0.0  # m³/s per (m/s wind)
+    for face in ("north", "south", "east", "west"):
+        fo = openings.get(face) or {}
+        A = float(fo.get("louvre_area_m2", 0) or 0)
+        if A <= 0:
+            continue
+        cd = float(fo.get("cd", openings.get("cd", 0.25)) or 0.25)
+        mode = fo.get("flow_mode") or openings.get("flow_mode") or "single_sided"
+        if mode == "cross":
+            K += cd * A * sqrt_cw
+        else:
+            K += 0.025 * min(1.0, cd / 0.6) * A
+    if K <= 0:
+        return {}
+    nz = max(1, len(zones))
+    per_zone = round(K / nz, 7)
+    objs = {}
+    for zn in zones:
+        objs[f"{zn}_permvent_louvre"] = {
+            "zone_or_zonelist_or_space_or_spacelist_name": zn,
+            "schedule_name": "always_on",
+            "design_flow_rate_calculation_method": "Flow/Zone",
+            "design_flow_rate": per_zone,
+            "ventilation_type": "Natural",
+            "fan_pressure_rise": 0.0,
+            "fan_total_efficiency": 1.0,
+            "constant_term_coefficient": 0.0,
+            "temperature_term_coefficient": 0.0,
+            "velocity_term_coefficient": 1.0,     # flow ∝ wind speed (NZA's correlation)
+            "velocity_squared_term_coefficient": 0.0,
+            "minimum_indoor_temperature": -100.0,
+            "maximum_indoor_temperature": 100.0,
+            "minimum_outdoor_temperature": -100.0,
+            "maximum_outdoor_temperature": 100.0,
+        }
+    return objs
+
+
 def _resolve_comfort_setpoints(building_params: dict) -> tuple[float, float]:
     """Brief 98-C P3: mirror NZA's setpoint resolution. NZA holds a flat comfort band
     continuously (active_setpoint); the band is comfort_band lower/upper, defaulting to
@@ -1716,7 +1769,11 @@ def assemble_epjson(
     # State 1 + State 2 both suppress operable windows (State 2.5 territory).
     # The `state1` kwarg name is kept for backward compatibility; semantically
     # it means "suppress operable-window stream".
-    natural_vent_objects = _build_openings_objects(zones, building_params, state1=(state1 or state2))
+    # Brief 98-C P6: in full mode the permanent louvres are emitted as
+    # ZoneVentilation:DesignFlowRate on NZA's wind correlation (above), so suppress the
+    # WindandStack version here to avoid double-counting the passive-opening loss.
+    natural_vent_objects = ({} if not (state1 or state2)
+                            else _build_openings_objects(zones, building_params, state1=(state1 or state2)))
 
     # Brief 28e Gate E4: also emit per-opening ZoneVentilation:WindandStackOpenArea
     # objects from building_config.operable_openings (doors, operable windows,
@@ -1739,8 +1796,12 @@ def assemble_epjson(
     # (full mode only — state1/state2 handle ventilation their own way). Emits ALL v40
     # systems at their v40 flows, mirroring NZA's per-system extract-loss model. Was
     # absent (inert ERV + per-person sizing OA) → EP missed ~277 MWh of runtime vent loss.
-    mech_vent_objects = (_build_mech_ventilation_objects(building_params, zones, _gia)
-                         if not (state1 or state2) else {})
+    # Brief 98-C P6: also emit the permanent-vent louvres on NZA's wind correlation (and
+    # suppress the WindandStack below), so both are ZoneVentilation:DesignFlowRate.
+    mech_vent_objects = {}
+    if not (state1 or state2):
+        mech_vent_objects = _build_mech_ventilation_objects(building_params, zones, _gia)
+        mech_vent_objects.update(_build_permanent_vent_objects(building_params, zones))
 
     # Always-on schedule referenced by louvres + 'always' window mode.
     # Also referenced by the State 2 baseload-equipment object, so we emit
@@ -1752,7 +1813,7 @@ def assemble_epjson(
             "schedule_type_limits_name": "Fraction",
             "hourly_value": 1.0,
         },
-    } if (natural_vent_objects or state2) else {}
+    } if (natural_vent_objects or state2 or mech_vent_objects) else {}
 
     # ── 7. HVAC — branch on hvac_mode ─────────────────────────────────────────
     # "ideal_loads" (default): ZoneHVAC:IdealLoadsAirSystem — perfect, no real system effects

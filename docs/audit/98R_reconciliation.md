@@ -12,7 +12,7 @@ Every channel + every input field, both engines, side by side — the systematic
 
 **The one-line verdict:** the electricity-side inputs are matched; the *heating*-side inputs are not — ventilation topology and occupant heat are the two big holes, both fixable on the EP side without moving the anchor. Only the thermostat and fan-accounting items touch the anchor and need Chris's call.
 
-*(Flag tally: 🔴 5 · 🟠 7 across 26 channels; every flag named, none unexplained. Anchors 132.6/126.0 byte-identical; EP change = output requests only.)*
+*(Flag tally: 🔴 3 · 🟠 9 across 26 channels; every flag named, none unexplained. Anchors 132.6/126.0 byte-identical; EP change = output requests only.)*
 
 ## Table A — output reconciliation (per channel, NZA | EP | Δ)
 
@@ -20,34 +20,34 @@ Both engines, `report_baseline_v1`, annual MWh. NZA = `calculateInstant` v2.5 (a
 
 | Group | Channel | NZA | EP | Δ% | Flag | Named cause |
 |---|---|--:|--:|--:|:--:|---|
-| LOSSES (gross, MWh/yr) | Wall conduction | 17.9 | 35.4 | +98% | 🟠 | NZA = setpoint-gated heating loss; EP = raw gross envelope loss (all hours) AND now carries the P5 thermal-bridging ΔU (NZA books bridging separately) → EP structurally larger, not a gap |
-|  | Roof conduction | 8.9 | 19.8 | +122% | 🟠 | same basis difference (gated vs gross) + P5 bridging ΔU folded in |
+| LOSSES (gross, MWh/yr) | Wall conduction | 17.9 | 35.6 | +99% | 🟠 | NZA = setpoint-gated heating loss; EP = raw gross envelope loss (all hours) AND now carries the P5 thermal-bridging ΔU (NZA books bridging separately) → EP structurally larger, not a gap |
+|  | Roof conduction | 8.9 | 19.8 | +123% | 🟠 | same basis difference (gated vs gross) + P5 bridging ΔU folded in |
 |  | Floor/ground conduction | 9.4 | 10.0 | +6% | ✅ | same; EP ground uses its own ground-temp object vs NZA annual-mean ground temp |
-|  | Glazing conduction | 77.3 | 56.3 | -27% | 🟠 | EP 'Windows Total Heat Loss' bundles glazing conduction; not cleanly separable (SimpleGlazing transmitted-solar var reads 0 in EP 25.2) |
-|  | Infiltration | 26.6 | 31.0 | +16% | 🟠 | airtightness ACH matched (0.0692) — residual is basis: EP uses zone-volume ACH per zone; NZA whole-building V. Small. |
-|  | Permanent vents | 16.2 | emitted✎ | — | ✅ | WindandStack louvre still present; EP now aggregates it with the mech systems in one per-zone ZoneVentilation variable → see the combined row. Basis alignment (Autocalculate vs cd/Cw) is P6 |
+|  | Glazing conduction | 77.3 | 56.6 | -27% | 🟠 | EP 'Windows Total Heat Loss' bundles glazing conduction; not cleanly separable (SimpleGlazing transmitted-solar var reads 0 in EP 25.2) |
+|  | Infiltration | 26.6 | 31.2 | +17% | 🟠 | airtightness ACH matched (0.0692) — residual is basis: EP uses zone-volume ACH per zone; NZA whole-building V. Small. |
+|  | Permanent vents | 16.2 | emitted✎ | — | ✅ | ✅ 98-C P6: WindandStack (Autocalculate, 55.7) replaced by ZoneVentilation:DesignFlowRate on NZA's own wind correlation (single-sided Q=0.025·min(1,cd/0.6)·A·v_wind, velocity_term_coefficient=1); aggregated into the combined row (was the +244% gap) |
 |  | Thermal bridging | 24.0 | emitted✎ | — | ✅ | ✅ 98-C P5: inherited as psi-adjusted U — H_TB 278 W/K (ISO 14683 mirror) degrades the wall/roof/floor insulation R by ΔU=H_TB/A_opaque. EP has no separate ψ object so it folds into the conduction rows above (which rose accordingly) |
 |  | Mech vent — public MVHR | 29.2 | emitted✎ | — | ✅ | ✅ 98-C P2: emitted ZoneVentilation:DesignFlowRate at v40 flow×(1−HRE) = 1425×0.20 = 285 L/s; per-system output not separable (EP aggregates) — see combined row |
 |  | Mech vent — bedroom extract | 226.4 | emitted✎ | — | ✅ | ✅ 98-C P2: emitted at 2208×(1−0) = 2208 L/s (was absent — the ~226 MWh hole); EP aggregates output — see combined row |
 |  | Mech vent — toilet extract | 21.5 | emitted✎ | — | ✅ | ✅ 98-C P2: emitted at 210×(1−0) = 210 L/s; EP aggregates output — see combined row |
-|  | Ventilation TOTAL (mech+perm, EP ZoneVentilation) | 293.3 | 373.7 | +27% | 🔴 | 98-C P2: all 3 mech systems now emitted at v40 flows; residual is permanent-vent basis (P6, EP WindandStack 55.7 vs NZA 16.2), EP ρCp 1206 vs NZA 1188 (1.5%), and thermostat ΔT (P3) |
-| GAINS (MWh/yr) | Solar through glazing | 147.8 | 125.5 | -15% | ✅ | EP 'Windows Total Heat Gain' bundles solar + conduction gain (transmitted-solar var = 0 under SimpleGlazing); NZA = transmitted solar only |
+|  | Ventilation TOTAL (mech+perm, EP ZoneVentilation) | 293.3 | 336.3 | +15% | 🟠 | 98-C P2+P6: all 3 mech systems (v40 flows) + permanent vents (NZA wind correlation) emitted; 375→336 after P6. Residual +15% is method — EP books ventilation loss ALL hours (incl. shoulder) vs NZA setpoint-gated — plus EP ρCp 1206 vs NZA 1188 (1.5%) |
+| GAINS (MWh/yr) | Solar through glazing | 147.8 | 125.2 | -15% | ✅ | EP 'Windows Total Heat Gain' bundles solar + conduction gain (transmitted-solar var = 0 under SimpleGlazing); NZA = transmitted solar only |
 |  | People | 120.4 | 120.4 | +0% | ✅ | ✅ 98-C P1: EP inherits NZA sensible 75 W/person (instantCalc.js:2254) + headcount 345 (density.value 2.5, per_room) + config occupancy schedule — was the activity-schedule-fraction bug (1.2 MWh) |
 |  | Lighting | 39.0 | 39.0 | +0% | ✅ | match |
 |  | Equipment / small power | 186.1 | 186.1 | +0% | ✅ | match |
-| DEMAND (MWh/yr) | Heating demand | 87.7 | 132.5 | +51% | 🔴 | 98-C P1-P3: 10.3→120.4 (NZA 87.7). Both engines now hold a flat 21/24 band (P3 removed EP's night setback, which had masked the vent over-count). Residual is EP's higher ventilation loss — permvent basis (P6) + EP books ventilation ALL hours vs NZA setpoint-gated (method); expected to fall at P6 |
-|  | Cooling demand | 101.1 | 78.1 | -23% | 🟠 | 98-C P1-P3: 163.8→84.5 (NZA 101.1); −16%, downstream of the same ventilation/thermostat treatment |
-| DELIVERED (MWh/yr) | Heating — electricity | 32.2 | 87.5 | +172% | 🔴 | tracks the heating-demand gap (÷ VRF SCOP) |
-|  | Cooling — electricity | 33.7 | 21.5 | -36% | 🔴 | downstream of cooling demand — inflated mid-convergence (people gain added, ventilation heat-sink not yet inherited); expected to fall when P2 lands the extract loss |
+| DEMAND (MWh/yr) | Heating demand | 87.7 | 107.2 | +22% | 🟠 | 98-C P1-P6 CONVERGED: 10.3→107.2 (NZA 87.7, +22%; was −88%). Residual is the gross-vs-gated method difference — EP's full sub-hourly heat balance books envelope+vent losses in all hours, NZA integrates net setpoint-gated demand (the mass-banking/gating mechanism from the physics trace) |
+|  | Cooling demand | 101.1 | 88.3 | -13% | 🟠 | 98-C P1-P6 CONVERGED: 163.8→88.3 (NZA 101.1, −13%; was +62%). Same method difference, opposite sign |
+| DELIVERED (MWh/yr) | Heating — electricity | 32.2 | 77.4 | +141% | 🔴 | NEW FINDING (not in P1-P6 register): EP VRF heating COP from performance curves (~1.4 in-service at UK winter temps + defrost) vs NZA's flat SCOP 3.0 → 77.4 vs 32.2. A delivered-side VRF-efficiency modelling difference (curves vs flat); the DEMAND converged (107 vs 88). Report, don't chase |
+|  | Cooling — electricity | 33.7 | 24.2 | -28% | 🔴 | downstream of cooling demand (88.3 vs 101.1) ÷ VRF cooling COP (also curve-based vs NZA flat EER) |
 |  | DHW — electricity | 42.2 | 34.6 | -18% | 🟠 | 98-C P4: ASHP share 48% at COP 3.0; 28.0→34.6 vs NZA 42.2 (−18%) — ASHP tank delivers ~84% of its thermal share (COP-as-thermal-efficiency + tank standby); gas side matches within 2% |
 |  | DHW — gas | 157.4 | 154.6 | -2% | ✅ | ✅ 98-C P4: parallel 52/48 gas/ASHP split (v40 shares) replacing the series preheat + corrected peak-flow sizing (0.65→0.35 schedule avg); gas 45.4→154.6 = NZA 157.4 |
-|  | Ventilation fans — electricity | — | 54.0 | — | 🔴 | NZA does not book fan electricity as a separate delivered channel (folded / null); EP books the MVHR+VRF fans explicitly |
+|  | Ventilation fans — electricity | — | 54.3 | — | 🔴 | NZA does not book fan electricity as a separate delivered channel (folded / null); EP books the MVHR+VRF fans explicitly |
 |  | Lighting — electricity | 39.0 | 39.0 | +0% | ✅ | match |
 |  | Small power — electricity | 186.1 | 186.1 | +0% | ✅ | match |
-| FUEL (MWh/yr) | Total electricity | 373.8 | 422.7 | +13% | 🟠 | downstream of heating-electricity (rose when P3 removed the compensating setback); settles as the ventilation residual closes at P6 |
+| FUEL (MWh/yr) | Total electricity | 373.8 | 415.7 | +11% | 🟠 | downstream of heating-electricity (rose when P3 removed the compensating setback); settles as the ventilation residual closes at P6 |
 |  | Total gas | 157.4 | 154.6 | -2% | ✅ | ✅ 98-C P4: all gas is DHW; parallel 52/48 split → 154.6 = NZA 157.4 (was 45.4 series-preheat) |
 
-**Flag tally:** 🔴 5 · 🟠 7 · rows 26. Unexplained: none — every flag named.
+**Flag tally:** 🔴 3 · 🟠 9 · rows 26. Unexplained: none — every flag named.
 
 NZA gross-loss channels reconcile to NZA's own total (457.5 = 457.5 MWh, verified in `_98R_nza_channels.mjs`). Anchors 132.6/126.0 byte-identical; instantCalc + EP physics untouched (EP change = output requests only, P1).
 
@@ -65,8 +65,8 @@ Assembler = `nza_engine/generators/epjson_assembler.py`.
 | glazing g-value | constructions | ✅ INHERITED | g_value_override → SimpleGlazing SHGC (assembler L219-223) |
 | geometry (L/W/floors/height/orientation/wwr/window_count) | — | ✅ INHERITED | `generate_building_geometry(building_params)` (assembler L1295) |
 | `shading_overhang` / `shading_fin` | 0.5 m avail. | 🔴 STRUCTURAL | geometry emits Shading:Overhang but it does not reduce solar in EP (Brief 23 H3) |
-| `openings` (permanent-vent louvre) | 2×1.1 m², cd 0.49 | 🟠 divergent | EP `ZoneVentilation:WindandStack` Autocalculate effectiveness ≠ NZA cd/Cw model |
-| `openings.site_exposure` (Cw) | exposed | 🔴 NOT INHERITED | EP WindandStack Autocalculate; NZA Cw from site_exposure |
+| `openings` (permanent-vent louvre) | 2×1.1 m², cd 0.49 | ✅ INHERITED (98-C P6) | `_build_permanent_vent_objects` drives ZoneVentilation:DesignFlowRate with NZA's single-sided wind correlation (cd, area, velocity coeff) — was the WindandStack Autocalculate over-count |
+| `openings.site_exposure` (Cw) | exposed | ✅ INHERITED (98-C P6) | Cw (exposed→0.20) feeds the cross-mode sqrt(Cw) coefficient in `_build_permanent_vent_objects` |
 | `thermal_bridges` | ISO 14683 ψ | ✅ INHERITED (98-C P5) | `_nza_thermal_bridging_H_TB` mirrors the auto ψ calc (278 W/K); `_apply_thermal_bridging` degrades opaque insulation R to bake in ΔU (no native EP ψ object, so folded into conduction) |
 | `thermal_mass_category` / `_mode` | medium/lumped | 🟠 divergent | EP mass = construction CTF (real layers); NZA = lumped 250k J/K·m² — different basis, both defensible |
 | `gains.lighting` | 2 W/m² profile | ✅ INHERITED | `_emit_state2_lighting_profiles` (98-A2 P1) → 39.0=39.0 |

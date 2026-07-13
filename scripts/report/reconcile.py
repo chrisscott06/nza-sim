@@ -88,7 +88,7 @@ rows = [
     ("", "Infiltration", L["infiltration"], var_sum("Zone Infiltration Sensible Heat Loss Energy"), "clean",
      "airtightness ACH matched (0.0692) — residual is basis: EP uses zone-volume ACH per zone; NZA whole-building V. Small."),
     ("", "Permanent vents", L["permanent_vents"], None, "emitted",
-     "WindandStack louvre still present; EP now aggregates it with the mech systems in one per-zone ZoneVentilation variable → see the combined row. Basis alignment (Autocalculate vs cd/Cw) is P6"),
+     "✅ 98-C P6: WindandStack (Autocalculate, 55.7) replaced by ZoneVentilation:DesignFlowRate on NZA's own wind correlation (single-sided Q=0.025·min(1,cd/0.6)·A·v_wind, velocity_term_coefficient=1); aggregated into the combined row (was the +244% gap)"),
     ("", "Thermal bridging", L["thermal_bridging"], None, "emitted",
      "✅ 98-C P5: inherited as psi-adjusted U — H_TB 278 W/K (ISO 14683 mirror) degrades the wall/roof/floor insulation R by ΔU=H_TB/A_opaque. EP has no separate ψ object so it folds into the conduction rows above (which rose accordingly)"),
     ("", "Mech vent — public MVHR", L["mech_vent_public_mvhr"], None, "emitted",
@@ -100,7 +100,7 @@ rows = [
     ("", "Ventilation TOTAL (mech+perm, EP ZoneVentilation)",
      L["mech_vent_public_mvhr"] + L["mech_vent_bedroom_extract"] + L["mech_vent_toilet_extract"] + L["permanent_vents"],
      var_sum("Zone Ventilation Sensible Heat Loss Energy"), "clean",
-     "98-C P2: all 3 mech systems now emitted at v40 flows; residual is permanent-vent basis (P6, EP WindandStack 55.7 vs NZA 16.2), EP ρCp 1206 vs NZA 1188 (1.5%), and thermostat ΔT (P3)"),
+     "98-C P2+P6: all 3 mech systems (v40 flows) + permanent vents (NZA wind correlation) emitted; 375→336 after P6. Residual +15% is method — EP books ventilation loss ALL hours (incl. shoulder) vs NZA setpoint-gated — plus EP ρCp 1206 vs NZA 1188 (1.5%)"),
     ("GAINS (MWh/yr)", "Solar through glazing", G["solar_through_glazing"], var_sum("Zone Windows Total Heat Gain Energy"), "divergent",
      "EP 'Windows Total Heat Gain' bundles solar + conduction gain (transmitted-solar var = 0 under SimpleGlazing); NZA = transmitted solar only"),
     ("", "People", G["people"], var_sum("Zone People Total Heating Energy"), "clean",
@@ -108,13 +108,13 @@ rows = [
     ("", "Lighting", G["lighting"], var_sum("Zone Lights Total Heating Energy"), "clean", None),
     ("", "Equipment / small power", G["equipment"], var_sum("Zone Electric Equipment Total Heating Energy"), "clean", None),
     ("DEMAND (MWh/yr)", "Heating demand", Dm["heating"], meter("Heating:EnergyTransfer"), "clean",
-     "98-C P1-P3: 10.3→120.4 (NZA 87.7). Both engines now hold a flat 21/24 band (P3 removed EP's night setback, which had masked the vent over-count). Residual is EP's higher ventilation loss — permvent basis (P6) + EP books ventilation ALL hours vs NZA setpoint-gated (method); expected to fall at P6"),
+     "98-C P1-P6 CONVERGED: 10.3→107.2 (NZA 87.7, +22%; was −88%). Residual is the gross-vs-gated method difference — EP's full sub-hourly heat balance books envelope+vent losses in all hours, NZA integrates net setpoint-gated demand (the mass-banking/gating mechanism from the physics trace)"),
     ("", "Cooling demand", Dm["cooling"], meter("Cooling:EnergyTransfer"), "clean",
-     "98-C P1-P3: 163.8→84.5 (NZA 101.1); −16%, downstream of the same ventilation/thermostat treatment"),
+     "98-C P1-P6 CONVERGED: 163.8→88.3 (NZA 101.1, −13%; was +62%). Same method difference, opposite sign"),
     ("DELIVERED (MWh/yr)", "Heating — electricity", De["heating_electricity"], meter("Heating:Electricity"), "clean",
-     "tracks the heating-demand gap (÷ VRF SCOP)"),
+     "NEW FINDING (not in P1-P6 register): EP VRF heating COP from performance curves (~1.4 in-service at UK winter temps + defrost) vs NZA's flat SCOP 3.0 → 77.4 vs 32.2. A delivered-side VRF-efficiency modelling difference (curves vs flat); the DEMAND converged (107 vs 88). Report, don't chase"),
     ("", "Cooling — electricity", De["cooling_electricity"], meter("Cooling:Electricity"), "clean",
-     "downstream of cooling demand — inflated mid-convergence (people gain added, ventilation heat-sink not yet inherited); expected to fall when P2 lands the extract loss"),
+     "downstream of cooling demand (88.3 vs 101.1) ÷ VRF cooling COP (also curve-based vs NZA flat EER)"),
     ("", "DHW — electricity", De["dhw_electricity"], meter("WaterSystems:Electricity"), "clean",
      "98-C P4: ASHP share 48% at COP 3.0; 28.0→34.6 vs NZA 42.2 (−18%) — ASHP tank delivers ~84% of its thermal share (COP-as-thermal-efficiency + tank standby); gas side matches within 2%"),
     ("", "DHW — gas", De["dhw_gas"], meter("WaterSystems:NaturalGas"), "clean",
@@ -214,8 +214,8 @@ Assembler = `nza_engine/generators/epjson_assembler.py`.
 | glazing g-value | constructions | ✅ INHERITED | g_value_override → SimpleGlazing SHGC (assembler L219-223) |
 | geometry (L/W/floors/height/orientation/wwr/window_count) | — | ✅ INHERITED | `generate_building_geometry(building_params)` (assembler L1295) |
 | `shading_overhang` / `shading_fin` | 0.5 m avail. | 🔴 STRUCTURAL | geometry emits Shading:Overhang but it does not reduce solar in EP (Brief 23 H3) |
-| `openings` (permanent-vent louvre) | 2×1.1 m², cd 0.49 | 🟠 divergent | EP `ZoneVentilation:WindandStack` Autocalculate effectiveness ≠ NZA cd/Cw model |
-| `openings.site_exposure` (Cw) | exposed | 🔴 NOT INHERITED | EP WindandStack Autocalculate; NZA Cw from site_exposure |
+| `openings` (permanent-vent louvre) | 2×1.1 m², cd 0.49 | ✅ INHERITED (98-C P6) | `_build_permanent_vent_objects` drives ZoneVentilation:DesignFlowRate with NZA's single-sided wind correlation (cd, area, velocity coeff) — was the WindandStack Autocalculate over-count |
+| `openings.site_exposure` (Cw) | exposed | ✅ INHERITED (98-C P6) | Cw (exposed→0.20) feeds the cross-mode sqrt(Cw) coefficient in `_build_permanent_vent_objects` |
 | `thermal_bridges` | ISO 14683 ψ | ✅ INHERITED (98-C P5) | `_nza_thermal_bridging_H_TB` mirrors the auto ψ calc (278 W/K); `_apply_thermal_bridging` degrades opaque insulation R to bake in ΔU (no native EP ψ object, so folded into conduction) |
 | `thermal_mass_category` / `_mode` | medium/lumped | 🟠 divergent | EP mass = construction CTF (real layers); NZA = lumped 250k J/K·m² — different basis, both defensible |
 | `gains.lighting` | 2 W/m² profile | ✅ INHERITED | `_emit_state2_lighting_profiles` (98-A2 P1) → 39.0=39.0 |
