@@ -1,5 +1,21 @@
 # Current brief
 
+**Brief 98-A2 — EnergyPlus inherits NZA-Sim's inputs (small power, lighting, DHW) — CLOSED 2026-07-13.**
+On branch `chris/ep-inherit-nza-inputs` (off `chris/engine-comparison-p0`, PR #13). Same building = same
+inputs — EP now inherits NZA's small-power + lighting schedules (via the per-profile machinery state2
+uses) and DHW demand (mirror of NZA's tap-mix → `daily_hot_litres_override`). **EP assembler only;
+instantCalc.js read-only; anchor unmoved (132.6/126.0).** Proven byte-exact: EP equipment 186.1 =
+NZA 186.1, lighting 39.0 = NZA 39.0, DHW 12,144 L/day → 257.3 MWh = NZA 257.335. **Claim 2 (systems)
+now tight (<0.1%)**; DHW delivered-gas differs by the ASHP topology (series-preheat vs 52/48), named.
+**BUT matching the gains unmasked a large Claim-1 residual** — EP heating 10.3 / cooling 163.8 vs NZA
+87.7 / 101.1 — a real blended-zone-vs-full-heat-balance solver difference amplified by NZA's flat
+8760 h small power (186 MWh, likely unrealistic for a 138-bed hotel). **Verdict: 98-B (Results UI)
+NOT clear** until a baseline-realism review (diversified small-power profile + DHW occupancy check —
+moves the anchor, Chris's call). Deliverable:
+[`../audit/98A2_matched_inputs.md`](../audit/98A2_matched_inputs.md). Brief:
+[`archive/98A2_ep_inherit_inputs_COMPLETED.md`](archive/98A2_ep_inherit_inputs_COMPLETED.md).
+**PR open, NOT merged.**
+
 **Brief 98-A — Same-Building Engine Comparison (airtightness fix + two-claim residual) — CLOSED 2026-07-10.**
 On branch `chris/engine-comparison-p0` (off clean `main` `a5d8107`). The first valid NZA-vs-EnergyPlus
 comparison — same building, both engines, nothing tuned (prior numbers void: measured across mismatched
