@@ -29,6 +29,7 @@ Usage
 from __future__ import annotations
 
 import json
+import math
 import re
 from pathlib import Path
 from typing import Any
@@ -291,6 +292,8 @@ def _build_people_objects(
     zones: dict,
     zone_type: str = "hotel_bedroom",
     density_override: float | None = None,
+    activity_schedule_name: str = "hotel_bedroom_occupancy",
+    sensible_fraction: float | None = None,
 ) -> dict:
     """
     Build EnergyPlus People objects for each zone.
@@ -326,8 +329,13 @@ def _build_people_objects(
             "number_of_people_calculation_method": "People/Area",
             "people_per_floor_area": round(density, 6),
             "fraction_radiant": 0.30,
-            "sensible_heat_fraction": 1.0 - loads["latent_fraction"],
-            "activity_level_schedule_name": "hotel_bedroom_occupancy",
+            "sensible_heat_fraction": (sensible_fraction if sensible_fraction is not None
+                                       else 1.0 - loads["latent_fraction"]),
+            # Brief 98-C P1: activity_level_schedule is the per-person heat (W). It
+            # previously pointed at "hotel_bedroom_occupancy" — a 0-1 FRACTION schedule
+            # — so each person emitted ~1 W. Caller now passes a proper W/person
+            # activity schedule (mirrored from NZA's occ.sensible_w_per_person).
+            "activity_level_schedule_name": activity_schedule_name,
         }
     return people
 
@@ -736,6 +744,250 @@ def _build_sizing_objects(zones: dict) -> dict:
         "DesignSpecification:OutdoorAir": dsoa,
         "Sizing:Zone": sizing_zone,
         "SizingPeriod:DesignDay": design_days,
+    }
+
+
+def _build_mech_ventilation_objects(building_params: dict, zones: dict, gia: float) -> dict:
+    """Brief 98-C P2: emit EACH v40 ventilation system as a ZoneVentilation:DesignFlowRate,
+    mirroring NZA's per-system heat-loss model exactly. NZA (instantCalc.js:2994-2997):
+
+        ventUA_i = AIR_HEAT_CAPACITY × (flow_l/s × 3.6) × (1 − HRE_i) × (hours/8760)  [W/K]
+
+    which is a Balanced ZoneVentilation whose effective volumetric flow = flow_m3s ×
+    (1 − HRE). Previously EP modelled ventilation via an inert ERV + a per-person SIZING
+    OA constant, so the ~277 MWh runtime extract loss (bedroom extract alone 226) was
+    absent from the balance. Flows / recovery / basis are read straight from v40 — nothing
+    invented. Fixed-constant caveat: EP applies its own air ρCp (~1206 J/m³K) vs NZA's
+    0.33 Wh/m³K (1188), a ~1.5% difference that is NOT an inherited input.
+
+    Flow basis mirrors instantCalc's projection: constant → L/s; per_m2 → ×GIA;
+    per_person → ×design occupants (computeTotalOccupants × occupancy_rate)."""
+    v40 = (building_params.get("systems_config_v40") or {}).get("ventilation") or []
+    occ = building_params.get("occupancy") or {}
+    dens = occ.get("density") or {"value": 1.5, "basis": "per_room"}
+    nrooms = int(building_params.get("num_bedrooms", 0) or 0)
+    rate = float(occ.get("occupancy_rate", 1) or 1)
+    basis_d = dens.get("basis", "per_room")
+    if basis_d == "per_m2":
+        design_occ = gia * float(dens.get("value", 0) or 0) * rate
+    elif basis_d == "total":
+        design_occ = float(dens.get("value", 0) or 0) * rate
+    else:
+        design_occ = nrooms * float(dens.get("value", 1.5) or 1.5) * rate
+
+    nz = max(1, len(zones))
+    objs: dict = {}
+    for sysv in v40:
+        if sysv.get("enabled", True) is False:
+            continue
+        fr = sysv.get("flow_rate")
+        if fr is None:
+            continue
+        basis = sysv.get("flow_rate_basis", "constant")
+        if basis == "per_m2":
+            flow_lps = float(fr) * gia
+        elif basis == "per_person":
+            flow_lps = float(fr) * design_occ
+        else:
+            flow_lps = float(fr)
+        em = sysv.get("efficiency_metric") or {}
+        hre = (float(em.get("recovery_sensible_pct", 0) or 0) / 100.0) if isinstance(em, dict) else 0.0
+        eff_m3s_total = (flow_lps / 1000.0) * (1.0 - hre)
+        if eff_m3s_total <= 0:
+            continue
+        per_zone = round(eff_m3s_total / nz, 6)
+        label = (sysv.get("label") or sysv.get("id") or "vent").replace(" ", "_")
+        for zn in zones:
+            objs[f"{zn}_mechvent_{label}"] = {
+                "zone_or_zonelist_or_space_or_spacelist_name": zn,
+                "schedule_name": "always_on",
+                "design_flow_rate_calculation_method": "Flow/Zone",
+                "design_flow_rate": per_zone,
+                "ventilation_type": "Balanced",     # symmetric air exchange, no fan heat
+                "fan_pressure_rise": 0.0,           # fan electricity is a parked (NZA-side) gap
+                "fan_total_efficiency": 1.0,
+                "constant_term_coefficient": 1.0,   # constant mechanical extract (not weather-modulated)
+                "temperature_term_coefficient": 0.0,
+                "velocity_term_coefficient": 0.0,
+                "velocity_squared_term_coefficient": 0.0,
+                "minimum_indoor_temperature": -100.0,
+                "maximum_indoor_temperature": 100.0,
+                "minimum_outdoor_temperature": -100.0,
+                "maximum_outdoor_temperature": 100.0,
+            }
+    return objs
+
+
+def _nza_thermal_bridging_H_TB(building_params: dict) -> float:
+    """Brief 98-C P5: server-side MIRROR of computeThermalBridges auto-mode
+    (frontend/src/utils/thermalBridges.js:63-129 + data/thermalBridgesLibrary.js ISO 14683
+    default ψ). H_TB = Σ (junction length × ψ × multiplier). Junction lengths from geometry;
+    ψ values and the multiplier are read from config — nothing invented. Returns W/K, or 0
+    when thermal_bridges is absent/legacy."""
+    tb = building_params.get("thermal_bridges") or {}
+    if tb.get("mode") not in ("iso14683_auto", None) or tb.get("mode") == "absent":
+        return 0.0
+    mult = float(tb.get("multiplier", 1) or 1)
+    L = float(building_params.get("length", 0) or 0)
+    W = float(building_params.get("width", 0) or 0)
+    NF = int(building_params.get("num_floors", 0) or 0)
+    FH = float(building_params.get("floor_height", 0) or 0)
+    perim = 2 * (L + W)
+    total_h = NF * FH
+    wwr = building_params.get("wwr") or {}
+    win_perim = 0.0
+    for face, wall_len in (("north", L), ("south", L), ("east", W), ("west", W)):
+        area = float(wwr.get(face, 0) or 0) * wall_len * total_h
+        if area > 0:
+            win_perim += 4.0 * math.sqrt(area)
+    # ISO14683_DEFAULT_PSI × auto junction lengths (thermalBridges.js:94-100, 58-63)
+    contributions = [
+        (perim, 0.08),                       # wall_to_roof
+        (perim * max(0, NF - 1), 0.08),      # wall_to_intermediate_floor
+        (perim, 0.16),                       # wall_to_ground_floor
+        (4 * total_h, 0.05),                 # external_corner
+        (win_perim, 0.05),                   # window_perimeter
+    ]  # door_perimeter = 0 (no operable doors in report_baseline)
+    return sum(length * psi * mult for length, psi in contributions)
+
+
+def _apply_thermal_bridging(construction_epjson: dict, building_params: dict) -> float:
+    """Brief 98-C P5: EP has no native linear-ψ object, so inherit NZA's ISO 14683 bridging
+    as psi-adjusted U-values (the standard SBEM/NCM mechanism): distribute ΔU = H_TB/A_opaque
+    uniformly across wall/roof/floor by DEGRADING each construction's NoMass insulation layer
+    resistance. Mass layers untouched (CTF dynamics preserved). Mutates construction_epjson
+    in place; returns the H_TB applied. Films per ISO 6946. NB: this folds bridging into the
+    opaque-conduction channels (EP has no separate bridging line) — noted in the table."""
+    H_TB = _nza_thermal_bridging_H_TB(building_params)
+    if H_TB <= 0:
+        return 0.0
+    L = float(building_params.get("length", 0) or 0)
+    W = float(building_params.get("width", 0) or 0)
+    NF = int(building_params.get("num_floors", 0) or 0)
+    FH = float(building_params.get("floor_height", 0) or 0)
+    wwr = building_params.get("wwr") or {}
+    a_glaz = sum(float(wwr.get(f, 0) or 0) * (L if f in ("north", "south") else W) * NF * FH
+                 for f in ("north", "south", "east", "west"))
+    a_wall = max(1.0, 2 * (L + W) * NF * FH - a_glaz)
+    a_roof = max(1.0, L * W)
+    a_floor = max(1.0, L * W)
+    a_opaque = a_wall + a_roof + a_floor
+    dU = H_TB / a_opaque
+    mats = construction_epjson.get("Material", {})
+    nomass = construction_epjson.get("Material:NoMass", {})
+    cons = construction_epjson.get("Construction", {})
+    # (construction name, inside film R_si, outside film R_se) — ISO 6946
+    targets = [("bridgwater_ext_wall", 0.13, 0.04),
+               ("bridgwater_roof", 0.10, 0.04),
+               ("bridgwater_ground_floor", 0.17, 0.04)]
+    for cname, r_si, r_se in targets:
+        c = cons.get(cname)
+        if not c:
+            continue
+        layers = [v for k, v in sorted(c.items()) if k == "outside_layer" or k.startswith("layer")]
+        whole_R = r_si + r_se
+        insul_name = None
+        for ln in layers:
+            if ln in nomass:
+                whole_R += float(nomass[ln].get("thermal_resistance", 0) or 0)
+                if insul_name is None:
+                    insul_name = ln   # first NoMass layer = insulation
+            elif ln in mats:
+                m = mats[ln]
+                cond = float(m.get("conductivity", 1) or 1)
+                whole_R += float(m.get("thickness", 0) or 0) / max(cond, 1e-6)
+        if insul_name is None or whole_R <= 0:
+            continue
+        U_old = 1.0 / whole_R
+        U_new = U_old + dU
+        dR = 1.0 / U_new - whole_R      # negative — remove resistance from the insulation
+        new_R = max(0.01, float(nomass[insul_name]["thermal_resistance"]) + dR)
+        nomass[insul_name]["thermal_resistance"] = round(new_R, 5)
+    return H_TB
+
+
+def _build_permanent_vent_objects(building_params: dict, zones: dict) -> dict:
+    """Brief 98-C P6: emit the permanent-vent louvres as ZoneVentilation:DesignFlowRate
+    driven by NZA's OWN wind-flow correlation, replacing EP's ZoneVentilation:WindandStack
+    (Autocalculate effectiveness, which over-booked 55.7 vs NZA 16.2). NZA
+    (instantCalc.js:1240-1252):
+        single_sided: Q = 0.025 · min(1, cd/0.6) · A · v_wind
+        cross:        Q = cd · A · sqrt(Cw) · v_wind
+    i.e. flow ∝ wind speed with coefficient K. EP's DesignFlowRate rate =
+    design_flow_rate · (C · WindSpeed) with velocity_term_coefficient C=1 reproduces this
+    exactly when design_flow_rate = K. cd / louvre area / site-exposure Cw read from the
+    openings block — nothing invented. Flow mode defaults to single_sided (NZA's default,
+    instantCalc.js:210)."""
+    openings = building_params.get("openings") or {}
+    cw = {"sheltered": 0.05, "normal": 0.10, "exposed": 0.20}.get(openings.get("site_exposure"), 0.10)
+    sqrt_cw = math.sqrt(cw)
+    K = 0.0  # m³/s per (m/s wind)
+    for face in ("north", "south", "east", "west"):
+        fo = openings.get(face) or {}
+        A = float(fo.get("louvre_area_m2", 0) or 0)
+        if A <= 0:
+            continue
+        cd = float(fo.get("cd", openings.get("cd", 0.25)) or 0.25)
+        mode = fo.get("flow_mode") or openings.get("flow_mode") or "single_sided"
+        if mode == "cross":
+            K += cd * A * sqrt_cw
+        else:
+            K += 0.025 * min(1.0, cd / 0.6) * A
+    if K <= 0:
+        return {}
+    nz = max(1, len(zones))
+    per_zone = round(K / nz, 7)
+    objs = {}
+    for zn in zones:
+        objs[f"{zn}_permvent_louvre"] = {
+            "zone_or_zonelist_or_space_or_spacelist_name": zn,
+            "schedule_name": "always_on",
+            "design_flow_rate_calculation_method": "Flow/Zone",
+            "design_flow_rate": per_zone,
+            "ventilation_type": "Natural",
+            "fan_pressure_rise": 0.0,
+            "fan_total_efficiency": 1.0,
+            "constant_term_coefficient": 0.0,
+            "temperature_term_coefficient": 0.0,
+            "velocity_term_coefficient": 1.0,     # flow ∝ wind speed (NZA's correlation)
+            "velocity_squared_term_coefficient": 0.0,
+            "minimum_indoor_temperature": -100.0,
+            "maximum_indoor_temperature": 100.0,
+            "minimum_outdoor_temperature": -100.0,
+            "maximum_outdoor_temperature": 100.0,
+        }
+    return objs
+
+
+def _resolve_comfort_setpoints(building_params: dict) -> tuple[float, float]:
+    """Brief 98-C P3: mirror NZA's setpoint resolution. NZA holds a flat comfort band
+    continuously (active_setpoint); the band is comfort_band lower/upper, defaulting to
+    21/24 (run_nza.mjs:43; instantCalc comfortBand fallback). v40 setpoint mode overrides:
+    follow_comfort → the band; custom → *_setpoint_c (CLAUDE.md Brief 42 service-level
+    setpoint rule). Returns (heating_c, cooling_c)."""
+    cb = building_params.get("comfort_band") or {}
+    lower = building_params.get("comfort_band_lower_c")
+    lower = lower if lower is not None else cb.get("lower_c", 21)
+    upper = building_params.get("comfort_band_upper_c")
+    upper = upper if upper is not None else cb.get("upper_c", 24)
+    v40 = building_params.get("systems_config_v40") or {}
+    if v40.get("heating_setpoint_mode") == "custom" and v40.get("heating_setpoint_c") is not None:
+        heat = float(v40["heating_setpoint_c"])
+    else:
+        heat = float(lower if lower is not None else 21)
+    if v40.get("cooling_setpoint_mode") == "custom" and v40.get("cooling_setpoint_c") is not None:
+        cool = float(v40["cooling_setpoint_c"])
+    else:
+        cool = float(upper if upper is not None else 24)
+    return heat, cool
+
+
+def _flat_temperature_schedule(value: float) -> dict:
+    """A constant 24/7/365 Temperature Schedule:Compact — no setback."""
+    return {
+        "schedule_type_limits_name": "Temperature",
+        "data": [{"field": "Through: 12/31"}, {"field": "For: AllDays"},
+                 {"field": "Until: 24:00"}, {"field": float(value)}],
     }
 
 
@@ -1332,6 +1584,13 @@ def assemble_epjson(
     used_constructions.discard("")
     construction_epjson = _collect_construction_epjson(used_constructions)
 
+    # Brief 98-C P5: inherit NZA's ISO 14683 thermal bridging as psi-adjusted U-values
+    # (full mode only — state1/state2 model the envelope their own way). Degrades the
+    # opaque insulation resistances so ΔU = H_TB/A_opaque is added to wall/roof/floor.
+    _tb_H_TB_applied = 0.0
+    if mode not in ("envelope-only", "envelope-gains"):
+        _tb_H_TB_applied = _apply_thermal_bridging(construction_epjson, building_params)
+
     # ── 4. Site location from EPW ─────────────────────────────────────────────
     loc = _parse_epw_location(weather_file_path)
 
@@ -1422,20 +1681,53 @@ def assemble_epjson(
         lpd_override = 0.0
         epd_override = 0.0
     elif _num_bedrooms > 0 and _gia > 0:
-        _avg_occupants = _num_bedrooms * _occupancy_rate * _people_per_room
-        _density_override = _avg_occupants / _gia
+        # Brief 98-C P1: mirror NZA's computeTotalOccupants (occupancy.density.value,
+        # per_room basis; instantCalc.js:2118) via the SAME helper state2 uses — was
+        # the legacy people_per_room field (2 vs density.value 2.5 → 276 vs 345 ppl).
+        _density_override = _v23_compute_occupancy_density(building_params, _gia)
     else:
         _density_override = None  # use library default
 
     # ── State 2 schedule emission for occupancy ───────────────────────────
     # Occupancy stays single-object — splice the derived schedule into
     # all_schedules under the name the People objects already reference.
-    if state2:
+    # Brief 98-C P1: EP inherits NZA's occupancy schedule + per-person sensible W.
+    # NZA books people gain SENSIBLE-only at occ.sensible_w_per_person
+    # (instantCalc.js:2254-2255). Previously (a) full mode used the library
+    # hotel_bedroom_occupancy fixed schedule, not the config-derived one, and (b) the
+    # People activity level pointed at the 0-1 occupancy FRACTION → ~1 W/person. We now
+    # splice the config-derived occupancy schedule in full mode too (not just state2)
+    # and emit a constant activity schedule = NZA's sensible W with
+    # sensible_heat_fraction=1.0 so EP sensible people gain equals NZA's. No wattage
+    # invented — mirrored from config; latent is not booked (NZA books sensible only).
+    _use_nza_people = (not state1) and bool(building_params.get("occupancy"))
+    _people_activity_sched = "hotel_bedroom_occupancy"
+    _people_sensible_frac = None
+    if _use_nza_people:
         all_schedules["hotel_bedroom_occupancy"] = _v23_derived_occupancy_schedule(building_params)
-        # Legacy schedule names left untouched — per-profile schedules below
-        # have unique names so they coexist without clobbering.
+        _occ_sensible_w = float((building_params.get("occupancy") or {}).get("sensible_w_per_person", 75) or 75)
+        schedule_type_limits["nza_activity_level"] = {
+            "lower_limit_value": 0, "numeric_type": "Continuous", "unit_type": "ActivityLevel"}
+        all_schedules["nza_people_activity"] = {
+            "schedule_type_limits_name": "nza_activity_level",
+            "data": [{"field": "Through: 12/31"}, {"field": "For: AllDays"},
+                     {"field": "Until: 24:00"}, {"field": _occ_sensible_w}]}
+        _people_activity_sched = "nza_people_activity"
+        _people_sensible_frac = 1.0
 
-    people_objects  = _build_people_objects(zones, density_override=_density_override)
+    people_objects  = _build_people_objects(zones, density_override=_density_override,
+                                            activity_schedule_name=_people_activity_sched,
+                                            sensible_fraction=_people_sensible_frac)
+
+    # Brief 98-C P3: EP inherits NZA's thermostat REGIME. NZA holds a flat comfort band
+    # continuously (active_setpoint); the EP hotel_*_setpoint schedules ran an overnight
+    # SETBACK (21/18 heating, 24/28 cooling) — EP inventing its own operating hours. In
+    # full mode we overwrite them with a flat band resolved from the comfort band + v40
+    # setpoint mode (same building = same setpoint), no setback.
+    if not (state1 or state2):
+        _heat_sp, _cool_sp = _resolve_comfort_setpoints(building_params)
+        all_schedules["hotel_heating_setpoint"] = _flat_temperature_schedule(_heat_sp)
+        all_schedules["hotel_cooling_setpoint"] = _flat_temperature_schedule(_cool_sp)
     # In state2 the v2.3-shape Lights / ElectricEquipment objects emit at
     # ZERO density (the per-profile objects below carry the real loads).
     # In state1 both are zero. In 'full' / other modes they use library
@@ -1477,7 +1769,11 @@ def assemble_epjson(
     # State 1 + State 2 both suppress operable windows (State 2.5 territory).
     # The `state1` kwarg name is kept for backward compatibility; semantically
     # it means "suppress operable-window stream".
-    natural_vent_objects = _build_openings_objects(zones, building_params, state1=(state1 or state2))
+    # Brief 98-C P6: in full mode the permanent louvres are emitted as
+    # ZoneVentilation:DesignFlowRate on NZA's wind correlation (above), so suppress the
+    # WindandStack version here to avoid double-counting the passive-opening loss.
+    natural_vent_objects = ({} if not (state1 or state2)
+                            else _build_openings_objects(zones, building_params, state1=(state1 or state2)))
 
     # Brief 28e Gate E4: also emit per-opening ZoneVentilation:WindandStackOpenArea
     # objects from building_config.operable_openings (doors, operable windows,
@@ -1496,6 +1792,17 @@ def assemble_epjson(
     operable_opening_objects = {} if (state1 or state2) else _build_operable_openings_objects(zones, building_params)
     natural_vent_objects = {**natural_vent_objects, **operable_opening_objects}
 
+    # Brief 98-C P2: mechanical ventilation as per-system ZoneVentilation:DesignFlowRate
+    # (full mode only — state1/state2 handle ventilation their own way). Emits ALL v40
+    # systems at their v40 flows, mirroring NZA's per-system extract-loss model. Was
+    # absent (inert ERV + per-person sizing OA) → EP missed ~277 MWh of runtime vent loss.
+    # Brief 98-C P6: also emit the permanent-vent louvres on NZA's wind correlation (and
+    # suppress the WindandStack below), so both are ZoneVentilation:DesignFlowRate.
+    mech_vent_objects = {}
+    if not (state1 or state2):
+        mech_vent_objects = _build_mech_ventilation_objects(building_params, zones, _gia)
+        mech_vent_objects.update(_build_permanent_vent_objects(building_params, zones))
+
     # Always-on schedule referenced by louvres + 'always' window mode.
     # Also referenced by the State 2 baseload-equipment object, so we emit
     # it whenever state2 is true even if there are no operable openings.
@@ -1506,7 +1813,7 @@ def assemble_epjson(
             "schedule_type_limits_name": "Fraction",
             "hourly_value": 1.0,
         },
-    } if (natural_vent_objects or state2) else {}
+    } if (natural_vent_objects or state2 or mech_vent_objects) else {}
 
     # ── 7. HVAC — branch on hvac_mode ─────────────────────────────────────────
     # "ideal_loads" (default): ZoneHVAC:IdealLoadsAirSystem — perfect, no real system effects
@@ -1667,6 +1974,31 @@ def assemble_epjson(
             # both engines run the same hot-water demand (delivered split then falls out
             # of EP's own gas/ASHP efficiencies — an expected, named residual).
             _nza_dhw_litres = _nza_dhw_boiler_litres_per_day(building_params)
+            # Brief 98-C P4: parallel gas/ASHP DHW split from v40 shares (mirror NZA's
+            # systemsEngine proportional split), replacing the series-preheat topology.
+            # Read the enabled v40 DHW systems; normalise shares; use their own effs.
+            _v40_dhw = [s for s in ((building_params.get("systems_config_v40") or {}).get("dhw") or [])
+                        if s.get("enabled", True) is not False]
+            _gas_sys = next((s for s in _v40_dhw if s.get("source") == "gas"), None)
+            _ashp_sys = next((s for s in _v40_dhw if s.get("source") in ("ambient_air", "electricity")), None)
+            _dhw_split_mode = "series"
+            _gas_share = 1.0
+            _ashp_share = 0.0
+            if _gas_sys is not None and _ashp_sys is not None:
+                _gs = float(_gas_sys.get("share_pct", 0) or 0)
+                _as = float(_ashp_sys.get("share_pct", 0) or 0)
+                _tot = _gs + _as
+                if _tot > 0:
+                    _dhw_split_mode = "parallel_share"
+                    _gas_share = _gs / _tot
+                    _ashp_share = _as / _tot
+                    # use each v40 system's own efficiency (gas η, ASHP COP)
+                    _gm = _gas_sys.get("efficiency_metric")
+                    if isinstance(_gm, (int, float)):
+                        dhw_efficiency = float(_gm)
+                    _am = _ashp_sys.get("efficiency_metric")
+                    if isinstance(_am, (int, float)):
+                        ashp_cop = float(_am)
             dhw_objects = generate_dhw_system(
                 zone_floor_area_m2=zone_floor_area,
                 num_zones=len(zones),
@@ -1679,6 +2011,9 @@ def assemble_epjson(
                 dhw_preheat_setpoint=float(sc.get("dhw_preheat_setpoint", 45.0)),
                 ashp_cop=ashp_cop,
                 daily_hot_litres_override=_nza_dhw_litres,
+                dhw_split_mode=_dhw_split_mode,
+                gas_share=_gas_share,
+                ashp_share=_ashp_share,
             )
             for obj_type, items in dhw_objects.items():
                 hvac_objects.setdefault(obj_type, {}).update(items)
@@ -1840,6 +2175,10 @@ def assemble_epjson(
 
         **({"ZoneVentilation:WindandStackOpenArea": natural_vent_objects}
            if natural_vent_objects else {}),
+
+        # Brief 98-C P2: per-system mechanical ventilation (v40 flows × (1−HRE))
+        **({"ZoneVentilation:DesignFlowRate": mech_vent_objects}
+           if mech_vent_objects else {}),
 
         "Output:Variable": _output_variables(),
         "Output:Meter": _output_meters(),

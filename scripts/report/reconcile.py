@@ -78,55 +78,62 @@ cond = conduction_by_class()
 L, G, De, Dm = NZA["losses"], NZA["gains"], NZA["delivered"], NZA["demand"]
 rows = [
     ("LOSSES (gross, MWh/yr)", "Wall conduction", L["wall_conduction"], cond["wall"], "divergent",
-     "NZA = setpoint-gated heating loss; EP = raw gross envelope loss (all hours) → EP structurally larger, not a gap"),
+     "NZA = setpoint-gated heating loss; EP = raw gross envelope loss (all hours) AND now carries the P5 thermal-bridging ΔU (NZA books bridging separately) → EP structurally larger, not a gap"),
     ("", "Roof conduction", L["roof_conduction"], cond["roof"], "divergent",
-     "same definitional basis difference (gated vs gross)"),
+     "same basis difference (gated vs gross) + P5 bridging ΔU folded in"),
     ("", "Floor/ground conduction", L["floor_conduction"], cond["floor"], "divergent",
      "same; EP ground uses its own ground-temp object vs NZA annual-mean ground temp"),
     ("", "Glazing conduction", L["glazing_conduction"], var_sum("Zone Windows Total Heat Loss Energy"), "divergent",
      "EP 'Windows Total Heat Loss' bundles glazing conduction; not cleanly separable (SimpleGlazing transmitted-solar var reads 0 in EP 25.2)"),
     ("", "Infiltration", L["infiltration"], var_sum("Zone Infiltration Sensible Heat Loss Energy"), "clean",
      "airtightness ACH matched (0.0692) — residual is basis: EP uses zone-volume ACH per zone; NZA whole-building V. Small."),
-    ("", "Permanent vents", L["permanent_vents"], var_sum("Zone Ventilation Sensible Heat Loss Energy"), "clean",
-     "passive-opening flow models differ: EP ZoneVentilation:WindandStack Autocalculate effectiveness vs NZA cd/Cw model"),
-    ("", "Thermal bridging", L["thermal_bridging"], 0.0, "clean",
-     "STRUCTURAL: EP model has no thermal-bridging object — NZA books ISO 14683 linear ψ; EP books nothing"),
-    ("", "Mech vent — public MVHR", L["mech_vent_public_mvhr"], 0.0, "clean",
-     "EP folds MVHR outdoor-air load into the VRF via DesignSpecification:OutdoorAir; no separate vent-loss channel, and HX recovery reports 0.0 MWh"),
-    ("", "Mech vent — bedroom extract", L["mech_vent_bedroom_extract"], 0.0, "clean",
-     "STRUCTURAL: derive_systems_for_sim._primary keeps only the highest-share vent system; bedroom extract (2208 L/s) absent from EP"),
-    ("", "Mech vent — toilet extract", L["mech_vent_toilet_extract"], 0.0, "clean",
-     "STRUCTURAL: same single-primary simplification — toilet extract (210 L/s) absent from EP"),
+    ("", "Permanent vents", L["permanent_vents"], None, "emitted",
+     "✅ 98-C P6: WindandStack (Autocalculate, 55.7) replaced by ZoneVentilation:DesignFlowRate on NZA's own wind correlation (single-sided Q=0.025·min(1,cd/0.6)·A·v_wind, velocity_term_coefficient=1); aggregated into the combined row (was the +244% gap)"),
+    ("", "Thermal bridging", L["thermal_bridging"], None, "emitted",
+     "✅ 98-C P5: inherited as psi-adjusted U — H_TB 278 W/K (ISO 14683 mirror) degrades the wall/roof/floor insulation R by ΔU=H_TB/A_opaque. EP has no separate ψ object so it folds into the conduction rows above (which rose accordingly)"),
+    ("", "Mech vent — public MVHR", L["mech_vent_public_mvhr"], None, "emitted",
+     "✅ 98-C P2: emitted ZoneVentilation:DesignFlowRate at v40 flow×(1−HRE) = 1425×0.20 = 285 L/s; per-system output not separable (EP aggregates) — see combined row"),
+    ("", "Mech vent — bedroom extract", L["mech_vent_bedroom_extract"], None, "emitted",
+     "✅ 98-C P2: emitted at 2208×(1−0) = 2208 L/s (was absent — the ~226 MWh hole); EP aggregates output — see combined row"),
+    ("", "Mech vent — toilet extract", L["mech_vent_toilet_extract"], None, "emitted",
+     "✅ 98-C P2: emitted at 210×(1−0) = 210 L/s; EP aggregates output — see combined row"),
+    ("", "Ventilation TOTAL (mech+perm, EP ZoneVentilation)",
+     L["mech_vent_public_mvhr"] + L["mech_vent_bedroom_extract"] + L["mech_vent_toilet_extract"] + L["permanent_vents"],
+     var_sum("Zone Ventilation Sensible Heat Loss Energy"), "clean",
+     "98-C P2+P6: all 3 mech systems (v40 flows) + permanent vents (NZA wind correlation) emitted; 375→336 after P6. Residual +15% is method — EP books ventilation loss ALL hours (incl. shoulder) vs NZA setpoint-gated — plus EP ρCp 1206 vs NZA 1188 (1.5%)"),
     ("GAINS (MWh/yr)", "Solar through glazing", G["solar_through_glazing"], var_sum("Zone Windows Total Heat Gain Energy"), "divergent",
      "EP 'Windows Total Heat Gain' bundles solar + conduction gain (transmitted-solar var = 0 under SimpleGlazing); NZA = transmitted solar only"),
     ("", "People", G["people"], var_sum("Zone People Total Heating Energy"), "clean",
-     "BUG: EP People.activity_level_schedule_name points at the occupancy FRACTION schedule (0-1 W/person) instead of a ~100 W/person activity level → EP books ~1% of NZA's people gain"),
+     "✅ 98-C P1: EP inherits NZA sensible 75 W/person (instantCalc.js:2254) + headcount 345 (density.value 2.5, per_room) + config occupancy schedule — was the activity-schedule-fraction bug (1.2 MWh)"),
     ("", "Lighting", G["lighting"], var_sum("Zone Lights Total Heating Energy"), "clean", None),
     ("", "Equipment / small power", G["equipment"], var_sum("Zone Electric Equipment Total Heating Energy"), "clean", None),
     ("DEMAND (MWh/yr)", "Heating demand", Dm["heating"], meter("Heating:EnergyTransfer"), "clean",
-     "downstream of the loss/gain gaps above (missing mech-vent loss lowers EP heating; missing people gain raises it — net EP far lower)"),
+     "98-C P1-P6 CONVERGED: 10.3→107.2 (NZA 87.7, +22%; was −88%). Residual is the gross-vs-gated method difference — EP's full sub-hourly heat balance books envelope+vent losses in all hours, NZA integrates net setpoint-gated demand (the mass-banking/gating mechanism from the physics trace)"),
     ("", "Cooling demand", Dm["cooling"], meter("Cooling:EnergyTransfer"), "clean",
-     "downstream: EP setback + missing vent loss + lumped-mass differences push cooling higher"),
+     "98-C P1-P6 CONVERGED: 163.8→88.3 (NZA 101.1, −13%; was +62%). Same method difference, opposite sign"),
     ("DELIVERED (MWh/yr)", "Heating — electricity", De["heating_electricity"], meter("Heating:Electricity"), "clean",
-     "tracks the heating-demand gap (÷ VRF SCOP)"),
-    ("", "Cooling — electricity", De["cooling_electricity"], meter("Cooling:Electricity"), "clean", None),
+     "NEW FINDING (not in P1-P6 register): EP VRF heating COP from performance curves (~1.4 in-service at UK winter temps + defrost) vs NZA's flat SCOP 3.0 → 77.4 vs 32.2. A delivered-side VRF-efficiency modelling difference (curves vs flat); the DEMAND converged (107 vs 88). Report, don't chase"),
+    ("", "Cooling — electricity", De["cooling_electricity"], meter("Cooling:Electricity"), "clean",
+     "downstream of cooling demand (88.3 vs 101.1) ÷ VRF cooling COP (also curve-based vs NZA flat EER)"),
     ("", "DHW — electricity", De["dhw_electricity"], meter("WaterSystems:Electricity"), "clean",
-     "DHW demand matched; delivered split differs — EP series-preheat ASHP vs NZA parallel 52/48 gas/ASHP"),
+     "98-C P4: ASHP share 48% at COP 3.0; 28.0→34.6 vs NZA 42.2 (−18%) — ASHP tank delivers ~84% of its thermal share (COP-as-thermal-efficiency + tank standby); gas side matches within 2%"),
     ("", "DHW — gas", De["dhw_gas"], meter("WaterSystems:NaturalGas"), "clean",
-     "same ASHP-topology split (EP puts more of DHW on electric preheat → less gas)"),
+     "✅ 98-C P4: parallel 52/48 gas/ASHP split (v40 shares) replacing the series preheat + corrected peak-flow sizing (0.65→0.35 schedule avg); gas 45.4→154.6 = NZA 157.4"),
     ("", "Ventilation fans — electricity", De["vent_fans_electricity"], meter("Fans:Electricity"), "clean",
      "NZA does not book fan electricity as a separate delivered channel (folded / null); EP books the MVHR+VRF fans explicitly"),
     ("", "Lighting — electricity", De["lighting_electricity"], meter("InteriorLights:Electricity"), "clean", None),
     ("", "Small power — electricity", De["small_power_electricity"], meter("InteriorEquipment:Electricity"), "clean", None),
-    ("FUEL (MWh/yr)", "Total electricity", De["total_electricity"], meter("Electricity:Facility"), "clean", None),
+    ("FUEL (MWh/yr)", "Total electricity", De["total_electricity"], meter("Electricity:Facility"), "clean",
+     "downstream of heating-electricity (rose when P3 removed the compensating setback); settles as the ventilation residual closes at P6"),
     ("", "Total gas", De["total_gas"], meter("NaturalGas:Facility"), "clean",
-     "NZA gas = DHW gas share (157.4); EP gas = DHW preheat remainder (45.4) — the ASHP-topology split"),
+     "✅ 98-C P4: all gas is DHW; parallel 52/48 split → 154.6 = NZA 157.4 (was 45.4 series-preheat)"),
 ]
 
 
 def flag(nza, ep, comparability):
-    nza = nza if nza is not None else None
-    ep = ep if ep is not None else None
+    if comparability == "emitted":
+        # input inherited & emitted; per-system output not separable in EP (aggregated)
+        return "✅", False
     a = abs(nza) if isinstance(nza, (int, float)) else 0
     b = abs(ep) if isinstance(ep, (int, float)) else 0
     ZERO = 1.0  # MWh threshold for "zero"
@@ -175,13 +182,14 @@ for group, chan, nza, ep, comp, cause in rows:
     dpct = "—"
     if isinstance(nza, (int, float)) and isinstance(ep, (int, float)) and abs(nza) >= 1.0:
         dpct = f"{(ep - nza) / abs(nza) * 100:+.0f}%"
+    ep_cell = "emitted✎" if comp == "emitted" else fmt(ep)
     cell_cause = cause or ""
     if flagged and not cause:
         cell_cause = "**UNEXPLAINED — needs investigation**"
         unexplained.append(chan)
     if not flagged and fl == "✅":
         cell_cause = cell_cause or "match"
-    lines.append(f"| {group} | {chan} | {fmt(nza)} | {fmt(ep)} | {dpct} | {fl} | {cell_cause} |")
+    lines.append(f"| {group} | {chan} | {fmt(nza)} | {ep_cell} | {dpct} | {fl} | {cell_cause} |")
 lines.append("")
 lines.append(f"**Flag tally:** 🔴 {n_red} · 🟠 {n_amber} · rows {len(rows)}. "
              f"Unexplained: {', '.join(unexplained) if unexplained else 'none — every flag named'}.")
@@ -206,24 +214,24 @@ Assembler = `nza_engine/generators/epjson_assembler.py`.
 | glazing g-value | constructions | ✅ INHERITED | g_value_override → SimpleGlazing SHGC (assembler L219-223) |
 | geometry (L/W/floors/height/orientation/wwr/window_count) | — | ✅ INHERITED | `generate_building_geometry(building_params)` (assembler L1295) |
 | `shading_overhang` / `shading_fin` | 0.5 m avail. | 🔴 STRUCTURAL | geometry emits Shading:Overhang but it does not reduce solar in EP (Brief 23 H3) |
-| `openings` (permanent-vent louvre) | 2×1.1 m², cd 0.49 | 🟠 divergent | EP `ZoneVentilation:WindandStack` Autocalculate effectiveness ≠ NZA cd/Cw model |
-| `openings.site_exposure` (Cw) | exposed | 🔴 NOT INHERITED | EP WindandStack Autocalculate; NZA Cw from site_exposure |
-| `thermal_bridges` | ISO 14683 ψ | 🔴 STRUCTURAL | assembler never reads `thermal_bridges` — EP books no bridging |
+| `openings` (permanent-vent louvre) | 2×1.1 m², cd 0.49 | ✅ INHERITED (98-C P6) | `_build_permanent_vent_objects` drives ZoneVentilation:DesignFlowRate with NZA's single-sided wind correlation (cd, area, velocity coeff) — was the WindandStack Autocalculate over-count |
+| `openings.site_exposure` (Cw) | exposed | ✅ INHERITED (98-C P6) | Cw (exposed→0.20) feeds the cross-mode sqrt(Cw) coefficient in `_build_permanent_vent_objects` |
+| `thermal_bridges` | ISO 14683 ψ | ✅ INHERITED (98-C P5) | `_nza_thermal_bridging_H_TB` mirrors the auto ψ calc (278 W/K); `_apply_thermal_bridging` degrades opaque insulation R to bake in ΔU (no native EP ψ object, so folded into conduction) |
 | `thermal_mass_category` / `_mode` | medium/lumped | 🟠 divergent | EP mass = construction CTF (real layers); NZA = lumped 250k J/K·m² — different basis, both defensible |
 | `gains.lighting` | 2 W/m² profile | ✅ INHERITED | `_emit_state2_lighting_profiles` (98-A2 P1) → 39.0=39.0 |
 | `gains.equipment` (small power) | 5.04 W/m² flat | ✅ INHERITED | `_emit_state2_equipment_profiles` (98-A2 P0) → 186.1=186.1 |
-| `occupancy.density` | 2.5/room (345 ppl) | 🟠 basis differs | EP People/Area 0.0655 p/m² = 276 ppl (assembler L327) — headcount basis diverges |
-| `occupancy.schedule` | config weekday/sat/sun | 🟠 derived | EP `hotel_bedroom_occupancy` derived from config (L1434) — shape approx, not the raw arrays |
-| `occupancy.sensible_w_per_person` (75 W) | 75 W/person | 🔴 NOT INHERITED (BUG) | EP `activity_level_schedule_name="hotel_bedroom_occupancy"` (the 0-1 FRACTION, assembler L330) → ~1 W/person → people gain 1.2 vs 120.4 MWh |
+| `occupancy.density` | 2.5/room (345 ppl) | ✅ INHERITED (98-C P1) | full mode now uses `_v23_compute_occupancy_density` (density.value 2.5, per_room → 345), not the legacy people_per_room (276) |
+| `occupancy.schedule` | config weekday/sat/sun | ✅ INHERITED (98-C P1) | full mode splices the config-derived `hotel_bedroom_occupancy` (was the library fixed schedule) |
+| `occupancy.sensible_w_per_person` (75 W) | 75 W/person | ✅ INHERITED (98-C P1) | constant activity schedule = 75 W + sensible_heat_fraction 1.0 → people gain 1.2→120.4 = NZA (was the activity-schedule-fraction bug) |
 | `systems_config_v40.heating` (VRF+panel, shares, SCOP) | 2 systems | 🟠 primary-only | `_primary` keeps highest-share; proportional split is NZA-only; SCOP of primary inherited |
 | `systems_config_v40.cooling` | 2 systems | 🟠 primary-only | same single-primary simplification |
-| `systems_config_v40.dhw` (2 systems, shares) | gas 52 / ASHP 48 | 🟠 demand yes / split no | DHW *demand* inherited (98-A2 P2); *delivered* split diverges (EP series-preheat vs NZA parallel) |
+| `systems_config_v40.dhw` (2 systems, shares) | gas 52 / ASHP 48 | ✅ INHERITED (98-C P4) | parallel share split (two WaterHeater:Mixed, flow split by v40 share, own effs) + corrected peak-flow sizing (0.35 schedule avg) → gas 154.6 = NZA 157.4 |
 | DHW setpoints (storage 60 / tap 42 / cold 10) | — | ✅ INHERITED | `_nza_dhw_boiler_litres_per_day` tap-mix (98-A2 P2) → demand 257.3=257.3 |
 | `dhw_demand_basis` / litres_per_person (55) | per_person | ✅ INHERITED | 98-A2 P2 → 12,144 L/day |
-| `ventilation[*].flow_rate` (1425/2208/210 L/s) | 3843 L/s total | 🔴 NOT INHERITED | EP OA = per-person constant `_VENT_M3_PER_S_PER_PERSON` (assembler L688), NOT v40 flows |
-| `ventilation[*]` bedroom + toilet extract | 2 systems | 🔴 STRUCTURAL | `_primary` models only the public MVHR; other two absent from EP |
-| `ventilation[0].recovery_sensible_pct` (80) | 80% | 🟠 passed, idle | effectiveness_override→ERV, but HeatExchanger recovery reports 0.0 MWh (ERV not conditioning) |
-| `heating_setpoint_mode`/`cooling_setpoint_mode` (follow_comfort) | flat 21/24 band | 🔴 NOT INHERITED | EP uses hardcoded `hotel_heating/cooling_setpoint` schedules with overnight SETBACK (21/18, 24/28); ignores comfort band + v40 setpoint |
+| `ventilation[*].flow_rate` (1425/2208/210 L/s) | 3843 L/s total | ✅ INHERITED (98-C P2) | `_build_mech_ventilation_objects` emits each system as ZoneVentilation:DesignFlowRate at its v40 flow (was the per-person OA constant) |
+| `ventilation[*]` bedroom + toilet extract | 2 systems | ✅ INHERITED (98-C P2) | all 3 systems now emitted (bedroom 2208, toilet 210 L/s) — the ~248 MWh hole closed |
+| `ventilation[0].recovery_sensible_pct` (80) | 80% | ✅ INHERITED (98-C P2) | applied as effective flow × (1−0.80) = 285 L/s in `_build_mech_ventilation_objects` (mirrors NZA ventUA), replacing the idle ERV |
+| `heating_setpoint_mode`/`cooling_setpoint_mode` (follow_comfort) | flat 21/24 band | ✅ INHERITED (98-C P3) | full mode overwrites `hotel_*_setpoint` with a flat band from `_resolve_comfort_setpoints` (comfort band + v40 mode); overnight setback removed |
 | `lighting` / `small_power` (v40 delivered) | — | ✅ INHERITED | InteriorLights/Equipment meters 39.0/186.1 match |
 """
 
@@ -268,30 +276,43 @@ header = ("# Brief 98-R — the reconciliation table\n\n"
           "are classification with assembler citations.\n\n")
 
 SUMMARY = (
-    "## In plain English\n\n"
-    "**Where the engines agree (✅, ≤10%):** lighting (39.0=39.0), equipment/small power "
-    "(186.1=186.1), DHW demand (257.3=257.3), cooling-electricity (33.7 vs 36.7), and total "
-    "electricity (373.8 vs 357.8). The inputs that dominate the electricity bill are matched.\n\n"
-    "**Where they differ, and why (🔴):** heating demand (NZA 87.7 vs EP 10.3) and cooling "
-    "demand (101.1 vs 163.8) diverge — but those are *downstream*. The **roots** are five input "
-    "gaps: (1) **ventilation** — EP models only 1 of NZA's 3 systems and ignores the v40 flows, "
-    "so it misses ~248 MWh of extract loss (bedroom extract alone is 226); (2) **people** — an "
-    "assembler bug points the EP occupant activity level at the 0–1 occupancy *fraction* instead "
-    "of 75 W/person, so EP books 1.2 MWh of body heat against NZA's 120; (3) **thermostat regime** "
-    "— EP runs an overnight setback (21/18, 24/28) while NZA holds a flat 21/24 band; (4) **thermal "
-    "bridging** — EP has no bridging object (NZA books 24 MWh); (5) **DHW fuel split** — EP series-"
-    "preheat ASHP vs NZA parallel 52/48 (gas 45 vs 157).\n\n"
-    "**Inputs inherited:** of ~25 config-field groups, **9 are fully inherited** (airtightness, "
-    "glazing U+g, geometry, lighting, equipment, DHW demand+setpoints), **9 partial/divergent-"
-    "basis**, and **7 not inherited** (ventilation flows + 2 of 3 systems, occupant heat, "
-    "thermostat regime, thermal bridging, shading effectiveness, site-exposure Cw). The un-"
-    "inherited set is the finish-the-model backlog below.\n\n"
-    "**The one-line verdict:** the electricity-side inputs are matched; the *heating*-side inputs "
-    "are not — ventilation topology and occupant heat are the two big holes, both fixable on the "
-    "EP side without moving the anchor. Only the thermostat and fan-accounting items touch the "
-    "anchor and need Chris's call.\n\n"
+    "## Convergence verdict (Brief 98-C — the AFTER table)\n\n"
+    "The six EP-side, anchor-safe gaps the reconciliation table found are now closed. EP was "
+    "changed to INHERIT NZA's inputs; nothing was tuned toward NZA's outputs. NZA-Sim untouched; "
+    "anchors 132.6/126.0 byte-identical throughout.\n\n"
+    "**Headline — the demand converged from ~8× apart to within ~20%:**\n\n"
+    "| Demand (MWh) | NZA | EP before (98-R) | EP after (98-C) |\n"
+    "|---|--:|--:|--:|\n"
+    "| Space heating | 87.7 | 10.3 (−88%) | **107.2 (+22%)** |\n"
+    "| Space cooling | 101.1 | 163.8 (+62%) | **88.3 (−13%)** |\n\n"
+    "Red cells fell **14 → 3**. The six inherits: people gain 1.2→120.4 (P1) · ventilation "
+    "0→3 systems at v40 flows, ~248 MWh of extract loss restored (P2) · thermostat setback→flat "
+    "21/24 band (P3) · DHW gas 45→155 via parallel 52/48 (P4) · thermal bridging 0→24 MWh via "
+    "psi-adjusted U (P5) · permanent vents 55.7→16 on NZA's wind correlation (P6).\n\n"
+    "**The residual demand gap (heating +22%, cooling −13%) is a named METHOD difference, not an "
+    "input gap:** EP's full sub-hourly heat balance books envelope + ventilation losses in every "
+    "hour, whereas NZA integrates net setpoint-gated demand and resets its lumped mass to the "
+    "setpoint each conditioned hour (the gain-banking/mass-reset mechanism from the physics trace). "
+    "Same inputs, different integration. Both under the 30% escalate threshold; not chased.\n\n"
+    "**The 3 remaining 🔴 are all DELIVERED-side, downstream of the (now-converged) demand:**\n"
+    "1. **Heating electricity 32.2 vs 77.4** — a NEW finding, not in the 98-R register: EP's VRF "
+    "heating COP comes from performance curves (~1.4 in-service at UK winter temps + defrost) vs "
+    "NZA's flat SCOP 3.0. A systems-layer (VRF-efficiency) difference, not envelope.\n"
+    "2. **Cooling electricity 33.7 vs 24.2** — downstream of cooling demand ÷ the same curve-based VRF COP.\n"
+    "3. **Ventilation fan electricity — NZA null vs EP 54.3** — parked/NZA-side (NZA books no separate "
+    "fan channel; on the OUT list, Chris-gated).\n\n"
+    "**Meter sanity check (the honest twist):** before 98-C, EP had almost no winter electricity "
+    "(heating 10 MWh → Jan/mean 0.99, summer-only). After 98-C, EP heating is real (107 MWh, electric "
+    "VRF) so a winter signature appears — but it OVER-shoots: EP Jan/mean 1.35 vs the real meter's 1.03, "
+    "and the shape correlation to the meter fell (r 0.84→0.22). The cause is the same low VRF heating "
+    "COP: it over-dumps winter electricity. So the **envelope/demand is converged; the remaining "
+    "divergence from reality is entirely in the SYSTEMS layer (VRF COP curves vs flat SCOP)** — the "
+    "clean next question, and a delivered-side one that does not touch the anchor.\n\n"
+    "**Bottom line:** the engines now model the same building on the demand side; every remaining red "
+    "is either delivered-side systems method (VRF COP), parked/anchor-moving (fans), or STRUCTURAL "
+    "(shading — Brief 23 H3). The comparison is presentable with the method residual named. "
     f"*(Flag tally: 🔴 {n_red} · 🟠 {n_amber} across {len(rows)} channels; every flag named, none "
-    "unexplained. Anchors 132.6/126.0 byte-identical; EP change = output requests only.)*\n\n")
+    "unexplained. Anchors 132.6/126.0 byte-identical; NZA-Sim untouched; EP changes = input inherits.)*\n\n")
 
 OUT.write_text(header + SUMMARY + "\n".join(lines) + "\n" + TABLE_B + "\n" + REGISTER + "\n")
 print(f"wrote {OUT.relative_to(REPO)}")

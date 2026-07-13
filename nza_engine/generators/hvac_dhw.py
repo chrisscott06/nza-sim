@@ -41,9 +41,14 @@ _DHW_DEMAND_SCHEDULE = "hotel_dhw_demand"   # fraction schedule (0-1) in library
 _LITRES_PER_ROOM_PER_DAY = 45.0             # UK CIBSE Guide G hotel benchmark
 _M2_PER_ROOM = 40.0                         # gross area per bedroom (for estimation)
 _COLD_WATER_TEMP_C = 10.0                   # UK mains water (annual average)
-# hotel_dhw_demand schedule: weighted average of all fractional values ≈ 0.65
-# Used to invert: peak_flow = daily_volume / (avg_fraction × 86400 s/day)
-_DHW_SCHEDULE_AVG_FRACTION = 0.65
+# hotel_dhw_demand schedule: TRUE annual-weighted average of its fractional values.
+# Used to invert: peak_flow = daily_volume / (avg_fraction × 86400 s/day). Brief 98-C P4:
+# corrected 0.65 → 0.350. The old 0.65 over-sized the divisor so EP delivered only
+# 0.35/0.65 ≈ 0.54× the DHW demand NZA computes (a latent 98-A2 P2 sizing error). Measured
+# from the emitted schedule: weekday avg 0.3354, other-days 0.3875, weighted 5/7:2/7 = 0.350
+# (scripts/report/reconcile.py DHW verification). This makes EP deliver NZA's full annual
+# DHW volume; the parallel gas/ASHP split (P4) then reproduces the fuel breakdown.
+_DHW_SCHEDULE_AVG_FRACTION = 0.350
 _WATER_DENSITY_KG_M3 = 1000.0              # water density kg/m³
 _WATER_CP_J_KG_K    = 4186.0               # specific heat capacity J/(kg·K)
 _SIZING_FACTOR       = 1.25                # safety margin on heater capacity
@@ -238,6 +243,9 @@ def generate_dhw_system(
     dhw_preheat_setpoint: float = 45.0,
     ashp_cop: float = 2.8,
     daily_hot_litres_override: float | None = None,
+    dhw_split_mode: str = "series",
+    gas_share: float = 1.0,
+    ashp_share: float = 0.0,
 ) -> dict:
     """
     Generate DHW system epJSON objects.
@@ -289,6 +297,42 @@ def generate_dhw_system(
     # Always add constant temperature schedules
     for obj_type, items in _constant_schedules().items():
         result.setdefault(obj_type, {}).update(items)
+
+    # ── Brief 98-C P4: PARALLEL share split (mirror NZA's systemsEngine) ────────
+    # NZA serves the DHW load with N systems in parallel, each taking share_pct of
+    # the FULL load (cold→setpoint) at its own efficiency (systemsEngine.js DHW split):
+    #   gas fuel = gas_share × thermal / η_gas ; ASHP elec = ashp_share × thermal / COP.
+    # The prior EP model was a SERIES preheat (ASHP 10→45, gas 45→60) which splits by
+    # TEMPERATURE (70/30) not by share — hence gas 45 vs NZA 157. Here both tanks heat
+    # the full cold→setpoint ΔT and the USE FLOW is split by v40 share. Shares/effs read
+    # from v40 — nothing invented.
+    if dhw_split_mode == "parallel_share":
+        gas_tank = _gas_boiler_tank(
+            name="DHW_Gas_Parallel",
+            peak_flow_m3s=round(peak_flow * gas_share, 9),
+            tank_vol_m3=round(tank_vol * max(gas_share, 0.05), 4),
+            efficiency=boiler_efficiency,
+            setpoint_sched=_SCHED_60C,
+            cold_water_sched=_SCHED_10C,
+            delivery_temp_c=dhw_setpoint,
+            cold_temp_c=_COLD_WATER_TEMP_C,
+        )
+        result.setdefault("WaterHeater:Mixed", {}).update(gas_tank)
+        if ashp_share > 0:
+            # ASHP tank heats the full ΔT to the delivery setpoint (not just a preheat);
+            # efficiency=COP so electricity = thermal / COP.
+            ashp_tank = _ashp_preheat_tank(
+                name="DHW_ASHP_Parallel",
+                peak_flow_m3s=round(peak_flow * ashp_share, 9),
+                tank_vol_m3=round(tank_vol * max(ashp_share, 0.05), 4),
+                ashp_cop=ashp_cop,
+                preheat_setpoint_sched=_SCHED_60C,
+                cold_water_sched=_SCHED_10C,
+                preheat_temp_c=dhw_setpoint,
+                cold_temp_c=_COLD_WATER_TEMP_C,
+            )
+            result.setdefault("WaterHeater:Mixed", {}).update(ashp_tank)
+        return result
 
     # ── Primary: gas boiler ───────────────────────────────────────────────────
     # Gas heats from cold water inlet temperature to delivery setpoint.
