@@ -2,7 +2,15 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
-## ✅ Brief 100 — Interventions Library: XLSX export + off-model savings + narratives — CLOSED 2026-07-10 on `chris/interventions-export` *(off `chris/seed-hiex-interventions` (PR #11); PR open, NOT merged)*
+## ✅ Brief 98-A — Same-Building Engine Comparison (airtightness fix + two-claim residual) — CLOSED 2026-07-10 on `chris/engine-comparison-p0` *(off clean `main` `a5d8107`; PR open, NOT merged)*
+
+The FIRST valid NZA-vs-EnergyPlus comparison — same building, both engines, nothing tuned. All prior divergence numbers were void (measured across mismatched stale configs, fixed by 98-pre-b/c/d). NZA-Sim `instantCalc.js` untouched; anchors 132.6/126.0 byte-identical (only the EP assembler's infiltration input changed). Deliverable: [`audit/98A_valid_comparison.md`](docs/audit/98A_valid_comparison.md).
+
+- **P0** — EP infiltration on NZA-Sim's envelope-derived basis. Was flat 0.5 ACH (volume-basis); NZA derives from q50 (n50=q50·A_env/V, operational=n50/20). `derive_operational_ach()` in `epjson_assembler.py` mirrors `deriveOperationalACH` (instantCalc.js:386) — divisor cited not reinvented; EP's AirChanges/Hour is the same basis, no conversion. Proven: emitted ACH **0.06925 = NZA-Sim n_op 0.06925 byte-identical** (was 0.5, ~7× over-infiltration), EP 25-2-0 0 fatal. (`scripts/_brief98A_p0.py`)
+- **P1** — two-claim residual on report_baseline_v1. **Claim 1 (Fabric→Demand, physics): defensible** — heating NZA 87.7 / EP 52.9 MWh (−39.7%), monthly r 0.896; gap dominated by two named NZA-only terms EP lacks: **thermal_bridging 24.0 MWh (EP 0) + permanent_vents 18.9 MWh (EP-absent)** = 42.9 MWh > the 34.8 net gap. **Claim 2 (Demand→Delivered, expected tight): NOT tight** — candidate bugs flagged (not tuned): **small_power NZA 186 vs EP 40 MWh (4.7×)**, **DHW NZA 257 demand vs EP ~24 gas (~10×)**, lighting 2×, fans scope. Same-building input parity tabulated (U-values/areas/systems/ACH equal). (`_brief98A_p1_ep.py` + `_brief98A_p1_nza.mjs`)
+- **P2 verdict** — the fabric residual is defensible physics; the systems layer has real candidate bugs that dominate the headline EUI gap (NZA 126 vs EP 47.3). **Recommendation: a Claim-2 bug-fix pass (DHW demand basis, small_power/lighting schedules, fan accounting — EP-side/scope only, NZA untouched) BEFORE Brief 98-B** builds the Results UI, else it would present systems drift as physics.
+
+## ✅ Brief 100 — Interventions Library: XLSX export + off-model savings + narratives — CLOSED 2026-07-10; MERGED to `main` `a5d8107` (PR #12)
 
 Makes every intervention explorable: off-model measures show real numbers, each carries a plain-language narrative, and the whole Library exports to one XLSX. **Engine untouched** (`instantCalc.js`/assembler/derive); anchors 132.6/126.0 byte-identical. Answers Chris's "PV shows nothing" + "export everything" asks.
 

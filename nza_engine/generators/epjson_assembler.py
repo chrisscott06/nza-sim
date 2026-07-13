@@ -73,6 +73,51 @@ _INTERIOR_CONSTRUCTION = "interior_floor_ceiling"
 # Default infiltration rate (ACH) — can be overridden via building_params
 DEFAULT_INFILTRATION_ACH = 0.5
 
+
+def derive_operational_ach(building_params: dict):
+    """Operational air-change rate from air permeability q50 — a server-side MIRROR of
+    NZA-Sim's `deriveOperationalACH` (frontend/src/utils/instantCalc.js:386) + its
+    `computeGeometry` (:337), so the EnergyPlus infiltration reads the SAME envelope-
+    derived rate the instant engine uses instead of a flat volume-based default.
+
+    Brief 98-A P0. n50 = q50·A_env/V ; operational ACH = n50 / 20 (ATTMA TSL1
+    divide-by-20 rule, cited at instantCalc.js:376-377 — divisor NOT reinvented).
+    A_env = Σ facade + roof + ground = 2·fh·nf·(L+W) + 2·L·W  (the wwr split cancels:
+    glazing + opaque = facade area, per computeGeometry:354-369). EnergyPlus's
+    `AirChanges/Hour` method already expresses infiltration as air changes of the zone
+    volume per hour — the SAME basis as n_op — so the two engines model identical
+    leakage; no basis conversion is needed.
+
+    Precedence mirrors the JS: (1) fabric.air_permeability_q50 → envelope-derived,
+    (2) legacy building.infiltration_ach → direct, (3) DEFAULT_INFILTRATION_ACH.
+
+    Returns (ach: float, meta: dict) — meta carries q50/A_env/V/n50 for the audit.
+    """
+    L = float(building_params.get("length", 60.0) or 60.0)
+    W = float(building_params.get("width", 15.0) or 15.0)
+    nf = float(building_params.get("num_floors", 4.0) or 4.0)
+    fh = float(building_params.get("floor_height", 3.2) or 3.2)
+    V = L * W * nf * fh
+    q50_raw = (building_params.get("fabric") or {}).get("air_permeability_q50")
+    try:
+        q50 = float(q50_raw)
+    except (TypeError, ValueError):
+        q50 = None
+    if q50 and q50 > 0 and V > 0:
+        A_env = 2.0 * fh * nf * (L + W) + 2.0 * (L * W)      # facade + roof + ground
+        n50 = q50 * A_env / V
+        return n50 / 20.0, {"source": "q50", "q50": q50, "A_env": round(A_env, 1),
+                            "volume": round(V, 1), "n50": round(n50, 4)}
+    legacy = building_params.get("infiltration_ach")
+    if legacy is not None:
+        try:
+            lv = float(legacy)
+            if lv >= 0:
+                return lv, {"source": "legacy_ach", "ach": lv}
+        except (TypeError, ValueError):
+            pass
+    return DEFAULT_INFILTRATION_ACH, {"source": "default", "ach": DEFAULT_INFILTRATION_ACH}
+
 # Ventilation (fresh air) design flow per person — m³/s
 # Bedrooms: 8 l/s/person = 0.008 m³/s/person
 _VENT_M3_PER_S_PER_PERSON = 0.008
@@ -1342,12 +1387,15 @@ def assemble_epjson(
             building_params, zones, all_schedules, _gia,
         )
         equip_objects.update(equipment_profile_objects)
+    # Brief 98-A P0: feed the envelope-derived operational ACH (q50 → n50/20) so EP
+    # reads the SAME airtightness basis as NZA-Sim, not the flat 0.5 default.
+    _op_ach, _op_ach_meta = derive_operational_ach(building_params)
     infil_objects   = _build_infiltration_objects(
         zones,
         building_params["length"],
         building_params["width"],
         building_params["floor_height"],
-        ach=building_params.get("infiltration_ach", DEFAULT_INFILTRATION_ACH),
+        ach=_op_ach,
     )
 
     # ── 6b. Openings — wind-driven natural ventilation ────────────────────────

@@ -1,0 +1,77 @@
+{
+  "eui_kwh_per_m2": 126,
+  "electricity_mwh": 373.845,
+  "gas_mwh": 157.428,
+  "space_heating": {
+    "demand_mwh": 87.7,
+    "delivered_mwh": 87.7,
+    "electricity_mwh": 32.157,
+    "gas_mwh": 0
+  },
+  "space_cooling": {
+    "demand_mwh": 101.1,
+    "delivered_mwh": 101.1,
+    "electricity_mwh": 33.7,
+    "gas_mwh": null
+  },
+  "dhw": {
+    "demand_mwh": 257.335,
+    "delivered_mwh": 257.335,
+    "electricity_mwh": 42.225,
+    "gas_mwh": 157.428
+  },
+  "ventilation": {
+    "demand_mwh": null,
+    "delivered_mwh": null,
+    "electricity_mwh": null,
+    "gas_mwh": null
+  },
+  "lighting": {
+    "demand_mwh": null,
+    "delivered_mwh": null,
+    "electricity_mwh": 39.014,
+    "gas_mwh": null
+  },
+  "small_power": {
+    "demand_mwh": null,
+    "delivered_mwh": null,
+    "electricity_mwh": 186.136,
+    "gas_mwh": null
+  },
+  "gross_losses_mwh": {
+    "external_wall": 23.6538,
+    "roof": 12.563,
+    "ground_floor": 10.850299999999999,
+    "glazing": 88.9314,
+    "thermal_bridging": 24.0062,
+    "fabric_leakage": 30.6229,
+    "permanent_vents": 18.912200000000002,
+    "mech_ventilation": 277.2143
+  },
+  "monthly_heating_loss_kwh": [
+    24307.2,
+    20130.699999999997,
+    21130.100000000002,
+    16992.7,
+    12861.6,
+    8738.9,
+    5932.2,
+    7274.3,
+    9588.9,
+    12786.8,
+    18695.1,
+    21878.9
+  ],
+  "consumption_keys": [
+    "space_heating",
+    "space_cooling",
+    "dhw",
+    "ventilation",
+    "lighting",
+    "small_power",
+    "total",
+    "daily_profiles",
+    "brief40",
+    "source_path"
+  ]
+}
