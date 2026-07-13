@@ -1,5 +1,19 @@
 # Current brief
 
+**Brief 98-R — The Reconciliation Table — CLOSED 2026-07-13.**
+On branch `chris/reconciliation-table` (off `chris/ep-inherit-nza-inputs`). The systematic gap-detector:
+every energy channel + every config field, NZA | EP, side by side, automatic flags. **DETECTS, does not
+fix.** No physics change either engine — EP assembler change limited to OUTPUT:VARIABLE requests (P1,
+demand byte-identical 95.6/10.3/163.8). instantCalc read-only; anchors 132.6/126.0 byte-identical.
+Deliverable [`../audit/98R_reconciliation.md`](../audit/98R_reconciliation.md) is fully script-generated
+(`scripts/report/reconcile.py`): **Table A** (25 channels, 14 🔴 / 2 🟠, zero unexplained — every flag
+named), **Table B** (input parity, INHERITED/NOT/STRUCTURAL with assembler file:line), **gap register**
+(11 root gaps, each with fix class + suggested brief). Headline gaps: ventilation topology (~248 MWh, EP
+models 1 of 3 systems), people activity-schedule bug (1.2 vs 120.4 MWh), thermostat regime (EP setback vs
+NZA band), thermal bridging (0 vs 24), DHW fuel split. **The register is the finish-the-model backlog** —
+vent + people are the dominant EP-side anchor-safe fixes. Brief:
+[`archive/98R_reconciliation_COMPLETED.md`](archive/98R_reconciliation_COMPLETED.md). **PR open, NOT merged.**
+
 **Brief 98-A2 — EnergyPlus inherits NZA-Sim's inputs (small power, lighting, DHW) — CLOSED 2026-07-13.**
 On branch `chris/ep-inherit-nza-inputs` (off `chris/engine-comparison-p0`, PR #13). Same building = same
 inputs — EP now inherits NZA's small-power + lighting schedules (via the per-profile machinery state2

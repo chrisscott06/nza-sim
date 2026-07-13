@@ -1,0 +1,52 @@
+{
+ "baseline": {
+  "eui": 126,
+  "elec_mwh": 373.845,
+  "gas_mwh": 157.428,
+  "heating_mwh": 87.7,
+  "cooling_mwh": 101.1,
+  "dhw_mwh": 257.3
+ },
+ "rows": {
+  "air_perm_1.9": {
+   "eui": 125.7,
+   "elec_mwh": 372.425,
+   "gas_mwh": 157.428,
+   "heating_mwh": 78.1,
+   "cooling_mwh": 107.4,
+   "dhw_mwh": 257.3
+  },
+  "3.5_brise_soleil": {
+   "eui": 125.9,
+   "elec_mwh": 373.315,
+   "gas_mwh": 157.428,
+   "heating_mwh": 89.8,
+   "cooling_mwh": 97.2,
+   "dhw_mwh": 257.3
+  },
+  "vent_to_mvhr": {
+   "eui": 130.7,
+   "elec_mwh": 393.743,
+   "gas_mwh": 157.428,
+   "heating_mwh": 3.4,
+   "cooling_mwh": 201.3,
+   "dhw_mwh": 257.3
+  },
+  "2.1_mvhr_conversion": {
+   "eui": 130.7,
+   "elec_mwh": 393.629,
+   "gas_mwh": 157.428,
+   "heating_mwh": 3.4,
+   "cooling_mwh": 201.3,
+   "dhw_mwh": 257.3
+  },
+  "3.3_setpoint_widen": {
+   "eui": 122.9,
+   "elec_mwh": 360.761,
+   "gas_mwh": 157.428,
+   "heating_mwh": 69.1,
+   "cooling_mwh": 82.2,
+   "dhw_mwh": 257.3
+  }
+ }
+}
