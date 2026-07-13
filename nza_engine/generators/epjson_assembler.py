@@ -1817,6 +1817,31 @@ def assemble_epjson(
             # both engines run the same hot-water demand (delivered split then falls out
             # of EP's own gas/ASHP efficiencies — an expected, named residual).
             _nza_dhw_litres = _nza_dhw_boiler_litres_per_day(building_params)
+            # Brief 98-C P4: parallel gas/ASHP DHW split from v40 shares (mirror NZA's
+            # systemsEngine proportional split), replacing the series-preheat topology.
+            # Read the enabled v40 DHW systems; normalise shares; use their own effs.
+            _v40_dhw = [s for s in ((building_params.get("systems_config_v40") or {}).get("dhw") or [])
+                        if s.get("enabled", True) is not False]
+            _gas_sys = next((s for s in _v40_dhw if s.get("source") == "gas"), None)
+            _ashp_sys = next((s for s in _v40_dhw if s.get("source") in ("ambient_air", "electricity")), None)
+            _dhw_split_mode = "series"
+            _gas_share = 1.0
+            _ashp_share = 0.0
+            if _gas_sys is not None and _ashp_sys is not None:
+                _gs = float(_gas_sys.get("share_pct", 0) or 0)
+                _as = float(_ashp_sys.get("share_pct", 0) or 0)
+                _tot = _gs + _as
+                if _tot > 0:
+                    _dhw_split_mode = "parallel_share"
+                    _gas_share = _gs / _tot
+                    _ashp_share = _as / _tot
+                    # use each v40 system's own efficiency (gas η, ASHP COP)
+                    _gm = _gas_sys.get("efficiency_metric")
+                    if isinstance(_gm, (int, float)):
+                        dhw_efficiency = float(_gm)
+                    _am = _ashp_sys.get("efficiency_metric")
+                    if isinstance(_am, (int, float)):
+                        ashp_cop = float(_am)
             dhw_objects = generate_dhw_system(
                 zone_floor_area_m2=zone_floor_area,
                 num_zones=len(zones),
@@ -1829,6 +1854,9 @@ def assemble_epjson(
                 dhw_preheat_setpoint=float(sc.get("dhw_preheat_setpoint", 45.0)),
                 ashp_cop=ashp_cop,
                 daily_hot_litres_override=_nza_dhw_litres,
+                dhw_split_mode=_dhw_split_mode,
+                gas_share=_gas_share,
+                ashp_share=_ashp_share,
             )
             for obj_type, items in dhw_objects.items():
                 hvac_objects.setdefault(obj_type, {}).update(items)

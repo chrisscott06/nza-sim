@@ -116,9 +116,9 @@ rows = [
     ("", "Cooling — electricity", De["cooling_electricity"], meter("Cooling:Electricity"), "clean",
      "downstream of cooling demand — inflated mid-convergence (people gain added, ventilation heat-sink not yet inherited); expected to fall when P2 lands the extract loss"),
     ("", "DHW — electricity", De["dhw_electricity"], meter("WaterSystems:Electricity"), "clean",
-     "DHW demand matched; delivered split differs — EP series-preheat ASHP vs NZA parallel 52/48 gas/ASHP"),
+     "98-C P4: ASHP share 48% at COP 3.0; 28.0→34.6 vs NZA 42.2 (−18%) — ASHP tank delivers ~84% of its thermal share (COP-as-thermal-efficiency + tank standby); gas side matches within 2%"),
     ("", "DHW — gas", De["dhw_gas"], meter("WaterSystems:NaturalGas"), "clean",
-     "same ASHP-topology split (EP puts more of DHW on electric preheat → less gas)"),
+     "✅ 98-C P4: parallel 52/48 gas/ASHP split (v40 shares) replacing the series preheat + corrected peak-flow sizing (0.65→0.35 schedule avg); gas 45.4→154.6 = NZA 157.4"),
     ("", "Ventilation fans — electricity", De["vent_fans_electricity"], meter("Fans:Electricity"), "clean",
      "NZA does not book fan electricity as a separate delivered channel (folded / null); EP books the MVHR+VRF fans explicitly"),
     ("", "Lighting — electricity", De["lighting_electricity"], meter("InteriorLights:Electricity"), "clean", None),
@@ -126,7 +126,7 @@ rows = [
     ("FUEL (MWh/yr)", "Total electricity", De["total_electricity"], meter("Electricity:Facility"), "clean",
      "downstream of heating-electricity (rose when P3 removed the compensating setback); settles as the ventilation residual closes at P6"),
     ("", "Total gas", De["total_gas"], meter("NaturalGas:Facility"), "clean",
-     "NZA gas = DHW gas share (157.4); EP gas = DHW preheat remainder (45.4) — the ASHP-topology split"),
+     "✅ 98-C P4: all gas is DHW; parallel 52/48 split → 154.6 = NZA 157.4 (was 45.4 series-preheat)"),
 ]
 
 
@@ -225,7 +225,7 @@ Assembler = `nza_engine/generators/epjson_assembler.py`.
 | `occupancy.sensible_w_per_person` (75 W) | 75 W/person | 🔴 NOT INHERITED (BUG) | EP `activity_level_schedule_name="hotel_bedroom_occupancy"` (the 0-1 FRACTION, assembler L330) → ~1 W/person → people gain 1.2 vs 120.4 MWh |
 | `systems_config_v40.heating` (VRF+panel, shares, SCOP) | 2 systems | 🟠 primary-only | `_primary` keeps highest-share; proportional split is NZA-only; SCOP of primary inherited |
 | `systems_config_v40.cooling` | 2 systems | 🟠 primary-only | same single-primary simplification |
-| `systems_config_v40.dhw` (2 systems, shares) | gas 52 / ASHP 48 | 🟠 demand yes / split no | DHW *demand* inherited (98-A2 P2); *delivered* split diverges (EP series-preheat vs NZA parallel) |
+| `systems_config_v40.dhw` (2 systems, shares) | gas 52 / ASHP 48 | ✅ INHERITED (98-C P4) | parallel share split (two WaterHeater:Mixed, flow split by v40 share, own effs) + corrected peak-flow sizing (0.35 schedule avg) → gas 154.6 = NZA 157.4 |
 | DHW setpoints (storage 60 / tap 42 / cold 10) | — | ✅ INHERITED | `_nza_dhw_boiler_litres_per_day` tap-mix (98-A2 P2) → demand 257.3=257.3 |
 | `dhw_demand_basis` / litres_per_person (55) | per_person | ✅ INHERITED | 98-A2 P2 → 12,144 L/day |
 | `ventilation[*].flow_rate` (1425/2208/210 L/s) | 3843 L/s total | 🔴 NOT INHERITED | EP OA = per-person constant `_VENT_M3_PER_S_PER_PERSON` (assembler L688), NOT v40 flows |
