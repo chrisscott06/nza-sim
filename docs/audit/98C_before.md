@@ -20,30 +20,30 @@ Both engines, `report_baseline_v1`, annual MWh. NZA = `calculateInstant` v2.5 (a
 
 | Group | Channel | NZA | EP | Δ% | Flag | Named cause |
 |---|---|--:|--:|--:|:--:|---|
-| LOSSES (gross, MWh/yr) | Wall conduction | 17.9 | 26.9 | +50% | 🟠 | NZA = setpoint-gated heating loss; EP = raw gross envelope loss (all hours) → EP structurally larger, not a gap |
-|  | Roof conduction | 8.9 | 15.4 | +73% | 🟠 | same definitional basis difference (gated vs gross) |
-|  | Floor/ground conduction | 9.4 | 9.1 | -3% | ✅ | same; EP ground uses its own ground-temp object vs NZA annual-mean ground temp |
-|  | Glazing conduction | 77.3 | 66.0 | -15% | ✅ | EP 'Windows Total Heat Loss' bundles glazing conduction; not cleanly separable (SimpleGlazing transmitted-solar var reads 0 in EP 25.2) |
-|  | Infiltration | 26.6 | 36.5 | +37% | 🔴 | airtightness ACH matched (0.0692) — residual is basis: EP uses zone-volume ACH per zone; NZA whole-building V. Small. |
-|  | Permanent vents | 16.2 | 59.4 | +267% | 🔴 | passive-opening flow models differ: EP ZoneVentilation:WindandStack Autocalculate effectiveness vs NZA cd/Cw model |
+| LOSSES (gross, MWh/yr) | Wall conduction | 17.9 | 24.8 | +38% | 🟠 | NZA = setpoint-gated heating loss; EP = raw gross envelope loss (all hours) → EP structurally larger, not a gap |
+|  | Roof conduction | 8.9 | 14.7 | +65% | 🟠 | same definitional basis difference (gated vs gross) |
+|  | Floor/ground conduction | 9.4 | 8.6 | -8% | ✅ | same; EP ground uses its own ground-temp object vs NZA annual-mean ground temp |
+|  | Glazing conduction | 77.3 | 61.8 | -20% | ✅ | EP 'Windows Total Heat Loss' bundles glazing conduction; not cleanly separable (SimpleGlazing transmitted-solar var reads 0 in EP 25.2) |
+|  | Infiltration | 26.6 | 34.0 | +28% | 🔴 | airtightness ACH matched (0.0692) — residual is basis: EP uses zone-volume ACH per zone; NZA whole-building V. Small. |
+|  | Permanent vents | 16.2 | 55.7 | +244% | 🔴 | passive-opening flow models differ: EP ZoneVentilation:WindandStack Autocalculate effectiveness vs NZA cd/Cw model |
 |  | Thermal bridging | 24.0 | 0.0 | -100% | 🔴 | STRUCTURAL: EP model has no thermal-bridging object — NZA books ISO 14683 linear ψ; EP books nothing |
 |  | Mech vent — public MVHR | 29.2 | 0.0 | -100% | 🔴 | EP folds MVHR outdoor-air load into the VRF via DesignSpecification:OutdoorAir; no separate vent-loss channel, and HX recovery reports 0.0 MWh |
 |  | Mech vent — bedroom extract | 226.4 | 0.0 | -100% | 🔴 | STRUCTURAL: derive_systems_for_sim._primary keeps only the highest-share vent system; bedroom extract (2208 L/s) absent from EP |
 |  | Mech vent — toilet extract | 21.5 | 0.0 | -100% | 🔴 | STRUCTURAL: same single-primary simplification — toilet extract (210 L/s) absent from EP |
-| GAINS (MWh/yr) | Solar through glazing | 147.8 | 120.5 | -19% | ✅ | EP 'Windows Total Heat Gain' bundles solar + conduction gain (transmitted-solar var = 0 under SimpleGlazing); NZA = transmitted solar only |
-|  | People | 120.4 | 120.4 | +0% | ✅ | ✅ 98-C P1: EP inherits NZA sensible 75 W/person (instantCalc.js:2254) + headcount 345 (density.value 2.5, per_room) + config occupancy schedule — was the activity-schedule-fraction bug (1.2 MWh) |
+| GAINS (MWh/yr) | Solar through glazing | 147.8 | 122.2 | -17% | ✅ | EP 'Windows Total Heat Gain' bundles solar + conduction gain (transmitted-solar var = 0 under SimpleGlazing); NZA = transmitted solar only |
+|  | People | 120.4 | 1.2 | -99% | 🔴 | BUG: EP People.activity_level_schedule_name points at the occupancy FRACTION schedule (0-1 W/person) instead of a ~100 W/person activity level → EP books ~1% of NZA's people gain |
 |  | Lighting | 39.0 | 39.0 | +0% | ✅ | match |
 |  | Equipment / small power | 186.1 | 186.1 | +0% | ✅ | match |
-| DEMAND (MWh/yr) | Heating demand | 87.7 | 2.4 | -97% | 🔴 | downstream of the loss/gain gaps above (missing mech-vent loss lowers EP heating; missing people gain raises it — net EP far lower) |
-|  | Cooling demand | 101.1 | 256.6 | +154% | 🔴 | downstream: EP setback + missing vent loss + lumped-mass differences push cooling higher |
-| DELIVERED (MWh/yr) | Heating — electricity | 32.2 | 3.2 | -90% | 🔴 | tracks the heating-demand gap (÷ VRF SCOP) |
-|  | Cooling — electricity | 33.7 | 59.0 | +75% | 🔴 | downstream of cooling demand — inflated mid-convergence (people gain added, ventilation heat-sink not yet inherited); expected to fall when P2 lands the extract loss |
+| DEMAND (MWh/yr) | Heating demand | 87.7 | 10.3 | -88% | 🔴 | downstream of the loss/gain gaps above (missing mech-vent loss lowers EP heating; missing people gain raises it — net EP far lower) |
+|  | Cooling demand | 101.1 | 163.8 | +62% | 🔴 | downstream: EP setback + missing vent loss + lumped-mass differences push cooling higher |
+| DELIVERED (MWh/yr) | Heating — electricity | 32.2 | 12.1 | -62% | 🔴 | tracks the heating-demand gap (÷ VRF SCOP) |
+|  | Cooling — electricity | 33.7 | 36.7 | +9% | ✅ | match |
 |  | DHW — electricity | 42.2 | 28.0 | -34% | 🔴 | DHW demand matched; delivered split differs — EP series-preheat ASHP vs NZA parallel 52/48 gas/ASHP |
 |  | DHW — gas | 157.4 | 45.4 | -71% | 🔴 | same ASHP-topology split (EP puts more of DHW on electric preheat → less gas) |
-|  | Ventilation fans — electricity | — | 61.5 | — | 🔴 | NZA does not book fan electricity as a separate delivered channel (folded / null); EP books the MVHR+VRF fans explicitly |
+|  | Ventilation fans — electricity | — | 55.9 | — | 🔴 | NZA does not book fan electricity as a separate delivered channel (folded / null); EP books the MVHR+VRF fans explicitly |
 |  | Lighting — electricity | 39.0 | 39.0 | +0% | ✅ | match |
 |  | Small power — electricity | 186.1 | 186.1 | +0% | ✅ | match |
-| FUEL (MWh/yr) | Total electricity | 373.8 | 376.8 | +1% | ✅ | match |
+| FUEL (MWh/yr) | Total electricity | 373.8 | 357.8 | -4% | ✅ | match |
 |  | Total gas | 157.4 | 45.4 | -71% | 🔴 | NZA gas = DHW gas share (157.4); EP gas = DHW preheat remainder (45.4) — the ASHP-topology split |
 
 **Flag tally:** 🔴 14 · 🟠 2 · rows 25. Unexplained: none — every flag named.

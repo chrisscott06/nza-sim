@@ -291,6 +291,8 @@ def _build_people_objects(
     zones: dict,
     zone_type: str = "hotel_bedroom",
     density_override: float | None = None,
+    activity_schedule_name: str = "hotel_bedroom_occupancy",
+    sensible_fraction: float | None = None,
 ) -> dict:
     """
     Build EnergyPlus People objects for each zone.
@@ -326,8 +328,13 @@ def _build_people_objects(
             "number_of_people_calculation_method": "People/Area",
             "people_per_floor_area": round(density, 6),
             "fraction_radiant": 0.30,
-            "sensible_heat_fraction": 1.0 - loads["latent_fraction"],
-            "activity_level_schedule_name": "hotel_bedroom_occupancy",
+            "sensible_heat_fraction": (sensible_fraction if sensible_fraction is not None
+                                       else 1.0 - loads["latent_fraction"]),
+            # Brief 98-C P1: activity_level_schedule is the per-person heat (W). It
+            # previously pointed at "hotel_bedroom_occupancy" — a 0-1 FRACTION schedule
+            # — so each person emitted ~1 W. Caller now passes a proper W/person
+            # activity schedule (mirrored from NZA's occ.sensible_w_per_person).
+            "activity_level_schedule_name": activity_schedule_name,
         }
     return people
 
@@ -1422,20 +1429,43 @@ def assemble_epjson(
         lpd_override = 0.0
         epd_override = 0.0
     elif _num_bedrooms > 0 and _gia > 0:
-        _avg_occupants = _num_bedrooms * _occupancy_rate * _people_per_room
-        _density_override = _avg_occupants / _gia
+        # Brief 98-C P1: mirror NZA's computeTotalOccupants (occupancy.density.value,
+        # per_room basis; instantCalc.js:2118) via the SAME helper state2 uses — was
+        # the legacy people_per_room field (2 vs density.value 2.5 → 276 vs 345 ppl).
+        _density_override = _v23_compute_occupancy_density(building_params, _gia)
     else:
         _density_override = None  # use library default
 
     # ── State 2 schedule emission for occupancy ───────────────────────────
     # Occupancy stays single-object — splice the derived schedule into
     # all_schedules under the name the People objects already reference.
-    if state2:
+    # Brief 98-C P1: EP inherits NZA's occupancy schedule + per-person sensible W.
+    # NZA books people gain SENSIBLE-only at occ.sensible_w_per_person
+    # (instantCalc.js:2254-2255). Previously (a) full mode used the library
+    # hotel_bedroom_occupancy fixed schedule, not the config-derived one, and (b) the
+    # People activity level pointed at the 0-1 occupancy FRACTION → ~1 W/person. We now
+    # splice the config-derived occupancy schedule in full mode too (not just state2)
+    # and emit a constant activity schedule = NZA's sensible W with
+    # sensible_heat_fraction=1.0 so EP sensible people gain equals NZA's. No wattage
+    # invented — mirrored from config; latent is not booked (NZA books sensible only).
+    _use_nza_people = (not state1) and bool(building_params.get("occupancy"))
+    _people_activity_sched = "hotel_bedroom_occupancy"
+    _people_sensible_frac = None
+    if _use_nza_people:
         all_schedules["hotel_bedroom_occupancy"] = _v23_derived_occupancy_schedule(building_params)
-        # Legacy schedule names left untouched — per-profile schedules below
-        # have unique names so they coexist without clobbering.
+        _occ_sensible_w = float((building_params.get("occupancy") or {}).get("sensible_w_per_person", 75) or 75)
+        schedule_type_limits["nza_activity_level"] = {
+            "lower_limit_value": 0, "numeric_type": "Continuous", "unit_type": "ActivityLevel"}
+        all_schedules["nza_people_activity"] = {
+            "schedule_type_limits_name": "nza_activity_level",
+            "data": [{"field": "Through: 12/31"}, {"field": "For: AllDays"},
+                     {"field": "Until: 24:00"}, {"field": _occ_sensible_w}]}
+        _people_activity_sched = "nza_people_activity"
+        _people_sensible_frac = 1.0
 
-    people_objects  = _build_people_objects(zones, density_override=_density_override)
+    people_objects  = _build_people_objects(zones, density_override=_density_override,
+                                            activity_schedule_name=_people_activity_sched,
+                                            sensible_fraction=_people_sensible_frac)
     # In state2 the v2.3-shape Lights / ElectricEquipment objects emit at
     # ZERO density (the per-profile objects below carry the real loads).
     # In state1 both are zero. In 'full' / other modes they use library
