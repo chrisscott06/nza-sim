@@ -33,14 +33,14 @@ def cost_basis(iv):
     parts = []
     # tier → rate basis
     if onp >= 40:
-        parts.append("NRM build-up with ~40% on-costs (prelims + OH&P + design + contingency)")
+        parts.append("NRM build-up with ~40% on-costs (prelims + OH&P + design + contingency).")
     elif iv["cls"] == "D" or c["central"] == 0 or c.get("within"):
         if c.get("within"):
-            parts.append(f"cost carried within the {c['within']} controls visit (this measure reads £0 capex to avoid double-count)")
+            parts.append(f"Cost carried within the {c['within']} controls visit (this measure reads £0 capex to avoid double-count).")
         else:
-            parts.append("enabling/metering measure — all-in benchmark rate, no separate on-costs")
+            parts.append("Enabling/metering measure — all-in benchmark rate, no separate on-costs.")
     else:
-        parts.append("all-in benchmark rate (HIEX cost doc), no separate on-costs")
+        parts.append("All-in benchmark rate (HIEX cost doc), no separate on-costs.")
     # allowance flag (L)
     if ref in L_FLAG_TEXT:
         parts.append("assumption: " + L_FLAG_TEXT[ref])
@@ -49,10 +49,11 @@ def cost_basis(iv):
     if life:
         reps = 25 // life
         if reps > 0:
-            parts.append(f"measure life {LIFE_CAT.get(life, str(life)+'y')}; £/tonne charges {reps} replacement(s) to 2050 at 70% of initial capex (excludes one-off strip-outs/supply/builder's-work/design ≈30%)")
+            plural = "replacement" if reps == 1 else "replacements"
+            parts.append(f"Measure life {LIFE_CAT.get(life, str(life)+'y')}; £/tonne charges {reps} {plural} to 2050 at 70% of initial capex (excludes one-off strip-outs / supply / builder's-work / design ≈30%).")
         else:
-            parts.append(f"measure life {LIFE_CAT.get(life, str(life)+'y')} — spans to 2050, no replacement in £/tonne")
-    parts.append(f"cost confidence {conf}; central £{c['central']:,} (range £{c['low']:,}–£{c['high']:,}).")
+            parts.append(f"Measure life {LIFE_CAT.get(life, str(life)+'y')} — spans to 2050, no replacement in £/tonne.")
+    parts.append(f"Cost confidence {conf}; central £{c['central']:,} (range £{c['low']:,}–£{c['high']:,}).")
     return "COST BASIS: " + " ".join(parts)
 
 

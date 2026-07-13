@@ -96,6 +96,26 @@ export function buildInterventionsWorkbook({ interventions = [], isolatedRows = 
     'Off-model basis': iv.off_model?.basis || '',
   }))
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(narr), 'Narratives')
+
+  // ── Sheet 5: Assumptions (ENERGY / COST basis — the audit trail) ───────────
+  // Brief 101 P2: split the assumption_notes string on its two labelled sections.
+  const splitNotes = (s) => {
+    const t = String(s || '')
+    const i = t.indexOf('COST BASIS:')
+    const energy = (i >= 0 ? t.slice(0, i) : t).replace(/^ENERGY BASIS:\s*/, '').trim()
+    const costs = (i >= 0 ? t.slice(i) : '').replace(/^COST BASIS:\s*/, '').trim()
+    return { energy, costs }
+  }
+  const assume = interventions.map((iv) => {
+    const { energy, costs } = splitNotes(iv.assumption_notes)
+    return {
+      'Label': iv.label,
+      'Measure life (yr)': iv.measure_life_years ?? '',
+      'ENERGY BASIS': energy,
+      'COST BASIS': costs,
+    }
+  })
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(assume), 'Assumptions')
   return wb
 }
 

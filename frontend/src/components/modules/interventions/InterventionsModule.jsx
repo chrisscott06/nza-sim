@@ -150,6 +150,11 @@ export default function InterventionsModule() {
     const next = (params?.interventions ?? []).map(iv => (iv.id === id ? { ...iv, cost } : iv))
     updateParam('interventions', next)
   }, [params?.interventions, updateParam])
+  // Brief 101 P2: per-intervention assumption_notes (ENERGY/COST audit trail), editable.
+  const updateInterventionAssumptionNotes = useCallback((id, assumption_notes) => {
+    const next = (params?.interventions ?? []).map(iv => (iv.id === id ? { ...iv, assumption_notes } : iv))
+    updateParam('interventions', next)
+  }, [params?.interventions, updateParam])
   // Brief 97 P3/P5 — the RICS cost editor is a pop-out; this holds the
   // intervention whose plan is being edited (null = closed).
   const [costEditorIv, setCostEditorIv] = useState(null)
@@ -628,6 +633,7 @@ export default function InterventionsModule() {
                   crremPick={crremPick}
                   projectCostDefaults={projectCostDefaults}
                   onEditCost={setCostEditorIv}
+                  onAssumptionNotesChange={updateInterventionAssumptionNotes}
                   epIso={selectedEpIso}
                   epBaseline={epResults.byDesc?.baseline ?? null}
                   epNzaOnly={selectedEpNzaOnly}
