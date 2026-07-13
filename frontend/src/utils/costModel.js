@@ -181,3 +181,29 @@ export function computePoundsPerTonne(totalCost, lifetimeTco2e) {
   if (!(totalCost > 0) || !(lifetimeTco2e > 0)) return null
   return totalCost / lifetimeTco2e
 }
+
+// ── Brief 101: lifecycle capex for the £/tonne metric ────────────────────────
+// The CO₂ saving is integrated over the whole CRREM window to 2050 (see
+// lifetimeCarbon.js), so a measure whose physical LIFE is shorter than that
+// window must be REPLACED to keep delivering — and £/tonne should carry that
+// replacement cost. Life bands (design note): controls/settings 10y · plant 15y
+// · PV 25y · fabric 30y.
+export const LIFECYCLE_HORIZON_YEARS = 2050 - 2025   // CRREM_ANALYSIS_END − START = 25
+// Replacement cost = 70% of initial capex: replacement excludes the one-off
+// elements (strip-outs, supply upgrades, builder's work, design) which the cost
+// plans show are ~30% of a typical build-up.
+export const REPLACEMENT_COST_FRACTION = 0.70
+
+/** Number of full replacements charged before 2050: one per expired life-cycle.
+ *  floor(25/life) → life 10→2, 15→1, 25→1, ≥26→0. 0 when life is unknown/≤0. */
+export function lifecycleReplacements(measureLifeYears) {
+  const life = Number(measureLifeYears)
+  if (!(life > 0)) return 0
+  return Math.floor(LIFECYCLE_HORIZON_YEARS / life)
+}
+
+/** Whole-of-life capex = initial + 70%·initial per expired life-cycle. */
+export function computeLifecycleCapex(initialCapex, measureLifeYears) {
+  if (!(initialCapex > 0)) return initialCapex
+  return initialCapex * (1 + REPLACEMENT_COST_FRACTION * lifecycleReplacements(measureLifeYears))
+}
