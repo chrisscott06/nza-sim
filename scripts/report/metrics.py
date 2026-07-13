@@ -19,6 +19,29 @@ import benchmarks as B  # noqa: E402
 from offmodel import refrigerant_3_2  # noqa: E402
 
 
+# Brief 101 follow-up: lifecycle capex for £/tCO₂e — mirror of frontend costModel.js.
+# £/tonne carries a 70%-of-initial replacement each time the measure life expires before
+# 2050 (floor(25/life): controls 10→2, plant 15→1, PV 25→1, fabric ≥26→0). Replacement is
+# 70% because it excludes one-off strip-outs/supply/builder's-work/design (~30% of a build-up).
+LIFECYCLE_HORIZON_YEARS = 2050 - 2025   # 25
+REPLACEMENT_COST_FRACTION = 0.70
+# Brief 101: the CO₂ SAVING is integrated over the whole CRREM window TO 2050 (not
+# life-capped) — the measure is replaced when it wears out (the £/tonne repex above), so it
+# keeps saving to 2050. This mirrors the frontend (lifetimeCarbon.js integrates to 2050) and
+# lets the two engines' £/tonne agree. `measure life` still drives the repex, not the horizon.
+CARBON_HORIZON_YEARS = B.CAP_YEAR - B.REPORT_START_YEAR + 1   # 2026..2050 → 25
+
+
+def lifecycle_replacements(life_years):
+    if not life_years or life_years <= 0:
+        return 0
+    return LIFECYCLE_HORIZON_YEARS // int(life_years)
+
+
+def lifecycle_capex(initial_capex, life_years):
+    return initial_capex * (1 + REPLACEMENT_COST_FRACTION * lifecycle_replacements(life_years))
+
+
 def _flags(iv):
     f = []
     if iv.get("cost", {}).get("confidence") == "L":
@@ -58,7 +81,7 @@ def compute_row(iv, baseline=None, modelled=None, off=None, ep_validated=False):
         gas_saved = round((baseline["gas_mwh"] - modelled["gas_mwh"]) * 1000)
         eui_delta = round(modelled["eui"] - baseline["eui"], 1)     # negative = reduction
         gbp_saved = round(elec_saved * B.ELEC_TARIFF_GBP_PER_KWH + gas_saved * B.GAS_TARIFF_GBP_PER_KWH)
-        lifetime = B.lifetime_carbon_tco2e(elec_saved, gas_saved, iv["life"])
+        lifetime = B.lifetime_carbon_tco2e(elec_saved, gas_saved, CARBON_HORIZON_YEARS)
         if iv["ref"] == "3.2":       # add the Class C refrigerant carbon to the 3.2 row
             lifetime = round(lifetime + refrigerant_3_2(life_years=iv["life"])["lifetime_tco2e"], 1)
         else:
@@ -69,8 +92,11 @@ def compute_row(iv, baseline=None, modelled=None, off=None, ep_validated=False):
     row["annual_gbp"] = gbp_saved
     row["eui_delta"] = eui_delta
     row["lifetime_tco2e"] = lifetime
-    # £/tCO₂e only meaningful when the measure actually saves carbon
-    row["gbp_per_tco2e"] = round(cost["central"] / lifetime) if (lifetime and lifetime > 0) else None
+    # £/tCO₂e only meaningful when the measure actually saves carbon. Brief 101 follow-up:
+    # numerator is LIFECYCLE capex (initial + 70% repex per measure-life expiry before 2050),
+    # matching the frontend export; capex_central column stays the initial capex.
+    row["lifecycle_capex"] = round(lifecycle_capex(cost["central"], iv["life"]))
+    row["gbp_per_tco2e"] = round(lifecycle_capex(cost["central"], iv["life"]) / lifetime) if (lifetime and lifetime > 0) else None
     # simple payback only when there's a positive £ saving
     row["payback_yrs"] = round(cost["central"] / gbp_saved, 1) if gbp_saved and gbp_saved > 0 else None
     return row
