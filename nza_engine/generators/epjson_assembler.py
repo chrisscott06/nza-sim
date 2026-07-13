@@ -783,6 +783,26 @@ def _output_variables() -> dict:
         "Baseboard Gas Energy",
         "Baseboard Total Heating Energy",
         "Baseboard Electricity Energy",
+        # Brief 98-R P1 — component-level reconciliation output requests
+        # (REPORTING ONLY, no physics change). Heat-recovery (ERV / HX) channel:
+        # NZA books mech-vent recovery per system; EP models it as the ZoneHVAC:
+        # EnergyRecoveryVentilator's HeatExchanger:AirToAir:SensibleAndLatent.
+        # Without these variables the recovery channel is invisible in the SQL.
+        "Heat Exchanger Sensible Heating Energy",
+        "Heat Exchanger Total Heating Energy",
+        "Heat Exchanger Sensible Cooling Energy",
+        "Heat Exchanger Total Cooling Energy",
+        "Heat Exchanger Electricity Energy",
+        # Total (sensible+latent) zone ventilation — the WindandStack permanent
+        # vents; pairs with the Sensible variants already requested so the
+        # latent split of the passive-opening channel is visible.
+        "Zone Ventilation Total Heat Loss Energy",
+        "Zone Ventilation Total Heat Gain Energy",
+        # Windows total heat gain/loss (transmitted solar + conduction through
+        # glazing, as EP books it on the window) — lets the window channel be
+        # reconciled against NZA's glazing-conduction + solar-through-glazing rows.
+        "Zone Windows Total Heat Gain Energy",
+        "Zone Windows Total Heat Loss Energy",
     ]
     result = {}
     for i, var in enumerate(vars_to_request, start=1):
