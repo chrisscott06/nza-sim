@@ -306,27 +306,6 @@ def _build_lights_objects(
     return lights
 
 
-def _nza_gain_flat_wpm2(building_params: dict, service: str) -> float | None:
-    """NZA-Sim's flat (uniform-8760) internal-gain density (W/m²) for `service`
-    ('equipment' or 'lighting'), read from the building's internal-gains model so
-    EnergyPlus can inherit the SAME load NZA-Sim runs (Brief 98-A2). NZA runs the
-    profile BASELOAD uniformly across 8760 h (`gains.<service>.profiles[].baseload`);
-    the profile schedule modulates only the 'active' component (0 on report_baseline).
-    Σ over profiles of baseload × area_share × gain_fraction. Mirrors instantCalc.js
-    computeHourlyGains. Returns None when no gains profile is present (caller keeps its
-    library default)."""
-    profs = ((building_params.get("gains") or {}).get(service) or {}).get("profiles")
-    if not profs:
-        return None
-    total = 0.0
-    for p in profs:
-        base = float(((p.get("baseload") or {}).get("value")) or 0.0)
-        share = float(p.get("area_share", 1.0) or 1.0)
-        gf = float(p.get("gain_fraction", 1.0) or 1.0)
-        total += base * share * gf
-    return total
-
-
 def _build_equipment_objects(
     zones: dict,
     zone_type: str = "hotel_bedroom",
@@ -1394,29 +1373,25 @@ def assemble_epjson(
     # ZERO density (the per-profile objects below carry the real loads).
     # In state1 both are zero. In 'full' / other modes they use library
     # defaults.
-    lights_objects  = _build_lights_objects(zones, lpd_override=lpd_override)
-    # Brief 98-A2 P0: in full mode, EnergyPlus inherits NZA-Sim's flat small-power
-    # density (baseload, uniform 8760 h via `always_on`) so both engines run the same
-    # equipment load — instead of a library EPD × a ~24%-load hotel-equipment schedule.
-    _nza_equip_wpm2 = None if (state1 or state2) else _nza_gain_flat_wpm2(building_params, "equipment")
-    if _nza_equip_wpm2 is not None:
-        equip_objects = _build_equipment_objects(zones, epd_override=_nza_equip_wpm2, schedule_override="always_on")
-    else:
-        equip_objects = _build_equipment_objects(zones, epd_override=epd_override)
+    # Brief 98-A2 (P0 small power, P1 lighting): in FULL mode, EnergyPlus inherits
+    # NZA-Sim's lighting + small-power loads via the SAME per-profile emission state2
+    # uses (magnitude/baseload × NZA-mirrored schedules `_v24_lighting_profile_schedule`
+    # / equipment baseload-flat + active-scheduled), instead of a library LPD/EPD × a
+    # hotel schedule — so both engines run identical internal loads. The base
+    # Lights/ElectricEquipment objects then emit at ZERO density; the per-profile
+    # objects carry the real load (the pattern state2 already used).
+    _gains = building_params.get("gains") or {}
+    _use_nza_lighting  = (not (state1 or state2)) and bool((_gains.get("lighting") or {}).get("profiles"))
+    _use_nza_equipment = (not (state1 or state2)) and bool((_gains.get("equipment") or {}).get("profiles"))
 
-    # ── State 2 per-profile multi-profile emission (Brief 27 Revised Part 10) ──
-    if state2:
-        # Lighting: one Lights object per profile per zone.
-        lighting_profile_objects = _emit_state2_lighting_profiles(
-            building_params, zones, all_schedules, _gia,
-        )
-        lights_objects.update(lighting_profile_objects)
+    lights_objects  = _build_lights_objects(zones, lpd_override=(0.0 if _use_nza_lighting else lpd_override))
+    equip_objects   = _build_equipment_objects(zones, epd_override=(0.0 if _use_nza_equipment else epd_override))
 
-        # Equipment: baseload + active objects per profile per zone.
-        equipment_profile_objects = _emit_state2_equipment_profiles(
-            building_params, zones, all_schedules, _gia,
-        )
-        equip_objects.update(equipment_profile_objects)
+    # ── Per-profile multi-profile emission (state2 + Brief 98-A2 full-mode inherit) ──
+    if state2 or _use_nza_lighting:
+        lights_objects.update(_emit_state2_lighting_profiles(building_params, zones, all_schedules, _gia))
+    if state2 or _use_nza_equipment:
+        equip_objects.update(_emit_state2_equipment_profiles(building_params, zones, all_schedules, _gia))
     # Brief 98-A P0: feed the envelope-derived operational ACH (q50 → n50/20) so EP
     # reads the SAME airtightness basis as NZA-Sim, not the flat 0.5 default.
     _op_ach, _op_ach_meta = derive_operational_ach(building_params)
