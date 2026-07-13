@@ -87,16 +87,20 @@ rows = [
      "EP 'Windows Total Heat Loss' bundles glazing conduction; not cleanly separable (SimpleGlazing transmitted-solar var reads 0 in EP 25.2)"),
     ("", "Infiltration", L["infiltration"], var_sum("Zone Infiltration Sensible Heat Loss Energy"), "clean",
      "airtightness ACH matched (0.0692) — residual is basis: EP uses zone-volume ACH per zone; NZA whole-building V. Small."),
-    ("", "Permanent vents", L["permanent_vents"], var_sum("Zone Ventilation Sensible Heat Loss Energy"), "clean",
-     "passive-opening flow models differ: EP ZoneVentilation:WindandStack Autocalculate effectiveness vs NZA cd/Cw model"),
+    ("", "Permanent vents", L["permanent_vents"], None, "emitted",
+     "WindandStack louvre still present; EP now aggregates it with the mech systems in one per-zone ZoneVentilation variable → see the combined row. Basis alignment (Autocalculate vs cd/Cw) is P6"),
     ("", "Thermal bridging", L["thermal_bridging"], 0.0, "clean",
      "STRUCTURAL: EP model has no thermal-bridging object — NZA books ISO 14683 linear ψ; EP books nothing"),
-    ("", "Mech vent — public MVHR", L["mech_vent_public_mvhr"], 0.0, "clean",
-     "EP folds MVHR outdoor-air load into the VRF via DesignSpecification:OutdoorAir; no separate vent-loss channel, and HX recovery reports 0.0 MWh"),
-    ("", "Mech vent — bedroom extract", L["mech_vent_bedroom_extract"], 0.0, "clean",
-     "STRUCTURAL: derive_systems_for_sim._primary keeps only the highest-share vent system; bedroom extract (2208 L/s) absent from EP"),
-    ("", "Mech vent — toilet extract", L["mech_vent_toilet_extract"], 0.0, "clean",
-     "STRUCTURAL: same single-primary simplification — toilet extract (210 L/s) absent from EP"),
+    ("", "Mech vent — public MVHR", L["mech_vent_public_mvhr"], None, "emitted",
+     "✅ 98-C P2: emitted ZoneVentilation:DesignFlowRate at v40 flow×(1−HRE) = 1425×0.20 = 285 L/s; per-system output not separable (EP aggregates) — see combined row"),
+    ("", "Mech vent — bedroom extract", L["mech_vent_bedroom_extract"], None, "emitted",
+     "✅ 98-C P2: emitted at 2208×(1−0) = 2208 L/s (was absent — the ~226 MWh hole); EP aggregates output — see combined row"),
+    ("", "Mech vent — toilet extract", L["mech_vent_toilet_extract"], None, "emitted",
+     "✅ 98-C P2: emitted at 210×(1−0) = 210 L/s; EP aggregates output — see combined row"),
+    ("", "Ventilation TOTAL (mech+perm, EP ZoneVentilation)",
+     L["mech_vent_public_mvhr"] + L["mech_vent_bedroom_extract"] + L["mech_vent_toilet_extract"] + L["permanent_vents"],
+     var_sum("Zone Ventilation Sensible Heat Loss Energy"), "clean",
+     "98-C P2: all 3 mech systems now emitted at v40 flows; residual is permanent-vent basis (P6, EP WindandStack 55.7 vs NZA 16.2), EP ρCp 1206 vs NZA 1188 (1.5%), and thermostat ΔT (P3)"),
     ("GAINS (MWh/yr)", "Solar through glazing", G["solar_through_glazing"], var_sum("Zone Windows Total Heat Gain Energy"), "divergent",
      "EP 'Windows Total Heat Gain' bundles solar + conduction gain (transmitted-solar var = 0 under SimpleGlazing); NZA = transmitted solar only"),
     ("", "People", G["people"], var_sum("Zone People Total Heating Energy"), "clean",
@@ -104,9 +108,9 @@ rows = [
     ("", "Lighting", G["lighting"], var_sum("Zone Lights Total Heating Energy"), "clean", None),
     ("", "Equipment / small power", G["equipment"], var_sum("Zone Electric Equipment Total Heating Energy"), "clean", None),
     ("DEMAND (MWh/yr)", "Heating demand", Dm["heating"], meter("Heating:EnergyTransfer"), "clean",
-     "downstream of the loss/gain gaps above (missing mech-vent loss lowers EP heating; missing people gain raises it — net EP far lower)"),
+     "98-C P1+P2 converged 10.3→106.2 (NZA 87.7); residual +21% is EP's higher ventilation loss (permvent basis P6 + ρCp 1.5%) + thermostat regime not yet inherited (P3)"),
     ("", "Cooling demand", Dm["cooling"], meter("Cooling:EnergyTransfer"), "clean",
-     "downstream: EP setback + missing vent loss + lumped-mass differences push cooling higher"),
+     "98-C P1+P2 converged 163.8→82.9 (NZA 101.1); residual −18% downstream of the same ventilation + thermostat differences (P3/P6)"),
     ("DELIVERED (MWh/yr)", "Heating — electricity", De["heating_electricity"], meter("Heating:Electricity"), "clean",
      "tracks the heating-demand gap (÷ VRF SCOP)"),
     ("", "Cooling — electricity", De["cooling_electricity"], meter("Cooling:Electricity"), "clean",
@@ -126,8 +130,9 @@ rows = [
 
 
 def flag(nza, ep, comparability):
-    nza = nza if nza is not None else None
-    ep = ep if ep is not None else None
+    if comparability == "emitted":
+        # input inherited & emitted; per-system output not separable in EP (aggregated)
+        return "✅", False
     a = abs(nza) if isinstance(nza, (int, float)) else 0
     b = abs(ep) if isinstance(ep, (int, float)) else 0
     ZERO = 1.0  # MWh threshold for "zero"
@@ -176,13 +181,14 @@ for group, chan, nza, ep, comp, cause in rows:
     dpct = "—"
     if isinstance(nza, (int, float)) and isinstance(ep, (int, float)) and abs(nza) >= 1.0:
         dpct = f"{(ep - nza) / abs(nza) * 100:+.0f}%"
+    ep_cell = "emitted✎" if comp == "emitted" else fmt(ep)
     cell_cause = cause or ""
     if flagged and not cause:
         cell_cause = "**UNEXPLAINED — needs investigation**"
         unexplained.append(chan)
     if not flagged and fl == "✅":
         cell_cause = cell_cause or "match"
-    lines.append(f"| {group} | {chan} | {fmt(nza)} | {fmt(ep)} | {dpct} | {fl} | {cell_cause} |")
+    lines.append(f"| {group} | {chan} | {fmt(nza)} | {ep_cell} | {dpct} | {fl} | {cell_cause} |")
 lines.append("")
 lines.append(f"**Flag tally:** 🔴 {n_red} · 🟠 {n_amber} · rows {len(rows)}. "
              f"Unexplained: {', '.join(unexplained) if unexplained else 'none — every flag named'}.")

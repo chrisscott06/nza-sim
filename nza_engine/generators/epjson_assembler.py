@@ -746,6 +746,77 @@ def _build_sizing_objects(zones: dict) -> dict:
     }
 
 
+def _build_mech_ventilation_objects(building_params: dict, zones: dict, gia: float) -> dict:
+    """Brief 98-C P2: emit EACH v40 ventilation system as a ZoneVentilation:DesignFlowRate,
+    mirroring NZA's per-system heat-loss model exactly. NZA (instantCalc.js:2994-2997):
+
+        ventUA_i = AIR_HEAT_CAPACITY × (flow_l/s × 3.6) × (1 − HRE_i) × (hours/8760)  [W/K]
+
+    which is a Balanced ZoneVentilation whose effective volumetric flow = flow_m3s ×
+    (1 − HRE). Previously EP modelled ventilation via an inert ERV + a per-person SIZING
+    OA constant, so the ~277 MWh runtime extract loss (bedroom extract alone 226) was
+    absent from the balance. Flows / recovery / basis are read straight from v40 — nothing
+    invented. Fixed-constant caveat: EP applies its own air ρCp (~1206 J/m³K) vs NZA's
+    0.33 Wh/m³K (1188), a ~1.5% difference that is NOT an inherited input.
+
+    Flow basis mirrors instantCalc's projection: constant → L/s; per_m2 → ×GIA;
+    per_person → ×design occupants (computeTotalOccupants × occupancy_rate)."""
+    v40 = (building_params.get("systems_config_v40") or {}).get("ventilation") or []
+    occ = building_params.get("occupancy") or {}
+    dens = occ.get("density") or {"value": 1.5, "basis": "per_room"}
+    nrooms = int(building_params.get("num_bedrooms", 0) or 0)
+    rate = float(occ.get("occupancy_rate", 1) or 1)
+    basis_d = dens.get("basis", "per_room")
+    if basis_d == "per_m2":
+        design_occ = gia * float(dens.get("value", 0) or 0) * rate
+    elif basis_d == "total":
+        design_occ = float(dens.get("value", 0) or 0) * rate
+    else:
+        design_occ = nrooms * float(dens.get("value", 1.5) or 1.5) * rate
+
+    nz = max(1, len(zones))
+    objs: dict = {}
+    for sysv in v40:
+        if sysv.get("enabled", True) is False:
+            continue
+        fr = sysv.get("flow_rate")
+        if fr is None:
+            continue
+        basis = sysv.get("flow_rate_basis", "constant")
+        if basis == "per_m2":
+            flow_lps = float(fr) * gia
+        elif basis == "per_person":
+            flow_lps = float(fr) * design_occ
+        else:
+            flow_lps = float(fr)
+        em = sysv.get("efficiency_metric") or {}
+        hre = (float(em.get("recovery_sensible_pct", 0) or 0) / 100.0) if isinstance(em, dict) else 0.0
+        eff_m3s_total = (flow_lps / 1000.0) * (1.0 - hre)
+        if eff_m3s_total <= 0:
+            continue
+        per_zone = round(eff_m3s_total / nz, 6)
+        label = (sysv.get("label") or sysv.get("id") or "vent").replace(" ", "_")
+        for zn in zones:
+            objs[f"{zn}_mechvent_{label}"] = {
+                "zone_or_zonelist_or_space_or_spacelist_name": zn,
+                "schedule_name": "always_on",
+                "design_flow_rate_calculation_method": "Flow/Zone",
+                "design_flow_rate": per_zone,
+                "ventilation_type": "Balanced",     # symmetric air exchange, no fan heat
+                "fan_pressure_rise": 0.0,           # fan electricity is a parked (NZA-side) gap
+                "fan_total_efficiency": 1.0,
+                "constant_term_coefficient": 1.0,   # constant mechanical extract (not weather-modulated)
+                "temperature_term_coefficient": 0.0,
+                "velocity_term_coefficient": 0.0,
+                "velocity_squared_term_coefficient": 0.0,
+                "minimum_indoor_temperature": -100.0,
+                "maximum_indoor_temperature": 100.0,
+                "minimum_outdoor_temperature": -100.0,
+                "maximum_outdoor_temperature": 100.0,
+            }
+    return objs
+
+
 def _output_variables() -> dict:
     """
     Build Output:Variable request objects for key simulation outputs.
@@ -1526,6 +1597,13 @@ def assemble_epjson(
     operable_opening_objects = {} if (state1 or state2) else _build_operable_openings_objects(zones, building_params)
     natural_vent_objects = {**natural_vent_objects, **operable_opening_objects}
 
+    # Brief 98-C P2: mechanical ventilation as per-system ZoneVentilation:DesignFlowRate
+    # (full mode only — state1/state2 handle ventilation their own way). Emits ALL v40
+    # systems at their v40 flows, mirroring NZA's per-system extract-loss model. Was
+    # absent (inert ERV + per-person sizing OA) → EP missed ~277 MWh of runtime vent loss.
+    mech_vent_objects = (_build_mech_ventilation_objects(building_params, zones, _gia)
+                         if not (state1 or state2) else {})
+
     # Always-on schedule referenced by louvres + 'always' window mode.
     # Also referenced by the State 2 baseload-equipment object, so we emit
     # it whenever state2 is true even if there are no operable openings.
@@ -1870,6 +1948,10 @@ def assemble_epjson(
 
         **({"ZoneVentilation:WindandStackOpenArea": natural_vent_objects}
            if natural_vent_objects else {}),
+
+        # Brief 98-C P2: per-system mechanical ventilation (v40 flows × (1−HRE))
+        **({"ZoneVentilation:DesignFlowRate": mech_vent_objects}
+           if mech_vent_objects else {}),
 
         "Output:Variable": _output_variables(),
         "Output:Meter": _output_meters(),
