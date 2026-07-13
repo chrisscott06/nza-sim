@@ -1,0 +1,43 @@
+{
+ "_meta": {
+  "source": "NZA-Sim calculateInstant v2.5, report_baseline_v1",
+  "units": "MWh annual"
+ },
+ "losses": {
+  "wall_conduction": 17.9,
+  "roof_conduction": 8.9,
+  "floor_conduction": 9.4,
+  "glazing_conduction": 77.3,
+  "infiltration": 26.6,
+  "permanent_vents": 16.2,
+  "thermal_bridging": 24,
+  "mech_vent_public_mvhr": 29.2,
+  "mech_vent_bedroom_extract": 226.4,
+  "mech_vent_toilet_extract": 21.5,
+  "natural_ventilation": 0,
+  "total_gross_loss": 457.5
+ },
+ "gains": {
+  "solar_through_glazing": 147.8,
+  "people": 120.4,
+  "lighting": 39,
+  "equipment": 186.1,
+  "auxiliary": 0
+ },
+ "demand": {
+  "heating": 87.7,
+  "cooling": 101.1
+ },
+ "delivered": {
+  "heating_electricity": 32.157,
+  "heating_gas": 0,
+  "cooling_electricity": 33.7,
+  "dhw_electricity": 42.225,
+  "dhw_gas": 157.428,
+  "vent_fans_electricity": null,
+  "lighting_electricity": 39.014,
+  "small_power_electricity": 186.136,
+  "total_electricity": 373.845,
+  "total_gas": 157.428
+ }
+}
