@@ -29,6 +29,7 @@ Usage
 from __future__ import annotations
 
 import json
+import math
 import re
 from pathlib import Path
 from typing import Any
@@ -817,6 +818,94 @@ def _build_mech_ventilation_objects(building_params: dict, zones: dict, gia: flo
     return objs
 
 
+def _nza_thermal_bridging_H_TB(building_params: dict) -> float:
+    """Brief 98-C P5: server-side MIRROR of computeThermalBridges auto-mode
+    (frontend/src/utils/thermalBridges.js:63-129 + data/thermalBridgesLibrary.js ISO 14683
+    default ψ). H_TB = Σ (junction length × ψ × multiplier). Junction lengths from geometry;
+    ψ values and the multiplier are read from config — nothing invented. Returns W/K, or 0
+    when thermal_bridges is absent/legacy."""
+    tb = building_params.get("thermal_bridges") or {}
+    if tb.get("mode") not in ("iso14683_auto", None) or tb.get("mode") == "absent":
+        return 0.0
+    mult = float(tb.get("multiplier", 1) or 1)
+    L = float(building_params.get("length", 0) or 0)
+    W = float(building_params.get("width", 0) or 0)
+    NF = int(building_params.get("num_floors", 0) or 0)
+    FH = float(building_params.get("floor_height", 0) or 0)
+    perim = 2 * (L + W)
+    total_h = NF * FH
+    wwr = building_params.get("wwr") or {}
+    win_perim = 0.0
+    for face, wall_len in (("north", L), ("south", L), ("east", W), ("west", W)):
+        area = float(wwr.get(face, 0) or 0) * wall_len * total_h
+        if area > 0:
+            win_perim += 4.0 * math.sqrt(area)
+    # ISO14683_DEFAULT_PSI × auto junction lengths (thermalBridges.js:94-100, 58-63)
+    contributions = [
+        (perim, 0.08),                       # wall_to_roof
+        (perim * max(0, NF - 1), 0.08),      # wall_to_intermediate_floor
+        (perim, 0.16),                       # wall_to_ground_floor
+        (4 * total_h, 0.05),                 # external_corner
+        (win_perim, 0.05),                   # window_perimeter
+    ]  # door_perimeter = 0 (no operable doors in report_baseline)
+    return sum(length * psi * mult for length, psi in contributions)
+
+
+def _apply_thermal_bridging(construction_epjson: dict, building_params: dict) -> float:
+    """Brief 98-C P5: EP has no native linear-ψ object, so inherit NZA's ISO 14683 bridging
+    as psi-adjusted U-values (the standard SBEM/NCM mechanism): distribute ΔU = H_TB/A_opaque
+    uniformly across wall/roof/floor by DEGRADING each construction's NoMass insulation layer
+    resistance. Mass layers untouched (CTF dynamics preserved). Mutates construction_epjson
+    in place; returns the H_TB applied. Films per ISO 6946. NB: this folds bridging into the
+    opaque-conduction channels (EP has no separate bridging line) — noted in the table."""
+    H_TB = _nza_thermal_bridging_H_TB(building_params)
+    if H_TB <= 0:
+        return 0.0
+    L = float(building_params.get("length", 0) or 0)
+    W = float(building_params.get("width", 0) or 0)
+    NF = int(building_params.get("num_floors", 0) or 0)
+    FH = float(building_params.get("floor_height", 0) or 0)
+    wwr = building_params.get("wwr") or {}
+    a_glaz = sum(float(wwr.get(f, 0) or 0) * (L if f in ("north", "south") else W) * NF * FH
+                 for f in ("north", "south", "east", "west"))
+    a_wall = max(1.0, 2 * (L + W) * NF * FH - a_glaz)
+    a_roof = max(1.0, L * W)
+    a_floor = max(1.0, L * W)
+    a_opaque = a_wall + a_roof + a_floor
+    dU = H_TB / a_opaque
+    mats = construction_epjson.get("Material", {})
+    nomass = construction_epjson.get("Material:NoMass", {})
+    cons = construction_epjson.get("Construction", {})
+    # (construction name, inside film R_si, outside film R_se) — ISO 6946
+    targets = [("bridgwater_ext_wall", 0.13, 0.04),
+               ("bridgwater_roof", 0.10, 0.04),
+               ("bridgwater_ground_floor", 0.17, 0.04)]
+    for cname, r_si, r_se in targets:
+        c = cons.get(cname)
+        if not c:
+            continue
+        layers = [v for k, v in sorted(c.items()) if k == "outside_layer" or k.startswith("layer")]
+        whole_R = r_si + r_se
+        insul_name = None
+        for ln in layers:
+            if ln in nomass:
+                whole_R += float(nomass[ln].get("thermal_resistance", 0) or 0)
+                if insul_name is None:
+                    insul_name = ln   # first NoMass layer = insulation
+            elif ln in mats:
+                m = mats[ln]
+                cond = float(m.get("conductivity", 1) or 1)
+                whole_R += float(m.get("thickness", 0) or 0) / max(cond, 1e-6)
+        if insul_name is None or whole_R <= 0:
+            continue
+        U_old = 1.0 / whole_R
+        U_new = U_old + dU
+        dR = 1.0 / U_new - whole_R      # negative — remove resistance from the insulation
+        new_R = max(0.01, float(nomass[insul_name]["thermal_resistance"]) + dR)
+        nomass[insul_name]["thermal_resistance"] = round(new_R, 5)
+    return H_TB
+
+
 def _resolve_comfort_setpoints(building_params: dict) -> tuple[float, float]:
     """Brief 98-C P3: mirror NZA's setpoint resolution. NZA holds a flat comfort band
     continuously (active_setpoint); the band is comfort_band lower/upper, defaulting to
@@ -1441,6 +1530,13 @@ def assemble_epjson(
     } | {_INTERIOR_CONSTRUCTION}
     used_constructions.discard("")
     construction_epjson = _collect_construction_epjson(used_constructions)
+
+    # Brief 98-C P5: inherit NZA's ISO 14683 thermal bridging as psi-adjusted U-values
+    # (full mode only — state1/state2 model the envelope their own way). Degrades the
+    # opaque insulation resistances so ΔU = H_TB/A_opaque is added to wall/roof/floor.
+    _tb_H_TB_applied = 0.0
+    if mode not in ("envelope-only", "envelope-gains"):
+        _tb_H_TB_applied = _apply_thermal_bridging(construction_epjson, building_params)
 
     # ── 4. Site location from EPW ─────────────────────────────────────────────
     loc = _parse_epw_location(weather_file_path)

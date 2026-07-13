@@ -78,9 +78,9 @@ cond = conduction_by_class()
 L, G, De, Dm = NZA["losses"], NZA["gains"], NZA["delivered"], NZA["demand"]
 rows = [
     ("LOSSES (gross, MWh/yr)", "Wall conduction", L["wall_conduction"], cond["wall"], "divergent",
-     "NZA = setpoint-gated heating loss; EP = raw gross envelope loss (all hours) → EP structurally larger, not a gap"),
+     "NZA = setpoint-gated heating loss; EP = raw gross envelope loss (all hours) AND now carries the P5 thermal-bridging ΔU (NZA books bridging separately) → EP structurally larger, not a gap"),
     ("", "Roof conduction", L["roof_conduction"], cond["roof"], "divergent",
-     "same definitional basis difference (gated vs gross)"),
+     "same basis difference (gated vs gross) + P5 bridging ΔU folded in"),
     ("", "Floor/ground conduction", L["floor_conduction"], cond["floor"], "divergent",
      "same; EP ground uses its own ground-temp object vs NZA annual-mean ground temp"),
     ("", "Glazing conduction", L["glazing_conduction"], var_sum("Zone Windows Total Heat Loss Energy"), "divergent",
@@ -89,8 +89,8 @@ rows = [
      "airtightness ACH matched (0.0692) — residual is basis: EP uses zone-volume ACH per zone; NZA whole-building V. Small."),
     ("", "Permanent vents", L["permanent_vents"], None, "emitted",
      "WindandStack louvre still present; EP now aggregates it with the mech systems in one per-zone ZoneVentilation variable → see the combined row. Basis alignment (Autocalculate vs cd/Cw) is P6"),
-    ("", "Thermal bridging", L["thermal_bridging"], 0.0, "clean",
-     "STRUCTURAL: EP model has no thermal-bridging object — NZA books ISO 14683 linear ψ; EP books nothing"),
+    ("", "Thermal bridging", L["thermal_bridging"], None, "emitted",
+     "✅ 98-C P5: inherited as psi-adjusted U — H_TB 278 W/K (ISO 14683 mirror) degrades the wall/roof/floor insulation R by ΔU=H_TB/A_opaque. EP has no separate ψ object so it folds into the conduction rows above (which rose accordingly)"),
     ("", "Mech vent — public MVHR", L["mech_vent_public_mvhr"], None, "emitted",
      "✅ 98-C P2: emitted ZoneVentilation:DesignFlowRate at v40 flow×(1−HRE) = 1425×0.20 = 285 L/s; per-system output not separable (EP aggregates) — see combined row"),
     ("", "Mech vent — bedroom extract", L["mech_vent_bedroom_extract"], None, "emitted",
@@ -216,7 +216,7 @@ Assembler = `nza_engine/generators/epjson_assembler.py`.
 | `shading_overhang` / `shading_fin` | 0.5 m avail. | 🔴 STRUCTURAL | geometry emits Shading:Overhang but it does not reduce solar in EP (Brief 23 H3) |
 | `openings` (permanent-vent louvre) | 2×1.1 m², cd 0.49 | 🟠 divergent | EP `ZoneVentilation:WindandStack` Autocalculate effectiveness ≠ NZA cd/Cw model |
 | `openings.site_exposure` (Cw) | exposed | 🔴 NOT INHERITED | EP WindandStack Autocalculate; NZA Cw from site_exposure |
-| `thermal_bridges` | ISO 14683 ψ | 🔴 STRUCTURAL | assembler never reads `thermal_bridges` — EP books no bridging |
+| `thermal_bridges` | ISO 14683 ψ | ✅ INHERITED (98-C P5) | `_nza_thermal_bridging_H_TB` mirrors the auto ψ calc (278 W/K); `_apply_thermal_bridging` degrades opaque insulation R to bake in ΔU (no native EP ψ object, so folded into conduction) |
 | `thermal_mass_category` / `_mode` | medium/lumped | 🟠 divergent | EP mass = construction CTF (real layers); NZA = lumped 250k J/K·m² — different basis, both defensible |
 | `gains.lighting` | 2 W/m² profile | ✅ INHERITED | `_emit_state2_lighting_profiles` (98-A2 P1) → 39.0=39.0 |
 | `gains.equipment` (small power) | 5.04 W/m² flat | ✅ INHERITED | `_emit_state2_equipment_profiles` (98-A2 P0) → 186.1=186.1 |
