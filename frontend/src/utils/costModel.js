@@ -131,7 +131,9 @@ export function computeOnCostsBreakdown(cost, projectDefaults = null) {
   const lines_total = computeLinesTotal(cost)
   const design_fees = Math.round(lines_total * onCostPct(cost, 'design_fees_pct', projectDefaults) / 100)
   const prelims     = Math.round(lines_total * onCostPct(cost, 'prelims_pct', projectDefaults) / 100)
-  const ohp         = Math.round(lines_total * onCostPct(cost, 'ohp_pct', projectDefaults) / 100)
+  // OH&P (contractor overhead + profit) applies to works + prelims, not works alone —
+  // standard NRM2 sequence and the basis of the Brief-101B on-cost framework.
+  const ohp         = Math.round((lines_total + prelims) * onCostPct(cost, 'ohp_pct', projectDefaults) / 100)
   const subtotal_with_works = lines_total + design_fees + prelims + ohp
   const contingency = Math.round(subtotal_with_works * onCostPct(cost, 'contingency_pct', projectDefaults) / 100)
   const inflation   = Math.round(subtotal_with_works * onCostPct(cost, 'inflation_pct', projectDefaults) / 100)

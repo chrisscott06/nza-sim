@@ -14,6 +14,26 @@ experiment removed). Engines: NZA-Sim v2.5 (headline) + EnergyPlus 25-2-0 (valid
 - **Gas carbon:** **0.18316 kgCO₂/kWh**, constant (design note).
 - **No discounting / NPV** — simple payback only (demonstrator simplicity).
 
+## Cost on-cost framework (Brief 101B, 2026-07-13)
+
+Every costed measure carries **on-costs on top of the works** (line-item build-up), applied
+in NRM2 order: `design = %×works · prelims = %×works · OH&P = %×(works+prelims) ·
+contingency = %×(works+design+prelims+OH&P)`. Four tiers replace the earlier flat 40%:
+
+| Tier | Applies to | Design | Prelims | OH&P | Conting. | Why |
+|---|---|--:|--:|--:|--:|---|
+| **T1** supply-&-fit | low-flow, solar film, keycard, CT/sub-metering, kitchen metering | – | – | – | **10%** | installed rate already carries installer prelims/OH&P |
+| **T2** specialist day-rate | fan duty, VRF commissioning, BMS realignment | – | – | – | **10%** | day-rate visits, small scope risk |
+| **T3** M&E plant project | WWHR, exhaust-air ASHP, DHW ASHP, VRF→DHW interlink, MVHR, VRF replacement, communal lighting | **8%** | **10%** | **8%** | **15%** | multi-trade install: M&E design/riser survey, site establishment, main-contractor margin; 15% = public-sector pre-tender norm |
+| **T4** façade/structural | brise soleil | 8% | 10% | 8% | 15% | + structural/wind-loading sign-off + access |
+| £0 | setpoints, bypass, run-hours, equip-at-replacement | – | – | – | – | no capex |
+
+Each plan's tier + justification is recorded in its **COST BASIS** note. **Replacement capex**
+for the lifetime £/tonne = **70% of the plan total** (excludes one-off strip-outs / supply
+upgrades / builder's-work / design). **PV is FLAGGED:** £1,100/kWp is an all-in turnkey (EPC)
+rate, so treated **T1** (contingency 10% → £60,500), not the framework spreadsheet's Tier-3
+£57,287 (which stripped a 40% PV never carried) — pending Chris's confirmation.
+
 ## The four metrics (design note, exact definitions)
 1. **EUI reduction** — Δ kWh/m²/yr on GIA **4,215 m²**, gross demand (**PV excluded** per CRREM).
 2. **Lifetime GHG to 2050** — annual fuel deltas × year-by-year factors (elec on the declining
