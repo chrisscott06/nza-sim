@@ -12,6 +12,7 @@
 import {
   computeCostTotal, computeLinesTotal, computeAnnualOperationalSaving,
   computeSimplePayback, computePoundsPerTonne, emptyCost,
+  computeLifecycleCapex, lifecycleReplacements,
 } from './costModel.js'
 import { computeLifetimeCarbon, perFuelFromDeltaRecord, defaultLifetimeYears } from './lifetimeCarbon.js'
 
@@ -52,10 +53,16 @@ export function computeInterventionMetrics(intervention, cumulativeDelta, projec
   const lifeTco2e = lifetime?.lifetime_carbon_saved_tco2e
 
   const cost = intervention?.cost ?? emptyCost()
-  const costTotal = computeCostTotal(cost, projectDefaults)
+  const costTotal = computeCostTotal(cost, projectDefaults)   // INITIAL capex — Capex column + payback
   const linesTotal = computeLinesTotal(cost)
   const annualSaving = computeAnnualOperationalSaving(d?.per_fuel, projectDefaults, om?.annual_gbp_saved)
-  const poundsPerTonne = costTotal > 0 && Number.isFinite(lifeTco2e) ? computePoundsPerTonne(costTotal, lifeTco2e) : null
+  // Brief 101: £/tonne uses LIFECYCLE capex (initial + 70%·initial per measure-life
+  // expiry before 2050). Measure life from the seeded field; unknown → no replacement.
+  const measureLifeYears = intervention?.measure_life_years ?? null
+  const replacements = lifecycleReplacements(measureLifeYears)
+  const lifecycleCapex = computeLifecycleCapex(costTotal, measureLifeYears)
+  const poundsPerTonne = lifecycleCapex > 0 && Number.isFinite(lifeTco2e)
+    ? computePoundsPerTonne(lifecycleCapex, lifeTco2e) : null
   const payback = costTotal > 0 ? computeSimplePayback(costTotal, annualSaving) : null
 
   return {
@@ -63,5 +70,6 @@ export function computeInterventionMetrics(intervention, cumulativeDelta, projec
     euiDelta, deliveredMwhDelta, lifeTco2e, annualSaving,
     costTotal, linesTotal, poundsPerTonne, payback,
     lifetimeYears, perFuel,
+    measureLifeYears, replacements, lifecycleCapex,
   }
 }

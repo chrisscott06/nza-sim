@@ -175,7 +175,7 @@ function CostSummary({ cost, costTotal, linesTotal, poundsPerTonne, onEdit }) {
   )
 }
 
-export default function PerInterventionView({ intervention, isolatedRow, crremPick, projectCostDefaults, onCostChange, onEditCost, epIso, epBaseline, epNzaOnly = false }) {
+export default function PerInterventionView({ intervention, isolatedRow, crremPick, projectCostDefaults, onCostChange, onEditCost, onAssumptionNotesChange, epIso, epBaseline, epNzaOnly = false }) {
   const [tab, setTab] = useState('impact')
   const d = isolatedRow?.cumulativeDelta ?? null
   const gia = getGia(isolatedRow?.isolatedResult?.baseline)
@@ -337,6 +337,25 @@ export default function PerInterventionView({ intervention, isolatedRow, crremPi
                 <p className="text-xs text-mid-grey leading-relaxed whitespace-pre-wrap">{intervention.notes}</p>
               </div>
             )}
+
+            {/* Brief 101 P2: editable ENERGY/COST assumption notes (the audit trail).
+                Uncontrolled (key + defaultValue) so switching interventions reloads the
+                text; commits on blur. Included in the Library XLSX export (Assumptions sheet). */}
+            <div className="mt-3 rounded-lg border border-light-grey bg-white p-3">
+              <div className="text-xxs uppercase tracking-wider font-semibold text-navy mb-1">Assumption notes — energy &amp; cost basis</div>
+              <textarea
+                key={intervention?.id}
+                defaultValue={intervention?.assumption_notes || ''}
+                onBlur={(e) => {
+                  const v = e.target.value
+                  if (v !== (intervention?.assumption_notes || '')) onAssumptionNotesChange?.(intervention.id, v)
+                }}
+                rows={8}
+                placeholder={'ENERGY BASIS: …\n\nCOST BASIS: …'}
+                className="w-full text-xs text-mid-grey leading-relaxed bg-off-white/50 border border-light-grey/60 rounded p-2 resize-y focus:outline-none focus:border-navy/40 whitespace-pre-wrap"
+              />
+              <div className="text-[10px] text-mid-grey/50 mt-1">Two labelled sections (ENERGY BASIS / COST BASIS). Auto-drafted from the design-note + HIEX cost sources; edits persist and export to the Assumptions sheet.</div>
+            </div>
           </div>
         )}
 

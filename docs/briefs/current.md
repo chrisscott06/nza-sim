@@ -1,5 +1,20 @@
 # Current brief
 
+**Brief 101 — Lifecycle £/tonne + assumption notes — CLOSED 2026-07-13.**
+On branch `chris/lifecycle-notes` (off main). Engine untouched (`instantCalc.js`/assembler
+byte-identical) — cost-model + intervention-data + export only. **P1:** £/tonne now uses
+LIFECYCLE capex — initial + 70%-of-initial replacements per measure life expiring before 2050
+(`floor(25/life)`; controls 10→2, plant 15→1, PV 25→1, fabric ≥26→0); carbon stays to-2050.
+`measure_life_years` seeded onto all 22 from `scripts/report/interventions.py` life bands.
+Verified: DHW ASHP (plant 15) £/t 155→**264** (×1.70); fabric (30y) unchanged. **P2:** per-
+intervention `assumption_notes` (ENERGY BASIS / COST BASIS), auto-drafted for all 22 from the
+repo sources; the four L-flags (1.2/1.3/1.5/2.1) say allowance-only, PV states the CRREM
+gross-demand rule; editable via a textarea in the isolated view; exported as a 5th **Assumptions**
+sheet. Re-exported `Bridgewater_Hotel_interventions.xlsx` (5 sheets); UI ↔ export consistent
+(1.1 £95, 1.4 £264 in both). Brief
+[`archive/101_lifecycle_notes_COMPLETED.md`](archive/101_lifecycle_notes_COMPLETED.md).
+**PR open, NOT merged.**
+
 **Brief 98-C — The Convergence — CLOSED 2026-07-13.**
 On branch `chris/engine-convergence` (off `chris/reconciliation-table`). Closed all six EP-side,
 anchor-safe gaps from the 98-R register, with the reconciliation table as the acceptance test.

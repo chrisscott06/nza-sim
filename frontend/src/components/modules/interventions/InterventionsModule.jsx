@@ -150,6 +150,11 @@ export default function InterventionsModule() {
     const next = (params?.interventions ?? []).map(iv => (iv.id === id ? { ...iv, cost } : iv))
     updateParam('interventions', next)
   }, [params?.interventions, updateParam])
+  // Brief 101 P2: per-intervention assumption_notes (ENERGY/COST audit trail), editable.
+  const updateInterventionAssumptionNotes = useCallback((id, assumption_notes) => {
+    const next = (params?.interventions ?? []).map(iv => (iv.id === id ? { ...iv, assumption_notes } : iv))
+    updateParam('interventions', next)
+  }, [params?.interventions, updateParam])
   // Brief 97 P3/P5 — the RICS cost editor is a pop-out; this holds the
   // intervention whose plan is being edited (null = closed).
   const [costEditorIv, setCostEditorIv] = useState(null)
@@ -457,6 +462,21 @@ export default function InterventionsModule() {
     return Array.from(set).sort((a, b) => a.localeCompare(b))
   }, [interventions])
 
+  // Theme filter for the Library list — multi-select chips; empty set = show all.
+  const [themeFilter, setThemeFilter] = useState(() => new Set())
+  const toggleTheme = useCallback((t) => {
+    setThemeFilter((prev) => {
+      const next = new Set(prev)
+      if (next.has(t)) next.delete(t); else next.add(t)
+      return next
+    })
+  }, [])
+  const filteredInterventions = useMemo(() => (
+    themeFilter.size === 0
+      ? (interventions ?? [])
+      : (interventions ?? []).filter((iv) => themeFilter.has((iv?.theme ?? '').trim()))
+  ), [interventions, themeFilter])
+
   // Brief 71 Part 3 (2026-05-28): runEngine closure for the Isolated view
   // (VisualiserHost → IsolatedView → useIsolatedResults → runInterventionStack).
   // Mirrors the inner closure calculateInstant builds at instantCalc.js:6991
@@ -559,10 +579,39 @@ export default function InterventionsModule() {
                     </button>
                   </div>
                 </div>
+                {/* Theme filter — quick multi-select chips (empty = show all). */}
+                {themeSuggestions.length > 1 && (
+                  <div className="flex flex-wrap items-center gap-1 pb-1">
+                    {themeSuggestions.map((t) => {
+                      const active = themeFilter.has(t)
+                      return (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => toggleTheme(t)}
+                          aria-pressed={active}
+                          className={`text-xxs px-2 py-0.5 rounded-full border transition-colors ${
+                            active ? 'text-white border-transparent' : 'text-mid-grey border-light-grey hover:border-mid-grey/50'
+                          }`}
+                          style={active ? { backgroundColor: INTERVENTIONS_ACCENT } : undefined}
+                        >
+                          {t}
+                        </button>
+                      )
+                    })}
+                    {themeFilter.size > 0 && (
+                      <button type="button" onClick={() => setThemeFilter(new Set())} className="text-xxs px-1 text-mid-grey/60 hover:text-navy underline">
+                        clear
+                      </button>
+                    )}
+                  </div>
+                )}
                 {interventions.length === 0 ? (
                   <p className="text-xs text-mid-grey/60 italic">No interventions yet. Add one to start the catalogue.</p>
+                ) : filteredInterventions.length === 0 ? (
+                  <p className="text-xs text-mid-grey/60 italic">No interventions match the selected {themeFilter.size === 1 ? 'theme' : 'themes'}.</p>
                 ) : (
-                  interventions.map((iv) => {
+                  filteredInterventions.map((iv) => {
                     const row = isolatedRows.find((r) => r.id === iv.id)
                     const euiD = row?.cumulativeDelta?.eui_kwh_per_m2?.delta
                     const isSel = iv.id === selectedLibId
@@ -628,6 +677,7 @@ export default function InterventionsModule() {
                   crremPick={crremPick}
                   projectCostDefaults={projectCostDefaults}
                   onEditCost={setCostEditorIv}
+                  onAssumptionNotesChange={updateInterventionAssumptionNotes}
                   epIso={selectedEpIso}
                   epBaseline={epResults.byDesc?.baseline ?? null}
                   epNzaOnly={selectedEpNzaOnly}
