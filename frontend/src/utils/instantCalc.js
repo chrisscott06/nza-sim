@@ -6369,6 +6369,7 @@ export function calculateInstantDegreeDay(building = {}, constructions = {}, sys
 
   const heat_balance = _buildHeatBalance({
     geo,
+    building,
     walls_kWh, roof_kWh, floor_kWh, glazing_kWh,
     infiltration_kWh, vent_kWh, cooling_thermal,
     solar_north: solar_gains.north,
@@ -6513,6 +6514,7 @@ function _empty() {
 
 function _buildHeatBalance({
   geo,
+  building,
   walls_kWh = 0, roof_kWh = 0, floor_kWh = 0, glazing_kWh = 0,
   infiltration_kWh = 0, vent_kWh = 0, cooling_thermal = 0,
   openings_louvre_kWh = 0, openings_window_kWh = 0,
@@ -7181,6 +7183,7 @@ function _calculateInstantBaseline(building = {}, constructions = {}, systems = 
 
   const heat_balance = _buildHeatBalance({
     geo,
+    building,
     walls_kWh: acc_walls_loss,
     roof_kWh:  acc_roof_loss,
     floor_kWh: acc_floor_loss,
