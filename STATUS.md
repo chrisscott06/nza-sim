@@ -2,6 +2,37 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
+## ✅ Bridgwater Baseline: Model-1 (As-Specified) — CLOSED 2026-07-14 on `chris/bridgwater-baseline-model1` *(pushed; merge to main is Chris's call)*
+
+Brought the Bridgewater baseline into line with the Model-1 (as-specified) definition,
+gas-anchored DHW, added an export **Outputs** sheet + engine SHA, and pinned the corrected
+scenario as the project baseline. **No engine or schedule changes.** Audit:
+[`docs/audit/bridgwater-baseline-model1_close.md`](docs/audit/bridgwater-baseline-model1_close.md);
+brief [`docs/briefs/archive/bridgwater-baseline-model1_COMPLETED.md`](docs/briefs/archive/bridgwater-baseline-model1_COMPLETED.md).
+
+- **Headline — Model-1 EUI = 119.2 kWh/m²/yr** (elec 294.959 MWh · gas 207.599 MWh · total 502.558).
+  Metered anchor 185.1 → **−35.6% as-specified performance gap** (the two-model methodology's
+  intended output). Inside the brief's hard stop-band 80–130.
+- **P1 D1 corrections:** SCOP 2.8→5.0, SEER 3.0→3.5, SFP 0.9→0.4 / 1.8→1.4, boiler η 0.85→0.89,
+  ASHP COP 3.0→3.4, permanent-opening EA 2.2→1.43 m², aux 7→0.3 W/m², occupancy_rate 1.0→0.971
+  (`scripts/_model1_baseline_params.py`, commit d683c5f). Derived occupied rooms 134, peak 402.
+- **P2 DHW gas-anchor:** L/p/day basis is **tap-mix @ 40 °C** (hot_fraction (40−10)/(60−10)=0.6).
+  Solved analytically (demand linear in L): **48.2 L/p/day tap** → gas **207.599 MWh** = −0.05% vs
+  207.7 target. 60 °C-equiv = 48.2×30/50 = **28.9 L/p/day** (≈ triangulation ref 28.7). (b15f13f)
+- **P3/P4 export + SHA:** second **Outputs** sheet (end-use kWh, fuel totals, metered-anchor Δ/Δ%,
+  sum reconciliation) + engine git short SHA in metadata (`__APP_SHA__` vite define). Verified by
+  decoding the actual exported blob: 2 sheets, SHA present, EUI 119.2, gas Δ −0.05%. (df9ec4e)
+- **Save-as-baseline:** corrected config pinned via the global baseline control; survives reload.
+  **Loader round-trip bug fixed** (af460b9) — `baseline_snapshot` was missing from the project-loader
+  allow-list, so pins persisted to the DB but were dropped on reload and would be wiped by the next
+  `/building` autosave. All other NON_BASELINE_KEYS were carried; this one wasn't.
+- **Finding (MAJOR):** `gains.auxiliary` is **inert in the instant engine** — setting the aux magnitude
+  to 0.0 / 0.3 / 7.0 W/m² gives identical output. So the "258 MWh aux" the brief expected to remove was
+  never in the modelled EUI; the pre-D1 model was already **118.6** (not ~185 — 185 is the meter). D1's
+  efficiency gains (−28.5 MWh elec) were offset by the DHW gas-anchor (+31.1 MWh gas), so EUI moved
+  118.6→119.2. The 7 W/m² is retained as Model-2 raw material, but **Model-2 must carry the auxiliary
+  residual on a counted end-use** — `gains.auxiliary` won't count it. Flagged as a follow-up task.
+
 ## ✅ Assumptions Export — single-sheet "Inputs" XLSX — CLOSED 2026-07-14 on `chris/assumptions-export` *(off main; local, NOT pushed/merged)*
 
 One-click **"Export assumptions"** button on the Building inputs page → a single-sheet

@@ -1,5 +1,20 @@
 # Current brief
 
+**Bridgwater Baseline: Model-1 (As-Specified) — CLOSED 2026-07-14 on `chris/bridgwater-baseline-model1` (pushed; merge to main is Chris's call).**
+Brought the Bridgewater baseline to the Model-1 (as-specified) definition, gas-anchored DHW,
+added an export **Outputs** sheet + engine SHA, and pinned the corrected scenario as the project
+baseline. **No engine/schedule changes.** **Headline: Model-1 EUI = 119.2 kWh/m²/yr** (elec
+294.959 · gas 207.599 · total 502.558 MWh) vs metered 185.1 → **−35.6% as-specified performance
+gap** (the two-model methodology's intended output; inside the hard stop-band 80–130). DHW
+gas-anchored to 207.599 MWh (−0.05% vs 207.7) at **48.2 L/p/day tap-basis** (60 °C-equiv 28.9).
+**MAJOR finding:** `gains.auxiliary` is **inert in the instant engine** (0.0/0.3/7.0 W/m² → identical
+output), so the "258 MWh aux" was never in the modelled EUI — the pre-D1 model was already 118.6,
+not ~185 (185 is the meter); Model-2's auxiliary residual must ride a *counted* end-use. Loader
+round-trip bug fixed so pinned baselines survive reload (`baseline_snapshot` was missing from the
+project-loader allow-list). Audit
+[`../audit/bridgwater-baseline-model1_close.md`](../audit/bridgwater-baseline-model1_close.md);
+brief [`archive/bridgwater-baseline-model1_COMPLETED.md`](archive/bridgwater-baseline-model1_COMPLETED.md).
+
 **Assumptions Export — single-sheet "Inputs" XLSX — CLOSED 2026-07-14.**
 On branch `chris/assumptions-export` (off clean `main`). Read-only export: a one-click
 "Export assumptions" button on the Building inputs page writes every model input assumption
