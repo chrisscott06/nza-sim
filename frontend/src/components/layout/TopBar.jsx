@@ -116,6 +116,106 @@ function BaselineControl() {
   )
 }
 
+// Named input-set scenarios (Model-2 brief Part 0). Minimal save / load / list
+// per project — no version history, no import, no management UI beyond these.
+// Reuses ProjectContext.saveScenario/loadScenario/deleteScenario, which are
+// built on the baseline-pin capture/restore path.
+function ScenarioControl() {
+  const ctx = useContext(ProjectContext)
+  const [open, setOpen] = useState(false)
+  const [newName, setNewName] = useState('')
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [open])
+
+  if (!ctx?.currentProjectId) return null
+  const scenarios = ctx.scenarios || []
+  const active = ctx.activeScenario
+  const dirty = ctx.scenarioDirty || { dirty: false, diffCount: 0 }
+
+  const chipLabel = active ? (dirty.dirty ? `${active} • modified` : active) : 'Scenario: none'
+  const chipCls = active
+    ? (dirty.dirty ? 'text-amber-700 border-amber-300 bg-amber-50' : 'text-navy border-light-grey bg-white')
+    : 'text-mid-grey border-light-grey bg-white'
+
+  const save = (name) => { const nm = (name ?? '').trim(); if (!nm) return; ctx.saveScenario(nm); setNewName('') }
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-1 px-2 py-1 rounded text-xxs font-medium border ${chipCls}`}
+        title="Named input-set scenarios — save / load / list the project's input sets"
+      >
+        {chipLabel}
+        <ChevronDown size={11} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 w-72 bg-white border border-light-grey rounded-lg shadow-lg z-50 p-2 text-xxs">
+          <p className="px-1.5 py-1 text-mid-grey leading-snug">
+            Saved input sets for this project. Loading one replaces the live inputs.
+          </p>
+          <div className="h-px bg-light-grey my-1" />
+          {scenarios.length === 0 && (
+            <p className="px-1.5 py-1 text-mid-grey italic">No scenarios saved yet.</p>
+          )}
+          {scenarios.map((s) => (
+            <div key={s.name} className="flex items-center gap-1">
+              <button
+                onClick={() => { ctx.loadScenario(s.name); setOpen(false) }}
+                className="flex-1 text-left px-1.5 py-1.5 rounded hover:bg-off-white text-navy"
+              >
+                <span className="font-medium">{s.name === active ? '● ' : ''}{s.name}</span>
+                <span className="block text-mid-grey">{_fmtBaselineTs(s.saved_at)}</span>
+              </button>
+              <button
+                onClick={() => ctx.deleteScenario(s.name)}
+                title={`Delete scenario "${s.name}"`}
+                className="px-1.5 py-1 text-mid-grey hover:text-coral"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          {active && dirty.dirty && (
+            <>
+              <div className="h-px bg-light-grey my-1" />
+              <button
+                onClick={() => { ctx.saveScenario(active); setOpen(false) }}
+                className="w-full text-left px-1.5 py-1.5 rounded hover:bg-off-white text-navy font-medium"
+              >
+                Update “{active}” to current inputs ({dirty.diffCount} changed)
+              </button>
+            </>
+          )}
+          <div className="h-px bg-light-grey my-1" />
+          <div className="flex items-center gap-1">
+            <input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { save(newName); setOpen(false) } }}
+              placeholder="New scenario name…"
+              className="flex-1 px-1.5 py-1 border border-light-grey rounded text-xxs text-navy"
+            />
+            <button
+              onClick={() => { save(newName); setOpen(false) }}
+              disabled={!newName.trim()}
+              className="px-2 py-1 rounded bg-navy text-white disabled:opacity-40"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Chris UX overhaul (2026-05-17) — app-global engine + unit toggles in the
 // top bar. Replaces per-view toggles in HeatBalance / SummaryView / etc.
 // Flipping either here flips it across every chart and Σ badge in the app.
@@ -306,6 +406,10 @@ export default function TopBar() {
         <SaveIndicator status={saveStatus} />
 
         <div className="flex-1" />
+
+        {/* Named input-set scenarios (Model-2 brief Part 0) — save / load /
+            list the project's named input sets (Model 1, Model 2, …). */}
+        <ScenarioControl />
 
         {/* Project baseline control (global) — the pinned inputs interventions
             measure against; Save / Restore / Export-baseline. */}

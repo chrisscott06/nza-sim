@@ -32,6 +32,13 @@ import {
 const NON_BASELINE_KEYS = [
   'baseline_snapshot', 'interventions', 'strategies', 'library_interventions',
   'roadmap', 'cost_template_library', 'cost_defaults',
+  // Named input-set scenarios (Model-2 brief Part 0). The saved scenario list
+  // and the active-scenario pointer sit ON TOP of the baseline inputs, exactly
+  // like baseline_snapshot — they must be excluded from the stripped snapshot
+  // (so a scenario never nests the whole scenario list inside itself) and
+  // carried through the loader allow-list (or they vanish on reload — the same
+  // round-trip bug fixed for baseline_snapshot in the Model-1 session).
+  'scenarios', 'active_scenario',
 ]
 function stripToBaselineInputs(cfg) {
   if (!cfg || typeof cfg !== 'object') return {}
@@ -50,6 +57,37 @@ function buildBaselineSnapshot(params, constructions, comfortBand, savedAtIso) {
     construction_choices: clone(constructions) ?? {},
     comfort_band: comfortBand ? { lower_c: comfortBand.lower_c, upper_c: comfortBand.upper_c } : null,
   }
+}
+// Named input-set scenario (Model-2 brief Part 0). Same captured shape as a
+// baseline snapshot (stripped baseline inputs + constructions + comfort band),
+// plus a name and an optional engine SHA stamp. The scenario list is the
+// minimal "save/load/list named input set per project" mechanism the brief
+// asks for — DB-backed inside building_config, no schema migration, reusing the
+// proven baseline-pin capture/restore path rather than the stale legacy
+// `scenarios` table (April-era, old systems_config schema, unwired to v40).
+function buildScenarioEntry(name, params, constructions, comfortBand, savedAtIso, sha) {
+  const snap = buildBaselineSnapshot(params, constructions, comfortBand, savedAtIso)
+  return {
+    ...snap,
+    schema: 'scenario/v1',
+    name,
+    engine_sha: sha ?? null,
+  }
+}
+// Count leaf paths whose value differs between two objects (arrays compared
+// whole, as one leaf). Powers the export dirty-state stamp (Model-2 brief D5):
+// "MODIFIED from <scenario> (n values differ)".
+function countValueDiffs(a, b) {
+  const keys = new Set([...Object.keys(a || {}), ...Object.keys(b || {})])
+  let n = 0
+  for (const k of keys) {
+    const va = a?.[k], vb = b?.[k]
+    const oa = va && typeof va === 'object' && !Array.isArray(va)
+    const ob = vb && typeof vb === 'object' && !Array.isArray(vb)
+    if (oa && ob) n += countValueDiffs(va, vb)
+    else if (JSON.stringify(va) !== JSON.stringify(vb)) n++
+  }
+  return n
 }
 import { publishState, onInitialStateRequest } from '../utils/broadcastChannel.js'
 import { SCHEDULE_PRESETS, findPreset } from '../data/schedulePresets.js'
@@ -1275,6 +1313,11 @@ export function ProjectProvider({ children }) {
       // but is invisible after reload — and the next /building autosave (which
       // PUTs the full params object) would drop it, wiping the stored pin.
       baseline_snapshot: bc.baseline_snapshot ?? null,
+      // Named input-set scenarios + the active-scenario pointer (Model-2 brief
+      // Part 0). Carried through the allow-list like baseline_snapshot so the
+      // saved list survives reload and the next /building autosave.
+      scenarios: Array.isArray(bc.scenarios) ? bc.scenarios : [],
+      active_scenario: typeof bc.active_scenario === 'string' ? bc.active_scenario : null,
     })
     setConstructions(project.construction_choices ?? DEFAULT_CONSTRUCTIONS)
     setSystems(migrateSystemsConfig(project.systems_config))
@@ -1634,6 +1677,83 @@ export function ProjectProvider({ children }) {
     return { pinned: true, drifted: liveDiff || constrDiff || comfortDiff, saved_at: baselineSnapshot.saved_at }
   }, [params, constructions, comfortBand, baselineSnapshot])
 
+  // ── Named input-set scenarios (Model-2 brief Part 0) ──────────────────────
+  // Minimal save / load / list of named input sets per project, reusing the
+  // baseline-pin capture (buildScenarioEntry) and restore (loadScenario mirrors
+  // restoreToBaseline) paths. Stored in building_config.scenarios[] and
+  // building_config.active_scenario, persisted via the normal /building save.
+  // NO version history, NO xlsx import, NO management UI beyond save/load/list.
+  const scenarios = Array.isArray(params?.scenarios) ? params.scenarios : []
+  const activeScenario = params?.active_scenario ?? null
+
+  const saveScenario = useCallback((name) => {
+    const nm = (name ?? '').trim()
+    if (!nm) return
+    const sha = (typeof __APP_SHA__ !== 'undefined') ? __APP_SHA__ : null
+    setParams(p => {
+      if (!p) return p
+      const entry = buildScenarioEntry(nm, p, constructions, comfortBand, new Date().toISOString(), sha)
+      const list = Array.isArray(p.scenarios) ? p.scenarios : []
+      const idx = list.findIndex(s => s?.name === nm)
+      const nextList = idx === -1 ? [...list, entry] : list.map((s, i) => (i === idx ? entry : s))
+      const next = { ...p, scenarios: nextList, active_scenario: nm }
+      _scheduleSave('building', next, 'user')
+      _broadcast({ building: next })
+      return next
+    })
+  }, [constructions, comfortBand, currentProjectId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loadScenario = useCallback((name) => {
+    const list = Array.isArray(params?.scenarios) ? params.scenarios : []
+    const scen = list.find(s => s?.name === name)
+    if (!scen?.building_config) return
+    // Mirror restoreToBaseline: keep the ON-TOP layers (measures/costs/scenarios
+    // list/snapshot), reset every baseline input to the scenario's values, and
+    // stamp active_scenario so the export dirty-state knows the provenance.
+    const keep = {}
+    for (const k of NON_BASELINE_KEYS) if (k in params) keep[k] = params[k]
+    const nextParams = { ...clone(stripToBaselineInputs(scen.building_config)), ...keep, active_scenario: name }
+    const nextConstructions = clone(scen.construction_choices) ?? constructions
+    const nextComfort = scen.comfort_band ?? comfortBand
+    setParams(nextParams)
+    setConstructions(nextConstructions)
+    if (nextComfort?.lower_c != null && nextComfort?.upper_c != null) setComfortBandState(nextComfort)
+    _scheduleSave(null, {
+      building_config: nextParams,
+      construction_choices: nextConstructions,
+      comfort_band_lower_c: nextComfort?.lower_c,
+      comfort_band_upper_c: nextComfort?.upper_c,
+    }, 'user')
+    _broadcast({ building: nextParams, constructions: nextConstructions, comfortBand: nextComfort })
+  }, [params, constructions, comfortBand, currentProjectId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const deleteScenario = useCallback((name) => {
+    setParams(p => {
+      if (!p) return p
+      const list = Array.isArray(p.scenarios) ? p.scenarios : []
+      const next = {
+        ...p,
+        scenarios: list.filter(s => s?.name !== name),
+        active_scenario: p.active_scenario === name ? null : p.active_scenario,
+      }
+      _scheduleSave('building', next, 'user')
+      _broadcast({ building: next })
+      return next
+    })
+  }, [currentProjectId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Dirty-state vs the active scenario (Model-2 brief D5 — export provenance).
+  const scenarioDirty = useMemo(() => {
+    if (!activeScenario) return { name: null, dirty: false, diffCount: 0, saved_at: null }
+    const scen = scenarios.find(s => s?.name === activeScenario)
+    if (!scen?.building_config) return { name: activeScenario, dirty: false, diffCount: 0, saved_at: null }
+    const diffCount =
+      countValueDiffs(stripToBaselineInputs(params), scen.building_config) +
+      (JSON.stringify(constructions ?? {}) !== JSON.stringify(scen.construction_choices ?? {}) ? 1 : 0) +
+      (scen.comfort_band && (scen.comfort_band.lower_c !== comfortBand?.lower_c || scen.comfort_band.upper_c !== comfortBand?.upper_c) ? 1 : 0)
+    return { name: activeScenario, dirty: diffCount > 0, diffCount, saved_at: scen.saved_at }
+  }, [params, constructions, comfortBand, scenarios, activeScenario])
+
   // ── Context value ─────────────────────────────────────────────────────────
 
   return (
@@ -1665,6 +1785,14 @@ export function ProjectProvider({ children }) {
       baselineDrift,
       saveBaseline,
       restoreToBaseline,
+
+      // Named input-set scenarios (Model-2 brief Part 0)
+      scenarios,
+      activeScenario,
+      scenarioDirty,
+      saveScenario,
+      loadScenario,
+      deleteScenario,
 
       // Project CRUD
       createProject,
