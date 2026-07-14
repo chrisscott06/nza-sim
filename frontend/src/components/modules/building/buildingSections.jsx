@@ -179,7 +179,7 @@ function _resolveChoice(choice) {
 }
 
 export function ConstructionSelect({ elementKey, label, library, types, selectedChoice, onSelect, onInspect }) {
-  const { library_id, u_value_override } = _resolveChoice(selectedChoice)
+  const { library_id, u_value_override, g_value_override } = _resolveChoice(selectedChoice)
   const filtered = library.filter(c => types.some(t => (c.type ?? '').toLowerCase() === t))
   const items = filtered.length > 0 ? filtered : library
   const selected = items.find(c => c.name === library_id)
@@ -196,6 +196,28 @@ export function ConstructionSelect({ elementKey, label, library, types, selected
     } else {
       onSelect(elementKey, newLibraryId)
     }
+  }
+
+  // Glazing g-value (SHGC): Auto = library value; Override = project-scoped
+  // g_value_override that BOTH the Static engine (getGValue) and EnergyPlus
+  // (_apply_glazing_overrides in the assembler) honour. Written in the same
+  // object shape as u_value_override so the two overrides coexist.
+  const isGlazing = elementKey === 'glazing'
+  const libraryG = selected?.g_value != null ? Number(selected.g_value) : null
+  const gOverrideActive = g_value_override != null && g_value_override > 0
+  const effectiveG = gOverrideActive ? g_value_override : libraryG
+
+  const setGOverride = (val) => {
+    const base = (selectedChoice && typeof selectedChoice === 'object')
+      ? selectedChoice
+      : { library_id }
+    onSelect(elementKey, { ...base, library_id, g_value_override: Math.round(val * 100) / 100 })
+  }
+  const clearGOverride = () => {
+    const base = (selectedChoice && typeof selectedChoice === 'object')
+      ? selectedChoice
+      : { library_id }
+    onSelect(elementKey, { ...base, library_id, g_value_override: null })
   }
 
   return (
@@ -234,6 +256,35 @@ export function ConstructionSelect({ elementKey, label, library, types, selected
           <option key={c.name} value={c.name}>{c.description ?? c.name}</option>
         ))}
       </select>
+
+      {isGlazing && selected && libraryG != null && (
+        <div className="mt-1 flex items-center gap-1.5">
+          <span className="text-xxs text-mid-grey">g-value</span>
+          <input
+            type="number"
+            min={0.1} max={0.9} step={0.01}
+            value={effectiveG ?? ''}
+            onChange={e => {
+              const v = Number(e.target.value)
+              if (Number.isFinite(v) && v > 0) setGOverride(v)
+            }}
+            title={gOverrideActive
+              ? `Project override g = ${effectiveG.toFixed(2)} (library g = ${libraryG.toFixed(2)}). Applied to the live engine and EnergyPlus.`
+              : `Library g = ${libraryG.toFixed(2)}. Type to set a project-specific override.`}
+            className="w-16 px-1.5 py-0.5 text-xxs text-navy text-right border border-light-grey rounded focus:outline-none focus:border-teal"
+          />
+          {gOverrideActive
+            ? (
+              <button
+                type="button"
+                onClick={clearGOverride}
+                className="text-xxs text-teal hover:text-navy underline"
+                title={`Reset to library g = ${libraryG.toFixed(2)}`}
+              >override · reset</button>
+            )
+            : <span className="text-xxs text-mid-grey">library</span>}
+        </div>
+      )}
     </div>
   )
 }

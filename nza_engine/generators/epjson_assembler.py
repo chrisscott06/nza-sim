@@ -220,12 +220,16 @@ def _resolve_choice(entry, default: str) -> str:
     (legacy) or a dict ``{library_id, u_value_override, g_value_override}``
     (post-28k, what Bridgewater + every reseeded project uses today).
 
-    For Dynamic we honour only the ``library_id`` part. The per-project
-    u_value_override / g_value_override fields are a Static-engine BRUKL/
-    as-built bypass that doesn't have a clean EnergyPlus analogue without
-    minting a per-project Construction object — that's queued for Brief
-    28-DynamicParity. The audit notes this convention difference between
-    Static (overrides honoured) and Dynamic (library U-values only).
+    This resolves the *library_id* only. Per-project overrides are applied
+    downstream:
+      - **Glazing** g_value_override / u_value_override ARE now honoured in
+        the EnergyPlus model — SimpleGlazingSystem exposes SHGC and U as
+        direct fields, so ``_apply_glazing_overrides`` writes them onto the
+        collected WindowMaterial after this resolution. Static and EnergyPlus
+        therefore agree on glazing g / U (2026-07 DynamicParity, glazing slice).
+      - **Opaque** u_value_override remains Static-only: overriding an opaque
+        U requires back-solving layer resistances, which has no direct field
+        analogue. That slice stays queued for a follow-up.
 
     Mirrors the JS-side ``resolveChoice()`` helper in
     ``frontend/src/utils/instantCalc.js``.
@@ -286,6 +290,55 @@ def _collect_construction_epjson(construction_names: set[str]) -> dict:
         for section in merged:
             merged[section].update(data.get(section, {}))
     return merged
+
+
+def _apply_glazing_overrides(construction_epjson: dict, choices: dict) -> None:
+    """
+    Honour per-project glazing overrides in the EnergyPlus model so the Static
+    engine and EnergyPlus agree on glazing g / U (2026-07 DynamicParity,
+    glazing slice).
+
+    The ``glazing`` construction_choices entry may be the Brief 28k object form
+    ``{library_id, g_value_override, u_value_override}``. SimpleGlazingSystem
+    exposes both quantities as direct fields (``solar_heat_gain_coefficient``,
+    ``u_factor``), so we overwrite them on the glazing's WindowMaterial in place
+    — no per-project Construction object required.
+
+    Mirrors the Static engine's override handling (``getGValue`` and the
+    u_value_override path in ``frontend/src/utils/instantCalc.js``): only
+    finite, strictly-positive overrides are applied, so an absent or zero
+    override leaves the library value untouched. Opaque U overrides are NOT
+    handled here — see ``_resolve_choice``.
+    """
+    entry = choices.get("glazing")
+    if not isinstance(entry, dict):
+        return
+
+    glazing_name = entry.get("library_id") or entry.get("name")
+    if not glazing_name:
+        return
+
+    # Construction → outside_layer → the SimpleGlazingSystem material key.
+    construction = (construction_epjson.get("Construction") or {}).get(glazing_name, {})
+    layer_key = construction.get("outside_layer")
+    glazing_mat = (construction_epjson.get("WindowMaterial:SimpleGlazingSystem") or {}).get(layer_key)
+    if not glazing_mat:
+        return
+
+    def _positive(value):
+        try:
+            f = float(value)
+        except (TypeError, ValueError):
+            return None
+        return f if f > 0 else None
+
+    g_ov = _positive(entry.get("g_value_override"))
+    if g_ov is not None:
+        glazing_mat["solar_heat_gain_coefficient"] = round(g_ov, 3)
+
+    u_ov = _positive(entry.get("u_value_override"))
+    if u_ov is not None:
+        glazing_mat["u_factor"] = round(u_ov, 3)
 
 
 def _build_people_objects(
@@ -1583,6 +1636,10 @@ def assemble_epjson(
     } | {_INTERIOR_CONSTRUCTION}
     used_constructions.discard("")
     construction_epjson = _collect_construction_epjson(used_constructions)
+
+    # Apply per-project glazing overrides (g / U) so EnergyPlus matches the
+    # Static engine. Opaque overrides stay Static-only — see _resolve_choice.
+    _apply_glazing_overrides(construction_epjson, construction_choices)
 
     # Brief 98-C P5: inherit NZA's ISO 14683 thermal bridging as psi-adjusted U-values
     # (full mode only — state1/state2 model the envelope their own way). Degrades the
