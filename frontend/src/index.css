@@ -68,8 +68,18 @@
 }
 
 /* ── Stolzl font-face ────────────────────────────────────────────────────── */
-/* When font files are placed in /public/fonts/, these will activate.        */
-/* The app falls back cleanly to system fonts until then.                    */
+/* Canonical NZA weight map (per docs/pablo_design_system_reference.md):      */
+/*   Thin 100 · Light 300 · Book 400 · Regular 450 · Medium 500 · Bold 700.   */
+/* NB: Stolzl "Book" is the 400 body weight; "Regular" is heavier (450).      */
+/* The app falls back cleanly to system fonts if the files are absent.        */
+@font-face {
+  font-family: "Stolzl";
+  src: url("/fonts/Stolzl-Thin.woff2") format("woff2"),
+       url("/fonts/Stolzl-Thin.woff") format("woff");
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
+}
 @font-face {
   font-family: "Stolzl";
   src: url("/fonts/Stolzl-Light.woff2") format("woff2"),
@@ -80,9 +90,17 @@
 }
 @font-face {
   font-family: "Stolzl";
+  src: url("/fonts/Stolzl-Book.woff2") format("woff2"),
+       url("/fonts/Stolzl-Book.woff") format("woff");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Stolzl";
   src: url("/fonts/Stolzl-Regular.woff2") format("woff2"),
        url("/fonts/Stolzl-Regular.woff") format("woff");
-  font-weight: 400;
+  font-weight: 450;
   font-style: normal;
   font-display: swap;
 }

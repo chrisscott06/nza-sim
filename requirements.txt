@@ -2,3 +2,4 @@ fastapi
 uvicorn[standard]
 aiosqlite
 httpx
+python-multipart
