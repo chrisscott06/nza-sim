@@ -93,64 +93,8 @@ function newId(prefix) {
   return `${prefix}_${raw}`
 }
 
-// ── Baseline banner (Route B) ────────────────────────────────────────────────
-// The pinned project baseline the interventions compare against. Three states:
-// not pinned (compares live) · pinned & in sync · pinned & drifted (project
-// inputs edited since — offer Restore-to-baseline or Update-baseline).
-function _fmtBaselineDate(iso) {
-  if (!iso) return ''
-  try {
-    return new Date(iso).toLocaleString('en-GB', {
-      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-    })
-  } catch { return iso }
-}
-function BaselineBanner({ drift, onSave, onRestore }) {
-  if (!drift) return null
-  const btn = 'text-xs font-semibold px-2.5 py-1 rounded-md whitespace-nowrap'
-  if (!drift.pinned) {
-    return (
-      <div className="flex-shrink-0 flex items-center justify-between gap-3 px-6 py-2 bg-amber-50 border-b border-amber-200">
-        <span className="text-xs text-amber-800">
-          <b>No baseline pinned.</b> Interventions compare against the live project — editing any input moves the baseline.
-        </span>
-        <button type="button" onClick={onSave} className={`${btn} bg-navy text-white hover:bg-navy/90`}>
-          Pin current inputs as baseline
-        </button>
-      </div>
-    )
-  }
-  if (drift.drifted) {
-    return (
-      <div className="flex-shrink-0 flex items-center justify-between gap-3 px-6 py-2 bg-amber-50 border-b border-amber-200">
-        <span className="text-xs text-amber-800">
-          ⚠ <b>Project inputs have changed</b> since the pinned baseline ({_fmtBaselineDate(drift.saved_at)}). Interventions are still measured against the pinned baseline.
-        </span>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <button type="button" onClick={onRestore} className={`${btn} border border-navy/30 text-navy hover:bg-navy/5`}
-            title="Reset the project inputs back to the pinned baseline">
-            Restore project to baseline
-          </button>
-          <button type="button" onClick={onSave} className={`${btn} bg-navy text-white hover:bg-navy/90`}
-            title="Re-pin: make the current project inputs the new baseline (shifts all interventions together)">
-            Update baseline to current
-          </button>
-        </div>
-      </div>
-    )
-  }
-  return (
-    <div className="flex-shrink-0 flex items-center gap-2 px-6 py-1.5 bg-off-white border-b border-light-grey">
-      <span className="text-xs text-mid-grey">
-        ✓ Baseline pinned · saved {_fmtBaselineDate(drift.saved_at)} — project inputs match; interventions measure against it.
-      </span>
-    </div>
-  )
-}
-
 export default function InterventionsModule() {
-  const { params, constructions, systems, comfortBand, updateParam, currentProjectId,
-          baselineSnapshot, baselineDrift, saveBaseline, restoreToBaseline } = useContext(ProjectContext)
+  const { params, constructions, systems, comfortBand, updateParam, currentProjectId } = useContext(ProjectContext)
   const { weatherData } = useContext(WeatherContext)
   const hourlySolar = useHourlySolar(weatherData, params?.orientation ?? 0)
 
@@ -618,10 +562,6 @@ export default function InterventionsModule() {
           ))}
         </div>
       </div>
-
-      {/* Baseline banner (Route B) — the pinned project baseline interventions
-          compare against; Restore / Update when the project has drifted. */}
-      <BaselineBanner drift={baselineDrift} onSave={saveBaseline} onRestore={restoreToBaseline} />
 
       {/* Body — Brief 47 Part 3: split into stack-left + visualiser-right.
           The Stack | Comparison tab switcher is retired; comparison is now

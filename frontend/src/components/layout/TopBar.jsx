@@ -3,7 +3,112 @@ import { Play, Loader2, CheckCircle2, AlertCircle, ChevronDown, ExternalLink, Za
 import { SimulationContext } from '../../context/SimulationContext.jsx'
 import { ProjectContext } from '../../context/ProjectContext.jsx'
 import { useUISettings } from '../../context/UISettingsContext.jsx'
+import { useWeather } from '../../context/WeatherContext.jsx'
+import { useHourlySolar } from '../../hooks/useHourlySolar.js'
+import { calculateInstant } from '../../utils/instantCalc.js'
+import { exportAssumptionsXlsx } from '../../utils/assumptionsExport.js'
 import ProjectPicker from './ProjectPicker.jsx'
+
+// ── Baseline control (global, every module) ──────────────────────────────────
+// The pinned project baseline interventions measure against. Shows sync state,
+// with Save/Update, Restore, and Export-baseline-to-Excel. Project-level, so it
+// lives in the top bar rather than any one module.
+function _fmtBaselineTs(iso) {
+  if (!iso) return ''
+  try {
+    return new Date(iso).toLocaleString('en-GB', {
+      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+    })
+  } catch { return iso }
+}
+function BaselineControl() {
+  const ctx = useContext(ProjectContext)
+  const { weatherData } = useWeather()
+  const params = ctx?.params
+  const hourlySolar = useHourlySolar(weatherData, params?.orientation ?? 0)
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [open])
+
+  if (!ctx?.currentProjectId) return null
+  const drift = ctx.baselineDrift || { pinned: false, drifted: false }
+
+  const chip = !drift.pinned
+    ? { label: 'No baseline', cls: 'text-mid-grey border-light-grey bg-white' }
+    : drift.drifted
+      ? { label: '⚠ Baseline changed', cls: 'text-amber-700 border-amber-300 bg-amber-50' }
+      : { label: '✓ Baseline', cls: 'text-green-700 border-green-300 bg-green-50' }
+
+  const handleExportBaseline = async () => {
+    setBusy(true)
+    try {
+      const snap = ctx.baselineSnapshot
+      const cfg = snap?.building_config ?? params
+      const constr = snap?.construction_choices ?? ctx.constructions
+      const cb = snap?.comfort_band ?? ctx.comfortBand
+      let libList = []
+      try { const r = await fetch('/api/library/constructions'); const d = await r.json(); libList = d.constructions ?? [] } catch {}
+      let occ = null
+      try {
+        const s2 = calculateInstant(cfg, constr, ctx.systems, { constructions: libList },
+          weatherData, hourlySolar, null, { mode: 'envelope-gains', comfortBand: cb, _skipInterventions: true })
+        occ = s2?.occupancy_summary ?? null
+      } catch { /* occupancy line escalates in the collector */ }
+      exportAssumptionsXlsx({
+        building: cfg, constructions: constr, libraryData: { constructions: libList },
+        occupancySummary: occ,
+        meta: { scenarioName: (params?.name || 'project') + (snap ? ' — baseline' : ' — current') },
+      })
+    } finally { setBusy(false); setOpen(false) }
+  }
+  const act = (fn) => () => { fn?.(); setOpen(false) }
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-1 px-2 py-1 rounded text-xxs font-medium border ${chip.cls}`}
+        title="Project baseline — the pinned inputs interventions measure against"
+      >
+        {chip.label}
+        <ChevronDown size={11} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 w-72 bg-white border border-light-grey rounded-lg shadow-lg z-50 p-2 text-xxs">
+          <p className="px-1.5 py-1 text-mid-grey leading-snug">
+            {!drift.pinned
+              ? 'No baseline pinned. Interventions compare against the live project until you pin one.'
+              : drift.drifted
+                ? <>⚠ Project inputs have changed since the pinned baseline ({_fmtBaselineTs(drift.saved_at)}). Interventions still measure against the pin.</>
+                : <>✓ Baseline pinned ({_fmtBaselineTs(drift.saved_at)}). Project matches it.</>}
+          </p>
+          <div className="h-px bg-light-grey my-1" />
+          <button onClick={act(ctx.saveBaseline)} className="w-full text-left px-1.5 py-1.5 rounded hover:bg-off-white text-navy font-medium">
+            {drift.pinned ? 'Update baseline to current inputs' : 'Pin current inputs as baseline'}
+          </button>
+          {drift.pinned && (
+            <button onClick={act(ctx.restoreToBaseline)}
+              className={`w-full text-left px-1.5 py-1.5 rounded hover:bg-off-white ${drift.drifted ? 'text-navy font-medium' : 'text-mid-grey'}`}>
+              Restore project to baseline
+            </button>
+          )}
+          <div className="h-px bg-light-grey my-1" />
+          <button onClick={handleExportBaseline} disabled={busy}
+            className="w-full text-left px-1.5 py-1.5 rounded hover:bg-off-white text-navy disabled:opacity-50">
+            {busy ? 'Exporting…' : `⬇ Export ${drift.pinned ? 'baseline' : 'current inputs'} to Excel`}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 // Chris UX overhaul (2026-05-17) — app-global engine + unit toggles in the
 // top bar. Replaces per-view toggles in HeatBalance / SummaryView / etc.
@@ -195,6 +300,10 @@ export default function TopBar() {
         <SaveIndicator status={saveStatus} />
 
         <div className="flex-1" />
+
+        {/* Project baseline control (global) — the pinned inputs interventions
+            measure against; Save / Restore / Export-baseline. */}
+        <BaselineControl />
 
         {/* Global engine + unit toggles — Chris UX overhaul (2026-05-17).
             App-wide; replaces per-view toggles in each module's header. */}
