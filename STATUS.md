@@ -2,7 +2,7 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
-## ✅ Bridgwater Baseline: Model-1 (As-Specified) — CLOSED 2026-07-14 on `chris/bridgwater-baseline-model1` *(pushed; merge to main is Chris's call)*
+## ✅ Bridgwater Baseline: Model-1 (As-Specified) — CLOSED 2026-07-14 on `chris/bridgwater-baseline-model1` *([PR #20](https://github.com/chrisscott06/nza-sim/pull/20) open, NOT merged — Chris merges after walkthrough)*
 
 Brought the Bridgewater baseline into line with the Model-1 (as-specified) definition,
 gas-anchored DHW, added an export **Outputs** sheet + engine SHA, and pinned the corrected

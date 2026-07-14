@@ -1,6 +1,6 @@
 # Current brief
 
-**Bridgwater Baseline: Model-1 (As-Specified) — CLOSED 2026-07-14 on `chris/bridgwater-baseline-model1` (pushed; merge to main is Chris's call).**
+**Bridgwater Baseline: Model-1 (As-Specified) — CLOSED 2026-07-14 on `chris/bridgwater-baseline-model1` ([PR #20](https://github.com/chrisscott06/nza-sim/pull/20) open, NOT merged — Chris merges after walkthrough).**
 Brought the Bridgewater baseline to the Model-1 (as-specified) definition, gas-anchored DHW,
 added an export **Outputs** sheet + engine SHA, and pinned the corrected scenario as the project
 baseline. **No engine/schedule changes.** **Headline: Model-1 EUI = 119.2 kWh/m²/yr** (elec
