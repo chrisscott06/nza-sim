@@ -1269,6 +1269,12 @@ export function ProjectProvider({ children }) {
       cost_template_library: Array.isArray(bc.cost_template_library) ? bc.cost_template_library : DEFAULT_PARAMS.cost_template_library,
       // Project cost defaults (tariffs + on-cost %s) — persist across loads.
       cost_defaults: (bc.cost_defaults && typeof bc.cost_defaults === 'object' && !Array.isArray(bc.cost_defaults)) ? bc.cost_defaults : DEFAULT_PARAMS.cost_defaults,
+      // Pinned baseline snapshot (global baseline control). Like the other
+      // NON_BASELINE_KEYS above (interventions, strategies, roadmap, …) it must
+      // be carried through the loader allow-list, or the pin persists to the DB
+      // but is invisible after reload — and the next /building autosave (which
+      // PUTs the full params object) would drop it, wiping the stored pin.
+      baseline_snapshot: bc.baseline_snapshot ?? null,
     })
     setConstructions(project.construction_choices ?? DEFAULT_CONSTRUCTIONS)
     setSystems(migrateSystemsConfig(project.systems_config))
