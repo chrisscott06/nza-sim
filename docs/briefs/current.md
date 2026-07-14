@@ -1,6 +1,15 @@
 # Current brief
 
-**Bridgwater Baseline: Model-1 (As-Specified) — CLOSED 2026-07-14 on `chris/bridgwater-baseline-model1` ([PR #20](https://github.com/chrisscott06/nza-sim/pull/20) open, NOT merged — Chris merges after walkthrough).**
+**ACTIVE — Bridgwater Model-2 (In-Service Calibrated) + Auxiliary Residual + Inert-Input Audit.**
+On branch `chris/bridgwater-model2-calibrated` (off `main` `e9dd13b`, with PR #20 Model-1 merged).
+Second named scenario "Bridgewater Hotel — calibrated (Model 2)" from the pinned Model-1 baseline;
+evidence-cited in-service de-rates applied cumulatively (15-step waterfall, EUI after each);
+DHW re-anchored to metered gas under a 60/40 gas:HP split; the remaining electricity gap
+implemented as an explicit **auxiliary residual on a counted end-use** (NOT `gains.auxiliary`);
+per-row inert-input trace audit + export marking; both scenarios exported. Parts 0–5.
+Brief [`active/bridgwater-model2-calibrated.md`](active/bridgwater-model2-calibrated.md).
+
+**Bridgwater Baseline: Model-1 (As-Specified) — CLOSED 2026-07-14; MERGED to `main` `8ef67c4` (PR #20).**
 Brought the Bridgewater baseline to the Model-1 (as-specified) definition, gas-anchored DHW,
 added an export **Outputs** sheet + engine SHA, and pinned the corrected scenario as the project
 baseline. **No engine/schedule changes.** **Headline: Model-1 EUI = 119.2 kWh/m²/yr** (elec
