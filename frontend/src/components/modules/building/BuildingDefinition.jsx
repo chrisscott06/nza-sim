@@ -66,6 +66,7 @@ import { useWeather } from '../../../context/WeatherContext.jsx'
 import { useHourlySolar } from '../../../hooks/useHourlySolar.js'
 import { useSimulationBalance } from '../../../hooks/useSimulationBalance.js'
 import { calculateInstant } from '../../../utils/instantCalc.js'
+import { exportAssumptionsXlsx } from '../../../utils/assumptionsExport.js'
 
 // ── Layout: resizable columns ────────────────────────────────────────────────
 // Persisted column widths so users can size to their screen / focus area.
@@ -140,7 +141,7 @@ function ResizeHandle({ onResize }) {
 // exports. This function owns the single-expand accordion state + the
 // module header, and forwards `accordionProps(id)` so only one section
 // is expanded at a time across the panel.
-function InputsColumn({ library, onInspectConstruction, liveResult }) {
+function InputsColumn({ library, onInspectConstruction, liveResult, onExportAssumptions }) {
   // Single-expand accordion for the entire Building left panel —
   // Geometry / Glazing / Shading / Openings / Fabric / Thermal bridges /
   // Airtightness / Comfort band. Click an open section to collapse it.
@@ -155,14 +156,24 @@ function InputsColumn({ library, onInspectConstruction, liveResult }) {
     <div className="h-full overflow-y-auto overflow-x-hidden bg-white border-r border-light-grey">
       {/* Module header with warm earth accent */}
       <div
-        className="px-3 pt-2 pb-2 border-b border-light-grey"
+        className="px-3 pt-2 pb-2 border-b border-light-grey flex items-start justify-between gap-2"
         style={{ borderTopWidth: '3px', borderTopColor: '#A1887F', borderTopStyle: 'solid' }}
       >
-        <NavLink to="/project" className="text-xxs text-mid-grey hover:text-navy transition-colors">
-          ← Overview
-        </NavLink>
-        <p className="text-caption font-medium mt-0.5" style={{ color: '#A1887F' }}>Building</p>
-        <p className="text-xxs text-mid-grey">Geometry, fabric &amp; airtightness</p>
+        <div className="min-w-0">
+          <NavLink to="/project" className="text-xxs text-mid-grey hover:text-navy transition-colors">
+            ← Overview
+          </NavLink>
+          <p className="text-caption font-medium mt-0.5" style={{ color: '#A1887F' }}>Building</p>
+          <p className="text-xxs text-mid-grey">Geometry, fabric &amp; airtightness</p>
+        </div>
+        <button
+          type="button"
+          onClick={onExportAssumptions}
+          className="text-xxs font-semibold text-mid-grey hover:text-navy whitespace-nowrap mt-0.5 flex-shrink-0"
+          title="Export all model input assumptions for this scenario to a single-sheet Excel file"
+        >
+          ⬇ Export assumptions
+        </button>
       </div>
 
       <div className="p-3 space-y-0">
@@ -671,6 +682,31 @@ export default function BuildingDefinition() {
     [params, constructions, systems, libraryData, weatherData, hourlySolar, comfortBand]
   )
 
+  // Assumptions export (brief: assumptions-export). The Building module's
+  // instantResult above is envelope-only (no occupancy), so the derived
+  // schedule-realised occupancy line needs a FULL-mode engine run — computed
+  // on demand here where all inputs are in scope. Reuses the engine's own
+  // occupancy aggregation (occupancy_summary), not a reimplementation.
+  const handleExportAssumptions = useCallback(() => {
+    let occupancySummary = null
+    try {
+      // occupancy_summary is built by the State-2 (envelope-gains) path — the
+      // same call useStateComparison uses to feed the Gains summary. The
+      // Building module's own instantResult is envelope-only, so recompute here.
+      const state2 = calculateInstant(params, constructions, systems, libraryData, weatherData, hourlySolar, null, {
+        mode: 'envelope-gains', comfortBand, _skipInterventions: true,
+      })
+      occupancySummary = state2?.occupancy_summary ?? null
+    } catch { /* leave null → collector escalates the derived occupancy line */ }
+    exportAssumptionsXlsx({
+      building: params,
+      constructions,
+      libraryData: { constructions: library },
+      occupancySummary,
+      meta: { scenarioName: params?.project_name || params?.name },
+    })
+  }, [params, constructions, systems, libraryData, library, weatherData, hourlySolar, comfortBand])
+
   // Simulation balance — fetched per (projectId, runId). Lets the Live |
   // Simulation toggle in the centre panel actually flip between sources
   // instead of being permanently disabled on the Simulation pill.
@@ -720,6 +756,7 @@ export default function BuildingDefinition() {
           library={library}
           onInspectConstruction={setInspectConstruction}
           liveResult={instantResult}
+          onExportAssumptions={handleExportAssumptions}
         />
       </div>
 

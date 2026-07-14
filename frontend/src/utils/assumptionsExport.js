@@ -15,8 +15,10 @@
  * value exists) emitted with an explicit DERIVED / escalation basis.
  *
  * Part 2 wires `collectAssumptions` to SheetJS + the button; the XLSX writer
- * lives below (`exportAssumptionsXlsx`) but is added in Part 2.
+ * (`exportAssumptionsXlsx`) lives at the bottom of this file.
  */
+
+import * as XLSX from 'xlsx'
 
 // Column contract (mirrors the report table): Category | Parameter | Value | Units | Basis/Source
 const COLUMNS = ['Category', 'Parameter', 'Value', 'Units', 'Basis/Source']
@@ -303,3 +305,59 @@ export function collectAssumptions({ building = {}, constructions = {}, libraryD
 }
 
 export { COLUMNS as ASSUMPTIONS_COLUMNS }
+
+// ── XLSX writer + download (Part 2) ─────────────────────────────────────────
+/**
+ * Build a single-sheet ("Inputs") XLSX from the collected assumptions and
+ * trigger a client-side download. Mirrors the SheetJS + Blob/anchor convention
+ * in interventionExport.js (CSP-safe, no backend). Snapshot values only.
+ *
+ * NB: bold header styling is NOT applied — the community `xlsx` build ignores
+ * cell styles on write. Column widths and category-grouped row order carry the
+ * legibility; a bold header would need a styling lib (out of scope — flag).
+ *
+ * @returns {{ filename: string, rowCount: number, escalations: string[] }}
+ */
+export function exportAssumptionsXlsx({ building, constructions, libraryData, occupancySummary, meta = {} } = {}) {
+  const { rows, escalations } = collectAssumptions({ building, constructions, libraryData, occupancySummary })
+
+  const scenario = meta.scenarioName || building?.name || 'scenario'
+  const now = meta.now instanceof Date ? meta.now : new Date()
+  const stamp = now.toISOString().slice(0, 19).replace('T', ' ') + ' UTC'
+  const dateForName = now.toISOString().slice(0, 10)
+
+  // Metadata stamp block, blank row, header row, then data — one sheet.
+  const aoa = [
+    ['NZA-Sim — Model input assumptions'],
+    ['Scenario', scenario],
+    ['Exported', stamp],
+  ]
+  if (meta.appVersion) aoa.push(['App version / SHA', meta.appVersion])
+  aoa.push(['Note', 'Snapshot of live model inputs — hard values, not formulas.'])
+  aoa.push([])
+  aoa.push([...COLUMNS])
+  for (const r of rows) aoa.push([r.Category, r.Parameter, r.Value, r.Units, r['Basis/Source']])
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa)
+  ws['!cols'] = [{ wch: 20 }, { wch: 42 }, { wch: 18 }, { wch: 16 }, { wch: 62 }]
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Inputs')
+
+  const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+  const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const safe = String(scenario).replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'scenario'
+  const filename = `nza-sim_assumptions_${safe}_${dateForName}.xlsx`
+
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(a.href)
+
+  // Surface escalations rather than hide them — the export is a truth-teller.
+  if (escalations.length) console.warn('[assumptions-export] escalated parameters:', escalations)
+  return { filename, rowCount: rows.length, escalations }
+}
