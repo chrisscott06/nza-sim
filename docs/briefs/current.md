@@ -1,5 +1,18 @@
 # Current brief
 
+**Assumptions Export — single-sheet "Inputs" XLSX — CLOSED 2026-07-14.**
+On branch `chris/assumptions-export` (off clean `main`). Read-only export: a one-click
+"Export assumptions" button on the Building inputs page writes every model input assumption
+(fabric, gains, occupancy, DHW, baseline systems) for the loaded scenario to a single-sheet
+`nza-sim_assumptions_<scenario>_<date>.xlsx`. **No engine/schedule change**; live state only, no
+hardcoded values; reuses installed SheetJS (no npm). Verified on live HIEX by decoding the actual
+exported blob (40+ rows faithful, single "Inputs" sheet, filename convention). Occupancy tripwire
+reconciled: schedule-realised avg = **293.8** (live State-2 `occupancy_summary`), not the brief's
+stale 330.6, shown beside the 414 peak; Chris confirmed. Brief
+[`archive/assumptions-export_COMPLETED.md`](archive/assumptions-export_COMPLETED.md); audit
+[`../audit/assumptions-export_verification.md`](../audit/assumptions-export_verification.md).
+**Local branch, NOT pushed/merged.**
+
 **Brief 101 — Lifecycle £/tonne + assumption notes — CLOSED 2026-07-13.**
 On branch `chris/lifecycle-notes` (off main). Engine untouched (`instantCalc.js`/assembler
 byte-identical) — cost-model + intervention-data + export only. **P1:** £/tonne now uses
