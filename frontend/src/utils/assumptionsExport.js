@@ -306,6 +306,54 @@ export function collectAssumptions({ building = {}, constructions = {}, libraryD
 
 export { COLUMNS as ASSUMPTIONS_COLUMNS }
 
+// ── Outputs sheet (brief: bridgwater-baseline-model1, D3) ────────────────────
+// Metered anchors — Bridgwater 2025 calendar year, triangulated across client
+// billing, MPAN half-hourly, and 505 meter reads (GIA 4,215 m²).
+const METERED = { electricity_kwh: 572400, gas_kwh: 207700, eui: 185.1, gia_m2: 4215 }
+
+/**
+ * Build the Outputs-sheet data from a FULL-mode engine `consumption` result:
+ * annual kWh by end use, fuel totals, and metered-anchor deltas. End uses
+ * reconcile to the fuel totals — Auxiliary carries the electricity residual so
+ * the sum row always closes. Returns null when no consumption is supplied.
+ */
+export function collectOutputs(consumption) {
+  if (!consumption?.total) return null
+  const mwh = v => (Number.isFinite(v) ? v : 0)
+  const kwh = v => Math.round(mwh(v) * 1000)
+  const c = consumption
+  const fans = (c.ventilation || []).reduce((s, v) => s + mwh(v.fan_electricity_mwh), 0)
+  const endUses = [
+    ['Heating', 'Electricity', kwh(c.space_heating?.electricity_mwh)],
+    ['Cooling', 'Electricity', kwh(c.space_cooling?.electricity_mwh)],
+    ['DHW', 'Gas', kwh(c.dhw?.gas_mwh)],
+    ['DHW', 'Electricity (ASHP incl. pump)', kwh(c.dhw?.electricity_mwh)],
+    ['Fans / ventilation', 'Electricity', kwh(fans)],
+    ['Lighting', 'Electricity', kwh(c.lighting?.electricity_mwh)],
+    ['Equipment / small power', 'Electricity', kwh(c.small_power?.electricity_mwh)],
+  ]
+  const elecTotal = kwh(c.total?.electricity_mwh)
+  const gasTotal = kwh(c.total?.gas_mwh)
+  const elecEndUseSum = endUses.filter(r => r[1] !== 'Gas').reduce((s, r) => s + r[2], 0)
+  endUses.push(['Auxiliary', 'Electricity', elecTotal - elecEndUseSum])  // residual — sum reconciles
+
+  const sumEndUse = endUses.reduce((s, r) => s + r[2], 0)
+  const total = elecTotal + gasTotal
+  const eui = Number.isFinite(c.total?.kwh_per_m2_yr) ? c.total.kwh_per_m2_yr
+            : (METERED.gia_m2 > 0 ? total / METERED.gia_m2 : 0)
+  const meteredTotal = METERED.electricity_kwh + METERED.gas_kwh
+  const dpct = (m, met) => (met ? Math.round((m - met) / met * 1000) / 10 : 0)
+  return {
+    endUses, sumEndUse, elecTotal, gasTotal, total, eui,
+    anchors: [
+      ['Electricity', elecTotal, METERED.electricity_kwh, Math.round(elecTotal - METERED.electricity_kwh), dpct(elecTotal, METERED.electricity_kwh)],
+      ['Gas', gasTotal, METERED.gas_kwh, Math.round(gasTotal - METERED.gas_kwh), dpct(gasTotal, METERED.gas_kwh)],
+      ['Total', total, meteredTotal, Math.round(total - meteredTotal), dpct(total, meteredTotal)],
+      ['EUI (kWh/m²·yr)', Math.round(eui * 10) / 10, METERED.eui, Math.round((eui - METERED.eui) * 10) / 10, dpct(eui, METERED.eui)],
+    ],
+  }
+}
+
 // ── XLSX writer + download (Part 2) ─────────────────────────────────────────
 /**
  * Build a single-sheet ("Inputs") XLSX from the collected assumptions and
@@ -318,13 +366,15 @@ export { COLUMNS as ASSUMPTIONS_COLUMNS }
  *
  * @returns {{ filename: string, rowCount: number, escalations: string[] }}
  */
-export function exportAssumptionsXlsx({ building, constructions, libraryData, occupancySummary, meta = {} } = {}) {
+export function exportAssumptionsXlsx({ building, constructions, libraryData, occupancySummary, consumption, meta = {} } = {}) {
   const { rows, escalations } = collectAssumptions({ building, constructions, libraryData, occupancySummary })
 
   const scenario = meta.scenarioName || building?.name || 'scenario'
   const now = meta.now instanceof Date ? meta.now : new Date()
   const stamp = now.toISOString().slice(0, 19).replace('T', ' ') + ' UTC'
   const dateForName = now.toISOString().slice(0, 10)
+  // Engine SHA (D4) — injected by vite (define __APP_SHA__); meta override wins.
+  const engineSha = meta.engineSha || (typeof __APP_SHA__ !== 'undefined' ? __APP_SHA__ : '') || null
 
   // Metadata stamp block, blank row, header row, then data — one sheet.
   const aoa = [
@@ -332,7 +382,8 @@ export function exportAssumptionsXlsx({ building, constructions, libraryData, oc
     ['Scenario', scenario],
     ['Exported', stamp],
   ]
-  if (meta.appVersion) aoa.push(['App version / SHA', meta.appVersion])
+  if (engineSha) aoa.push(['Engine SHA', engineSha])
+  if (meta.appVersion) aoa.push(['App version', meta.appVersion])
   aoa.push(['Note', 'Snapshot of live model inputs — hard values, not formulas.'])
   aoa.push([])
   aoa.push([...COLUMNS])
@@ -343,6 +394,28 @@ export function exportAssumptionsXlsx({ building, constructions, libraryData, oc
 
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Inputs')
+
+  // Outputs sheet (D3) — modelled end uses + fuel totals vs metered anchors,
+  // from a full-mode engine consumption result (when supplied).
+  const outputs = collectOutputs(consumption)
+  if (outputs) {
+    const oaoa = [
+      ['NZA-Sim — Outputs (modelled vs metered)'],
+      ['Scenario', scenario],
+      engineSha ? ['Engine SHA', engineSha] : ['Engine SHA', '(unset)'],
+      ['Note', 'Model-1 (as-specified). End uses reconcile to fuel totals. Metered = 2025 triangulated (GIA 4,215 m²).'],
+      [],
+      ['End use', 'Fuel', 'Model kWh/yr'],
+      ...outputs.endUses,
+      ['Sum — end uses', '', outputs.sumEndUse],
+      [],
+      ['Fuel / metric', 'Model', 'Metered', 'Δ (model − metered)', 'Δ %'],
+      ...outputs.anchors,
+    ]
+    const ows = XLSX.utils.aoa_to_sheet(oaoa)
+    ows['!cols'] = [{ wch: 28 }, { wch: 26 }, { wch: 16 }, { wch: 20 }, { wch: 10 }]
+    XLSX.utils.book_append_sheet(wb, ows, 'Outputs')
+  }
 
   const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
   const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })

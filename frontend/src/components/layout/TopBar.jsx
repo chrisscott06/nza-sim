@@ -7,6 +7,7 @@ import { useWeather } from '../../context/WeatherContext.jsx'
 import { useHourlySolar } from '../../hooks/useHourlySolar.js'
 import { calculateInstant } from '../../utils/instantCalc.js'
 import { exportAssumptionsXlsx } from '../../utils/assumptionsExport.js'
+import { SYSTEM_TEMPLATES_LIBRARY } from '../../data/systemTemplatesLibrary.js'
 import ProjectPicker from './ProjectPicker.jsx'
 
 // ── Baseline control (global, every module) ──────────────────────────────────
@@ -55,15 +56,20 @@ function BaselineControl() {
       const cb = snap?.comfort_band ?? ctx.comfortBand
       let libList = []
       try { const r = await fetch('/api/library/constructions'); const d = await r.json(); libList = d.constructions ?? [] } catch {}
-      let occ = null
+      // Full-mode run gives BOTH occupancy_summary and the consumption breakdown
+      // (Outputs sheet). system_templates is required to resolve v40 systems.
+      let occ = null, consumption = null
       try {
-        const s2 = calculateInstant(cfg, constr, ctx.systems, { constructions: libList },
-          weatherData, hourlySolar, null, { mode: 'envelope-gains', comfortBand: cb, _skipInterventions: true })
-        occ = s2?.occupancy_summary ?? null
-      } catch { /* occupancy line escalates in the collector */ }
+        const full = calculateInstant(cfg, constr, ctx.systems, {
+          constructions: libList, system_templates: SYSTEM_TEMPLATES_LIBRARY,
+          library_systems: cfg?.library_systems ?? [], library_schedules: cfg?.library_schedules ?? [],
+        }, weatherData, hourlySolar, null, { mode: 'full', comfortBand: cb, _skipInterventions: true })
+        occ = full?.occupancy_summary ?? null
+        consumption = full?.consumption ?? null
+      } catch (e) { console.warn('[baseline-export] engine run failed:', e) }
       exportAssumptionsXlsx({
         building: cfg, constructions: constr, libraryData: { constructions: libList },
-        occupancySummary: occ,
+        occupancySummary: occ, consumption,
         meta: { scenarioName: (params?.name || 'project') + (snap ? ' — baseline' : ' — current') },
       })
     } finally { setBusy(false); setOpen(false) }
