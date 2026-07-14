@@ -2,6 +2,25 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
+## ✅ Assumptions Export — single-sheet "Inputs" XLSX — CLOSED 2026-07-14 on `chris/assumptions-export` *(off main; local, NOT pushed/merged)*
+
+One-click **"Export assumptions"** button on the Building inputs page → a single-sheet
+`nza-sim_assumptions_<scenario>_<date>.xlsx` snapshotting every model **input** assumption
+(fabric, gains, occupancy, DHW, baseline systems) for the loaded scenario. **Read-only — no
+engine or schedule change.** `collectAssumptions()` reads live state (ProjectContext + State-2
+`occupancy_summary`), zero hardcoded values; SheetJS already installed (no npm). Verified
+end-to-end on live HIEX by decoding the **actual exported blob**: 40+ rows, every value faithful,
+single "Inputs" sheet, filename convention. **Occupancy tripwire reconciled:** derived
+schedule-realised average = **293.8** (annual 2,573,932 person·h), NOT the brief's stale 330.6 —
+it's the faithful live value (State-2 `occupancy_summary`, identical to the Gains summary),
+shown alongside the **414** peak (138×3) so the drift is visible; Chris confirmed 293.8. Escalation:
+"number of occupied rooms" kept as a DERIVED row (no new input). Divergences (Lessons):
+screenshots replaced by blob-decode (in-app browser sandboxes downloads); header not bold
+(community SheetJS ignores cell styles) — flagged, not chased. Follow-up: naming collision with
+`interventionExport.js` Sheet 5 "Assumptions" left as-is. Brief
+[`docs/briefs/archive/assumptions-export_COMPLETED.md`](docs/briefs/archive/assumptions-export_COMPLETED.md);
+audit [`docs/audit/assumptions-export_verification.md`](docs/audit/assumptions-export_verification.md).
+
 ## ✅ Brief 101 — Lifecycle £/tonne + assumption notes — CLOSED 2026-07-13 on `chris/lifecycle-notes` *(off main; PR open, NOT merged)*
 
 Small two-part brief, **engine untouched** (`instantCalc.js`/assembler byte-identical vs main) — cost model + intervention data + Library XLSX export only. Deliverable re-exported: `Bridgewater_Hotel_interventions.xlsx` (5 sheets).
