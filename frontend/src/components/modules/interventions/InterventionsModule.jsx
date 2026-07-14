@@ -133,6 +133,18 @@ export default function InterventionsModule() {
   const strategyInterventions = useMemo(() => resolveStrategyInterventions(params), [params])
   const strategyRefIds = useMemo(() => strategyRefIdSet(params), [params])
 
+  // Route B — interventions measure against the PINNED baseline snapshot (the
+  // inputs signed off in the project), not the live project. Falls back to live
+  // params/constructions/comfortBand until a baseline is pinned, so behaviour is
+  // unchanged for projects that haven't saved one. The intervention DEFINITIONS
+  // stay live (resolved from params above); only the BASELINE is pinned. All
+  // Static baseline consumers below (engineResult / baselineConfig / runEngine)
+  // read from these so they can never disagree.
+  const _baselineSnap = params?.baseline_snapshot
+  const baselineParams = _baselineSnap?.building_config ?? params
+  const baselineConstructions = _baselineSnap?.construction_choices ?? constructions
+  const baselineComfort = _baselineSnap?.comfort_band ?? comfortBand
+
   // Brief 89 (Brief C) Part 7: project-level CRREM pathway pick. v1 is single-
   // pathway — property type derives from the project building_type (single source
   // of truth), country fixed UK, pathway local (1.5°C; persistence + more curves
@@ -186,9 +198,9 @@ export default function InterventionsModule() {
   // in-progress editor edits are swapped in here, so the global result is frozen while
   // editing and recomputes once when params change (Apply / add / reorder / toggle).
   const paramsForEngine = useMemo(() => {
-    if (!params) return params
-    return { ...params, interventions: strategyInterventions }
-  }, [params, strategyInterventions])
+    if (!baselineParams) return baselineParams
+    return { ...baselineParams, interventions: strategyInterventions }
+  }, [baselineParams, strategyInterventions])
 
   // Engine result with interventions block (when present).
   //
@@ -225,15 +237,15 @@ export default function InterventionsModule() {
     try {
       return calculateInstant(
         paramsForEngine,
-        constructions, systems, libraryData, weatherData, hourlySolar, null,
-        { mode: 'full', comfortBand, engine: 'v2.5' },
+        baselineConstructions, systems, libraryData, weatherData, hourlySolar, null,
+        { mode: 'full', comfortBand: baselineComfort, engine: 'v2.5' },
       )
     } catch (err) {
       console.warn('[InterventionsModule] calculateInstant threw:', err)
       return null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paramsForEngine, constructions, systems, libraryData, weatherData, hourlySolar, comfortBand])
+  }, [paramsForEngine, baselineConstructions, systems, libraryData, weatherData, hourlySolar, baselineComfort])
 
   const stackResult = engineResult?.consumption?.interventions ?? engineResult?.interventions ?? null
 
@@ -442,12 +454,12 @@ export default function InterventionsModule() {
   // single-intervention preview can thread it via options.comfortBand
   // when calling calculateInstant inside runInterventionStack.
   const baselineConfig = useMemo(() => ({
-    building: params,
-    constructions,
+    building: baselineParams,
+    constructions: baselineConstructions,
     systems,
     libraryData,
-    comfortBand,
-  }), [params, constructions, systems, libraryData, comfortBand])
+    comfortBand: baselineComfort,
+  }), [baselineParams, baselineConstructions, systems, libraryData, baselineComfort])
 
   // Brief 71 Part 4 (2026-05-28): distinct theme values from the current
   // interventions list, alphabetised. Threaded to the editor popout so its
@@ -485,16 +497,16 @@ export default function InterventionsModule() {
   // isolated hook calls runInterventionStack with singletons.
   const runEngine = useMemo(() => {
     return (cfg) => calculateInstant(
-      cfg?.building ?? params,
-      cfg?.constructions ?? constructions,
+      cfg?.building ?? baselineParams,
+      cfg?.constructions ?? baselineConstructions,
       cfg?.systems ?? systems,
       cfg?.libraryData ?? libraryData,
       weatherData,
       hourlySolar,
       null,
-      { mode: 'full', comfortBand, engine: 'v2.5', _skipInterventions: true },
+      { mode: 'full', comfortBand: baselineComfort, engine: 'v2.5', _skipInterventions: true },
     )
-  }, [params, constructions, systems, libraryData, weatherData, hourlySolar, comfortBand])
+  }, [baselineParams, baselineConstructions, systems, libraryData, weatherData, hourlySolar, baselineComfort])
 
   // Brief 87 Part 4 — per-intervention isolated deltas for the Library view.
   // Reuses the existing Brief 71 hook (singleton stack per intervention), so no

@@ -19,9 +19,38 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react'
+
+// ── Baseline snapshot helpers (pinned project baseline for Interventions) ────
+// Fields inside building_config that are NOT baseline inputs — they are the
+// measures / costs / snapshot layered ON TOP of the baseline. Excluded from the
+// pinned snapshot and from drift comparison. Keep in sync with DEFAULT_PARAMS if
+// new measure/cost fields are added.
+const NON_BASELINE_KEYS = [
+  'baseline_snapshot', 'interventions', 'strategies', 'library_interventions',
+  'roadmap', 'cost_template_library', 'cost_defaults',
+]
+function stripToBaselineInputs(cfg) {
+  if (!cfg || typeof cfg !== 'object') return {}
+  const out = {}
+  for (const k of Object.keys(cfg)) {
+    if (!NON_BASELINE_KEYS.includes(k)) out[k] = cfg[k]
+  }
+  return out
+}
+function clone(v) { return v == null ? v : JSON.parse(JSON.stringify(v)) }
+function buildBaselineSnapshot(params, constructions, comfortBand, savedAtIso) {
+  return {
+    schema: 'baseline/v1',
+    saved_at: savedAtIso,
+    building_config: clone(stripToBaselineInputs(params)),
+    construction_choices: clone(constructions) ?? {},
+    comfort_band: comfortBand ? { lower_c: comfortBand.lower_c, upper_c: comfortBand.upper_c } : null,
+  }
+}
 import { publishState, onInitialStateRequest } from '../utils/broadcastChannel.js'
 import { SCHEDULE_PRESETS, findPreset } from '../data/schedulePresets.js'
 import { migrateInterventionPatches } from '../utils/interventionsEngine.js'  // Brief 42 Part 2
@@ -1240,6 +1269,12 @@ export function ProjectProvider({ children }) {
       cost_template_library: Array.isArray(bc.cost_template_library) ? bc.cost_template_library : DEFAULT_PARAMS.cost_template_library,
       // Project cost defaults (tariffs + on-cost %s) — persist across loads.
       cost_defaults: (bc.cost_defaults && typeof bc.cost_defaults === 'object' && !Array.isArray(bc.cost_defaults)) ? bc.cost_defaults : DEFAULT_PARAMS.cost_defaults,
+      // Pinned baseline snapshot (global baseline control). Like the other
+      // NON_BASELINE_KEYS above (interventions, strategies, roadmap, …) it must
+      // be carried through the loader allow-list, or the pin persists to the DB
+      // but is invisible after reload — and the next /building autosave (which
+      // PUTs the full params object) would drop it, wiping the stored pin.
+      baseline_snapshot: bc.baseline_snapshot ?? null,
     })
     setConstructions(project.construction_choices ?? DEFAULT_CONSTRUCTIONS)
     setSystems(migrateSystemsConfig(project.systems_config))
@@ -1548,6 +1583,57 @@ export function ProjectProvider({ children }) {
     setProjects(list)
   }
 
+  // ── Baseline snapshot (pinned project baseline for Interventions) ─────────
+  // Route B: interventions measure against a pinned snapshot of the project
+  // inputs, not the live project. saveBaseline pins the current inputs;
+  // restoreToBaseline resets the live inputs back to the snapshot (KEEPS the
+  // interventions/strategies); baselineDrift flags when live inputs differ from
+  // the pin. Stored inside building_config (params.baseline_snapshot) so it
+  // persists via the normal /building save — no schema change.
+  const saveBaseline = useCallback(() => {
+    setParams(p => {
+      if (!p) return p
+      const snapshot = buildBaselineSnapshot(p, constructions, comfortBand, new Date().toISOString())
+      const next = { ...p, baseline_snapshot: snapshot }
+      _scheduleSave('building', next, 'user')
+      _broadcast({ building: next })
+      return next
+    })
+  }, [constructions, comfortBand, currentProjectId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const restoreToBaseline = useCallback(() => {
+    const snap = params?.baseline_snapshot
+    if (!snap?.building_config) return
+    // Keep the measures/costs/snapshot (not part of the baseline); reset every
+    // baseline input back to the pinned values. Event handler → read params
+    // directly and call each setter flat (no nested setState).
+    const keep = {}
+    for (const k of NON_BASELINE_KEYS) if (k in params) keep[k] = params[k]
+    const nextParams = { ...clone(stripToBaselineInputs(snap.building_config)), ...keep }
+    const nextConstructions = clone(snap.construction_choices) ?? constructions
+    const nextComfort = snap.comfort_band ?? comfortBand
+    setParams(nextParams)
+    setConstructions(nextConstructions)
+    if (nextComfort?.lower_c != null && nextComfort?.upper_c != null) setComfortBandState(nextComfort)
+    _scheduleSave(null, {
+      building_config: nextParams,
+      construction_choices: nextConstructions,
+      comfort_band_lower_c: nextComfort?.lower_c,
+      comfort_band_upper_c: nextComfort?.upper_c,
+    }, 'user')
+    _broadcast({ building: nextParams, constructions: nextConstructions, comfortBand: nextComfort })
+  }, [params, constructions, comfortBand, currentProjectId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const baselineSnapshot = params?.baseline_snapshot ?? null
+  const baselineDrift = useMemo(() => {
+    if (!baselineSnapshot?.building_config) return { pinned: false, drifted: false, saved_at: null }
+    const liveDiff = JSON.stringify(stripToBaselineInputs(params)) !== JSON.stringify(baselineSnapshot.building_config)
+    const constrDiff = JSON.stringify(constructions ?? {}) !== JSON.stringify(baselineSnapshot.construction_choices ?? {})
+    const cb = baselineSnapshot.comfort_band
+    const comfortDiff = !!cb && (cb.lower_c !== comfortBand?.lower_c || cb.upper_c !== comfortBand?.upper_c)
+    return { pinned: true, drifted: liveDiff || constrDiff || comfortDiff, saved_at: baselineSnapshot.saved_at }
+  }, [params, constructions, comfortBand, baselineSnapshot])
+
   // ── Context value ─────────────────────────────────────────────────────────
 
   return (
@@ -1573,6 +1659,12 @@ export function ProjectProvider({ children }) {
       updateConstruction,
       updateSystem,
       updateProjectName,
+
+      // Baseline snapshot (pinned project baseline for Interventions — Route B)
+      baselineSnapshot,
+      baselineDrift,
+      saveBaseline,
+      restoreToBaseline,
 
       // Project CRUD
       createProject,
