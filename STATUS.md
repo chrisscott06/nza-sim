@@ -2,7 +2,27 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
-## ✅ Interventions Fix (relative ops + Model-2 re-reference + 4.8 results) — CLOSED 2026-07-15 on `chris/interventions-fix` *(PR to follow; Chris merges after walkthrough)*
+## ✅ 505 Reconciliation (trace their savings to assumptions, compare under Model 2) — CLOSED 2026-07-15 on `chris/505-reconciliation` *(PR to follow; register DRAFTS → Claude Chat tone review → Chris)*
+
+Reproduced 505 Design's claimed savings **under their assumptions** (diagnostic, not deference) and
+compared under Model 2. **No engine changes; scenarios never modified (scratch configs only).** Audit
+[`docs/audit/505_reconciliation.md`](docs/audit/505_reconciliation.md); extraction + register drafts in
+`docs/reference/505/` (gitignored dir — text force-added, 13MB binaries stay local).
+
+- **P1** (`fc4c332`): extracted DRAFT P02 docx + workbook claims with provenance. Three MUST-RESOLVE items
+  are structurally embedded as "savings" in 505's Consolidation table.
+- **P2** (`38d79f1`): baseline gap 180.85 vs 185.08 = the meter window (bin-1 Convention); tier arithmetic
+  verified (181−54/−66/−86 = 127/115/95).
+- **P3** (`6845b2e`): Run A (their assumptions) / Run B (Model 2) per measure. Reproduced A2 occupancy→1.6
+  (111.8 MWh/26.5 EUI vs their 120.6/28.6) and A3 washing (35.1 vs 34.5, exact). **D5 ventilator EUI-of-12:**
+  50.9 MWh thermal/EUI 12.07 (COP-1) → 18.1 MWh delivered/EUI 4.30 via the VRF → gains-cancelled ~0.
+- **P4** (`<this>`): 11 register DRAFTS (4 bins × COMMENT/MUST-RESOLVE) + tally. **CRUX: ~91% of 505's
+  low-cost −54 EUI tier is the three must-resolve items** (occupancy + washing + ventilator = 48.9/54) —
+  reproducible under their assumptions, re-labelled/shrunk under NZA's CRREM gross-metered methodology.
+  VRF entry = one soft SMMS-e COMMENT (Paul confirmed the fleet HR description stands). All 6 checks pass.
+- **DRAFTS only** — nothing sent to 505; route to Claude Chat tone review (the brief's gate) before Chris.
+
+## ✅ Interventions Fix (relative ops + Model-2 re-reference + 4.8 results) — CLOSED 2026-07-15 on `chris/interventions-fix` *(MERGED to `main` `4d8650b`, PR #23)*
 
 Made the interventions stack coherent against Model 2. **No thermal-engine changes.** Results:
 [`docs/audit/interventions_model2_results.md`](docs/audit/interventions_model2_results.md); brief
