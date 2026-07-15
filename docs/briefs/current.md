@@ -1,6 +1,6 @@
 # Current brief
 
-**ACTIVE — 505 Reconciliation: Trace Their Savings to Assumptions, Compare Under Model 2, Draft Register Comments.**
+**505 Reconciliation: Trace Their Savings to Assumptions — CLOSED 2026-07-15 on `chris/505-reconciliation` (PR to follow; register DRAFTS route to Claude Chat tone review, then Chris).**
 On branch `chris/505-reconciliation` (off `main` `4d8650b`, #20–#23 merged; Model-1/Model-2 pinned).
 Reproduce each 505-Design claimed saving under THEIR stated assumptions in the NZA engine (diagnostic,
 not deference), compare with the same measures under Model 2 (reuse interventions-fix results), and

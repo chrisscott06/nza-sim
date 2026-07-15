@@ -65,5 +65,50 @@ regime and a scope exclusion, not interventions) and the ventilator is **4.3 EUI
 toward 0** — not a 12-EUI baseload. This is the reconciliation's centre of gravity and why these three are
 MUST-RESOLVE-BEFORE-MERGE in a shared document.
 
-## Part 4 — comparison table + four-bin/two-flag tally
-_(pending)_
+## Part 4 — register tally + inconsistencies
+
+Register drafts: `docs/reference/505/register_drafts.md` (11 entries, each DRAFT + bin + flag).
+**Routing: Claude Chat tone review first (the brief's gate), then Chris. Nothing sent to 505.**
+
+### Four-bin / two-flag tally
+| Bin | Entries | | Flag | Entries |
+|---|---|---|---|---|
+| 1 Convention | R4, R11 (2) | | **MUST-RESOLVE** | **R1, R2, R3 (3)** |
+| 2 Method | R3, R5, R6, R7 (4) | | COMMENT | R4–R11 (8) |
+| 3 Classification | R1, R2 (2) | | | |
+| 4 Agreement | R8, R9, R10 (3) | | | |
+
+### Agreements (deliverables too)
+ASHP-primary-HWS is a large real saving (R9); VRF replacement agreed (R8, fleet HR description stands per
+Paul↔Chris); solar shading agreed, small (R10); fan-speed direction agreed (R5); the washing figure itself
+agreed exactly — 34.5 MWh (R2, the divergence is classification only).
+
+### 505-internal inconsistencies found (D2b)
+- Report resultant EUIs **127 / 115** vs workbook **126.8 / 115.1** (rounding — confirm current).
+- Tier reductions presented **cumulatively** (−54/−66/−86 from 181); arithmetically consistent.
+- Occupancy (120.6 MWh) and tier EUIs sit behind **cross-sheet formulas** — no cached value in a flat XML
+  read; "provide driving cell" raised as a register question (R11), not a blocker (per-measure attribution
+  was not reduced to guesswork).
+
+### Headline
+The reconciliation's centre of gravity is **tier A**: ~91% of its −54 EUI is the three MUST-RESOLVE items
+(occupancy 28.6 + washing 8.2 + ventilator 12.1 = 48.9). Each is reproducible under 505's assumptions
+(diagnostic) but re-labels or shrinks under NZA's CRREM gross-metered, delivered-energy methodology. Tiers
+B/C are largely agreements or method-notes. The conversation this enables is about **named assumptions**
+(occupancy regime, laundry scope, COP-1 vs VRF), not whose model is right.
+
+### Verification (all pass)
+1. Baseline: gap documented as the meter window (bin 1). ✔
+2. Tier sums reproduced (181−54/−66/−86). ✔
+3. Every mapped measure: both runs + verdict + named-assumption Δ (A2/A3 reproduced ±8%/±2%). ✔
+4. Conservation holds on every run. ✔
+5. Every divergence has a classified, flagged register draft; agreements recorded. ✔
+6. Neither named scenario modified (all Run-A were scratch clones); residual untouched. ✔
+
+## Lessons / divergences from brief
+- **Reference-file commit:** `.gitignore:60` deliberately excludes `docs/reference/505/` (13MB client
+  binaries); committed the text extraction + register (force-added) instead of the raw docx/xlsx. Approved.
+- **Baseline "reproduction":** the baseline is metered, not modelled — the ±3 check resolves to a window
+  convention, not an engine reproduction.
+- **Exact workbook cells** behind occupancy/tier EUIs live in cross-sheet formulas; raised as a register
+  question rather than chased through the 10 MB workbook.
