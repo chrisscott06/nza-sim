@@ -89,12 +89,27 @@ D4_MEASURE = {
   'measure_life_years': 30,
   'patches': [P('scale', f'building.openings.{f}.louvre_area_m2', 0.5) for f in ('north', 'south', 'east', 'west')],
   'assumption_notes': {'ENERGY BASIS': D4_NOTE, 'COST BASIS': 'Illustrative; no 505 cost basis - CONFIRM with 505.'},
+  # Cost plan — same shape every measure carries (groups/on_costs/template_origin/
+  # notes), empty lines (illustrative measure, no 505 cost basis). Required or the
+  # interventions UI dereferences an undefined cost and crashes.
+  'cost': {
+    'groups': [{'id': 'g_hiex_2_4', 'name': 'Cost plan (trickle-vent)', 'nrm2_category': None, 'collapsed': False, 'lines': []}],
+    'on_costs': {'design_fees_pct': 0, 'prelims_pct': 0, 'ohp_pct': 0, 'contingency_pct': 10, 'inflation_pct': 0},
+    'template_origin': None, 'notes': 'Illustrative - no 505 cost basis. CONFIRM with 505.',
+  },
 }
 
 con = sqlite3.connect('data/nza_sim.db'); con.row_factory = sqlite3.Row
 r = con.execute('SELECT building_config FROM projects WHERE id=?', (PID,)).fetchone()
 bc = json.loads(r['building_config'])
-old = bc.get('interventions') or []
+# Source the ORIGINAL 22 measures from the frozen pre-interventions-fix backup so
+# the re-author is deterministic + idempotent (re-running against an already-
+# re-authored live DB would otherwise re-split / duplicate the new measures).
+BACKUP = r'C:\Users\ChrisScott\Backups\nza-sim-db\nza_sim_pre-interventions-fix_2026-07-15.db'
+_bcon = sqlite3.connect(BACKUP); _bcon.row_factory = sqlite3.Row
+old = json.loads(_bcon.execute('SELECT building_config FROM projects WHERE id=?', (PID,)).fetchone()['building_config']).get('interventions') or []
+_bcon.close()
+assert len(old) == 22, f'expected 22 original measures in backup, got {len(old)}'
 out = []
 for it in old:
     iid = it.get('id')
