@@ -2,7 +2,28 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
-## ✅ Bridgwater Model-2 (In-Service Calibrated) — CLOSED 2026-07-15 on `chris/bridgwater-model2-calibrated` *([PR #22](https://github.com/chrisscott06/nza-sim/pull/22) open, NOT merged — Chris merges after walkthrough)*
+## ✅ Interventions Fix (relative ops + Model-2 re-reference + 4.8 results) — CLOSED 2026-07-15 on `chris/interventions-fix` *(PR to follow; Chris merges after walkthrough)*
+
+Made the interventions stack coherent against Model 2. **No thermal-engine changes.** Results:
+[`docs/audit/interventions_model2_results.md`](docs/audit/interventions_model2_results.md); brief
+[`docs/briefs/archive/interventions-fix_COMPLETED.md`](docs/briefs/archive/interventions-fix_COMPLETED.md).
+
+- **B1** (`8510a5e`): relative patch ops `scale`/`delta` on `interventionsEngine.applyPatch` — read live
+  value + transform; **fail-loud** (throw) on path-miss / non-numeric. Tests 13/13.
+- **B2** (`47b04db` + fix `da8ae0a`): re-authored measures relative to live per the diagnostic; fixed the
+  two mis-authored patches (1_3 deletes the VRF de-rate; 1_4 drops the side-effect COP de-rate); 3_3 ±1K
+  widen via custom 21/24; **D7** split 2_1→2_1a (2208)/2_1b (1656 l/s); **D4** new trickle-vent (×0.5,
+  illustrative, CONFIRM-505). Persisted via `scripts/_model2_reauthor_interventions.py` (idempotent).
+- **B3** (`767969d`): residual-exclusion structural proof — measures target named profiles, never the
+  residual; hard assertion residual byte-identical after every measure (PASS ×13).
+- **B4** (`d617754`): full stack re-run isolated vs Model 2 (production `runInterventionStack`) → 4.8
+  table. **5 sign-flips penalty→saving:** 1_3 −5.25, 2_2 −14.9, 3_1 −9.4, 3_2 −15.6, **4_2 −18.9 (was
+  +70)**. Conservation passes. MVHR both net penalty (no bypass) + with-bypass bound (2_1a ~−11.5, 2_1b
+  ~−20.5) + sealed-vents itemised; 1_4 100%-ASHP approximation flagged.
+- **B5**: verified in the live UI (impacts match harness); all 6 checks pass; scenarios untouched. A D4
+  crash (missing cost plan) was caught in browser verify + fixed.
+
+## ✅ Bridgwater Model-2 (In-Service Calibrated) — CLOSED 2026-07-15; MERGED to `main` `74e82fb` (PR #22)
 
 Second named scenario **"Bridgewater Hotel — calibrated (Model 2)"** from the pinned Model-1 baseline —
 evidence-cited in-service de-rates + a named auxiliary residual on a counted end-use. **No engine
