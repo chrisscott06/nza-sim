@@ -1,6 +1,6 @@
 # Current brief
 
-**Bridgwater Model-2 (In-Service Calibrated) — CLOSED 2026-07-15 on `chris/bridgwater-model2-calibrated` (PR to follow; Chris merges after walkthrough).**
+**Bridgwater Model-2 (In-Service Calibrated) — CLOSED 2026-07-15 on `chris/bridgwater-model2-calibrated` ([PR #22](https://github.com/chrisscott06/nza-sim/pull/22) open, NOT merged — Chris merges after walkthrough).**
 Two named scenarios on the project: **"Model 1 — as-specified" (EUI 119.2)** and **"Bridgewater Hotel —
 calibrated (Model 2)" (EUI 185.1 = metered)**. 15-step evidence-cited waterfall (119.2 → 150.0 →
 residual → 185.1); DHW re-anchored to gas 207.700 MWh at **57.57 L/p/day** (60 °C-equiv 34.5) under the
