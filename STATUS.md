@@ -2,7 +2,37 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
-## ✅ Bridgwater Baseline: Model-1 (As-Specified) — CLOSED 2026-07-14 on `chris/bridgwater-baseline-model1` *([PR #20](https://github.com/chrisscott06/nza-sim/pull/20) open, NOT merged — Chris merges after walkthrough)*
+## ✅ Bridgwater Model-2 (In-Service Calibrated) — CLOSED 2026-07-15 on `chris/bridgwater-model2-calibrated` *(PR to follow; Chris merges after walkthrough)*
+
+Second named scenario **"Bridgewater Hotel — calibrated (Model 2)"** from the pinned Model-1 baseline —
+evidence-cited in-service de-rates + a named auxiliary residual on a counted end-use. **No engine
+changes.** Audit
+[`docs/audit/bridgwater-model2-calibrated_close.md`](docs/audit/bridgwater-model2-calibrated_close.md);
+brief [`docs/briefs/archive/bridgwater-model2-calibrated_COMPLETED.md`](docs/briefs/archive/bridgwater-model2-calibrated_COMPLETED.md).
+
+- **Headline — Model-2 EUI 185.1 = metered** (elec 572,398 Δ −2 / gas 207,700 Δ 0). Waterfall:
+  119.2 (M1) → 140.4 (step 13) → 150.0 (step 14 DHW re-anchor) → **185.1** (step 15 residual).
+- **P0 named scenarios (minimal):** save/load/list per project in `building_config.scenarios[]` +
+  `active_scenario`, reusing the baseline-pin path; carried through NON_BASELINE_KEYS + the loader
+  allow-list (no repeat of the Model-1 round-trip bug). `ScenarioControl` chip in the top bar. Verified
+  on ZZ TEST (`99c457e`).
+- **P1/P2 waterfall** (`8da084a`): 13 in-service adjustments cumulatively, EUI after each (fixture
+  `docs/audit/fixtures/model2_base.json` + `scripts/_model2_waterfall.mjs`). Step 1 U-values is a real
+  gains-dominated cancellation (heat +4.5 / cool −3.3, net +0.1); step 3 door-infiltration = E1 skip;
+  laundry +34.498 = target.
+- **P3 DHW re-anchor** (`6aa18a8`): converged **L/p/day 57.57** (tap; 60 °C-equiv 34.5) → gas 207.700
+  (0.0%) under 60/40 split + η 0.85. Demand converged, not hand-picked.
+- **P4 residual + D3 audit** (`ed53696`): `auxiliary_residual_unattributed` 147.75 MWh (4.001 W/m²,
+  35.1 EUI pts), equipment-class (counted), **gain_fraction=0 = thermally-neutral by assumption**. In
+  stop-band. D2 proof: 424.648 → 572.400. D3 flagged 3 export rows: `gains.auxiliary` +
+  `latent_w_per_person` NOT CONSUMED; **`thermal_bridges` E5** — H_TB 170 W/K computed but not applied
+  in full-mode demand (Rule-14 gap; residual overstatement ≈ 1.6 MWh; follow-up brief flagged).
+- **P5 close:** both scenarios pinned/exported (2 sheets, SHA, D3 marks, **D5 dirty-stamp** "State:
+  saved"), Model-1 export EUI 119.2 unchanged, scenario round-trip no-bleed verified. All 10 checks pass.
+- **Follow-ups flagged (tasks):** wire `gains.auxiliary` onto a counted end-use (running in a parallel
+  session), and fix thermal bridging in the full-mode path.
+
+## ✅ Bridgwater Baseline: Model-1 (As-Specified) — CLOSED 2026-07-14 on `chris/bridgwater-baseline-model1` *([PR #20](https://github.com/chrisscott06/nza-sim/pull/20) MERGED to `main` `8ef67c4`)*
 
 Brought the Bridgewater baseline into line with the Model-1 (as-specified) definition,
 gas-anchored DHW, added an export **Outputs** sheet + engine SHA, and pinned the corrected

@@ -1,13 +1,18 @@
 # Current brief
 
-**ACTIVE — Bridgwater Model-2 (In-Service Calibrated) + Auxiliary Residual + Inert-Input Audit.**
-On branch `chris/bridgwater-model2-calibrated` (off `main` `e9dd13b`, with PR #20 Model-1 merged).
-Second named scenario "Bridgewater Hotel — calibrated (Model 2)" from the pinned Model-1 baseline;
-evidence-cited in-service de-rates applied cumulatively (15-step waterfall, EUI after each);
-DHW re-anchored to metered gas under a 60/40 gas:HP split; the remaining electricity gap
-implemented as an explicit **auxiliary residual on a counted end-use** (NOT `gains.auxiliary`);
-per-row inert-input trace audit + export marking; both scenarios exported. Parts 0–5.
-Brief [`active/bridgwater-model2-calibrated.md`](active/bridgwater-model2-calibrated.md).
+**Bridgwater Model-2 (In-Service Calibrated) — CLOSED 2026-07-15 on `chris/bridgwater-model2-calibrated` (PR to follow; Chris merges after walkthrough).**
+Two named scenarios on the project: **"Model 1 — as-specified" (EUI 119.2)** and **"Bridgewater Hotel —
+calibrated (Model 2)" (EUI 185.1 = metered)**. 15-step evidence-cited waterfall (119.2 → 150.0 →
+residual → 185.1); DHW re-anchored to gas 207.700 MWh at **57.57 L/p/day** (60 °C-equiv 34.5) under the
+60/40 split; electricity gap closed by a named **auxiliary residual on a counted end-use** (147.75 MWh,
+4.001 W/m², thermally-neutral by assumption — gain_fraction=0), elec 572,398 (Δ −2). Minimal named-
+scenario save/load/list built (Part 0). **No engine changes.** D3 inert-input audit flagged three
+export rows (`gains.auxiliary`, `latent_w_per_person` NOT CONSUMED; `thermal_bridges` E5 — H_TB 170 W/K
+computed but not applied in full-mode, follow-up brief). Audit
+[`../audit/bridgwater-model2-calibrated_close.md`](../audit/bridgwater-model2-calibrated_close.md);
+brief [`archive/bridgwater-model2-calibrated_COMPLETED.md`](archive/bridgwater-model2-calibrated_COMPLETED.md).
+NB: `active/bridgwater-auxiliary-inert-input-audit.md` is a **parallel session's** brief (the spawned
+gains.auxiliary follow-up) — not part of this close.
 
 **Bridgwater Baseline: Model-1 (As-Specified) — CLOSED 2026-07-14; MERGED to `main` `8ef67c4` (PR #20).**
 Brought the Bridgewater baseline to the Model-1 (as-specified) definition, gas-anchored DHW,

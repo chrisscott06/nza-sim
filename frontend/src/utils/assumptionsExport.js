@@ -396,6 +396,9 @@ export function exportAssumptionsXlsx({ building, constructions, libraryData, oc
   ]
   if (engineSha) aoa.push(['Engine SHA', engineSha])
   if (meta.appVersion) aoa.push(['App version', meta.appVersion])
+  // D5 dirty-state stamp — declares which named scenario this file came from AND
+  // whether the live inputs still matched it at export time.
+  if (meta.stateStamp) aoa.push(['State', meta.stateStamp])
   aoa.push(['Note', 'Snapshot of live model inputs — hard values, not formulas.'])
   aoa.push([])
   aoa.push([...COLUMNS])
@@ -415,7 +418,8 @@ export function exportAssumptionsXlsx({ building, constructions, libraryData, oc
       ['NZA-Sim — Outputs (modelled vs metered)'],
       ['Scenario', scenario],
       engineSha ? ['Engine SHA', engineSha] : ['Engine SHA', '(unset)'],
-      ['Note', 'Model-1 (as-specified). End uses reconcile to fuel totals. Metered = 2025 triangulated (GIA 4,215 m²).'],
+      ...(meta.stateStamp ? [['State', meta.stateStamp]] : []),
+      ['Note', meta.outputsNote || 'End uses reconcile to fuel totals. Metered = 2025 triangulated (GIA 4,215 m²).'],
       [],
       ['End use', 'Fuel', 'Model kWh/yr'],
       ...outputs.endUses,

@@ -122,8 +122,12 @@ function BaselineControl() {
 // built on the baseline-pin capture/restore path.
 function ScenarioControl() {
   const ctx = useContext(ProjectContext)
+  const { weatherData } = useWeather()
+  const params = ctx?.params
+  const hourlySolar = useHourlySolar(weatherData, params?.orientation ?? 0)
   const [open, setOpen] = useState(false)
   const [newName, setNewName] = useState('')
+  const [busy, setBusy] = useState(false)
   const ref = useRef(null)
 
   useEffect(() => {
@@ -144,6 +148,40 @@ function ScenarioControl() {
     : 'text-mid-grey border-light-grey bg-white'
 
   const save = (name) => { const nm = (name ?? '').trim(); if (!nm) return; ctx.saveScenario(nm); setNewName('') }
+
+  // Export the LIVE inputs (== the active scenario when just loaded), full-mode
+  // consumption for the Outputs sheet, D4 SHA, D3 inert-input marks, and the D5
+  // dirty-state stamp declaring provenance. "Export both scenarios" = load each,
+  // export each.
+  const handleExportScenario = async () => {
+    setBusy(true)
+    try {
+      const cfg = params, constr = ctx.constructions, cb = ctx.comfortBand
+      let libList = []
+      try { const r = await fetch('/api/library/constructions'); const d = await r.json(); libList = d.constructions ?? [] } catch {}
+      let occ = null, consumption = null
+      try {
+        const full = calculateInstant(cfg, constr, ctx.systems, {
+          constructions: libList, system_templates: SYSTEM_TEMPLATES_LIBRARY,
+          library_systems: cfg?.library_systems ?? [], library_schedules: cfg?.library_schedules ?? [],
+        }, weatherData, hourlySolar, null, { mode: 'full', comfortBand: cb, _skipInterventions: true })
+        occ = full?.occupancy_summary ?? null
+        consumption = full?.consumption ?? null
+      } catch (e) { console.warn('[scenario-export] engine run failed:', e) }
+      const stateStamp = active
+        ? (dirty.dirty ? `MODIFIED from "${active}" (${dirty.diffCount} value${dirty.diffCount === 1 ? '' : 's'} differ)` : `saved`)
+        : 'no scenario (live inputs)'
+      exportAssumptionsXlsx({
+        building: cfg, constructions: constr, libraryData: { constructions: libList },
+        occupancySummary: occ, consumption,
+        meta: {
+          scenarioName: active || cfg?.name || 'project',
+          stateStamp,
+          outputsNote: `${active || 'Live inputs'}. End uses reconcile to fuel totals. Metered = 2025 triangulated (GIA 4,215 m²).`,
+        },
+      })
+    } finally { setBusy(false); setOpen(false) }
+  }
 
   return (
     <div className="relative" ref={ref}>
@@ -210,6 +248,11 @@ function ScenarioControl() {
               Save
             </button>
           </div>
+          <div className="h-px bg-light-grey my-1" />
+          <button onClick={handleExportScenario} disabled={busy}
+            className="w-full text-left px-1.5 py-1.5 rounded hover:bg-off-white text-navy disabled:opacity-50">
+            {busy ? 'Exporting…' : `⬇ Export ${active ? `“${active}”` : 'current inputs'} to Excel`}
+          </button>
         </div>
       )}
     </div>
