@@ -269,6 +269,32 @@ export function applyPatch(config, patch, libraryData) {
       container[leafKey] = resolved
       return cloned
     }
+    // Relative ops (interventions-fix brief D1). Unlike `set`, these read the
+    // CURRENT (live) value at the path and transform it — so a measure is a
+    // relative transformation coherent against ANY baseline (Model 2 here), not
+    // an absolute frozen to a config that no longer exists.
+    //   scale: value ×= factor        delta: value += amount
+    // FAIL LOUDLY, never silently: a scale/delta that can't resolve its path or
+    // finds a non-numeric current value THROWS — a silent no-op would leave the
+    // value untransformed and the measure would compute as a placebo (exactly
+    // the failure class the diagnostic caught). Authoring errors surface here.
+    case 'scale':
+    case 'delta': {
+      const { container, leafKey } = navigateToParent(cloned, segments)
+      if (container == null) {
+        throw new Error(`[interventionsEngine] ${patch.op}: path not found — ${patch.path}`)
+      }
+      const cur = container[leafKey]
+      if (typeof cur !== 'number' || !Number.isFinite(cur)) {
+        throw new Error(`[interventionsEngine] ${patch.op}: current value at ${patch.path} is not a finite number (got ${JSON.stringify(cur)})`)
+      }
+      const operand = Number(resolved)
+      if (!Number.isFinite(operand)) {
+        throw new Error(`[interventionsEngine] ${patch.op}: operand is not a finite number (got ${JSON.stringify(resolved)})`)
+      }
+      container[leafKey] = patch.op === 'scale' ? cur * operand : cur + operand
+      return cloned
+    }
     case 'add': {
       const arr = navigateToArray(cloned, segments)
       if (!Array.isArray(arr)) {

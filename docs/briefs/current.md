@@ -1,6 +1,19 @@
 # Current brief
 
-**Bridgwater Model-2 (In-Service Calibrated) — CLOSED 2026-07-15 on `chris/bridgwater-model2-calibrated` ([PR #22](https://github.com/chrisscott06/nza-sim/pull/22) open, NOT merged — Chris merges after walkthrough).**
+**Interventions Fix: relative ops, re-author, Model-2 re-reference, 4.8 results — CLOSED 2026-07-15 on `chris/interventions-fix` (PR to follow; Chris merges after walkthrough).**
+Added relative patch ops (`scale`/`delta`, fail-loud) to `interventionsEngine.applyPatch`; re-authored
+every stale-absolute measure relative to live state; fixed the two mis-authored patches; split MVHR into
+2_1a/2_1b + added the D4 trickle-vent measure; excluded the Model-2 residual from every %-measure base
+(structural + hard assertion). **No thermal-engine changes.** Full stack re-run isolated vs Model 2 →
+report 4.8 table: five measures flipped penalty→saving (1_3 −5.25, 2_2 −14.9, 3_1 −9.4, 3_2 −15.6, 4_2
+**−18.9 was +70**); MVHR both net penalty as-modelled (no bypass) with the with-bypass bound stated
+(2_1a ~−11.5, 2_1b ~−20.5). Verified in the live UI. Results
+[`../audit/interventions_model2_results.md`](../audit/interventions_model2_results.md);
+brief [`archive/interventions-fix_COMPLETED.md`](archive/interventions-fix_COMPLETED.md).
+NB: `active/` also holds three **parallel-session** briefs (gains.auxiliary, thermal-bridging,
+performance-gap-term) — not part of this close.
+
+**Bridgwater Model-2 (In-Service Calibrated) — CLOSED 2026-07-15; MERGED to `main` `74e82fb` (PR #22).**
 Two named scenarios on the project: **"Model 1 — as-specified" (EUI 119.2)** and **"Bridgewater Hotel —
 calibrated (Model 2)" (EUI 185.1 = metered)**. 15-step evidence-cited waterfall (119.2 → 150.0 →
 residual → 185.1); DHW re-anchored to gas 207.700 MWh at **57.57 L/p/day** (60 °C-equiv 34.5) under the
