@@ -1,6 +1,20 @@
 # Current brief
 
-**Bridgwater Baseline: Model-1 (As-Specified) — CLOSED 2026-07-14 on `chris/bridgwater-baseline-model1` ([PR #20](https://github.com/chrisscott06/nza-sim/pull/20) open, NOT merged — Chris merges after walkthrough).**
+**Bridgwater Model-2 (In-Service Calibrated) — CLOSED 2026-07-15 on `chris/bridgwater-model2-calibrated` ([PR #22](https://github.com/chrisscott06/nza-sim/pull/22) open, NOT merged — Chris merges after walkthrough).**
+Two named scenarios on the project: **"Model 1 — as-specified" (EUI 119.2)** and **"Bridgewater Hotel —
+calibrated (Model 2)" (EUI 185.1 = metered)**. 15-step evidence-cited waterfall (119.2 → 150.0 →
+residual → 185.1); DHW re-anchored to gas 207.700 MWh at **57.57 L/p/day** (60 °C-equiv 34.5) under the
+60/40 split; electricity gap closed by a named **auxiliary residual on a counted end-use** (147.75 MWh,
+4.001 W/m², thermally-neutral by assumption — gain_fraction=0), elec 572,398 (Δ −2). Minimal named-
+scenario save/load/list built (Part 0). **No engine changes.** D3 inert-input audit flagged three
+export rows (`gains.auxiliary`, `latent_w_per_person` NOT CONSUMED; `thermal_bridges` E5 — H_TB 170 W/K
+computed but not applied in full-mode, follow-up brief). Audit
+[`../audit/bridgwater-model2-calibrated_close.md`](../audit/bridgwater-model2-calibrated_close.md);
+brief [`archive/bridgwater-model2-calibrated_COMPLETED.md`](archive/bridgwater-model2-calibrated_COMPLETED.md).
+NB: `active/bridgwater-auxiliary-inert-input-audit.md` is a **parallel session's** brief (the spawned
+gains.auxiliary follow-up) — not part of this close.
+
+**Bridgwater Baseline: Model-1 (As-Specified) — CLOSED 2026-07-14; MERGED to `main` `8ef67c4` (PR #20).**
 Brought the Bridgewater baseline to the Model-1 (as-specified) definition, gas-anchored DHW,
 added an export **Outputs** sheet + engine SHA, and pinned the corrected scenario as the project
 baseline. **No engine/schedule changes.** **Headline: Model-1 EUI = 119.2 kWh/m²/yr** (elec

@@ -60,6 +60,18 @@ const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null)
  *                                          line is escalated rather than reimplemented.
  * @returns {{ columns: string[], rows: object[], escalations: string[] }}
  */
+// Model-2 brief D3 — engine-consumption markers. Rows whose input does NOT
+// affect the reported (full-mode) engine result are flagged so they aren't
+// presented as live assumptions. Verified empirically 2026-07-14; full trace
+// table in docs/audit/bridgwater-model2-calibrated_close.md (D3).
+//   - gains.auxiliary + occupancy.latent_w_per_person: never consumed (the
+//     static engine is sensible-only; gains.auxiliary is wired to nothing).
+//   - thermal_bridges: computed (H_TB ≈ 170 W/K on Bridgewater) but NOT applied
+//     to the full-mode Systems/report demand — an E5 parallel-path gap (Rule 14;
+//     State-1 Building page reflects it, the reported result doesn't).
+const NOT_CONSUMED = ' ⚠ NOT CONSUMED BY ENGINE'
+const TB_NOT_APPLIED = ' ⚠ NOT REFLECTED IN OUTPUTS (E5 — H_TB computed but not applied in full-mode demand; see audit)'
+
 export function collectAssumptions({ building = {}, constructions = {}, libraryData = {}, occupancySummary = null } = {}) {
   const rows = []
   const escalations = []
@@ -127,7 +139,7 @@ export function collectAssumptions({ building = {}, constructions = {}, libraryD
       ? `${manualH} W/K (manual)`
       : `${mode}${mult != null ? ` ×${mult}` : ''}`
     push('Fabric', 'Thermal bridging assumption', valStr, mode === 'manual_h_tb' ? 'W/K' : '—',
-      'Input (building.thermal_bridges); H_TB is engine-derived from this')
+      'Input (building.thermal_bridges); H_TB is engine-derived from this' + TB_NOT_APPLIED)
   } else {
     push('Fabric', 'Thermal bridging assumption', '—', '—', 'MISSING — thermal_bridges not set')
     escalate('Thermal bridging: building.thermal_bridges absent')
@@ -185,7 +197,7 @@ export function collectAssumptions({ building = {}, constructions = {}, libraryD
     num(occ.density?.value) ?? '—', 'people/room',
     `Input (occupancy.density, basis = ${occ.density?.basis ?? '?'})`)
   push('Internal gains', 'Sensible gain per person', num(occ.sensible_w_per_person) ?? '—', 'W', 'Input (occupancy.sensible_w_per_person)')
-  push('Internal gains', 'Latent gain per person', num(occ.latent_w_per_person) ?? '—', 'W', 'Input (occupancy.latent_w_per_person)')
+  push('Internal gains', 'Latent gain per person', num(occ.latent_w_per_person) ?? '—', 'W', 'Input (occupancy.latent_w_per_person)' + NOT_CONSUMED)
 
   // Equipment / plug load — report each profile's baseload in the unit the model stores
   const equipProfiles = building.gains?.equipment?.profiles
@@ -220,7 +232,7 @@ export function collectAssumptions({ building = {}, constructions = {}, libraryD
       const mag = p.magnitude ?? p.baseload
       if (mag?.value != null) {
         push('Internal gains', `Auxiliary baseload — ${p.label ?? p.id ?? 'profile'}`,
-          num(mag.value), mag.unit ?? '', `Input (gains.auxiliary "${p.id ?? ''}")`)
+          num(mag.value), mag.unit ?? '', `Input (gains.auxiliary "${p.id ?? ''}")` + NOT_CONSUMED)
       }
     }
   }
@@ -384,6 +396,9 @@ export function exportAssumptionsXlsx({ building, constructions, libraryData, oc
   ]
   if (engineSha) aoa.push(['Engine SHA', engineSha])
   if (meta.appVersion) aoa.push(['App version', meta.appVersion])
+  // D5 dirty-state stamp — declares which named scenario this file came from AND
+  // whether the live inputs still matched it at export time.
+  if (meta.stateStamp) aoa.push(['State', meta.stateStamp])
   aoa.push(['Note', 'Snapshot of live model inputs — hard values, not formulas.'])
   aoa.push([])
   aoa.push([...COLUMNS])
@@ -403,7 +418,8 @@ export function exportAssumptionsXlsx({ building, constructions, libraryData, oc
       ['NZA-Sim — Outputs (modelled vs metered)'],
       ['Scenario', scenario],
       engineSha ? ['Engine SHA', engineSha] : ['Engine SHA', '(unset)'],
-      ['Note', 'Model-1 (as-specified). End uses reconcile to fuel totals. Metered = 2025 triangulated (GIA 4,215 m²).'],
+      ...(meta.stateStamp ? [['State', meta.stateStamp]] : []),
+      ['Note', meta.outputsNote || 'End uses reconcile to fuel totals. Metered = 2025 triangulated (GIA 4,215 m²).'],
       [],
       ['End use', 'Fuel', 'Model kWh/yr'],
       ...outputs.endUses,
