@@ -1,6 +1,15 @@
 # Current brief
 
-**Interventions Fix: relative ops, re-author, Model-2 re-reference, 4.8 results — CLOSED 2026-07-15 on `chris/interventions-fix` (PR to follow; Chris merges after walkthrough).**
+**ACTIVE — 505 Reconciliation: Trace Their Savings to Assumptions, Compare Under Model 2, Draft Register Comments.**
+On branch `chris/505-reconciliation` (off `main` `4d8650b`, #20–#23 merged; Model-1/Model-2 pinned).
+Reproduce each 505-Design claimed saving under THEIR stated assumptions in the NZA engine (diagnostic,
+not deference), compare with the same measures under Model 2 (reuse interventions-fix results), and
+deliver a per-measure comparison table + **draft** register comments (four bins — Convention / Method /
+Classification / Agreement — each flagged COMMENT or MUST-RESOLVE-BEFORE-MERGE). Nothing sent to 505;
+DRAFTS only. **No engine changes; scenarios never modified (scratch configs only).** Parts 1–4.
+Brief [`active/505-reconciliation.md`](active/505-reconciliation.md).
+
+**Interventions Fix: relative ops, re-author, Model-2 re-reference, 4.8 results — CLOSED 2026-07-15; MERGED to `main` `4d8650b` (PR #23).**
 Added relative patch ops (`scale`/`delta`, fail-loud) to `interventionsEngine.applyPatch`; re-authored
 every stale-absolute measure relative to live state; fixed the two mis-authored patches; split MVHR into
 2_1a/2_1b + added the D4 trickle-vent measure; excluded the Model-2 residual from every %-measure base
