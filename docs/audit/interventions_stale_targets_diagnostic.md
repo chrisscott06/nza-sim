@@ -96,3 +96,15 @@ Measures declare **absolute** targets referenced to the pre-D1 config; D1 raised
 ## For the fix brief (not done here)
 
 The fix is a separate brief: convert Class-D measures to **relative deltas** (e.g. "improve SCOP by ×1.1" / "reduce plug density by 25%") or re-reference targets to the **Model-2** baseline, populate the empty companion measures (esp. 2_3 bypass), and correct the 1_3 mis-target. This note is the complete inventory to work from.
+
+---
+## Addendum (2026-07-17, final-p02-run Part 1) — summer_bypass correction
+This diagnostic's MVHR analysis described the engine as having "no summer bypass" and treated the
+year-round-recovery cooling penalty as an engine limitation. **That is wrong: `summer_bypass` is a real,
+consumed engine capability** (`instantCalc.js` free-cooling gate, lines ~2957/3213/3435/4829 — Brief 53
+Part 2). Setting `summer_bypass: true` on a ventilation system engages a lagged free-cooling gate that
+bypasses recovery when outdoor < indoor and the zone calls for cooling. Confirmed live: the GF units'
+existing-design bypass drops cooling 50.23→42.63 MWh (Model 2 → Model 2.1, EUI 185.1→183.3).
+The original MVHR *measures* simply did not set the flag; the penalty was a measure-authoring gap, not an
+engine gap. The re-authored MVHR measures (final-p02-run Part 4) set `summer_bypass: true`. History not
+rewritten — this note supersedes the "no bypass" framing above.
