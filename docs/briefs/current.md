@@ -1,5 +1,13 @@
 # Current brief
 
+**ACTIVE — Final P02 Run: Engine Fixes, Measure Re-Authors, All-In Costs, Print-Ready Results.**
+On branch `chris/final-p02-run` (off `main` `910fb9c`). Ship-tonight run. **Part-0 resolved (Chris):**
+canonical baseline is **Model 2.1** (GF summer_bypass=True, existing design) — **freeze 183.3 EUI /
+564,836 elec / 207,700 gas**, residual 147.75 unchanged, **accept 1.3% under** the meter. Parts: parity
+audit (both directions), ventilation scheduler consumed (guarded engine change), glazing g-value per
+orientation, final measure re-authors + all-in costs, full re-run + print-ready 4.8. Gated briefs re-gate
+to this run's SHA. Brief [`active/final-p02-run.md`](active/final-p02-run.md).
+
 **505 Reconciliation: Trace Their Savings to Assumptions — CLOSED 2026-07-15 on `chris/505-reconciliation` (PR to follow; register DRAFTS route to Claude Chat tone review, then Chris).**
 On branch `chris/505-reconciliation` (off `main` `4d8650b`, #20–#23 merged; Model-1/Model-2 pinned).
 Reproduce each 505-Design claimed saving under THEIR stated assumptions in the NZA engine (diagnostic,
