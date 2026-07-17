@@ -65,8 +65,11 @@ const setPatch = (iv, path, value, op = 'set') => {
 }
 
 // ── DELETE the GF HR-bypass measure concept (2_3): baseline carries GF bypass
-// as the existing design; no row anywhere. ───────────────────────────────────
-fx.interventions = fx.interventions.filter(i => i.id !== 'int_hiex_2_3')
+// as the existing design; no row anywhere. Also DELETE the standalone
+// trickle-vent free-area measure (2_4): superseded inside the MVHR variants
+// (they seal the trickle path, EA→0) and the brief forbids a standalone
+// trickle-vent row. ───────────────────────────────────────────────────────────
+fx.interventions = fx.interventions.filter(i => i.id !== 'int_hiex_2_3' && i.id !== 'int_hiex_2_4')
 
 fs.writeFileSync(`${FX}/final_p02_model2_reauthored.json`, JSON.stringify(fx, null, 1))
 console.log('wrote docs/audit/fixtures/final_p02_model2_reauthored.json')

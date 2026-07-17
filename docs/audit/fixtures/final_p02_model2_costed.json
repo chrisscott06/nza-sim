@@ -3327,7 +3327,11 @@
     "notes": ""
    },
    "measure_life_years": 15,
-   "assumption_notes": "ENERGY BASIS: DHW demand −19.5%: shower fraction 65% (mid 60–70%) × low-flow volume reduction 30% (aerator/regulator standard). Within the doc's −10..−25% band. Source: HIEX design note (basis: Low-flow fittings; saving applies to the shower fraction of room DHW only).\n\nCOST BASIS: Tier 1 (supply-&-fit, all-in installed rate): contingency 10% only — the installed rate already carries the installer's prelims/OH&P (public-sector minor-works norm). Measure life plant (15y); £/tonne charges 1 replacement to 2050 at 70% of total capex (excludes one-off strip-outs / supply upgrades / builder's-work / design). Cost confidence M."
+   "assumption_notes": "ENERGY BASIS: DHW demand −19.5%: shower fraction 65% (mid 60–70%) × low-flow volume reduction 30% (aerator/regulator standard). Within the doc's −10..−25% band. Source: HIEX design note (basis: Low-flow fittings; saving applies to the shower fraction of room DHW only).\n\nCOST BASIS: Tier 1 (supply-&-fit, all-in installed rate): contingency 10% only — the installed rate already carries the installer's prelims/OH&P (public-sector minor-works norm). Measure life plant (15y); £/tonne charges 1 replacement to 2050 at 70% of total capex (excludes one-off strip-outs / supply upgrades / builder's-work / design). Cost confidence M.",
+   "cost_category": "supply_fit",
+   "cost_multiplier": 1.12,
+   "base_capex_gbp": 8280,
+   "all_in_capex_gbp": 9274
   },
   {
    "id": "int_hiex_1_2",
@@ -3391,7 +3395,11 @@
     "notes": ""
    },
    "measure_life_years": 15,
-   "assumption_notes": "ENERGY BASIS: Design note: DHW demand scalar 0.82 (shower 65% × HX effectiveness 45% × config factor 0.6 ≈ −18%). Modelled as demand-litres ×0.82 (55→45.1). SAME PATH as 1.1 — see cumulative caveat. Source: HIEX design note (basis: Drain-water HX pre-heats cold feed; −18% DHW energy central (range −12..−25%)).\n\nCOST BASIS: Tier 3 (M&E plant project): design 8% + prelims 10% + OH&P 8% + contingency 15% — multi-trade installed project (M&E design/riser survey + integration, site establishment, main-contractor margin; 15% = public-sector pre-tender norm). assumption: WWHR vertical HX units cost is an ALLOWANCE pending survey. Measure life plant (15y); £/tonne charges 1 replacement to 2050 at 70% of total capex (excludes one-off strip-outs / supply upgrades / builder's-work / design). Cost confidence L."
+   "assumption_notes": "ENERGY BASIS: Design note: DHW demand scalar 0.82 (shower 65% × HX effectiveness 45% × config factor 0.6 ≈ −18%). Modelled as demand-litres ×0.82 (55→45.1). SAME PATH as 1.1 — see cumulative caveat. Source: HIEX design note (basis: Drain-water HX pre-heats cold feed; −18% DHW energy central (range −12..−25%)).\n\nCOST BASIS: Tier 3 (M&E plant project): design 8% + prelims 10% + OH&P 8% + contingency 15% — multi-trade installed project (M&E design/riser survey + integration, site establishment, main-contractor margin; 15% = public-sector pre-tender norm). assumption: WWHR vertical HX units cost is an ALLOWANCE pending survey. Measure life plant (15y); £/tonne charges 1 replacement to 2050 at 70% of total capex (excludes one-off strip-outs / supply upgrades / builder's-work / design). Cost confidence L.",
+   "cost_category": "supply_fit",
+   "cost_multiplier": 1.12,
+   "base_capex_gbp": 15825,
+   "all_in_capex_gbp": 17724
   },
   {
    "id": "int_hiex_1_3",
@@ -3447,7 +3455,11 @@
     "notes": ""
    },
    "measure_life_years": 15,
-   "assumption_notes": "ENERGY BASIS: Design note: preheat-stage COP +0.4 absolute (3.0→3.4), applies to the ASHP preheat share of DHW (dhw[1], 48%). SAME PATH as 1.4 — see cumulative caveat. Source: HIEX design note (basis: Warm extract (~20°C) across the DHW heat-pump source coil; +0.3/+0.5 range).\n\nCOST BASIS: Tier 3 (M&E plant project): design 8% + prelims 10% + OH&P 8% + contingency 15% — multi-trade installed project (M&E design/riser survey + integration, site establishment, main-contractor margin; 15% = public-sector pre-tender norm). assumption: exhaust-air ductwork cost is an ALLOWANCE pending survey. Measure life plant (15y); £/tonne charges 1 replacement to 2050 at 70% of total capex (excludes one-off strip-outs / supply upgrades / builder's-work / design). Cost confidence L."
+   "assumption_notes": "ENERGY BASIS: Design note: preheat-stage COP +0.4 absolute (3.0→3.4), applies to the ASHP preheat share of DHW (dhw[1], 48%). SAME PATH as 1.4 — see cumulative caveat. Source: HIEX design note (basis: Warm extract (~20°C) across the DHW heat-pump source coil; +0.3/+0.5 range).\n\nCOST BASIS: Tier 3 (M&E plant project): design 8% + prelims 10% + OH&P 8% + contingency 15% — multi-trade installed project (M&E design/riser survey + integration, site establishment, main-contractor margin; 15% = public-sector pre-tender norm). assumption: exhaust-air ductwork cost is an ALLOWANCE pending survey. Measure life plant (15y); £/tonne charges 1 replacement to 2050 at 70% of total capex (excludes one-off strip-outs / supply upgrades / builder's-work / design). Cost confidence L.",
+   "cost_category": "works",
+   "cost_multiplier": 1.32,
+   "base_capex_gbp": 4550,
+   "all_in_capex_gbp": 6006
   },
   {
    "id": "int_hiex_1_4",
@@ -3525,7 +3537,11 @@
     "notes": ""
    },
    "measure_life_years": 15,
-   "assumption_notes": "ENERGY BASIS: Gas DHW off (share 0), ASHP serves 100% at high-temp SCOP 2.9 (mid 2.8–3.0). The principal carbon measure (gas→electric). Source: HIEX design note (basis: Upsized high-temp ASHP meets full hot-water load; gas heaters retired).\n\nCOST BASIS: Tier 3 (M&E plant project): design 8% + prelims 10% + OH&P 8% + contingency 15% — multi-trade installed project (M&E design/riser survey + integration, site establishment, main-contractor margin; 15% = public-sector pre-tender norm). Measure life plant (15y); £/tonne charges 1 replacement to 2050 at 70% of total capex (excludes one-off strip-outs / supply upgrades / builder's-work / design). Cost confidence M."
+   "assumption_notes": "ENERGY BASIS: Gas DHW off (share 0), ASHP serves 100% at high-temp SCOP 2.9 (mid 2.8–3.0). The principal carbon measure (gas→electric). Source: HIEX design note (basis: Upsized high-temp ASHP meets full hot-water load; gas heaters retired).\n\nCOST BASIS: Tier 3 (M&E plant project): design 8% + prelims 10% + OH&P 8% + contingency 15% — multi-trade installed project (M&E design/riser survey + integration, site establishment, main-contractor margin; 15% = public-sector pre-tender norm). Measure life plant (15y); £/tonne charges 1 replacement to 2050 at 70% of total capex (excludes one-off strip-outs / supply upgrades / builder's-work / design). Cost confidence M.",
+   "cost_category": "works",
+   "cost_multiplier": 1.32,
+   "base_capex_gbp": 75500,
+   "all_in_capex_gbp": 99660
   },
   {
    "id": "int_hiex_1_5",
@@ -3698,7 +3714,11 @@
     "notes": ""
    },
    "measure_life_years": 15,
-   "assumption_notes": "ENERGY BASIS: Bedroom extract → balanced MVHR 80% HR, SFP 1.8 (mid 1.5–2.0). Electric panel heating (heating[1], 5%) removed → VRF 100%. Note: net effect may be adverse (summer) — modelling decides. Source: HIEX design note (basis: MVHR uses ceiling void as plenum; supersedes bathroom extract + central electric heating).\n\nCOST BASIS: Tier 3 (M&E plant project): design 8% + prelims 10% + OH&P 8% + contingency 15% — multi-trade installed project (M&E design/riser survey + integration, site establishment, main-contractor margin; 15% = public-sector pre-tender norm). assumption: MVHR plenum/ductwork cost is an ALLOWANCE pending survey. Measure life plant (15y); £/tonne charges 1 replacement to 2050 at 70% of total capex (excludes one-off strip-outs / supply upgrades / builder's-work / design). Cost confidence L."
+   "assumption_notes": "ENERGY BASIS: Bedroom extract → balanced MVHR 80% HR, SFP 1.8 (mid 1.5–2.0). Electric panel heating (heating[1], 5%) removed → VRF 100%. Note: net effect may be adverse (summer) — modelling decides. Source: HIEX design note (basis: MVHR uses ceiling void as plenum; supersedes bathroom extract + central electric heating).\n\nCOST BASIS: Tier 3 (M&E plant project): design 8% + prelims 10% + OH&P 8% + contingency 15% — multi-trade installed project (M&E design/riser survey + integration, site establishment, main-contractor margin; 15% = public-sector pre-tender norm). assumption: MVHR plenum/ductwork cost is an ALLOWANCE pending survey. Measure life plant (15y); £/tonne charges 1 replacement to 2050 at 70% of total capex (excludes one-off strip-outs / supply upgrades / builder's-work / design). Cost confidence L.",
+   "cost_category": "works",
+   "cost_multiplier": 1.32,
+   "base_capex_gbp": 70600,
+   "all_in_capex_gbp": 93192
   },
   {
    "id": "int_hiex_2_1b",
@@ -3822,7 +3842,11 @@
     "notes": ""
    },
    "measure_life_years": 15,
-   "assumption_notes": "ENERGY BASIS: Bedroom extract → balanced MVHR 80% HR, SFP 1.8 (mid 1.5–2.0). Electric panel heating (heating[1], 5%) removed → VRF 100%. Note: net effect may be adverse (summer) — modelling decides. Source: HIEX design note (basis: MVHR uses ceiling void as plenum; supersedes bathroom extract + central electric heating).\n\nCOST BASIS: Tier 3 (M&E plant project): design 8% + prelims 10% + OH&P 8% + contingency 15% — multi-trade installed project (M&E design/riser survey + integration, site establishment, main-contractor margin; 15% = public-sector pre-tender norm). assumption: MVHR plenum/ductwork cost is an ALLOWANCE pending survey. Measure life plant (15y); £/tonne charges 1 replacement to 2050 at 70% of total capex (excludes one-off strip-outs / supply upgrades / builder's-work / design). Cost confidence L."
+   "assumption_notes": "ENERGY BASIS: Bedroom extract → balanced MVHR 80% HR, SFP 1.8 (mid 1.5–2.0). Electric panel heating (heating[1], 5%) removed → VRF 100%. Note: net effect may be adverse (summer) — modelling decides. Source: HIEX design note (basis: MVHR uses ceiling void as plenum; supersedes bathroom extract + central electric heating).\n\nCOST BASIS: Tier 3 (M&E plant project): design 8% + prelims 10% + OH&P 8% + contingency 15% — multi-trade installed project (M&E design/riser survey + integration, site establishment, main-contractor margin; 15% = public-sector pre-tender norm). assumption: MVHR plenum/ductwork cost is an ALLOWANCE pending survey. Measure life plant (15y); £/tonne charges 1 replacement to 2050 at 70% of total capex (excludes one-off strip-outs / supply upgrades / builder's-work / design). Cost confidence L.",
+   "cost_category": "works",
+   "cost_multiplier": 1.32,
+   "base_capex_gbp": 70600,
+   "all_in_capex_gbp": 93192
   },
   {
    "id": "int_hiex_2_5_night_shutdown",
@@ -3841,7 +3865,11 @@
     }
    ],
    "measure_life_years": 10,
-   "assumption_notes": "ENERGY BASIS: GF communal MVHR off overnight; hand estimate −1.5 kWh/m² (±0.7). Report the modelled figure. COST BASIS: settings/commissioning tier — £0 controls visit (BMS schedule change)."
+   "assumption_notes": "ENERGY BASIS: GF communal MVHR off overnight; hand estimate −1.5 kWh/m² (±0.7). Report the modelled figure. COST BASIS: settings/commissioning tier — £0 controls visit (BMS schedule change).",
+   "cost_category": "settings",
+   "cost_multiplier": 1,
+   "base_capex_gbp": 0,
+   "all_in_capex_gbp": 0
   },
   {
    "id": "int_hiex_2_2",
@@ -3903,7 +3931,11 @@
     "notes": ""
    },
    "measure_life_years": 10,
-   "assumption_notes": "ENERGY BASIS: Bedroom extract flow 2208→1590 (−28%, per doc's 2292→1656 case). Fan power falls with the cube law → SFP scaled by (flow ratio)² (0.9→0.47) so fan energy ∝ flow³. Source: HIEX design note (basis: Slow extract to the minimum air-quality-compliant flow).\n\nCOST BASIS: Tier 2 (specialist day-rate): contingency 10% only — day-rate visits, small but non-zero scope risk. Measure life controls/settings (10y); £/tonne charges 2 replacements to 2050 at 70% of total capex (excludes one-off strip-outs / supply upgrades / builder's-work / design). Cost confidence M."
+   "assumption_notes": "ENERGY BASIS: Bedroom extract flow 2208→1590 (−28%, per doc's 2292→1656 case). Fan power falls with the cube law → SFP scaled by (flow ratio)² (0.9→0.47) so fan energy ∝ flow³. Source: HIEX design note (basis: Slow extract to the minimum air-quality-compliant flow).\n\nCOST BASIS: Tier 2 (specialist day-rate): contingency 10% only — day-rate visits, small but non-zero scope risk. Measure life controls/settings (10y); £/tonne charges 2 replacements to 2050 at 70% of total capex (excludes one-off strip-outs / supply upgrades / builder's-work / design). Cost confidence M.",
+   "cost_category": "settings",
+   "cost_multiplier": 1,
+   "base_capex_gbp": 2900,
+   "all_in_capex_gbp": 2900
   },
   {
    "id": "int_hiex_3_1",
@@ -3981,7 +4013,11 @@
     "notes": ""
    },
    "measure_life_years": 10,
-   "assumption_notes": "ENERGY BASIS: Design note sensitivity band: none / central +0.4 / strong (managed 3.9). CENTRAL (+0.4 on in-service VRF heating SCOP + cooling EER, 3.0→3.4) is the stack member; none/strong stored as sensitivity. SAME PATH as 3.2 — 3.2 composes on the post-3.1 state. Source: HIEX design note (basis: Sub-meter + diagnostic + coil clean + controls align; managed ~3.9 vs typical ~2.8).\n\nCOST BASIS: Tier 2 (specialist day-rate): contingency 10% only — day-rate visits, small but non-zero scope risk. Measure life controls/settings (10y); £/tonne charges 2 replacements to 2050 at 70% of total capex (excludes one-off strip-outs / supply upgrades / builder's-work / design). Cost confidence M."
+   "assumption_notes": "ENERGY BASIS: Design note sensitivity band: none / central +0.4 / strong (managed 3.9). CENTRAL (+0.4 on in-service VRF heating SCOP + cooling EER, 3.0→3.4) is the stack member; none/strong stored as sensitivity. SAME PATH as 3.2 — 3.2 composes on the post-3.1 state. Source: HIEX design note (basis: Sub-meter + diagnostic + coil clean + controls align; managed ~3.9 vs typical ~2.8).\n\nCOST BASIS: Tier 2 (specialist day-rate): contingency 10% only — day-rate visits, small but non-zero scope risk. Measure life controls/settings (10y); £/tonne charges 2 replacements to 2050 at 70% of total capex (excludes one-off strip-outs / supply upgrades / builder's-work / design). Cost confidence M.",
+   "cost_category": "settings",
+   "cost_multiplier": 1,
+   "base_capex_gbp": 8100,
+   "all_in_capex_gbp": 8100
   },
   {
    "id": "int_hiex_3_2",
@@ -4067,7 +4103,11 @@
     "basis": "Charge 112 kg (0.35 kg/kW × 320 kW) × 3.0% leak × (GWP 2088→675) = 4.7 tCO₂e/yr avoided."
    },
    "measure_life_years": 15,
-   "assumption_notes": "ENERGY BASIS: Heating/cooling consumption −20% (spec 15–25%), via rated-SCOP substitution derated to in-service: eff 3.0→3.75 (=3.0/0.8). CUMULATIVE: computed against the post-3.1 state (3.4→4.25) per the note's double-count guard. Plus Class C refrigerant carbon ≈4.7 tCO₂e/yr (offmodel). Source: HIEX design note (basis: Replace 2019 SHRM fleet with R-32 heat-recovery generation at end of life).\n\nCOST BASIS: Tier 3 (M&E plant project): design 8% + prelims 10% + OH&P 8% + contingency 15% — multi-trade installed project (M&E design/riser survey + integration, site establishment, main-contractor margin; 15% = public-sector pre-tender norm). Measure life plant (15y); £/tonne charges 1 replacement to 2050 at 70% of total capex (excludes one-off strip-outs / supply upgrades / builder's-work / design). Cost confidence M."
+   "assumption_notes": "ENERGY BASIS: Heating/cooling consumption −20% (spec 15–25%), via rated-SCOP substitution derated to in-service: eff 3.0→3.75 (=3.0/0.8). CUMULATIVE: computed against the post-3.1 state (3.4→4.25) per the note's double-count guard. Plus Class C refrigerant carbon ≈4.7 tCO₂e/yr (offmodel). Source: HIEX design note (basis: Replace 2019 SHRM fleet with R-32 heat-recovery generation at end of life).\n\nCOST BASIS: Tier 3 (M&E plant project): design 8% + prelims 10% + OH&P 8% + contingency 15% — multi-trade installed project (M&E design/riser survey + integration, site establishment, main-contractor margin; 15% = public-sector pre-tender norm). Measure life plant (15y); £/tonne charges 1 replacement to 2050 at 70% of total capex (excludes one-off strip-outs / supply upgrades / builder's-work / design). Cost confidence M.",
+   "cost_category": "works",
+   "cost_multiplier": 1.32,
+   "base_capex_gbp": 269000,
+   "all_in_capex_gbp": 355080
   },
   {
    "id": "int_hiex_3_3",
@@ -4116,7 +4156,11 @@
     "notes": "Cost carried by ref 6.1."
    },
    "measure_life_years": 10,
-   "assumption_notes": "ENERGY BASIS: Heating 21→20, cooling 24→25 (doc example). Widened dead-band within comfort agreement. Source: HIEX design note (basis: Zone setpoints across VRF. Cost within the 6.1 controls visit).\n\nCOST BASIS: No capex (policy/settings measure — energy saving claimed here, cost carried under the consolidated controls visit where applicable). Measure life controls/settings (10y); £/tonne charges 2 replacements to 2050 at 70% of total capex (excludes one-off strip-outs / supply upgrades / builder's-work / design). Cost confidence H."
+   "assumption_notes": "ENERGY BASIS: Heating 21→20, cooling 24→25 (doc example). Widened dead-band within comfort agreement. Source: HIEX design note (basis: Zone setpoints across VRF. Cost within the 6.1 controls visit).\n\nCOST BASIS: No capex (policy/settings measure — energy saving claimed here, cost carried under the consolidated controls visit where applicable). Measure life controls/settings (10y); £/tonne charges 2 replacements to 2050 at 70% of total capex (excludes one-off strip-outs / supply upgrades / builder's-work / design). Cost confidence H.",
+   "cost_category": "settings",
+   "cost_multiplier": 1,
+   "base_capex_gbp": 0,
+   "all_in_capex_gbp": 0
   },
   {
    "id": "int_hiex_3_4",
@@ -4166,7 +4210,11 @@
     "notes": ""
    },
    "measure_life_years": 30,
-   "assumption_notes": "ENERGY BASIS: Glazing g 0.55→0.42 (nearest library construction double_low_e; u unchanged at 1.4 — film reduces g, not u; doc target g 0.40). Expected marginal/counterproductive here (cuts useful winter heat, raises cooling). Film life ~10–15y in reality but note maps fabric→30y. Source: HIEX design note (basis: Solar-control film to bedroom glazing (193 m²)).\n\nCOST BASIS: Tier 1 (supply-&-fit, all-in installed rate): contingency 10% only — the installed rate already carries the installer's prelims/OH&P (public-sector minor-works norm). Measure life fabric (30y) — spans to 2050, no replacement in £/tonne. Cost confidence M."
+   "assumption_notes": "ENERGY BASIS: Glazing g 0.55→0.42 (nearest library construction double_low_e; u unchanged at 1.4 — film reduces g, not u; doc target g 0.40). Expected marginal/counterproductive here (cuts useful winter heat, raises cooling). Film life ~10–15y in reality but note maps fabric→30y. Source: HIEX design note (basis: Solar-control film to bedroom glazing (193 m²)).\n\nCOST BASIS: Tier 1 (supply-&-fit, all-in installed rate): contingency 10% only — the installed rate already carries the installer's prelims/OH&P (public-sector minor-works norm). Measure life fabric (30y) — spans to 2050, no replacement in £/tonne. Cost confidence M.",
+   "cost_category": "supply_fit",
+   "cost_multiplier": 1.12,
+   "base_capex_gbp": 4040,
+   "all_in_capex_gbp": 4525
   },
   {
    "id": "int_hiex_3_5",
@@ -4228,7 +4276,11 @@
     "notes": ""
    },
    "measure_life_years": 30,
-   "assumption_notes": "ENERGY BASIS: 0.5 m horizontal overhang on the SW/S/W-facing glazing → modelled as south + west facades of the 4-orientation box (North_Axis 42). Seasonally selective (cuts summer sun, admits winter). Source: HIEX design note (basis: Fixed horizontal brise soleil, 0.5 m projection, SW/S/W bedroom windows (~42 m² blade)).\n\nCOST BASIS: Tier 4 (façade/structural): design 8% + prelims 10% + OH&P 8% + contingency 15% — includes the structural/wind-loading design sign-off and access. Measure life fabric (30y) — spans to 2050, no replacement in £/tonne. Cost confidence M."
+   "assumption_notes": "ENERGY BASIS: 0.5 m horizontal overhang on the SW/S/W-facing glazing → modelled as south + west facades of the 4-orientation box (North_Axis 42). Seasonally selective (cuts summer sun, admits winter). Source: HIEX design note (basis: Fixed horizontal brise soleil, 0.5 m projection, SW/S/W bedroom windows (~42 m² blade)).\n\nCOST BASIS: Tier 4 (façade/structural): design 8% + prelims 10% + OH&P 8% + contingency 15% — includes the structural/wind-loading design sign-off and access. Measure life fabric (30y) — spans to 2050, no replacement in £/tonne. Cost confidence M.",
+   "cost_category": "works",
+   "cost_multiplier": 1.32,
+   "base_capex_gbp": 31200,
+   "all_in_capex_gbp": 41184
   },
   {
    "id": "int_hiex_4_1",
@@ -4317,7 +4369,11 @@
     "notes": ""
    },
    "measure_life_years": 10,
-   "assumption_notes": "ENERGY BASIS: Room plug load −25% (mid of doc's −20..−30% when unoccupied). Equipment baseload 5.04→3.78 W/m² (net occupancy-weighted). Source: HIEX design note (basis: Master switch cuts non-essential room power when unoccupied).\n\nCOST BASIS: Tier 1 (supply-&-fit, all-in installed rate): contingency 10% only — the installed rate already carries the installer's prelims/OH&P (public-sector minor-works norm). Measure life controls/settings (10y); £/tonne charges 2 replacements to 2050 at 70% of total capex (excludes one-off strip-outs / supply upgrades / builder's-work / design). Cost confidence M."
+   "assumption_notes": "ENERGY BASIS: Room plug load −25% (mid of doc's −20..−30% when unoccupied). Equipment baseload 5.04→3.78 W/m² (net occupancy-weighted). Source: HIEX design note (basis: Master switch cuts non-essential room power when unoccupied).\n\nCOST BASIS: Tier 1 (supply-&-fit, all-in installed rate): contingency 10% only — the installed rate already carries the installer's prelims/OH&P (public-sector minor-works norm). Measure life controls/settings (10y); £/tonne charges 2 replacements to 2050 at 70% of total capex (excludes one-off strip-outs / supply upgrades / builder's-work / design). Cost confidence M.",
+   "cost_category": "supply_fit",
+   "cost_multiplier": 1.12,
+   "base_capex_gbp": 19320,
+   "all_in_capex_gbp": 21638
   },
   {
    "id": "int_hiex_4_3",
@@ -4446,7 +4502,11 @@
     "notes": ""
    },
    "measure_life_years": 15,
-   "assumption_notes": "ENERGY BASIS: Whole-building lighting magnitude −15% (2.0→1.7 W/m²) representing communal LED + PIR occupancy sensing on the communal fraction. [15% is a stated assumption — communal share × PIR saving.]. Source: HIEX design note (basis: Confirm LED communal/external; add occupancy sensing).\n\nCOST BASIS: Tier 3 (M&E plant project): design 8% + prelims 10% + OH&P 8% + contingency 15% — multi-trade installed project (M&E design/riser survey + integration, site establishment, main-contractor margin; 15% = public-sector pre-tender norm). Measure life plant (15y); £/tonne charges 1 replacement to 2050 at 70% of total capex (excludes one-off strip-outs / supply upgrades / builder's-work / design). Cost confidence M."
+   "assumption_notes": "ENERGY BASIS: Whole-building lighting magnitude −15% (2.0→1.7 W/m²) representing communal LED + PIR occupancy sensing on the communal fraction. [15% is a stated assumption — communal share × PIR saving.]. Source: HIEX design note (basis: Confirm LED communal/external; add occupancy sensing).\n\nCOST BASIS: Tier 3 (M&E plant project): design 8% + prelims 10% + OH&P 8% + contingency 15% — multi-trade installed project (M&E design/riser survey + integration, site establishment, main-contractor margin; 15% = public-sector pre-tender norm). Measure life plant (15y); £/tonne charges 1 replacement to 2050 at 70% of total capex (excludes one-off strip-outs / supply upgrades / builder's-work / design). Cost confidence M.",
+   "cost_category": "supply_fit",
+   "cost_multiplier": 1.12,
+   "base_capex_gbp": 20100,
+   "all_in_capex_gbp": 22512
   },
   {
    "id": "int_hiex_5_3",
@@ -4627,5 +4687,17 @@
    "measure_life_years": 25,
    "assumption_notes": "ENERGY BASIS: Off-model (Class C): 50 kWp × 950 kWh/kWp = 47.5 MWh/yr, 85% self-consumption. CRREM gross-demand rule — PV cuts CARBON, EUI is UNCHANGED by construction; carbon on the declining grid factor. assumption: yield + self-consumption per the HIEX design note.\n\nCOST BASIS: assumption: PV £1,100/kWp is an all-in turnkey (EPC) rate → treated Tier 1 (contingency 10% only). The framework's Tier-3 PV row stripped a 40% this plan never carried; FLAGGED for Chris to confirm (T1 £60,500 vs framework T3 £57,287). Measure life PV (25y); £/tonne charges 1 replacement to 2050 at 70% of total capex (excludes one-off strip-outs / supply upgrades / builder's-work / design). Cost confidence H."
   }
- ]
+ ],
+ "cost_plan": {
+  "tariffs": {
+   "electricity_price_per_kWh": 0.25,
+   "gas_price_per_kWh": 0.06
+  },
+  "multipliers": {
+   "settings": 1,
+   "supply_fit": 1.12,
+   "works": 1.32
+  },
+  "basis": "settings ×1.00 · supply-and-fit ×1.12 · works ×1.32; all-in = base × category multiplier. Tariffs elec £0.25/kWh, gas £0.06/kWh. [CONFIRM house rates & tariffs — Appendix A]."
+ }
 }
