@@ -41,6 +41,7 @@ import { CARBON_FACTORS_CURRENT } from '../data/carbonFactors.js'
 // discriminator). Now routes through the same `computeTotalOccupants`
 // helper the State 2 hourly occupancy gain accumulator uses.
 import { computeTotalOccupants } from './instantCalc.js'
+import { resolveScheduleAtHour } from './scheduleLibrary.js'  // Final-P02 Part 2: fan schedule consumption
 
 const VALID_SERVICES = ['heating', 'cooling', 'dhw', 'ventilation', 'lighting', 'small_power']
 
@@ -606,7 +607,23 @@ function _computeDhw(systems, serviceLevel, gia, building, presenceHourly = null
  * Returns per-system fan_electrical + recovery numbers. Recovery composition:
  * sum recovered kWh per system (NOT compose recovery percentages).
  */
-function _computeVentilation(systems, gia, peakOccupants, hoursActive = 8760, v25Systems = null) {
+function _computeVentilation(systems, gia, peakOccupants, hoursActive = 8760, v25Systems = null, building = null) {
+  // Final-P02 Part 2: per-system annual fan run-hours from the v40
+  // control_schedule_id (× control_factor). Fan energy = SFP × flow × on-hours;
+  // on-hours is the annual COUNT (fans need no temperature weighting, unlike the
+  // vent-heat path which is hour-by-hour in instantCalc). 'always_on' + no
+  // control_factor ⇒ 8760 ⇒ byte-identical to the previous flat treatment.
+  const fanHoursFor = (sys) => {
+    const cf = (sys?.control_factor != null ? Number(sys.control_factor) : 1)
+    const ref = sys?.control_schedule_id ?? 'always_on'
+    if (ref === 'always_on') return hoursActive * cf
+    let h = 0
+    for (let t = 0; t < 8760; t++) {
+      const f = resolveScheduleAtHour(ref, t, null, building)
+      h += (Number.isFinite(f) ? f : 1)
+    }
+    return h * cf
+  }
   // Brief 40 Part 5b Section A (2026-05-19): filter enabled; validate sum
   // of enabled shares; error blocks compute (same shape as heating/cooling/
   // DHW). Disabled vent systems preserved on disk but skipped in compute.
@@ -701,8 +718,10 @@ function _computeVentilation(systems, gia, peakOccupants, hoursActive = 8760, v2
     // secondary-fuel-mix replacement for the demand-split services
     // (heating/cooling/DHW) — that retirement is Chris-scoped as its
     // own brief.
-    // SFP units: W/(l/s); flow in l/s; result in Wh, /1000 → kWh
-    const fan_electrical_kwh = sfp_w_per_lps * flow_lps * hoursActive / 1000
+    // SFP units: W/(l/s); flow in l/s; result in Wh, /1000 → kWh.
+    // Final-P02 Part 2: per-system schedule hours (not flat hoursActive).
+    const fan_hours = fanHoursFor(sys)
+    const fan_electrical_kwh = sfp_w_per_lps * flow_lps * fan_hours / 1000
     const fan_electrical_mwh = fan_electrical_kwh / 1000
 
     // Recovery is per-system: the kWh recovered by this system's MVHR core
@@ -736,6 +755,10 @@ function _computeVentilation(systems, gia, peakOccupants, hoursActive = 8760, v2
       // so the per-hour bypass trigger fires correctly when the user has
       // opted in. Default false → 128.20 anchor holds.
       summer_bypass:            sys.summer_bypass === true,
+      // Final-P02 Part 2: carry the schedule through so computeVentilationEnergy's
+      // fan (the EUI-driving path, via ventResult.totalFanKwh) is schedule-aware.
+      control_schedule_id:      sys.control_schedule_id ?? null,
+      control_factor:           (sys.control_factor != null ? Number(sys.control_factor) : 1),
     }
   })
 
@@ -913,7 +936,7 @@ export function computeSystemsDelivered({ building, state2Result, comfortBand, s
   // way State 2 does (instantCalc.js:2771-2772). The v25 array reaches us
   // via `building.systems_config_v25.ventilation`; pass null when absent.
   const v25Vent = building?.systems_config_v25?.ventilation ?? null
-  const ventilation = _computeVentilation(cfg.ventilation ?? [], gia, peakOccupants, 8760, v25Vent)
+  const ventilation = _computeVentilation(cfg.ventilation ?? [], gia, peakOccupants, 8760, v25Vent, building)
   const lighting    = _computeThin(cfg.lighting ?? [], lightingElecMwh)
   const small_power = _computeThin(cfg.small_power ?? [], equipmentElecMwh)
 
@@ -1132,7 +1155,12 @@ export function v40VentilationToV25List(brief40VentBlock) {
     sfp_w_per_l_s:  Number(s.sfp_w_per_lps ?? 0),
     hre:            Number(s.recovery_sensible_pct ?? 0) / 100,
     hours:          8760,
-    schedule_ref:   'always_on',  // Part 5b: scheduled vent in v40 deferred; future enhancement
+    // Final-P02 Part 2: v40 ventilation schedule now consumed. schedule_ref
+    // resolves per-hour in computeVentilationEnergy's fan (via
+    // hoursActiveForSchedule); control_factor scales flow-hours linearly.
+    // Guard: always_on + control_factor 1 → 8760 h flat → byte-identical.
+    schedule_ref:   s.control_schedule_id ?? 'always_on',
+    control_factor: (s.control_factor != null ? Number(s.control_factor) : 1),
     summer_bypass:  s.summer_bypass === true,   // Brief 53 Part 2 — free-cooling damper
   }))
 }

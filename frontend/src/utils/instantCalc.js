@@ -12,7 +12,7 @@
  */
 
 import { resolveCmass } from './thermalMass.js'
-import { resolveScheduleAtHour } from './scheduleLibrary.js'
+import { resolveScheduleAtHour, getScheduleObject } from './scheduleLibrary.js'
 import { computeThermalBridges } from './thermalBridges.js'
 import {
   computeSystemsDelivered,
@@ -437,8 +437,18 @@ function resolveChoice(choice) {
   return { id: null, overrides: {} }
 }
 
-function getGValue(constructionChoices, libraryData) {
+// Final-P02 Part 3: optional `facade` (north|east|south|west) resolves a
+// per-orientation g override from `glazing.g_value_override_by_facade.<facade>`
+// before falling back to the project-wide scalar `g_value_override`, then the
+// library g, then the default. Passing no facade preserves the pre-Part-3
+// scalar behaviour exactly (guard: no per-facade override -> every facade
+// resolves to the same value as the scalar call).
+function getGValue(constructionChoices, libraryData, facade = null) {
   const { id, overrides } = resolveChoice(constructionChoices?.glazing)
+  if (facade && overrides?.g_value_override_by_facade) {
+    const pf = overrides.g_value_override_by_facade[facade]
+    if (Number.isFinite(pf) && pf > 0) return Number(pf)
+  }
   if (Number.isFinite(overrides.g_value_override) && overrides.g_value_override > 0) {
     return Number(overrides.g_value_override)
   }
@@ -450,6 +460,18 @@ function getGValue(constructionChoices, libraryData) {
     }
   }
   return DEFAULT_G_VALUE
+}
+
+// Final-P02 Part 3: resolve g per cardinal facade in one call. Each facade
+// independently honours a per-facade override, else the shared scalar. When no
+// per-facade override exists all four equal getGValue() -> byte-identical.
+function getGValueByFacade(constructionChoices, libraryData) {
+  return {
+    north: getGValue(constructionChoices, libraryData, 'north'),
+    east:  getGValue(constructionChoices, libraryData, 'east'),
+    south: getGValue(constructionChoices, libraryData, 'south'),
+    west:  getGValue(constructionChoices, libraryData, 'west'),
+  }
 }
 
 // ── State 1 envelope-only helpers (Brief 26 Part 3) ───────────────────────────
@@ -924,6 +946,7 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   // ── Library U / g values (used for glazing only post Brief 28b Part 3) ────
   const u_glaz  = getUValue(constructions, 'glazing', libraryData)
   const g_value = getGValue(constructions, libraryData)
+  const gF = getGValueByFacade(constructions, libraryData)  // Final-P02 Part 3: per-facade g
   const FRAME_FRACTION = 0.20  // visible glass = 80% of WWR; framed area = 20%
   // Brief 26.1 follow-up: per-facade shading factors from overhang + fin geometry.
   const shadingFactors = computeShadingFactors(building)
@@ -1200,10 +1223,10 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
     const v_wind = weatherData.wind_speed?.[h] ?? 0
 
     // Solar gains transmitted through glazing per facade (Wh into the zone)
-    const sol_n = hourlySolar.f1[h] * (glazing.north ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.north
-    const sol_e = hourlySolar.f2[h] * (glazing.east  ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.east
-    const sol_s = hourlySolar.f3[h] * (glazing.south ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.south
-    const sol_w = hourlySolar.f4[h] * (glazing.west  ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.west
+    const sol_n = hourlySolar.f1[h] * (glazing.north ?? 0) * gF.north * (1 - FRAME_FRACTION) * shadingFactors.north
+    const sol_e = hourlySolar.f2[h] * (glazing.east  ?? 0) * gF.east  * (1 - FRAME_FRACTION) * shadingFactors.east
+    const sol_s = hourlySolar.f3[h] * (glazing.south ?? 0) * gF.south * (1 - FRAME_FRACTION) * shadingFactors.south
+    const sol_w = hourlySolar.f4[h] * (glazing.west  ?? 0) * gF.west  * (1 - FRAME_FRACTION) * shadingFactors.west
     const Q_solar_glaz_zone = sol_n + sol_e + sol_s + sol_w
     acc_solar_n += sol_n; acc_solar_e += sol_e; acc_solar_s += sol_s; acc_solar_w += sol_w
 
@@ -2618,6 +2641,7 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   // Glazing U + g, shading factors (same as State 1)
   const u_glaz = getUValue(constructions, 'glazing', libraryData)
   const g_value = getGValue(constructions, libraryData)
+  const gF = getGValueByFacade(constructions, libraryData)  // Final-P02 Part 3: per-facade g
   const FRAME_FRACTION = 0.20
   const shadingFactors = computeShadingFactors(building)
 
@@ -2981,7 +3005,12 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       hre,
       sfp,
       hours:        Number(v25Match?.hours ?? 8760),
-      schedule_ref: v25Match?.schedule_ref ?? 'always_on',
+      // Final-P02 Part 2: ventilation schedule now consumed HOUR-BY-HOUR (fan +
+      // vent-heat/free-cooling). v40 control_schedule_id wins (the field the
+      // Systems UI writes); v25 schedule_ref / 'always_on' fallback. control_factor
+      // is a flat speed multiplier (partial-speed running) applied alongside it.
+      schedule_ref: v40Match?.control_schedule_id ?? v25Match?.schedule_ref ?? 'always_on',
+      control_factor: (v40Match?.control_factor != null ? Number(v40Match.control_factor) : 1),
       // Brief 28-IM IM-M4.5 Phase 2: carry `enabled` through so the State 2
       // mech vent loss loop AND computeVentilationEnergy honour the per-
       // system disable flag.
@@ -2989,12 +3018,26 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       summer_bypass,   // Brief 53 Part 2
     }
   })
-  // Per-system UA (W/K). Schedule_factor = hours/8760 (proportional approx;
-  // schedule-profile-aware integration is a future refinement).
+  // Per-system UA (W/K), FULL conductance. Final-P02 Part 2: the schedule is no
+  // longer folded in as an annual scalar (the old `hours/8760` proportional
+  // approx) — it is applied HOUR-BY-HOUR in the mech-vent loops below via
+  // ventSchedFrac[vi][h], so cold-night off-hours are temperature-weighted
+  // correctly (matters for the GF night-shutdown measure). Guard: always_on +
+  // no control_factor ⇒ ventSchedFrac = 1.0 every hour ⇒ byte-identical.
   const ventUA = ventSystems.map(v => {
     const Q_m3_h = v.flow_l_s * 3.6      // L/s × 3.6 = m³/h
-    const sched_factor = v.hours / 8760
-    return AIR_HEAT_CAPACITY * Q_m3_h * (1 - v.hre) * sched_factor   // W/K — recovery active
+    return AIR_HEAT_CAPACITY * Q_m3_h * (1 - v.hre)   // W/K — recovery active
+  })
+  // Per-system hourly schedule fraction (0..1) × control_factor. resolveScheduleAtHour
+  // returns the on-fraction at hour h; 'always_on' → 1 every hour.
+  const ventSchedFrac = ventSystems.map(v => {
+    const arr = new Float32Array(8760)
+    const cf = Number.isFinite(v.control_factor) ? v.control_factor : 1
+    for (let h = 0; h < 8760; h++) {
+      const f = resolveScheduleAtHour(v.schedule_ref, h, weatherData, building)
+      arr[h] = (Number.isFinite(f) ? f : 1) * cf
+    }
+    return arr
   })
   // Brief 53 Part 2 (2026-05-26): parallel UA array with no recovery (HRE
   // factor = 1.0). Used when the per-system summer bypass damper is open
@@ -3004,8 +3047,7 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   // per-hour bypass trigger (see hourly loop below).
   const ventUA_bypass = ventSystems.map(v => {
     const Q_m3_h = v.flow_l_s * 3.6
-    const sched_factor = v.hours / 8760
-    return AIR_HEAT_CAPACITY * Q_m3_h * 1.0 * sched_factor   // W/K — bypass (no HRE)
+    return AIR_HEAT_CAPACITY * Q_m3_h * 1.0   // W/K — bypass (no HRE); schedule applied hourly below
   })
   const ventTotalUA = ventUA.reduce((s, x) => s + x, 0)
   // Brief 53 Part 2 reconciliation log: count bypass-active hours per
@@ -3088,10 +3130,10 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
                        && T_out < prev_T_air
 
     // Solar through glazing per facade (Wh into zone, post g × frame × shading)
-    const sol_n = hourlySolar.f1[h] * (glazing.north ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.north
-    const sol_e = hourlySolar.f2[h] * (glazing.east  ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.east
-    const sol_s = hourlySolar.f3[h] * (glazing.south ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.south
-    const sol_w = hourlySolar.f4[h] * (glazing.west  ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.west
+    const sol_n = hourlySolar.f1[h] * (glazing.north ?? 0) * gF.north * (1 - FRAME_FRACTION) * shadingFactors.north
+    const sol_e = hourlySolar.f2[h] * (glazing.east  ?? 0) * gF.east  * (1 - FRAME_FRACTION) * shadingFactors.east
+    const sol_s = hourlySolar.f3[h] * (glazing.south ?? 0) * gF.south * (1 - FRAME_FRACTION) * shadingFactors.south
+    const sol_w = hourlySolar.f4[h] * (glazing.west  ?? 0) * gF.west  * (1 - FRAME_FRACTION) * shadingFactors.west
     const Q_solar_glaz_zone = sol_n + sol_e + sol_s + sol_w
     acc_solar_n += sol_n; acc_solar_e += sol_e; acc_solar_s += sol_s; acc_solar_w += sol_w
 
@@ -3211,7 +3253,7 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     for (let vi = 0; vi < ventSystems.length; vi++) {
       if (ventSystems[vi]?.enabled === false) continue
       const bypass_h_for_C = ventSystems[vi].summer_bypass && bypass_gate_h
-      UA_mech_vent_h += bypass_h_for_C ? ventUA_bypass[vi] : ventUA[vi]
+      UA_mech_vent_h += (bypass_h_for_C ? ventUA_bypass[vi] : ventUA[vi]) * ventSchedFrac[vi][h]
     }
 
     // Zone air implicit Euler balance
@@ -3436,7 +3478,7 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       // computeVentilationEnergy's per-hour bypass decision exactly. Same
       // trigger formula, same lagged signals, same hours.
       const bypass_h = ventSystems[vi].summer_bypass && bypass_gate_h
-      const UA_eff = bypass_h ? ventUA_bypass[vi] : ventUA[vi]
+      const UA_eff = (bypass_h ? ventUA_bypass[vi] : ventUA[vi]) * ventSchedFrac[vi][h]
       const heat_h = UA_eff * dT_heat_out
       const cool_h = UA_eff * dT_cool_out
       mech_vent_heat_h += heat_h
@@ -4707,21 +4749,35 @@ function hoursActiveForSchedule(schedule_ref, building) {
   if (schedule_ref == null || schedule_ref === 'always_on') {
     return { hours: 8760, source: 'always_on' }
   }
+  // Final-P02 Part 2/4: resolve gains profiles first (back-compat), then fall
+  // back to project/library schedules (building.schedules → hardcoded), the
+  // SAME source the hour-by-hour vent-heat path (resolveScheduleAtHour) reads.
+  // A night-shutdown schedule lives in building.schedules; without this the
+  // fan would silently stay at 8760 h while the vent-heat path zeroed the
+  // night hours — a Rule-14 divergence.
   const profile = findScheduleProfileById(schedule_ref, building)
+                ?? getScheduleObject(schedule_ref, building)
   if (!profile) {
     // eslint-disable-next-line no-console
-    console.warn(`[State 3 / ventilation] Unknown schedule_ref "${schedule_ref}" — falling back to always_on (8760 h). Define the profile in building.gains.{lighting,equipment,occupancy} or use 'always_on' explicitly.`)
+    console.warn(`[State 3 / ventilation] Unknown schedule_ref "${schedule_ref}" — falling back to always_on (8760 h). Define it in building.schedules, building.gains.{lighting,equipment,occupancy}, or use 'always_on' explicitly.`)
     return { hours: 8760, source: 'unresolved_fallback' }
   }
   const sched = profile.schedule ?? profile
-  const weekday  = Array.isArray(sched.weekday)  ? sched.weekday  : null
+  // Final-P02 Part 4: tolerate BOTH the flat shape (sched.weekday) and the
+  // nested day_types shape (sched.day_types.weekday) — the hardcoded SCHEDULES
+  // library uses the nested form, mirroring resolveScheduleAtHour's fallback.
+  const dt = sched.day_types ?? null
+  const weekday  = Array.isArray(sched.weekday)  ? sched.weekday
+                 : Array.isArray(dt?.weekday)    ? dt.weekday : null
   if (!weekday) {
     // eslint-disable-next-line no-console
     console.warn(`[State 3 / ventilation] schedule_ref "${schedule_ref}" resolved but has no weekday array — falling back to always_on.`)
     return { hours: 8760, source: 'unresolved_fallback' }
   }
-  const saturday = Array.isArray(sched.saturday) ? sched.saturday : weekday
-  const sunday   = Array.isArray(sched.sunday)   ? sched.sunday   : saturday
+  const saturday = Array.isArray(sched.saturday) ? sched.saturday
+                 : Array.isArray(dt?.saturday)   ? dt.saturday : weekday
+  const sunday   = Array.isArray(sched.sunday)   ? sched.sunday
+                 : Array.isArray(dt?.sunday)     ? dt.sunday : saturday
   const avg = arr => arr.reduce((s, v) => s + Number(v ?? 0), 0) / Math.max(arr.length, 1)
   // 261 weekdays + 52 Sat + 52 Sun ≈ 365 days/year (rounded UK calendar).
   const hours = 24 * (261 * avg(weekday) + 52 * avg(saturday) + 52 * avg(sunday))
@@ -4800,7 +4856,13 @@ function computeVentilationEnergy(ventSystems, weatherData, T_setpoint_c, buildi
       continue
     }
     const { hours: hours_active, source: schedule_source } = hoursActiveForSchedule(vs.schedule_ref, building)
-    const fan_kwh = (vs.flow_l_s * vs.sfp_w_per_l_s * hours_active) / 1000
+    // Final-P02 Part 2: control_factor scales the flow-hours linearly (a duty
+    // derate, e.g. 0.5 = half-flow). Default 1 preserves the byte-identical
+    // guard. Combined with the schedule_ref resolution above, the v40
+    // ventilation schedule now reaches the EUI fan (this fan feeds
+    // ventResult.totalFanKwh → the State-3 electricity total).
+    const control_factor = (vs.control_factor != null ? Number(vs.control_factor) : 1)
+    const fan_kwh = (vs.flow_l_s * vs.sfp_w_per_l_s * hours_active * control_factor) / 1000
 
     // Theoretical (uncapped) — annual integral × schedule_factor, same as
     // pre-28j. Surfaced as system_performance.ventilation.systems[*]
@@ -6011,12 +6073,13 @@ export function calculateInstantDegreeDay(building = {}, constructions = {}, sys
   // Division to MWh happens only in the gains_losses display output below.
   const orientation = Number(building.orientation ?? 0)
   const g_value = getGValue(constructions, libraryData)
+  const gF = getGValueByFacade(constructions, libraryData)  // Final-P02 Part 3: per-facade g
   const sf = computeShadingFactors(building)
   const solar_gains = {
-    north: glazing.north * getSolarRadiation('north', orientation) * g_value * sf.north,
-    south: glazing.south * getSolarRadiation('south', orientation) * g_value * sf.south,
-    east:  glazing.east  * getSolarRadiation('east',  orientation) * g_value * sf.east,
-    west:  glazing.west  * getSolarRadiation('west',  orientation) * g_value * sf.west,
+    north: glazing.north * getSolarRadiation('north', orientation) * gF.north * sf.north,
+    south: glazing.south * getSolarRadiation('south', orientation) * gF.south * sf.south,
+    east:  glazing.east  * getSolarRadiation('east',  orientation) * gF.east  * sf.east,
+    west:  glazing.west  * getSolarRadiation('west',  orientation) * gF.west  * sf.west,
   }
 
   // ── Sol-air opaque conduction gains (kWh) ─────────────────────────────────
@@ -6739,6 +6802,7 @@ function _calculateInstantBaseline(building = {}, constructions = {}, systems = 
 
   // ── Solar / g-value ───────────────────────────────────────────────────────
   const g_value = getGValue(constructions, libraryData)
+  const gF = getGValueByFacade(constructions, libraryData)  // Final-P02 Part 3: per-facade g
   const OPAQUE_GAIN_FRACTION = 0.04
 
   // ── Shading factors per facade (live preview) ─────────────────────────────
@@ -6900,10 +6964,10 @@ function _calculateInstantBaseline(building = {}, constructions = {}, systems = 
                       + hour_vent + hour_openings_louvre + hour_openings_window
 
     // Solar gains this hour from precomputed facade arrays (kWh)
-    const solar_n    = hourlySolar.f1[h] * glazing.north * g_value * shadingFactors.north / 1000
-    const solar_e    = hourlySolar.f2[h] * glazing.east  * g_value * shadingFactors.east  / 1000
-    const solar_s    = hourlySolar.f3[h] * glazing.south * g_value * shadingFactors.south / 1000
-    const solar_w    = hourlySolar.f4[h] * glazing.west  * g_value * shadingFactors.west  / 1000
+    const solar_n    = hourlySolar.f1[h] * glazing.north * gF.north * shadingFactors.north / 1000
+    const solar_e    = hourlySolar.f2[h] * glazing.east  * gF.east  * shadingFactors.east  / 1000
+    const solar_s    = hourlySolar.f3[h] * glazing.south * gF.south * shadingFactors.south / 1000
+    const solar_w    = hourlySolar.f4[h] * glazing.west  * gF.west  * shadingFactors.west  / 1000
     const solar_roof_h = hourlySolar.roof[h] * roof_area * OPAQUE_GAIN_FRACTION / 1000
     const solar_opq_h  = (
       hourlySolar.f1[h] * wall_opaque.north +

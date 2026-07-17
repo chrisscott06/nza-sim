@@ -761,7 +761,79 @@ export function FabricSection({ library, onInspectConstruction, isOpen, onToggle
           onInspect={onInspectConstruction}
         />
       ))}
+      <GlazingGPerFacade library={library ?? []} />
     </CollapsibleSection>
+  )
+}
+
+// Final-P02 Part 3: per-orientation glazing g-value override. Blank = inherit
+// the glazing construction's g (or scalar project override). The engine reads
+// `constructions.glazing.g_value_override_by_facade.<facade>` (getGValue in
+// instantCalc.js, precedence facade -> scalar -> library -> default). Used for
+// orientation-specific solar-control film (e.g. SW-only). Writes the whole
+// merged glazing object via mutate('constructions.glazing', ...) so it
+// dirty-stamps and works inside the interventions editor too.
+const G_FACADES = [
+  { key: 'north', label: 'North' },
+  { key: 'east',  label: 'East'  },
+  { key: 'south', label: 'South' },
+  { key: 'west',  label: 'West'  },
+]
+function GlazingGPerFacade({ library }) {
+  const { constructions } = useContext(ProjectContext)
+  const { mutate } = useProjectMutation()
+  const choice = constructions?.glazing
+  const asObj = (choice && typeof choice === 'object') ? choice : null
+  const libraryId = asObj?.library_id ?? (typeof choice === 'string' ? choice : null)
+  const byFacade = asObj?.g_value_override_by_facade ?? {}
+
+  // Effective inherited g (scalar override, else library g) — shown as the
+  // placeholder each facade falls back to when its own field is blank.
+  const libItem = (library ?? []).find(c => c.name === libraryId)
+  const libG = libItem?.g_value ?? libItem?.config_json?.g_value ?? null
+  const scalarG = Number.isFinite(asObj?.g_value_override) && asObj.g_value_override > 0
+    ? Number(asObj.g_value_override) : null
+  const inheritedG = scalarG ?? (libG != null ? Number(libG) : null)
+
+  function setFacade(facade, raw) {
+    const base = asObj ? { ...asObj } : { library_id: libraryId }
+    const next_by = { ...(base.g_value_override_by_facade ?? {}) }
+    const v = Number(raw)
+    if (raw !== '' && Number.isFinite(v) && v > 0) next_by[facade] = v
+    else delete next_by[facade]
+    const next = { ...base }
+    if (Object.keys(next_by).length > 0) next.g_value_override_by_facade = next_by
+    else delete next.g_value_override_by_facade
+    mutate('constructions.glazing', next)
+  }
+
+  return (
+    <div className="bg-white rounded-lg border border-light-grey p-3 space-y-2">
+      <div className="flex items-baseline justify-between">
+        <p className="text-xxs uppercase tracking-wider text-mid-grey">Glazing g-value — per orientation</p>
+        {inheritedG != null && (
+          <span className="text-xxs text-mid-grey">inherits g = <span className="tabular-nums">{inheritedG.toFixed(2)}</span></span>
+        )}
+      </div>
+      <p className="text-xxs text-mid-grey leading-tight">
+        Override the solar heat-gain coefficient for individual facades — for orientation-specific
+        solar-control film. Blank = inherit the glazing construction's g.
+      </p>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+        {G_FACADES.map(f => (
+          <label key={f.key} className="flex items-center justify-between gap-2">
+            <span className="text-xxs text-dark-grey">{f.label}</span>
+            <input
+              type="number" min={0} max={1} step={0.01}
+              value={byFacade[f.key] ?? ''}
+              placeholder={inheritedG != null ? inheritedG.toFixed(2) : 'g'}
+              onChange={e => setFacade(f.key, e.target.value)}
+              className="w-16 px-2 py-0.5 text-xxs text-navy text-right border border-light-grey rounded focus:outline-none focus:border-teal"
+            />
+          </label>
+        ))}
+      </div>
+    </div>
   )
 }
 
