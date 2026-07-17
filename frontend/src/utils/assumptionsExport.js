@@ -169,6 +169,21 @@ export function collectAssumptions({ building = {}, constructions = {}, libraryD
       push('Fabric', 'Glazing g-value (SHGC)', '—', '–', 'MISSING — no glazing g-value')
       escalate('Glazing g-value: no library g_value for the assigned glazing')
     }
+    // Final-P02 Part 3: per-orientation g overrides (solar-control film, e.g.
+    // SW-only). Each facade with an override emits its own basis line; blank
+    // facades inherit the effective g above and are not listed.
+    const byFacade = (constructions.glazing && typeof constructions.glazing === 'object')
+      ? constructions.glazing.g_value_override_by_facade : null
+    if (byFacade && typeof byFacade === 'object') {
+      for (const face of ['north', 'east', 'south', 'west']) {
+        const gf = num(byFacade[face])
+        if (gf != null && gf > 0) {
+          const cap = face.charAt(0).toUpperCase() + face.slice(1)
+          push('Fabric', `Glazing g-value — ${cap}`, gf, '–',
+            `Per-orientation override (inherits ${effG ?? '?'} when blank)`)
+        }
+      }
+    }
   }
 
   // Permanent openings / trickle-vent equivalent area — Σ per-facade louvre area

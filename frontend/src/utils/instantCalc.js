@@ -437,8 +437,18 @@ function resolveChoice(choice) {
   return { id: null, overrides: {} }
 }
 
-function getGValue(constructionChoices, libraryData) {
+// Final-P02 Part 3: optional `facade` (north|east|south|west) resolves a
+// per-orientation g override from `glazing.g_value_override_by_facade.<facade>`
+// before falling back to the project-wide scalar `g_value_override`, then the
+// library g, then the default. Passing no facade preserves the pre-Part-3
+// scalar behaviour exactly (guard: no per-facade override -> every facade
+// resolves to the same value as the scalar call).
+function getGValue(constructionChoices, libraryData, facade = null) {
   const { id, overrides } = resolveChoice(constructionChoices?.glazing)
+  if (facade && overrides?.g_value_override_by_facade) {
+    const pf = overrides.g_value_override_by_facade[facade]
+    if (Number.isFinite(pf) && pf > 0) return Number(pf)
+  }
   if (Number.isFinite(overrides.g_value_override) && overrides.g_value_override > 0) {
     return Number(overrides.g_value_override)
   }
@@ -450,6 +460,18 @@ function getGValue(constructionChoices, libraryData) {
     }
   }
   return DEFAULT_G_VALUE
+}
+
+// Final-P02 Part 3: resolve g per cardinal facade in one call. Each facade
+// independently honours a per-facade override, else the shared scalar. When no
+// per-facade override exists all four equal getGValue() -> byte-identical.
+function getGValueByFacade(constructionChoices, libraryData) {
+  return {
+    north: getGValue(constructionChoices, libraryData, 'north'),
+    east:  getGValue(constructionChoices, libraryData, 'east'),
+    south: getGValue(constructionChoices, libraryData, 'south'),
+    west:  getGValue(constructionChoices, libraryData, 'west'),
+  }
 }
 
 // ── State 1 envelope-only helpers (Brief 26 Part 3) ───────────────────────────
@@ -924,6 +946,7 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
   // ── Library U / g values (used for glazing only post Brief 28b Part 3) ────
   const u_glaz  = getUValue(constructions, 'glazing', libraryData)
   const g_value = getGValue(constructions, libraryData)
+  const gF = getGValueByFacade(constructions, libraryData)  // Final-P02 Part 3: per-facade g
   const FRAME_FRACTION = 0.20  // visible glass = 80% of WWR; framed area = 20%
   // Brief 26.1 follow-up: per-facade shading factors from overhang + fin geometry.
   const shadingFactors = computeShadingFactors(building)
@@ -1200,10 +1223,10 @@ function _calculateEnvelopeOnly(building, constructions, libraryData, weatherDat
     const v_wind = weatherData.wind_speed?.[h] ?? 0
 
     // Solar gains transmitted through glazing per facade (Wh into the zone)
-    const sol_n = hourlySolar.f1[h] * (glazing.north ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.north
-    const sol_e = hourlySolar.f2[h] * (glazing.east  ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.east
-    const sol_s = hourlySolar.f3[h] * (glazing.south ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.south
-    const sol_w = hourlySolar.f4[h] * (glazing.west  ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.west
+    const sol_n = hourlySolar.f1[h] * (glazing.north ?? 0) * gF.north * (1 - FRAME_FRACTION) * shadingFactors.north
+    const sol_e = hourlySolar.f2[h] * (glazing.east  ?? 0) * gF.east  * (1 - FRAME_FRACTION) * shadingFactors.east
+    const sol_s = hourlySolar.f3[h] * (glazing.south ?? 0) * gF.south * (1 - FRAME_FRACTION) * shadingFactors.south
+    const sol_w = hourlySolar.f4[h] * (glazing.west  ?? 0) * gF.west  * (1 - FRAME_FRACTION) * shadingFactors.west
     const Q_solar_glaz_zone = sol_n + sol_e + sol_s + sol_w
     acc_solar_n += sol_n; acc_solar_e += sol_e; acc_solar_s += sol_s; acc_solar_w += sol_w
 
@@ -2618,6 +2641,7 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   // Glazing U + g, shading factors (same as State 1)
   const u_glaz = getUValue(constructions, 'glazing', libraryData)
   const g_value = getGValue(constructions, libraryData)
+  const gF = getGValueByFacade(constructions, libraryData)  // Final-P02 Part 3: per-facade g
   const FRAME_FRACTION = 0.20
   const shadingFactors = computeShadingFactors(building)
 
@@ -3106,10 +3130,10 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
                        && T_out < prev_T_air
 
     // Solar through glazing per facade (Wh into zone, post g × frame × shading)
-    const sol_n = hourlySolar.f1[h] * (glazing.north ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.north
-    const sol_e = hourlySolar.f2[h] * (glazing.east  ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.east
-    const sol_s = hourlySolar.f3[h] * (glazing.south ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.south
-    const sol_w = hourlySolar.f4[h] * (glazing.west  ?? 0) * g_value * (1 - FRAME_FRACTION) * shadingFactors.west
+    const sol_n = hourlySolar.f1[h] * (glazing.north ?? 0) * gF.north * (1 - FRAME_FRACTION) * shadingFactors.north
+    const sol_e = hourlySolar.f2[h] * (glazing.east  ?? 0) * gF.east  * (1 - FRAME_FRACTION) * shadingFactors.east
+    const sol_s = hourlySolar.f3[h] * (glazing.south ?? 0) * gF.south * (1 - FRAME_FRACTION) * shadingFactors.south
+    const sol_w = hourlySolar.f4[h] * (glazing.west  ?? 0) * gF.west  * (1 - FRAME_FRACTION) * shadingFactors.west
     const Q_solar_glaz_zone = sol_n + sol_e + sol_s + sol_w
     acc_solar_n += sol_n; acc_solar_e += sol_e; acc_solar_s += sol_s; acc_solar_w += sol_w
 
@@ -6035,12 +6059,13 @@ export function calculateInstantDegreeDay(building = {}, constructions = {}, sys
   // Division to MWh happens only in the gains_losses display output below.
   const orientation = Number(building.orientation ?? 0)
   const g_value = getGValue(constructions, libraryData)
+  const gF = getGValueByFacade(constructions, libraryData)  // Final-P02 Part 3: per-facade g
   const sf = computeShadingFactors(building)
   const solar_gains = {
-    north: glazing.north * getSolarRadiation('north', orientation) * g_value * sf.north,
-    south: glazing.south * getSolarRadiation('south', orientation) * g_value * sf.south,
-    east:  glazing.east  * getSolarRadiation('east',  orientation) * g_value * sf.east,
-    west:  glazing.west  * getSolarRadiation('west',  orientation) * g_value * sf.west,
+    north: glazing.north * getSolarRadiation('north', orientation) * gF.north * sf.north,
+    south: glazing.south * getSolarRadiation('south', orientation) * gF.south * sf.south,
+    east:  glazing.east  * getSolarRadiation('east',  orientation) * gF.east  * sf.east,
+    west:  glazing.west  * getSolarRadiation('west',  orientation) * gF.west  * sf.west,
   }
 
   // ── Sol-air opaque conduction gains (kWh) ─────────────────────────────────
@@ -6763,6 +6788,7 @@ function _calculateInstantBaseline(building = {}, constructions = {}, systems = 
 
   // ── Solar / g-value ───────────────────────────────────────────────────────
   const g_value = getGValue(constructions, libraryData)
+  const gF = getGValueByFacade(constructions, libraryData)  // Final-P02 Part 3: per-facade g
   const OPAQUE_GAIN_FRACTION = 0.04
 
   // ── Shading factors per facade (live preview) ─────────────────────────────
@@ -6924,10 +6950,10 @@ function _calculateInstantBaseline(building = {}, constructions = {}, systems = 
                       + hour_vent + hour_openings_louvre + hour_openings_window
 
     // Solar gains this hour from precomputed facade arrays (kWh)
-    const solar_n    = hourlySolar.f1[h] * glazing.north * g_value * shadingFactors.north / 1000
-    const solar_e    = hourlySolar.f2[h] * glazing.east  * g_value * shadingFactors.east  / 1000
-    const solar_s    = hourlySolar.f3[h] * glazing.south * g_value * shadingFactors.south / 1000
-    const solar_w    = hourlySolar.f4[h] * glazing.west  * g_value * shadingFactors.west  / 1000
+    const solar_n    = hourlySolar.f1[h] * glazing.north * gF.north * shadingFactors.north / 1000
+    const solar_e    = hourlySolar.f2[h] * glazing.east  * gF.east  * shadingFactors.east  / 1000
+    const solar_s    = hourlySolar.f3[h] * glazing.south * gF.south * shadingFactors.south / 1000
+    const solar_w    = hourlySolar.f4[h] * glazing.west  * gF.west  * shadingFactors.west  / 1000
     const solar_roof_h = hourlySolar.roof[h] * roof_area * OPAQUE_GAIN_FRACTION / 1000
     const solar_opq_h  = (
       hourlySolar.f1[h] * wall_opaque.north +
