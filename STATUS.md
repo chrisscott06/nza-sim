@@ -2,6 +2,31 @@
 
 > **Reconciled 2026-05-28** as part of Brief 72 Part 1. Source: `git log --oneline 9fde212..286f57c` (Brief 64 close → tip-of-main at brief landing). Sections below for Briefs 65–71 are git-grounded — every claim is anchored to one or more commit SHAs from that range. The Brief-64-and-earlier sections that follow stay as a historical snapshot (Brief 23-tagged in CLAUDE.md is now technically out of date for that tag; the canonical sources remain `git log`, `docs/briefs/active/`, `docs/briefs/archive/`).
 
+## ✅ Final P02 Run (engine scheduler + per-orientation g, measure re-authors, all-in costs, 4.8) — CLOSED 2026-07-17 on `chris/final-p02-run` *(PR to follow; no self-merge — Chris uses the branch docs for the report tonight)*
+
+The P02 report ships from this run's outputs. **Ships on Model 2 (185.1)** — Part-0 caught a drifted
+baseline (Model 2.1 / 183.3, GF summer_bypass=True); Chris ruled Model 2 (185.1) the legal baseline and
+parked 2.1 (`docs/audit/final_p02_part0_scenario_note.md`). Model 2 re-closes at **elec 572,398 / gas
+207,700 / EUI 185.1** after all parts (byte-identical guard). Results:
+[`docs/audit/interventions_model2_results.md`](docs/audit/interventions_model2_results.md) (print-ready
+4.8 table). Reproducible from `docs/audit/fixtures/final_p02_model2_*.json` + `scripts/_final_p02_*.mjs`.
+
+- **P1** parity audit both directions (`docs/audit/final_p02_parity_audit.md`); corrected the
+  summer_bypass + gains.auxiliary findings.
+- **P2** (`69744da`): ventilation scheduler consumed — fan (EUI path) + State-2 vent-heat multiply by the
+  schedule fraction hour-by-hour. Guard: pinned scenarios byte-identical; 50% schedule → fan halves.
+- **P3** (`bbf9587`): glazing g-value per orientation — `getGValue(…, facade)` + UI panel + export. Guard
+  byte-identical; per-facade proof (south-only cooling response; all-facades = library g returns BASE).
+- **P4** (`a6ec8da`): measure re-authors — MVHR full −2.4 / reduced −1.9 (bypass + SFP 1.2), NEW night
+  shutdown −2.1, film SW-only −0.5, deleted GF-bypass + trickle-vent-standalone. Night-shutdown scheduler
+  completes P2's wiring (fan resolver reads project/hardcoded schedules; Rule-14 parity). Conservation +
+  residual (4.0006 W/m²) PASS.
+- **P5** (`d876213`): all-in cost structure — category multipliers ×1.00/×1.12/×1.32 on base line-items;
+  tariffs elec £0.25/gas £0.06.
+- **P6** (`7e2df57`): full re-run + print-ready 4.8 table (all-in £/tCO₂e, payback, capex) with footnotes.
+- **P7** (`<this>`): re-gated the three follow-up briefs (thermal-bridging, performance-gap-term,
+  auxiliary) to this run's close; STATUS + archive + PR.
+
 ## ✅ 505 Reconciliation (trace their savings to assumptions, compare under Model 2) — CLOSED 2026-07-15 on `chris/505-reconciliation` *(PR to follow; register DRAFTS → Claude Chat tone review → Chris)*
 
 Reproduced 505 Design's claimed savings **under their assumptions** (diagnostic, not deference) and

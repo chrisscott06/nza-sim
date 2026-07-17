@@ -1,12 +1,18 @@
 # Current brief
 
-**ACTIVE — Final P02 Run: Engine Fixes, Measure Re-Authors, All-In Costs, Print-Ready Results.**
-On branch `chris/final-p02-run` (off `main` `910fb9c`). Ship-tonight run. **Part-0 resolved (Chris):**
-canonical baseline is **Model 2.1** (GF summer_bypass=True, existing design) — **freeze 183.3 EUI /
-564,836 elec / 207,700 gas**, residual 147.75 unchanged, **accept 1.3% under** the meter. Parts: parity
-audit (both directions), ventilation scheduler consumed (guarded engine change), glazing g-value per
-orientation, final measure re-authors + all-in costs, full re-run + print-ready 4.8. Gated briefs re-gate
-to this run's SHA. Brief [`active/final-p02-run.md`](active/final-p02-run.md).
+**Final P02 Run: Engine Fixes, Measure Re-Authors, All-In Costs, Print-Ready Results — CLOSED 2026-07-17
+on `chris/final-p02-run` (PR to follow; no self-merge — Chris uses the branch docs for the report tonight).**
+Off `main` `910fb9c`. **Ships on Model 2 (185.1)** — Part-0 caught a drifted baseline (Model 2.1 / 183.3,
+GF summer_bypass=True); Chris ruled Model 2 (185.1) the legal baseline and parked 2.1
+([`../audit/final_p02_part0_scenario_note.md`](../audit/final_p02_part0_scenario_note.md)). Parts: P1 parity
+audit; **P2** ventilation scheduler consumed (guarded, byte-identical); **P3** glazing g per orientation;
+**P4** measure re-authors (MVHR bypass −2.4/−1.9, night shutdown −2.1, film SW-only −0.5) + night-shutdown
+scheduler; **P5** all-in costs (×1.00/×1.12/×1.32, tariffs 0.25/0.06); **P6** print-ready 4.8 table; **P7**
+re-gate + close. Model 2 re-closes 572,398/207,700/185.1. Results
+[`../audit/interventions_model2_results.md`](../audit/interventions_model2_results.md); brief
+[`archive/final-p02-run_COMPLETED.md`](archive/final-p02-run_COMPLETED.md). Gated briefs (thermal-bridging,
+performance-gap-term, auxiliary) re-gated to this close. **P03 follow-up:** fold GF summer_bypass into the
+baseline + re-close the residual, batched with the thermal-bridging fix.
 
 **505 Reconciliation: Trace Their Savings to Assumptions — CLOSED 2026-07-15 on `chris/505-reconciliation` (PR to follow; register DRAFTS route to Claude Chat tone review, then Chris).**
 On branch `chris/505-reconciliation` (off `main` `4d8650b`, #20–#23 merged; Model-1/Model-2 pinned).
