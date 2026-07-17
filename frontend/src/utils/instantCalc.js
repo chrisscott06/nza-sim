@@ -12,7 +12,7 @@
  */
 
 import { resolveCmass } from './thermalMass.js'
-import { resolveScheduleAtHour } from './scheduleLibrary.js'
+import { resolveScheduleAtHour, getScheduleObject } from './scheduleLibrary.js'
 import { computeThermalBridges } from './thermalBridges.js'
 import {
   computeSystemsDelivered,
@@ -4749,21 +4749,35 @@ function hoursActiveForSchedule(schedule_ref, building) {
   if (schedule_ref == null || schedule_ref === 'always_on') {
     return { hours: 8760, source: 'always_on' }
   }
+  // Final-P02 Part 2/4: resolve gains profiles first (back-compat), then fall
+  // back to project/library schedules (building.schedules → hardcoded), the
+  // SAME source the hour-by-hour vent-heat path (resolveScheduleAtHour) reads.
+  // A night-shutdown schedule lives in building.schedules; without this the
+  // fan would silently stay at 8760 h while the vent-heat path zeroed the
+  // night hours — a Rule-14 divergence.
   const profile = findScheduleProfileById(schedule_ref, building)
+                ?? getScheduleObject(schedule_ref, building)
   if (!profile) {
     // eslint-disable-next-line no-console
-    console.warn(`[State 3 / ventilation] Unknown schedule_ref "${schedule_ref}" — falling back to always_on (8760 h). Define the profile in building.gains.{lighting,equipment,occupancy} or use 'always_on' explicitly.`)
+    console.warn(`[State 3 / ventilation] Unknown schedule_ref "${schedule_ref}" — falling back to always_on (8760 h). Define it in building.schedules, building.gains.{lighting,equipment,occupancy}, or use 'always_on' explicitly.`)
     return { hours: 8760, source: 'unresolved_fallback' }
   }
   const sched = profile.schedule ?? profile
-  const weekday  = Array.isArray(sched.weekday)  ? sched.weekday  : null
+  // Final-P02 Part 4: tolerate BOTH the flat shape (sched.weekday) and the
+  // nested day_types shape (sched.day_types.weekday) — the hardcoded SCHEDULES
+  // library uses the nested form, mirroring resolveScheduleAtHour's fallback.
+  const dt = sched.day_types ?? null
+  const weekday  = Array.isArray(sched.weekday)  ? sched.weekday
+                 : Array.isArray(dt?.weekday)    ? dt.weekday : null
   if (!weekday) {
     // eslint-disable-next-line no-console
     console.warn(`[State 3 / ventilation] schedule_ref "${schedule_ref}" resolved but has no weekday array — falling back to always_on.`)
     return { hours: 8760, source: 'unresolved_fallback' }
   }
-  const saturday = Array.isArray(sched.saturday) ? sched.saturday : weekday
-  const sunday   = Array.isArray(sched.sunday)   ? sched.sunday   : saturday
+  const saturday = Array.isArray(sched.saturday) ? sched.saturday
+                 : Array.isArray(dt?.saturday)   ? dt.saturday : weekday
+  const sunday   = Array.isArray(sched.sunday)   ? sched.sunday
+                 : Array.isArray(dt?.sunday)     ? dt.sunday : saturday
   const avg = arr => arr.reduce((s, v) => s + Number(v ?? 0), 0) / Math.max(arr.length, 1)
   // 261 weekdays + 52 Sat + 52 Sun ≈ 365 days/year (rounded UK calendar).
   const hours = 24 * (261 * avg(weekday) + 52 * avg(saturday) + 52 * avg(sunday))

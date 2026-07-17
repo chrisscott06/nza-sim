@@ -61,6 +61,16 @@ const _SUMMER_DAYTIME_DAY = (() => {
 })()
 const _SUMMER_MONTHS = [0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0]   // May (idx 4) through Sept (idx 8)
 
+// Final-P02 Part 4 — communal ventilation night shutdown. GF public MVHR runs
+// 07:00-23:00, off 23:00-07:00 (all day-types). 16 on-hours/day → 5,840 annual
+// hours. Referenced by the night-shutdown measure's control_schedule_id; unused
+// by the pinned baselines (guard-safe).
+const _GF_NIGHT_OFF_23_07_DAY = (() => {
+  const a = new Array(24).fill(0.0)
+  for (let h = 7; h < 23; h++) a[h] = 1.0
+  return a
+})()
+
 export const SCHEDULES = {
   always_on: {
     day_types: { weekday: _ALWAYS_ON_DAY, saturday: _ALWAYS_ON_DAY, sunday: _ALWAYS_ON_DAY },
@@ -74,6 +84,9 @@ export const SCHEDULES = {
   summer_day_daytime: {
     day_types: { weekday: _SUMMER_DAYTIME_DAY, saturday: _SUMMER_DAYTIME_DAY, sunday: _SUMMER_DAYTIME_DAY },
     monthly_multipliers: _SUMMER_MONTHS,
+  },
+  gf_night_off_23_07: {
+    day_types: { weekday: _GF_NIGHT_OFF_23_07_DAY, saturday: _GF_NIGHT_OFF_23_07_DAY, sunday: _GF_NIGHT_OFF_23_07_DAY },
   },
 }
 
@@ -146,6 +159,20 @@ function _projectScheduleByName(name, building) {
   const list = building?.schedules
   if (!Array.isArray(list)) return null
   return list.find(s => s?.name === name || s?.id === name) ?? null
+}
+
+/**
+ * Final-P02 Part 2/4: resolve a schedule NAME to its raw schedule object,
+ * using the same lookup order as resolveScheduleAtHour (project schedules
+ * then the hardcoded library). Returns the object ({weekday,saturday,sunday,…})
+ * or null. Lets the ventilation fan's annual-hours resolver
+ * (hoursActiveForSchedule in instantCalc) read the SAME source the
+ * hour-by-hour vent-heat path reads, so a night-shutdown schedule reduces
+ * both fan and vent-heat consistently (Rule-14 parity).
+ */
+export function getScheduleObject(name, building = null) {
+  if (name == null) return null
+  return _projectScheduleByName(name, building) ?? SCHEDULES[name] ?? null
 }
 
 /**
