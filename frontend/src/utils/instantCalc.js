@@ -2981,7 +2981,12 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       hre,
       sfp,
       hours:        Number(v25Match?.hours ?? 8760),
-      schedule_ref: v25Match?.schedule_ref ?? 'always_on',
+      // Final-P02 Part 2: ventilation schedule now consumed HOUR-BY-HOUR (fan +
+      // vent-heat/free-cooling). v40 control_schedule_id wins (the field the
+      // Systems UI writes); v25 schedule_ref / 'always_on' fallback. control_factor
+      // is a flat speed multiplier (partial-speed running) applied alongside it.
+      schedule_ref: v40Match?.control_schedule_id ?? v25Match?.schedule_ref ?? 'always_on',
+      control_factor: (v40Match?.control_factor != null ? Number(v40Match.control_factor) : 1),
       // Brief 28-IM IM-M4.5 Phase 2: carry `enabled` through so the State 2
       // mech vent loss loop AND computeVentilationEnergy honour the per-
       // system disable flag.
@@ -2989,12 +2994,26 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       summer_bypass,   // Brief 53 Part 2
     }
   })
-  // Per-system UA (W/K). Schedule_factor = hours/8760 (proportional approx;
-  // schedule-profile-aware integration is a future refinement).
+  // Per-system UA (W/K), FULL conductance. Final-P02 Part 2: the schedule is no
+  // longer folded in as an annual scalar (the old `hours/8760` proportional
+  // approx) — it is applied HOUR-BY-HOUR in the mech-vent loops below via
+  // ventSchedFrac[vi][h], so cold-night off-hours are temperature-weighted
+  // correctly (matters for the GF night-shutdown measure). Guard: always_on +
+  // no control_factor ⇒ ventSchedFrac = 1.0 every hour ⇒ byte-identical.
   const ventUA = ventSystems.map(v => {
     const Q_m3_h = v.flow_l_s * 3.6      // L/s × 3.6 = m³/h
-    const sched_factor = v.hours / 8760
-    return AIR_HEAT_CAPACITY * Q_m3_h * (1 - v.hre) * sched_factor   // W/K — recovery active
+    return AIR_HEAT_CAPACITY * Q_m3_h * (1 - v.hre)   // W/K — recovery active
+  })
+  // Per-system hourly schedule fraction (0..1) × control_factor. resolveScheduleAtHour
+  // returns the on-fraction at hour h; 'always_on' → 1 every hour.
+  const ventSchedFrac = ventSystems.map(v => {
+    const arr = new Float32Array(8760)
+    const cf = Number.isFinite(v.control_factor) ? v.control_factor : 1
+    for (let h = 0; h < 8760; h++) {
+      const f = resolveScheduleAtHour(v.schedule_ref, h, weatherData, building)
+      arr[h] = (Number.isFinite(f) ? f : 1) * cf
+    }
+    return arr
   })
   // Brief 53 Part 2 (2026-05-26): parallel UA array with no recovery (HRE
   // factor = 1.0). Used when the per-system summer bypass damper is open
@@ -3004,8 +3023,7 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
   // per-hour bypass trigger (see hourly loop below).
   const ventUA_bypass = ventSystems.map(v => {
     const Q_m3_h = v.flow_l_s * 3.6
-    const sched_factor = v.hours / 8760
-    return AIR_HEAT_CAPACITY * Q_m3_h * 1.0 * sched_factor   // W/K — bypass (no HRE)
+    return AIR_HEAT_CAPACITY * Q_m3_h * 1.0   // W/K — bypass (no HRE); schedule applied hourly below
   })
   const ventTotalUA = ventUA.reduce((s, x) => s + x, 0)
   // Brief 53 Part 2 reconciliation log: count bypass-active hours per
@@ -3211,7 +3229,7 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
     for (let vi = 0; vi < ventSystems.length; vi++) {
       if (ventSystems[vi]?.enabled === false) continue
       const bypass_h_for_C = ventSystems[vi].summer_bypass && bypass_gate_h
-      UA_mech_vent_h += bypass_h_for_C ? ventUA_bypass[vi] : ventUA[vi]
+      UA_mech_vent_h += (bypass_h_for_C ? ventUA_bypass[vi] : ventUA[vi]) * ventSchedFrac[vi][h]
     }
 
     // Zone air implicit Euler balance
@@ -3436,7 +3454,7 @@ function _calculateState2(building, constructions, libraryData, weatherData, hou
       // computeVentilationEnergy's per-hour bypass decision exactly. Same
       // trigger formula, same lagged signals, same hours.
       const bypass_h = ventSystems[vi].summer_bypass && bypass_gate_h
-      const UA_eff = bypass_h ? ventUA_bypass[vi] : ventUA[vi]
+      const UA_eff = (bypass_h ? ventUA_bypass[vi] : ventUA[vi]) * ventSchedFrac[vi][h]
       const heat_h = UA_eff * dT_heat_out
       const cool_h = UA_eff * dT_cool_out
       mech_vent_heat_h += heat_h
@@ -4800,7 +4818,13 @@ function computeVentilationEnergy(ventSystems, weatherData, T_setpoint_c, buildi
       continue
     }
     const { hours: hours_active, source: schedule_source } = hoursActiveForSchedule(vs.schedule_ref, building)
-    const fan_kwh = (vs.flow_l_s * vs.sfp_w_per_l_s * hours_active) / 1000
+    // Final-P02 Part 2: control_factor scales the flow-hours linearly (a duty
+    // derate, e.g. 0.5 = half-flow). Default 1 preserves the byte-identical
+    // guard. Combined with the schedule_ref resolution above, the v40
+    // ventilation schedule now reaches the EUI fan (this fan feeds
+    // ventResult.totalFanKwh → the State-3 electricity total).
+    const control_factor = (vs.control_factor != null ? Number(vs.control_factor) : 1)
+    const fan_kwh = (vs.flow_l_s * vs.sfp_w_per_l_s * hours_active * control_factor) / 1000
 
     // Theoretical (uncapped) — annual integral × schedule_factor, same as
     // pre-28j. Surfaced as system_performance.ventilation.systems[*]
